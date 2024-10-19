@@ -1,10 +1,12 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::branches_sharing_code)]
 
 use maud::{html, Markup};
 use moosicbox_app_native_image::image;
 use moosicbox_library_models::{ApiAlbum, ApiArtist, ApiLibraryAlbum, ApiLibraryArtist, ApiTrack};
 use moosicbox_menu_models::api::ApiAlbumVersion;
+use moosicbox_paging::Page;
 
 macro_rules! public_img {
     ($path:expr $(,)?) => {
@@ -293,28 +295,70 @@ pub fn album(album: ApiAlbum, versions: &[ApiAlbumVersion]) -> Markup {
 }
 
 #[must_use]
-pub fn albums_page_content(albums: Vec<ApiAlbum>) -> Markup {
-    let albums = albums
-        .into_iter()
-        .map(|x| {
-            let ApiAlbum::Library(x) = x;
-            x
-        })
-        .collect::<Vec<_>>();
+pub fn albums_list_start(albums: &Page<ApiAlbum>, size: u16) -> Markup {
+    static MAX_PARALLEL_REQUESTS: u32 = 6;
+    static MIN_PAGE_THRESHOLD: u32 = 30;
+    let remaining = if albums.has_more() {
+        albums.remaining().map_or_else(
+            || {
+                html! {
+                    div hx-get={"/albums-list-start?offset="(albums.offset() + albums.limit())"&limit=100&size="(size)} {}
+                }
+            },
+            |remaining| {
+                let offset = albums.offset() + albums.limit();
+                let limit = remaining / MAX_PARALLEL_REQUESTS;
+                let last = limit + (remaining % MAX_PARALLEL_REQUESTS);
 
-    let size: u16 = 200;
-    #[allow(clippy::cast_sign_loss)]
-    #[allow(clippy::cast_possible_truncation)]
-    let request_size = (f64::from(size) * 1.33).round() as u16;
+                html! {
+                    @if limit < MIN_PAGE_THRESHOLD {
+                        div hx-get={"/albums-list?offset="(offset)"&limit="(remaining + offset)"&size="(size)} {}
+                    } @else {
+                        @for i in 0..MAX_PARALLEL_REQUESTS {
+                            @if i == MAX_PARALLEL_REQUESTS - 1 {
+                                div hx-get={"/albums-list?offset="(offset + i * limit)"&limit="(last)"&size="(size)} {}
+                            } @else {
+                                div hx-get={"/albums-list?offset="(offset + i * limit)"&limit="(limit)"&size="(size)} {}
+                            }
+                        }
+                    }
+                }
+            },
+        )
+    } else {
+        html! {}
+    };
+    let albums = albums.iter().map(|x| {
+        let ApiAlbum::Library(album) = x;
+        album
+    });
 
     html! {
-        div sx-dir="row" sx-overflow-x="wrap" sx-overflow-y="show" {
-            @for album in &albums {
-                a href={"/albums?albumId="(album.album_id)} sx-width=(size) sx-height=(size + 30) {
-                    div sx-width=(size) sx-height=(size + 30) {
-                        img src=(album_cover_url(album, request_size, request_size)) sx-width=(size) sx-height=(size);
-                        (album.title)
-                    }
+        @for album in albums {
+            a href={"/albums?albumId="(album.album_id)} sx-width=(size) sx-height=(size + 30) {
+                div sx-width=(size) sx-height=(size + 30) {
+                    (album_cover_img(album, size))
+                    (album.title)
+                }
+            }
+        }
+        (remaining)
+    }
+}
+
+#[must_use]
+pub fn albums_list(albums: &Page<ApiAlbum>, size: u16) -> Markup {
+    let albums = albums.iter().map(|x| {
+        let ApiAlbum::Library(album) = x;
+        album
+    });
+
+    html! {
+        @for album in albums {
+            a href={"/albums?albumId="(album.album_id)} sx-width=(size) sx-height=(size + 30) {
+                div sx-width=(size) sx-height=(size + 30) {
+                    (album_cover_img(album, size))
+                    (album.title)
                 }
             }
         }
@@ -322,8 +366,20 @@ pub fn albums_page_content(albums: Vec<ApiAlbum>) -> Markup {
 }
 
 #[must_use]
-pub fn albums(albums: Vec<ApiAlbum>) -> Markup {
-    page(&albums_page_content(albums))
+pub fn albums_page_content() -> Markup {
+    let size: u16 = 200;
+
+    html! {
+        h1 { ("Albums") }
+        div sx-dir="row" sx-overflow-x="wrap" sx-overflow-y="show" {
+            div hx-get={"/albums-list-start?limit=100&size="(size)} {}
+        }
+    }
+}
+
+#[must_use]
+pub fn albums() -> Markup {
+    page(&albums_page_content())
 }
 
 #[must_use]

@@ -1,12 +1,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-use std::sync::Arc;
+use std::{num::ParseIntError, sync::Arc};
 
-use moosicbox_app_native_lib::router::Router;
+use moosicbox_app_native_lib::router::{ContainerElement, RouteRequest, Router};
 use moosicbox_env_utils::{default_env_usize, option_env_i32, option_env_u16};
 use moosicbox_library_models::{ApiAlbum, ApiArtist};
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_paging::Page;
+use thiserror::Error;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     moosicbox_logging::init(None)?;
@@ -69,27 +70,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .into_string()
                     .try_into()?
             } else {
-                let response = reqwest::get(format!(
-                    "{}/menu/albums?moosicboxProfile=master&offset=0&limit=2000",
-                    std::env::var("MOOSICBOX_HOST")
-                        .as_deref()
-                        .unwrap_or("http://localhost:8500")
-                ))
-                .await?;
-
-                if !response.status().is_success() {
-                    log::debug!("Error: {}", response.status());
-                }
-
-                let albums: Page<ApiAlbum> = response.json().await?;
-
-                log::trace!("albums: {albums:?}");
-
-                moosicbox_app_native_ui::albums(albums.items())
-                    .into_string()
-                    .try_into()?
+                moosicbox_app_native_ui::albums().into_string().try_into()?
             })
         })
+        .with_route("/albums-list-start", |req| async move {
+            albums_list_start_route(req).await
+        })
+        .with_route(
+            "/albums-list",
+            |req| async move { albums_list_route(req).await },
+        )
         .with_route("/artists", |req| async move {
             Ok::<_, Box<dyn std::error::Error>>(
                 if let Some(artist_id) = req.query.get("artistId") {
@@ -195,16 +185,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             log::debug!("Shutting down app server..");
             if let Err(e) = app_server_handle.shutdown() {
-                log::error!("AppServer failed to shutdown: {e:?}");
+                moosicbox_assert::die_or_error!("AppServer failed to shutdown: {e:?}");
             }
 
             log::debug!("Joining app server...");
             match runtime.block_on(join_app_server) {
                 Err(e) => {
-                    log::error!("Failed to join app server: {e:?}");
+                    moosicbox_assert::die_or_error!("Failed to join app server: {e:?}");
                 }
                 Ok(Err(e)) => {
-                    log::error!("Failed to join app server: {e:?}");
+                    moosicbox_assert::die_or_error!("Failed to join app server: {e:?}");
                 }
                 _ => {}
             }
@@ -217,4 +207,93 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     runner.run().unwrap();
 
     Ok(())
+}
+
+#[derive(Debug, Error)]
+pub enum RouteError {
+    #[error("Missing query param: '{0}'")]
+    MissingQueryParam(&'static str),
+    #[error("Failed to parse markup")]
+    ParseMarkup,
+    #[error(transparent)]
+    ParseInt(#[from] ParseIntError),
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+}
+
+async fn albums_list_start_route(req: RouteRequest) -> Result<ContainerElement, RouteError> {
+    let Some(limit) = req.query.get("limit") else {
+        return Err(RouteError::MissingQueryParam("limit"));
+    };
+    let limit = limit.parse::<u32>()?;
+    let Some(size) = req.query.get("size") else {
+        return Err(RouteError::MissingQueryParam("size"));
+    };
+    let size = size.parse::<u16>()?;
+    let offset = if let Some(offset) = req.query.get("offset") {
+        offset.parse::<u32>()?
+    } else {
+        0
+    };
+    let response = reqwest::get(format!(
+        "{}/menu/albums?moosicboxProfile=master&offset={offset}&limit={limit}",
+        std::env::var("MOOSICBOX_HOST")
+            .as_deref()
+            .unwrap_or("http://localhost:8500")
+    ))
+    .await?;
+
+    if !response.status().is_success() {
+        log::debug!("Error: {}", response.status());
+    }
+
+    let albums: Page<ApiAlbum> = response.json().await?;
+
+    log::trace!("albums_list_start_route: albums={albums:?}");
+
+    moosicbox_app_native_ui::albums_list_start(&albums, size)
+        .into_string()
+        .try_into()
+        .map_err(|e| {
+            moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
+            RouteError::ParseMarkup
+        })
+}
+
+async fn albums_list_route(req: RouteRequest) -> Result<ContainerElement, RouteError> {
+    let Some(offset) = req.query.get("offset") else {
+        return Err(RouteError::MissingQueryParam("offset"));
+    };
+    let offset = offset.parse::<u32>()?;
+    let Some(limit) = req.query.get("limit") else {
+        return Err(RouteError::MissingQueryParam("limit"));
+    };
+    let limit = limit.parse::<u32>()?;
+    let Some(size) = req.query.get("size") else {
+        return Err(RouteError::MissingQueryParam("size"));
+    };
+    let size = size.parse::<u16>()?;
+    let response = reqwest::get(format!(
+        "{}/menu/albums?moosicboxProfile=master&offset={offset}&limit={limit}",
+        std::env::var("MOOSICBOX_HOST")
+            .as_deref()
+            .unwrap_or("http://localhost:8500")
+    ))
+    .await?;
+
+    if !response.status().is_success() {
+        log::debug!("Error: {}", response.status());
+    }
+
+    let albums: Page<ApiAlbum> = response.json().await?;
+
+    log::trace!("albums_list_route: albums={albums:?}");
+
+    moosicbox_app_native_ui::albums_list(&albums, size)
+        .into_string()
+        .try_into()
+        .map_err(|e| {
+            moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
+            RouteError::ParseMarkup
+        })
 }

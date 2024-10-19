@@ -5749,12 +5749,14 @@ dependencies = [
  "moosicbox_app_native_bundled",
  "moosicbox_app_native_lib",
  "moosicbox_app_native_ui",
+ "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_library_models",
  "moosicbox_logging",
  "moosicbox_menu_models",
  "moosicbox_paging",
  "reqwest 0.12.8",
+ "thiserror",
  "tokio",
 ]
 
@@ -5807,6 +5809,7 @@ dependencies = [
  "moosicbox_app_native_image",
  "moosicbox_library_models",
  "moosicbox_menu_models",
+ "moosicbox_paging",
 ]
 
 [[package]]
