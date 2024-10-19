@@ -9,7 +9,7 @@ use std::{
 
 use flume::{Receiver, SendError, Sender};
 use futures::Future;
-use gigachad_transformer::ContainerElement;
+pub use gigachad_transformer::ContainerElement;
 use qstring::QString;
 use thiserror::Error;
 use tokio::task::JoinHandle;
