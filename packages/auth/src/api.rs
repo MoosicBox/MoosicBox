@@ -115,14 +115,17 @@ pub async fn create_magic_token_endpoint(
 
     let query_string = query_string.finish();
 
-    if let Some(host) = &query.host {
-        Ok(Json(json!({
-            "token": token,
-            "url": format!("{host}?{query_string}")
-        })))
-    } else {
-        Ok(Json(json!({
-            "token": token,
-        })))
-    }
+    query.host.as_ref().map_or_else(
+        || {
+            Ok(Json(json!({
+                "token": token,
+            })))
+        },
+        |host| {
+            Ok(Json(json!({
+                "token": token,
+                "url": format!("{host}?{query_string}")
+            })))
+        },
+    )
 }

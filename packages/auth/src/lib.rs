@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 #[cfg(feature = "api")]
 pub mod api;
@@ -44,11 +45,9 @@ async fn tunnel_magic_token(
         .json()
         .await?;
 
-    if let Some(success) = value.get("success") {
-        Ok(success.as_bool().unwrap_or(false))
-    } else {
-        Ok(false)
-    }
+    Ok(value
+        .get("success")
+        .map_or(false, |success| success.as_bool().unwrap_or(false)))
 }
 
 #[cfg(feature = "api")]
@@ -78,6 +77,9 @@ fn create_client_id() -> String {
     Uuid::new_v4().to_string()
 }
 
+/// # Errors
+///
+/// Will error if there is a database error
 pub async fn get_client_id_and_access_token(
     db: &ConfigDatabase,
     host: &str,
@@ -87,13 +89,10 @@ pub async fn get_client_id_and_access_token(
     } else {
         let client_id = create_client_id();
 
-        let token = match register_client(host, &client_id)
+        let token = register_client(host, &client_id)
             .await
             .map_err(|_| DbError::Unknown)?
-        {
-            Some(token) => Ok(token),
-            None => Err(DbError::Unknown),
-        }?;
+            .ok_or(DbError::Unknown)?;
 
         create_client_access_token(db, &client_id, &token).await?;
 
@@ -136,7 +135,7 @@ impl FromRequest for NonTunnelRequestAuthorized {
 
     fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
         if is_authorized(req) {
-            ok(NonTunnelRequestAuthorized)
+            ok(Self)
         } else {
             log::warn!(
                 "Unauthorized NonTunnelRequestAuthorized request to '{}'",
@@ -167,6 +166,11 @@ pub enum FetchSignatureError {
     Unauthorized,
 }
 
+/// # Errors
+///
+/// * If the request is unauthorized
+/// * If there was a generic http request error
+/// * If there was an error parsing the json response
 pub async fn fetch_signature_token(
     host: &str,
     client_id: &str,
@@ -181,7 +185,7 @@ pub async fn fetch_signature_token(
         .send()
         .await?;
 
-    if let reqwest::StatusCode::UNAUTHORIZED = response.status() {
+    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
         return Err(FetchSignatureError::Unauthorized);
     }
 
