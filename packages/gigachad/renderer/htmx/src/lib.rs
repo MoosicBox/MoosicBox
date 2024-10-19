@@ -79,9 +79,13 @@ pub async fn catchall_endpoint(
     } else {
         format!("?{query_string}")
     };
+
+    let path = format!("{}{}", req.path(), query_string);
+    drop(req);
+
     let container = app
         .router
-        .navigate(&format!("{}{}", req.path(), query_string))
+        .navigate(&path)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to navigate: {e:?}")))?;
 
