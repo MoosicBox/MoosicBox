@@ -371,7 +371,7 @@ pub fn albums_page_content() -> Markup {
     let size: u16 = 200;
 
     html! {
-        h1 { ("Albums") }
+        h1 sx-height=(36) { ("Albums") }
         div sx-dir="row" sx-overflow-x="wrap" sx-overflow-y="show" {
             div hx-get=(PreEscaped(format!("/albums-list-start?limit=100&size={size}"))) {}
         }
