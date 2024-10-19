@@ -161,8 +161,136 @@ impl ContainerElement {
         }
     }
 
+    #[cfg(feature = "id")]
+    #[must_use]
+    pub fn find_parent<'a>(&self, root: &'a mut Self) -> Option<&'a Self> {
+        if root
+            .elements
+            .iter()
+            .filter_map(|x| x.container_element())
+            .any(|x| x.id == self.id)
+        {
+            Some(root)
+        } else {
+            root.elements
+                .iter()
+                .filter_map(|x| x.container_element())
+                .find(|x| {
+                    x.elements
+                        .iter()
+                        .filter_map(|x| x.container_element())
+                        .any(|x| x.id == self.id)
+                })
+        }
+    }
+
+    #[cfg(feature = "id")]
+    #[must_use]
+    pub fn find_parent_by_id(&self, id: usize) -> Option<&Self> {
+        if self
+            .elements
+            .iter()
+            .filter_map(|x| x.container_element())
+            .any(|x| x.id == id)
+        {
+            Some(self)
+        } else {
+            self.elements
+                .iter()
+                .filter_map(|x| x.container_element())
+                .find_map(|x| x.find_parent_by_id(id))
+        }
+    }
+
+    #[cfg(feature = "id")]
+    #[must_use]
+    pub fn find_parent_by_id_mut(&mut self, id: usize) -> Option<&mut Self> {
+        if self
+            .elements
+            .iter()
+            .filter_map(|x| x.container_element())
+            .any(|x| x.id == id)
+        {
+            Some(self)
+        } else {
+            self.elements
+                .iter_mut()
+                .filter_map(|x| x.container_element_mut())
+                .find_map(|x| x.find_parent_by_id_mut(id))
+        }
+    }
+
     pub fn replace_with(&mut self, replacement: Self) {
         *self = replacement;
+    }
+
+    /// # Panics
+    ///
+    /// * If the `ContainerElement` is the root node
+    /// * If the `ContainerElement` is not properly attached to the tree
+    #[cfg(feature = "id")]
+    pub fn replace_with_elements(&mut self, replacement: Vec<Element>, root: &mut Self) {
+        let Some(parent) = &mut root.find_parent_by_id_mut(self.id) else {
+            panic!("Cannot replace the root node with multiple elements");
+        };
+
+        let index = parent
+            .elements
+            .iter()
+            .enumerate()
+            .find_map(|(i, x)| {
+                if let Some(container) = x.container_element() {
+                    if container.id == self.id {
+                        Some(i)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| panic!("ContainerElement is not attached properly to tree"));
+
+        parent.elements.remove(index);
+
+        for (i, element) in replacement.into_iter().enumerate() {
+            parent.elements.insert(index + i, element);
+        }
+    }
+
+    /// # Panics
+    ///
+    /// * If the `ContainerElement` is not properly attached to the tree
+    #[cfg(feature = "id")]
+    pub fn replace_id_with_elements(&mut self, replacement: Vec<Element>, id: usize) -> bool {
+        let Some(parent) = &mut self.find_parent_by_id_mut(id) else {
+            return false;
+        };
+
+        let index = parent
+            .elements
+            .iter()
+            .enumerate()
+            .find_map(|(i, x)| {
+                x.container_element().and_then(
+                    |container| {
+                        if container.id == id {
+                            Some(i)
+                        } else {
+                            None
+                        }
+                    },
+                )
+            })
+            .unwrap_or_else(|| panic!("ContainerElement is not attached properly to tree"));
+
+        parent.elements.remove(index);
+
+        for (i, element) in replacement.into_iter().enumerate() {
+            parent.elements.insert(index + i, element);
+        }
+
+        true
     }
 }
 

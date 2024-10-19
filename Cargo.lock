@@ -3767,6 +3767,7 @@ dependencies = [
  "egui_extras",
  "flume",
  "gigachad_renderer",
+ "gigachad_router",
  "gigachad_transformer",
  "image",
  "itertools 0.13.0",

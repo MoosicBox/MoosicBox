@@ -11,7 +11,10 @@ use eframe::egui::{self, Response, Ui, Widget};
 use flume::{Receiver, Sender};
 use gigachad_renderer::viewport::immediate::{Pos, Viewport, ViewportListener};
 pub use gigachad_renderer::*;
-use gigachad_transformer::{calc::Calc, ContainerElement, Element, LayoutDirection, TableIter};
+use gigachad_router::Router;
+use gigachad_transformer::{
+    calc::Calc, ContainerElement, Element, LayoutDirection, Route, TableIter,
+};
 use itertools::Itertools;
 
 #[derive(Clone)]
@@ -24,15 +27,9 @@ pub struct EguiRenderer {
     receiver: Receiver<String>,
 }
 
-impl Default for EguiRenderer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl EguiRenderer {
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(router: Router) -> Self {
         let (tx, rx) = flume::unbounded();
         let (event_tx, event_rx) = flume::unbounded();
         Self {
@@ -40,7 +37,7 @@ impl EguiRenderer {
             height: None,
             x: None,
             y: None,
-            app: EguiApp::new(tx, event_tx, event_rx),
+            app: EguiApp::new(router, tx, event_tx, event_rx),
             receiver: rx,
         }
     }
@@ -172,6 +169,7 @@ impl Renderer for EguiRenderer {
         *self.app.container.write().unwrap() = elements;
         *self.app.viewport_listeners.write().unwrap() = HashMap::new();
         *self.app.viewports.write().unwrap() = HashMap::new();
+        *self.app.route_requests.write().unwrap() = vec![];
 
         log::debug!("render: finished");
         if let Some(ctx) = &*self.app.ctx.read().unwrap() {
@@ -185,6 +183,7 @@ impl Renderer for EguiRenderer {
 #[derive(Debug)]
 enum AppEvent {
     LoadImage { source: String },
+    ProcessRoute { route: Route, container_id: usize },
 }
 
 #[derive(Clone)]
@@ -205,12 +204,15 @@ struct EguiApp {
     viewport_listeners: Arc<RwLock<HashMap<usize, ViewportListener>>>,
     viewports: Arc<RwLock<HashMap<usize, Viewport>>>,
     images: Arc<RwLock<HashMap<String, AppImage>>>,
+    route_requests: Arc<RwLock<Vec<usize>>>,
+    router: Router,
 }
 
 type Handler = Box<dyn Fn(&Response)>;
 
 impl EguiApp {
     fn new(
+        router: Router,
         sender: Sender<String>,
         event: Sender<AppEvent>,
         event_receiver: Receiver<AppEvent>,
@@ -226,6 +228,8 @@ impl EguiApp {
             viewport_listeners: Arc::new(RwLock::new(HashMap::new())),
             viewports: Arc::new(RwLock::new(HashMap::new())),
             images: Arc::new(RwLock::new(HashMap::new())),
+            route_requests: Arc::new(RwLock::new(vec![])),
+            router,
         }
     }
 
@@ -278,6 +282,32 @@ impl EguiApp {
                         });
                     }
                 }
+                AppEvent::ProcessRoute {
+                    route,
+                    container_id,
+                } => match route {
+                    Route::Get { route } | Route::Post { route } => {
+                        match self.router.navigate(&route).await {
+                            Ok(container) => {
+                                let mut page = self.container.write().unwrap();
+                                if page.replace_id_with_elements(container.elements, container_id) {
+                                    page.calc();
+                                    drop(page);
+                                    if let Some(ctx) = &*self.ctx.read().unwrap() {
+                                        ctx.request_repaint();
+                                    }
+                                } else {
+                                    moosicbox_assert::die_or_warn!(
+                                        "Unable to find element with id {container_id}"
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                log::error!("Failed to process route ({route}): {e:?}");
+                            }
+                        }
+                    }
+                },
             }
         }
     }
@@ -752,6 +782,27 @@ impl EguiApp {
         rect: Option<egui::Rect>,
     ) {
         log::trace!("render_element: rect={rect:?}");
+
+        if let Some(container) = element.container_element() {
+            if let Some(route) = &container.route {
+                let processed_route = {
+                    self.route_requests
+                        .read()
+                        .unwrap()
+                        .iter()
+                        .any(|x| *x == container.id)
+                };
+                if !processed_route {
+                    self.route_requests.write().unwrap().push(container.id);
+                    if let Err(e) = self.event.send(AppEvent::ProcessRoute {
+                        route: route.to_owned(),
+                        container_id: container.id,
+                    }) {
+                        log::error!("Failed to send ProcessRoute event: {e:?}");
+                    }
+                }
+            }
+        }
 
         let response: Option<Response> = match element {
             Element::Table { .. } => {

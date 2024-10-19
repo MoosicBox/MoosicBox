@@ -124,7 +124,7 @@ impl NativeAppBuilder {
                 Ok(if cfg!(feature = "egui") {
                     #[cfg(feature = "egui")]
                     {
-                        let renderer = gigachad_renderer_egui::EguiRenderer::new();
+                        let renderer = gigachad_renderer_egui::EguiRenderer::new(router.clone());
                         moosicbox_task::spawn("egui navigation listener", {
                             let renderer = renderer.clone();
                             let mut router = router.clone();
