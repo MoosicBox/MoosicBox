@@ -134,6 +134,34 @@ pub struct ContainerElement {
     pub calculated_position: Option<LayoutPosition>,
 }
 
+impl ContainerElement {
+    #[cfg(feature = "id")]
+    #[must_use]
+    pub fn find_element_by_id(&self, id: usize) -> Option<&Self> {
+        if self.id == id {
+            Some(self)
+        } else {
+            self.elements
+                .iter()
+                .filter_map(|x| x.container_element())
+                .find_map(|x| x.find_element_by_id(id))
+        }
+    }
+
+    #[cfg(feature = "id")]
+    #[must_use]
+    pub fn find_element_by_id_mut(&mut self, id: usize) -> Option<&mut Self> {
+        if self.id == id {
+            Some(self)
+        } else {
+            self.elements
+                .iter_mut()
+                .filter_map(|x| x.container_element_mut())
+                .find_map(|x| x.find_element_by_id_mut(id))
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Element {
     Raw {
