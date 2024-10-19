@@ -85,7 +85,9 @@ pub async fn catchall_endpoint(
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to navigate: {e:?}")))?;
 
-    Ok(HttpResponse::Ok().body(container_element_to_html(&container)))
+    Ok(HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(container_element_to_html(&container)))
 }
 
 pub struct HtmxRenderRunner {
