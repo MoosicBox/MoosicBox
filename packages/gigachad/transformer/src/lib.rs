@@ -103,8 +103,14 @@ impl LayoutPosition {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Route {
-    Get { route: String },
-    Post { route: String },
+    Get {
+        route: String,
+        trigger: Option<String>,
+    },
+    Post {
+        route: String,
+        trigger: Option<String>,
+    },
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -425,11 +431,13 @@ impl ContainerElement {
 
         if let Some(route) = &self.route {
             match route {
-                Route::Get { route } => {
+                Route::Get { route, trigger } => {
                     attrs.add("hx-get", route);
+                    attrs.add_opt("hx-trigger", trigger.clone());
                 }
-                Route::Post { route } => {
+                Route::Post { route, trigger } => {
                     attrs.add("hx-post", route);
+                    attrs.add_opt("hx-trigger", trigger.clone());
                 }
             }
         }

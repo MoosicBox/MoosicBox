@@ -80,10 +80,12 @@ fn get_route(tag: &HTMLTag) -> Option<Route> {
     if let Some(get) = get_tag_attr_value(tag, "hx-get") {
         Some(Route::Get {
             route: get.to_string(),
+            trigger: get_tag_attr_value_owned(tag, "hx-trigger"),
         })
     } else if let Some(post) = get_tag_attr_value(tag, "hx-post") {
         Some(Route::Post {
             route: post.to_string(),
+            trigger: get_tag_attr_value_owned(tag, "hx-trigger"),
         })
     } else {
         None

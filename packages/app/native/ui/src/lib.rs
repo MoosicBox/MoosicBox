@@ -310,7 +310,7 @@ pub fn albums_list_start(albums: &Page<ApiAlbum>, size: u16) -> Markup {
         albums.remaining().map_or_else(
             || {
                 html! {
-                    div hx-get=(pre_escaped!("/albums-list-start?offset={offset}&limit={limit}&size={size}")) {}
+                    div hx-get=(pre_escaped!("/albums-list-start?offset={offset}&limit={limit}&size={size}")) hx-trigger="load" {}
                 }
             },
             |remaining| {
@@ -319,13 +319,13 @@ pub fn albums_list_start(albums: &Page<ApiAlbum>, size: u16) -> Markup {
 
                 html! {
                     @if limit < MIN_PAGE_THRESHOLD {
-                        div hx-get=(pre_escaped!("/albums-list?offset={offset}&limit={remaining}&size={size}")) {}
+                        div hx-get=(pre_escaped!("/albums-list?offset={offset}&limit={remaining}&size={size}")) hx-trigger="load" {}
                     } @else {
                         @for i in 0..MAX_PARALLEL_REQUESTS {
                             @if i == MAX_PARALLEL_REQUESTS - 1 {
-                                div hx-get=(pre_escaped!("/albums-list?offset={}&limit={last}&size={size}", offset + i * limit)) {}
+                                div hx-get=(pre_escaped!("/albums-list?offset={}&limit={last}&size={size}", offset + i * limit)) hx-trigger="load" {}
                             } @else {
-                                div hx-get=(pre_escaped!("/albums-list?offset={}&limit={limit}&size={size}", offset + i * limit)) {}
+                                div hx-get=(pre_escaped!("/albums-list?offset={}&limit={limit}&size={size}", offset + i * limit)) hx-trigger="load" {}
                             }
                         }
                     }
@@ -381,6 +381,7 @@ pub fn albums_page_content() -> Markup {
         div sx-dir="row" sx-overflow-x="wrap" sx-overflow-y="show" {
             div
                 hx-get=(pre_escaped!("/albums-list-start?limit=100&size={size}"))
+                hx-trigger="load"
                 sx-dir="row"
                 sx-overflow-x="wrap"
                 sx-overflow-y="show"

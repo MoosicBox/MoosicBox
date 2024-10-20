@@ -289,27 +289,29 @@ impl EguiApp {
                     let ctx = self.ctx.clone();
                     moosicbox_task::spawn("renderer: ProcessRoute", async move {
                         match route {
-                            Route::Get { route } | Route::Post { route } => {
-                                match router.navigate(&route).await {
-                                    Ok(result) => {
-                                        let mut page = container.write().unwrap();
-                                        if page.replace_id_with_elements(
-                                            result.immediate.elements,
-                                            container_id,
-                                        ) {
-                                            page.calc();
-                                            drop(page);
-                                            if let Some(ctx) = &*ctx.read().unwrap() {
-                                                ctx.request_repaint();
+                            Route::Get { route, trigger } | Route::Post { route, trigger } => {
+                                if trigger.as_deref() == Some("load") {
+                                    match router.navigate(&route).await {
+                                        Ok(result) => {
+                                            let mut page = container.write().unwrap();
+                                            if page.replace_id_with_elements(
+                                                result.immediate.elements,
+                                                container_id,
+                                            ) {
+                                                page.calc();
+                                                drop(page);
+                                                if let Some(ctx) = &*ctx.read().unwrap() {
+                                                    ctx.request_repaint();
+                                                }
+                                            } else {
+                                                moosicbox_assert::die_or_warn!(
+                                                    "Unable to find element with id {container_id}"
+                                                );
                                             }
-                                        } else {
-                                            moosicbox_assert::die_or_warn!(
-                                                "Unable to find element with id {container_id}"
-                                            );
                                         }
-                                    }
-                                    Err(e) => {
-                                        log::error!("Failed to process route ({route}): {e:?}");
+                                        Err(e) => {
+                                            log::error!("Failed to process route ({route}): {e:?}");
+                                        }
                                     }
                                 }
                             }
