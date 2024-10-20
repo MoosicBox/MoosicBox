@@ -1317,12 +1317,12 @@ impl Renderer for FltkRenderer {
     /// Will panic if elements `Mutex` is poisoned.
     fn render(
         &mut self,
-        elements: ContainerElement,
+        elements: View,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         log::debug!("render: {elements:?}");
 
         {
-            *self.elements.lock().unwrap() = elements;
+            *self.elements.lock().unwrap() = elements.immediate;
         }
 
         self.perform_render()

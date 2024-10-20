@@ -12,7 +12,7 @@ use actix_web::{
 };
 use async_trait::async_trait;
 use flume::Receiver;
-use gigachad_renderer::{RenderRunner, Renderer};
+use gigachad_renderer::{RenderRunner, Renderer, View};
 use gigachad_router::Router;
 use gigachad_transformer::ContainerElement;
 use tokio::runtime::{Handle, Runtime};
@@ -91,7 +91,7 @@ pub async fn catchall_endpoint(
 
     Ok(HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
-        .body(container_element_to_html(&container)))
+        .body(container_element_to_html(&container.immediate)))
 }
 
 pub struct HtmxRenderRunner {
@@ -210,7 +210,7 @@ impl Renderer for HtmxRenderer {
     /// Will error if htmx fails to render the elements.
     fn render(
         &mut self,
-        elements: ContainerElement,
+        elements: View,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         moosicbox_logging::debug_or_trace!(("render: start"), ("render: start {elements:?}"));
 

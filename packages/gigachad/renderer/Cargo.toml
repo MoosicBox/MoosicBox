@@ -11,15 +11,20 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-gigachad_transformer = { version = "0.1.0", path = "../transformer", default-features = false }
+gigachad_transformer = { version = "0.1.0", path = "../transformer", default-features = false, features = [
+    "html",
+] }
 
 async-trait = { workspace = true }
 log         = { workspace = true }
+maud        = { workspace = true, optional = true }
 
 [features]
-default = ["viewport", "viewport-immediate", "viewport-retained"]
+default = ["maud", "viewport", "viewport-immediate", "viewport-retained"]
 
 fail-on-warnings = []
+
+maud = ["dep:maud"]
 
 viewport           = []
 viewport-immediate = ["viewport"]

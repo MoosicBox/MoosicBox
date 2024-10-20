@@ -25,9 +25,11 @@ thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["rt-multi-thread", "sync"] }
 
 [features]
-default = ["egui-wgpu", "fltk", "format", "htmx"]
+default = ["egui-wgpu", "fltk", "format", "htmx", "maud"]
 
 fail-on-warnings = []
+
+maud = ["gigachad_renderer/maud"]
 
 egui      = ["dep:gigachad_renderer_egui"]
 egui-wgpu = ["egui", "gigachad_renderer_egui/wgpu"]

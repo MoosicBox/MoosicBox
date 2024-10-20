@@ -9,6 +9,7 @@ use moosicbox_env_utils::default_env_usize;
 use thiserror::Error;
 use tokio::{runtime::Runtime, sync::RwLock};
 
+pub use gigachad_renderer as renderer;
 pub use gigachad_router as router;
 
 #[derive(Debug, Error)]

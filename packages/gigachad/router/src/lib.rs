@@ -7,8 +7,9 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use flume::{Receiver, SendError, Sender};
+use flume::{Receiver, Sender};
 use futures::Future;
+use gigachad_renderer::View;
 pub use gigachad_transformer::ContainerElement;
 use qstring::QString;
 use thiserror::Error;
@@ -18,12 +19,9 @@ pub type RouteFunc = Arc<
     Box<
         dyn (Fn(
                 RouteRequest,
-            ) -> Pin<
-                Box<
-                    dyn Future<Output = Result<ContainerElement, Box<dyn std::error::Error>>>
-                        + Send,
-                >,
-            >) + Send
+            )
+                -> Pin<Box<dyn Future<Output = Result<View, Box<dyn std::error::Error>>> + Send>>)
+            + Send
             + Sync,
     >,
 >;
@@ -174,15 +172,15 @@ pub enum NavigateError {
     InvalidPath,
     #[error("Handler error")]
     Handler,
-    #[error(transparent)]
-    Send(#[from] SendError<ContainerElement>),
+    #[error("Sender error")]
+    Sender,
 }
 
 #[derive(Clone)]
 pub struct Router {
     routes: Arc<RwLock<Vec<(RoutePath, RouteFunc)>>>,
-    sender: Sender<ContainerElement>,
-    pub receiver: Receiver<ContainerElement>,
+    sender: Sender<View>,
+    pub receiver: Receiver<View>,
 }
 
 impl Default for Router {
@@ -207,20 +205,69 @@ impl Router {
     ///
     /// Will panic if routes `RwLock` is poisoned.
     #[must_use]
-    pub fn with_route<
-        F: Future<Output = Result<ContainerElement, BoxE>> + Send + 'static,
+    pub fn with_route_result<
+        Response: TryInto<View>,
+        F: Future<Output = Result<Response, BoxE>> + Send + 'static,
         BoxE: Into<Box<dyn std::error::Error>>,
     >(
         self,
         route: impl Into<RoutePath>,
         handler: impl Fn(RouteRequest) -> F + Send + Sync + Clone + 'static,
-    ) -> Self {
+    ) -> Self
+    where
+        Response::Error: Into<Box<dyn std::error::Error>>,
+    {
         self.routes.write().unwrap().push((
             route.into(),
             Arc::new(Box::new(move |req| {
                 Box::pin({
                     let handler = handler.clone();
-                    async move { handler(req).await.map_err(Into::into) }
+                    async move {
+                        let resp: Result<Response, Box<dyn std::error::Error>> =
+                            handler(req).await.map_err(Into::into);
+                        match resp.map(|x| {
+                            let x: Result<View, Box<dyn std::error::Error>> =
+                                x.try_into().map_err(|y| y.into());
+                            x
+                        }) {
+                            Ok(x) => match x {
+                                Ok(x) => Ok(x),
+                                Err(e) => Err(e),
+                            },
+                            Err(e) => Err(e),
+                        }
+                    }
+                })
+            })),
+        ));
+        self
+    }
+
+    /// # Panics
+    ///
+    /// Will panic if routes `RwLock` is poisoned.
+    #[must_use]
+    pub fn with_route<Response: TryInto<View>, F: Future<Output = Response> + Send + 'static>(
+        self,
+        route: impl Into<RoutePath>,
+        handler: impl Fn(RouteRequest) -> F + Send + Sync + Clone + 'static,
+    ) -> Self
+    where
+        Response::Error: std::error::Error + 'static,
+    {
+        self.routes.write().unwrap().push((
+            route.into(),
+            Arc::new(Box::new(move |req| {
+                Box::pin({
+                    let handler = handler.clone();
+                    async move {
+                        let resp: Result<View, Box<dyn std::error::Error>> =
+                            handler(req).await.try_into().map_err(|e| {
+                                log::error!("Failed to handle route: {e:?}");
+                                Box::new(e) as Box<dyn std::error::Error>
+                            });
+                        resp
+                    }
                 })
             })),
         ));
@@ -234,7 +281,7 @@ impl Router {
     /// # Panics
     ///
     /// Will panic if routes `RwLock` is poisoned.
-    pub async fn navigate(&self, path: &str) -> Result<ContainerElement, NavigateError> {
+    pub async fn navigate(&self, path: &str) -> Result<View, NavigateError> {
         let req = RouteRequest::from_path(path);
         let handler = {
             self.routes
@@ -248,9 +295,9 @@ impl Router {
 
         Ok(if let Some(handler) = handler {
             match handler(req).await {
-                Ok(elements) => elements,
+                Ok(view) => view,
                 Err(e) => {
-                    log::error!("Failed to fetch route elements: {e:?}");
+                    log::error!("Failed to fetch route view: {e:?}");
                     return Err(NavigateError::Handler);
                 }
             }
@@ -268,7 +315,7 @@ impl Router {
     ///
     /// Will panic if routes `RwLock` is poisoned.
     pub async fn navigate_send(&mut self, path: &str) -> Result<(), NavigateError> {
-        let elements = {
+        let view = {
             let req = RouteRequest::from_path(path);
             let handler = {
                 self.routes
@@ -281,9 +328,9 @@ impl Router {
             };
             if let Some(handler) = handler {
                 match handler(req).await {
-                    Ok(elements) => elements,
+                    Ok(view) => view,
                     Err(e) => {
-                        log::error!("Failed to fetch route elements: {e:?}");
+                        log::error!("Failed to fetch route view: {e:?}");
                         return Err(NavigateError::Handler);
                     }
                 }
@@ -293,7 +340,10 @@ impl Router {
             }
         };
 
-        self.sender.send(elements)?;
+        self.sender.send(view).map_err(|e| {
+            log::error!("Failed to send: {e:?}");
+            NavigateError::Sender
+        })?;
 
         Ok(())
     }
@@ -327,7 +377,7 @@ impl Router {
     }
 
     #[must_use]
-    pub async fn wait_for_navigation(&self) -> Option<ContainerElement> {
+    pub async fn wait_for_navigation(&self) -> Option<View> {
         self.receiver.recv_async().await.ok()
     }
 }

@@ -152,11 +152,9 @@ impl Renderer for EguiRenderer {
     /// # Panics
     ///
     /// Will panic if elements `Mutex` is poisoned.
-    fn render(
-        &mut self,
-        mut elements: ContainerElement,
-    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-        moosicbox_logging::debug_or_trace!(("render: start"), ("render: start {elements:?}"));
+    fn render(&mut self, view: View) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        moosicbox_logging::debug_or_trace!(("render: start"), ("render: start {view:?}"));
+        let mut elements = view.immediate;
 
         elements.calculated_width = self.app.width.read().unwrap().or(self.width.map(f32::from));
         elements.calculated_height = self
@@ -295,9 +293,10 @@ impl EguiApp {
                                 match router.navigate(&route).await {
                                     Ok(result) => {
                                         let mut page = container.write().unwrap();
-                                        if page
-                                            .replace_id_with_elements(result.elements, container_id)
-                                        {
+                                        if page.replace_id_with_elements(
+                                            result.immediate.elements,
+                                            container_id,
+                                        ) {
                                             page.calc();
                                             drop(page);
                                             if let Some(ctx) = &*ctx.read().unwrap() {

@@ -2,7 +2,10 @@
 
 use std::{num::ParseIntError, sync::Arc};
 
-use moosicbox_app_native_lib::router::{ContainerElement, RouteRequest, Router};
+use moosicbox_app_native_lib::{
+    renderer::View,
+    router::{ContainerElement, RouteRequest, Router},
+};
 use moosicbox_env_utils::{default_env_usize, option_env_i32, option_env_u16};
 use moosicbox_library_models::{ApiAlbum, ApiArtist};
 use moosicbox_menu_models::api::ApiAlbumVersion;
@@ -25,14 +28,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let router = Router::new()
         .with_route(&["/", "/home"], |_| async {
-            moosicbox_app_native_ui::home().into_string().try_into()
+            moosicbox_app_native_ui::home()
         })
         .with_route("/downloads", |_| async {
             moosicbox_app_native_ui::downloads()
-                .into_string()
-                .try_into()
         })
-        .with_route("/albums", |req| async move {
+        .with_route_result("/albums", |req| async move {
             Ok::<_, Box<dyn std::error::Error>>(if let Some(album_id) = req.query.get("albumId") {
                 let response = reqwest::get(format!(
                     "{}/menu/album?moosicboxProfile=master&albumId={album_id}",
@@ -66,21 +67,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 log::debug!("versions: {versions:?}");
 
-                moosicbox_app_native_ui::album(album, &versions)
+                let container: ContainerElement = moosicbox_app_native_ui::album(album, &versions)
                     .into_string()
-                    .try_into()?
+                    .try_into()?;
+
+                container
             } else {
                 moosicbox_app_native_ui::albums().into_string().try_into()?
             })
         })
-        .with_route("/albums-list-start", |req| async move {
+        .with_route_result("/albums-list-start", |req| async move {
             albums_list_start_route(req).await
         })
-        .with_route(
+        .with_route_result(
             "/albums-list",
             |req| async move { albums_list_route(req).await },
         )
-        .with_route("/artists", |req| async move {
+        .with_route_result("/artists", |req| async move {
             Ok::<_, Box<dyn std::error::Error>>(
                 if let Some(artist_id) = req.query.get("artistId") {
                     let response = reqwest::get(format!(
@@ -99,9 +102,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     log::debug!("artist: {artist:?}");
 
-                    moosicbox_app_native_ui::artist(artist)
+                    let container: ContainerElement = moosicbox_app_native_ui::artist(artist)
                         .into_string()
-                        .try_into()?
+                        .try_into()?;
+
+                    container
                 } else {
                     let response = reqwest::get(format!(
                         "{}/menu/artists?moosicboxProfile=master&offset=0&limit=2000",
@@ -221,7 +226,7 @@ pub enum RouteError {
     Reqwest(#[from] reqwest::Error),
 }
 
-async fn albums_list_start_route(req: RouteRequest) -> Result<ContainerElement, RouteError> {
+async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteError> {
     let Some(limit) = req.query.get("limit") else {
         return Err(RouteError::MissingQueryParam("limit"));
     };
@@ -260,7 +265,7 @@ async fn albums_list_start_route(req: RouteRequest) -> Result<ContainerElement, 
         })
 }
 
-async fn albums_list_route(req: RouteRequest) -> Result<ContainerElement, RouteError> {
+async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
     let Some(offset) = req.query.get("offset") else {
         return Err(RouteError::MissingQueryParam("offset"));
     };
