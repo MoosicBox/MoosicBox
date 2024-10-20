@@ -3805,6 +3805,7 @@ name = "gigachad_renderer_htmx"
 version = "0.1.0"
 dependencies = [
  "actix-cors",
+ "actix-htmx",
  "actix-web",
  "async-trait",
  "flume",
@@ -3812,6 +3813,7 @@ dependencies = [
  "gigachad_router",
  "gigachad_transformer",
  "log",
+ "moosicbox_app_native_image",
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_logging",

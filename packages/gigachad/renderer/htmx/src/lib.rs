@@ -1,9 +1,10 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use std::sync::Arc;
+use std::{ops::Deref, path::PathBuf, str::FromStr as _, sync::Arc};
 
 use actix_cors::Cors;
+use actix_htmx::Htmx;
 use actix_web::{
     error::ErrorInternalServerError,
     http, middleware, route,
@@ -15,6 +16,7 @@ use flume::Receiver;
 use gigachad_renderer::{RenderRunner, Renderer, View};
 use gigachad_router::Router;
 use gigachad_transformer::ContainerElement;
+use moosicbox_app_native_image::image;
 use tokio::runtime::{Handle, Runtime};
 
 #[derive(Clone)]
@@ -49,14 +51,32 @@ impl HtmxRenderer {
     }
 }
 
-fn container_element_to_html(container: &ContainerElement) -> String {
+#[allow(clippy::similar_names)]
+fn container_element_to_html(container: &ContainerElement, htmx: &Htmx) -> String {
     let html = container
         .elements
         .iter()
         .map(ToString::to_string)
         .collect::<String>();
 
-    format!("<html><body>{html}</body></html>")
+    if htmx.is_htmx {
+        html
+    } else {
+        format!(
+            r#"
+            <html>
+                <head>
+                    <script
+                        src="https://unpkg.com/htmx.org@2.0.2"
+                        integrity="sha384-Y7hw+L/jvKeWIRRkqWYfPcvVxHzVzn5REgzbawhxAuQGwX1XWe70vji+VSeHOThJ"
+                        crossorigin="anonymous">
+                    </script>
+                </head>
+                <body>{html}</body>
+            </html>
+            "#
+        )
+    }
 }
 
 #[route(
@@ -72,6 +92,7 @@ fn container_element_to_html(container: &ContainerElement) -> String {
 pub async fn catchall_endpoint(
     app: web::Data<HtmxApp>,
     req: HttpRequest,
+    htmx: Htmx,
 ) -> Result<HttpResponse, actix_web::Error> {
     let query_string = req.query_string();
     let query_string = if query_string.is_empty() {
@@ -83,6 +104,41 @@ pub async fn catchall_endpoint(
     let path = format!("{}{}", req.path(), query_string);
     drop(req);
 
+    if path == "/favicon.ico" {
+        let favicon = image!("../../../../../app-website/public/favicon.ico");
+        if let Some(favicon) = moosicbox_app_native_image::get_image(favicon) {
+            return Ok(HttpResponse::Ok()
+                .content_type("image/ico")
+                .body(favicon.deref().clone()));
+        }
+    } else if path.starts_with("/app-website/") {
+        let path = PathBuf::from_str(&format!("../../../../..{path}")).unwrap();
+        if let Some(path_str) = path.to_str() {
+            if let Some(image) = moosicbox_app_native_image::get_image(path_str) {
+                if let Some(extension) = path.extension().and_then(|x| x.to_str()) {
+                    let extension = extension.to_lowercase();
+                    let mut response = HttpResponse::Ok();
+
+                    match extension.as_str() {
+                        "png" | "jpeg" | "jpg" | "ico" => {
+                            response.content_type(format!("image/{extension}"));
+                        }
+                        "svg" => {
+                            response.content_type(format!("image/{extension}+xml"));
+                        }
+                        _ => {
+                            moosicbox_assert::die_or_warn!(
+                                "unknown content-type for image {path_str}"
+                            );
+                        }
+                    }
+
+                    return Ok(response.body(image.deref().clone()));
+                }
+            }
+        }
+    }
+
     let container = app
         .router
         .navigate(&path)
@@ -91,7 +147,7 @@ pub async fn catchall_endpoint(
 
     Ok(HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
-        .body(container_element_to_html(&container.immediate)))
+        .body(container_element_to_html(&container.immediate, &htmx)))
 }
 
 pub struct HtmxRenderRunner {
