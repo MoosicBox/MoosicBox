@@ -1,7 +1,8 @@
 use std::borrow::Cow;
 
 use thiserror::Error;
-use tl::{Children, HTMLTag, Node, NodeHandle, ParseError, Parser, ParserOptions};
+pub use tl::ParseError;
+use tl::{Children, HTMLTag, Node, NodeHandle, Parser, ParserOptions};
 
 use crate::{LayoutDirection, LayoutOverflow, Number, Route};
 
