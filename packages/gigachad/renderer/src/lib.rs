@@ -4,12 +4,14 @@
 #[cfg(feature = "viewport")]
 pub mod viewport;
 
+use std::{future::Future, pin::Pin};
+
 use async_trait::async_trait;
 use gigachad_transformer::{html::ParseError, ContainerElement};
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Default)]
 pub struct View {
-    pub future: Option<ContainerElement>,
+    pub future: Option<Pin<Box<dyn Future<Output = ContainerElement> + Send>>>,
     pub immediate: ContainerElement,
 }
 
