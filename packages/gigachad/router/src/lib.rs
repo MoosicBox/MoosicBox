@@ -227,7 +227,7 @@ impl Router {
                             handler(req).await.map_err(Into::into);
                         match resp.map(|x| {
                             let x: Result<View, Box<dyn std::error::Error>> =
-                                x.try_into().map_err(|y| y.into());
+                                x.try_into().map_err(Into::into);
                             x
                         }) {
                             Ok(x) => match x {
