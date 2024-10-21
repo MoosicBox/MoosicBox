@@ -1319,7 +1319,7 @@ impl Renderer for FltkRenderer {
         &mut self,
         elements: View,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-        log::debug!("render: {elements:?}");
+        log::debug!("render: {:?}", elements.immediate);
 
         {
             *self.elements.lock().unwrap() = elements.immediate;

@@ -153,7 +153,10 @@ impl Renderer for EguiRenderer {
     ///
     /// Will panic if elements `Mutex` is poisoned.
     fn render(&mut self, view: View) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-        moosicbox_logging::debug_or_trace!(("render: start"), ("render: start {view:?}"));
+        moosicbox_logging::debug_or_trace!(
+            ("render: start"),
+            ("render: start {:?}", view.immediate)
+        );
         let mut elements = view.immediate;
 
         elements.calculated_width = self.app.width.read().unwrap().or(self.width.map(f32::from));
@@ -231,6 +234,7 @@ impl EguiApp {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn listen(&self) {
         while let Ok(event) = self.event_receiver.recv_async().await {
             log::trace!("received event {event:?}");
@@ -293,20 +297,50 @@ impl EguiApp {
                                 if trigger.as_deref() == Some("load") {
                                     match router.navigate(&route).await {
                                         Ok(result) => {
-                                            let mut page = container.write().unwrap();
-                                            if page.replace_id_with_elements(
-                                                result.immediate.elements,
-                                                container_id,
-                                            ) {
-                                                page.calc();
-                                                drop(page);
-                                                if let Some(ctx) = &*ctx.read().unwrap() {
-                                                    ctx.request_repaint();
+                                            let ids = {
+                                                let ids = result
+                                                    .immediate
+                                                    .elements
+                                                    .iter()
+                                                    .filter_map(|x| x.container_element())
+                                                    .map(|x| x.id)
+                                                    .collect_vec();
+                                                let mut page = container.write().unwrap();
+                                                if page.replace_id_with_elements(
+                                                    result.immediate.elements,
+                                                    container_id,
+                                                ) {
+                                                    page.calc();
+                                                    drop(page);
+                                                    if let Some(ctx) = &*ctx.read().unwrap() {
+                                                        ctx.request_repaint();
+                                                    }
+                                                } else {
+                                                    moosicbox_assert::die_or_warn!(
+                                                        "Unable to find element with id {container_id}"
+                                                    );
                                                 }
-                                            } else {
-                                                moosicbox_assert::die_or_warn!(
-                                                    "Unable to find element with id {container_id}"
-                                                );
+                                                ids
+                                            };
+                                            {
+                                                if let Some(future) = result.future {
+                                                    let elements = future.await;
+                                                    let mut page = container.write().unwrap();
+                                                    if page.replace_ids_with_elements(
+                                                        elements.elements,
+                                                        &ids,
+                                                    ) {
+                                                        page.calc();
+                                                        drop(page);
+                                                        if let Some(ctx) = &*ctx.read().unwrap() {
+                                                            ctx.request_repaint();
+                                                        }
+                                                    } else {
+                                                        moosicbox_assert::die_or_warn!(
+                                                            "Unable to find element with ids {ids:?}"
+                                                        );
+                                                    }
+                                                }
                                             }
                                         }
                                         Err(e) => {

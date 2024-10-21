@@ -298,6 +298,41 @@ impl ContainerElement {
 
         true
     }
+
+    /// # Panics
+    ///
+    /// * If the `ContainerElement` is not properly attached to the tree
+    #[cfg(feature = "id")]
+    pub fn replace_ids_with_elements(&mut self, replacement: Vec<Element>, ids: &[usize]) -> bool {
+        let Some(parent) = &mut self.find_parent_by_id_mut(ids[0]) else {
+            return false;
+        };
+
+        let index = parent
+            .elements
+            .iter()
+            .enumerate()
+            .find_map(|(i, x)| {
+                x.container_element().and_then(|container| {
+                    if container.id == ids[0] {
+                        Some(i)
+                    } else {
+                        None
+                    }
+                })
+            })
+            .unwrap_or_else(|| panic!("ContainerElement is not attached properly to tree"));
+
+        for _ in 0..ids.len() {
+            parent.elements.remove(index);
+        }
+
+        for (i, element) in replacement.into_iter().enumerate() {
+            parent.elements.insert(index + i, element);
+        }
+
+        true
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

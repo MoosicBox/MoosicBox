@@ -268,7 +268,10 @@ impl Renderer for HtmxRenderer {
         &mut self,
         elements: View,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-        moosicbox_logging::debug_or_trace!(("render: start"), ("render: start {elements:?}"));
+        moosicbox_logging::debug_or_trace!(
+            ("render: start"),
+            ("render: start {:?}", elements.immediate)
+        );
 
         log::debug!("render: finished");
 
