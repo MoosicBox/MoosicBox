@@ -152,9 +152,7 @@ export const offCurrentSeekChanged = onCurrentSeekChangedListener.off;
 export const currentSeek = _currentSeek;
 type CurrentSeekType = ReturnType<typeof _currentSeek>;
 export const setCurrentSeek = (
-    value:
-        | CurrentSeekType
-        | ((old: CurrentSeekType) => CurrentSeekType),
+    value: CurrentSeekType | ((old: CurrentSeekType) => CurrentSeekType),
     trigger = true,
 ) => {
     const old = _currentSeek();
@@ -258,9 +256,7 @@ export const offPlaylistChanged = onPlaylistChangedListener.off;
 export const playlist = _playlist;
 type PlaylistType = ReturnType<typeof _playlist>;
 export const setPlaylist = (
-    value:
-        | PlaylistType
-        | ((old: PlaylistType) => PlaylistType),
+    value: PlaylistType | ((old: PlaylistType) => PlaylistType),
     trigger = true,
 ) => {
     const old = _playlist();
@@ -1070,7 +1066,7 @@ export function updateSessionPartial(
             if (typeof playlistPosition() === 'number') {
                 const track =
                     state.currentPlaybackSession.playlist.tracks[
-                    playlistPosition()!
+                        playlistPosition()!
                     ];
 
                 if (track) {
@@ -1202,7 +1198,7 @@ if (!isServer) {
         });
     }
 
-    document.body.onkeydown = function(e) {
+    document.body.onkeydown = function (e) {
         const target = e.target as HTMLElement;
 
         if (
