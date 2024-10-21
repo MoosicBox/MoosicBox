@@ -370,8 +370,8 @@ impl EguiApp {
 
                 log::debug!(
                     "calc: frame size changed from ({:?}, {:?}) -> ({width}, {height})",
-                    self.width,
-                    self.height
+                    self.width.read().unwrap(),
+                    self.height.read().unwrap()
                 );
 
                 {
