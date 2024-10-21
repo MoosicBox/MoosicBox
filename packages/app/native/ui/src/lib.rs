@@ -246,6 +246,44 @@ impl TimeFormat for u64 {
 }
 
 #[must_use]
+pub fn album_page_immediate(album_id: u64) -> Markup {
+    html! {
+        div hx-get=(pre_escaped!("/albums?full=true&albumId={album_id}")) hx-trigger="load" {
+            div sx-dir="row" {
+                @let size = 200;
+                div sx-width=(size) sx-height=(size + 30) {
+                    img src=(public_img!("album.svg")) sx-width=(size) sx-height=(size);
+                }
+                div {
+                    h1 { ("loading...") }
+                    h2 { ("loading...") }
+                }
+            }
+            div {
+                table {
+                    thead {
+                        tr{
+                            th { ("#") }
+                            th { ("Title") }
+                            th { ("Artist") }
+                            th { ("Time") }
+                        }
+                    }
+                    tbody {
+                        tr {
+                            td { ("loading...") }
+                            td { ("loading...") }
+                            td { a { ("loading...") } }
+                            td { ("loading...") }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[must_use]
 pub fn album_page_content(album: ApiAlbum, versions: &[ApiAlbumVersion]) -> Markup {
     let ApiAlbum::Library(album) = album;
 
@@ -296,8 +334,8 @@ pub fn album_page_content(album: ApiAlbum, versions: &[ApiAlbumVersion]) -> Mark
 }
 
 #[must_use]
-pub fn album(album: ApiAlbum, versions: &[ApiAlbumVersion]) -> Markup {
-    page(&album_page_content(album, versions))
+pub fn album(album_id: u64) -> Markup {
+    page(&album_page_immediate(album_id))
 }
 
 #[must_use]

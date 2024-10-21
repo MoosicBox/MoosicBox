@@ -35,43 +35,53 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .with_route_result("/albums", |req| async move {
             Ok::<_, Box<dyn std::error::Error>>(if let Some(album_id) = req.query.get("albumId") {
-                let response = reqwest::get(format!(
-                    "{}/menu/album?moosicboxProfile=master&albumId={album_id}",
-                    std::env::var("MOOSICBOX_HOST")
-                        .as_deref()
-                        .unwrap_or("http://localhost:8500")
-                ))
-                .await?;
+                if req.query.get("full").map(|x| x.as_str()) == Some("true") {
+                    let response = reqwest::get(format!(
+                        "{}/menu/album?moosicboxProfile=master&albumId={album_id}",
+                        std::env::var("MOOSICBOX_HOST")
+                            .as_deref()
+                            .unwrap_or("http://localhost:8500")
+                    ))
+                    .await?;
 
-                if !response.status().is_success() {
-                    log::debug!("Error: {}", response.status());
+                    if !response.status().is_success() {
+                        log::debug!("Error: {}", response.status());
+                    }
+
+                    let album: ApiAlbum = response.json().await?;
+
+                    log::debug!("album: {album:?}");
+
+                    let response = reqwest::get(format!(
+                        "{}/menu/album/versions?moosicboxProfile=master&albumId={album_id}",
+                        std::env::var("MOOSICBOX_HOST")
+                            .as_deref()
+                            .unwrap_or("http://localhost:8500")
+                    ))
+                    .await?;
+
+                    if !response.status().is_success() {
+                        log::debug!("Error: {}", response.status());
+                    }
+
+                    let versions: Vec<ApiAlbumVersion> = response.json().await?;
+
+                    log::debug!("versions: {versions:?}");
+
+                    let container: ContainerElement =
+                        moosicbox_app_native_ui::album_page_content(album, &versions)
+                            .into_string()
+                            .try_into()?;
+
+                    container
+                } else {
+                    let container: ContainerElement =
+                        moosicbox_app_native_ui::album(album_id.parse::<u64>()?)
+                            .into_string()
+                            .try_into()?;
+
+                    container
                 }
-
-                let album: ApiAlbum = response.json().await?;
-
-                log::debug!("album: {album:?}");
-
-                let response = reqwest::get(format!(
-                    "{}/menu/album/versions?moosicboxProfile=master&albumId={album_id}",
-                    std::env::var("MOOSICBOX_HOST")
-                        .as_deref()
-                        .unwrap_or("http://localhost:8500")
-                ))
-                .await?;
-
-                if !response.status().is_success() {
-                    log::debug!("Error: {}", response.status());
-                }
-
-                let versions: Vec<ApiAlbumVersion> = response.json().await?;
-
-                log::debug!("versions: {versions:?}");
-
-                let container: ContainerElement = moosicbox_app_native_ui::album(album, &versions)
-                    .into_string()
-                    .try_into()?;
-
-                container
             } else {
                 moosicbox_app_native_ui::albums().into_string().try_into()?
             })
