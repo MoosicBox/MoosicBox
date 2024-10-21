@@ -392,53 +392,53 @@ impl ContainerElement {
         {
             element.calc_hardsized_elements();
 
-            if let Some(width) = element.width {
+            if let Some(width) = &element.width {
                 match width {
                     Number::Real(x) => {
                         log::trace!(
                             "calc_hardsized_elements: setting calculated_width={x} {element:?}"
                         );
-                        element.calculated_width.replace(x);
+                        element.calculated_width.replace(*x);
                     }
                     Number::Integer(x) => {
                         log::trace!(
                             "calc_hardsized_elements: setting calculated_width={x} {element:?}"
                         );
                         #[allow(clippy::cast_precision_loss)]
-                        element.calculated_width.replace(x as f32);
+                        element.calculated_width.replace(*x as f32);
                     }
-                    Number::RealPercent(_) | Number::IntegerPercent(_) => {}
+                    Number::RealPercent(_) | Number::IntegerPercent(_) | Number::Calc(_) => {}
                 }
             }
-            if let Some(height) = element.height {
+            if let Some(height) = &element.height {
                 match height {
                     Number::Real(x) => {
                         log::trace!(
                             "calc_hardsized_elements: setting calculated_height={x} {element:?}"
                         );
-                        element.calculated_height.replace(x);
+                        element.calculated_height.replace(*x);
                     }
                     Number::Integer(x) => {
                         log::trace!(
                             "calc_hardsized_elements: setting calculated_height={x} {element:?}"
                         );
                         #[allow(clippy::cast_precision_loss)]
-                        element.calculated_height.replace(x as f32);
+                        element.calculated_height.replace(*x as f32);
                     }
-                    Number::RealPercent(_) | Number::IntegerPercent(_) => {}
+                    Number::RealPercent(_) | Number::IntegerPercent(_) | Number::Calc(_) => {}
                 }
             }
         }
     }
 
     fn calc_sized_element_width(&mut self, container_width: f32) -> f32 {
-        let width = calc_number(self.width.unwrap(), container_width);
+        let width = calc_number(self.width.as_ref().unwrap(), container_width);
         self.calculated_width.replace(width);
         width
     }
 
     fn calc_sized_element_height(&mut self, container_height: f32) -> f32 {
-        let height = calc_number(self.height.unwrap(), container_height);
+        let height = calc_number(self.height.as_ref().unwrap(), container_height);
         self.calculated_height.replace(height);
         height
     }
@@ -451,9 +451,10 @@ impl ContainerElement {
     ) -> f32 {
         match direction {
             LayoutDirection::Row => {
-                let width = calc_number(self.width.unwrap(), container_width);
+                let width = calc_number(self.width.as_ref().unwrap(), container_width);
                 let height = self
                     .height
+                    .as_ref()
                     .map_or(container_height, |x| calc_number(x, container_height));
                 self.calculated_width.replace(width);
                 self.calculated_height.replace(height);
@@ -461,8 +462,9 @@ impl ContainerElement {
             LayoutDirection::Column => {
                 let width = self
                     .width
+                    .as_ref()
                     .map_or(container_width, |x| calc_number(x, container_width));
-                let height = calc_number(self.height.unwrap(), container_height);
+                let height = calc_number(self.height.as_ref().unwrap(), container_height);
                 self.calculated_width.replace(width);
                 self.calculated_height.replace(height);
             }
@@ -549,6 +551,7 @@ impl ContainerElement {
                     LayoutDirection::Row => {
                         let height = container
                             .height
+                            .as_ref()
                             .map_or(container_height, |x| calc_number(x, container_height));
                         container.calculated_height.replace(height);
                         container
@@ -558,6 +561,7 @@ impl ContainerElement {
                     LayoutDirection::Column => {
                         let width = container
                             .width
+                            .as_ref()
                             .map_or(container_width, |x| calc_number(x, container_width));
                         container.calculated_width.replace(width);
                         container
@@ -791,6 +795,7 @@ impl ContainerElement {
                         .filter_map(|x| x.container_element())
                         .filter_map(|x| {
                             x.width
+                                .as_ref()
                                 .map(|x| calc_number(x, calculated_width))
                                 .or_else(|| {
                                     if recurse {
@@ -826,6 +831,7 @@ impl ContainerElement {
                             .filter_map(|x| x.container_element())
                             .filter_map(|x| {
                                 x.width
+                                    .as_ref()
                                     .map(|x| calc_number(x, calculated_width))
                                     .or_else(|| {
                                         if recurse {
@@ -873,6 +879,7 @@ impl ContainerElement {
                             .filter_map(|x| x.container_element())
                             .filter_map(|x| {
                                 x.height
+                                    .as_ref()
                                     .map(|x| calc_number(x, calculated_height))
                                     .or_else(|| {
                                         if recurse {
@@ -909,6 +916,7 @@ impl ContainerElement {
                         .filter_map(|x| x.container_element())
                         .filter_map(|x| {
                             x.height
+                                .as_ref()
                                 .map(|x| calc_number(x, calculated_height))
                                 .or_else(|| {
                                     if recurse {
@@ -1298,14 +1306,16 @@ fn order_float(a: &f32, b: &f32) -> std::cmp::Ordering {
 
 #[allow(clippy::module_name_repetitions)]
 #[must_use]
-pub fn calc_number(number: Number, container: f32) -> f32 {
+pub fn calc_number(number: &Number, container: f32) -> f32 {
     match number {
-        Number::Real(x) => x,
+        Number::Real(x) => *x,
         #[allow(clippy::cast_precision_loss)]
-        Number::Integer(x) => x as f32,
-        Number::RealPercent(x) => container * (x / 100.0),
+        Number::Integer(x) => *x as f32,
+        Number::RealPercent(x) => container * (*x / 100.0),
         #[allow(clippy::cast_precision_loss)]
-        Number::IntegerPercent(x) => container * (x as f32 / 100.0),
+        Number::IntegerPercent(x) => container * (*x as f32 / 100.0),
+        // FIXME: Actually calc
+        Number::Calc(_x) => container,
     }
 }
 

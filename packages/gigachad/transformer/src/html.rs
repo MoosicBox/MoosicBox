@@ -110,7 +110,12 @@ pub enum GetNumberError {
 
 fn get_number(tag: &HTMLTag, name: &str) -> Result<Number, GetNumberError> {
     Ok(if let Some(number) = get_tag_attr_value(tag, name) {
-        if let Some((number, _)) = number.split_once('%') {
+        if let Some(calc) = number
+            .strip_prefix("calc(")
+            .and_then(|x| x.strip_suffix(")"))
+        {
+            Number::Calc(calc.to_string())
+        } else if let Some((number, _)) = number.split_once('%') {
             if number.contains('.') {
                 Number::RealPercent(
                     number

@@ -33,12 +33,13 @@ fn write_css_attr(f: &mut dyn Write, attr: &str, value: &[u8]) -> Result<(), std
     Ok(())
 }
 
-fn number_to_css_string(number: Number) -> String {
+fn number_to_css_string(number: &Number) -> String {
     match number {
         Number::Real(x) => format!("{x}px"),
         Number::Integer(x) => format!("{x}px"),
         Number::RealPercent(x) => format!("{x}%"),
         Number::IntegerPercent(x) => format!("{x}%"),
+        Number::Calc(x) => format!("calc({x})"),
     }
 }
 
@@ -106,14 +107,14 @@ pub fn element_style_to_html(
         }
     }
 
-    if let Some(width) = element.width {
+    if let Some(width) = &element.width {
         if !printed_start {
             printed_start = true;
             f.write_all(b" style=\"")?;
         }
         write_css_attr(f, "width", number_to_css_string(width).as_bytes())?;
     }
-    if let Some(height) = element.height {
+    if let Some(height) = &element.height {
         if !printed_start {
             printed_start = true;
             f.write_all(b" style=\"")?;

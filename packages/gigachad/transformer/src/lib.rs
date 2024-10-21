@@ -8,12 +8,13 @@ pub mod calc;
 #[cfg(feature = "html")]
 pub mod html;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Number {
     Real(f32),
     Integer(u64),
     RealPercent(f32),
     IntegerPercent(u64),
+    Calc(String),
 }
 
 impl Display for Number {
@@ -23,6 +24,7 @@ impl Display for Number {
             Self::Integer(x) => f.write_fmt(format_args!("{x}")),
             Self::RealPercent(x) => f.write_fmt(format_args!("{x}%")),
             Self::IntegerPercent(x) => f.write_fmt(format_args!("{x}%")),
+            Self::Calc(x) => f.write_fmt(format_args!("calc({x})")),
         }
     }
 }
@@ -481,10 +483,10 @@ impl ContainerElement {
             attrs.add("sx-dir", "row");
         }
 
-        if let Some(width) = self.width {
+        if let Some(width) = &self.width {
             attrs.add("sx-width", width);
         }
-        if let Some(height) = self.height {
+        if let Some(height) = &self.height {
             attrs.add("sx-height", height);
         }
         match self.overflow_x {

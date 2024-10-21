@@ -905,8 +905,8 @@ impl FltkRenderer {
                                 bytes,
                                 source: source.to_owned(),
                             },
-                            width: element.width.map(|_| width.unwrap()),
-                            height: element.height.map(|_| height.unwrap()),
+                            width: element.width.as_ref().map(|_| width.unwrap()),
+                            height: element.height.as_ref().map(|_| height.unwrap()),
                             frame: frame.clone(),
                         }) {
                             log::error!(
@@ -917,8 +917,8 @@ impl FltkRenderer {
                         if let Err(e) = event_sender.send(AppEvent::RegisterImage {
                             viewport: viewport.deref().clone(),
                             source: ImageSource::Url(source.to_owned()),
-                            width: element.width.map(|_| width.unwrap()),
-                            height: element.height.map(|_| height.unwrap()),
+                            width: element.width.as_ref().map(|_| width.unwrap()),
+                            height: element.height.as_ref().map(|_| height.unwrap()),
                             frame: frame.clone(),
                         }) {
                             log::error!(
@@ -942,17 +942,19 @@ impl FltkRenderer {
                                     if path.is_file() {
                                         let image = SharedImage::load(path)?;
 
+                                        // FIXME: Need to handle aspect ratio if either width or
+                                        // height is missing
                                         if width.is_some() || height.is_some() {
                                             #[allow(clippy::cast_possible_truncation)]
                                             let width = calc_number(
-                                                element.width.unwrap_or_default(),
+                                                element.width.as_ref().unwrap(),
                                                 context.width,
                                             )
                                             .round()
                                                 as i32;
                                             #[allow(clippy::cast_possible_truncation)]
                                             let height = calc_number(
-                                                element.height.unwrap_or_default(),
+                                                element.height.as_ref().unwrap(),
                                                 context.height,
                                             )
                                             .round()
@@ -1360,11 +1362,16 @@ impl Context {
         self.overflow_y = container.overflow_y;
         self.width = container
             .calculated_width
-            .or_else(|| container.width.map(|x| calc_number(x, self.width)))
+            .or_else(|| container.width.as_ref().map(|x| calc_number(x, self.width)))
             .unwrap_or(self.width);
         self.height = container
             .calculated_height
-            .or_else(|| container.height.map(|x| calc_number(x, self.height)))
+            .or_else(|| {
+                container
+                    .height
+                    .as_ref()
+                    .map(|x| calc_number(x, self.height))
+            })
             .unwrap_or(self.height);
         self
     }
