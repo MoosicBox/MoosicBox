@@ -883,22 +883,6 @@ impl FltkRenderer {
 
                 if let Some(source) = source {
                     if let Some(bytes) = moosicbox_app_native_image::get_image(source) {
-                        // let image = RgbImage::new(&bytes, 100, 100, enums::ColorDepth::Rgb8)?;
-
-                        // if width.is_some() || height.is_some() {
-                        //     #[allow(clippy::cast_possible_truncation)]
-                        //     let width =
-                        //         calc_number(element.width.unwrap_or_default(), context.width)
-                        //             .round() as i32;
-                        //     #[allow(clippy::cast_possible_truncation)]
-                        //     let height =
-                        //         calc_number(element.height.unwrap_or_default(), context.height)
-                        //             .round() as i32;
-
-                        //     frame.set_size(width, height);
-                        // }
-
-                        // frame.set_image_scaled(Some(image));
                         if let Err(e) = event_sender.send(AppEvent::RegisterImage {
                             viewport: viewport.deref().clone(),
                             source: ImageSource::Bytes {
