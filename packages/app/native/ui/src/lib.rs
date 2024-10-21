@@ -498,8 +498,8 @@ pub fn artists(artists: Vec<ApiArtist>) -> Markup {
 #[must_use]
 pub fn page(slot: &Markup) -> Markup {
     html! {
-        div id="root" class="dark" {
-            section class="navigation-bar-and-main-content" sx-dir="row" {
+        div id="root" class="dark" sx-width="100%" sx-height="100%" {
+            section class="navigation-bar-and-main-content" sx-dir="row" sx-height="calc(100% - 100px)" {
                 (sidebar_navigation())
                 (main(&slot))
             }
