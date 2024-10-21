@@ -15,9 +15,11 @@ use async_trait::async_trait;
 use flume::Receiver;
 use gigachad_renderer::{RenderRunner, Renderer, View};
 use gigachad_router::Router;
-use gigachad_transformer::ContainerElement;
+use html::container_element_to_html_response;
 use moosicbox_app_native_image::image;
 use tokio::runtime::{Handle, Runtime};
+
+mod html;
 
 #[derive(Clone)]
 pub struct HtmxRenderer {
@@ -48,34 +50,6 @@ impl HtmxRenderer {
     #[must_use]
     pub async fn wait_for_navigation(&self) -> Option<String> {
         self.receiver.recv_async().await.ok()
-    }
-}
-
-#[allow(clippy::similar_names)]
-fn container_element_to_html(container: &ContainerElement, htmx: &Htmx) -> String {
-    let html = container
-        .elements
-        .iter()
-        .map(ToString::to_string)
-        .collect::<String>();
-
-    if htmx.is_htmx {
-        html
-    } else {
-        format!(
-            r#"
-            <html>
-                <head>
-                    <script
-                        src="https://unpkg.com/htmx.org@2.0.2"
-                        integrity="sha384-Y7hw+L/jvKeWIRRkqWYfPcvVxHzVzn5REgzbawhxAuQGwX1XWe70vji+VSeHOThJ"
-                        crossorigin="anonymous">
-                    </script>
-                </head>
-                <body>{html}</body>
-            </html>
-            "#
-        )
     }
 }
 
@@ -147,7 +121,10 @@ pub async fn catchall_endpoint(
 
     Ok(HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
-        .body(container_element_to_html(&container.immediate, &htmx)))
+        .body(
+            container_element_to_html_response(&container.immediate, &htmx)
+                .map_err(ErrorInternalServerError)?,
+        ))
 }
 
 pub struct HtmxRenderRunner {
