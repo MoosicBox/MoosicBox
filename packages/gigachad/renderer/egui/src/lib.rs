@@ -7,7 +7,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use eframe::egui::{self, Response, Ui, Widget};
+use eframe::egui::{self, CursorIcon, Response, Ui, Widget};
 use flume::{Receiver, Sender};
 use gigachad_renderer::viewport::immediate::{Pos, Viewport, ViewportListener};
 pub use gigachad_renderer::*;
@@ -948,14 +948,20 @@ impl EguiApp {
         }
 
         let immediate_handler: Option<Handler> = match element {
-            Element::Button { .. } => Some(Box::new(|response| {
-                if response.interact(egui::Sense::click()).clicked() {
-                    log::debug!("clicked button!");
-                }
-            })),
+            Element::Button { .. } => {
+                let ctx = ctx.clone();
+                Some(Box::new(move |response| {
+                    if response.interact(egui::Sense::click()).clicked() {
+                        log::debug!("clicked button!");
+                    } else if response.interact(egui::Sense::hover()).hovered() {
+                        ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
+                    }
+                }))
+            }
             Element::Anchor { href, .. } => {
                 let href = href.to_owned();
                 let sender = self.sender.clone();
+                let ctx = ctx.clone();
                 Some(Box::new(move |response| {
                     if response.interact(egui::Sense::click()).clicked() {
                         if let Some(href) = href.clone() {
@@ -963,6 +969,8 @@ impl EguiApp {
                                 log::error!("Failed to send href event: {e:?}");
                             }
                         }
+                    } else if response.interact(egui::Sense::hover()).hovered() {
+                        ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
                     }
                 }))
             }
