@@ -5,7 +5,7 @@ use std::io::Write;
 use actix_htmx::Htmx;
 use gigachad_router::ContainerElement;
 use gigachad_transformer::{
-    Element, HeaderSize, Input, LayoutDirection, LayoutOverflow, Number, Route,
+    Calculation, Element, HeaderSize, Input, LayoutDirection, LayoutOverflow, Number, Route,
 };
 
 pub fn elements_to_html(f: &mut dyn Write, elements: &[Element]) -> Result<(), std::io::Error> {
@@ -39,7 +39,33 @@ fn number_to_css_string(number: &Number) -> String {
         Number::Integer(x) => format!("{x}px"),
         Number::RealPercent(x) => format!("{x}%"),
         Number::IntegerPercent(x) => format!("{x}%"),
-        Number::Calc(x) => format!("calc({x})"),
+        Number::Calc(x) => format!("calc({})", calc_to_css_string(x)),
+    }
+}
+
+fn calc_to_css_string(calc: &Calculation) -> String {
+    match calc {
+        Calculation::Number(number) => number_to_css_string(number),
+        Calculation::Add(left, right) => format!(
+            "{} + {}",
+            calc_to_css_string(left),
+            calc_to_css_string(right)
+        ),
+        Calculation::Subtract(left, right) => format!(
+            "{} - {}",
+            calc_to_css_string(left),
+            calc_to_css_string(right)
+        ),
+        Calculation::Multiply(left, right) => format!(
+            "{} * {}",
+            calc_to_css_string(left),
+            calc_to_css_string(right)
+        ),
+        Calculation::Divide(left, right) => format!(
+            "{} / {}",
+            calc_to_css_string(left),
+            calc_to_css_string(right)
+        ),
     }
 }
 

@@ -3,8 +3,8 @@ use std::sync::atomic::AtomicU16;
 use itertools::Itertools;
 
 use crate::{
-    ContainerElement, Element, LayoutDirection, LayoutOverflow, LayoutPosition, Number, TableIter,
-    TableIterMut,
+    calc_number, ContainerElement, Element, LayoutDirection, LayoutOverflow, LayoutPosition,
+    Number, TableIter, TableIterMut,
 };
 
 static SCROLLBAR_SIZE: AtomicU16 = AtomicU16::new(16);
@@ -1301,21 +1301,6 @@ fn order_float(a: &f32, b: &f32) -> std::cmp::Ordering {
         std::cmp::Ordering::Less
     } else {
         std::cmp::Ordering::Equal
-    }
-}
-
-#[allow(clippy::module_name_repetitions)]
-#[must_use]
-pub fn calc_number(number: &Number, container: f32) -> f32 {
-    match number {
-        Number::Real(x) => *x,
-        #[allow(clippy::cast_precision_loss)]
-        Number::Integer(x) => *x as f32,
-        Number::RealPercent(x) => container * (*x / 100.0),
-        #[allow(clippy::cast_precision_loss)]
-        Number::IntegerPercent(x) => container * (*x as f32 / 100.0),
-        // FIXME: Actually calc
-        Number::Calc(_x) => container,
     }
 }
 

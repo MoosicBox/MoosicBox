@@ -8,13 +8,60 @@ pub mod calc;
 #[cfg(feature = "html")]
 pub mod html;
 
+#[allow(clippy::module_name_repetitions)]
+#[must_use]
+pub fn calc_number(number: &Number, container: f32) -> f32 {
+    match number {
+        Number::Real(x) => *x,
+        #[allow(clippy::cast_precision_loss)]
+        Number::Integer(x) => *x as f32,
+        Number::RealPercent(x) => container * (*x / 100.0),
+        #[allow(clippy::cast_precision_loss)]
+        Number::IntegerPercent(x) => container * (*x as f32 / 100.0),
+        Number::Calc(x) => x.calc(container),
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Calculation {
+    Number(Box<Number>),
+    Add(Box<Calculation>, Box<Calculation>),
+    Subtract(Box<Calculation>, Box<Calculation>),
+    Multiply(Box<Calculation>, Box<Calculation>),
+    Divide(Box<Calculation>, Box<Calculation>),
+}
+
+impl Calculation {
+    fn calc(&self, container: f32) -> f32 {
+        match self {
+            Self::Number(number) => calc_number(number, container),
+            Self::Add(left, right) => left.calc(container) + right.calc(container),
+            Self::Subtract(left, right) => left.calc(container) - right.calc(container),
+            Self::Multiply(left, right) => left.calc(container) * right.calc(container),
+            Self::Divide(left, right) => left.calc(container) / right.calc(container),
+        }
+    }
+}
+
+impl Display for Calculation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Number(number) => f.write_str(&number.to_string()),
+            Self::Add(left, right) => f.write_fmt(format_args!("{left} + {right}")),
+            Self::Subtract(left, right) => f.write_fmt(format_args!("{left} - {right}")),
+            Self::Multiply(left, right) => f.write_fmt(format_args!("{left} * {right}")),
+            Self::Divide(left, right) => f.write_fmt(format_args!("{left} / {right}")),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Number {
     Real(f32),
     Integer(u64),
     RealPercent(f32),
     IntegerPercent(u64),
-    Calc(String),
+    Calc(Calculation),
 }
 
 impl Display for Number {
