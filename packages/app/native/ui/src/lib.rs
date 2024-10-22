@@ -416,13 +416,14 @@ pub fn albums_page_content() -> Markup {
 
     html! {
         h1 sx-height=(36) { ("Albums") }
-        div sx-dir="row" sx-overflow-x="wrap" sx-overflow-y="show" {
+        div sx-dir="row" sx-overflow-x="wrap" sx-overflow-y="show" sx-justify-content="space-evenly" {
             div
                 hx-get=(pre_escaped!("/albums-list-start?limit=100&size={size}"))
                 hx-trigger="load"
                 sx-dir="row"
                 sx-overflow-x="wrap"
                 sx-overflow-y="show"
+                sx-justify-content="space-evenly"
             {
                 @for _ in 0..100 {
                     div sx-width=(size) sx-height=(size + 30) {
@@ -477,7 +478,7 @@ pub fn artists_page_content(artists: Vec<ApiArtist>) -> Markup {
     let request_size = (f64::from(size) * 1.33).round() as u16;
 
     html! {
-        div sx-dir="row" sx-overflow-x="wrap" sx-overflow-y="show" {
+        div sx-dir="row" sx-overflow-x="wrap" sx-overflow-y="show" sx-justify-content="space-evenly" {
             @for artist in &artists {
                 a href={"/artists?artistId="(artist.artist_id)} sx-width=(size) sx-height=(size + 30) {
                     div sx-width=(size) sx-height=(size + 30) {
