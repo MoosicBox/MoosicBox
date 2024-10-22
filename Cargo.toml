@@ -125,7 +125,7 @@ aws-config = "1.5.8"
 aws-sdk-apigatewaymanagement = "1.46.0"
 aws-sdk-ssm = "1.51.0"
 base64 = "0.22.1"
-bytes = "1.7.2"
+bytes = "1.8.0"
 chrono = { version = "0.4.38", default-features = false, features = [
     "clock",
     "serde",
@@ -145,8 +145,8 @@ enum-as-inner = "0.6.1"
 env_logger = "0.11"
 fdk-aac = "0.7.0"
 flacenc = "0.4.0"
-fltk = "1.4.34"
-fltk-sys = "1.4.34"
+fltk = "1.4.35"
+fltk-sys = "1.4.35"
 flume = "0.11.1"
 free_log_client = { version = "0.4.1", default-features = false }
 futures = "0.3"
@@ -238,10 +238,10 @@ strum = "0.26.3"
 strum_macros = "0.26.4"
 symphonia = { version = "0.5.4", features = ["all"] }
 tantivy = "0.22.0"
-tauri = { version = "2.0.5", features = ["protocol-asset"] }
-tauri-build = { version = "2.0.1", features = [] }
-tauri-plugin = { version = "2.0.1", features = ["build"] }
-tauri-plugin-dialog = "2.0.2"
+tauri = { version = "2.0.6", features = ["protocol-asset"] }
+tauri-build = { version = "2.0.2", features = [] }
+tauri-plugin = { version = "2.0.2", features = ["build"] }
+tauri-plugin-dialog = "2.0.3"
 tauri-plugin-notification = "2.0.1"
 test-log = "0.2.16"
 thiserror = "1.0.64"
@@ -259,7 +259,7 @@ utoipa = { version = "5.1.1", features = ["actix_extras"] }
 utoipa-rapidoc = { version = "5.0.0", features = ["actix-web"] }
 utoipa-redoc = { version = "5.0.0", features = ["actix-web"] }
 utoipa-scalar = { version = "0.2.0", features = ["actix-web"] }
-utoipa-swagger-ui = { version = "8.0.1", features = ["actix-web"] }
+utoipa-swagger-ui = { version = "8.0.2", features = ["actix-web"] }
 uuid = { version = "1.11.0", features = ["v4"] }
 webp = "0.3.0"
 whoami = "1.5.2"

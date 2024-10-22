@@ -1674,9 +1674,9 @@ checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
 
 [[package]]
 name = "bytes"
-version = "1.7.2"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "428d9aa8fbc0670b7b8d6030a7fadd0f86151cae55e4dbbece15f3780a3dfaf3"
+checksum = "9ac0150caa2ae65ca5bd83f25c7de183dea78d4d366469f148435e2acfbad0da"
 dependencies = [
  "serde",
 ]
@@ -2012,6 +2012,12 @@ checksum = "fb1e43aa7fd152b1f968787f7dbcdeb306d1867ff373c69955211876c053f91a"
 dependencies = [
  "cc",
 ]
+
+[[package]]
+name = "cmk"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fd5de2a10e31b3ec3e8d75e7ccf8281ab3ee55de68f7ab6ffa9e21be8d82f22"
 
 [[package]]
 name = "cocoa"
@@ -3275,25 +3281,26 @@ checksum = "98de4bbd547a563b716d8dfa9aad1cb19bfab00f4fa09a6a4ed21dbcf44ce9c4"
 
 [[package]]
 name = "fltk"
-version = "1.4.34"
+version = "1.4.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8f81f9ebf85aeaad76e43362cc2bb1d926e5daca1327dc0a094d00c86a95ebb"
+checksum = "b01c29354c150d6b80a9ddf3fa5711a359c5de5d035bdb5359880a7e8d2b4024"
 dependencies = [
  "bitflags 2.6.0",
  "crossbeam-channel",
  "fltk-sys",
  "once_cell",
  "paste",
- "ttf-parser 0.24.1",
+ "ttf-parser",
 ]
 
 [[package]]
 name = "fltk-sys"
-version = "1.4.34"
+version = "1.4.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30bbe32c3f9f72469e2cf2a62edc74ef990b81c2caf082f53fd67060ce0c9893"
+checksum = "de79eda8e018209b50e62d409e41b68af76ba25162b799a116aec5e9c23d9aa8"
 dependencies = [
  "cmake",
+ "cmk",
 ]
 
 [[package]]
@@ -7794,7 +7801,7 @@ version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22ec719bbf3b2a81c109a4e20b1f129b5566b7dce654bc3872f6a05abf82b2c4"
 dependencies = [
- "ttf-parser 0.25.0",
+ "ttf-parser",
 ]
 
 [[package]]
@@ -12070,12 +12077,6 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "ttf-parser"
-version = "0.24.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5be21190ff5d38e8b4a2d3b6a3ae57f612cc39c96e83cedeaf7abc338a8bac4a"
-
-[[package]]
-name = "ttf-parser"
 version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5902c5d130972a0000f60860bfbf46f7ca3db5391eddfedd1b8728bd9dc96c0e"
@@ -12398,9 +12399,9 @@ dependencies = [
 
 [[package]]
 name = "utoipa-swagger-ui"
-version = "8.0.1"
+version = "8.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85a551be0331bd01a1d39f2654409ca61cb955f02dfef0fc0f7aced8b2abbc88"
+checksum = "1054c946332dfc6e4bc31f704aa714fcbed73e9f412dd939f9ed86869e6304c3"
 dependencies = [
  "actix-web",
  "mime_guess",
