@@ -120,6 +120,22 @@ impl Display for LayoutOverflow {
     }
 }
 
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub enum JustifyContent {
+    SpaceEvenly,
+    #[default]
+    Default,
+}
+
+impl Display for JustifyContent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SpaceEvenly => f.write_str("SpaceEvenly"),
+            Self::Default => f.write_str("Default"),
+        }
+    }
+}
+
 #[cfg(feature = "calc")]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum LayoutPosition {
@@ -170,6 +186,7 @@ pub struct ContainerElement {
     pub direction: LayoutDirection,
     pub overflow_x: LayoutOverflow,
     pub overflow_y: LayoutOverflow,
+    pub justify_content: JustifyContent,
     pub width: Option<Number>,
     pub height: Option<Number>,
     pub route: Option<Route>,

@@ -5,7 +5,8 @@ use std::io::Write;
 use actix_htmx::Htmx;
 use gigachad_router::ContainerElement;
 use gigachad_transformer::{
-    Calculation, Element, HeaderSize, Input, LayoutDirection, LayoutOverflow, Number, Route,
+    Calculation, Element, HeaderSize, Input, JustifyContent, LayoutDirection, LayoutOverflow,
+    Number, Route,
 };
 
 pub fn elements_to_html(f: &mut dyn Write, elements: &[Element]) -> Result<(), std::io::Error> {
@@ -131,6 +132,17 @@ pub fn element_style_to_html(
             }
             write_css_attr(f, "flex-wrap", b"wrap")?;
         }
+    }
+
+    match element.justify_content {
+        JustifyContent::SpaceEvenly => {
+            if !printed_start {
+                printed_start = true;
+                f.write_all(b" style=\"")?;
+            }
+            write_css_attr(f, "justify-content", b"space-evenly")?;
+        }
+        JustifyContent::Default => {}
     }
 
     if let Some(width) = &element.width {
@@ -348,6 +360,11 @@ pub fn container_element_to_html_response(
                         integrity="sha384-Y7hw+L/jvKeWIRRkqWYfPcvVxHzVzn5REgzbawhxAuQGwX1XWe70vji+VSeHOThJ"
                         crossorigin="anonymous">
                     </script>
+                    <style>
+                        body {{
+                            margin: 0;
+                        }}
+                    </style>
                 </head>
                 <body>{html}</body>
             </html>

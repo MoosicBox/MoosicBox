@@ -4,7 +4,7 @@ use thiserror::Error;
 pub use tl::ParseError;
 use tl::{Children, HTMLTag, Node, NodeHandle, Parser, ParserOptions};
 
-use crate::{Calculation, LayoutDirection, LayoutOverflow, Number, Route};
+use crate::{Calculation, JustifyContent, LayoutDirection, LayoutOverflow, Number, Route};
 
 impl TryFrom<String> for crate::ContainerElement {
     type Error = ParseError;
@@ -99,6 +99,13 @@ fn get_overflow(tag: &HTMLTag, name: &str) -> LayoutOverflow {
         Some("show") => LayoutOverflow::Show,
         Some("auto") => LayoutOverflow::Auto,
         _ => LayoutOverflow::default(),
+    }
+}
+
+fn get_justify_content(tag: &HTMLTag, name: &str) -> JustifyContent {
+    match get_tag_attr_value_lower(tag, name).as_deref() {
+        Some("space-evenly") => JustifyContent::SpaceEvenly,
+        _ => JustifyContent::default(),
     }
 }
 
@@ -203,6 +210,7 @@ fn parse_element(
         direction: get_direction(tag),
         overflow_x: get_overflow(tag, "sx-overflow-x"),
         overflow_y: get_overflow(tag, "sx-overflow-y"),
+        justify_content: get_justify_content(tag, "sx-justify-content"),
         elements: parse_top_children(node.children(), parser),
         width: get_number(tag, "sx-width").ok(),
         height: get_number(tag, "sx-height").ok(),
