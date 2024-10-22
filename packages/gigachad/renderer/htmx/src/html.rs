@@ -17,17 +17,17 @@ pub fn elements_to_html(f: &mut dyn Write, elements: &[Element]) -> Result<(), s
     Ok(())
 }
 
-fn write_attr(f: &mut dyn Write, attr: &str, value: &[u8]) -> Result<(), std::io::Error> {
+fn write_attr(f: &mut dyn Write, attr: &[u8], value: &[u8]) -> Result<(), std::io::Error> {
     f.write_all(b" ")?;
-    f.write_all(attr.as_bytes())?;
+    f.write_all(attr)?;
     f.write_all(b"=\"")?;
     f.write_all(value)?;
     f.write_all(b"\"")?;
     Ok(())
 }
 
-fn write_css_attr(f: &mut dyn Write, attr: &str, value: &[u8]) -> Result<(), std::io::Error> {
-    f.write_all(attr.as_bytes())?;
+fn write_css_attr(f: &mut dyn Write, attr: &[u8], value: &[u8]) -> Result<(), std::io::Error> {
+    f.write_all(attr)?;
     f.write_all(b":")?;
     f.write_all(value)?;
     f.write_all(b";")?;
@@ -81,8 +81,8 @@ pub fn element_style_to_html(
             printed_start = true;
             f.write_all(b" style=\"")?;
         }
-        write_css_attr(f, "display", b"flex")?;
-        write_css_attr(f, "flex-direction", b"row")?;
+        write_css_attr(f, b"display", b"flex")?;
+        write_css_attr(f, b"flex-direction", b"row")?;
     }
 
     match element.overflow_x {
@@ -91,14 +91,14 @@ pub fn element_style_to_html(
                 printed_start = true;
                 f.write_all(b" style=\"")?;
             }
-            write_css_attr(f, "overflow-x", b"auto")?;
+            write_css_attr(f, b"overflow-x", b"auto")?;
         }
         LayoutOverflow::Scroll => {
             if !printed_start {
                 printed_start = true;
                 f.write_all(b" style=\"")?;
             }
-            write_css_attr(f, "overflow-x", b"scroll")?;
+            write_css_attr(f, b"overflow-x", b"scroll")?;
         }
         LayoutOverflow::Show | LayoutOverflow::Squash => {}
         LayoutOverflow::Wrap => {
@@ -106,7 +106,7 @@ pub fn element_style_to_html(
                 printed_start = true;
                 f.write_all(b" style=\"")?;
             }
-            write_css_attr(f, "flex-wrap", b"wrap")?;
+            write_css_attr(f, b"flex-wrap", b"wrap")?;
         }
     }
     match element.overflow_y {
@@ -115,14 +115,14 @@ pub fn element_style_to_html(
                 printed_start = true;
                 f.write_all(b" style=\"")?;
             }
-            write_css_attr(f, "overflow-y", b"auto")?;
+            write_css_attr(f, b"overflow-y", b"auto")?;
         }
         LayoutOverflow::Scroll => {
             if !printed_start {
                 printed_start = true;
                 f.write_all(b" style=\"")?;
             }
-            write_css_attr(f, "overflow-y", b"scroll")?;
+            write_css_attr(f, b"overflow-y", b"scroll")?;
         }
         LayoutOverflow::Show | LayoutOverflow::Squash => {}
         LayoutOverflow::Wrap => {
@@ -130,7 +130,7 @@ pub fn element_style_to_html(
                 printed_start = true;
                 f.write_all(b" style=\"")?;
             }
-            write_css_attr(f, "flex-wrap", b"wrap")?;
+            write_css_attr(f, b"flex-wrap", b"wrap")?;
         }
     }
 
@@ -140,7 +140,7 @@ pub fn element_style_to_html(
                 printed_start = true;
                 f.write_all(b" style=\"")?;
             }
-            write_css_attr(f, "justify-content", b"space-evenly")?;
+            write_css_attr(f, b"justify-content", b"space-evenly")?;
         }
         JustifyContent::Default => {}
     }
@@ -150,14 +150,14 @@ pub fn element_style_to_html(
             printed_start = true;
             f.write_all(b" style=\"")?;
         }
-        write_css_attr(f, "width", number_to_css_string(width).as_bytes())?;
+        write_css_attr(f, b"width", number_to_css_string(width).as_bytes())?;
     }
     if let Some(height) = &element.height {
         if !printed_start {
             printed_start = true;
             f.write_all(b" style=\"")?;
         }
-        write_css_attr(f, "height", number_to_css_string(height).as_bytes())?;
+        write_css_attr(f, b"height", number_to_css_string(height).as_bytes())?;
     }
 
     if printed_start {
@@ -174,17 +174,17 @@ pub fn element_attrs_to_html(
     if let Some(route) = &element.route {
         match route {
             Route::Get { route, trigger } => {
-                write_attr(f, "hx-swap", b"outerHTML")?;
-                write_attr(f, "hx-get", route.as_bytes())?;
+                write_attr(f, b"hx-swap", b"outerHTML")?;
+                write_attr(f, b"hx-get", route.as_bytes())?;
                 if let Some(trigger) = trigger {
-                    write_attr(f, "hx-trigger", trigger.as_bytes())?;
+                    write_attr(f, b"hx-trigger", trigger.as_bytes())?;
                 }
             }
             Route::Post { route, trigger } => {
-                write_attr(f, "hx-swap", b"outerHTML")?;
-                write_attr(f, "hx-post", route.as_bytes())?;
+                write_attr(f, b"hx-swap", b"outerHTML")?;
+                write_attr(f, b"hx-post", route.as_bytes())?;
                 if let Some(trigger) = trigger {
-                    write_attr(f, "hx-trigger", trigger.as_bytes())?;
+                    write_attr(f, b"hx-trigger", trigger.as_bytes())?;
                 }
             }
         }
@@ -203,9 +203,9 @@ pub fn element_to_html(f: &mut dyn Write, element: &Element) -> Result<(), std::
             return Ok(());
         }
         Element::Image { source, element } => {
-            const TAG_NAME: &str = "img";
+            const TAG_NAME: &[u8] = b"img";
             f.write_all(b"<")?;
-            f.write_all(TAG_NAME.as_bytes())?;
+            f.write_all(TAG_NAME)?;
             if let Some(source) = source {
                 f.write_all(b" src=\"")?;
                 f.write_all(source.as_bytes())?;
@@ -215,14 +215,14 @@ pub fn element_to_html(f: &mut dyn Write, element: &Element) -> Result<(), std::
             f.write_all(b">")?;
             elements_to_html(f, &element.elements)?;
             f.write_all(b"</")?;
-            f.write_all(TAG_NAME.as_bytes())?;
+            f.write_all(TAG_NAME)?;
             f.write_all(b">")?;
             return Ok(());
         }
         Element::Anchor { element, href } => {
-            const TAG_NAME: &str = "a";
+            const TAG_NAME: &[u8] = b"a";
             f.write_all(b"<")?;
-            f.write_all(TAG_NAME.as_bytes())?;
+            f.write_all(TAG_NAME)?;
             if let Some(href) = href {
                 f.write_all(b" href=\"")?;
                 f.write_all(href.as_bytes())?;
@@ -232,7 +232,7 @@ pub fn element_to_html(f: &mut dyn Write, element: &Element) -> Result<(), std::
             f.write_all(b">")?;
             elements_to_html(f, &element.elements)?;
             f.write_all(b"</")?;
-            f.write_all(TAG_NAME.as_bytes())?;
+            f.write_all(TAG_NAME)?;
             f.write_all(b">")?;
             return Ok(());
         }
@@ -256,9 +256,9 @@ pub fn element_to_html(f: &mut dyn Write, element: &Element) -> Result<(), std::
             return Ok(());
         }
         Element::Input(input) => {
-            const TAG_NAME: &str = "input";
+            const TAG_NAME: &[u8] = b"input";
             f.write_all(b"<")?;
-            f.write_all(TAG_NAME.as_bytes())?;
+            f.write_all(TAG_NAME)?;
             match input {
                 Input::Text { value, placeholder } => {
                     f.write_all(b" type=\"text\"")?;
@@ -288,7 +288,7 @@ pub fn element_to_html(f: &mut dyn Write, element: &Element) -> Result<(), std::
                 }
             }
             f.write_all(b"></")?;
-            f.write_all(TAG_NAME.as_bytes())?;
+            f.write_all(TAG_NAME)?;
             f.write_all(b">")?;
             return Ok(());
         }
