@@ -244,10 +244,10 @@ tauri-plugin = { version = "2.0.2", features = ["build"] }
 tauri-plugin-dialog = "2.0.3"
 tauri-plugin-notification = "2.0.1"
 test-log = "0.2.16"
-thiserror = "1.0.64"
+thiserror = "1.0.65"
 throttle = "0.1.0"
 tl = "0.7.8"
-tokio = { version = "1.40.0" }
+tokio = { version = "1.41.0" }
 tokio-postgres = { version = "0.7.12", features = ["with-chrono-0_4"] }
 tokio-stream = "0.1.16"
 tokio-tungstenite = { version = "0.24.0", features = ["native-tls-vendored"] }
