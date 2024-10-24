@@ -1202,6 +1202,7 @@ impl ContainerElement {
                 .is_some_and(|x| (x - scrollbar_size).abs() < 0.001)
             {
                 self.padding_right.replace(scrollbar_size);
+                log::debug!("resize_children: resized because vertical scrollbar is visible");
                 resized = true;
             }
         }
@@ -1217,6 +1218,7 @@ impl ContainerElement {
                 .is_some_and(|x| (x - scrollbar_size).abs() < 0.001)
             {
                 self.padding_bottom.replace(scrollbar_size);
+                log::debug!("resize_children: resized because horizontal scrollbar is visible");
                 resized = true;
             }
         }
@@ -1228,6 +1230,7 @@ impl ContainerElement {
                 LayoutOverflow::Show => {
                     if self.width.is_none() {
                         self.calculated_width.replace(contained_calculated_width);
+                        log::debug!("resize_children: resized because calculated_width was None");
                         resized = true;
                     }
                 }
@@ -1246,12 +1249,28 @@ impl ContainerElement {
                         .filter_map(|x| x.container_element_mut())
                         .filter(|x| x.width.is_none())
                     {
-                        element
-                            .calculated_width
-                            .replace(evenly_split_remaining_size);
+                        if let Some(existing) = element.calculated_width {
+                            if (existing - evenly_split_remaining_size).abs() > 0.01 {
+                                element
+                                    .calculated_width
+                                    .replace(evenly_split_remaining_size);
+                                resized = true;
+                                log::debug!("resize_children: resized because child calculated_width was different ({existing} != {evenly_split_remaining_size})");
+                            }
+                        } else {
+                            element
+                                .calculated_width
+                                .replace(evenly_split_remaining_size);
+                            resized = true;
+                            log::debug!(
+                                "resize_children: resized because child calculated_width was None"
+                            );
+                        }
 
-                        element.resize_children();
-                        resized = true;
+                        if element.resize_children() {
+                            resized = true;
+                            log::debug!("resize_children: resized because child was resized");
+                        }
                     }
 
                     log::trace!(
@@ -1268,6 +1287,7 @@ impl ContainerElement {
                 LayoutOverflow::Show => {
                     if self.height.is_none() {
                         self.calculated_height.replace(contained_calculated_height);
+                        log::debug!("resize_children: resized because calculated_height was None");
                         resized = true;
                     }
                 }
@@ -1286,12 +1306,28 @@ impl ContainerElement {
                         .filter_map(|x| x.container_element_mut())
                         .filter(|x| x.height.is_none())
                     {
-                        element
-                            .calculated_height
-                            .replace(evenly_split_remaining_size);
+                        if let Some(existing) = element.calculated_height {
+                            if (existing - evenly_split_remaining_size).abs() > 0.01 {
+                                element
+                                    .calculated_height
+                                    .replace(evenly_split_remaining_size);
+                                resized = true;
+                                log::debug!("resize_children: resized because child calculated_height was different ({existing} != {evenly_split_remaining_size})");
+                            }
+                        } else {
+                            element
+                                .calculated_height
+                                .replace(evenly_split_remaining_size);
+                            resized = true;
+                            log::debug!(
+                                "resize_children: resized because child calculated_height was None"
+                            );
+                        }
 
-                        element.resize_children();
-                        resized = true;
+                        if element.resize_children() {
+                            resized = true;
+                            log::debug!("resize_children: resized because child was resized");
+                        }
                     }
 
                     log::trace!(
