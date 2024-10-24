@@ -348,7 +348,11 @@ pub fn albums_list_start(albums: &Page<ApiAlbum>, size: u16) -> Markup {
         albums.remaining().map_or_else(
             || {
                 html! {
-                    div hx-get=(pre_escaped!("/albums-list-start?offset={offset}&limit={limit}&size={size}")) hx-trigger="load" {}
+                    div
+                        hx-get=(pre_escaped!("/albums-list-start?offset={offset}&limit={limit}&size={size}"))
+                        hx-trigger="load"
+                        sx-hidden=(true)
+                    {}
                 }
             },
             |remaining| {
@@ -357,13 +361,25 @@ pub fn albums_list_start(albums: &Page<ApiAlbum>, size: u16) -> Markup {
 
                 html! {
                     @if limit < MIN_PAGE_THRESHOLD {
-                        div hx-get=(pre_escaped!("/albums-list?offset={offset}&limit={remaining}&size={size}")) hx-trigger="load" {}
+                        div
+                            hx-get=(pre_escaped!("/albums-list?offset={offset}&limit={remaining}&size={size}"))
+                            hx-trigger="load"
+                            sx-hidden=(true)
+                        {}
                     } @else {
                         @for i in 0..MAX_PARALLEL_REQUESTS {
                             @if i == MAX_PARALLEL_REQUESTS - 1 {
-                                div hx-get=(pre_escaped!("/albums-list?offset={}&limit={last}&size={size}", offset + i * limit)) hx-trigger="load" {}
+                                div
+                                    hx-get=(pre_escaped!("/albums-list?offset={}&limit={last}&size={size}", offset + i * limit))
+                                    hx-trigger="load"
+                                    sx-hidden=(true)
+                                {}
                             } @else {
-                                div hx-get=(pre_escaped!("/albums-list?offset={}&limit={limit}&size={size}", offset + i * limit)) hx-trigger="load" {}
+                                div
+                                    hx-get=(pre_escaped!("/albums-list?offset={}&limit={limit}&size={size}", offset + i * limit))
+                                    hx-trigger="load"
+                                    sx-hidden=(true)
+                                {}
                             }
                         }
                     }
