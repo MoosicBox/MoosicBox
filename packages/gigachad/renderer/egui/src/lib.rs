@@ -357,6 +357,27 @@ impl EguiApp {
         }
     }
 
+    fn update_frame_size(&self, width: f32, height: f32) {
+        *self.viewport_listeners.write().unwrap() = HashMap::new();
+        *self.viewports.write().unwrap() = HashMap::new();
+
+        log::debug!(
+            "calc: frame size changed from ({:?}, {:?}) -> ({width}, {height})",
+            self.width.read().unwrap(),
+            self.height.read().unwrap()
+        );
+
+        {
+            let mut container = self.container.write().unwrap();
+            container.calculated_width.replace(width);
+            container.calculated_height.replace(height);
+            container.calc();
+        }
+
+        self.width.write().unwrap().replace(width);
+        self.height.write().unwrap().replace(height);
+    }
+
     fn calc(&self, ctx: &egui::Context) {
         ctx.input(move |i| {
             let width = i.screen_rect.width();
@@ -366,24 +387,7 @@ impl EguiApp {
             if !current_width.is_some_and(|x| (x - width).abs() < 0.01)
                 || !current_height.is_some_and(|x| (x - height).abs() < 0.01)
             {
-                *self.viewport_listeners.write().unwrap() = HashMap::new();
-                *self.viewports.write().unwrap() = HashMap::new();
-
-                log::debug!(
-                    "calc: frame size changed from ({:?}, {:?}) -> ({width}, {height})",
-                    self.width.read().unwrap(),
-                    self.height.read().unwrap()
-                );
-
-                {
-                    let mut container = self.container.write().unwrap();
-                    container.calculated_width.replace(width);
-                    container.calculated_height.replace(height);
-                    container.calc();
-                }
-
-                self.width.write().unwrap().replace(width);
-                self.height.write().unwrap().replace(height);
+                self.update_frame_size(width, height);
             }
         });
     }
