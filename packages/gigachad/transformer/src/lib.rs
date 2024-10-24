@@ -191,6 +191,10 @@ pub struct ContainerElement {
     pub height: Option<Number>,
     pub hidden: Option<bool>,
     pub route: Option<Route>,
+    pub margin_left: Option<f32>,
+    pub margin_right: Option<f32>,
+    pub margin_top: Option<f32>,
+    pub margin_bottom: Option<f32>,
     pub padding_left: Option<f32>,
     pub padding_right: Option<f32>,
     pub padding_top: Option<f32>,
@@ -614,6 +618,10 @@ impl ContainerElement {
                 attrs.add_opt("dbg-y", self.calculated_y);
                 attrs.add_opt("dbg-width", self.calculated_width);
                 attrs.add_opt("dbg-height", self.calculated_height);
+                attrs.add_opt("dbg-margin-left", self.margin_left);
+                attrs.add_opt("dbg-margin-right", self.margin_right);
+                attrs.add_opt("dbg-margin-top", self.margin_top);
+                attrs.add_opt("dbg-margin-bottom", self.margin_bottom);
                 attrs.add_opt("dbg-padding-left", self.padding_left);
                 attrs.add_opt("dbg-padding-right", self.padding_right);
                 attrs.add_opt("dbg-padding-top", self.padding_top);
