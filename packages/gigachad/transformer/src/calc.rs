@@ -547,6 +547,10 @@ impl ContainerElement {
         container_height: f32,
         remainder: f32,
     ) {
+        let mut elements = elements.peekable();
+        if elements.peek().is_none() {
+            return;
+        }
         let elements = elements.collect_vec();
         #[allow(clippy::cast_precision_loss)]
         let evenly_split_remaining_size = remainder / (elements.len() as f32);
