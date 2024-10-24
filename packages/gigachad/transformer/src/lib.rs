@@ -189,6 +189,7 @@ pub struct ContainerElement {
     pub justify_content: JustifyContent,
     pub width: Option<Number>,
     pub height: Option<Number>,
+    pub hidden: Option<bool>,
     pub route: Option<Route>,
     pub padding_left: Option<f32>,
     pub padding_right: Option<f32>,
@@ -206,7 +207,29 @@ pub struct ContainerElement {
     pub calculated_position: Option<LayoutPosition>,
 }
 
+fn visible_elements(elements: &[Element]) -> impl Iterator<Item = &Element> {
+    elements.iter().filter(|x| {
+        !x.container_element()
+            .is_some_and(|x| x.hidden == Some(true))
+    })
+}
+
+fn visible_elements_mut(elements: &mut [Element]) -> impl Iterator<Item = &mut Element> {
+    elements.iter_mut().filter(|x| {
+        !x.container_element()
+            .is_some_and(|x| x.hidden == Some(true))
+    })
+}
+
 impl ContainerElement {
+    pub fn visible_elements(&self) -> impl Iterator<Item = &Element> {
+        visible_elements(&self.elements)
+    }
+
+    pub fn visible_elements_mut(&mut self) -> impl Iterator<Item = &mut Element> {
+        visible_elements_mut(&mut self.elements)
+    }
+
     #[cfg(feature = "id")]
     #[must_use]
     pub fn find_element_by_id(&self, id: usize) -> Option<&Self> {

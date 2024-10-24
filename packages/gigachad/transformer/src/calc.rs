@@ -23,6 +23,13 @@ pub trait Calc {
 
 impl Calc for Element {
     fn calc(&mut self) {
+        if self
+            .container_element()
+            .is_some_and(|x| x.hidden == Some(true))
+        {
+            return;
+        }
+
         if let Self::Table { .. } = self {
             self.calc_table();
         } else if let Some(container) = self.container_element_mut() {
@@ -237,7 +244,7 @@ impl Element {
             .replace(heading_height.unwrap_or(0.0) + body_height);
 
         {
-            for element in &mut container.elements {
+            for element in visible_elements_mut(&mut container.elements) {
                 match element {
                     Self::THead { element } => {
                         if element.width.is_none() {
@@ -249,9 +256,7 @@ impl Element {
                                 .replace(heading_height.unwrap_or(0.0));
                         }
 
-                        for element in element
-                            .elements
-                            .iter_mut()
+                        for element in visible_elements_mut(&mut element.elements)
                             .filter_map(|x| x.container_element_mut())
                         {
                             if element.width.is_none() {
@@ -259,9 +264,7 @@ impl Element {
                             }
                             if element.height.is_none() {
                                 element.calculated_height.replace(
-                                    element
-                                        .elements
-                                        .iter()
+                                    visible_elements(&element.elements)
                                         .filter_map(|x| x.container_element())
                                         .find_map(|x| x.calculated_height)
                                         .unwrap_or(0.0),
@@ -277,9 +280,7 @@ impl Element {
                             element.calculated_height.replace(body_height);
                         }
 
-                        for element in element
-                            .elements
-                            .iter_mut()
+                        for element in visible_elements_mut(&mut element.elements)
                             .filter_map(|x| x.container_element_mut())
                         {
                             if element.width.is_none() {
@@ -287,9 +288,7 @@ impl Element {
                             }
                             if element.height.is_none() {
                                 element.calculated_height.replace(
-                                    element
-                                        .elements
-                                        .iter()
+                                    visible_elements(&element.elements)
                                         .filter_map(|x| x.container_element())
                                         .find_map(|x| x.calculated_height)
                                         .unwrap_or(0.0),
@@ -303,9 +302,7 @@ impl Element {
                         }
                         if element.height.is_none() {
                             element.calculated_height.replace(
-                                element
-                                    .elements
-                                    .iter()
+                                visible_elements(&element.elements)
                                     .filter_map(|x| x.container_element())
                                     .find_map(|x| x.calculated_height)
                                     .unwrap_or(0.0),
@@ -345,6 +342,10 @@ impl Calc for ContainerElement {
 
 impl ContainerElement {
     fn calc_inner(&mut self) {
+        if self.hidden == Some(true) {
+            return;
+        }
+
         let (Some(container_width), Some(container_height)) = (
             self.calculated_width_minus_padding(),
             self.calculated_height_minus_padding(),
@@ -358,8 +359,9 @@ impl ContainerElement {
 
         let direction = self.direction;
 
-        let (sized_elements, unsized_elements): (Vec<_>, Vec<_>) =
-            self.elements.iter_mut().partition(|x| {
+        let (sized_elements, unsized_elements): (Vec<_>, Vec<_>) = self
+            .visible_elements_mut()
+            .partition(|x| {
                 x.container_element().is_some_and(|x| match direction {
                     LayoutDirection::Row => x.width.is_some(),
                     LayoutDirection::Column => x.height.is_some(),
@@ -386,8 +388,7 @@ impl ContainerElement {
 
     fn calc_hardsized_elements(&mut self) {
         for element in self
-            .elements
-            .iter_mut()
+            .visible_elements_mut()
             .filter_map(|x| x.container_element_mut())
         {
             element.calc_hardsized_elements();
@@ -510,7 +511,7 @@ impl ContainerElement {
                 );
         };
         Self::calc_unsized_element_sizes(
-            self.elements.iter_mut(),
+            visible_elements_mut(&mut self.elements),
             self.direction,
             container_width,
             container_height,
@@ -592,7 +593,7 @@ impl ContainerElement {
         let mut row = 0;
         let mut col = 0;
 
-        for element in &mut self.elements {
+        for element in self.visible_elements_mut() {
             log::trace!("handle_overflow: processing child element\n{element}");
             // TODO:
             // need to handle non container elements that have a width/height that is the split
@@ -709,10 +710,8 @@ impl ContainerElement {
         let mut max_width = 0.0;
         let mut max_height = 0.0;
 
-        for element in self
-            .elements
-            .iter_mut()
-            .filter_map(|x| x.container_element_mut())
+        for element in
+            visible_elements_mut(&mut self.elements).filter_map(|x| x.container_element_mut())
         {
             log::trace!("position_children: x={x} y={y} child={element:?}");
 
@@ -779,8 +778,7 @@ impl ContainerElement {
 
         match self.direction {
             LayoutDirection::Row => self
-                .elements
-                .iter()
+                .visible_elements()
                 .chunk_by(|x| {
                     x.container_element().and_then(|x| {
                         x.calculated_position.as_ref().and_then(|x| match x {
@@ -815,7 +813,7 @@ impl ContainerElement {
                 })
                 .max_by(order_float),
             LayoutDirection::Column => {
-                let columns = self.elements.iter().chunk_by(|x| {
+                let columns = self.visible_elements().chunk_by(|x| {
                     x.container_element().and_then(|x| {
                         x.calculated_position.as_ref().and_then(|x| match x {
                             LayoutPosition::Wrap { col, .. } => Some(col),
@@ -863,7 +861,7 @@ impl ContainerElement {
 
         match self.direction {
             LayoutDirection::Row => {
-                let rows = self.elements.iter().chunk_by(|x| {
+                let rows = self.visible_elements().chunk_by(|x| {
                     x.container_element().and_then(|x| {
                         x.calculated_position.as_ref().and_then(|x| match x {
                             LayoutPosition::Wrap { row, .. } => Some(row),
@@ -900,8 +898,7 @@ impl ContainerElement {
                 }
             }
             LayoutDirection::Column => self
-                .elements
-                .iter()
+                .visible_elements()
                 .chunk_by(|x| {
                     x.container_element().and_then(|x| {
                         x.calculated_position.as_ref().and_then(|x| match x {
@@ -950,8 +947,7 @@ impl ContainerElement {
 
         match self.direction {
             LayoutDirection::Row => self
-                .elements
-                .iter()
+                .visible_elements()
                 .chunk_by(|x| {
                     x.container_element().and_then(|x| {
                         x.calculated_position.as_ref().and_then(|x| match x {
@@ -982,8 +978,7 @@ impl ContainerElement {
                 .max_by(order_float)
                 .unwrap_or(0.0),
             LayoutDirection::Column => self
-                .elements
-                .iter()
+                .visible_elements()
                 .chunk_by(|x| {
                     x.container_element().and_then(|x| {
                         x.calculated_position.as_ref().and_then(|x| match x {
@@ -1020,8 +1015,7 @@ impl ContainerElement {
     pub fn contained_calculated_height(&self) -> f32 {
         match self.direction {
             LayoutDirection::Row => self
-                .elements
-                .iter()
+                .visible_elements()
                 .chunk_by(|x| {
                     x.container_element().and_then(|x| {
                         x.calculated_position.as_ref().and_then(|x| match x {
@@ -1043,8 +1037,7 @@ impl ContainerElement {
                 })
                 .sum(),
             LayoutDirection::Column => self
-                .elements
-                .iter()
+                .visible_elements()
                 .chunk_by(|x| {
                     x.container_element().and_then(|x| {
                         x.calculated_position.as_ref().and_then(|x| match x {
@@ -1070,8 +1063,7 @@ impl ContainerElement {
     }
 
     pub fn rows(&self) -> u32 {
-        self.elements
-            .iter()
+        self.visible_elements()
             .filter_map(|x| x.container_element())
             .filter_map(|x| x.calculated_position.as_ref())
             .filter_map(LayoutPosition::row)
@@ -1081,8 +1073,7 @@ impl ContainerElement {
     }
 
     pub fn columns(&self) -> u32 {
-        self.elements
-            .iter()
+        self.visible_elements()
             .filter_map(|x| x.container_element())
             .filter_map(|x| x.calculated_position.as_ref())
             .filter_map(LayoutPosition::column)
@@ -1146,7 +1137,7 @@ impl ContainerElement {
     #[allow(clippy::too_many_lines)]
     #[allow(clippy::cognitive_complexity)]
     fn resize_children(&mut self) -> bool {
-        if self.elements.is_empty() {
+        if self.visible_elements().peekable().peek().is_none() {
             log::trace!("resize_children: no children");
             return false;
         }
@@ -1226,8 +1217,7 @@ impl ContainerElement {
                     };
 
                     for element in self
-                        .elements
-                        .iter_mut()
+                        .visible_elements_mut()
                         .filter_map(|x| x.container_element_mut())
                         .filter(|x| x.width.is_none())
                     {
@@ -1267,8 +1257,7 @@ impl ContainerElement {
                     };
 
                     for element in self
-                        .elements
-                        .iter_mut()
+                        .visible_elements_mut()
                         .filter_map(|x| x.container_element_mut())
                         .filter(|x| x.height.is_none())
                     {

@@ -721,6 +721,11 @@ impl EguiApp {
                 }
             }
         }
+
+        for element in &container.elements {
+            self.handle_element_side_effects(element);
+        }
+
         match container.direction {
             LayoutDirection::Row => {
                 let rows = container
@@ -815,6 +820,33 @@ impl EguiApp {
         }
     }
 
+    fn handle_element_side_effects(&self, element: &Element) {
+        if let Some(container) = element.container_element() {
+            if let Some(route) = &container.route {
+                let processed_route = {
+                    self.route_requests
+                        .read()
+                        .unwrap()
+                        .iter()
+                        .any(|x| *x == container.id)
+                };
+                if !processed_route {
+                    log::debug!(
+                        "processing route route={route:?} container_id={}",
+                        container.id
+                    );
+                    self.route_requests.write().unwrap().push(container.id);
+                    if let Err(e) = self.event.send(AppEvent::ProcessRoute {
+                        route: route.to_owned(),
+                        container_id: container.id,
+                    }) {
+                        log::error!("Failed to send ProcessRoute event: {e:?}");
+                    }
+                }
+            }
+        }
+    }
+
     #[allow(clippy::too_many_lines)]
     fn render_element(
         &self,
@@ -827,24 +859,12 @@ impl EguiApp {
     ) {
         log::trace!("render_element: rect={rect:?}");
 
+        self.handle_element_side_effects(element);
+
         if let Some(container) = element.container_element() {
-            if let Some(route) = &container.route {
-                let processed_route = {
-                    self.route_requests
-                        .read()
-                        .unwrap()
-                        .iter()
-                        .any(|x| *x == container.id)
-                };
-                if !processed_route {
-                    self.route_requests.write().unwrap().push(container.id);
-                    if let Err(e) = self.event.send(AppEvent::ProcessRoute {
-                        route: route.to_owned(),
-                        container_id: container.id,
-                    }) {
-                        log::error!("Failed to send ProcessRoute event: {e:?}");
-                    }
-                }
+            if container.hidden == Some(true) {
+                log::debug!("render_element: container is hidden. skipping render");
+                return;
             }
         }
 

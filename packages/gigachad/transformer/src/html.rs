@@ -74,6 +74,14 @@ fn get_direction(tag: &HTMLTag) -> LayoutDirection {
     }
 }
 
+fn get_hidden(tag: &HTMLTag) -> Option<bool> {
+    match get_tag_attr_value_lower(tag, "sx-hidden").as_deref() {
+        Some("true" | "") => Some(true),
+        Some("false") => Some(false),
+        _ => None,
+    }
+}
+
 fn get_route(tag: &HTMLTag) -> Option<Route> {
     #[allow(clippy::option_if_let_else)]
     #[allow(clippy::manual_map)]
@@ -208,6 +216,7 @@ fn parse_element(
         #[cfg(feature = "id")]
         id: CURRENT_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
         direction: get_direction(tag),
+        hidden: get_hidden(tag),
         overflow_x: get_overflow(tag, "sx-overflow-x"),
         overflow_y: get_overflow(tag, "sx-overflow-y"),
         justify_content: get_justify_content(tag, "sx-justify-content"),
