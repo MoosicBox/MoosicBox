@@ -109,6 +109,48 @@ macro_rules! assert_or_unimplemented {
 }
 
 #[macro_export]
+macro_rules! assert_or_panic {
+    ($evaluate:expr, $(,)?) => {
+        if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1"
+            && !($evaluate)
+        {
+            $crate::assert!($evaluate)
+        } else if !($evaluate) {
+            panic!(
+                "{}",
+                $crate::Colorize::on_red($crate::Colorize::white($crate::Colorize::bold(
+                    format!(
+                        "{}\n{}",
+                        $crate::Colorize::underline(format!($($message)*).as_str()),
+                        std::backtrace::Backtrace::force_capture()
+                    )
+                    .as_str()
+                )))
+            );
+        }
+    };
+    ($evaluate:expr, $($message:tt)+) => {
+        if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1"
+            && !($evaluate)
+        {
+            $crate::assert!($evaluate, $($message)*)
+        } else if !($evaluate) {
+            panic!(
+                "{}",
+                $crate::Colorize::on_red($crate::Colorize::white($crate::Colorize::bold(
+                    format!(
+                        "{}\n{}",
+                        $crate::Colorize::underline(format!($($message)*).as_str()),
+                        std::backtrace::Backtrace::force_capture()
+                    )
+                    .as_str()
+                )))
+            );
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! die {
     () => {
         if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1" {
