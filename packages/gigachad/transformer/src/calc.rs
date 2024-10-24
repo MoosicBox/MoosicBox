@@ -342,6 +342,8 @@ impl Calc for ContainerElement {
 
 impl ContainerElement {
     fn calc_inner(&mut self) {
+        static MAX_HANDLE_OVERFLOW: usize = 100;
+
         if self.hidden == Some(true) {
             return;
         }
@@ -383,7 +385,26 @@ impl ContainerElement {
             remainder,
         );
 
-        while self.handle_overflow() {}
+        let mut attempt = 0;
+        while self.handle_overflow() {
+            attempt += 1;
+
+            {
+                fn truncated(mut value: String, len: usize) -> String {
+                    value.truncate(len);
+                    value
+                }
+
+                moosicbox_assert::assert_or_panic!(
+                    attempt < MAX_HANDLE_OVERFLOW,
+                    "Max number of handle_overflow attempts encountered on {} elements self={}",
+                    self.elements.len(),
+                    truncated(format!("{self:?}"), 50000),
+                );
+            }
+
+            log::debug!("handle_overflow: attempt {}", attempt + 1);
+        }
     }
 
     fn calc_hardsized_elements(&mut self) {
