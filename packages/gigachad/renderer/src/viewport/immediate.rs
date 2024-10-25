@@ -33,7 +33,7 @@ pub struct Pos {
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub struct ViewportListener {
-    viewport: Option<Viewport>,
+    pub viewport: Option<Viewport>,
     visible: bool,
     prev_visible: Option<bool>,
     initialized: bool,
