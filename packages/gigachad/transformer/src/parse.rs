@@ -10,27 +10,70 @@ pub enum GetNumberError {
     Parse(String),
 }
 
+pub fn split_on_char(haystack: &str, needle: char) -> Result<Option<(&str, &str)>, GetNumberError> {
+    let mut pop_stack = vec![];
+
+    for (i, char) in haystack.chars().enumerate() {
+        if pop_stack.is_empty() && char == needle {
+            let (a, b) = haystack.split_at(i);
+            return Ok(Some((a, &b[1..])));
+        }
+
+        match char {
+            '{' => {
+                pop_stack.insert(0, '}');
+            }
+            '}' => {
+                moosicbox_assert::assert_or_err!(
+                    pop_stack.first() == Some(&'}'),
+                    GetNumberError::Parse("Failed to find ending match to {".to_string()),
+                );
+                pop_stack.remove(0);
+            }
+            '(' => {
+                pop_stack.insert(0, ')');
+            }
+            ')' => {
+                moosicbox_assert::assert_or_err!(
+                    pop_stack.first() == Some(&')'),
+                    GetNumberError::Parse("Failed to find ending match to (".to_string()),
+                );
+                if pop_stack.first() == Some(&')') {
+                    pop_stack.remove(0);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Ok(None)
+}
+
+pub fn split_on_char_trimmed(
+    haystack: &str,
+    needle: char,
+) -> Result<Option<(&str, &str)>, GetNumberError> {
+    Ok(split_on_char(haystack, needle)?.map(|(x, y)| (x.trim(), y.trim())))
+}
+
 pub fn parse_calculation(calc: &str) -> Result<Calculation, GetNumberError> {
     Ok(
-        if let Some((left, right)) = calc.split_once('+').map(|(x, y)| (x.trim(), y.trim())) {
+        if let Some((left, right)) = split_on_char_trimmed(calc, '+')? {
             Calculation::Add(
                 Box::new(parse_calculation(left)?),
                 Box::new(parse_calculation(right)?),
             )
-        } else if let Some((left, right)) = calc.split_once('-').map(|(x, y)| (x.trim(), y.trim()))
-        {
+        } else if let Some((left, right)) = split_on_char_trimmed(calc, '-')? {
             Calculation::Subtract(
                 Box::new(parse_calculation(left)?),
                 Box::new(parse_calculation(right)?),
             )
-        } else if let Some((left, right)) = calc.split_once('*').map(|(x, y)| (x.trim(), y.trim()))
-        {
+        } else if let Some((left, right)) = split_on_char_trimmed(calc, '*')? {
             Calculation::Multiply(
                 Box::new(parse_calculation(left)?),
                 Box::new(parse_calculation(right)?),
             )
-        } else if let Some((left, right)) = calc.split_once('/').map(|(x, y)| (x.trim(), y.trim()))
-        {
+        } else if let Some((left, right)) = split_on_char_trimmed(calc, '/')? {
             Calculation::Divide(
                 Box::new(parse_calculation(left)?),
                 Box::new(parse_calculation(right)?),
@@ -79,4 +122,53 @@ pub fn parse_number(number: &str) -> Result<Number, GetNumberError> {
             )
         },
     )
+}
+
+#[cfg(test)]
+mod test {
+    use pretty_assertions::assert_eq;
+
+    use crate::parse::{split_on_char, split_on_char_trimmed};
+
+    #[test_log::test]
+    fn split_on_char_returns_none_for_basic_floating_point_number() {
+        assert_eq!(split_on_char("123.5", '+').unwrap(), None);
+    }
+
+    #[test_log::test]
+    fn split_on_char_returns_none_for_basic_integer_number() {
+        assert_eq!(split_on_char("123", '+').unwrap(), None);
+    }
+
+    #[test_log::test]
+    fn split_on_char_returns_splits_on_plus_sign_with_floating_point_numbers() {
+        assert_eq!(
+            split_on_char("123.5 + 131.2", '+').unwrap(),
+            Some(("123.5 ", " 131.2"))
+        );
+    }
+
+    #[test_log::test]
+    fn split_on_char_returns_splits_on_plus_sign_with_integer_numbers() {
+        assert_eq!(
+            split_on_char("123 + 131", '+').unwrap(),
+            Some(("123 ", " 131"))
+        );
+    }
+
+    #[test_log::test]
+    fn split_on_char_trimmed_returns_splits_on_plus_sign_with_floating_point_numbers() {
+        assert_eq!(
+            split_on_char_trimmed("123.5 + 131.2", '+').unwrap(),
+            Some(("123.5", "131.2"))
+        );
+    }
+
+    #[test_log::test]
+    fn split_on_char_trimmed_returns_splits_on_plus_sign_with_integer_numbers() {
+        assert_eq!(
+            split_on_char_trimmed("123 + 131", '+').unwrap(),
+            Some(("123", "131"))
+        );
+    }
 }
