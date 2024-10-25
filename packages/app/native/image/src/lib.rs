@@ -1,3 +1,6 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+
 use std::{
     collections::HashMap,
     sync::{Arc, LazyLock, RwLock},
@@ -20,6 +23,9 @@ macro_rules! image {
     }};
 }
 
+/// # Panics
+///
+/// * If the `BYTES` `RwLock` is poisoned
 pub fn get_image(path: &str) -> Option<Arc<Bytes>> {
     BYTES.read().unwrap().get(path).cloned()
 }
