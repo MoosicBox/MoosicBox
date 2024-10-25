@@ -67,6 +67,16 @@ fn calc_to_css_string(calc: &Calculation) -> String {
             calc_to_css_string(left),
             calc_to_css_string(right)
         ),
+        Calculation::Min(left, right) => format!(
+            "min({}, {})",
+            calc_to_css_string(left),
+            calc_to_css_string(right)
+        ),
+        Calculation::Max(left, right) => format!(
+            "max({}, {})",
+            calc_to_css_string(left),
+            calc_to_css_string(right)
+        ),
     }
 }
 
