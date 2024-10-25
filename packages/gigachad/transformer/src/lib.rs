@@ -8,6 +8,8 @@ pub mod calc;
 #[cfg(feature = "html")]
 pub mod html;
 
+mod parse;
+
 #[allow(clippy::module_name_repetitions)]
 #[must_use]
 pub fn calc_number(number: &Number, container: f32) -> f32 {

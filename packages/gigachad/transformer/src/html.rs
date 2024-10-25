@@ -1,10 +1,12 @@
 use std::borrow::Cow;
 
-use thiserror::Error;
 pub use tl::ParseError;
 use tl::{Children, HTMLTag, Node, NodeHandle, Parser, ParserOptions};
 
-use crate::{Calculation, JustifyContent, LayoutDirection, LayoutOverflow, Number, Route};
+use crate::{
+    parse::{parse_number, GetNumberError},
+    JustifyContent, LayoutDirection, LayoutOverflow, Number, Route,
+};
 
 impl TryFrom<String> for crate::ContainerElement {
     type Error = ParseError;
@@ -115,83 +117,6 @@ fn get_justify_content(tag: &HTMLTag, name: &str) -> JustifyContent {
         Some("space-evenly") => JustifyContent::SpaceEvenly,
         _ => JustifyContent::default(),
     }
-}
-
-#[derive(Debug, Error)]
-pub enum GetNumberError {
-    #[error("Failed to parse number '{0}'")]
-    Parse(String),
-}
-
-fn parse_calculation(calc: &str) -> Result<Calculation, GetNumberError> {
-    Ok(
-        if let Some((left, right)) = calc.split_once('+').map(|(x, y)| (x.trim(), y.trim())) {
-            Calculation::Add(
-                Box::new(parse_calculation(left)?),
-                Box::new(parse_calculation(right)?),
-            )
-        } else if let Some((left, right)) = calc.split_once('-').map(|(x, y)| (x.trim(), y.trim()))
-        {
-            Calculation::Subtract(
-                Box::new(parse_calculation(left)?),
-                Box::new(parse_calculation(right)?),
-            )
-        } else if let Some((left, right)) = calc.split_once('*').map(|(x, y)| (x.trim(), y.trim()))
-        {
-            Calculation::Multiply(
-                Box::new(parse_calculation(left)?),
-                Box::new(parse_calculation(right)?),
-            )
-        } else if let Some((left, right)) = calc.split_once('/').map(|(x, y)| (x.trim(), y.trim()))
-        {
-            Calculation::Divide(
-                Box::new(parse_calculation(left)?),
-                Box::new(parse_calculation(right)?),
-            )
-        } else {
-            Calculation::Number(Box::new(parse_number(calc)?))
-        },
-    )
-}
-
-fn parse_number(number: &str) -> Result<Number, GetNumberError> {
-    Ok(
-        if let Some(calc) = number
-            .strip_prefix("calc(")
-            .and_then(|x| x.strip_suffix(")"))
-            .map(str::trim)
-        {
-            Number::Calc(parse_calculation(calc)?)
-        } else if let Some((number, _)) = number.split_once('%') {
-            if number.contains('.') {
-                Number::RealPercent(
-                    number
-                        .parse::<f32>()
-                        .map_err(|_| GetNumberError::Parse(number.to_string()))?,
-                )
-            } else {
-                Number::IntegerPercent(
-                    number
-                        .parse::<u64>()
-                        .map_err(|_| GetNumberError::Parse(number.to_string()))?,
-                )
-            }
-        } else if number.contains('.') {
-            let number = number.strip_suffix("px").unwrap_or(number);
-            Number::Real(
-                number
-                    .parse::<f32>()
-                    .map_err(|_| GetNumberError::Parse(number.to_string()))?,
-            )
-        } else {
-            let number = number.strip_suffix("px").unwrap_or(number);
-            Number::Integer(
-                number
-                    .parse::<u64>()
-                    .map_err(|_| GetNumberError::Parse(number.to_string()))?,
-            )
-        },
-    )
 }
 
 fn get_number(tag: &HTMLTag, name: &str) -> Result<Number, GetNumberError> {
