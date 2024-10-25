@@ -1,5 +1,5 @@
 [parallelization]
-chunked = 3
+chunked = 1
 
 [[ci-steps]]
 command = '''
