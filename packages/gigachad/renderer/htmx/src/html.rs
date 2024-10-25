@@ -89,6 +89,7 @@ fn calc_to_css_string(calc: &Calculation) -> String {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn element_style_to_html(
     f: &mut dyn Write,
     element: &ContainerElement,
@@ -164,13 +165,15 @@ pub fn element_style_to_html(
         JustifyContent::Default => {}
     }
 
+    let mut flex_shrink_0 = false;
+
     if let Some(width) = &element.width {
         if !printed_start {
             printed_start = true;
             f.write_all(b" style=\"")?;
         }
         write_css_attr(f, b"width", number_to_css_string(width).as_bytes())?;
-        write_css_attr(f, b"flex-shrink", b"0")?;
+        flex_shrink_0 = true;
     }
     if let Some(height) = &element.height {
         if !printed_start {
@@ -178,6 +181,14 @@ pub fn element_style_to_html(
             f.write_all(b" style=\"")?;
         }
         write_css_attr(f, b"height", number_to_css_string(height).as_bytes())?;
+        flex_shrink_0 = true;
+    }
+
+    if flex_shrink_0 {
+        if !printed_start {
+            printed_start = true;
+            f.write_all(b" style=\"")?;
+        }
         write_css_attr(f, b"flex-shrink", b"0")?;
     }
 
