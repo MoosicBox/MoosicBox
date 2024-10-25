@@ -11,9 +11,12 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [package.metadata.cargo-machete]
-ignored = ["image"]
+ignored = ["gigachad_color", "image"]
 
 [dependencies]
+gigachad_color = { version = "0.1.0", path = "../../color", default-features = false, features = [
+    "egui",
+] }
 gigachad_renderer = { version = "0.1.0", path = "../", default-features = false, features = [
     "viewport-immediate",
 ] }

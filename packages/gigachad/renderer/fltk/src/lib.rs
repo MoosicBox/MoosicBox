@@ -1182,6 +1182,7 @@ impl Renderer for FltkRenderer {
         height: u16,
         x: Option<i32>,
         y: Option<i32>,
+        background: Option<Color>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         let app = app::App::default();
         self.app.replace(app);
@@ -1196,8 +1197,14 @@ impl Renderer for FltkRenderer {
         self.height
             .store(i32::from(height), std::sync::atomic::Ordering::SeqCst);
 
-        app::set_background_color(24, 26, 27);
+        if let Some(background) = background {
+            app::set_background_color(background.r, background.g, background.b);
+        } else {
+            app::set_background_color(24, 26, 27);
+        }
+
         app::set_foreground_color(255, 255, 255);
+
         app::set_frame_type(enums::FrameType::NoBox);
         fltk::image::Image::set_scaling_algorithm(fltk::image::RgbScaling::Bilinear);
         RgbImage::set_scaling_algorithm(fltk::image::RgbScaling::Bilinear);

@@ -3790,6 +3790,7 @@ name = "gigachad_renderer"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "gigachad_color",
  "gigachad_transformer",
  "log",
  "maud",
@@ -3803,6 +3804,7 @@ dependencies = [
  "eframe",
  "egui_extras",
  "flume",
+ "gigachad_color",
  "gigachad_renderer",
  "gigachad_router",
  "gigachad_transformer",
@@ -3878,6 +3880,7 @@ dependencies = [
 name = "gigachad_transformer"
 version = "0.1.0"
 dependencies = [
+ "gigachad_color",
  "itertools 0.13.0",
  "log",
  "moosicbox_assert",

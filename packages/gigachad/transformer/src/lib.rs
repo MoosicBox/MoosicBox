@@ -3,6 +3,8 @@
 
 use std::{fmt::Display, io::Write};
 
+use gigachad_color::Color;
+
 #[cfg(feature = "calc")]
 pub mod calc;
 #[cfg(feature = "html")]
@@ -215,6 +217,7 @@ pub struct ContainerElement {
     pub justify_content: JustifyContent,
     pub width: Option<Number>,
     pub height: Option<Number>,
+    pub background: Option<Color>,
     pub hidden: Option<bool>,
     pub route: Option<Route>,
     pub margin_left: Option<f32>,

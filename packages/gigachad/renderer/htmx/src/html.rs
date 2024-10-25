@@ -3,6 +3,7 @@
 use std::io::Write;
 
 use actix_htmx::Htmx;
+use gigachad_renderer::Color;
 use gigachad_router::ContainerElement;
 use gigachad_transformer::{
     Calculation, Element, HeaderSize, Input, JustifyContent, LayoutDirection, LayoutOverflow,
@@ -42,6 +43,13 @@ fn number_to_css_string(number: &Number) -> String {
         Number::IntegerPercent(x) => format!("{x}%"),
         Number::Calc(x) => format!("calc({})", calc_to_css_string(x)),
     }
+}
+
+fn color_to_css_string(color: Color) -> String {
+    color.a.map_or_else(
+        || format!("rgb({},{},{})", color.r, color.g, color.b),
+        |a| format!("rgba({},{},{},{})", color.r, color.g, color.b, a),
+    )
 }
 
 fn calc_to_css_string(calc: &Calculation) -> String {
@@ -162,6 +170,7 @@ pub fn element_style_to_html(
             f.write_all(b" style=\"")?;
         }
         write_css_attr(f, b"width", number_to_css_string(width).as_bytes())?;
+        write_css_attr(f, b"flex-shrink", b"0")?;
     }
     if let Some(height) = &element.height {
         if !printed_start {
@@ -169,6 +178,15 @@ pub fn element_style_to_html(
             f.write_all(b" style=\"")?;
         }
         write_css_attr(f, b"height", number_to_css_string(height).as_bytes())?;
+        write_css_attr(f, b"flex-shrink", b"0")?;
+    }
+
+    if let Some(background) = element.background {
+        if !printed_start {
+            printed_start = true;
+            f.write_all(b" style=\"")?;
+        }
+        write_css_attr(f, b"background", color_to_css_string(background).as_bytes())?;
     }
 
     if printed_start {
@@ -355,6 +373,7 @@ pub fn container_element_to_html(container: &ContainerElement) -> Result<String,
 #[allow(clippy::similar_names)]
 pub fn container_element_to_html_response(
     container: &ContainerElement,
+    background: Option<Color>,
     htmx: &Htmx,
 ) -> Result<String, std::io::Error> {
     let html = container_element_to_html(container)?;
@@ -373,13 +392,17 @@ pub fn container_element_to_html_response(
                     </script>
                     <style>
                         body {{
-                            margin: 0;
+                            margin: 0;{background}
                         }}
                     </style>
                 </head>
                 <body>{html}</body>
             </html>
-            "#
+            "#,
+            background = background
+                .map(|x| format!("background:rgb({},{},{})", x.r, x.g, x.b))
+                .as_deref()
+                .unwrap_or("")
         )
     })
 }

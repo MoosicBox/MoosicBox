@@ -7,6 +7,7 @@ pub mod viewport;
 use std::{future::Future, pin::Pin};
 
 use async_trait::async_trait;
+pub use gigachad_color::Color;
 use gigachad_transformer::{html::ParseError, ContainerElement};
 
 #[derive(Default)]
@@ -73,6 +74,7 @@ pub trait Renderer: Send + Sync {
         height: u16,
         x: Option<i32>,
         y: Option<i32>,
+        background: Option<Color>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
 
     /// # Errors

@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use gigachad_color::Color;
 pub use tl::ParseError;
 use tl::{Children, HTMLTag, Node, NodeHandle, Parser, ParserOptions};
 
@@ -76,6 +77,12 @@ fn get_direction(tag: &HTMLTag) -> LayoutDirection {
     }
 }
 
+fn get_color(tag: &HTMLTag, name: &str) -> Option<Color> {
+    get_tag_attr_value(tag, name)
+        .as_deref()
+        .map(Color::from_hex)
+}
+
 fn get_hidden(tag: &HTMLTag) -> Option<bool> {
     match get_tag_attr_value_lower(tag, "sx-hidden").as_deref() {
         Some("true" | "") => Some(true),
@@ -141,6 +148,7 @@ fn parse_element(
         #[cfg(feature = "id")]
         id: CURRENT_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
         direction: get_direction(tag),
+        background: get_color(tag, "sx-background"),
         hidden: get_hidden(tag),
         overflow_x: get_overflow(tag, "sx-overflow-x"),
         overflow_y: get_overflow(tag, "sx-overflow-y"),

@@ -13,7 +13,7 @@ use actix_web::{
 };
 use async_trait::async_trait;
 use flume::Receiver;
-use gigachad_renderer::{RenderRunner, Renderer, View};
+use gigachad_renderer::{Color, RenderRunner, Renderer, View};
 use gigachad_router::Router;
 use html::container_element_to_html_response;
 use moosicbox_app_native_image::image;
@@ -122,7 +122,7 @@ pub async fn catchall_endpoint(
     Ok(HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
         .body(
-            container_element_to_html_response(&container.immediate, &htmx)
+            container_element_to_html_response(&container.immediate, app.background, &htmx)
                 .map_err(ErrorInternalServerError)?,
         ))
 }
@@ -217,11 +217,13 @@ impl Renderer for HtmxRenderer {
         height: u16,
         x: Option<i32>,
         y: Option<i32>,
+        background: Option<Color>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         self.width = Some(width);
         self.height = Some(height);
         self.x = x;
         self.y = y;
+        self.app.background = background;
 
         Ok(())
     }
@@ -259,10 +261,14 @@ impl Renderer for HtmxRenderer {
 #[derive(Clone)]
 struct HtmxApp {
     router: Router,
+    background: Option<Color>,
 }
 
 impl HtmxApp {
     const fn new(router: Router) -> Self {
-        Self { router }
+        Self {
+            router,
+            background: None,
+        }
     }
 }

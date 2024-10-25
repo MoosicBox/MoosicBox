@@ -23,7 +23,7 @@ macro_rules! pre_escaped {
 #[must_use]
 pub fn sidebar_navigation() -> Markup {
     html! {
-        aside sx-width="calc(max(240, min(280, 15%)))" {
+        aside sx-width="calc(max(240, min(280, 15%)))" sx-background="#080a0b" {
             div class="navigation-bar" {
                 div class="navigation-bar-header" {
                     a href="/" sx-dir="row" {
@@ -136,7 +136,7 @@ pub fn player() -> Markup {
 #[must_use]
 pub fn footer() -> Markup {
     html! {
-        footer sx-height=(100) {
+        footer sx-height=(100) sx-background="#080a0b" {
             (player())
         }
     }

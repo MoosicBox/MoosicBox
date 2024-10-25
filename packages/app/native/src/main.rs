@@ -3,7 +3,7 @@
 use std::{num::ParseIntError, sync::Arc};
 
 use moosicbox_app_native_lib::{
-    renderer::View,
+    renderer::{Color, View},
     router::{ContainerElement, RouteRequest, Router},
 };
 use moosicbox_env_utils::{default_env_usize, option_env_i32, option_env_u16};
@@ -144,6 +144,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut app = moosicbox_app_native_lib::NativeAppBuilder::new()
         .with_router(router.clone())
         .with_runtime_arc(runtime.clone())
+        .with_background(Color::from_hex("#181a1b"))
         .with_size(
             option_env_u16("WINDOW_WIDTH").unwrap().unwrap_or(1000),
             option_env_u16("WINDOW_HEIGHT").unwrap().unwrap_or(600),

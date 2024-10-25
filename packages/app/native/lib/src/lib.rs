@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use gigachad_renderer::{RenderRunner, Renderer};
+use gigachad_renderer::{Color, RenderRunner, Renderer};
 use gigachad_router::Router;
 use moosicbox_env_utils::default_env_usize;
 use thiserror::Error;
@@ -23,6 +23,7 @@ pub enum NativeAppError {
 pub struct NativeAppBuilder {
     x: Option<i32>,
     y: Option<i32>,
+    background: Option<Color>,
     width: Option<u16>,
     height: Option<u16>,
     router: Option<Router>,
@@ -43,6 +44,7 @@ impl NativeAppBuilder {
         Self {
             x: None,
             y: None,
+            background: None,
             width: None,
             height: None,
             router: None,
@@ -96,6 +98,12 @@ impl NativeAppBuilder {
     #[must_use]
     pub fn with_position(self, x: i32, y: i32) -> Self {
         self.with_x(x).with_y(y)
+    }
+
+    #[must_use]
+    pub fn with_background(mut self, color: Color) -> Self {
+        self.background.replace(color);
+        self
     }
 
     #[must_use]
@@ -183,6 +191,7 @@ impl NativeAppBuilder {
         let mut app = NativeApp {
             x: self.x,
             y: self.y,
+            background: self.background,
             width: self.width,
             height: self.height,
             router,
@@ -198,6 +207,7 @@ impl NativeAppBuilder {
 pub struct NativeApp {
     x: Option<i32>,
     y: Option<i32>,
+    background: Option<Color>,
     width: Option<u16>,
     height: Option<u16>,
     pub router: Router,
@@ -216,6 +226,7 @@ impl NativeApp {
                 self.height.unwrap_or(600),
                 self.x,
                 self.y,
+                self.background,
             )
             .await?;
 

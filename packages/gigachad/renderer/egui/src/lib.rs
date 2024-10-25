@@ -7,7 +7,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use eframe::egui::{self, CursorIcon, Response, Ui, Widget};
+use eframe::egui::{self, Color32, CursorIcon, Response, Ui, Widget};
 use flume::{Receiver, Sender};
 use gigachad_renderer::viewport::immediate::{Pos, Viewport, ViewportListener};
 pub use gigachad_renderer::*;
@@ -111,11 +111,13 @@ impl Renderer for EguiRenderer {
         height: u16,
         x: Option<i32>,
         y: Option<i32>,
+        background: Option<Color>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         self.width = Some(width);
         self.height = Some(height);
         self.x = x;
         self.y = y;
+        self.app.background = background.map(Into::into);
 
         log::debug!("start: spawning listen thread");
         moosicbox_task::spawn("renderer_egui::start: listen", {
@@ -205,6 +207,7 @@ struct EguiApp {
     images: Arc<RwLock<HashMap<String, AppImage>>>,
     route_requests: Arc<RwLock<Vec<usize>>>,
     router: Router,
+    background: Option<Color32>,
 }
 
 type Handler = Box<dyn Fn(&Response)>;
@@ -228,6 +231,7 @@ impl EguiApp {
             images: Arc::new(RwLock::new(HashMap::new())),
             route_requests: Arc::new(RwLock::new(vec![])),
             router,
+            background: None,
         }
     }
 
@@ -430,8 +434,13 @@ impl EguiApp {
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
     ) {
-        egui::Frame::none()
-            .inner_margin(egui::Margin {
+        let mut frame = egui::Frame::none();
+
+        if let Some(background) = container.background {
+            frame = frame.fill(background.into());
+        }
+
+        frame.inner_margin(egui::Margin {
                 left: container.margin_left.unwrap_or(0.0),
                 right: container.margin_right.unwrap_or(0.0),
                 top: container.margin_top.unwrap_or(0.0),
@@ -1027,8 +1036,7 @@ impl EguiApp {
             x.options.line_scroll_speed = 100.0;
         });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            let style = ui.style_mut();
+        ctx.style_mut(|style| {
             style.spacing.window_margin.left = 0.0;
             style.spacing.window_margin.right = 0.0;
             style.spacing.window_margin.top = 0.0;
@@ -1038,8 +1046,21 @@ impl EguiApp {
             {
                 style.debug.debug_on_hover = true;
             }
-            self.render_container(ctx, ui, container, None, None, None);
         });
+
+        egui::CentralPanel::default()
+            .frame(egui::Frame::none())
+            .show(ctx, |ui| {
+                egui::Frame::none()
+                    .inner_margin(egui::Margin::ZERO)
+                    .fill(
+                        self.background
+                            .unwrap_or_else(|| Color32::from_hex("#181a1b").unwrap()),
+                    )
+                    .show(ui, |ui| {
+                        self.render_container(ctx, ui, container, None, None, None);
+                    });
+            });
     }
 }
 
