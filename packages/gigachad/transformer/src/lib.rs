@@ -31,6 +31,7 @@ pub enum Calculation {
     Subtract(Box<Calculation>, Box<Calculation>),
     Multiply(Box<Calculation>, Box<Calculation>),
     Divide(Box<Calculation>, Box<Calculation>),
+    Grouping(Box<Calculation>),
     Min(Box<Calculation>, Box<Calculation>),
     Max(Box<Calculation>, Box<Calculation>),
 }
@@ -43,6 +44,7 @@ impl Calculation {
             Self::Subtract(left, right) => left.calc(container) - right.calc(container),
             Self::Multiply(left, right) => left.calc(container) * right.calc(container),
             Self::Divide(left, right) => left.calc(container) / right.calc(container),
+            Self::Grouping(value) => value.calc(container),
             Self::Min(left, right) => {
                 let a = left.calc(container);
                 let b = right.calc(container);
@@ -73,6 +75,7 @@ impl Display for Calculation {
             Self::Subtract(left, right) => f.write_fmt(format_args!("{left} - {right}")),
             Self::Multiply(left, right) => f.write_fmt(format_args!("{left} * {right}")),
             Self::Divide(left, right) => f.write_fmt(format_args!("{left} / {right}")),
+            Self::Grouping(value) => f.write_str(&value.to_string()),
             Self::Min(left, right) => f.write_fmt(format_args!("min({left}, {right})")),
             Self::Max(left, right) => f.write_fmt(format_args!("max({left}, {right})")),
         }

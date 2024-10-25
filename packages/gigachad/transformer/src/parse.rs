@@ -56,6 +56,18 @@ pub fn split_on_char_trimmed(
     Ok(split_on_char(haystack, needle)?.map(|(x, y)| (x.trim(), y.trim())))
 }
 
+pub fn parse_grouping(calc: &str) -> Result<Calculation, GetNumberError> {
+    if let Some(contents) = calc.strip_prefix('(').and_then(|x| x.strip_suffix(')')) {
+        Ok(Calculation::Grouping(Box::new(parse_calculation(
+            contents,
+        )?)))
+    } else {
+        Err(GetNumberError::Parse(
+            "Invalid grouping: '{calc}'".to_string(),
+        ))
+    }
+}
+
 pub fn parse_calculation(calc: &str) -> Result<Calculation, GetNumberError> {
     Ok(
         if let Some((left, right)) = split_on_char_trimmed(calc, '+')? {
@@ -78,6 +90,8 @@ pub fn parse_calculation(calc: &str) -> Result<Calculation, GetNumberError> {
                 Box::new(parse_calculation(left)?),
                 Box::new(parse_calculation(right)?),
             )
+        } else if let Ok(grouping) = parse_grouping(calc) {
+            grouping
         } else {
             Calculation::Number(Box::new(parse_number(calc)?))
         },
@@ -128,7 +142,10 @@ pub fn parse_number(number: &str) -> Result<Number, GetNumberError> {
 mod test {
     use pretty_assertions::assert_eq;
 
-    use crate::parse::{split_on_char, split_on_char_trimmed};
+    use crate::{
+        parse::{parse_calculation, split_on_char, split_on_char_trimmed},
+        Calculation, Number,
+    };
 
     #[test_log::test]
     fn split_on_char_returns_none_for_basic_floating_point_number() {
@@ -169,6 +186,91 @@ mod test {
         assert_eq!(
             split_on_char_trimmed("123 + 131", '+').unwrap(),
             Some(("123", "131"))
+        );
+    }
+
+    #[test_log::test]
+    fn split_on_char_trimmed_skips_char_in_parens_scope() {
+        assert_eq!(
+            split_on_char_trimmed("(123 + 131) + 100", '+').unwrap(),
+            Some(("(123 + 131)", "100"))
+        );
+    }
+
+    #[test_log::test]
+    fn split_on_char_trimmed_skips_char_in_nested_parens_scope() {
+        assert_eq!(
+            split_on_char_trimmed("(123 + (131 * 99)) + 100", '+').unwrap(),
+            Some(("(123 + (131 * 99))", "100"))
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_basic_floating_point_number() {
+        assert_eq!(
+            parse_calculation("123.5").unwrap(),
+            Calculation::Number(Box::new(Number::Real(123.5)))
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_basic_integer_number() {
+        assert_eq!(
+            parse_calculation("123").unwrap(),
+            Calculation::Number(Box::new(Number::Integer(123)))
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_plus_sign_with_floating_point_numbers() {
+        assert_eq!(
+            parse_calculation("123.5 + 131.2").unwrap(),
+            Calculation::Add(
+                Box::new(Calculation::Number(Box::new(Number::Real(123.5)))),
+                Box::new(Calculation::Number(Box::new(Number::Real(131.2))))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_plus_sign_with_integer_numbers() {
+        assert_eq!(
+            parse_calculation("123 + 131").unwrap(),
+            Calculation::Add(
+                Box::new(Calculation::Number(Box::new(Number::Integer(123)))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(131))))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_parens_scope() {
+        assert_eq!(
+            parse_calculation("(123 + 131) + 100").unwrap(),
+            Calculation::Add(
+                Box::new(Calculation::Grouping(Box::new(Calculation::Add(
+                    Box::new(Calculation::Number(Box::new(Number::Integer(123)))),
+                    Box::new(Calculation::Number(Box::new(Number::Integer(131))))
+                )))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(100))))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_nested_parens_scope() {
+        assert_eq!(
+            parse_calculation("(123 + (131 * 99)) + 100").unwrap(),
+            Calculation::Add(
+                Box::new(Calculation::Grouping(Box::new(Calculation::Add(
+                    Box::new(Calculation::Number(Box::new(Number::Integer(123)))),
+                    Box::new(Calculation::Grouping(Box::new(Calculation::Multiply(
+                        Box::new(Calculation::Number(Box::new(Number::Integer(131)))),
+                        Box::new(Calculation::Number(Box::new(Number::Integer(99))))
+                    )))),
+                )))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(100))))
+            )
         );
     }
 }
