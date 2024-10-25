@@ -10,6 +10,10 @@ pub enum GetNumberError {
     Parse(String),
 }
 
+/// # Errors
+///
+/// * If there is an unmatched ending ')'
+/// * If there is an unmatched ending '}'
 pub fn split_on_char(haystack: &str, needle: char) -> Result<Option<(&str, &str)>, GetNumberError> {
     let mut pop_stack = vec![];
 
@@ -49,6 +53,9 @@ pub fn split_on_char(haystack: &str, needle: char) -> Result<Option<(&str, &str)
     Ok(None)
 }
 
+/// # Errors
+///
+/// * If the `split_on_char` fn failed.
 pub fn split_on_char_trimmed(
     haystack: &str,
     needle: char,
@@ -56,6 +63,10 @@ pub fn split_on_char_trimmed(
     Ok(split_on_char(haystack, needle)?.map(|(x, y)| (x.trim(), y.trim())))
 }
 
+/// # Errors
+///
+/// * If the input is not a grouping.
+/// * If the contents fails to parse.
 pub fn parse_grouping(calc: &str) -> Result<Calculation, GetNumberError> {
     if let Some(contents) = calc.strip_prefix('(').and_then(|x| x.strip_suffix(')')) {
         Ok(Calculation::Grouping(Box::new(parse_calculation(
@@ -68,6 +79,10 @@ pub fn parse_grouping(calc: &str) -> Result<Calculation, GetNumberError> {
     }
 }
 
+/// # Errors
+///
+/// * If the input is not a `min` function.
+/// * If the contents fails to parse.
 pub fn parse_min(calc: &str) -> Result<Calculation, GetNumberError> {
     if let Some(contents) = calc
         .strip_prefix("min")
@@ -85,6 +100,10 @@ pub fn parse_min(calc: &str) -> Result<Calculation, GetNumberError> {
     Err(GetNumberError::Parse("Invalid min: '{calc}'".to_string()))
 }
 
+/// # Errors
+///
+/// * If the input is not a `max` function.
+/// * If the contents fails to parse.
 pub fn parse_max(calc: &str) -> Result<Calculation, GetNumberError> {
     if let Some(contents) = calc
         .strip_prefix("max")
@@ -102,6 +121,9 @@ pub fn parse_max(calc: &str) -> Result<Calculation, GetNumberError> {
     Err(GetNumberError::Parse("Invalid max: '{calc}'".to_string()))
 }
 
+/// # Errors
+///
+/// * If the `calc` fails to parse.
 pub fn parse_calculation(calc: &str) -> Result<Calculation, GetNumberError> {
     Ok(
         if let Some((left, right)) = split_on_char_trimmed(calc, '+')? {
@@ -136,6 +158,9 @@ pub fn parse_calculation(calc: &str) -> Result<Calculation, GetNumberError> {
     )
 }
 
+/// # Errors
+///
+/// * If the input string is not a valid number.
 pub fn parse_number(number: &str) -> Result<Number, GetNumberError> {
     Ok(
         if let Some(calc) = number

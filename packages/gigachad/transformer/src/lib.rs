@@ -7,8 +7,7 @@ use std::{fmt::Display, io::Write};
 pub mod calc;
 #[cfg(feature = "html")]
 pub mod html;
-
-mod parse;
+pub mod parse;
 
 #[allow(clippy::module_name_repetitions)]
 #[must_use]
