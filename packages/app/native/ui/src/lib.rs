@@ -395,14 +395,7 @@ pub fn albums_list_start(albums: &Page<ApiAlbum>, size: u16) -> Markup {
     });
 
     html! {
-        @for album in albums {
-            a href={"/albums?albumId="(album.album_id)} sx-width=(size) sx-height=(size + 30) {
-                div sx-width=(size) sx-height=(size + 30) {
-                    (album_cover_img(album, size))
-                    (album.title)
-                }
-            }
-        }
+        (show_albums(albums, size))
         (remaining)
     }
 }
@@ -414,12 +407,16 @@ pub fn albums_list(albums: &Page<ApiAlbum>, size: u16) -> Markup {
         album
     });
 
+    show_albums(albums, size)
+}
+
+fn show_albums<'a>(albums: impl Iterator<Item = &'a ApiLibraryAlbum>, size: u16) -> Markup {
     html! {
         @for album in albums {
             a href={"/albums?albumId="(album.album_id)} sx-width=(size) sx-height=(size + 30) {
                 div sx-width=(size) sx-height=(size + 30) {
                     (album_cover_img(album, size))
-                    (album.title)
+                    (album.title) (album.album_id)
                 }
             }
         }
