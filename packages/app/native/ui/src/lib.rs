@@ -416,7 +416,7 @@ fn show_albums<'a>(albums: impl Iterator<Item = &'a ApiLibraryAlbum>, size: u16)
             a href={"/albums?albumId="(album.album_id)} sx-width=(size) sx-height=(size + 30) {
                 div sx-width=(size) sx-height=(size + 30) {
                     (album_cover_img(album, size))
-                    (album.title) (album.album_id)
+                    (album.title)
                 }
             }
         }
