@@ -131,7 +131,7 @@ chrono = { version = "0.4.38", default-features = false, features = [
     "serde",
 ] }
 clap = { version = "4.5.20", features = ["derive"] }
-console-subscriber = "0.4.0"
+console-subscriber = "0.4.1"
 cpal = "0.15.3"
 debounce = "0.2.2"
 derive_more = "1.0.0"
@@ -190,7 +190,7 @@ ogg = "0.9.1"
 open = "5.3.0"
 openssl = { version = "0.10.68", features = ["v110"] }
 opus = "0.3.0"
-pin-project = "1.1.6"
+pin-project = "1.1.7"
 pin-utils = "0.1.0"
 pingora = "0.3.0"
 pingora-core = "0.3.0"
@@ -207,7 +207,7 @@ rand = "0.8"
 rangemap = "1.5.1"
 rb = "0.4.1"
 rcgen = "0.13.1"
-regex = "1.11.0"
+regex = "1.11.1"
 reqwest = { version = "0.12.8", default-features = false, features = [
     "blocking",
     "rustls-tls",
