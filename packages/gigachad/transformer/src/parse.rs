@@ -123,6 +123,23 @@ pub fn parse_max(calc: &str) -> Result<Calculation, GetNumberError> {
 
 /// # Errors
 ///
+/// * If the input is not a `calc` function.
+/// * If the contents fails to parse.
+pub fn parse_calc(calc: &str) -> Result<Number, GetNumberError> {
+    if let Some(contents) = calc
+        .strip_prefix("calc")
+        .and_then(|x| x.trim().strip_prefix('('))
+        .and_then(|x| x.strip_suffix(')'))
+        .map(str::trim)
+    {
+        return Ok(Number::Calc(parse_calculation(contents)?));
+    }
+
+    Err(GetNumberError::Parse("Invalid calc: '{calc}'".to_string()))
+}
+
+/// # Errors
+///
 /// * If the `calc` fails to parse.
 pub fn parse_calculation(calc: &str) -> Result<Calculation, GetNumberError> {
     Ok(
@@ -162,43 +179,37 @@ pub fn parse_calculation(calc: &str) -> Result<Calculation, GetNumberError> {
 ///
 /// * If the input string is not a valid number.
 pub fn parse_number(number: &str) -> Result<Number, GetNumberError> {
-    Ok(
-        if let Some(calc) = number
-            .strip_prefix("calc(")
-            .and_then(|x| x.strip_suffix(")"))
-            .map(str::trim)
-        {
-            Number::Calc(parse_calculation(calc)?)
-        } else if let Some((number, _)) = number.split_once('%') {
-            if number.contains('.') {
-                Number::RealPercent(
-                    number
-                        .parse::<f32>()
-                        .map_err(|_| GetNumberError::Parse(number.to_string()))?,
-                )
-            } else {
-                Number::IntegerPercent(
-                    number
-                        .parse::<u64>()
-                        .map_err(|_| GetNumberError::Parse(number.to_string()))?,
-                )
-            }
-        } else if number.contains('.') {
-            let number = number.strip_suffix("px").unwrap_or(number);
-            Number::Real(
+    Ok(if let Ok(calc) = parse_calc(number) {
+        calc
+    } else if let Some((number, _)) = number.split_once('%') {
+        if number.contains('.') {
+            Number::RealPercent(
                 number
                     .parse::<f32>()
                     .map_err(|_| GetNumberError::Parse(number.to_string()))?,
             )
         } else {
-            let number = number.strip_suffix("px").unwrap_or(number);
-            Number::Integer(
+            Number::IntegerPercent(
                 number
                     .parse::<u64>()
                     .map_err(|_| GetNumberError::Parse(number.to_string()))?,
             )
-        },
-    )
+        }
+    } else if number.contains('.') {
+        let number = number.strip_suffix("px").unwrap_or(number);
+        Number::Real(
+            number
+                .parse::<f32>()
+                .map_err(|_| GetNumberError::Parse(number.to_string()))?,
+        )
+    } else {
+        let number = number.strip_suffix("px").unwrap_or(number);
+        Number::Integer(
+            number
+                .parse::<u64>()
+                .map_err(|_| GetNumberError::Parse(number.to_string()))?,
+        )
+    })
 }
 
 #[cfg(test)]
