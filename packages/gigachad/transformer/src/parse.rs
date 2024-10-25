@@ -68,6 +68,40 @@ pub fn parse_grouping(calc: &str) -> Result<Calculation, GetNumberError> {
     }
 }
 
+pub fn parse_min(calc: &str) -> Result<Calculation, GetNumberError> {
+    if let Some(contents) = calc
+        .strip_prefix("min")
+        .and_then(|x| x.trim_start().strip_prefix('('))
+        .and_then(|x| x.strip_suffix(')'))
+    {
+        if let Some((left, right)) = split_on_char_trimmed(contents, ',')? {
+            return Ok(Calculation::Min(
+                Box::new(parse_calculation(left)?),
+                Box::new(parse_calculation(right)?),
+            ));
+        }
+    }
+
+    Err(GetNumberError::Parse("Invalid min: '{calc}'".to_string()))
+}
+
+pub fn parse_max(calc: &str) -> Result<Calculation, GetNumberError> {
+    if let Some(contents) = calc
+        .strip_prefix("max")
+        .and_then(|x| x.trim_start().strip_prefix('('))
+        .and_then(|x| x.strip_suffix(')'))
+    {
+        if let Some((left, right)) = split_on_char_trimmed(contents, ',')? {
+            return Ok(Calculation::Max(
+                Box::new(parse_calculation(left)?),
+                Box::new(parse_calculation(right)?),
+            ));
+        }
+    }
+
+    Err(GetNumberError::Parse("Invalid max: '{calc}'".to_string()))
+}
+
 pub fn parse_calculation(calc: &str) -> Result<Calculation, GetNumberError> {
     Ok(
         if let Some((left, right)) = split_on_char_trimmed(calc, '+')? {
@@ -90,6 +124,10 @@ pub fn parse_calculation(calc: &str) -> Result<Calculation, GetNumberError> {
                 Box::new(parse_calculation(left)?),
                 Box::new(parse_calculation(right)?),
             )
+        } else if let Ok(min) = parse_min(calc) {
+            min
+        } else if let Ok(max) = parse_max(calc) {
+            max
         } else if let Ok(grouping) = parse_grouping(calc) {
             grouping
         } else {
@@ -268,6 +306,97 @@ mod test {
                         Box::new(Calculation::Number(Box::new(Number::Integer(131)))),
                         Box::new(Calculation::Number(Box::new(Number::Integer(99))))
                     )))),
+                )))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(100))))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_min_with_two_integers() {
+        assert_eq!(
+            parse_calculation("min(123, 131)").unwrap(),
+            Calculation::Min(
+                Box::new(Calculation::Number(Box::new(Number::Integer(123)))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(131))))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_min_with_a_space_before_paren() {
+        assert_eq!(
+            parse_calculation("min (123, 131)").unwrap(),
+            Calculation::Min(
+                Box::new(Calculation::Number(Box::new(Number::Integer(123)))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(131))))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_min_with_two_floats() {
+        assert_eq!(
+            parse_calculation("min(123.5, 131.2)").unwrap(),
+            Calculation::Min(
+                Box::new(Calculation::Number(Box::new(Number::Real(123.5)))),
+                Box::new(Calculation::Number(Box::new(Number::Real(131.2))))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_max_with_two_integers() {
+        assert_eq!(
+            parse_calculation("max(123, 131)").unwrap(),
+            Calculation::Max(
+                Box::new(Calculation::Number(Box::new(Number::Integer(123)))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(131))))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_max_with_a_space_before_paren() {
+        assert_eq!(
+            parse_calculation("max (123, 131)").unwrap(),
+            Calculation::Max(
+                Box::new(Calculation::Number(Box::new(Number::Integer(123)))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(131))))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_max_with_two_floats() {
+        assert_eq!(
+            parse_calculation("max(123.5, 131.2)").unwrap(),
+            Calculation::Max(
+                Box::new(Calculation::Number(Box::new(Number::Real(123.5)))),
+                Box::new(Calculation::Number(Box::new(Number::Real(131.2))))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_nested_parens_scope_with_min_and_max_calls() {
+        assert_eq!(
+            parse_calculation("(123 + min(131 * max(100, 100%), 25)) + 100").unwrap(),
+            Calculation::Add(
+                Box::new(Calculation::Grouping(Box::new(Calculation::Add(
+                    Box::new(Calculation::Number(Box::new(Number::Integer(123)))),
+                    Box::new(Calculation::Min(
+                        Box::new(Calculation::Multiply(
+                            Box::new(Calculation::Number(Box::new(Number::Integer(131)))),
+                            Box::new(Calculation::Max(
+                                Box::new(Calculation::Number(Box::new(Number::Integer(100)))),
+                                Box::new(Calculation::Number(Box::new(Number::IntegerPercent(
+                                    100
+                                ))))
+                            )),
+                        )),
+                        Box::new(Calculation::Number(Box::new(Number::Integer(25)))),
+                    )),
                 )))),
                 Box::new(Calculation::Number(Box::new(Number::Integer(100))))
             )
