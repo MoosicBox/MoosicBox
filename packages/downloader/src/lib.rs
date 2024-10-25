@@ -563,7 +563,7 @@ async fn download_track_inner(
     track: &Track,
     quality: TrackAudioQuality,
     source: DownloadApiSource,
-    start: Option<u64>,
+    mut start: Option<u64>,
     on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
@@ -650,10 +650,18 @@ async fn download_track_inner(
 
     if Path::is_file(&track_path) {
         log::debug!("Track already downloaded");
-        return Ok(());
+        if start.is_none() {
+            if let Ok(metadata) = std::fs::File::open(&track_path).and_then(|x| x.metadata()) {
+                let len = metadata.len();
+                start = Some(len);
+                log::debug!("Resuming track download from {len} bytes");
+            } else {
+                return Ok(());
+            }
+        }
     }
 
-    log::debug!("Downloading track to track_path={track_path:?}");
+    log::debug!("Downloading track to track_path={track_path:?} start={start:?}");
 
     {
         let mut reader = bytes.stream;
