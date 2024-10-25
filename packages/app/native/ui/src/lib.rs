@@ -23,7 +23,7 @@ macro_rules! pre_escaped {
 #[must_use]
 pub fn sidebar_navigation() -> Markup {
     html! {
-        aside sx-width="20%" {
+        aside sx-width="calc(max(240, min(280, 15%)))" {
             div class="navigation-bar" {
                 div class="navigation-bar-header" {
                     a href="/" sx-dir="row" {
