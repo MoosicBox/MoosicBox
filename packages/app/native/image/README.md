@@ -1,1 +1,1 @@
-# MoosicBox Native App UI crate
+# MoosicBox Native App Image crate
