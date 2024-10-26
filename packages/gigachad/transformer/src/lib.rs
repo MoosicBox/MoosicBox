@@ -151,6 +151,7 @@ impl Display for LayoutOverflow {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum JustifyContent {
     SpaceBetween,
+    SpaceEvenly,
     #[default]
     Default,
 }
@@ -159,6 +160,7 @@ impl Display for JustifyContent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::SpaceBetween => f.write_str("SpaceBetween"),
+            Self::SpaceEvenly => f.write_str("SpaceEvenly"),
             Self::Default => f.write_str("Default"),
         }
     }

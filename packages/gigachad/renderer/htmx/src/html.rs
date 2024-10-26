@@ -162,6 +162,13 @@ pub fn element_style_to_html(
             }
             write_css_attr(f, b"justify-content", b"space-between")?;
         }
+        JustifyContent::SpaceEvenly => {
+            if !printed_start {
+                printed_start = true;
+                f.write_all(b" style=\"")?;
+            }
+            write_css_attr(f, b"justify-content", b"space-evenly")?;
+        }
         JustifyContent::Default => {}
     }
 

@@ -793,23 +793,44 @@ impl ContainerElement {
         let mut horizontal_margin = None;
         let mut vertical_margin = None;
 
+        let columns = self.columns();
+        let rows = self.rows();
+        let mut remainder_width = 0.0;
+        let mut remainder_height = 0.0;
+
         // TODO: Handle variable amount of items in rows/cols (i.e., non-uniform row/cols wrapping)
         match self.justify_content {
             #[allow(clippy::cast_precision_loss)]
             JustifyContent::SpaceBetween => match self.direction {
                 LayoutDirection::Row => {
-                    let margin = (container_width - self.contained_calculated_width())
-                        / ((self.columns() - 1) as f32);
+                    remainder_width = container_width - self.contained_calculated_width();
+                    let margin = remainder_width / ((columns - 1) as f32);
                     horizontal_margin = Some(margin);
                 }
                 LayoutDirection::Column => {
-                    let margin = (container_height - self.contained_calculated_height())
-                        / ((self.rows() - 1) as f32);
+                    remainder_height = container_height - self.contained_calculated_height();
+                    let margin = remainder_height / ((rows - 1) as f32);
+                    vertical_margin = Some(margin);
+                }
+            },
+            #[allow(clippy::cast_precision_loss)]
+            JustifyContent::SpaceEvenly => match self.direction {
+                LayoutDirection::Row => {
+                    remainder_width = container_width - self.contained_calculated_width();
+                    let margin = remainder_width / ((columns + 1) as f32);
+                    horizontal_margin = Some(margin);
+                }
+                LayoutDirection::Column => {
+                    remainder_height = container_height - self.contained_calculated_height();
+                    let margin = remainder_height / ((rows + 1) as f32);
                     vertical_margin = Some(margin);
                 }
             },
             JustifyContent::Default => {}
         }
+
+        let mut first_horizontal_margin = horizontal_margin;
+        let mut first_vertical_margin = vertical_margin;
 
         if let Some(gap) = &self.gap {
             let gap_x = calc_number(gap, container_width);
@@ -817,14 +838,26 @@ impl ContainerElement {
 
             if let Some(margin) = horizontal_margin {
                 if gap_x > margin {
-                    horizontal_margin.replace(gap_x - margin);
+                    horizontal_margin.replace(gap_x);
+
+                    if self.justify_content == JustifyContent::SpaceEvenly {
+                        #[allow(clippy::cast_precision_loss)]
+                        first_horizontal_margin
+                            .replace(gap_x.mul_add(-((columns - 1) as f32), remainder_width) / 2.0);
+                    }
                 }
             } else {
                 horizontal_margin = Some(gap_x);
             }
             if let Some(margin) = vertical_margin {
                 if gap_y > margin {
-                    vertical_margin.replace(gap_y - margin);
+                    vertical_margin.replace(gap_y);
+
+                    if self.justify_content == JustifyContent::SpaceEvenly {
+                        #[allow(clippy::cast_precision_loss)]
+                        first_vertical_margin
+                            .replace(gap_y.mul_add(-((rows - 1) as f32), remainder_height) / 2.0);
+                    }
                 }
             } else {
                 vertical_margin = Some(gap_y);
@@ -849,25 +882,27 @@ impl ContainerElement {
             };
 
             if let LayoutPosition::Wrap { row, col } = position {
-                if *col > 0 {
-                    if let Some(margin) = horizontal_margin {
-                        let should_add = match self.direction {
-                            LayoutDirection::Row => true,
-                            LayoutDirection::Column => *row == 0,
-                        };
-                        if should_add {
+                if self.justify_content == JustifyContent::SpaceEvenly || *col > 0 {
+                    let hmargin = if *col == 0 {
+                        first_horizontal_margin
+                    } else {
+                        horizontal_margin
+                    };
+                    if let Some(margin) = hmargin {
+                        if self.direction == LayoutDirection::Row || *row == 0 {
                             x += margin;
                         }
                         element.margin_left.replace(margin);
                     }
                 }
-                if *row > 0 {
-                    if let Some(margin) = vertical_margin {
-                        let should_add = match self.direction {
-                            LayoutDirection::Row => *col == 0,
-                            LayoutDirection::Column => true,
-                        };
-                        if should_add {
+                if self.justify_content == JustifyContent::SpaceEvenly || *row > 0 {
+                    let vmargin = if *row == 0 {
+                        first_vertical_margin
+                    } else {
+                        vertical_margin
+                    };
+                    if let Some(margin) = vmargin {
+                        if self.direction == LayoutDirection::Column || *col == 0 {
                             y += margin;
                         }
                         element.margin_top.replace(margin);
@@ -883,7 +918,11 @@ impl ContainerElement {
                     match position {
                         LayoutPosition::Wrap { col, .. } => {
                             if *col == 0 {
-                                x = 0.0;
+                                x = if self.justify_content == JustifyContent::SpaceEvenly {
+                                    horizontal_margin.unwrap_or(0.0)
+                                } else {
+                                    0.0
+                                };
                                 y += max_height;
                                 max_height = 0.0;
                                 element.calculated_x.replace(x);
@@ -898,7 +937,11 @@ impl ContainerElement {
                     match position {
                         LayoutPosition::Wrap { row, .. } => {
                             if *row == 0 {
-                                y = 0.0;
+                                y = if self.justify_content == JustifyContent::SpaceEvenly {
+                                    vertical_margin.unwrap_or(0.0)
+                                } else {
+                                    0.0
+                                };
                                 x += max_width;
                                 max_width = 0.0;
                                 element.calculated_x.replace(x);
@@ -3149,6 +3192,646 @@ mod test {
                         calculated_width: Some(20.0),
                         calculated_height: Some(20.0),
                         calculated_x: Some(0.0),
+                        calculated_y: Some(40.0 + 10.0 + 10.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
+                        ..container.elements[4].container_element().unwrap().clone()
+                    },
+                },
+            ],
+            calculated_width: Some(75.0),
+            calculated_height: Some(60.0),
+            ..container
+        };
+
+        assert_eq!(actual, expected);
+
+        while actual.handle_overflow() {}
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test_log::test]
+    fn handles_justify_content_space_evenly_and_wraps_elements_properly() {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(75.0),
+            calculated_height: Some(40.0),
+            direction: LayoutDirection::Row,
+            overflow_x: LayoutOverflow::Wrap,
+            justify_content: JustifyContent::SpaceEvenly,
+            ..Default::default()
+        };
+        while container.handle_overflow() {}
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(20.0),
+                            calculated_x: Some(3.75),
+                            calculated_y: Some(0.0),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                            ..container.elements[0].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(20.0),
+                            calculated_x: Some(20.0 + 3.75 + 3.75),
+                            calculated_y: Some(0.0),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                            ..container.elements[1].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(20.0),
+                            calculated_x: Some(40.0 + 3.75 + 3.75 + 3.75),
+                            calculated_y: Some(0.0),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 2 }),
+                            ..container.elements[2].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(20.0),
+                            calculated_x: Some(3.75),
+                            calculated_y: Some(20.0),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                            ..container.elements[3].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(20.0),
+                            calculated_x: Some(20.0 + 3.75 + 3.75),
+                            calculated_y: Some(20.0),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
+                            ..container.elements[4].container_element().unwrap().clone()
+                        },
+                    },
+                ],
+                calculated_width: Some(75.0),
+                calculated_height: Some(40.0),
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn handles_justify_content_space_evenly_and_wraps_elements_properly_with_hidden_div() {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        hidden: Some(true),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(75.0),
+            calculated_height: Some(40.0),
+            direction: LayoutDirection::Row,
+            overflow_x: LayoutOverflow::Wrap,
+            justify_content: JustifyContent::SpaceEvenly,
+            ..Default::default()
+        };
+        while container.handle_overflow() {}
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(20.0),
+                            calculated_x: Some(3.75),
+                            calculated_y: Some(0.0),
+                            ..container.elements[0].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(20.0),
+                            calculated_x: Some(20.0 + 3.75 + 3.75),
+                            calculated_y: Some(0.0),
+                            ..container.elements[1].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(20.0),
+                            calculated_x: Some(40.0 + 3.75 + 3.75 + 3.75),
+                            calculated_y: Some(0.0),
+                            ..container.elements[2].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(20.0),
+                            calculated_x: Some(3.75),
+                            calculated_y: Some(20.0),
+                            ..container.elements[3].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(20.0),
+                            calculated_x: Some(20.0 + 3.75 + 3.75),
+                            calculated_y: Some(20.0),
+                            ..container.elements[4].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            hidden: Some(true),
+                            ..Default::default()
+                        },
+                    },
+                ],
+                calculated_width: Some(75.0),
+                calculated_height: Some(40.0),
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn handles_justify_content_space_evenly_and_wraps_elements_properly_and_can_recalc_with_new_rows(
+    ) {
+        const ROW_HEIGHT: f32 = 40.0 / 4.0;
+
+        let div = Element::Div {
+            element: ContainerElement {
+                width: Some(Number::Integer(20)),
+                calculated_width: Some(20.0),
+                calculated_height: Some(20.0),
+                ..Default::default()
+            },
+        };
+
+        let mut container = ContainerElement {
+            elements: vec![
+                div.clone(),
+                div.clone(),
+                div.clone(),
+                div.clone(),
+                div.clone(),
+            ],
+            calculated_width: Some(75.0),
+            calculated_height: Some(40.0),
+            direction: LayoutDirection::Row,
+            overflow_x: LayoutOverflow::Wrap,
+            justify_content: JustifyContent::SpaceEvenly,
+            ..Default::default()
+        };
+
+        log::debug!("First handle_overflow");
+        while container.handle_overflow() {}
+
+        container.elements.extend(vec![
+            div.clone(),
+            div.clone(),
+            div.clone(),
+            div.clone(),
+            div,
+        ]);
+
+        log::debug!("Second handle_overflow");
+        while container.handle_overflow() {}
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(10.0),
+                            calculated_x: Some(3.75),
+                            calculated_y: Some(ROW_HEIGHT * 0.0),
+                            ..container.elements[0].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(10.0),
+                            calculated_x: Some(20.0 + 3.75 + 3.75),
+                            calculated_y: Some(ROW_HEIGHT * 0.0),
+                            ..container.elements[1].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 2 }),
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(10.0),
+                            calculated_x: Some(40.0 + 3.75 + 3.75 + 3.75),
+                            calculated_y: Some(ROW_HEIGHT * 0.0),
+                            ..container.elements[2].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(10.0),
+                            calculated_x: Some(3.75),
+                            calculated_y: Some(ROW_HEIGHT * 1.0),
+                            ..container.elements[3].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(10.0),
+                            calculated_x: Some(20.0 + 3.75 + 3.75),
+                            calculated_y: Some(ROW_HEIGHT * 1.0),
+                            ..container.elements[4].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 2 }),
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(10.0),
+                            calculated_x: Some(40.0 + 3.75 + 3.75 + 3.75),
+                            calculated_y: Some(ROW_HEIGHT * 1.0),
+                            ..container.elements[5].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(10.0),
+                            calculated_x: Some(3.75),
+                            calculated_y: Some(ROW_HEIGHT * 2.0),
+                            ..container.elements[6].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 1 }),
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(10.0),
+                            calculated_x: Some(20.0 + 3.75 + 3.75),
+                            calculated_y: Some(ROW_HEIGHT * 2.0),
+                            ..container.elements[7].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 2 }),
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(10.0),
+                            calculated_x: Some(40.0 + 3.75 + 3.75 + 3.75),
+                            calculated_y: Some(ROW_HEIGHT * 2.0),
+                            ..container.elements[8].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_position: Some(LayoutPosition::Wrap { row: 3, col: 0 }),
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(10.0),
+                            calculated_x: Some(3.75),
+                            calculated_y: Some(ROW_HEIGHT * 3.0),
+                            ..container.elements[9].container_element().unwrap().clone()
+                        },
+                    },
+                ],
+                calculated_width: Some(75.0),
+                calculated_height: Some(40.0),
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn handles_justify_content_space_evenly_with_gap_and_wraps_elements_properly() {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(75.0),
+            calculated_height: Some(40.0),
+            direction: LayoutDirection::Row,
+            overflow_x: LayoutOverflow::Wrap,
+            overflow_y: LayoutOverflow::Show,
+            justify_content: JustifyContent::SpaceEvenly,
+            gap: Some(Number::Integer(10)),
+            ..Default::default()
+        };
+        while container.handle_overflow() {}
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(20.0),
+                            calculated_x: Some(11.666_667),
+                            calculated_y: Some(0.0),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                            ..container.elements[0].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(20.0),
+                            calculated_x: Some(43.333_336),
+                            calculated_y: Some(0.0),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                            ..container.elements[1].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(20.0),
+                            calculated_x: Some(11.666_667),
+                            calculated_y: Some(20.0 + 10.0),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                            ..container.elements[2].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(20.0),
+                            calculated_x: Some(43.333_336),
+                            calculated_y: Some(20.0 + 10.0),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
+                            ..container.elements[3].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(20.0),
+                            calculated_x: Some(11.666_667),
+                            calculated_y: Some(40.0 + 10.0 + 10.0),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
+                            ..container.elements[4].container_element().unwrap().clone()
+                        },
+                    },
+                ],
+                calculated_width: Some(75.0),
+                calculated_height: Some(60.0),
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn handles_justify_content_space_evenly_with_gap_and_wraps_elements_properly_and_can_recalc() {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(75.0),
+            calculated_height: Some(40.0),
+            direction: LayoutDirection::Row,
+            overflow_x: LayoutOverflow::Wrap,
+            overflow_y: LayoutOverflow::Show,
+            justify_content: JustifyContent::SpaceEvenly,
+            gap: Some(Number::Integer(10)),
+            ..Default::default()
+        };
+        while container.handle_overflow() {}
+
+        let mut actual = container.clone();
+        let expected = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement {
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        calculated_x: Some(11.666_667),
+                        calculated_y: Some(0.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                        ..container.elements[0].container_element().unwrap().clone()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        calculated_x: Some(43.333_336),
+                        calculated_y: Some(0.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                        ..container.elements[1].container_element().unwrap().clone()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        calculated_x: Some(11.666_667),
+                        calculated_y: Some(20.0 + 10.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                        ..container.elements[2].container_element().unwrap().clone()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        calculated_x: Some(43.333_336),
+                        calculated_y: Some(20.0 + 10.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
+                        ..container.elements[3].container_element().unwrap().clone()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        calculated_x: Some(11.666_667),
                         calculated_y: Some(40.0 + 10.0 + 10.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
                         ..container.elements[4].container_element().unwrap().clone()
