@@ -606,10 +606,7 @@ impl ContainerElement {
 
     #[allow(clippy::too_many_lines)]
     fn handle_overflow(&mut self) -> bool {
-        moosicbox_logging::debug_or_trace!(
-            ("handle_overflow"),
-            ("handle_overflow: processing self\n{self:?}")
-        );
+        log::trace!("handle_overflow: processing self\n{self:?}");
         let mut layout_shifted = false;
 
         let direction = self.direction;
