@@ -843,9 +843,6 @@ impl ContainerElement {
         let mut horizontal_margin = None;
         let mut vertical_margin = None;
 
-        let gap_x = self.gap.as_ref().map(|x| calc_number(x, container_width));
-        let gap_y = self.gap.as_ref().map(|x| calc_number(x, container_height));
-
         // TODO: Handle variable amount of items in rows/cols (i.e., non-uniform row/cols wrapping)
         match self.justify_content {
             #[allow(clippy::cast_precision_loss)]
@@ -853,19 +850,35 @@ impl ContainerElement {
                 LayoutDirection::Row => {
                     let margin = (container_width - self.contained_calculated_width())
                         / ((self.columns() + 1) as f32);
-                    let margin =
-                        gap_x.map_or(margin, |gap| if gap > margin { gap } else { margin });
                     horizontal_margin = Some(margin);
                 }
                 LayoutDirection::Column => {
                     let margin = (container_height - self.contained_calculated_height())
                         / ((self.rows() + 1) as f32);
-                    let margin =
-                        gap_y.map_or(margin, |gap| if gap > margin { gap } else { margin });
                     vertical_margin = Some(margin);
                 }
             },
             JustifyContent::Default => {}
+        }
+
+        if let Some(gap) = &self.gap {
+            let gap_x = calc_number(gap, container_width);
+            let gap_y = calc_number(gap, container_height);
+
+            if let Some(margin) = horizontal_margin {
+                if gap_x > margin {
+                    horizontal_margin.replace(gap_x);
+                }
+            } else {
+                horizontal_margin = Some(gap_x);
+            }
+            if let Some(margin) = vertical_margin {
+                if gap_y > margin {
+                    vertical_margin.replace(gap_y);
+                }
+            } else {
+                vertical_margin = Some(gap_y);
+            }
         }
 
         for element in
