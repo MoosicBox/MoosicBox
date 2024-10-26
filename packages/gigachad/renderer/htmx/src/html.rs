@@ -247,6 +247,17 @@ pub fn element_attrs_to_html(
 
     element_style_to_html(f, element)?;
 
+    let mut is_flex_grid = false;
+    if let LayoutOverflow::Wrap { .. } = element.overflow_x {
+        is_flex_grid = true;
+    } else if let LayoutOverflow::Wrap { .. } = element.overflow_y {
+        is_flex_grid = true;
+    }
+
+    if is_flex_grid {
+        write_attr(f, b"class", b"flex-grid-fill-last-row")?;
+    }
+
     Ok(())
 }
 
@@ -419,6 +430,11 @@ pub fn container_element_to_html_response(
                     <style>
                         body {{
                             margin: 0;{background}
+                        }}
+
+                        .flex-grid-fill-last-row::after {{
+                            content: "";
+                            flex: auto;
                         }}
                     </style>
                 </head>
