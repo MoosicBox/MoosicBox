@@ -77,7 +77,7 @@ pub fn player() -> Markup {
         div sx-height=(100) sx-dir="row" {
             div sx-dir="row" {
                 @let size = 70;
-                div sx-width=(size) sx-height=(size) {
+                a href={"/albums?albumId="(1)} sx-width=(size) sx-height=(size) {
                     (album_cover_img(&ApiLibraryAlbum { album_id: 1, contains_cover: true, ..Default::default() }, size))
                 }
             }
