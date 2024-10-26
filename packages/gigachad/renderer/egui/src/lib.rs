@@ -884,7 +884,7 @@ impl EguiApp {
                                 )
                             };
                             if contains_image {
-                                log::debug!(
+                                log::trace!(
                                     "render_element: showing image for source={source} ({}, {})",
                                     element.calculated_width.unwrap(),
                                     element.calculated_height.unwrap(),
