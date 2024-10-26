@@ -1,7 +1,7 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["gui"]
-description = "Giga-Chad htmx renderer package"
+description = "GigaChad htmx renderer package"
 edition     = "2021"
 keywords    = ["gui", "htmx", "render", "renderer", "web"]
 license     = "MPL-2.0"

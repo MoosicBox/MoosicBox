@@ -1,7 +1,7 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["development-tools", "gui", "web-programming"]
-description = "Giga-Chad package"
+description = "GigaChad package"
 edition     = "2021"
 keywords    = ["gigachad"]
 license     = "MPL-2.0"

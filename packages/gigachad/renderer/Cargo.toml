@@ -1,7 +1,7 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["gui"]
-description = "Giga-Chad renderer package"
+description = "GigaChad renderer package"
 edition     = "2021"
 keywords    = ["desktop", "gui", "render", "renderer"]
 license     = "MPL-2.0"

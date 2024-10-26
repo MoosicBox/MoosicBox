@@ -1,7 +1,7 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["development-tools", "gui", "web-programming"]
-description = "MoosicBox Giga-Chad Transformer package"
+description = "GigaChad Transformer package"
 edition     = "2021"
 keywords    = ["dom", "gigachad", "gui", "transformer", "web"]
 license     = "MPL-2.0"

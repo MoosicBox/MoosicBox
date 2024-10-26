@@ -1,7 +1,7 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["gui", "web-programming"]
-description = "Giga-Chad color package"
+description = "GigaChad color package"
 edition     = "2021"
 keywords    = ["color", "gui", "web"]
 license     = "MPL-2.0"

@@ -1,7 +1,7 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["gui"]
-description = "Giga-Chad FLTK renderer package"
+description = "GigaChad FLTK renderer package"
 edition     = "2021"
 keywords    = ["desktop", "fltk", "gui", "render", "renderer"]
 license     = "MPL-2.0"

@@ -1,7 +1,7 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["gui"]
-description = "Giga-Chad egui renderer package"
+description = "GigaChad egui renderer package"
 edition     = "2021"
 keywords    = ["desktop", "egui", "gui", "render", "renderer"]
 license     = "MPL-2.0"
