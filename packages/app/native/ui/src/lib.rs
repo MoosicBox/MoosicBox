@@ -83,19 +83,19 @@ pub fn player() -> Markup {
             }
             div sx-dir="row" {
                 @let size = 36;
-                div sx-width=(size) sx-height=(size) {
+                button sx-width=(size) sx-height=(size) {
                     img
                         sx-width=(size)
                         sx-height=(size)
                         src=(public_img!("chevron-left-white.svg"));
                 }
-                div sx-width=(size) sx-height=(size) {
+                button sx-width=(size) sx-height=(size) {
                     img
                         sx-width=(size)
                         sx-height=(size)
                         src=(public_img!("pause-button-white.svg"));
                 }
-                div sx-width=(size) sx-height=(size) {
+                button sx-width=(size) sx-height=(size) {
                     img
                         sx-width=(size)
                         sx-height=(size)
@@ -104,25 +104,25 @@ pub fn player() -> Markup {
             }
             div sx-dir="row" {
                 @let size = 25;
-                div sx-width=(size) sx-height=(size) {
+                button sx-width=(size) sx-height=(size) {
                     img
                         sx-width=(size)
                         sx-height=(size)
                         src=(public_img!("audio-white.svg"));
                 }
-                div sx-width=(size) sx-height=(size) {
+                button sx-width=(size) sx-height=(size) {
                     img
                         sx-width=(size)
                         sx-height=(size)
                         src=(public_img!("speaker-white.svg"));
                 }
-                div sx-width=(size) sx-height=(size) {
+                button sx-width=(size) sx-height=(size) {
                     img
                         sx-width=(size)
                         sx-height=(size)
                         src=(public_img!("sessions-white.svg"));
                 }
-                div sx-width=(size) sx-height=(size) {
+                button sx-width=(size) sx-height=(size) {
                     img
                         sx-width=(size)
                         sx-height=(size)
