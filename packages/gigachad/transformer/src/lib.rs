@@ -208,6 +208,12 @@ pub enum Route {
     },
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ActionType {
+    Click { action: String },
+    Hover { action: String },
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ContainerElement {
     #[cfg(feature = "id")]
@@ -223,6 +229,7 @@ pub struct ContainerElement {
     pub background: Option<Color>,
     pub hidden: Option<bool>,
     pub route: Option<Route>,
+    pub actions: Vec<ActionType>,
     pub margin_left: Option<f32>,
     pub margin_right: Option<f32>,
     pub margin_top: Option<f32>,
@@ -258,6 +265,16 @@ fn visible_elements_mut(elements: &mut [Element]) -> impl Iterator<Item = &mut E
 }
 
 impl ContainerElement {
+    #[must_use]
+    pub fn is_visible(&self) -> bool {
+        self.hidden != Some(true)
+    }
+
+    #[must_use]
+    pub fn is_hidden(&self) -> bool {
+        self.hidden == Some(true)
+    }
+
     pub fn visible_elements(&self) -> impl Iterator<Item = &Element> {
         visible_elements(&self.elements)
     }

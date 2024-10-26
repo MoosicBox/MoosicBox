@@ -52,10 +52,12 @@ moosicbox_menu_models = { version = "0.1.0", path = "../../menu/models", default
     "api",
 ] }
 moosicbox_paging = { version = "0.1.0", path = "../../paging", default-features = false }
+moosicbox_task = { version = "0.1.0", path = "../../task", default-features = false }
 
 # Bundled dependencies
 moosicbox_app_native_bundled = { version = "0.1.0", path = "bundled", optional = true, default-features = false }
 
+flume     = { workspace = true }
 log       = { workspace = true }
 reqwest   = { workspace = true, features = ["json"] }
 thiserror = { workspace = true }

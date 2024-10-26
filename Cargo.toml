@@ -162,6 +162,7 @@ futures-util = { version = "0.3.31", default-features = false, features = [
 hex = "0.4.3"
 home = "0.5.9"
 hostname = "0.4.0"
+html-escape = "0.2.13"
 id3 = "1.14.0"
 image = "0.25.4"
 io-streams = "0.16.3"

@@ -2,10 +2,12 @@
 
 use std::{num::ParseIntError, sync::Arc};
 
+use flume::SendError;
 use moosicbox_app_native_lib::{
     renderer::{Color, View},
     router::{ContainerElement, RouteRequest, Router},
 };
+use moosicbox_app_native_ui::Action;
 use moosicbox_env_utils::{default_env_usize, option_env_i32, option_env_u16};
 use moosicbox_library_models::{ApiAlbum, ApiArtist};
 use moosicbox_menu_models::api::ApiAlbumVersion;
@@ -141,16 +143,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             )
         });
 
+    let (action_tx, action_rx) = flume::unbounded();
+
     let mut app = moosicbox_app_native_lib::NativeAppBuilder::new()
         .with_router(router.clone())
         .with_runtime_arc(runtime.clone())
         .with_background(Color::from_hex("#181a1b"))
+        .with_action_handler(move |x| {
+            Ok::<_, SendError<Action>>(if let Ok(action) = Action::try_from(x) {
+                action_tx.send(action)?;
+                true
+            } else {
+                false
+            })
+        })
         .with_size(
             option_env_u16("WINDOW_WIDTH").unwrap().unwrap_or(1000),
             option_env_u16("WINDOW_HEIGHT").unwrap().unwrap_or(600),
         );
 
     let mut runner = runtime.clone().block_on(async move {
+        moosicbox_task::spawn("native app action listener", async move {
+            while let Ok(action) = action_rx.recv_async().await {
+                match action {
+                    Action::TogglePlayback => {
+                        log::debug!("native app action listener: TogglePlayback");
+                    }
+                    Action::PreviousTrack => {
+                        log::debug!("native app action listener: PreviousTrack");
+                    }
+                    Action::NextTrack => {
+                        log::debug!("native app action listener: NextTrack");
+                    }
+                }
+            }
+        });
+
         #[cfg(feature = "bundled")]
         let (join_app_server, app_server_handle) = {
             use moosicbox_app_native_bundled::service::Commander as _;

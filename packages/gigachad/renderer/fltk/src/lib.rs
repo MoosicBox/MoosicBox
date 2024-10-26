@@ -111,17 +111,13 @@ pub struct FltkRenderer {
     viewport_listener_join_handle: Arc<Mutex<Option<JoinHandleAndCancelled>>>,
     sender: Sender<String>,
     receiver: Receiver<String>,
-}
-
-impl Default for FltkRenderer {
-    fn default() -> Self {
-        Self::new()
-    }
+    #[allow(unused)]
+    request_action: Sender<String>,
 }
 
 impl FltkRenderer {
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(request_action: Sender<String>) -> Self {
         let (tx, rx) = flume::unbounded();
         Self {
             app: None,
@@ -137,6 +133,7 @@ impl FltkRenderer {
             viewport_listener_join_handle: Arc::new(Mutex::new(None)),
             sender: tx,
             receiver: rx,
+            request_action,
         }
     }
 

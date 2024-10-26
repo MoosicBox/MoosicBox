@@ -18,7 +18,10 @@ moosicbox_menu_models = { version = "0.1.0", path = "../../../menu/models", defa
 ] }
 moosicbox_paging = { version = "0.1.0", path = "../../../paging", default-features = false }
 
-maud = { workspace = true }
+log        = { workspace = true }
+maud       = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
 
 [features]
 default = []

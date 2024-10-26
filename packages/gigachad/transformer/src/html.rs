@@ -6,7 +6,7 @@ use tl::{Children, HTMLTag, Node, NodeHandle, Parser, ParserOptions};
 
 use crate::{
     parse::{parse_number, GetNumberError},
-    JustifyContent, LayoutDirection, LayoutOverflow, Number, Route,
+    ActionType, JustifyContent, LayoutDirection, LayoutOverflow, Number, Route,
 };
 
 impl TryFrom<String> for crate::ContainerElement {
@@ -135,6 +135,19 @@ fn get_number(tag: &HTMLTag, name: &str) -> Result<Number, GetNumberError> {
     })
 }
 
+fn get_actions(tag: &HTMLTag) -> Vec<ActionType> {
+    let mut actions = vec![];
+    if let Some(action) = get_tag_attr_value(tag, "fx-click") {
+        let action = html_escape::decode_html_entities(&action).to_string();
+        actions.push(ActionType::Click { action });
+    }
+    if let Some(action) = get_tag_attr_value(tag, "fx-hover") {
+        let action = html_escape::decode_html_entities(&action).to_string();
+        actions.push(ActionType::Hover { action });
+    }
+    actions
+}
+
 fn parse_element(
     tag: &HTMLTag<'_>,
     node: &Node<'_>,
@@ -159,6 +172,7 @@ fn parse_element(
         height: get_number(tag, "sx-height").ok(),
         gap: get_number(tag, "sx-gap").ok(),
         route: get_route(tag),
+        actions: get_actions(tag),
         ..Default::default()
     }
 }

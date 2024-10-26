@@ -12,7 +12,7 @@ use actix_web::{
     App, HttpRequest, HttpResponse,
 };
 use async_trait::async_trait;
-use flume::Receiver;
+use flume::{Receiver, Sender};
 use gigachad_renderer::{Color, RenderRunner, Renderer, View};
 use gigachad_router::Router;
 use html::container_element_to_html_response;
@@ -34,14 +34,14 @@ pub struct HtmxRenderer {
 
 impl HtmxRenderer {
     #[must_use]
-    pub fn new(router: Router, runtime: Arc<Runtime>) -> Self {
+    pub fn new(router: Router, runtime: Arc<Runtime>, request_action: Sender<String>) -> Self {
         let (_tx, rx) = flume::unbounded();
         Self {
             width: None,
             height: None,
             x: None,
             y: None,
-            app: HtmxApp::new(router),
+            app: HtmxApp::new(router, request_action),
             receiver: rx,
             runtime,
         }
@@ -262,13 +262,16 @@ impl Renderer for HtmxRenderer {
 struct HtmxApp {
     router: Router,
     background: Option<Color>,
+    #[allow(unused)]
+    request_action: Sender<String>,
 }
 
 impl HtmxApp {
-    const fn new(router: Router) -> Self {
+    const fn new(router: Router, request_action: Sender<String>) -> Self {
         Self {
             router,
             background: None,
+            request_action,
         }
     }
 }

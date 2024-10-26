@@ -3881,6 +3881,7 @@ name = "gigachad_transformer"
 version = "0.1.0"
 dependencies = [
  "gigachad_color",
+ "html-escape",
  "itertools 0.13.0",
  "log",
  "moosicbox_assert",
@@ -4423,6 +4424,15 @@ dependencies = [
  "cfg-if",
  "libc",
  "windows 0.52.0",
+]
+
+[[package]]
+name = "html-escape"
+version = "0.2.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d1ad449764d627e22bfd7cd5e8868264fc9236e07c752972b4080cd351cb476"
+dependencies = [
+ "utf8-width",
 ]
 
 [[package]]
@@ -5811,6 +5821,7 @@ dependencies = [
 name = "moosicbox_app_native"
 version = "0.1.0"
 dependencies = [
+ "flume",
  "log",
  "moosicbox_app_native_bundled",
  "moosicbox_app_native_lib",
@@ -5821,6 +5832,7 @@ dependencies = [
  "moosicbox_logging",
  "moosicbox_menu_models",
  "moosicbox_paging",
+ "moosicbox_task",
  "reqwest 0.12.8",
  "thiserror",
  "tokio",
@@ -5854,6 +5866,7 @@ dependencies = [
 name = "moosicbox_app_native_lib"
 version = "0.1.0"
 dependencies = [
+ "flume",
  "gigachad_renderer",
  "gigachad_renderer_egui",
  "gigachad_renderer_fltk",
@@ -5871,11 +5884,14 @@ dependencies = [
 name = "moosicbox_app_native_ui"
 version = "0.1.0"
 dependencies = [
+ "log",
  "maud",
  "moosicbox_app_native_image",
  "moosicbox_library_models",
  "moosicbox_menu_models",
  "moosicbox_paging",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -12351,6 +12367,12 @@ name = "utf8-ranges"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fcfc827f90e53a02eaef5e535ee14266c1d569214c6aa70133a624d8a3164ba"
+
+[[package]]
+name = "utf8-width"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86bd8d4e895da8537e5315b8254664e6b769c4ff3db18321b297a1e7004392e3"
 
 [[package]]
 name = "utf8parse"

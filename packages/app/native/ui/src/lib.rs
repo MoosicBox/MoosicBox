@@ -7,6 +7,7 @@ use moosicbox_app_native_image::image;
 use moosicbox_library_models::{ApiAlbum, ApiArtist, ApiLibraryAlbum, ApiLibraryArtist, ApiTrack};
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_paging::Page;
+use serde::{Deserialize, Serialize};
 
 macro_rules! public_img {
     ($path:expr $(,)?) => {
@@ -18,6 +19,28 @@ macro_rules! pre_escaped {
     ($($message:tt)+) => {
         PreEscaped(format!($($message)*))
     };
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum Action {
+    TogglePlayback,
+    PreviousTrack,
+    NextTrack,
+}
+
+impl std::fmt::Display for Action {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&serde_json::to_string(self).unwrap())
+    }
+}
+
+impl<'a> TryFrom<&'a str> for Action {
+    type Error = serde_json::Error;
+
+    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        serde_json::from_str(value)
+    }
 }
 
 #[must_use]
@@ -83,19 +106,19 @@ pub fn player() -> Markup {
             }
             div sx-dir="row" {
                 @let size = 36;
-                button sx-width=(size) sx-height=(size) {
+                button sx-width=(size) sx-height=(size) fx-click=(Action::PreviousTrack) {
                     img
                         sx-width=(size)
                         sx-height=(size)
                         src=(public_img!("chevron-left-white.svg"));
                 }
-                button sx-width=(size) sx-height=(size) {
+                button sx-width=(size) sx-height=(size) fx-click=(Action::TogglePlayback) {
                     img
                         sx-width=(size)
                         sx-height=(size)
                         src=(public_img!("pause-button-white.svg"));
                 }
-                button sx-width=(size) sx-height=(size) {
+                button sx-width=(size) sx-height=(size) fx-click=(Action::NextTrack) {
                     img
                         sx-width=(size)
                         sx-height=(size)
