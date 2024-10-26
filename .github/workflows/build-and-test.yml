@@ -18,18 +18,29 @@ env:
 jobs:
     build-matrix:
         name: Build matrix
-        runs-on: ubuntu-latest
+
+        strategy:
+            fail-fast: true
+
+            matrix:
+                os: ['macos-latest', 'ubuntu-latest', 'windows-latest']
+
+        runs-on: ${{ matrix.os }}
+
         outputs:
             matrix: ${{ steps.build-matrix-step.outputs.matrix }}
+
         steps:
+            - uses: dtolnay/rust-toolchain@stable
+
             - name: Checkout
+              if: ${{ matrix.os == 'ubuntu-latest' }}
               uses: actions/checkout@v4
               with:
                   fetch-depth: 0
 
-            - uses: dtolnay/rust-toolchain@stable
-
             - name: Build matrix JSON
+              if: ${{ matrix.os == 'ubuntu-latest' }}
               id: build-matrix-step
               run: |
                   MATRIX=$(
@@ -63,6 +74,29 @@ jobs:
                   echo 'matrix<<EOF' >> $GITHUB_OUTPUT
                   echo $MATRIX >> $GITHUB_OUTPUT
                   echo 'EOF' >> $GITHUB_OUTPUT
+
+            - name: Install cargo-machete
+              shell: bash
+              run: |
+                  cargo install cargo-machete
+
+            - uses: actions/upload-artifact@master
+              if: ${{ matrix.os == 'macos-latest' }}
+              with:
+                  name: cargo-machete-macos
+                  path: ~/.cargo/bin/cargo-machete
+
+            - uses: actions/upload-artifact@master
+              if: ${{ matrix.os == 'ubuntu-latest' }}
+              with:
+                  name: cargo-machete-ubuntu
+                  path: ~/.cargo/bin/cargo-machete
+
+            - uses: actions/upload-artifact@master
+              if: ${{ matrix.os == 'windows-latest' }}
+              with:
+                  name: cargo-machete.exe
+                  path: ~/.cargo/bin/cargo-machete.exe
 
     build:
         runs-on: ${{ matrix.package.os }}
@@ -148,15 +182,56 @@ jobs:
               run: |
                   (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo fmt)
 
-            - name: Install cargo-machete
+            - uses: actions/download-artifact@master
+              if: ${{ matrix.package.os == 'macos-latest' }}
+              with:
+                  name: cargo-machete-macos
+                  path: ~/.cargo/bin
+
+            - uses: actions/download-artifact@master
+              if: ${{ matrix.package.os == 'ubuntu-latest' }}
+              with:
+                  name: cargo-machete-ubuntu
+                  path: ~/.cargo/bin
+
+            - uses: actions/download-artifact@master
+              if: ${{ matrix.package.os == 'windows-latest' }}
+              with:
+                  name: cargo-machete.exe
+                  path: ~/.cargo/bin
+
+            - name: Make cargo-machete executable
+              if: ${{ matrix.package.os == 'macos-latest' }}
               shell: bash
-              run: |
-                  cargo install cargo-machete
+              run: chmod +x ~/.cargo/bin/cargo-machete
+
+            - name: Make cargo-machete executable
+              if: ${{ matrix.package.os == 'ubuntu-latest' }}
+              shell: bash
+              run: chmod +x ~/.cargo/bin/cargo-machete
+
+            - name: Make cargo-machete executable
+              if: ${{ matrix.package.os == 'windows-latest' }}
+              shell: bash
+              run: chmod +x ~/.cargo/bin/cargo-machete.exe
 
             - name: Validate ${{ matrix.package.name }} dependencies (machete)
+              if: ${{ matrix.package.os == 'macos-latest' }}
               shell: bash
               run: |
-                  ${{ matrix.package.env }} cargo machete --with-metadata ${{ matrix.package.path }}
+                  ${{ matrix.package.env }} ~/.cargo/bin/cargo-machete --with-metadata ${{ matrix.package.path }}
+
+            - name: Validate ${{ matrix.package.name }} dependencies (machete)
+              if: ${{ matrix.package.os == 'ubuntu-latest' }}
+              shell: bash
+              run: |
+                  ${{ matrix.package.env }} ~/.cargo/bin/cargo-machete --with-metadata ${{ matrix.package.path }}
+
+            - name: Validate ${{ matrix.package.name }} dependencies (machete)
+              if: ${{ matrix.package.os == 'windows-latest' }}
+              shell: bash
+              run: |
+                  ${{ matrix.package.env }} ~/.cargo/bin/cargo-machete.exe --with-metadata ${{ matrix.package.path }}
 
     create-tauri-app-release:
         runs-on: ubuntu-latest
