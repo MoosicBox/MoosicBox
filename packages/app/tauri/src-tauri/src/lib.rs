@@ -86,54 +86,35 @@ struct PlaybackTargetSessionPlayer {
     player_type: PlayerType,
 }
 
-static API_URL: LazyLock<Arc<RwLock<Option<String>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(None)));
-static PROFILE: LazyLock<Arc<RwLock<Option<String>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(None)));
-static WS_URL: LazyLock<Arc<RwLock<Option<String>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(None)));
-static WS_CONNECTION_ID: LazyLock<Arc<RwLock<Option<String>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(None)));
-static CONNECTION_ID: LazyLock<Arc<RwLock<Option<String>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(None)));
-static SIGNATURE_TOKEN: LazyLock<Arc<RwLock<Option<String>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(None)));
-static CLIENT_ID: LazyLock<Arc<RwLock<Option<String>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(None)));
-static API_TOKEN: LazyLock<Arc<RwLock<Option<String>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(None)));
-static WS_TOKEN: LazyLock<Arc<RwLock<Option<CancellationToken>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(None)));
-static WS_HANDLE: LazyLock<Arc<RwLock<Option<WsHandle>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(None)));
-static WS_JOIN_HANDLE: LazyLock<Arc<RwLock<Option<JoinHandle<()>>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(None)));
-static AUDIO_ZONE_ACTIVE_API_PLAYERS: LazyLock<Arc<RwLock<ApiPlayersMap>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(HashMap::new())));
-static ACTIVE_PLAYERS: LazyLock<Arc<RwLock<Vec<PlaybackTargetSessionPlayer>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(vec![])));
-static PLAYBACK_QUALITY: LazyLock<Arc<RwLock<Option<PlaybackQuality>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(None)));
-static WS_MESSAGE_BUFFER: LazyLock<Arc<RwLock<Vec<InboundPayload>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(vec![])));
-static CURRENT_PLAYBACK_TARGET: LazyLock<Arc<RwLock<Option<PlaybackTarget>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(None)));
-static CURRENT_CONNECTIONS: LazyLock<Arc<RwLock<Vec<ApiConnection>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(vec![])));
-static PENDING_PLAYER_SESSIONS: LazyLock<Arc<RwLock<HashMap<u64, u64>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(HashMap::new())));
-static CURRENT_SESSIONS: LazyLock<Arc<RwLock<Vec<ApiSession>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(vec![])));
-static CURRENT_SESSION_ID: LazyLock<Arc<RwLock<Option<u64>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(None)));
-static CURRENT_AUDIO_ZONES: LazyLock<Arc<RwLock<Vec<ApiAudioZoneWithSession>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(vec![])));
-#[allow(clippy::type_complexity)]
-static CURRENT_PLAYERS: LazyLock<Arc<RwLock<Vec<(ApiPlayer, PlayerType, AudioOutputFactory)>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(vec![])));
-static UPNP_AV_TRANSPORT_SERVICES: LazyLock<
-    tokio::sync::RwLock<Vec<moosicbox_upnp::player::UpnpAvTransportService>>,
-> = LazyLock::new(|| tokio::sync::RwLock::new(vec![]));
+#[derive(Default)]
+pub struct TauriAppState {
+    api_url: Arc<RwLock<Option<String>>>,
+    profile: Arc<RwLock<Option<String>>>,
+    ws_url: Arc<RwLock<Option<String>>>,
+    ws_connection_id: Arc<RwLock<Option<String>>>,
+    connection_id: Arc<RwLock<Option<String>>>,
+    signature_token: Arc<RwLock<Option<String>>>,
+    client_id: Arc<RwLock<Option<String>>>,
+    api_token: Arc<RwLock<Option<String>>>,
+    ws_token: Arc<RwLock<Option<CancellationToken>>>,
+    ws_handle: Arc<RwLock<Option<WsHandle>>>,
+    ws_join_handle: Arc<RwLock<Option<JoinHandle<()>>>>,
+    audio_zone_active_api_players: Arc<RwLock<ApiPlayersMap>>,
+    active_players: Arc<RwLock<Vec<PlaybackTargetSessionPlayer>>>,
+    playback_quality: Arc<RwLock<Option<PlaybackQuality>>>,
+    ws_message_buffer: Arc<RwLock<Vec<InboundPayload>>>,
+    current_playback_target: Arc<RwLock<Option<PlaybackTarget>>>,
+    current_connections: Arc<RwLock<Vec<ApiConnection>>>,
+    pending_player_sessions: Arc<RwLock<HashMap<u64, u64>>>,
+    current_sessions: Arc<RwLock<Vec<ApiSession>>>,
+    current_session_id: Arc<RwLock<Option<u64>>>,
+    current_audio_zones: Arc<RwLock<Vec<ApiAudioZoneWithSession>>>,
+    #[allow(clippy::type_complexity)]
+    current_players: Arc<RwLock<Vec<(ApiPlayer, PlayerType, AudioOutputFactory)>>>,
+    upnp_av_transport_services: Arc<RwLock<Vec<moosicbox_upnp::player::UpnpAvTransportService>>>,
+}
+
+static STATE: LazyLock<TauriAppState> = LazyLock::new(TauriAppState::default);
 
 const DEFAULT_PLAYBACK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOptions {
     max_attempts: 10,
@@ -183,7 +164,7 @@ async fn new_player(
     output: AudioOutputFactory,
     player_type: PlayerType,
 ) -> Result<PlaybackHandler, TauriPlayerError> {
-    let profile = { PROFILE.read().await.clone() };
+    let profile = { STATE.profile.read().await.clone() };
     let Some(profile) = profile else {
         return Err(TauriPlayerError::Unknown("Missing profile".to_string()));
     };
@@ -191,29 +172,37 @@ async fn new_player(
     let mut headers = HashMap::new();
     headers.insert("moosicbox-profile".to_string(), profile);
 
-    if API_TOKEN.read().await.is_some() {
+    if STATE.api_token.read().await.is_some() {
         headers.insert(
             "Authorization".to_string(),
-            API_TOKEN.read().await.clone().unwrap().to_string(),
+            STATE.api_token.read().await.clone().unwrap().to_string(),
         );
     }
 
-    let query = if CLIENT_ID.read().await.is_some() && SIGNATURE_TOKEN.read().await.is_some() {
-        let mut query = HashMap::new();
-        query.insert(
-            "clientId".to_string(),
-            CLIENT_ID.read().await.clone().unwrap().to_string(),
-        );
-        query.insert(
-            "signature".to_string(),
-            SIGNATURE_TOKEN.read().await.clone().unwrap().to_string(),
-        );
-        Some(query)
-    } else {
-        None
-    };
+    let query =
+        if STATE.client_id.read().await.is_some() && STATE.signature_token.read().await.is_some() {
+            let mut query = HashMap::new();
+            query.insert(
+                "clientId".to_string(),
+                STATE.client_id.read().await.clone().unwrap().to_string(),
+            );
+            query.insert(
+                "signature".to_string(),
+                STATE
+                    .signature_token
+                    .read()
+                    .await
+                    .clone()
+                    .unwrap()
+                    .to_string(),
+            );
+            Some(query)
+        } else {
+            None
+        };
 
-    let host = API_URL
+    let host = STATE
+        .api_url
         .read()
         .await
         .clone()
@@ -285,7 +274,8 @@ async fn new_player(
     };
 
     let session = {
-        CURRENT_SESSIONS
+        STATE
+            .current_sessions
             .read()
             .await
             .iter()
@@ -293,7 +283,7 @@ async fn new_player(
             .cloned()
     };
 
-    let profile = { PROFILE.read().await.clone() };
+    let profile = { STATE.profile.read().await.clone() };
 
     if let (Some(profile), Some(session)) = (profile.clone(), session) {
         log::debug!("new_player: init_from_api_session session={session:?}");
@@ -302,7 +292,8 @@ async fn new_player(
         }
     } else {
         log::debug!("new_player: No session info available for player yet");
-        PENDING_PLAYER_SESSIONS
+        STATE
+            .pending_player_sessions
             .write()
             .await
             .insert(player.id as u64, session_id);
@@ -318,7 +309,7 @@ async fn new_player(
             None,
             None,
             None,
-            *PLAYBACK_QUALITY.read().await,
+            *STATE.playback_quality.read().await,
             Some(session_id),
             profile,
             Some(playback_target.into()),
@@ -343,14 +334,14 @@ async fn show_main_window(window: tauri::Window) {
 async fn on_startup() -> Result<(), tauri::Error> {
     log::debug!("on_startup");
 
-    let connection_id = { WS_CONNECTION_ID.read().await.clone() };
+    let connection_id = { STATE.ws_connection_id.read().await.clone() };
 
     if let Some(connection_id) = connection_id {
         APP.get().unwrap().emit(
             "ws-connect",
             WsConnectMessage {
                 connection_id,
-                ws_url: WS_URL.read().await.to_owned().unwrap_or_default(),
+                ws_url: STATE.ws_url.read().await.to_owned().unwrap_or_default(),
             },
         )?;
     }
@@ -393,7 +384,7 @@ async fn set_state(state: AppState) -> Result<(), TauriPlayerError> {
             LOG_LAYER.get().map(|x| x.remove_property("connectionId"));
         }
 
-        let mut connection_id = CONNECTION_ID.write().await;
+        let mut connection_id = STATE.connection_id.write().await;
 
         if connection_id.as_ref() != state.connection_id.as_ref() {
             log::debug!(
@@ -427,7 +418,7 @@ async fn set_state(state: AppState) -> Result<(), TauriPlayerError> {
             LOG_LAYER.get().map(|x| x.remove_property("clientId"));
         }
 
-        let mut client_id = CLIENT_ID.write().await;
+        let mut client_id = STATE.client_id.write().await;
 
         if client_id.as_ref() != state.client_id.as_ref() {
             log::debug!(
@@ -443,7 +434,7 @@ async fn set_state(state: AppState) -> Result<(), TauriPlayerError> {
     }
 
     {
-        let mut signature_token = SIGNATURE_TOKEN.write().await;
+        let mut signature_token = STATE.signature_token.write().await;
 
         if signature_token.as_ref() != state.signature_token.as_ref() {
             log::debug!(
@@ -459,7 +450,7 @@ async fn set_state(state: AppState) -> Result<(), TauriPlayerError> {
     }
 
     {
-        let mut api_token = API_TOKEN.write().await;
+        let mut api_token = STATE.api_token.write().await;
 
         if api_token.as_ref() != state.api_token.as_ref() {
             log::debug!(
@@ -483,7 +474,7 @@ async fn set_state(state: AppState) -> Result<(), TauriPlayerError> {
             LOG_LAYER.get().map(|x| x.remove_property("apiUrl"));
         }
 
-        let mut api_url = API_URL.write().await;
+        let mut api_url = STATE.api_url.write().await;
 
         if api_url.as_ref() != state.api_url.as_ref() {
             log::debug!(
@@ -507,7 +498,7 @@ async fn set_state(state: AppState) -> Result<(), TauriPlayerError> {
             LOG_LAYER.get().map(|x| x.remove_property("profile"));
         }
 
-        let mut profile = PROFILE.write().await;
+        let mut profile = STATE.profile.write().await;
 
         if profile.as_ref() != state.profile.as_ref() {
             log::debug!(
@@ -523,11 +514,11 @@ async fn set_state(state: AppState) -> Result<(), TauriPlayerError> {
     }
 
     {
-        *CURRENT_PLAYBACK_TARGET.write().await = state.playback_target;
+        *STATE.current_playback_target.write().await = state.playback_target;
     }
 
     {
-        *CURRENT_SESSION_ID.write().await = state.current_session_id;
+        *STATE.current_session_id.write().await = state.current_session_id;
     }
 
     if state.current_session_id.is_some() {
@@ -546,7 +537,7 @@ async fn set_state(state: AppState) -> Result<(), TauriPlayerError> {
 
 #[async_recursion]
 pub async fn update_state() -> Result<(), TauriPlayerError> {
-    let has_connection_id = { CONNECTION_ID.read().await.is_some() };
+    let has_connection_id = { STATE.connection_id.read().await.is_some() };
     log::debug!("update_state: has_connection_id={has_connection_id}");
 
     if has_connection_id {
@@ -589,7 +580,7 @@ pub async fn update_state() -> Result<(), TauriPlayerError> {
 }
 
 async fn reinit_players() -> Result<(), TauriPlayerError> {
-    let mut players_map = ACTIVE_PLAYERS.write().await;
+    let mut players_map = STATE.active_players.write().await;
     let ids = {
         players_map
             .iter()
@@ -654,11 +645,11 @@ async fn set_audio_zone_active_players(
         players.iter().map(|(x, _, _)| x).collect::<Vec<_>>()
     );
 
-    let mut api_players_map = AUDIO_ZONE_ACTIVE_API_PLAYERS.write().await;
+    let mut api_players_map = STATE.audio_zone_active_api_players.write().await;
     api_players_map.insert(audio_zone_id, players.clone());
 
     {
-        let mut players_map = ACTIVE_PLAYERS.write().await;
+        let mut players_map = STATE.active_players.write().await;
         for (player, ptype, output) in players.iter() {
             if let Some(existing) = players_map.iter().find(|x| match x.playback_target {
                 ApiPlaybackTarget::AudioZone { audio_zone_id: id } => id == audio_zone_id,
@@ -728,9 +719,9 @@ async fn set_audio_zone_active_players(
 }
 
 async fn update_audio_zones() -> Result<(), TauriPlayerError> {
-    let audio_zones_binding = CURRENT_AUDIO_ZONES.read().await;
+    let audio_zones_binding = STATE.current_audio_zones.read().await;
     let audio_zones: &[ApiAudioZoneWithSession] = audio_zones_binding.as_ref();
-    let players_binding = CURRENT_PLAYERS.read().await;
+    let players_binding = STATE.current_players.read().await;
     let players: &[(ApiPlayer, PlayerType, AudioOutputFactory)] = players_binding.as_ref();
 
     log::debug!(
@@ -763,12 +754,13 @@ async fn update_audio_zones() -> Result<(), TauriPlayerError> {
 }
 
 async fn update_connection_outputs(session_ids: &[u64]) -> Result<(), TauriPlayerError> {
-    let Some(current_connection_id) = ({ CONNECTION_ID.read().await.clone() }) else {
+    let Some(current_connection_id) = ({ STATE.connection_id.read().await.clone() }) else {
         return Ok(());
     };
 
     let local_outputs = moosicbox_audio_output::output_factories().await;
-    let upnp_outputs = UPNP_AV_TRANSPORT_SERVICES
+    let upnp_outputs = STATE
+        .upnp_av_transport_services
         .read()
         .await
         .iter()
@@ -787,7 +779,7 @@ async fn update_connection_outputs(session_ids: &[u64]) -> Result<(), TauriPlaye
         let output_id = &output.id;
         log::debug!("update_connection_outputs: ApiPlaybackTarget::ConnectionOutput current_connection_id={current_connection_id} output_id={output_id}");
 
-        let binding = CURRENT_PLAYERS.read().await;
+        let binding = STATE.current_players.read().await;
         let current_players: &[(ApiPlayer, PlayerType, AudioOutputFactory)] = binding.as_ref();
 
         if let Some((_player, ptype, output)) = current_players.iter().find(|(x, _, _)| {
@@ -820,7 +812,7 @@ async fn update_connection_outputs(session_ids: &[u64]) -> Result<(), TauriPlaye
                     player_type: ptype.clone(),
                 };
 
-                let mut players = ACTIVE_PLAYERS.write().await;
+                let mut players = STATE.active_players.write().await;
 
                 if !players.iter().any(|x| x.session_id == session_id && x.playback_target == playback_target) {
                     players.push(player);
@@ -838,7 +830,7 @@ async fn get_players(
 ) -> Result<Vec<PlaybackHandler>, TauriPlayerError> {
     let players = {
         let mut playback_handlers = vec![];
-        let active_players = ACTIVE_PLAYERS.read().await;
+        let active_players = STATE.active_players.read().await;
 
         for player in active_players.iter() {
             let target = &player.playback_target;
@@ -914,12 +906,12 @@ impl From<TrackIdWithApiSource> for UpdateSessionPlaylistTrack {
 async fn set_playback_quality(quality: PlaybackQuality) -> Result<(), TauriPlayerError> {
     log::debug!("Setting playback quality: {quality:?}");
 
-    PLAYBACK_QUALITY.write().await.replace(quality);
+    STATE.playback_quality.write().await.replace(quality);
 
-    let mut binding = ACTIVE_PLAYERS.write().await;
+    let mut binding = STATE.active_players.write().await;
     let players = binding.iter_mut();
 
-    let profile = { PROFILE.read().await.clone() };
+    let profile = { STATE.profile.read().await.clone() };
 
     for x in players {
         x.player
@@ -932,7 +924,7 @@ async fn set_playback_quality(quality: PlaybackQuality) -> Result<(), TauriPlaye
                 None,
                 None,
                 None,
-                *PLAYBACK_QUALITY.read().await,
+                *STATE.playback_quality.read().await,
                 Some(x.session_id),
                 profile.clone(),
                 Some(x.playback_target.clone().into()),
@@ -1000,8 +992,8 @@ async fn send_ws_message(
 }
 
 async fn flush_ws_message_buffer() -> Result<(), SendWsMessageError> {
-    if let Some(handle) = WS_HANDLE.read().await.as_ref() {
-        let mut binding = WS_MESSAGE_BUFFER.write().await;
+    if let Some(handle) = STATE.ws_handle.read().await.as_ref() {
+        let mut binding = STATE.ws_message_buffer.write().await;
         log::debug!(
             "flush_ws_message_buffer: Flushing {} ws messages from buffer",
             binding.len()
@@ -1027,7 +1019,7 @@ async fn propagate_ws_message(message: InboundPayload) -> Result<(), TauriPlayer
     );
 
     moosicbox_task::spawn("propagate_ws_message", async move {
-        let handle = { WS_HANDLE.read().await.clone() };
+        let handle = { STATE.ws_handle.read().await.clone() };
 
         if let Some(handle) = handle {
             send_ws_message(&handle, message, true).await?;
@@ -1036,7 +1028,7 @@ async fn propagate_ws_message(message: InboundPayload) -> Result<(), TauriPlayer
                 ("propagate_ws_message: pushing message to buffer: {message}"),
                 ("propagate_ws_message: pushing message to buffer: {message:?}")
             );
-            WS_MESSAGE_BUFFER.write().await.push(message);
+            STATE.ws_message_buffer.write().await.push(message);
         }
 
         Ok::<_, SendWsMessageError>(())
@@ -1093,7 +1085,8 @@ async fn api_proxy_get(
 ) -> Result<serde_json::Value, TauriPlayerError> {
     let url = format!(
         "{}/{url}",
-        API_URL
+        STATE
+            .api_url
             .read()
             .await
             .clone()
@@ -1121,7 +1114,8 @@ async fn api_proxy_post(
 ) -> Result<serde_json::Value, TauriPlayerError> {
     let url = format!(
         "{}/{url}",
-        API_URL
+        STATE
+            .api_url
             .read()
             .await
             .clone()
@@ -1150,7 +1144,7 @@ async fn propagate_playback_event(update: UpdateSession, to_plugin: bool) -> Res
         propagate_state_to_plugin(&update.clone().into()).await;
     }
 
-    if let Some(handle) = WS_HANDLE.read().await.as_ref() {
+    if let Some(handle) = STATE.ws_handle.read().await.as_ref() {
         log::debug!("on_playback_event: Sending update session: update={update:?}");
 
         APP.get().unwrap().emit(
@@ -1197,7 +1191,8 @@ pub enum ScanOutputsError {
 async fn scan_outputs() -> Result<(), ScanOutputsError> {
     log::debug!("scan_outputs: attempting to scan outputs");
     {
-        if API_URL.as_ref().read().await.is_none() || CONNECTION_ID.as_ref().read().await.is_none()
+        if STATE.api_url.as_ref().read().await.is_none()
+            || STATE.connection_id.as_ref().read().await.is_none()
         {
             log::debug!("scan_outputs: missing API_URL or CONNECTION_ID, not scanning");
             return Ok(());
@@ -1237,7 +1232,8 @@ async fn scan_outputs() -> Result<(), ScanOutputsError> {
 
     update_audio_zones().await?;
     let ids = {
-        CURRENT_SESSIONS
+        STATE
+            .current_sessions
             .read()
             .await
             .iter()
@@ -1250,7 +1246,7 @@ async fn scan_outputs() -> Result<(), ScanOutputsError> {
 }
 
 async fn add_players_to_current_players(players: Vec<(ApiPlayer, PlayerType, AudioOutputFactory)>) {
-    let mut existing_players = CURRENT_PLAYERS.write().await;
+    let mut existing_players = STATE.current_players.write().await;
 
     let new_players = players
         .into_iter()
@@ -1282,16 +1278,17 @@ pub enum RegisterPlayersError {
 async fn register_players(
     players: &[RegisterPlayer],
 ) -> Result<Vec<ApiPlayer>, RegisterPlayersError> {
-    let connection_id = CONNECTION_ID.read().await.clone().unwrap();
-    let api_token = API_TOKEN.read().await.clone();
-    let client_id = CLIENT_ID
+    let connection_id = STATE.connection_id.read().await.clone().unwrap();
+    let api_token = STATE.api_token.read().await.clone();
+    let client_id = STATE
+        .client_id
         .read()
         .await
         .clone()
         .map(|x| format!("&clientId={x}"))
         .unwrap_or_default();
 
-    let profile = { PROFILE.read().await.clone() };
+    let profile = { STATE.profile.read().await.clone() };
     let Some(profile) = profile else {
         return Err(RegisterPlayersError::MissingProfile);
     };
@@ -1331,8 +1328,9 @@ pub enum FetchAudioZonesError {
 }
 
 async fn fetch_audio_zones() -> Result<(), FetchAudioZonesError> {
-    let api_token = API_TOKEN.read().await.clone();
-    let client_id = CLIENT_ID
+    let api_token = STATE.api_token.read().await.clone();
+    let client_id = STATE
+        .client_id
         .read()
         .await
         .clone()
@@ -1340,7 +1338,7 @@ async fn fetch_audio_zones() -> Result<(), FetchAudioZonesError> {
         .map(|x| format!("?clientId={x}"))
         .unwrap_or_default();
 
-    let profile = { PROFILE.read().await.clone() };
+    let profile = { STATE.profile.read().await.clone() };
     let Some(profile) = profile else {
         return Err(FetchAudioZonesError::MissingProfile);
     };
@@ -1369,7 +1367,7 @@ async fn fetch_audio_zones() -> Result<(), FetchAudioZonesError> {
 
     let zones: Page<ApiAudioZoneWithSession> = serde_json::from_value(response)?;
 
-    *CURRENT_AUDIO_ZONES.write().await = zones.items();
+    *STATE.current_audio_zones.write().await = zones.items();
 
     update_audio_zones().await?;
 
@@ -1392,7 +1390,8 @@ async fn get_session_playback_for_player(
     if let Some(session_id) = session_id {
         if session_id != update.session_id {
             let session = {
-                CURRENT_SESSIONS
+                STATE
+                    .current_sessions
                     .read()
                     .await
                     .iter()
@@ -1426,7 +1425,7 @@ async fn get_session_playback_for_player(
 }
 
 async fn propagate_state_to_plugin(update: &ApiUpdateSession) {
-    let current_session_id = { *CURRENT_SESSION_ID.read().await };
+    let current_session_id = { *STATE.current_session_id.read().await };
 
     if current_session_id.is_some_and(|id| update.session_id == id) {
         if let Some((url, query)) = get_url_and_query().await {
@@ -1478,7 +1477,7 @@ async fn handle_playback_update(update: &ApiUpdateSession) -> Result<(), HandleW
         log::debug!("handle_playback_update: player={}", player.id);
 
         if let Some(quality) = update.quality {
-            PLAYBACK_QUALITY.write().await.replace(quality);
+            STATE.playback_quality.write().await.replace(quality);
         }
 
         player
@@ -1603,13 +1602,13 @@ fn convert_track(
 }
 
 async fn get_url_and_query() -> Option<(String, String)> {
-    let url = { API_URL.read().await.clone() }?;
+    let url = { STATE.api_url.read().await.clone() }?;
 
     let mut query = String::new();
-    if let Some(client_id) = CLIENT_ID.read().await.clone() {
+    if let Some(client_id) = STATE.client_id.read().await.clone() {
         query.push_str(&format!("&clientId={client_id}"));
     }
-    if let Some(signature_token) = SIGNATURE_TOKEN.read().await.clone() {
+    if let Some(signature_token) = STATE.signature_token.read().await.clone() {
         query.push_str(&format!("&signature={signature_token}"));
     }
 
@@ -1621,7 +1620,7 @@ async fn update_playlist() -> Result<(), HandleWsMessageError> {
 
     log::trace!("update_playlist");
 
-    let current_session_id = { *CURRENT_SESSION_ID.read().await };
+    let current_session_id = { *STATE.current_session_id.read().await };
     let Some(current_session_id) = current_session_id else {
         log::debug!("update_playlist: no CURRENT_SESSION_ID");
         return Ok(());
@@ -1630,7 +1629,7 @@ async fn update_playlist() -> Result<(), HandleWsMessageError> {
     log::trace!("update_playlist: current_session_id={current_session_id}");
 
     let session = {
-        let binding = CURRENT_SESSIONS.read().await;
+        let binding = STATE.current_sessions.read().await;
         let sessions: &[ApiSession] = &binding;
         sessions
             .iter()
@@ -1719,7 +1718,8 @@ async fn handle_ws_message(message: OutboundPayload) -> Result<(), HandleWsMessa
                 }
                 OutboundPayload::ConnectionId(payload) => {
                     {
-                        WS_CONNECTION_ID
+                        STATE
+                            .ws_connection_id
                             .write()
                             .await
                             .replace(payload.connection_id.to_owned());
@@ -1728,33 +1728,35 @@ async fn handle_ws_message(message: OutboundPayload) -> Result<(), HandleWsMessa
                         "ws-connect",
                         WsConnectMessage {
                             connection_id: payload.connection_id.to_owned(),
-                            ws_url: WS_URL.read().await.to_owned().unwrap_or_default(),
+                            ws_url: STATE.ws_url.read().await.to_owned().unwrap_or_default(),
                         },
                     )?;
                 }
                 OutboundPayload::Connections(payload) => {
-                    *CURRENT_CONNECTIONS.write().await = payload.payload.clone();
+                    *STATE.current_connections.write().await = payload.payload.clone();
 
                     update_audio_zones().await?;
                 }
                 OutboundPayload::Sessions(payload) => {
                     let player_ids = {
                         let mut player_ids = vec![];
-                        let player_sessions = PENDING_PLAYER_SESSIONS
+                        let player_sessions = STATE
+                            .pending_player_sessions
                             .read()
                             .await
                             .iter()
                             .map(|(x, y)| (*x, *y))
                             .collect::<Vec<_>>();
 
-                        let profile = { PROFILE.read().await.clone() };
+                        let profile = { STATE.profile.read().await.clone() };
 
                         if let Some(profile) = profile {
                             for (player_id, session_id) in player_sessions {
                                 if let Some(session) =
                                     payload.payload.iter().find(|x| x.session_id == session_id)
                                 {
-                                    if let Some(player) = ACTIVE_PLAYERS
+                                    if let Some(player) = STATE
+                                        .active_players
                                         .write()
                                         .await
                                         .iter_mut()
@@ -1781,13 +1783,14 @@ async fn handle_ws_message(message: OutboundPayload) -> Result<(), HandleWsMessa
                         player_ids
                     };
                     {
-                        PENDING_PLAYER_SESSIONS
+                        STATE
+                            .pending_player_sessions
                             .write()
                             .await
                             .retain(|id, _| !player_ids.contains(id));
                     }
                     {
-                        *CURRENT_SESSIONS.write().await = payload.payload.clone();
+                        *STATE.current_sessions.write().await = payload.payload.clone();
                     }
 
                     update_audio_zones().await?;
@@ -1803,7 +1806,7 @@ async fn handle_ws_message(message: OutboundPayload) -> Result<(), HandleWsMessa
                 }
 
                 OutboundPayload::AudioZoneWithSessions(payload) => {
-                    *CURRENT_AUDIO_ZONES.write().await = payload.payload.clone();
+                    *STATE.current_audio_zones.write().await = payload.payload.clone();
 
                     update_audio_zones().await?;
                 }
@@ -1838,43 +1841,45 @@ async fn init_ws_connection() -> Result<(), InitWsError> {
 
     log::debug!("init_ws_connection: attempting to connect to ws");
     {
-        if API_URL.as_ref().read().await.is_none() {
+        if STATE.api_url.as_ref().read().await.is_none() {
             log::debug!("init_ws_connection: missing API_URL");
             return Ok(());
         }
     }
     {
-        if let Some(token) = WS_TOKEN.read().await.as_ref() {
+        if let Some(token) = STATE.ws_token.read().await.as_ref() {
             token.cancel();
         }
     }
     let token = {
         let token = CancellationToken::new();
-        WS_TOKEN.write().await.replace(token.clone());
+        STATE.ws_token.write().await.replace(token.clone());
         token
     };
 
-    let api_url = API_URL.read().await.clone().unwrap();
-    let profile = PROFILE
+    let api_url = STATE.api_url.read().await.clone().unwrap();
+    let profile = STATE
+        .profile
         .read()
         .await
         .clone()
         .ok_or_else(|| InitWsError::MissingProfile)?;
 
-    let client_id = CLIENT_ID.read().await.clone();
-    let signature_token = SIGNATURE_TOKEN.read().await.clone();
+    let client_id = STATE.client_id.read().await.clone();
+    let signature_token = STATE.signature_token.read().await.clone();
 
     let ws_url = format!("ws{}/ws", &api_url[4..]);
     {
-        *WS_URL.write().await = Some(ws_url.clone());
+        *STATE.ws_url.write().await = Some(ws_url.clone());
     }
     let (client, handle) = WsClient::new(ws_url);
 
-    WS_HANDLE.write().await.replace(handle.clone());
+    STATE.ws_handle.write().await.replace(handle.clone());
 
     let mut client = client.with_cancellation_token(token.clone());
 
-    WS_JOIN_HANDLE
+    STATE
+        .ws_join_handle
         .write()
         .await
         .replace(moosicbox_task::spawn("moosicbox_app: ws", async move {
@@ -1966,11 +1971,11 @@ pub enum CloseWsError {
 async fn close_ws_connection() -> Result<(), CloseWsError> {
     log::debug!("close_ws_connection: attempting to close ws connection");
 
-    if let Some(handle) = WS_HANDLE.read().await.as_ref() {
+    if let Some(handle) = STATE.ws_handle.read().await.as_ref() {
         handle.close().await?;
     }
 
-    if let Some(handle) = WS_JOIN_HANDLE.write().await.take() {
+    if let Some(handle) = STATE.ws_join_handle.write().await.take() {
         handle.abort();
     }
 
@@ -2010,7 +2015,7 @@ async fn init_upnp_players() -> Result<(), InitUpnpError> {
     moosicbox_upnp::scan_devices().await?;
 
     let services = {
-        let mut av_transport_services = UPNP_AV_TRANSPORT_SERVICES.write().await;
+        let mut av_transport_services = STATE.upnp_av_transport_services.write().await;
         av_transport_services.clear();
 
         for device in moosicbox_upnp::devices().await {
@@ -2027,7 +2032,7 @@ async fn init_upnp_players() -> Result<(), InitUpnpError> {
 
     let mut outputs = Vec::with_capacity(services.len());
 
-    let url_string = { API_URL.read().await.clone() };
+    let url_string = { STATE.api_url.read().await.clone() };
     let url = url_string.as_deref();
 
     let Some(url) = url else {
@@ -2077,7 +2082,8 @@ async fn init_upnp_players() -> Result<(), InitUpnpError> {
     add_players_to_current_players(api_players).await;
 
     let ids = {
-        CURRENT_SESSIONS
+        STATE
+            .current_sessions
             .read()
             .await
             .iter()
