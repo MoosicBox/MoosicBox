@@ -217,6 +217,7 @@ pub struct ContainerElement {
     pub justify_content: JustifyContent,
     pub width: Option<Number>,
     pub height: Option<Number>,
+    pub gap: Option<Number>,
     pub background: Option<Color>,
     pub hidden: Option<bool>,
     pub route: Option<Route>,

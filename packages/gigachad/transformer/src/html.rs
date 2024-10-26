@@ -156,6 +156,7 @@ fn parse_element(
         elements: parse_top_children(node.children(), parser),
         width: get_number(tag, "sx-width").ok(),
         height: get_number(tag, "sx-height").ok(),
+        gap: get_number(tag, "sx-gap").ok(),
         route: get_route(tag),
         ..Default::default()
     }
