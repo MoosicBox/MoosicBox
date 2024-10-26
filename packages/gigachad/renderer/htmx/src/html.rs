@@ -155,12 +155,12 @@ pub fn element_style_to_html(
     }
 
     match element.justify_content {
-        JustifyContent::SpaceEvenly => {
+        JustifyContent::SpaceBetween => {
             if !printed_start {
                 printed_start = true;
                 f.write_all(b" style=\"")?;
             }
-            write_css_attr(f, b"justify-content", b"space-evenly")?;
+            write_css_attr(f, b"justify-content", b"space-between")?;
         }
         JustifyContent::Default => {}
     }

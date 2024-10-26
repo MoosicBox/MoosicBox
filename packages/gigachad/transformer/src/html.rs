@@ -121,7 +121,7 @@ fn get_overflow(tag: &HTMLTag, name: &str) -> LayoutOverflow {
 
 fn get_justify_content(tag: &HTMLTag, name: &str) -> JustifyContent {
     match get_tag_attr_value_lower(tag, name).as_deref() {
-        Some("space-evenly") => JustifyContent::SpaceEvenly,
+        Some("space-between") => JustifyContent::SpaceBetween,
         _ => JustifyContent::default(),
     }
 }

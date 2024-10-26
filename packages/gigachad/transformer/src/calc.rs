@@ -799,7 +799,7 @@ impl ContainerElement {
         // TODO: Handle variable amount of items in rows/cols (i.e., non-uniform row/cols wrapping)
         match self.justify_content {
             #[allow(clippy::cast_precision_loss)]
-            JustifyContent::SpaceEvenly => match self.direction {
+            JustifyContent::SpaceBetween => match self.direction {
                 LayoutDirection::Row => {
                     let margin = (container_width - self.contained_calculated_width())
                         / ((self.columns() - 1) as f32);
@@ -2531,7 +2531,7 @@ mod test {
     }
 
     #[test_log::test]
-    fn handles_justify_content_space_evenly_and_wraps_elements_properly() {
+    fn handles_justify_content_space_between_and_wraps_elements_properly() {
         let mut container = ContainerElement {
             elements: vec![
                 Element::Div {
@@ -2579,7 +2579,7 @@ mod test {
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
-            justify_content: JustifyContent::SpaceEvenly,
+            justify_content: JustifyContent::SpaceBetween,
             ..Default::default()
         };
         while container.handle_overflow() {}
@@ -2647,7 +2647,7 @@ mod test {
     }
 
     #[test_log::test]
-    fn handles_justify_content_space_evenly_and_wraps_elements_properly_with_hidden_div() {
+    fn handles_justify_content_space_between_and_wraps_elements_properly_with_hidden_div() {
         let mut container = ContainerElement {
             elements: vec![
                 Element::Div {
@@ -2706,7 +2706,7 @@ mod test {
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
-            justify_content: JustifyContent::SpaceEvenly,
+            justify_content: JustifyContent::SpaceBetween,
             ..Default::default()
         };
         while container.handle_overflow() {}
@@ -2775,7 +2775,7 @@ mod test {
     }
 
     #[test_log::test]
-    fn handles_justify_content_space_evenly_and_wraps_elements_properly_and_can_recalc_with_new_rows(
+    fn handles_justify_content_space_between_and_wraps_elements_properly_and_can_recalc_with_new_rows(
     ) {
         const ROW_HEIGHT: f32 = 40.0 / 4.0;
 
@@ -2800,7 +2800,7 @@ mod test {
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
-            justify_content: JustifyContent::SpaceEvenly,
+            justify_content: JustifyContent::SpaceBetween,
             ..Default::default()
         };
 
@@ -2931,7 +2931,7 @@ mod test {
     }
 
     #[test_log::test]
-    fn handles_justify_content_space_evenly_with_gap_and_wraps_elements_properly() {
+    fn handles_justify_content_space_between_with_gap_and_wraps_elements_properly() {
         let mut container = ContainerElement {
             elements: vec![
                 Element::Div {
@@ -2980,7 +2980,7 @@ mod test {
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
             overflow_y: LayoutOverflow::Show,
-            justify_content: JustifyContent::SpaceEvenly,
+            justify_content: JustifyContent::SpaceBetween,
             gap: Some(Number::Integer(10)),
             ..Default::default()
         };
@@ -3049,7 +3049,7 @@ mod test {
     }
 
     #[test_log::test]
-    fn handles_justify_content_space_evenly_with_gap_and_wraps_elements_properly_and_can_recalc() {
+    fn handles_justify_content_space_between_with_gap_and_wraps_elements_properly_and_can_recalc() {
         let mut container = ContainerElement {
             elements: vec![
                 Element::Div {
@@ -3098,7 +3098,7 @@ mod test {
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
             overflow_y: LayoutOverflow::Show,
-            justify_content: JustifyContent::SpaceEvenly,
+            justify_content: JustifyContent::SpaceBetween,
             gap: Some(Number::Integer(10)),
             ..Default::default()
         };
