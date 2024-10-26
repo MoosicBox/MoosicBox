@@ -165,6 +165,14 @@ pub fn element_style_to_html(
         JustifyContent::Default => {}
     }
 
+    if let Some(gap) = &element.gap {
+        if !printed_start {
+            printed_start = true;
+            f.write_all(b" style=\"")?;
+        }
+        write_css_attr(f, b"grid-gap", number_to_css_string(gap).as_bytes())?;
+    }
+
     let mut flex_shrink_0 = false;
 
     if let Some(width) = &element.width {
