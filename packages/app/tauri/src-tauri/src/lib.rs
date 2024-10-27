@@ -7,6 +7,7 @@ use std::{
 
 use async_recursion::async_recursion;
 use log::info;
+use moosicbox_app_state::{PlaybackTargetSessionPlayer, PlayerType};
 use moosicbox_app_ws::{
     CloseError, WebsocketSendError, WebsocketSender as _, WsClient, WsHandle, WsMessage,
 };
@@ -25,21 +26,19 @@ use moosicbox_player::{
 };
 use moosicbox_remote_library::RemoteLibraryMusicApi;
 use moosicbox_session::models::{
-    ApiConnection, ApiPlaybackTarget, ApiSession, ApiUpdateSession, ApiUpdateSessionPlaylist,
-    PlaybackTarget, RegisterPlayer, UpdateSession, UpdateSessionPlaylistTrack,
+    ApiPlaybackTarget, ApiSession, ApiUpdateSession, ApiUpdateSessionPlaylist, PlaybackTarget,
+    RegisterPlayer, UpdateSession, UpdateSessionPlaylistTrack,
 };
-use moosicbox_upnp::{
-    listener::Handle, player::UpnpAvTransportService, Device, Service, UpnpDeviceScannerError,
-};
+use moosicbox_upnp::{player::UpnpAvTransportService, UpnpDeviceScannerError};
 use moosicbox_ws::models::{
     EmptyPayload, InboundPayload, OutboundPayload, SessionUpdatedPayload, UpdateSessionPayload,
 };
 use reqwest::RequestBuilder;
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
-use tauri::{async_runtime::RwLock, AppHandle, Emitter};
+use tauri::{AppHandle, Emitter};
 use thiserror::Error;
-use tokio::task::{JoinError, JoinHandle};
+use tokio::task::JoinError;
 use tokio_util::sync::CancellationToken;
 
 mod mdns;
@@ -76,45 +75,8 @@ pub enum AppError {
 static APP: OnceLock<AppHandle> = OnceLock::new();
 static LOG_LAYER: OnceLock<moosicbox_logging::free_log_client::FreeLogLayer> = OnceLock::new();
 
-type ApiPlayersMap = HashMap<u64, Vec<(ApiPlayer, PlayerType, AudioOutputFactory)>>;
-
-#[derive(Debug)]
-struct PlaybackTargetSessionPlayer {
-    playback_target: ApiPlaybackTarget,
-    session_id: u64,
-    player: PlaybackHandler,
-    player_type: PlayerType,
-}
-
-#[derive(Default)]
-pub struct TauriAppState {
-    api_url: Arc<RwLock<Option<String>>>,
-    profile: Arc<RwLock<Option<String>>>,
-    ws_url: Arc<RwLock<Option<String>>>,
-    ws_connection_id: Arc<RwLock<Option<String>>>,
-    connection_id: Arc<RwLock<Option<String>>>,
-    signature_token: Arc<RwLock<Option<String>>>,
-    client_id: Arc<RwLock<Option<String>>>,
-    api_token: Arc<RwLock<Option<String>>>,
-    ws_token: Arc<RwLock<Option<CancellationToken>>>,
-    ws_handle: Arc<RwLock<Option<WsHandle>>>,
-    ws_join_handle: Arc<RwLock<Option<JoinHandle<()>>>>,
-    audio_zone_active_api_players: Arc<RwLock<ApiPlayersMap>>,
-    active_players: Arc<RwLock<Vec<PlaybackTargetSessionPlayer>>>,
-    playback_quality: Arc<RwLock<Option<PlaybackQuality>>>,
-    ws_message_buffer: Arc<RwLock<Vec<InboundPayload>>>,
-    current_playback_target: Arc<RwLock<Option<PlaybackTarget>>>,
-    current_connections: Arc<RwLock<Vec<ApiConnection>>>,
-    pending_player_sessions: Arc<RwLock<HashMap<u64, u64>>>,
-    current_sessions: Arc<RwLock<Vec<ApiSession>>>,
-    current_session_id: Arc<RwLock<Option<u64>>>,
-    current_audio_zones: Arc<RwLock<Vec<ApiAudioZoneWithSession>>>,
-    #[allow(clippy::type_complexity)]
-    current_players: Arc<RwLock<Vec<(ApiPlayer, PlayerType, AudioOutputFactory)>>>,
-    upnp_av_transport_services: Arc<RwLock<Vec<moosicbox_upnp::player::UpnpAvTransportService>>>,
-}
-
-static STATE: LazyLock<TauriAppState> = LazyLock::new(TauriAppState::default);
+static STATE: LazyLock<moosicbox_app_state::AppState> =
+    LazyLock::new(moosicbox_app_state::AppState::default);
 
 const DEFAULT_PLAYBACK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOptions {
     max_attempts: 10,
@@ -130,32 +92,6 @@ lazy_static::lazy_static! {
         .max_blocking_threads(*THREADS)
         .build()
         .unwrap();
-}
-
-#[derive(Clone)]
-enum PlayerType {
-    Local,
-    Upnp {
-        source_to_music_api: Arc<Box<dyn SourceToMusicApi + Send + Sync>>,
-        device: Device,
-        service: Service,
-        handle: Handle,
-    },
-}
-
-impl std::fmt::Debug for PlayerType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Local => write!(f, "Local"),
-            Self::Upnp {
-                device, service, ..
-            } => f
-                .debug_struct("Upnp")
-                .field("device", device)
-                .field("service", service)
-                .finish(),
-        }
-    }
 }
 
 async fn new_player(

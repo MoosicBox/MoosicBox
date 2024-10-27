@@ -1,0 +1,1 @@
+# MoosicBox App state crate

@@ -7,6 +7,7 @@ members = [
     "packages/app/native/image",
     "packages/app/native/lib",
     "packages/app/native/ui",
+    "packages/app/state",
     "packages/app/tauri/bundled",
     "packages/app/tauri/client",
     "packages/app/tauri/create_config",

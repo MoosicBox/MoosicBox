@@ -5765,6 +5765,7 @@ dependencies = [
  "lazy_static",
  "log",
  "moosicbox_app_client",
+ "moosicbox_app_state",
  "moosicbox_app_tauri_bundled",
  "moosicbox_app_ws",
  "moosicbox_assert",
@@ -5892,6 +5893,26 @@ dependencies = [
  "moosicbox_paging",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "moosicbox_app_state"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "moosicbox_app_ws",
+ "moosicbox_assert",
+ "moosicbox_audio_output",
+ "moosicbox_audio_zone",
+ "moosicbox_core",
+ "moosicbox_env_utils",
+ "moosicbox_music_api",
+ "moosicbox_player",
+ "moosicbox_session",
+ "moosicbox_upnp",
+ "moosicbox_ws",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]

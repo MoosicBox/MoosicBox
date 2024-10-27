@@ -25,6 +25,9 @@ name       = "moosicbox_lib"
 tauri-build = { workspace = true, features = [] }
 
 [dependencies]
+moosicbox_app_state = { version = "0.1.0", path = "../../state", default-features = false, features = [
+    "upnp",
+] }
 moosicbox_app_ws = { version = "0.1.0", path = "../ws", default-features = false }
 
 moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
