@@ -29,6 +29,7 @@ moosicbox_upnp = { version = "0.1.0", path = "../../upnp", optional = true, defa
 moosicbox_ws = { version = "0.1.0", path = "../../ws", default-features = false }
 
 log        = { workspace = true }
+thiserror  = { workspace = true }
 tokio      = { workspace = true, features = ["macros"] }
 tokio-util = { workspace = true }
 

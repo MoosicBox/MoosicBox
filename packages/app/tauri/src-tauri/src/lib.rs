@@ -7,7 +7,7 @@ use std::{
 
 use async_recursion::async_recursion;
 use log::info;
-use moosicbox_app_state::{PlaybackTargetSessionPlayer, PlayerType};
+use moosicbox_app_state::{AppStateError, PlaybackTargetSessionPlayer, PlayerType};
 use moosicbox_app_ws::{
     CloseError, WebsocketSendError, WebsocketSender as _, WsClient, WsHandle, WsMessage,
 };
@@ -56,6 +56,12 @@ pub enum TauriPlayerError {
     Unknown(String),
 }
 
+impl From<AppStateError> for TauriPlayerError {
+    fn from(err: AppStateError) -> Self {
+        TauriPlayerError::Unknown(err.to_string())
+    }
+}
+
 impl From<PlayerError> for TauriPlayerError {
     fn from(err: PlayerError) -> Self {
         TauriPlayerError::Unknown(err.to_string())
@@ -92,169 +98,6 @@ lazy_static::lazy_static! {
         .max_blocking_threads(*THREADS)
         .build()
         .unwrap();
-}
-
-async fn new_player(
-    session_id: u64,
-    playback_target: ApiPlaybackTarget,
-    output: AudioOutputFactory,
-    player_type: PlayerType,
-) -> Result<PlaybackHandler, TauriPlayerError> {
-    let profile = { STATE.profile.read().await.clone() };
-    let Some(profile) = profile else {
-        return Err(TauriPlayerError::Unknown("Missing profile".to_string()));
-    };
-
-    let mut headers = HashMap::new();
-    headers.insert("moosicbox-profile".to_string(), profile);
-
-    if STATE.api_token.read().await.is_some() {
-        headers.insert(
-            "Authorization".to_string(),
-            STATE.api_token.read().await.clone().unwrap().to_string(),
-        );
-    }
-
-    let query =
-        if STATE.client_id.read().await.is_some() && STATE.signature_token.read().await.is_some() {
-            let mut query = HashMap::new();
-            query.insert(
-                "clientId".to_string(),
-                STATE.client_id.read().await.clone().unwrap().to_string(),
-            );
-            query.insert(
-                "signature".to_string(),
-                STATE
-                    .signature_token
-                    .read()
-                    .await
-                    .clone()
-                    .unwrap()
-                    .to_string(),
-            );
-            Some(query)
-        } else {
-            None
-        };
-
-    let host = STATE
-        .api_url
-        .read()
-        .await
-        .clone()
-        .ok_or_else(|| TauriPlayerError::Unknown("API_URL not set".to_string()))?;
-
-    let player_source = PlayerSource::Remote {
-        host: host.clone(),
-        headers: Some(headers),
-        query,
-    };
-
-    let mut player = match player_type {
-        PlayerType::Local => {
-            let local_player = LocalPlayer::new(player_source, Some(PlaybackType::Stream))
-                .await
-                .map_err(|e| {
-                    TauriPlayerError::Unknown(format!(
-                        "Failed to initialize new local player: {e:?}"
-                    ))
-                })?
-                .with_output(output.clone());
-
-            let playback = local_player.playback.clone();
-            let receiver = local_player.receiver.clone();
-
-            let handler = PlaybackHandler::new(local_player.clone())
-                .with_playback(playback)
-                .with_output(Some(Arc::new(std::sync::Mutex::new(output))))
-                .with_receiver(receiver);
-
-            local_player
-                .playback_handler
-                .write()
-                .unwrap()
-                .replace(handler.clone());
-
-            handler
-        }
-        PlayerType::Upnp {
-            source_to_music_api,
-            device,
-            service,
-            handle,
-        } => {
-            let upnp_player = moosicbox_upnp::player::UpnpPlayer::new(
-                source_to_music_api,
-                device,
-                service,
-                player_source,
-                handle,
-            );
-
-            let playback = upnp_player.playback.clone();
-            let receiver = upnp_player.receiver.clone();
-
-            let handler = PlaybackHandler::new(upnp_player.clone())
-                .with_playback(playback)
-                .with_output(Some(Arc::new(std::sync::Mutex::new(output))))
-                .with_receiver(receiver);
-
-            upnp_player
-                .playback_handler
-                .write()
-                .unwrap()
-                .replace(handler.clone());
-
-            handler
-        }
-    };
-
-    let session = {
-        STATE
-            .current_sessions
-            .read()
-            .await
-            .iter()
-            .find(|x| x.session_id == session_id)
-            .cloned()
-    };
-
-    let profile = { STATE.profile.read().await.clone() };
-
-    if let (Some(profile), Some(session)) = (profile.clone(), session) {
-        log::debug!("new_player: init_from_api_session session={session:?}");
-        if let Err(e) = player.init_from_api_session(profile, session).await {
-            log::error!("Failed to init player from api session: {e:?}");
-        }
-    } else {
-        log::debug!("new_player: No session info available for player yet");
-        STATE
-            .pending_player_sessions
-            .write()
-            .await
-            .insert(player.id as u64, session_id);
-    }
-
-    player
-        .update_playback(
-            false,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            *STATE.playback_quality.read().await,
-            Some(session_id),
-            profile,
-            Some(playback_target.into()),
-            false,
-            None,
-        )
-        .await?;
-
-    Ok(player)
 }
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
@@ -534,8 +377,9 @@ async fn reinit_players() -> Result<(), TauriPlayerError> {
     for (i, (playback_target, session_id, player, ptype)) in ids.into_iter().enumerate() {
         let output = player.output.as_ref().unwrap().lock().unwrap().clone();
         log::debug!("reinit_players: playback_target={playback_target:?} session_id={session_id} output={output:?}");
-        let mut created_player =
-            new_player(session_id, playback_target.clone(), output, ptype.clone()).await?;
+        let mut created_player = STATE
+            .new_player(session_id, playback_target.clone(), output, ptype.clone())
+            .await?;
 
         let playback = player.playback.read().unwrap().clone();
 
@@ -617,13 +461,14 @@ async fn set_audio_zone_active_players(
             }
 
             let playback_target = ApiPlaybackTarget::AudioZone { audio_zone_id };
-            let player = new_player(
-                session_id,
-                playback_target.clone(),
-                output.clone(),
-                ptype.clone(),
-            )
-            .await?;
+            let player = STATE
+                .new_player(
+                    session_id,
+                    playback_target.clone(),
+                    output.clone(),
+                    ptype.clone(),
+                )
+                .await?;
             log::debug!(
                 "set_audio_zone_active_players: audio_zone_id={audio_zone_id} session_id={session_id:?}"
             );
@@ -729,7 +574,7 @@ async fn update_connection_outputs(session_ids: &[u64]) -> Result<(), TauriPlaye
                 let session_id = *session_id;
                 log::debug!("update_connection_outputs: ApiPlaybackTarget::ConnectionOutput creating player for output_id={output_id} session_id={session_id} playback_target={playback_target:?}");
 
-                let player = new_player(
+                let player = STATE.new_player(
                     session_id,
                     playback_target.clone(),
                     output.clone(),
