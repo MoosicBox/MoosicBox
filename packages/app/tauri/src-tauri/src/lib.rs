@@ -300,14 +300,14 @@ async fn set_state(state: UpdateAppState) -> Result<(), TauriPlayerError> {
     }
 
     if updated_connection_details {
-        update_state().await?;
+        update_connection_state().await?;
     }
 
     Ok(())
 }
 
 #[async_recursion]
-pub async fn update_state() -> Result<(), TauriPlayerError> {
+pub async fn update_connection_state() -> Result<(), TauriPlayerError> {
     let has_connection_id = { STATE.connection_id.read().await.is_some() };
     log::debug!("update_state: has_connection_id={has_connection_id}");
 
