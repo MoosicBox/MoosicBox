@@ -27,7 +27,7 @@ pub enum AppStateError {
 }
 
 impl AppStateError {
-    fn unknown(message: impl Into<String>) -> Self {
+    pub fn unknown(message: impl Into<String>) -> Self {
         Self::Unknown(message.into())
     }
 }
@@ -311,5 +311,70 @@ impl AppState {
             playback_handlers.push(player.player);
         }
         playback_handlers
+    }
+
+    /// # Errors
+    ///
+    /// * If there is a `PlayerError`
+    ///
+    /// # Panics
+    ///
+    /// * If any of the relevant state `RwLock`s are poisoned
+    pub async fn reinit_players(&self) -> Result<(), AppStateError> {
+        let mut players_map = self.active_players.write().await;
+        let ids = {
+            players_map
+                .iter()
+                .map(|x| {
+                    (
+                        x.playback_target.clone(),
+                        x.session_id,
+                        x.player.clone(),
+                        x.player_type.clone(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+
+        for (i, (playback_target, session_id, player, ptype)) in ids.into_iter().enumerate() {
+            let output = player.output.as_ref().unwrap().lock().unwrap().clone();
+            log::debug!("reinit_players: playback_target={playback_target:?} session_id={session_id} output={output:?}");
+            let mut created_player = self
+                .new_player(session_id, playback_target.clone(), output, ptype.clone())
+                .await?;
+
+            let playback = player.playback.read().unwrap().clone();
+
+            if let Some(playback) = playback {
+                created_player
+                    .update_playback(
+                        false,
+                        None,
+                        None,
+                        Some(playback.playing),
+                        Some(playback.position),
+                        Some(playback.progress),
+                        Some(playback.volume.load(std::sync::atomic::Ordering::SeqCst)),
+                        Some(playback.tracks.clone()),
+                        Some(playback.quality),
+                        Some(playback.session_id),
+                        Some(playback.profile),
+                        Some(playback_target.clone().into()),
+                        false,
+                        None,
+                    )
+                    .await?;
+            }
+
+            players_map[i] = PlaybackTargetSessionPlayer {
+                playback_target,
+                session_id,
+                player: created_player,
+                player_type: ptype,
+            };
+        }
+        drop(players_map);
+
+        Ok(())
     }
 }

@@ -330,10 +330,10 @@ pub async fn update_state() -> Result<(), TauriPlayerError> {
         let reinited_players = moosicbox_task::spawn("set_state: reinit_players", async move {
             inited_upnp_players
                 .await
-                .map_err(|e| TauriPlayerError::Unknown(e.to_string()))?
-                .map_err(|e| TauriPlayerError::Unknown(e.to_string()))?;
+                .map_err(|e| AppStateError::unknown(e.to_string()))?
+                .map_err(|e| AppStateError::unknown(e.to_string()))?;
             log::debug!("Attempting to reinit_players...");
-            reinit_players().await
+            STATE.reinit_players().await
         });
 
         moosicbox_task::spawn("set_state: fetch_audio_zones", async move {
@@ -350,63 +350,6 @@ pub async fn update_state() -> Result<(), TauriPlayerError> {
         log::debug!("Attempting to init_ws_connection...");
         init_ws_connection().await
     });
-
-    Ok(())
-}
-
-async fn reinit_players() -> Result<(), TauriPlayerError> {
-    let mut players_map = STATE.active_players.write().await;
-    let ids = {
-        players_map
-            .iter()
-            .map(|x| {
-                (
-                    x.playback_target.clone(),
-                    x.session_id,
-                    x.player.clone(),
-                    x.player_type.clone(),
-                )
-            })
-            .collect::<Vec<_>>()
-    };
-
-    for (i, (playback_target, session_id, player, ptype)) in ids.into_iter().enumerate() {
-        let output = player.output.as_ref().unwrap().lock().unwrap().clone();
-        log::debug!("reinit_players: playback_target={playback_target:?} session_id={session_id} output={output:?}");
-        let mut created_player = STATE
-            .new_player(session_id, playback_target.clone(), output, ptype.clone())
-            .await?;
-
-        let playback = player.playback.read().unwrap().clone();
-
-        if let Some(playback) = playback {
-            created_player
-                .update_playback(
-                    false,
-                    None,
-                    None,
-                    Some(playback.playing),
-                    Some(playback.position),
-                    Some(playback.progress),
-                    Some(playback.volume.load(std::sync::atomic::Ordering::SeqCst)),
-                    Some(playback.tracks.clone()),
-                    Some(playback.quality),
-                    Some(playback.session_id),
-                    Some(playback.profile),
-                    Some(playback_target.clone().into()),
-                    false,
-                    None,
-                )
-                .await?;
-        }
-
-        players_map[i] = PlaybackTargetSessionPlayer {
-            playback_target,
-            session_id,
-            player: created_player,
-            player_type: ptype,
-        };
-    }
 
     Ok(())
 }
