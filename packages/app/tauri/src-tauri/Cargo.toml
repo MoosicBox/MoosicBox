@@ -95,7 +95,6 @@ all-encoders = ["aac", "flac", "mp3"]
 bundled = ["dep:moosicbox_app_tauri_bundled"]
 client  = ["dep:moosicbox_app_client"]
 
-
 all-supported-formats = ["aac", "flac", "mp3"]
 
 # Encoders
