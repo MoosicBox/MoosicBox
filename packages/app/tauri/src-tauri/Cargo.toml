@@ -28,10 +28,8 @@ tauri-build = { workspace = true, features = [] }
 moosicbox_app_state = { version = "0.1.0", path = "../../state", default-features = false, features = [
     "upnp",
 ] }
-moosicbox_app_ws = { version = "0.1.0", path = "../ws", default-features = false }
 
 moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
-moosicbox_audio_output = { version = "0.1.0", path = "../../../audio_output", default-features = false }
 moosicbox_audio_zone = { version = "0.1.0", path = "../../../audio_zone", default-features = false }
 moosicbox_core = { version = "0.1.0", path = "../../../core", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../../../env_utils", default-features = false }
@@ -75,7 +73,6 @@ tauri-plugin-dialog       = { workspace = true }
 tauri-plugin-notification = { workspace = true }
 thiserror                 = { workspace = true }
 tokio                     = { workspace = true, features = ["macros"] }
-tokio-util                = { workspace = true }
 
 [features]
 default = ["all-supported-formats", "cpal"]

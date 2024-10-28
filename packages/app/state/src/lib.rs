@@ -3,6 +3,8 @@
 
 use std::{
     collections::HashMap,
+    future::Future,
+    pin::Pin,
     sync::{Arc, LazyLock},
 };
 
@@ -14,13 +16,16 @@ use moosicbox_player::{
     local::LocalPlayer, PlaybackHandler, PlaybackType, PlayerError, PlayerSource,
 };
 use moosicbox_session::models::{
-    ApiConnection, ApiPlaybackTarget, ApiSession, PlaybackTarget, RegisterPlayer,
+    ApiConnection, ApiPlaybackTarget, ApiSession, ApiUpdateSession, ApiUpdateSessionPlaylist,
+    PlaybackTarget, RegisterPlayer,
 };
-use moosicbox_ws::models::InboundPayload;
+use moosicbox_ws::models::{InboundPayload, OutboundPayload};
 use reqwest::RequestBuilder;
 use thiserror::Error;
 use tokio::{sync::RwLock, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
+
+pub mod ws;
 
 type ApiPlayersMap = (ApiPlayer, PlayerType, AudioOutputFactory);
 
@@ -88,6 +93,12 @@ pub enum AppStateError {
     RegisterPlayers(#[from] RegisterPlayersError),
     #[error(transparent)]
     ScanOutputs(#[from] ScanOutputsError),
+    #[error(transparent)]
+    InitWs(#[from] ws::InitWsError),
+    #[error(transparent)]
+    CloseWs(#[from] ws::CloseWsError),
+    #[error(transparent)]
+    SendWsMessage(#[from] ws::SendWsMessageError),
 }
 
 impl AppStateError {
@@ -132,7 +143,7 @@ pub struct PlaybackTargetSessionPlayer {
     pub player_type: PlayerType,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct AppState {
     pub api_url: Arc<RwLock<Option<String>>>,
     pub profile: Arc<RwLock<Option<String>>>,
@@ -160,12 +171,155 @@ pub struct AppState {
     #[cfg(feature = "upnp")]
     pub upnp_av_transport_services:
         Arc<RwLock<Vec<moosicbox_upnp::player::UpnpAvTransportService>>>,
+    #[allow(clippy::type_complexity)]
+    pub on_before_handle_playback_update_listeners: Vec<
+        Arc<
+            Box<
+                dyn Fn(&ApiUpdateSession) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+                    + Send
+                    + Sync,
+            >,
+        >,
+    >,
+    #[allow(clippy::type_complexity)]
+    pub on_after_handle_playback_update_listeners: Vec<
+        Arc<
+            Box<
+                dyn Fn(&ApiUpdateSession) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+                    + Send
+                    + Sync,
+            >,
+        >,
+    >,
+    #[allow(clippy::type_complexity)]
+    pub on_before_update_playlist_listeners:
+        Vec<Arc<Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync>>>,
+    #[allow(clippy::type_complexity)]
+    pub on_after_update_playlist_listeners: Vec<
+        Arc<
+            Box<
+                dyn Fn(&ApiSession) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+                    + Send
+                    + Sync,
+            >,
+        >,
+    >,
+    #[allow(clippy::type_complexity)]
+    pub on_before_handle_ws_message_listeners: Vec<
+        Arc<
+            Box<
+                dyn Fn(&OutboundPayload) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+                    + Send
+                    + Sync,
+            >,
+        >,
+    >,
+    #[allow(clippy::type_complexity)]
+    pub on_after_handle_ws_message_listeners: Vec<
+        Arc<
+            Box<
+                dyn Fn(&OutboundPayload) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+                    + Send
+                    + Sync,
+            >,
+        >,
+    >,
 }
 
 impl AppState {
+    #[must_use]
+    pub fn with_on_before_handle_playback_update_listener<F: Future<Output = ()> + Send + Sync>(
+        mut self,
+        listener: impl Fn(ApiUpdateSession) -> F + Send + Sync + 'static,
+    ) -> Self {
+        let listener = Arc::new(Box::new(listener));
+        self.on_before_handle_playback_update_listeners
+            .push(Arc::new(Box::new(move |update_session| {
+                let listener = listener.clone();
+                let update_session = update_session.to_owned();
+                Box::pin(async move { listener(update_session).await })
+            })));
+        self
+    }
+
+    #[must_use]
+    pub fn with_on_after_handle_playback_update_listener<F: Future<Output = ()> + Send + Sync>(
+        mut self,
+        listener: impl Fn(ApiUpdateSession) -> F + Send + Sync + 'static,
+    ) -> Self {
+        let listener = Arc::new(Box::new(listener));
+        self.on_after_handle_playback_update_listeners
+            .push(Arc::new(Box::new(move |update_session| {
+                let listener = listener.clone();
+                let update_session = update_session.to_owned();
+                Box::pin(async move { listener(update_session).await })
+            })));
+        self
+    }
+
+    #[must_use]
+    pub fn with_on_before_update_playlist_listener<F: Future<Output = ()> + Send + Sync>(
+        mut self,
+        listener: impl Fn() -> F + Send + Sync + 'static,
+    ) -> Self {
+        let listener = Arc::new(Box::new(listener));
+        self.on_before_update_playlist_listeners
+            .push(Arc::new(Box::new(move || {
+                let listener = listener.clone();
+                Box::pin(async move { listener().await })
+            })));
+        self
+    }
+
+    #[must_use]
+    pub fn with_on_after_update_playlist_listener<F: Future<Output = ()> + Send + Sync>(
+        mut self,
+        listener: impl Fn(ApiSession) -> F + Send + Sync + 'static,
+    ) -> Self {
+        let listener = Arc::new(Box::new(listener));
+        self.on_after_update_playlist_listeners
+            .push(Arc::new(Box::new(move |session| {
+                let listener = listener.clone();
+                let session = session.to_owned();
+                Box::pin(async move { listener(session).await })
+            })));
+        self
+    }
+
+    #[must_use]
+    pub fn with_on_before_handle_ws_message_listener<F: Future<Output = ()> + Send + Sync>(
+        mut self,
+        listener: impl Fn(OutboundPayload) -> F + Send + Sync + 'static,
+    ) -> Self {
+        let listener = Arc::new(Box::new(listener));
+        self.on_before_handle_ws_message_listeners
+            .push(Arc::new(Box::new(move |message| {
+                let listener = listener.clone();
+                let message = message.to_owned();
+                Box::pin(async move { listener(message).await })
+            })));
+        self
+    }
+
+    #[must_use]
+    pub fn with_on_after_handle_ws_message_listener<F: Future<Output = ()> + Send + Sync>(
+        mut self,
+        listener: impl Fn(OutboundPayload) -> F + Send + Sync + 'static,
+    ) -> Self {
+        let listener = Arc::new(Box::new(listener));
+        self.on_after_handle_ws_message_listeners
+            .push(Arc::new(Box::new(move |message| {
+                let listener = listener.clone();
+                let message = message.to_owned();
+                Box::pin(async move { listener(message).await })
+            })));
+        self
+    }
+
     /// # Errors
     ///
     /// * If there is a `PlayerError`
+    /// * If the request is missing a `MoosicBox` profile
     /// * If an unknown error occurs
     ///
     /// # Panics
@@ -1017,5 +1171,59 @@ impl AppState {
         self.update_connection_outputs(&ids).await?;
 
         Ok(())
+    }
+
+    /// # Panics
+    ///
+    /// * If the `Playback` `RwLock` is poisoned
+    pub async fn get_session_playback_for_player(
+        &self,
+        mut update: ApiUpdateSession,
+        player: &PlaybackHandler,
+    ) -> ApiUpdateSession {
+        let session_id = {
+            player
+                .playback
+                .read()
+                .unwrap()
+                .as_ref()
+                .map(|x| x.session_id)
+        };
+
+        if let Some(session_id) = session_id {
+            if session_id != update.session_id {
+                let session = {
+                    self.current_sessions
+                        .read()
+                        .await
+                        .iter()
+                        .find(|s| s.session_id == session_id)
+                        .cloned()
+                };
+
+                if let Some(session) = session {
+                    update.session_id = session_id;
+
+                    if update.position.is_none() {
+                        update.position = session.position;
+                    }
+                    #[allow(clippy::cast_precision_loss)]
+                    if update.seek.is_none() {
+                        update.seek = session.seek.map(|x| x as f64);
+                    }
+                    if update.volume.is_none() {
+                        update.volume = session.volume;
+                    }
+                    if update.playlist.is_none() {
+                        update.playlist = Some(ApiUpdateSessionPlaylist {
+                            session_playlist_id: session.playlist.session_playlist_id,
+                            tracks: session.playlist.tracks,
+                        });
+                    }
+                }
+            }
+        }
+
+        update
     }
 }

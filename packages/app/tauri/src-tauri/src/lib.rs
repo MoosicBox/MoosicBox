@@ -4,11 +4,7 @@ use std::{
     sync::{Arc, LazyLock, OnceLock},
 };
 
-use moosicbox_app_state::{AppStateError, UPNP_LISTENER_HANDLE};
-use moosicbox_app_ws::{
-    CloseError, WebsocketSendError, WebsocketSender as _, WsClient, WsHandle, WsMessage,
-};
-use moosicbox_audio_output::AudioOutputScannerError;
+use moosicbox_app_state::{ws::WsConnectMessage, AppStateError, UPNP_LISTENER_HANDLE};
 use moosicbox_audio_zone::models::ApiAudioZoneWithSession;
 use moosicbox_core::{
     sqlite::models::{ApiSource, Id},
@@ -17,29 +13,19 @@ use moosicbox_core::{
 use moosicbox_mdns::scanner::service::Commander;
 use moosicbox_music_api::FromId;
 use moosicbox_paging::Page;
-use moosicbox_player::{Playback, PlaybackHandler, PlaybackRetryOptions, PlayerError, Track};
+use moosicbox_player::{Playback, PlayerError};
 use moosicbox_session::models::{
-    ApiSession, ApiUpdateSession, ApiUpdateSessionPlaylist, PlaybackTarget, UpdateSession,
-    UpdateSessionPlaylistTrack,
+    ApiSession, ApiUpdateSession, PlaybackTarget, UpdateSession, UpdateSessionPlaylistTrack,
 };
 use moosicbox_ws::models::{
-    EmptyPayload, InboundPayload, OutboundPayload, SessionUpdatedPayload, UpdateSessionPayload,
+    InboundPayload, OutboundPayload, SessionUpdatedPayload, UpdateSessionPayload,
 };
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 use tauri::{AppHandle, Emitter};
 use thiserror::Error;
-use tokio::task::JoinError;
-use tokio_util::sync::CancellationToken;
 
 mod mdns;
-
-#[derive(Clone, Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct WsConnectMessage {
-    pub connection_id: String,
-    pub ws_url: String,
-}
 
 #[derive(Debug, Error, Serialize, Deserialize)]
 pub enum TauriPlayerError {
@@ -64,7 +50,7 @@ pub enum AppError {
     #[error(transparent)]
     Tauri(#[from] tauri::Error),
     #[error(transparent)]
-    SendWsMessage(#[from] SendWsMessageError),
+    AppState(#[from] AppStateError),
     #[error("Unknown({0})")]
     Unknown(String),
 }
@@ -72,13 +58,13 @@ pub enum AppError {
 static APP: OnceLock<AppHandle> = OnceLock::new();
 static LOG_LAYER: OnceLock<moosicbox_logging::free_log_client::FreeLogLayer> = OnceLock::new();
 
-static STATE: LazyLock<moosicbox_app_state::AppState> =
-    LazyLock::new(moosicbox_app_state::AppState::default);
-
-const DEFAULT_PLAYBACK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOptions {
-    max_attempts: 10,
-    retry_delay: std::time::Duration::from_millis(1000),
-};
+static STATE: LazyLock<moosicbox_app_state::AppState> = LazyLock::new(|| {
+    moosicbox_app_state::AppState::default()
+        .with_on_before_handle_playback_update_listener(propagate_state_to_plugin)
+        .with_on_after_update_playlist_listener(update_player_plugin_playlist)
+        .with_on_before_handle_ws_message_listener(handle_before_ws_message)
+        .with_on_after_handle_ws_message_listener(handle_after_ws_message)
+});
 
 #[cfg(feature = "bundled")]
 lazy_static::lazy_static! {
@@ -292,10 +278,7 @@ async fn set_state(state: UpdateAppState) -> Result<(), TauriPlayerError> {
     }
 
     if state.current_session_id.is_some() {
-        update_playlist().await.map_err(|e| {
-            log::error!("Failed to update playlist: {e:?}");
-            TauriPlayerError::Unknown(e.to_string())
-        })?;
+        STATE.update_playlist().await;
     }
 
     if updated_connection_details {
@@ -303,6 +286,74 @@ async fn set_state(state: UpdateAppState) -> Result<(), TauriPlayerError> {
     }
 
     Ok(())
+}
+
+async fn get_url_and_query() -> Option<(String, String)> {
+    let url = { STATE.api_url.read().await.clone() }?;
+
+    let mut query = String::new();
+    if let Some(client_id) = STATE.client_id.read().await.clone() {
+        query.push_str(&format!("&clientId={client_id}"));
+    }
+    if let Some(signature_token) = STATE.signature_token.read().await.clone() {
+        query.push_str(&format!("&signature={signature_token}"));
+    }
+
+    Some((url, query))
+}
+
+async fn update_player_plugin_playlist(session: ApiSession) {
+    use app_tauri_plugin_player::PlayerExt;
+
+    let Some((url, query)) = get_url_and_query().await else {
+        return;
+    };
+
+    match APP
+        .get()
+        .unwrap()
+        .player()
+        .update_state(app_tauri_plugin_player::UpdateState {
+            playing: Some(session.playing),
+            position: session.position,
+            seek: session.seek.map(|x| x as f64),
+            volume: session.volume,
+            playlist: Some(app_tauri_plugin_player::Playlist {
+                tracks: session
+                    .playlist
+                    .tracks
+                    .into_iter()
+                    .filter_map(|x| convert_track(x, &url, &query))
+                    .collect::<Vec<_>>(),
+            }),
+        }) {
+        Ok(_resp) => {
+            log::debug!("Successfully set state");
+        }
+        Err(e) => {
+            log::error!("Failed to set state: {e:?}");
+        }
+    }
+}
+
+async fn handle_before_ws_message(message: OutboundPayload) {
+    if let OutboundPayload::ConnectionId(payload) = &message {
+        if let Err(e) = APP.get().unwrap().emit(
+            "ws-connect",
+            WsConnectMessage {
+                connection_id: payload.connection_id.to_owned(),
+                ws_url: STATE.ws_url.read().await.to_owned().unwrap_or_default(),
+            },
+        ) {
+            log::error!("Failed to emit ws-connect: {e:?}");
+        }
+    }
+}
+
+async fn handle_after_ws_message(message: OutboundPayload) {
+    if let Err(e) = APP.get().unwrap().emit("ws-message", message) {
+        log::error!("Failed to emit ws-message: {e:?}");
+    }
 }
 
 pub async fn update_connection_state() -> Result<(), TauriPlayerError> {
@@ -342,7 +393,7 @@ pub async fn update_connection_state() -> Result<(), TauriPlayerError> {
 
     moosicbox_task::spawn("set_state: init_ws_connection", async move {
         log::debug!("Attempting to init_ws_connection...");
-        init_ws_connection().await
+        STATE.init_ws_connection().await
     });
 
     Ok(())
@@ -419,80 +470,6 @@ async fn set_playback_quality(quality: PlaybackQuality) -> Result<(), TauriPlaye
     Ok(())
 }
 
-#[derive(Debug, Error)]
-pub enum SendWsMessageError {
-    #[error(transparent)]
-    WebsocketSend(#[from] WebsocketSendError),
-    #[error(transparent)]
-    HandleWsMessage(#[from] HandleWsMessageError),
-}
-
-async fn send_ws_message(
-    handle: &WsHandle,
-    message: InboundPayload,
-    handle_update: bool,
-) -> Result<(), SendWsMessageError> {
-    log::debug!("send_ws_message: handle_update={handle_update} message={message:?}");
-
-    if handle_update {
-        let message = message.clone();
-        moosicbox_task::spawn("send_ws_message: handle_update", async move {
-            match &message {
-                InboundPayload::UpdateSession(payload) => {
-                    handle_playback_update(&payload.payload.clone().into()).await?;
-                }
-                InboundPayload::SetSeek(payload) => {
-                    handle_playback_update(&ApiUpdateSession {
-                        session_id: payload.payload.session_id,
-                        profile: payload.payload.profile.clone(),
-                        playback_target: payload.payload.playback_target.clone(),
-                        play: None,
-                        stop: None,
-                        name: None,
-                        active: None,
-                        playing: None,
-                        position: None,
-                        seek: Some(payload.payload.seek as f64),
-                        volume: None,
-                        playlist: None,
-                        quality: None,
-                    })
-                    .await?;
-                }
-                _ => {}
-            }
-
-            Ok::<_, HandleWsMessageError>(())
-        });
-    }
-
-    handle
-        .send(&serde_json::to_string(&message).unwrap())
-        .await?;
-
-    Ok(())
-}
-
-async fn flush_ws_message_buffer() -> Result<(), SendWsMessageError> {
-    if let Some(handle) = STATE.ws_handle.read().await.as_ref() {
-        let mut binding = STATE.ws_message_buffer.write().await;
-        log::debug!(
-            "flush_ws_message_buffer: Flushing {} ws messages from buffer",
-            binding.len()
-        );
-
-        let messages = binding.drain(..);
-
-        for message in messages {
-            send_ws_message(handle, message, true).await?;
-        }
-    } else {
-        log::debug!("flush_ws_message_buffer: No WS_HANDLE");
-    }
-
-    Ok(())
-}
-
 #[tauri::command]
 async fn propagate_ws_message(message: InboundPayload) -> Result<(), TauriPlayerError> {
     moosicbox_logging::debug_or_trace!(
@@ -504,7 +481,7 @@ async fn propagate_ws_message(message: InboundPayload) -> Result<(), TauriPlayer
         let handle = { STATE.ws_handle.read().await.clone() };
 
         if let Some(handle) = handle {
-            send_ws_message(&handle, message, true).await?;
+            STATE.send_ws_message(&handle, message, true).await?;
         } else {
             moosicbox_logging::debug_or_trace!(
                 ("propagate_ws_message: pushing message to buffer: {message}"),
@@ -513,7 +490,7 @@ async fn propagate_ws_message(message: InboundPayload) -> Result<(), TauriPlayer
             STATE.ws_message_buffer.write().await.push(message);
         }
 
-        Ok::<_, SendWsMessageError>(())
+        Ok::<_, AppStateError>(())
     });
 
     Ok(())
@@ -538,7 +515,7 @@ async fn api_proxy_post(
 
 async fn propagate_playback_event(update: UpdateSession, to_plugin: bool) -> Result<(), AppError> {
     if to_plugin {
-        propagate_state_to_plugin(&update.clone().into()).await;
+        propagate_state_to_plugin(update.clone().into()).await;
     }
 
     if let Some(handle) = STATE.ws_handle.read().await.as_ref() {
@@ -551,12 +528,16 @@ async fn propagate_playback_event(update: UpdateSession, to_plugin: bool) -> Res
             }),
         )?;
 
-        send_ws_message(
-            handle,
-            InboundPayload::UpdateSession(UpdateSessionPayload { payload: update }),
-            false,
-        )
-        .await?;
+        if let Err(e) = STATE
+            .send_ws_message(
+                handle,
+                InboundPayload::UpdateSession(UpdateSessionPayload { payload: update }),
+                false,
+            )
+            .await
+        {
+            log::error!("Failed to propagate UpdateSession ws message: {e:?}");
+        }
     } else {
         log::debug!("on_playback_event: No WS_HANDLE to send update to");
     }
@@ -632,57 +613,7 @@ async fn fetch_audio_zones() -> Result<(), FetchAudioZonesError> {
     Ok(())
 }
 
-async fn get_session_playback_for_player(
-    mut update: ApiUpdateSession,
-    player: &PlaybackHandler,
-) -> ApiUpdateSession {
-    let session_id = {
-        player
-            .playback
-            .read()
-            .unwrap()
-            .as_ref()
-            .map(|x| x.session_id)
-    };
-
-    if let Some(session_id) = session_id {
-        if session_id != update.session_id {
-            let session = {
-                STATE
-                    .current_sessions
-                    .read()
-                    .await
-                    .iter()
-                    .find(|s| s.session_id == session_id)
-                    .cloned()
-            };
-
-            if let Some(session) = session {
-                update.session_id = session_id;
-
-                if update.position.is_none() {
-                    update.position = session.position;
-                }
-                if update.seek.is_none() {
-                    update.seek = session.seek.map(|x| x as f64);
-                }
-                if update.volume.is_none() {
-                    update.volume = session.volume;
-                }
-                if update.playlist.is_none() {
-                    update.playlist = Some(ApiUpdateSessionPlaylist {
-                        session_playlist_id: session.playlist.session_playlist_id,
-                        tracks: session.playlist.tracks.clone(),
-                    });
-                }
-            }
-        }
-    }
-
-    update
-}
-
-async fn propagate_state_to_plugin(update: &ApiUpdateSession) {
+async fn propagate_state_to_plugin(update: ApiUpdateSession) {
     let current_session_id = { *STATE.current_session_id.read().await };
 
     if current_session_id.is_some_and(|id| update.session_id == id) {
@@ -712,63 +643,6 @@ async fn propagate_state_to_plugin(update: &ApiUpdateSession) {
             }
         }
     }
-}
-
-async fn handle_playback_update(update: &ApiUpdateSession) -> Result<(), HandleWsMessageError> {
-    log::debug!("handle_playback_update: {update:?}");
-
-    propagate_state_to_plugin(update).await;
-
-    let players = STATE
-        .get_players(update.session_id, Some(&update.playback_target))
-        .await;
-
-    moosicbox_logging::debug_or_trace!(
-        ("handle_playback_update: player count={}", players.len()),
-        (
-            "handle_playback_update: player count={} players={players:?}",
-            players.len()
-        )
-    );
-
-    for mut player in players {
-        let update = get_session_playback_for_player(update.to_owned(), &player).await;
-
-        log::debug!("handle_playback_update: player={}", player.id);
-
-        if let Some(quality) = update.quality {
-            STATE.playback_quality.write().await.replace(quality);
-        }
-
-        player
-            .update_playback(
-                true,
-                update.play,
-                update.stop,
-                update.playing,
-                update.position,
-                update.seek,
-                update.volume,
-                update.playlist.map(|x| {
-                    x.tracks
-                        .iter()
-                        .map(|track| Track {
-                            id: track.track_id(),
-                            source: track.api_source(),
-                            data: track.data(),
-                        })
-                        .collect()
-                }),
-                update.quality,
-                Some(update.session_id),
-                Some(update.profile.clone()),
-                Some(update.playback_target.into()),
-                false,
-                Some(DEFAULT_PLAYBACK_RETRY_OPTIONS),
-            )
-            .await?;
-    }
-    Ok(())
 }
 
 fn album_cover_url(album_id: &str, source: ApiSource, url: &str, query: &str) -> String {
@@ -859,392 +733,6 @@ fn convert_track(
             })
         }
     }
-}
-
-async fn get_url_and_query() -> Option<(String, String)> {
-    let url = { STATE.api_url.read().await.clone() }?;
-
-    let mut query = String::new();
-    if let Some(client_id) = STATE.client_id.read().await.clone() {
-        query.push_str(&format!("&clientId={client_id}"));
-    }
-    if let Some(signature_token) = STATE.signature_token.read().await.clone() {
-        query.push_str(&format!("&signature={signature_token}"));
-    }
-
-    Some((url, query))
-}
-
-async fn update_playlist() -> Result<(), HandleWsMessageError> {
-    use app_tauri_plugin_player::PlayerExt;
-
-    log::trace!("update_playlist");
-
-    let current_session_id = { *STATE.current_session_id.read().await };
-    let Some(current_session_id) = current_session_id else {
-        log::debug!("update_playlist: no CURRENT_SESSION_ID");
-        return Ok(());
-    };
-
-    log::trace!("update_playlist: current_session_id={current_session_id}");
-
-    let session = {
-        let binding = STATE.current_sessions.read().await;
-        let sessions: &[ApiSession] = &binding;
-        sessions
-            .iter()
-            .find(|x| x.session_id == current_session_id)
-            .cloned()
-    };
-
-    let Some(session) = session else {
-        log::debug!("update_playlist: no session exists");
-        return Ok(());
-    };
-
-    log::debug!("update_playlist: session={session:?}");
-
-    let Some((url, query)) = get_url_and_query().await else {
-        return Ok(());
-    };
-
-    match APP
-        .get()
-        .unwrap()
-        .player()
-        .update_state(app_tauri_plugin_player::UpdateState {
-            playing: Some(session.playing),
-            position: session.position,
-            seek: session.seek.map(|x| x as f64),
-            volume: session.volume,
-            playlist: Some(app_tauri_plugin_player::Playlist {
-                tracks: session
-                    .playlist
-                    .tracks
-                    .into_iter()
-                    .filter_map(|x| convert_track(x, &url, &query))
-                    .collect::<Vec<_>>(),
-            }),
-        }) {
-        Ok(_resp) => {
-            log::debug!("Successfully set state");
-        }
-        Err(e) => {
-            log::error!("Failed to set state: {e:?}");
-        }
-    }
-
-    Ok(())
-}
-
-#[derive(Debug, Error)]
-pub enum HandleWsMessageError {
-    #[error(transparent)]
-    Serde(#[from] serde_json::Error),
-    #[error(transparent)]
-    Player(#[from] PlayerError),
-    #[error(transparent)]
-    Emit(#[from] tauri::Error),
-    #[error(transparent)]
-    Tauri(#[from] TauriPlayerError),
-    #[error(transparent)]
-    AppState(#[from] AppStateError),
-}
-
-async fn handle_ws_message(message: OutboundPayload) -> Result<(), HandleWsMessageError> {
-    log::debug!("handle_ws_message: {message:?}");
-    moosicbox_task::spawn("handle_ws_message", {
-        let message = message.clone();
-        async move {
-            match &message {
-                OutboundPayload::SessionUpdated(payload) => {
-                    handle_playback_update(&payload.payload).await?
-                }
-                OutboundPayload::SetSeek(payload) => {
-                    handle_playback_update(&ApiUpdateSession {
-                        session_id: payload.payload.session_id,
-                        profile: payload.payload.profile.clone(),
-                        playback_target: payload.payload.playback_target.clone(),
-                        play: None,
-                        stop: None,
-                        name: None,
-                        active: None,
-                        playing: None,
-                        position: None,
-                        seek: Some(payload.payload.seek as f64),
-                        volume: None,
-                        playlist: None,
-                        quality: None,
-                    })
-                    .await?
-                }
-                OutboundPayload::ConnectionId(payload) => {
-                    {
-                        STATE
-                            .ws_connection_id
-                            .write()
-                            .await
-                            .replace(payload.connection_id.to_owned());
-                    }
-                    APP.get().unwrap().emit(
-                        "ws-connect",
-                        WsConnectMessage {
-                            connection_id: payload.connection_id.to_owned(),
-                            ws_url: STATE.ws_url.read().await.to_owned().unwrap_or_default(),
-                        },
-                    )?;
-                }
-                OutboundPayload::Connections(payload) => {
-                    *STATE.current_connections.write().await = payload.payload.clone();
-
-                    STATE.update_audio_zones().await?;
-                }
-                OutboundPayload::Sessions(payload) => {
-                    let player_ids = {
-                        let mut player_ids = vec![];
-                        let player_sessions = STATE
-                            .pending_player_sessions
-                            .read()
-                            .await
-                            .iter()
-                            .map(|(x, y)| (*x, *y))
-                            .collect::<Vec<_>>();
-
-                        let profile = { STATE.profile.read().await.clone() };
-
-                        if let Some(profile) = profile {
-                            for (player_id, session_id) in player_sessions {
-                                if let Some(session) =
-                                    payload.payload.iter().find(|x| x.session_id == session_id)
-                                {
-                                    if let Some(player) = STATE
-                                        .active_players
-                                        .write()
-                                        .await
-                                        .iter_mut()
-                                        .find(|x| x.player.id as u64 == player_id)
-                                        .map(|x| &mut x.player)
-                                    {
-                                        log::debug!(
-                                        "handle_ws_message: init_from_api_session session={session:?}"
-                                    );
-                                        if let Err(e) = player
-                                            .init_from_api_session(profile.clone(), session.clone())
-                                            .await
-                                        {
-                                            log::error!(
-                                                "Failed to init player from api session: {e:?}"
-                                            );
-                                        }
-                                        player_ids.push(player_id);
-                                    }
-                                }
-                            }
-                        }
-
-                        player_ids
-                    };
-                    {
-                        STATE
-                            .pending_player_sessions
-                            .write()
-                            .await
-                            .retain(|id, _| !player_ids.contains(id));
-                    }
-                    {
-                        *STATE.current_sessions.write().await = payload.payload.clone();
-                    }
-
-                    STATE.update_audio_zones().await?;
-                    STATE
-                        .update_connection_outputs(
-                            &payload
-                                .payload
-                                .iter()
-                                .map(|x| x.session_id)
-                                .collect::<Vec<_>>(),
-                        )
-                        .await?;
-                    update_playlist().await?;
-                }
-
-                OutboundPayload::AudioZoneWithSessions(payload) => {
-                    *STATE.current_audio_zones.write().await = payload.payload.clone();
-
-                    STATE.update_audio_zones().await?;
-                }
-                _ => {}
-            }
-
-            Ok::<_, HandleWsMessageError>(())
-        }
-    });
-
-    APP.get().unwrap().emit("ws-message", message)?;
-
-    Ok(())
-}
-
-#[derive(Debug, Error)]
-pub enum InitWsError {
-    #[error(transparent)]
-    AudioOutputScanner(#[from] AudioOutputScannerError),
-    #[error(transparent)]
-    Serde(#[from] serde_json::Error),
-    #[error(transparent)]
-    TauriPlayer(#[from] TauriPlayerError),
-    #[error(transparent)]
-    CloseWs(#[from] CloseWsError),
-    #[error("Missing profile")]
-    MissingProfile,
-}
-
-async fn init_ws_connection() -> Result<(), InitWsError> {
-    close_ws_connection().await?;
-
-    log::debug!("init_ws_connection: attempting to connect to ws");
-    {
-        if STATE.api_url.as_ref().read().await.is_none() {
-            log::debug!("init_ws_connection: missing API_URL");
-            return Ok(());
-        }
-    }
-    {
-        if let Some(token) = STATE.ws_token.read().await.as_ref() {
-            token.cancel();
-        }
-    }
-    let token = {
-        let token = CancellationToken::new();
-        STATE.ws_token.write().await.replace(token.clone());
-        token
-    };
-
-    let api_url = STATE.api_url.read().await.clone().unwrap();
-    let profile = STATE
-        .profile
-        .read()
-        .await
-        .clone()
-        .ok_or_else(|| InitWsError::MissingProfile)?;
-
-    let client_id = STATE.client_id.read().await.clone();
-    let signature_token = STATE.signature_token.read().await.clone();
-
-    let ws_url = format!("ws{}/ws", &api_url[4..]);
-    {
-        *STATE.ws_url.write().await = Some(ws_url.clone());
-    }
-    let (client, handle) = WsClient::new(ws_url);
-
-    STATE.ws_handle.write().await.replace(handle.clone());
-
-    let mut client = client.with_cancellation_token(token.clone());
-
-    STATE
-        .ws_join_handle
-        .write()
-        .await
-        .replace(moosicbox_task::spawn("moosicbox_app: ws", async move {
-            let mut rx = client.start(client_id, signature_token, profile, {
-                let handle = handle.clone();
-                move || {
-                    tauri::async_runtime::spawn({
-                        let handle = handle.clone();
-                        async move {
-                            log::debug!("Sending GetConnectionId");
-                            if let Err(e) = send_ws_message(
-                                &handle,
-                                InboundPayload::GetConnectionId(EmptyPayload {}),
-                                true,
-                            )
-                            .await
-                            {
-                                log::error!("Failed to send GetConnectionId WS message: {e:?}");
-                            }
-                            if let Err(e) = flush_ws_message_buffer().await {
-                                log::error!("Failed to flush WS message buffer: {e:?}");
-                            }
-                        }
-                    });
-                }
-            });
-
-            while let Some(m) = tokio::select! {
-                resp = rx.recv() => {
-                    resp
-                }
-                _ = token.cancelled() => {
-                    None
-                }
-            } {
-                match m {
-                    WsMessage::TextMessage(message) => {
-                        match serde_json::from_str::<OutboundPayload>(&message) {
-                            Ok(message) => {
-                                if let Err(e) = handle_ws_message(message).await {
-                                    log::error!("Failed to handle_ws_message: {e:?}");
-                                }
-                            }
-                            Err(e) => {
-                                moosicbox_assert::die_or_error!(
-                                    "got invalid message: {message}: {e:?}"
-                                );
-                            }
-                        }
-                    }
-                    WsMessage::Message(bytes) => match String::from_utf8(bytes.into()) {
-                        Ok(message) => match serde_json::from_str::<OutboundPayload>(&message) {
-                            Ok(message) => {
-                                if let Err(e) = handle_ws_message(message).await {
-                                    log::error!("Failed to handle_ws_message: {e:?}");
-                                }
-                            }
-                            Err(e) => {
-                                moosicbox_assert::die_or_error!(
-                                    "got invalid message: {message}: {e:?}"
-                                );
-                            }
-                        },
-                        Err(e) => {
-                            log::error!("Failed to read ws message: {e:?}");
-                        }
-                    },
-                    WsMessage::Ping => {
-                        log::debug!("got ping");
-                    }
-                }
-            }
-            log::debug!("Exiting ws message loop");
-        }));
-
-    Ok(())
-}
-
-#[derive(Debug, Error)]
-pub enum CloseWsError {
-    #[error(transparent)]
-    TauriPlayer(#[from] TauriPlayerError),
-    #[error(transparent)]
-    Close(#[from] CloseError),
-    #[error(transparent)]
-    Join(#[from] JoinError),
-}
-
-async fn close_ws_connection() -> Result<(), CloseWsError> {
-    log::debug!("close_ws_connection: attempting to close ws connection");
-
-    if let Some(handle) = STATE.ws_handle.read().await.as_ref() {
-        handle.close().await?;
-    }
-
-    if let Some(handle) = STATE.ws_join_handle.write().await.take() {
-        handle.abort();
-    }
-
-    log::debug!("close_ws_connection: ws connection closed");
-
-    Ok(())
 }
 
 #[cfg(target_os = "android")]
