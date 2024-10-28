@@ -4,7 +4,6 @@ use std::{
     sync::{Arc, LazyLock, OnceLock},
 };
 
-use async_recursion::async_recursion;
 use moosicbox_app_state::{AppStateError, UPNP_LISTENER_HANDLE};
 use moosicbox_app_ws::{
     CloseError, WebsocketSendError, WebsocketSender as _, WsClient, WsHandle, WsMessage,
@@ -306,7 +305,6 @@ async fn set_state(state: UpdateAppState) -> Result<(), TauriPlayerError> {
     Ok(())
 }
 
-#[async_recursion]
 pub async fn update_connection_state() -> Result<(), TauriPlayerError> {
     let has_connection_id = { STATE.connection_id.read().await.is_some() };
     log::debug!("update_state: has_connection_id={has_connection_id}");

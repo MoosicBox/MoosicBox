@@ -5759,7 +5759,6 @@ name = "moosicbox_app"
 version = "0.14.0"
 dependencies = [
  "app-tauri-plugin-player",
- "async-recursion",
  "console-subscriber",
  "kanal",
  "lazy_static",
