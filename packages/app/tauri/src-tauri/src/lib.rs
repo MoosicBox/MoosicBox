@@ -354,43 +354,6 @@ pub async fn update_state() -> Result<(), TauriPlayerError> {
     Ok(())
 }
 
-async fn update_audio_zones() -> Result<(), TauriPlayerError> {
-    let audio_zones_binding = STATE.current_audio_zones.read().await;
-    let audio_zones: &[ApiAudioZoneWithSession] = audio_zones_binding.as_ref();
-    let players_binding = STATE.current_players.read().await;
-    let players: &[(ApiPlayer, PlayerType, AudioOutputFactory)] = players_binding.as_ref();
-
-    log::debug!(
-        "\
-        Updating audio zones\n\t\
-        audio_zones={audio_zones:?}\n\t\
-        players={:?}\n\t\
-        ",
-        players.iter().map(|(x, _, _)| x).collect::<Vec<_>>()
-    );
-
-    for audio_zone in audio_zones {
-        let players = audio_zone
-            .players
-            .clone()
-            .into_iter()
-            .filter_map(|x| {
-                players
-                    .iter()
-                    .find(|(p, _, _)| p.player_id == x.player_id)
-                    .map(|(_, ptype, output)| (x, ptype.clone(), output.clone()))
-            })
-            .collect::<Vec<_>>();
-
-        if !players.is_empty() {
-            STATE
-                .set_audio_zone_active_players(audio_zone.session_id, audio_zone.id, players)
-                .await?;
-        }
-    }
-    Ok(())
-}
-
 async fn update_connection_outputs(session_ids: &[u64]) -> Result<(), TauriPlayerError> {
     let Some(current_connection_id) = ({ STATE.connection_id.read().await.clone() }) else {
         return Ok(());
@@ -781,6 +744,8 @@ pub enum ScanOutputsError {
     #[error(transparent)]
     TauriPlayer(#[from] TauriPlayerError),
     #[error(transparent)]
+    AppState(#[from] AppStateError),
+    #[error(transparent)]
     RegisterPlayers(#[from] RegisterPlayersError),
 }
 
@@ -826,7 +791,7 @@ async fn scan_outputs() -> Result<(), ScanOutputsError> {
 
     add_players_to_current_players(players).await;
 
-    update_audio_zones().await?;
+    STATE.update_audio_zones().await?;
     let ids = {
         STATE
             .current_sessions
@@ -919,6 +884,8 @@ pub enum FetchAudioZonesError {
     Serde(#[from] serde_json::Error),
     #[error(transparent)]
     TauriPlayer(#[from] TauriPlayerError),
+    #[error(transparent)]
+    AppState(#[from] AppStateError),
     #[error("Missing profile")]
     MissingProfile,
 }
@@ -965,7 +932,7 @@ async fn fetch_audio_zones() -> Result<(), FetchAudioZonesError> {
 
     *STATE.current_audio_zones.write().await = zones.items();
 
-    update_audio_zones().await?;
+    STATE.update_audio_zones().await?;
 
     Ok(())
 }
@@ -1335,7 +1302,7 @@ async fn handle_ws_message(message: OutboundPayload) -> Result<(), HandleWsMessa
                 OutboundPayload::Connections(payload) => {
                     *STATE.current_connections.write().await = payload.payload.clone();
 
-                    update_audio_zones().await?;
+                    STATE.update_audio_zones().await?;
                 }
                 OutboundPayload::Sessions(payload) => {
                     let player_ids = {
@@ -1393,7 +1360,7 @@ async fn handle_ws_message(message: OutboundPayload) -> Result<(), HandleWsMessa
                         *STATE.current_sessions.write().await = payload.payload.clone();
                     }
 
-                    update_audio_zones().await?;
+                    STATE.update_audio_zones().await?;
                     update_connection_outputs(
                         &payload
                             .payload
@@ -1408,7 +1375,7 @@ async fn handle_ws_message(message: OutboundPayload) -> Result<(), HandleWsMessa
                 OutboundPayload::AudioZoneWithSessions(payload) => {
                     *STATE.current_audio_zones.write().await = payload.payload.clone();
 
-                    update_audio_zones().await?;
+                    STATE.update_audio_zones().await?;
                 }
                 _ => {}
             }

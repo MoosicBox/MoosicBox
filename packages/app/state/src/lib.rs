@@ -470,4 +470,51 @@ impl AppState {
 
         Ok(())
     }
+
+    /// # Errors
+    ///
+    /// * If `set_audio_zone_active_players` fails
+    ///
+    /// # Panics
+    ///
+    /// * If any of the relevant state `RwLock`s are poisoned
+    pub async fn update_audio_zones(&self) -> Result<(), AppStateError> {
+        let audio_zones_binding = self.current_audio_zones.read().await;
+        let audio_zones: &[ApiAudioZoneWithSession] = audio_zones_binding.as_ref();
+        let players_binding = self.current_players.read().await;
+        let players: &[(ApiPlayer, PlayerType, AudioOutputFactory)] = players_binding.as_ref();
+
+        log::debug!(
+            "\
+            Updating audio zones\n\t\
+            audio_zones={audio_zones:?}\n\t\
+            players={:?}\n\t\
+            ",
+            players.iter().map(|(x, _, _)| x).collect::<Vec<_>>()
+        );
+
+        for audio_zone in audio_zones {
+            let players = audio_zone
+                .players
+                .clone()
+                .into_iter()
+                .filter_map(|x| {
+                    players
+                        .iter()
+                        .find(|(p, _, _)| p.player_id == x.player_id)
+                        .map(|(_, ptype, output)| (x, ptype.clone(), output.clone()))
+                })
+                .collect::<Vec<_>>();
+
+            if !players.is_empty() {
+                self.set_audio_zone_active_players(audio_zone.session_id, audio_zone.id, players)
+                    .await?;
+            }
+        }
+
+        drop(audio_zones_binding);
+        drop(players_binding);
+
+        Ok(())
+    }
 }
