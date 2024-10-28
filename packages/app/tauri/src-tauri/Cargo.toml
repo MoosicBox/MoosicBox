@@ -47,7 +47,6 @@ moosicbox_paging = { version = "0.1.0", path = "../../../paging", default-featur
 moosicbox_player = { version = "0.1.0", path = "../../../player", default-features = false, features = [
     "local",
 ] }
-moosicbox_remote_library = { version = "0.1.0", path = "../../../remote_library", default-features = false }
 moosicbox_session = { version = "0.1.0", path = "../../../session", default-features = false }
 moosicbox_task = { version = "0.1.0", path = "../../../task", default-features = false }
 moosicbox_upnp = { version = "0.1.0", path = "../../../upnp", default-features = false, features = [
@@ -63,24 +62,21 @@ moosicbox_app_client = { version = "0.1.0", path = "../client", default-features
 
 app-tauri-plugin-player = { version = "0.1.0", path = "../tauri-plugin-player" }
 
-async-recursion = { workspace = true }
-console-subscriber = { workspace = true }
-kanal = { workspace = true }
-lazy_static = { workspace = true }
-log = { workspace = true }
-reqwest = { workspace = true, default-features = false, features = [
-    "rustls-tls",
-] }
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
-strum = { workspace = true }
-strum_macros = { workspace = true }
-tauri = { workspace = true, features = ["protocol-asset"] }
-tauri-plugin-dialog = { workspace = true }
+async-recursion           = { workspace = true }
+console-subscriber        = { workspace = true }
+kanal                     = { workspace = true }
+lazy_static               = { workspace = true }
+log                       = { workspace = true }
+serde                     = { workspace = true, features = ["derive"] }
+serde_json                = { workspace = true }
+strum                     = { workspace = true }
+strum_macros              = { workspace = true }
+tauri                     = { workspace = true, features = ["protocol-asset"] }
+tauri-plugin-dialog       = { workspace = true }
 tauri-plugin-notification = { workspace = true }
-thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros"] }
-tokio-util = { workspace = true }
+thiserror                 = { workspace = true }
+tokio                     = { workspace = true, features = ["macros"] }
+tokio-util                = { workspace = true }
 
 [features]
 default = ["all-supported-formats", "cpal"]

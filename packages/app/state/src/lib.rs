@@ -1,22 +1,79 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, LazyLock},
+};
 
 use moosicbox_app_ws::WsHandle;
-use moosicbox_audio_output::AudioOutputFactory;
+use moosicbox_audio_output::{AudioOutputFactory, AudioOutputScannerError};
 use moosicbox_audio_zone::models::{ApiAudioZoneWithSession, ApiPlayer};
 use moosicbox_core::types::PlaybackQuality;
 use moosicbox_player::{
     local::LocalPlayer, PlaybackHandler, PlaybackType, PlayerError, PlayerSource,
 };
-use moosicbox_session::models::{ApiConnection, ApiPlaybackTarget, ApiSession, PlaybackTarget};
+use moosicbox_session::models::{
+    ApiConnection, ApiPlaybackTarget, ApiSession, PlaybackTarget, RegisterPlayer,
+};
 use moosicbox_ws::models::InboundPayload;
+use reqwest::RequestBuilder;
 use thiserror::Error;
 use tokio::{sync::RwLock, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 
 type ApiPlayersMap = (ApiPlayer, PlayerType, AudioOutputFactory);
+
+static PROXY_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
+
+#[cfg(feature = "upnp")]
+pub static UPNP_LISTENER_HANDLE: std::sync::OnceLock<moosicbox_upnp::listener::Handle> =
+    std::sync::OnceLock::new();
+
+#[cfg(feature = "upnp")]
+pub struct SourceToRemoteLibrary {
+    host: String,
+}
+
+#[cfg(feature = "upnp")]
+impl moosicbox_music_api::SourceToMusicApi for SourceToRemoteLibrary {
+    fn get(
+        &self,
+        source: moosicbox_core::sqlite::models::ApiSource,
+    ) -> Result<Arc<Box<dyn moosicbox_music_api::MusicApi>>, moosicbox_music_api::MusicApisError>
+    {
+        Ok(Arc::new(Box::new(
+            moosicbox_remote_library::RemoteLibraryMusicApi::new(self.host.clone(), source),
+        )))
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum ScanOutputsError {
+    #[error(transparent)]
+    AudioOutputScanner(#[from] AudioOutputScannerError),
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
+}
+
+#[cfg(feature = "upnp")]
+#[derive(Debug, Error)]
+pub enum InitUpnpError {
+    #[error(transparent)]
+    UpnpDeviceScanner(#[from] moosicbox_upnp::UpnpDeviceScannerError),
+    #[error(transparent)]
+    AudioOutput(#[from] moosicbox_audio_output::AudioOutputError),
+    #[error(transparent)]
+    RegisterPlayers(#[from] RegisterPlayersError),
+}
+
+#[derive(Debug, Error)]
+pub enum RegisterPlayersError {
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
+    #[error("Missing profile")]
+    MissingProfile,
+}
 
 #[derive(Debug, Error)]
 pub enum AppStateError {
@@ -24,6 +81,13 @@ pub enum AppStateError {
     Unknown(String),
     #[error(transparent)]
     Player(#[from] PlayerError),
+    #[cfg(feature = "upnp")]
+    #[error(transparent)]
+    InitUpnp(#[from] InitUpnpError),
+    #[error(transparent)]
+    RegisterPlayers(#[from] RegisterPlayersError),
+    #[error(transparent)]
+    ScanOutputs(#[from] ScanOutputsError),
 }
 
 impl AppStateError {
@@ -106,7 +170,7 @@ impl AppState {
     ///
     /// # Panics
     ///
-    /// * If any of the relevant state `RwLock`s are poisoned
+    /// * If any of the required state properties are missing
     #[allow(clippy::too_many_lines)]
     pub async fn new_player(
         &self,
@@ -273,7 +337,7 @@ impl AppState {
 
     /// # Panics
     ///
-    /// * If any of the relevant state `RwLock`s are poisoned
+    /// * If any of the required state properties are missing
     pub async fn get_players(
         &self,
         session_id: u64,
@@ -319,7 +383,7 @@ impl AppState {
     ///
     /// # Panics
     ///
-    /// * If any of the relevant state `RwLock`s are poisoned
+    /// * If any of the required state properties are missing
     pub async fn reinit_players(&self) -> Result<(), AppStateError> {
         let mut players_map = self.active_players.write().await;
         let ids = {
@@ -384,7 +448,7 @@ impl AppState {
     ///
     /// # Panics
     ///
-    /// * If any of the relevant state `RwLock`s are poisoned
+    /// * If any of the required state properties are missing
     pub async fn set_audio_zone_active_players(
         &self,
         session_id: u64,
@@ -477,7 +541,7 @@ impl AppState {
     ///
     /// # Panics
     ///
-    /// * If any of the relevant state `RwLock`s are poisoned
+    /// * If any of the required state properties are missing
     pub async fn update_audio_zones(&self) -> Result<(), AppStateError> {
         let audio_zones_binding = self.current_audio_zones.read().await;
         let audio_zones: &[ApiAudioZoneWithSession] = audio_zones_binding.as_ref();
@@ -514,6 +578,443 @@ impl AppState {
 
         drop(audio_zones_binding);
         drop(players_binding);
+
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// * If the `UpnpDeviceScanner` fails
+    /// * If the `UpnpAvTransportService` fails to convert into an `AudioOutput`
+    ///
+    /// # Panics
+    ///
+    /// * If any of the required state properties are missing
+    #[cfg(feature = "upnp")]
+    pub async fn init_upnp_players(&self) -> Result<(), AppStateError> {
+        use moosicbox_session::models::RegisterPlayer;
+
+        moosicbox_upnp::scan_devices()
+            .await
+            .map_err(InitUpnpError::UpnpDeviceScanner)?;
+
+        let services = {
+            let mut av_transport_services = self.upnp_av_transport_services.write().await;
+            av_transport_services.clear();
+
+            for device in moosicbox_upnp::devices().await {
+                let service_id = "urn:upnp-org:serviceId:AVTransport";
+                if let Ok((device, service)) =
+                    moosicbox_upnp::get_device_and_service(&device.udn, service_id)
+                {
+                    av_transport_services
+                        .push(moosicbox_upnp::player::UpnpAvTransportService { device, service });
+                }
+            }
+
+            av_transport_services.clone()
+        };
+
+        let mut outputs = Vec::with_capacity(services.len());
+
+        let url_string = { self.api_url.read().await.clone() };
+        let url = url_string.as_deref();
+
+        let Some(url) = url else {
+            return Ok(());
+        };
+
+        for service in services {
+            let player_type = PlayerType::Upnp {
+                source_to_music_api: Arc::new(Box::new(SourceToRemoteLibrary {
+                    host: url.to_owned(),
+                })),
+                device: service.device.clone(),
+                service: service.service.clone(),
+                handle: UPNP_LISTENER_HANDLE.get().unwrap().clone(),
+            };
+            let output: AudioOutputFactory =
+                service.try_into().map_err(InitUpnpError::AudioOutput)?;
+
+            outputs.push((output, player_type));
+        }
+
+        let register_players_payload = outputs
+            .iter()
+            .map(|(x, _)| RegisterPlayer {
+                audio_output_id: x.id.clone(),
+                name: x.name.clone(),
+            })
+            .collect::<Vec<_>>();
+
+        let api_players = self.register_players(&register_players_payload).await?;
+
+        log::debug!("init_upnp_players: players={api_players:?}");
+
+        let api_players = api_players
+            .into_iter()
+            .filter_map(|p| {
+                if let Some((output, ptype)) = outputs
+                    .iter()
+                    .find(|(output, _ptype)| output.id == p.audio_output_id)
+                {
+                    Some((p, ptype.clone(), output.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        self.add_players_to_current_players(api_players).await;
+
+        let ids = {
+            self.current_sessions
+                .read()
+                .await
+                .iter()
+                .map(|x| x.session_id)
+                .collect::<Vec<_>>()
+        };
+
+        self.update_connection_outputs(&ids).await?;
+
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// * If the request is missing a `MoosicBox` profile
+    /// * If the `RegisterPlayer` `players` fail to serialize
+    ///
+    /// # Panics
+    ///
+    /// * If any of the required state properties are missing
+    pub async fn register_players(
+        &self,
+        players: &[RegisterPlayer],
+    ) -> Result<Vec<ApiPlayer>, AppStateError> {
+        let connection_id = self.connection_id.read().await.clone().unwrap();
+        let api_token = self.api_token.read().await.clone();
+        let client_id = self
+            .client_id
+            .read()
+            .await
+            .clone()
+            .map(|x| format!("&clientId={x}"))
+            .unwrap_or_default();
+
+        let profile = { self.profile.read().await.clone() };
+        let Some(profile) = profile else {
+            return Err(RegisterPlayersError::MissingProfile.into());
+        };
+
+        let mut headers = serde_json::Map::new();
+
+        headers.insert(
+            "moosicbox-profile".to_string(),
+            serde_json::Value::String(profile),
+        );
+
+        if let Some(api_token) = api_token {
+            headers.insert(
+                "Authorization".to_string(),
+                serde_json::Value::String(format!("bearer {api_token}")),
+            );
+        }
+
+        let response = self
+            .api_proxy_post(
+                format!("session/register-players?connectionId={connection_id}{client_id}",),
+                Some(serde_json::to_value(players).map_err(RegisterPlayersError::Serde)?),
+                Some(serde_json::Value::Object(headers)),
+            )
+            .await?;
+
+        Ok(serde_json::from_value(response).unwrap())
+    }
+
+    /// # Errors
+    ///
+    /// * If the `api_url` is not set in the state
+    ///
+    /// # Panics
+    ///
+    /// * If any of the required state properties are missing
+    /// * If the headers object is not a valid JSON object
+    pub async fn api_proxy_post(
+        &self,
+        url: String,
+        body: Option<serde_json::Value>,
+        headers: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value, AppStateError> {
+        let url = format!(
+            "{}/{url}",
+            self.api_url
+                .read()
+                .await
+                .clone()
+                .ok_or_else(|| AppStateError::unknown(format!("API_URL not set ({url})")))?
+        );
+        log::info!("Posting url from proxy: {url}");
+
+        let mut builder = PROXY_CLIENT.post(url);
+
+        if let Some(headers) = headers {
+            for header in headers.as_object().unwrap() {
+                builder = builder.header(header.0, header.1.as_str().unwrap().to_string());
+            }
+        }
+
+        if let Some(body) = body {
+            builder = builder.json(&body);
+        }
+
+        self.send_request_builder(builder).await
+    }
+
+    /// # Errors
+    ///
+    /// * If the `api_url` is not set in the state
+    ///
+    /// # Panics
+    ///
+    /// * If any of the required state properties are missing
+    /// * If the headers object is not a valid JSON object
+    pub async fn api_proxy_get(
+        &self,
+        url: String,
+        headers: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value, AppStateError> {
+        let url = format!(
+            "{}/{url}",
+            self.api_url
+                .read()
+                .await
+                .clone()
+                .ok_or_else(|| AppStateError::unknown(format!("API_URL not set ({url})")))?
+        );
+        log::info!("Fetching url from proxy: {url}");
+
+        let mut builder = PROXY_CLIENT.get(url);
+
+        if let Some(headers) = headers {
+            for header in headers.as_object().unwrap() {
+                builder = builder.header(header.0, header.1.as_str().unwrap().to_string());
+            }
+        }
+
+        self.send_request_builder(builder).await
+    }
+
+    /// # Errors
+    ///
+    /// * If failed to parse the JSON response
+    /// * If the HTTP request fails
+    pub async fn send_request_builder(
+        &self,
+        builder: RequestBuilder,
+    ) -> Result<serde_json::Value, AppStateError> {
+        log::debug!("send_request_builder: Sending request");
+        match builder.send().await {
+            Ok(resp) => {
+                log::debug!("send_request_builder: status_code={}", resp.status());
+                let success = resp.status().is_success();
+                match resp.text().await {
+                    Ok(text) => {
+                        if success {
+                            match serde_json::from_str(&text) {
+                                Ok(resp) => {
+                                    log::debug!("Got post response: {resp:?}");
+                                    Ok(resp)
+                                }
+                                Err(e) => {
+                                    log::error!(
+                                        "Failed to parse request response: {e:?} ({text:?})"
+                                    );
+                                    Err(AppStateError::unknown(format!("Json failed: {e:?}")))
+                                }
+                            }
+                        } else {
+                            log::error!("Failure response: ({text:?})");
+                            Err(AppStateError::unknown(format!("Request failed: {text:?}")))
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("Failed to parse request response: {e:?}");
+                        Err(AppStateError::unknown(format!("Json failed: {e:?}")))
+                    }
+                }
+            }
+            Err(e) => {
+                log::error!("Failed to send request: {e:?}");
+                Err(AppStateError::unknown(format!("Json failed: {e:?}")))
+            }
+        }
+    }
+
+    pub async fn add_players_to_current_players(&self, players: Vec<ApiPlayersMap>) {
+        let mut existing_players = self.current_players.write().await;
+
+        let new_players = players
+            .into_iter()
+            .filter(|(p, _, _)| {
+                !existing_players
+                    .iter()
+                    .any(|(existing, _, _)| existing.player_id == p.player_id)
+            })
+            .collect::<Vec<_>>();
+
+        log::debug!(
+            "add_players_to_current_players: Adding new_players={:?}",
+            new_players.iter().map(|(x, _, _)| x).collect::<Vec<_>>()
+        );
+
+        existing_players.extend(new_players);
+    }
+
+    /// # Errors
+    ///
+    /// * If any `UpnpAvTransportService`s fail to convert to `AudioOutputFactory`s
+    /// * If there is a `PlayerError`
+    pub async fn update_connection_outputs(
+        &self,
+        session_ids: &[u64],
+    ) -> Result<(), AppStateError> {
+        let Some(current_connection_id) = ({ self.connection_id.read().await.clone() }) else {
+            return Ok(());
+        };
+
+        let local_outputs = moosicbox_audio_output::output_factories().await;
+        #[cfg(feature = "upnp")]
+        let upnp_outputs = self
+            .upnp_av_transport_services
+            .read()
+            .await
+            .iter()
+            .cloned()
+            .map(TryInto::try_into)
+            .collect::<Result<Vec<AudioOutputFactory>, moosicbox_audio_output::AudioOutputError>>()
+            .map_err(|e| AppStateError::unknown(format!("Error: {e:?}")))?;
+
+        #[cfg(not(feature = "upnp"))]
+        let upnp_outputs = vec![];
+
+        let outputs = [local_outputs, upnp_outputs].concat();
+
+        for output in outputs {
+            let playback_target = ApiPlaybackTarget::ConnectionOutput {
+                connection_id: current_connection_id.clone(),
+                output_id: output.id.clone(),
+            };
+            let output_id = &output.id;
+            log::debug!("update_connection_outputs: ApiPlaybackTarget::ConnectionOutput current_connection_id={current_connection_id} output_id={output_id}");
+
+            let binding = self.current_players.read().await;
+            let current_players: &[(ApiPlayer, PlayerType, AudioOutputFactory)] = binding.as_ref();
+
+            if let Some((_player, ptype, output)) = current_players.iter().find(|(x, _, _)| {
+                log::trace!(
+                    "update_connection_outputs: ApiPlaybackTarget::ConnectionOutput checking '{}' == '{output_id}'",
+                    x.audio_output_id
+                );
+                &x.audio_output_id == output_id
+            }) {
+                for session_id in session_ids {
+                    let session_id = *session_id;
+                    log::debug!("update_connection_outputs: ApiPlaybackTarget::ConnectionOutput creating player for output_id={output_id} session_id={session_id} playback_target={playback_target:?}");
+
+                    let player = self.new_player(
+                        session_id,
+                        playback_target.clone(),
+                        output.clone(),
+                        ptype.clone(),
+                    )
+                    .await?;
+
+                    moosicbox_logging::debug_or_trace!(
+                        ("update_connection_outputs: ApiPlaybackTarget::ConnectionOutput created new player={}", player.id),
+                        ("update_connection_outputs: ApiPlaybackTarget::ConnectionOutput created new player={:?}", player)
+                    );
+                    let player = PlaybackTargetSessionPlayer {
+                        playback_target: playback_target.clone(),
+                        session_id,
+                        player,
+                        player_type: ptype.clone(),
+                    };
+
+                    let mut players = self.active_players.write().await;
+
+                    if !players.iter().any(|x| x.session_id == session_id && x.playback_target == playback_target) {
+                        players.push(player);
+                    }
+                }
+            }
+
+            drop(binding);
+        }
+
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// * If failed to scan outputs
+    /// * If failed to update audio zones
+    /// * If failed to update connection outputs
+    pub async fn scan_outputs(&self) -> Result<(), AppStateError> {
+        log::debug!("scan_outputs: attempting to scan outputs");
+        {
+            if self.api_url.as_ref().read().await.is_none()
+                || self.connection_id.as_ref().read().await.is_none()
+            {
+                log::debug!("scan_outputs: missing API_URL or CONNECTION_ID, not scanning");
+                return Ok(());
+            }
+        }
+
+        if moosicbox_audio_output::output_factories().await.is_empty() {
+            moosicbox_audio_output::scan_outputs()
+                .await
+                .map_err(ScanOutputsError::AudioOutputScanner)?;
+        }
+
+        let outputs = moosicbox_audio_output::output_factories().await;
+        log::debug!("scan_outputs: scanned outputs={outputs:?}");
+
+        let players = outputs
+            .iter()
+            .map(|x| RegisterPlayer {
+                audio_output_id: x.id.clone(),
+                name: x.name.clone(),
+            })
+            .collect::<Vec<_>>();
+
+        let players = self.register_players(&players).await?;
+
+        log::debug!("scan_outputs: players={players:?}");
+
+        let players = players
+            .into_iter()
+            .filter_map(|p| {
+                outputs
+                    .iter()
+                    .find(|output| output.id == p.audio_output_id)
+                    .map(|output| (p, PlayerType::Local, output.clone()))
+            })
+            .collect::<Vec<_>>();
+
+        self.add_players_to_current_players(players).await;
+
+        self.update_audio_zones().await?;
+        let ids = {
+            self.current_sessions
+                .read()
+                .await
+                .iter()
+                .map(|x| x.session_id)
+                .collect::<Vec<_>>()
+        };
+        self.update_connection_outputs(&ids).await?;
 
         Ok(())
     }

@@ -5,31 +5,27 @@ use std::{
 };
 
 use async_recursion::async_recursion;
-use log::info;
-use moosicbox_app_state::{AppStateError, PlaybackTargetSessionPlayer, PlayerType};
+use moosicbox_app_state::{AppStateError, UPNP_LISTENER_HANDLE};
 use moosicbox_app_ws::{
     CloseError, WebsocketSendError, WebsocketSender as _, WsClient, WsHandle, WsMessage,
 };
-use moosicbox_audio_output::{AudioOutputError, AudioOutputFactory, AudioOutputScannerError};
-use moosicbox_audio_zone::models::{ApiAudioZoneWithSession, ApiPlayer};
+use moosicbox_audio_output::AudioOutputScannerError;
+use moosicbox_audio_zone::models::ApiAudioZoneWithSession;
 use moosicbox_core::{
     sqlite::models::{ApiSource, Id},
     types::PlaybackQuality,
 };
 use moosicbox_mdns::scanner::service::Commander;
-use moosicbox_music_api::{FromId, MusicApi, MusicApisError, SourceToMusicApi};
+use moosicbox_music_api::FromId;
 use moosicbox_paging::Page;
 use moosicbox_player::{Playback, PlaybackHandler, PlaybackRetryOptions, PlayerError, Track};
-use moosicbox_remote_library::RemoteLibraryMusicApi;
 use moosicbox_session::models::{
-    ApiPlaybackTarget, ApiSession, ApiUpdateSession, ApiUpdateSessionPlaylist, PlaybackTarget,
-    RegisterPlayer, UpdateSession, UpdateSessionPlaylistTrack,
+    ApiSession, ApiUpdateSession, ApiUpdateSessionPlaylist, PlaybackTarget, UpdateSession,
+    UpdateSessionPlaylistTrack,
 };
-use moosicbox_upnp::{player::UpnpAvTransportService, UpnpDeviceScannerError};
 use moosicbox_ws::models::{
     EmptyPayload, InboundPayload, OutboundPayload, SessionUpdatedPayload, UpdateSessionPayload,
 };
-use reqwest::RequestBuilder;
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 use tauri::{AppHandle, Emitter};
@@ -318,13 +314,13 @@ pub async fn update_state() -> Result<(), TauriPlayerError> {
     if has_connection_id {
         moosicbox_task::spawn("set_state: scan_outputs", async {
             log::debug!("Attempting to scan_outputs...");
-            scan_outputs().await
+            STATE.scan_outputs().await
         });
 
         let inited_upnp_players =
             moosicbox_task::spawn("set_state: init_upnp_players", async move {
                 log::debug!("Attempting to init_upnp_players...");
-                init_upnp_players().await
+                STATE.init_upnp_players().await
             });
 
         let reinited_players = moosicbox_task::spawn("set_state: reinit_players", async move {
@@ -350,77 +346,6 @@ pub async fn update_state() -> Result<(), TauriPlayerError> {
         log::debug!("Attempting to init_ws_connection...");
         init_ws_connection().await
     });
-
-    Ok(())
-}
-
-async fn update_connection_outputs(session_ids: &[u64]) -> Result<(), TauriPlayerError> {
-    let Some(current_connection_id) = ({ STATE.connection_id.read().await.clone() }) else {
-        return Ok(());
-    };
-
-    let local_outputs = moosicbox_audio_output::output_factories().await;
-    let upnp_outputs = STATE
-        .upnp_av_transport_services
-        .read()
-        .await
-        .iter()
-        .cloned()
-        .map(|x| x.try_into())
-        .collect::<Result<Vec<AudioOutputFactory>, AudioOutputError>>()
-        .map_err(|e| TauriPlayerError::Unknown(format!("Error: {e:?}")))?;
-
-    let outputs = [local_outputs, upnp_outputs].concat();
-
-    for output in outputs {
-        let playback_target = ApiPlaybackTarget::ConnectionOutput {
-            connection_id: current_connection_id.clone(),
-            output_id: output.id.to_owned(),
-        };
-        let output_id = &output.id;
-        log::debug!("update_connection_outputs: ApiPlaybackTarget::ConnectionOutput current_connection_id={current_connection_id} output_id={output_id}");
-
-        let binding = STATE.current_players.read().await;
-        let current_players: &[(ApiPlayer, PlayerType, AudioOutputFactory)] = binding.as_ref();
-
-        if let Some((_player, ptype, output)) = current_players.iter().find(|(x, _, _)| {
-            log::trace!(
-                "update_connection_outputs: ApiPlaybackTarget::ConnectionOutput checking '{}' == '{output_id}'",
-                x.audio_output_id
-            );
-            &x.audio_output_id == output_id
-        }) {
-            for session_id in session_ids {
-                let session_id = *session_id;
-                log::debug!("update_connection_outputs: ApiPlaybackTarget::ConnectionOutput creating player for output_id={output_id} session_id={session_id} playback_target={playback_target:?}");
-
-                let player = STATE.new_player(
-                    session_id,
-                    playback_target.clone(),
-                    output.clone(),
-                    ptype.clone(),
-                )
-                .await?;
-
-                moosicbox_logging::debug_or_trace!(
-                    ("update_connection_outputs: ApiPlaybackTarget::ConnectionOutput created new player={}", player.id),
-                    ("update_connection_outputs: ApiPlaybackTarget::ConnectionOutput created new player={:?}", player)
-                );
-                let player = PlaybackTargetSessionPlayer {
-                    playback_target: playback_target.clone(),
-                    session_id,
-                    player,
-                    player_type: ptype.clone(),
-                };
-
-                let mut players = STATE.active_players.write().await;
-
-                if !players.iter().any(|x| x.session_id == session_id && x.playback_target == playback_target) {
-                    players.push(player);
-                }
-            }
-        }
-    }
 
     Ok(())
 }
@@ -596,73 +521,12 @@ async fn propagate_ws_message(message: InboundPayload) -> Result<(), TauriPlayer
     Ok(())
 }
 
-async fn send_request_builder(
-    builder: RequestBuilder,
-) -> Result<serde_json::Value, TauriPlayerError> {
-    log::debug!("send_request_builder: Sending request");
-    match builder.send().await {
-        Ok(resp) => {
-            log::debug!("send_request_builder: status_code={}", resp.status());
-            let success = resp.status().is_success();
-            match resp.text().await {
-                Ok(text) => {
-                    if success {
-                        match serde_json::from_str(&text) {
-                            Ok(resp) => {
-                                log::debug!("Got post response: {resp:?}");
-                                Ok(resp)
-                            }
-                            Err(e) => {
-                                log::error!("Failed to parse request response: {e:?} ({text:?})");
-                                Err(TauriPlayerError::Unknown(format!("Json failed: {e:?}")))
-                            }
-                        }
-                    } else {
-                        log::error!("Failure response: ({text:?})");
-                        Err(TauriPlayerError::Unknown(format!(
-                            "Request failed: {text:?}"
-                        )))
-                    }
-                }
-                Err(e) => {
-                    log::error!("Failed to parse request response: {e:?}");
-                    Err(TauriPlayerError::Unknown(format!("Json failed: {e:?}")))
-                }
-            }
-        }
-        Err(e) => {
-            log::error!("Failed to send request: {e:?}");
-            Err(TauriPlayerError::Unknown(format!("Json failed: {e:?}")))
-        }
-    }
-}
-
 #[tauri::command]
 async fn api_proxy_get(
     url: String,
     headers: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, TauriPlayerError> {
-    let url = format!(
-        "{}/{url}",
-        STATE
-            .api_url
-            .read()
-            .await
-            .clone()
-            .ok_or_else(|| TauriPlayerError::Unknown(format!("API_URL not set ({url})")))?
-    );
-    info!("Fetching url from proxy: {url}");
-    let client = reqwest::Client::new();
-
-    let mut builder = client.get(url);
-
-    if let Some(headers) = headers {
-        for header in headers.as_object().unwrap() {
-            builder = builder.header(header.0, header.1.as_str().unwrap().to_string());
-        }
-    }
-
-    send_request_builder(builder).await
+    Ok(STATE.api_proxy_get(url, headers).await?)
 }
 
 #[tauri::command]
@@ -671,31 +535,7 @@ async fn api_proxy_post(
     body: Option<serde_json::Value>,
     headers: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, TauriPlayerError> {
-    let url = format!(
-        "{}/{url}",
-        STATE
-            .api_url
-            .read()
-            .await
-            .clone()
-            .ok_or_else(|| TauriPlayerError::Unknown(format!("API_URL not set ({url})")))?
-    );
-    info!("Posting url from proxy: {url}");
-    let client = reqwest::Client::new();
-
-    let mut builder = client.post(url);
-
-    if let Some(headers) = headers {
-        for header in headers.as_object().unwrap() {
-            builder = builder.header(header.0, header.1.as_str().unwrap().to_string());
-        }
-    }
-
-    if let Some(body) = body {
-        builder = builder.json(&body);
-    }
-
-    send_request_builder(builder).await
+    Ok(STATE.api_proxy_post(url, body, headers).await?)
 }
 
 async fn propagate_playback_event(update: UpdateSession, to_plugin: bool) -> Result<(), AppError> {
@@ -733,149 +573,6 @@ pub fn on_playback_event(update: &UpdateSession, _current: &Playback) {
         "moosicbox_app: on_playback_event",
         propagate_playback_event(update.to_owned(), true),
     );
-}
-
-#[derive(Debug, Error)]
-pub enum ScanOutputsError {
-    #[error(transparent)]
-    AudioOutputScanner(#[from] AudioOutputScannerError),
-    #[error(transparent)]
-    Serde(#[from] serde_json::Error),
-    #[error(transparent)]
-    TauriPlayer(#[from] TauriPlayerError),
-    #[error(transparent)]
-    AppState(#[from] AppStateError),
-    #[error(transparent)]
-    RegisterPlayers(#[from] RegisterPlayersError),
-}
-
-async fn scan_outputs() -> Result<(), ScanOutputsError> {
-    log::debug!("scan_outputs: attempting to scan outputs");
-    {
-        if STATE.api_url.as_ref().read().await.is_none()
-            || STATE.connection_id.as_ref().read().await.is_none()
-        {
-            log::debug!("scan_outputs: missing API_URL or CONNECTION_ID, not scanning");
-            return Ok(());
-        }
-    }
-
-    if moosicbox_audio_output::output_factories().await.is_empty() {
-        moosicbox_audio_output::scan_outputs().await?;
-    }
-
-    let outputs = moosicbox_audio_output::output_factories().await;
-    log::debug!("scan_outputs: scanned outputs={outputs:?}");
-
-    let players = outputs
-        .iter()
-        .map(|x| RegisterPlayer {
-            audio_output_id: x.id.clone(),
-            name: x.name.clone(),
-        })
-        .collect::<Vec<_>>();
-
-    let players = register_players(&players).await?;
-
-    log::debug!("scan_outputs: players={players:?}");
-
-    let players = players
-        .into_iter()
-        .filter_map(|p| {
-            outputs
-                .iter()
-                .find(|output| output.id == p.audio_output_id)
-                .map(|output| (p, PlayerType::Local, output.clone()))
-        })
-        .collect::<Vec<_>>();
-
-    add_players_to_current_players(players).await;
-
-    STATE.update_audio_zones().await?;
-    let ids = {
-        STATE
-            .current_sessions
-            .read()
-            .await
-            .iter()
-            .map(|x| x.session_id)
-            .collect::<Vec<_>>()
-    };
-    update_connection_outputs(&ids).await?;
-
-    Ok(())
-}
-
-async fn add_players_to_current_players(players: Vec<(ApiPlayer, PlayerType, AudioOutputFactory)>) {
-    let mut existing_players = STATE.current_players.write().await;
-
-    let new_players = players
-        .into_iter()
-        .filter(|(p, _, _)| {
-            !existing_players
-                .iter()
-                .any(|(existing, _, _)| existing.player_id == p.player_id)
-        })
-        .collect::<Vec<_>>();
-
-    log::debug!(
-        "add_players_to_current_players: Adding new_players={:?}",
-        new_players.iter().map(|(x, _, _)| x).collect::<Vec<_>>()
-    );
-
-    existing_players.extend(new_players);
-}
-
-#[derive(Debug, Error)]
-pub enum RegisterPlayersError {
-    #[error(transparent)]
-    Serde(#[from] serde_json::Error),
-    #[error(transparent)]
-    TauriPlayer(#[from] TauriPlayerError),
-    #[error("Missing profile")]
-    MissingProfile,
-}
-
-async fn register_players(
-    players: &[RegisterPlayer],
-) -> Result<Vec<ApiPlayer>, RegisterPlayersError> {
-    let connection_id = STATE.connection_id.read().await.clone().unwrap();
-    let api_token = STATE.api_token.read().await.clone();
-    let client_id = STATE
-        .client_id
-        .read()
-        .await
-        .clone()
-        .map(|x| format!("&clientId={x}"))
-        .unwrap_or_default();
-
-    let profile = { STATE.profile.read().await.clone() };
-    let Some(profile) = profile else {
-        return Err(RegisterPlayersError::MissingProfile);
-    };
-
-    let mut headers = serde_json::Map::new();
-
-    headers.insert(
-        "moosicbox-profile".to_string(),
-        serde_json::Value::String(profile),
-    );
-
-    if let Some(api_token) = api_token {
-        headers.insert(
-            "Authorization".to_string(),
-            serde_json::Value::String(format!("bearer {api_token}")),
-        );
-    }
-
-    let response = api_proxy_post(
-        format!("session/register-players?connectionId={connection_id}{client_id}",),
-        Some(serde_json::to_value(players)?),
-        Some(serde_json::Value::Object(headers)),
-    )
-    .await?;
-
-    Ok(serde_json::from_value(response)?)
 }
 
 #[derive(Debug, Error)]
@@ -1361,14 +1058,15 @@ async fn handle_ws_message(message: OutboundPayload) -> Result<(), HandleWsMessa
                     }
 
                     STATE.update_audio_zones().await?;
-                    update_connection_outputs(
-                        &payload
-                            .payload
-                            .iter()
-                            .map(|x| x.session_id)
-                            .collect::<Vec<_>>(),
-                    )
-                    .await?;
+                    STATE
+                        .update_connection_outputs(
+                            &payload
+                                .payload
+                                .iter()
+                                .map(|x| x.session_id)
+                                .collect::<Vec<_>>(),
+                        )
+                        .await?;
                     update_playlist().await?;
                 }
 
@@ -1547,118 +1245,6 @@ async fn close_ws_connection() -> Result<(), CloseWsError> {
     }
 
     log::debug!("close_ws_connection: ws connection closed");
-
-    Ok(())
-}
-
-pub struct SourceToRemoteLibrary {
-    host: String,
-}
-
-impl SourceToMusicApi for SourceToRemoteLibrary {
-    fn get(&self, source: ApiSource) -> Result<Arc<Box<dyn MusicApi>>, MusicApisError> {
-        Ok(Arc::new(Box::new(RemoteLibraryMusicApi::new(
-            self.host.to_owned(),
-            source,
-        ))))
-    }
-}
-
-static UPNP_LISTENER_HANDLE: OnceLock<moosicbox_upnp::listener::Handle> = OnceLock::new();
-
-#[derive(Debug, Error)]
-pub enum InitUpnpError {
-    #[error(transparent)]
-    UpnpDeviceScanner(#[from] UpnpDeviceScannerError),
-    #[error(transparent)]
-    TauriPlayer(#[from] TauriPlayerError),
-    #[error(transparent)]
-    AudioOutput(#[from] AudioOutputError),
-    #[error(transparent)]
-    RegisterPlayers(#[from] RegisterPlayersError),
-}
-
-async fn init_upnp_players() -> Result<(), InitUpnpError> {
-    moosicbox_upnp::scan_devices().await?;
-
-    let services = {
-        let mut av_transport_services = STATE.upnp_av_transport_services.write().await;
-        av_transport_services.clear();
-
-        for device in moosicbox_upnp::devices().await {
-            let service_id = "urn:upnp-org:serviceId:AVTransport";
-            if let Ok((device, service)) =
-                moosicbox_upnp::get_device_and_service(&device.udn, service_id)
-            {
-                av_transport_services.push(UpnpAvTransportService { device, service });
-            }
-        }
-
-        av_transport_services.clone()
-    };
-
-    let mut outputs = Vec::with_capacity(services.len());
-
-    let url_string = { STATE.api_url.read().await.clone() };
-    let url = url_string.as_deref();
-
-    let Some(url) = url else {
-        return Ok(());
-    };
-
-    for service in services.into_iter() {
-        let player_type = PlayerType::Upnp {
-            source_to_music_api: Arc::new(Box::new(SourceToRemoteLibrary {
-                host: url.to_owned(),
-            })),
-            device: service.device.clone(),
-            service: service.service.clone(),
-            handle: UPNP_LISTENER_HANDLE.get().unwrap().clone(),
-        };
-        let output: AudioOutputFactory = service.try_into()?;
-
-        outputs.push((output, player_type));
-    }
-
-    let register_players_payload = outputs
-        .iter()
-        .map(|(x, _)| RegisterPlayer {
-            audio_output_id: x.id.clone(),
-            name: x.name.clone(),
-        })
-        .collect::<Vec<_>>();
-
-    let api_players = register_players(&register_players_payload).await?;
-
-    log::debug!("init_upnp_players: players={api_players:?}");
-
-    let api_players = api_players
-        .into_iter()
-        .filter_map(|p| {
-            if let Some((output, ptype)) = outputs
-                .iter()
-                .find(|(output, _ptype)| output.id == p.audio_output_id)
-            {
-                Some((p, ptype.clone(), output.clone()))
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-
-    add_players_to_current_players(api_players).await;
-
-    let ids = {
-        STATE
-            .current_sessions
-            .read()
-            .await
-            .iter()
-            .map(|x| x.session_id)
-            .collect::<Vec<_>>()
-    };
-
-    update_connection_outputs(&ids).await?;
 
     Ok(())
 }

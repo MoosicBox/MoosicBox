@@ -18,10 +18,12 @@ moosicbox_audio_output = { version = "0.1.0", path = "../../audio_output", defau
 moosicbox_audio_zone = { version = "0.1.0", path = "../../audio_zone", default-features = false }
 moosicbox_core = { version = "0.1.0", path = "../../core", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../../env_utils", default-features = false }
+moosicbox_logging = { version = "0.1.0", path = "../../logging", default-features = false }
 moosicbox_music_api = { version = "0.1.0", path = "../../music_api", default-features = false }
 moosicbox_player = { version = "0.1.0", path = "../../player", default-features = false, features = [
     "local",
 ] }
+moosicbox_remote_library = { version = "0.1.0", path = "../../remote_library", default-features = false }
 moosicbox_session = { version = "0.1.0", path = "../../session", default-features = false }
 moosicbox_upnp = { version = "0.1.0", path = "../../upnp", optional = true, default-features = false, features = [
     "player",
@@ -29,6 +31,8 @@ moosicbox_upnp = { version = "0.1.0", path = "../../upnp", optional = true, defa
 moosicbox_ws = { version = "0.1.0", path = "../../ws", default-features = false }
 
 log        = { workspace = true }
+reqwest    = { workspace = true }
+serde_json = { workspace = true }
 thiserror  = { workspace = true }
 tokio      = { workspace = true, features = ["macros"] }
 tokio-util = { workspace = true }
