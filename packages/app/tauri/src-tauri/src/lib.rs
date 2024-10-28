@@ -122,7 +122,7 @@ async fn on_startup() -> Result<(), tauri::Error> {
 
 #[derive(Debug, Default, Error, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AppState {
+pub struct UpdateAppState {
     connection_id: Option<String>,
     connection_name: Option<String>,
     api_url: Option<String>,
@@ -134,14 +134,14 @@ pub struct AppState {
     current_session_id: Option<u64>,
 }
 
-impl std::fmt::Display for AppState {
+impl std::fmt::Display for UpdateAppState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("{self:?}"))
     }
 }
 
 #[tauri::command]
-async fn set_state(state: AppState) -> Result<(), TauriPlayerError> {
+async fn set_state(state: UpdateAppState) -> Result<(), TauriPlayerError> {
     log::debug!("set_state: state={state:?}");
 
     let mut updated_connection_details = false;
