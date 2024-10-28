@@ -1198,7 +1198,7 @@ async fn handle_playback_update(update: &ApiUpdateSession) -> Result<(), HandleW
 
     let players = STATE
         .get_players(update.session_id, Some(&update.playback_target))
-        .await?;
+        .await;
 
     moosicbox_logging::debug_or_trace!(
         ("handle_playback_update: player count={}", players.len()),
@@ -1861,7 +1861,7 @@ async fn handle_media_event(
             current_session_id,
             Some(&current_playback_target.clone().into()),
         )
-        .await?;
+        .await;
     log::debug!("handle_media_event: {} player(s)", players.len());
 
     for mut player in players {

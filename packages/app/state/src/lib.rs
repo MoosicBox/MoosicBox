@@ -271,11 +271,6 @@ impl AppState {
         Ok(player)
     }
 
-    /// # Errors
-    ///
-    /// * If there is a `PlayerError`
-    /// * If an unknown error occurs
-    ///
     /// # Panics
     ///
     /// * If any of the relevant state `RwLock`s are poisoned
@@ -283,17 +278,16 @@ impl AppState {
         &self,
         session_id: u64,
         playback_target: Option<&ApiPlaybackTarget>,
-    ) -> Result<Vec<PlaybackHandler>, AppStateError> {
-        let players = {
-            let mut playback_handlers = vec![];
-            let active_players = self.active_players.read().await.clone();
+    ) -> Vec<PlaybackHandler> {
+        let mut playback_handlers = vec![];
+        let active_players = self.active_players.read().await.clone();
 
-            for player in active_players {
-                let target = &player.playback_target;
-                log::trace!(
+        for player in active_players {
+            let target = &player.playback_target;
+            log::trace!(
                 "get_players: Checking if player is in session: target={target:?} session_id={session_id} player_zone_id={playback_target:?} player={player:?}",
             );
-                let same_session = player.player.playback
+            let same_session = player.player.playback
                 .read()
                 .unwrap()
                 .as_ref()
@@ -304,21 +298,18 @@ impl AppState {
                     );
                     p.session_id == session_id
                 });
-                if !same_session {
-                    continue;
-                }
-                log::trace!(
+            if !same_session {
+                continue;
+            }
+            log::trace!(
                 "get_players: Checking if player is in zone: target={target:?} session_id={session_id} player_zone_id={playback_target:?} player={player:?}",
             );
-                if playback_target.is_some_and(|x| x != target) {
-                    continue;
-                }
-
-                playback_handlers.push(player.player);
+            if playback_target.is_some_and(|x| x != target) {
+                continue;
             }
-            playback_handlers
-        };
 
-        Ok(players)
+            playback_handlers.push(player.player);
+        }
+        playback_handlers
     }
 }
