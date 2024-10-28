@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     env,
     fmt::Debug,
     sync::{Arc, LazyLock, OnceLock},
@@ -20,10 +19,7 @@ use moosicbox_core::{
 use moosicbox_mdns::scanner::service::Commander;
 use moosicbox_music_api::{FromId, MusicApi, MusicApisError, SourceToMusicApi};
 use moosicbox_paging::Page;
-use moosicbox_player::{
-    local::LocalPlayer, Playback, PlaybackHandler, PlaybackRetryOptions, PlaybackType, PlayerError,
-    PlayerSource, Track,
-};
+use moosicbox_player::{Playback, PlaybackHandler, PlaybackRetryOptions, PlayerError, Track};
 use moosicbox_remote_library::RemoteLibraryMusicApi;
 use moosicbox_session::models::{
     ApiPlaybackTarget, ApiSession, ApiUpdateSession, ApiUpdateSessionPlaylist, PlaybackTarget,
@@ -603,48 +599,6 @@ async fn update_connection_outputs(session_ids: &[u64]) -> Result<(), TauriPlaye
     }
 
     Ok(())
-}
-
-async fn get_players(
-    session_id: u64,
-    playback_target: Option<&ApiPlaybackTarget>,
-) -> Result<Vec<PlaybackHandler>, TauriPlayerError> {
-    let players = {
-        let mut playback_handlers = vec![];
-        let active_players = STATE.active_players.read().await;
-
-        for player in active_players.iter() {
-            let target = &player.playback_target;
-            log::trace!(
-                "get_players: Checking if player is in session: target={target:?} session_id={session_id} player_zone_id={playback_target:?} player={player:?}",
-            );
-            let same_session = player.player.playback
-                .read()
-                .unwrap()
-                .as_ref()
-                .is_some_and(|p| {
-                    log::trace!(
-                        "get_players: player playback.session_id={} target session_id={session_id} player={player:?}",
-                        p.session_id
-                    );
-                    p.session_id == session_id
-                });
-            if !same_session {
-                continue;
-            }
-            log::trace!(
-                "get_players: Checking if player is in zone: target={target:?} session_id={session_id} player_zone_id={playback_target:?} player={player:?}",
-            );
-            if playback_target.is_some_and(|x| x != target) {
-                continue;
-            }
-
-            playback_handlers.push(player.player.clone());
-        }
-        playback_handlers
-    };
-
-    Ok(players)
 }
 
 #[derive(Copy, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone)]
@@ -1242,7 +1196,9 @@ async fn handle_playback_update(update: &ApiUpdateSession) -> Result<(), HandleW
 
     propagate_state_to_plugin(update).await;
 
-    let players = get_players(update.session_id, Some(&update.playback_target)).await?;
+    let players = STATE
+        .get_players(update.session_id, Some(&update.playback_target))
+        .await?;
 
     moosicbox_logging::debug_or_trace!(
         ("handle_playback_update: player count={}", players.len()),
@@ -1468,6 +1424,8 @@ pub enum HandleWsMessageError {
     Emit(#[from] tauri::Error),
     #[error(transparent)]
     Tauri(#[from] TauriPlayerError),
+    #[error(transparent)]
+    AppState(#[from] AppStateError),
 }
 
 async fn handle_ws_message(message: OutboundPayload) -> Result<(), HandleWsMessageError> {
@@ -1898,11 +1856,12 @@ async fn handle_media_event(
         return Ok(());
     };
 
-    let players = get_players(
-        current_session_id,
-        Some(&current_playback_target.clone().into()),
-    )
-    .await?;
+    let players = STATE
+        .get_players(
+            current_session_id,
+            Some(&current_playback_target.clone().into()),
+        )
+        .await?;
     log::debug!("handle_media_event: {} player(s)", players.len());
 
     for mut player in players {

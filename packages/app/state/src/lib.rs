@@ -60,7 +60,7 @@ impl std::fmt::Debug for PlayerType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PlaybackTargetSessionPlayer {
     pub playback_target: ApiPlaybackTarget,
     pub session_id: u64,
@@ -269,5 +269,56 @@ impl AppState {
             .await?;
 
         Ok(player)
+    }
+
+    /// # Errors
+    ///
+    /// * If there is a `PlayerError`
+    /// * If an unknown error occurs
+    ///
+    /// # Panics
+    ///
+    /// * If any of the relevant state `RwLock`s are poisoned
+    pub async fn get_players(
+        &self,
+        session_id: u64,
+        playback_target: Option<&ApiPlaybackTarget>,
+    ) -> Result<Vec<PlaybackHandler>, AppStateError> {
+        let players = {
+            let mut playback_handlers = vec![];
+            let active_players = self.active_players.read().await.clone();
+
+            for player in active_players {
+                let target = &player.playback_target;
+                log::trace!(
+                "get_players: Checking if player is in session: target={target:?} session_id={session_id} player_zone_id={playback_target:?} player={player:?}",
+            );
+                let same_session = player.player.playback
+                .read()
+                .unwrap()
+                .as_ref()
+                .is_some_and(|p| {
+                    log::trace!(
+                        "get_players: player playback.session_id={} target session_id={session_id} player={player:?}",
+                        p.session_id
+                    );
+                    p.session_id == session_id
+                });
+                if !same_session {
+                    continue;
+                }
+                log::trace!(
+                "get_players: Checking if player is in zone: target={target:?} session_id={session_id} player_zone_id={playback_target:?} player={player:?}",
+            );
+                if playback_target.is_some_and(|x| x != target) {
+                    continue;
+                }
+
+                playback_handlers.push(player.player);
+            }
+            playback_handlers
+        };
+
+        Ok(players)
     }
 }
