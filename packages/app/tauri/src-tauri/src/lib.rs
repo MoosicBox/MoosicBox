@@ -354,90 +354,6 @@ pub async fn update_state() -> Result<(), TauriPlayerError> {
     Ok(())
 }
 
-async fn set_audio_zone_active_players(
-    session_id: u64,
-    audio_zone_id: u64,
-    players: Vec<(ApiPlayer, PlayerType, AudioOutputFactory)>,
-) -> Result<(), TauriPlayerError> {
-    log::debug!(
-        "set_audio_zone_active_players: session_id={session_id} audio_zone_id={audio_zone_id} {:?}",
-        players.iter().map(|(x, _, _)| x).collect::<Vec<_>>()
-    );
-
-    let mut api_players_map = STATE.audio_zone_active_api_players.write().await;
-    api_players_map.insert(audio_zone_id, players.clone());
-
-    {
-        let mut players_map = STATE.active_players.write().await;
-        for (player, ptype, output) in players.iter() {
-            if let Some(existing) = players_map.iter().find(|x| match x.playback_target {
-                ApiPlaybackTarget::AudioZone { audio_zone_id: id } => id == audio_zone_id,
-                _ => false,
-            }) {
-                let different_session = {
-                    !existing
-                        .player
-                        .playback
-                        .read()
-                        .unwrap()
-                        .as_ref()
-                        .is_some_and(|p| p.session_id == session_id)
-                };
-
-                let same_output = existing
-                    .player
-                    .output
-                    .as_ref()
-                    .is_some_and(|output| output.lock().unwrap().id == player.audio_output_id);
-
-                if !different_session && same_output {
-                    log::debug!(
-                        "Skipping existing player for audio_zone_id={audio_zone_id} audio_output_id={}",
-                        player.audio_output_id
-                    );
-                    continue;
-                }
-            }
-
-            let playback_target = ApiPlaybackTarget::AudioZone { audio_zone_id };
-            let player = STATE
-                .new_player(
-                    session_id,
-                    playback_target.clone(),
-                    output.clone(),
-                    ptype.clone(),
-                )
-                .await?;
-            log::debug!(
-                "set_audio_zone_active_players: audio_zone_id={audio_zone_id} session_id={session_id:?}"
-            );
-            let playback_target_session_player = PlaybackTargetSessionPlayer {
-                playback_target,
-                session_id,
-                player,
-                player_type: ptype.clone(),
-            };
-            if let Some((i, _)) =
-                players_map
-                    .iter()
-                    .enumerate()
-                    .find(|(_, x)| match x.playback_target {
-                        ApiPlaybackTarget::AudioZone { audio_zone_id: id } => {
-                            id == audio_zone_id && x.session_id == session_id
-                        }
-                        _ => false,
-                    })
-            {
-                players_map[i] = playback_target_session_player;
-            } else {
-                players_map.push(playback_target_session_player);
-            }
-        }
-    }
-
-    Ok(())
-}
-
 async fn update_audio_zones() -> Result<(), TauriPlayerError> {
     let audio_zones_binding = STATE.current_audio_zones.read().await;
     let audio_zones: &[ApiAudioZoneWithSession] = audio_zones_binding.as_ref();
@@ -467,7 +383,9 @@ async fn update_audio_zones() -> Result<(), TauriPlayerError> {
             .collect::<Vec<_>>();
 
         if !players.is_empty() {
-            set_audio_zone_active_players(audio_zone.session_id, audio_zone.id, players).await?;
+            STATE
+                .set_audio_zone_active_players(audio_zone.session_id, audio_zone.id, players)
+                .await?;
         }
     }
     Ok(())

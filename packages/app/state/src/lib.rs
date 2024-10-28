@@ -377,4 +377,97 @@ impl AppState {
 
         Ok(())
     }
+
+    /// # Errors
+    ///
+    /// * If a new player fails to be created
+    ///
+    /// # Panics
+    ///
+    /// * If any of the relevant state `RwLock`s are poisoned
+    pub async fn set_audio_zone_active_players(
+        &self,
+        session_id: u64,
+        audio_zone_id: u64,
+        players: Vec<(ApiPlayer, PlayerType, AudioOutputFactory)>,
+    ) -> Result<(), AppStateError> {
+        log::debug!(
+        "set_audio_zone_active_players: session_id={session_id} audio_zone_id={audio_zone_id} {:?}",
+        players.iter().map(|(x, _, _)| x).collect::<Vec<_>>()
+    );
+
+        let mut api_players_map = self.audio_zone_active_api_players.write().await;
+        api_players_map.insert(audio_zone_id, players.clone());
+
+        {
+            let mut players_map = self.active_players.write().await;
+            for (player, ptype, output) in &players {
+                if let Some(existing) = players_map.iter().find(|x| match x.playback_target {
+                    ApiPlaybackTarget::AudioZone { audio_zone_id: id } => id == audio_zone_id,
+                    ApiPlaybackTarget::ConnectionOutput { .. } => false,
+                }) {
+                    let different_session = {
+                        !existing
+                            .player
+                            .playback
+                            .read()
+                            .unwrap()
+                            .as_ref()
+                            .is_some_and(|p| p.session_id == session_id)
+                    };
+
+                    let same_output =
+                        existing.player.output.as_ref().is_some_and(|output| {
+                            output.lock().unwrap().id == player.audio_output_id
+                        });
+
+                    if !different_session && same_output {
+                        log::debug!(
+                        "Skipping existing player for audio_zone_id={audio_zone_id} audio_output_id={}",
+                        player.audio_output_id
+                    );
+                        continue;
+                    }
+                }
+
+                let playback_target = ApiPlaybackTarget::AudioZone { audio_zone_id };
+                let player = self
+                    .new_player(
+                        session_id,
+                        playback_target.clone(),
+                        output.clone(),
+                        ptype.clone(),
+                    )
+                    .await?;
+                log::debug!(
+                "set_audio_zone_active_players: audio_zone_id={audio_zone_id} session_id={session_id:?}"
+            );
+                let playback_target_session_player = PlaybackTargetSessionPlayer {
+                    playback_target,
+                    session_id,
+                    player,
+                    player_type: ptype.clone(),
+                };
+                if let Some((i, _)) =
+                    players_map
+                        .iter()
+                        .enumerate()
+                        .find(|(_, x)| match x.playback_target {
+                            ApiPlaybackTarget::AudioZone { audio_zone_id: id } => {
+                                id == audio_zone_id && x.session_id == session_id
+                            }
+                            ApiPlaybackTarget::ConnectionOutput { .. } => false,
+                        })
+                {
+                    players_map[i] = playback_target_session_player;
+                } else {
+                    players_map.push(playback_target_session_player);
+                }
+            }
+        }
+
+        drop(api_players_map);
+
+        Ok(())
+    }
 }
