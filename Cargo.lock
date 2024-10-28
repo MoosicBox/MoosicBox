@@ -5756,7 +5756,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_app"
-version = "0.13.1"
+version = "0.14.0"
 dependencies = [
  "app-tauri-plugin-player",
  "async-recursion",
