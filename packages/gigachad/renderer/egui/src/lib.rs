@@ -13,7 +13,7 @@ use gigachad_renderer::viewport::immediate::{Pos, Viewport, ViewportListener};
 pub use gigachad_renderer::*;
 use gigachad_router::Router;
 use gigachad_transformer::{
-    calc::Calc, ActionType, ContainerElement, Element, LayoutDirection, Route, TableIter,
+    calc::Calc, ActionType, ContainerElement, Element, Input, LayoutDirection, Route, TableIter,
 };
 use itertools::Itertools;
 
@@ -914,6 +914,25 @@ impl EguiApp {
             Element::Table { .. } => {
                 self.render_table(ctx, ui, element, &handler, viewport, rect);
                 return;
+            }
+            Element::Input(input) => {
+                let value = match input {
+                    Input::Text { value, .. } | Input::Password { value, .. } => value,
+                };
+
+                let id = ui.next_auto_id();
+                let mut value_text = ui
+                    .data_mut(|data| data.remove_temp::<String>(id))
+                    .unwrap_or_else(|| value.clone().unwrap_or_default());
+                let mut text_edit = egui::TextEdit::singleline(&mut value_text).id(id);
+
+                if let Input::Password { .. } = input {
+                    text_edit = text_edit.password(true);
+                }
+
+                let response = text_edit.ui(ui);
+                ui.data_mut(|data| data.insert_temp(id, value_text));
+                Some(response)
             }
             Element::Raw { value } => Some(ui.label(value)),
             Element::Image { source, element } => source.clone().map(|source| {
