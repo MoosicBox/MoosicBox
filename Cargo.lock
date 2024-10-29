@@ -3401,7 +3401,7 @@ checksum = "ea36e2fb879a217fbdab6443ee8005b2314dcb6afcc13864144fdf3d24c0b04b"
 dependencies = [
  "free_log_models",
  "futures-util",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "serde",
  "serde_json",
  "strum",
@@ -3815,7 +3815,7 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_logging",
  "moosicbox_task",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
 ]
 
 [[package]]
@@ -3833,7 +3833,7 @@ dependencies = [
  "moosicbox_app_native_image",
  "moosicbox_assert",
  "moosicbox_task",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "thiserror",
  "tokio",
 ]
@@ -4606,7 +4606,7 @@ dependencies = [
  "http 1.1.0",
  "hyper 1.5.0",
  "hyper-util",
- "rustls 0.23.15",
+ "rustls 0.23.16",
  "rustls-pki-types",
  "tokio",
  "tokio-rustls 0.26.0",
@@ -4629,9 +4629,9 @@ dependencies = [
 
 [[package]]
 name = "hyper-util"
-version = "0.1.9"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41296eb09f183ac68eec06e03cdbea2e759633d4067b2f6552fc2e009bcad08b"
+checksum = "df2dcfbe0677734ab2f3ffa7fa7bfd4706bfdc1ef393f2ee30184aed67e631b4"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -5188,9 +5188,9 @@ dependencies = [
 
 [[package]]
 name = "libm"
-version = "0.2.9"
+version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bda4c6077b0b08da2c48b172195795498381a7c8988c9e6212a6c55c5b9bd70"
+checksum = "8355be11b20d696c8f18f6cc018c4e372165b1fa8126cef092399c9951984ffa"
 
 [[package]]
 name = "libpulse-binding"
@@ -5828,7 +5828,7 @@ dependencies = [
  "moosicbox_menu_models",
  "moosicbox_paging",
  "moosicbox_task",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "thiserror",
  "tokio",
 ]
@@ -5908,7 +5908,7 @@ dependencies = [
  "moosicbox_task",
  "moosicbox_upnp",
  "moosicbox_ws",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "serde",
  "serde_json",
  "thiserror",
@@ -5987,7 +5987,7 @@ dependencies = [
  "moosicbox_stream_utils",
  "moosicbox_task",
  "rangemap",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "symphonia",
  "thiserror",
  "tokio",
@@ -6080,7 +6080,7 @@ dependencies = [
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_json_utils",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "serde",
  "serde_json",
  "thiserror",
@@ -6250,7 +6250,7 @@ dependencies = [
  "moosicbox_stream_utils",
  "moosicbox_task",
  "regex",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "serde",
  "strum",
  "strum_macros",
@@ -6521,7 +6521,7 @@ dependencies = [
  "moosicbox_task",
  "rand 0.8.5",
  "regex",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "serde",
  "serde_json",
  "symphonia",
@@ -6559,7 +6559,7 @@ dependencies = [
  "moosicbox_paging",
  "moosicbox_search",
  "regex",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "serde",
  "serde_json",
  "strum",
@@ -6579,7 +6579,7 @@ dependencies = [
  "moosicbox_core",
  "moosicbox_music_api",
  "moosicbox_paging",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "thiserror",
 ]
 
@@ -6617,7 +6617,7 @@ dependencies = [
  "moosicbox_task",
  "mp3-duration",
  "regex",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "serde",
  "serde_json",
  "strum",
@@ -6761,7 +6761,7 @@ dependencies = [
  "log",
  "moosicbox_task",
  "pin-project",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "thiserror",
  "tokio",
  "tokio-util",
@@ -6794,7 +6794,7 @@ dependencies = [
  "moosicbox_paging",
  "moosicbox_search",
  "open",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "serde",
  "serde_json",
  "strum",
@@ -6851,7 +6851,7 @@ dependencies = [
  "moosicbox_ws",
  "rand 0.8.5",
  "regex",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "serde",
  "serde-aux",
  "serde_json",
@@ -6921,7 +6921,7 @@ dependencies = [
  "pin-utils",
  "rand 0.8.5",
  "regex",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "roxmltree 0.20.0",
  "rupnp",
  "serde",
@@ -6974,7 +6974,7 @@ dependencies = [
  "moosicbox_paging",
  "moosicbox_search",
  "open",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "serde",
  "serde_json",
  "strum",
@@ -8852,7 +8852,7 @@ dependencies = [
  "quinn-proto",
  "quinn-udp",
  "rustc-hash 2.0.0",
- "rustls 0.23.15",
+ "rustls 0.23.16",
  "socket2",
  "thiserror",
  "tokio",
@@ -8869,7 +8869,7 @@ dependencies = [
  "rand 0.8.5",
  "ring",
  "rustc-hash 2.0.0",
- "rustls 0.23.15",
+ "rustls 0.23.16",
  "slab",
  "thiserror",
  "tinyvec",
@@ -8878,10 +8878,11 @@ dependencies = [
 
 [[package]]
 name = "quinn-udp"
-version = "0.5.5"
+version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fe68c2e9e1a1234e218683dbdf9f9dfcb094113c5ac2b938dfcb9bab4c4140b"
+checksum = "e346e016eacfff12233c243718197ca12f148c84e1e84268a896699b41c71780"
 dependencies = [
+ "cfg_aliases 0.2.1",
  "libc",
  "once_cell",
  "socket2",
@@ -9247,9 +9248,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.12.8"
+version = "0.12.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f713147fbe92361e52392c73b8c9e48c04c6625bce969ef54dc901e58e042a7b"
+checksum = "a77c62af46e79de0a562e1a9849205ffcb7fc1238876e9bd743357570e04046f"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -9270,7 +9271,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "quinn",
- "rustls 0.23.15",
+ "rustls 0.23.16",
  "rustls-pemfile 2.2.0",
  "rustls-pki-types",
  "serde",
@@ -9581,9 +9582,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.15"
+version = "0.23.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fbb44d7acc4e873d613422379f69f237a1b141928c02f6bc6ccfddddc2d7993"
+checksum = "eee87ff5d9b36712a58574e12e9f0ea80f915a5b0ac518d322b24a465617925e"
 dependencies = [
  "once_cell",
  "ring",
@@ -9924,9 +9925,9 @@ checksum = "a3f0bf26fd526d2a95683cd0f87bf103b8539e2ca1ef48ce002d67aad59aa0b4"
 
 [[package]]
 name = "serde"
-version = "1.0.213"
+version = "1.0.214"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ea7893ff5e2466df8d720bb615088341b295f849602c6956047f8f80f0e9bc1"
+checksum = "f55c3193aca71c12ad7890f1785d2b73e1b9f63a0bbc353c08ef26fe03fc56b5"
 dependencies = [
  "serde_derive",
 ]
@@ -9955,9 +9956,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.213"
+version = "1.0.214"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e85ad2009c50b58e87caa8cd6dac16bdf511bbfb7af6c33df902396aa480fa5"
+checksum = "de523f781f095e28fa605cdce0f8307e451cc0fd14e2eb4cd2e98a355b147766"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -10433,7 +10434,7 @@ dependencies = [
  "once_cell",
  "paste",
  "percent-encoding",
- "rustls 0.23.15",
+ "rustls 0.23.16",
  "rustls-pemfile 2.2.0",
  "serde",
  "serde_json",
@@ -11164,9 +11165,9 @@ dependencies = [
 
 [[package]]
 name = "tao"
-version = "0.30.3"
+version = "0.30.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0dbbebe82d02044dfa481adca1550d6dd7bd16e086bc34fa0fbecceb5a63751"
+checksum = "5f716c1804556a00391742f0b7c8e71b72fc9e333060756472c83c3e0eb23752"
 dependencies = [
  "bitflags 2.6.0",
  "cocoa",
@@ -11247,7 +11248,7 @@ dependencies = [
  "percent-encoding",
  "plist",
  "raw-window-handle",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "serde",
  "serde_json",
  "serde_repr",
@@ -11804,7 +11805,7 @@ version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c7bc40d0e5a97695bb96e27995cd3a08538541b0a846f65bba7a359f36700d4"
 dependencies = [
- "rustls 0.23.15",
+ "rustls 0.23.16",
  "rustls-pki-types",
  "tokio",
 ]
