@@ -35,6 +35,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_route("/downloads", |_| async {
             moosicbox_app_native_ui::downloads()
         })
+        .with_route("/settings", |_| async {
+            moosicbox_app_native_ui::settings::settings()
+        })
         .with_route_result("/albums", |req| async move {
             Ok::<_, Box<dyn std::error::Error>>(if let Some(album_id) = req.query.get("albumId") {
                 if req.query.get("full").map(|x| x.as_str()) == Some("true") {

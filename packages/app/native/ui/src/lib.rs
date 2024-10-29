@@ -2,6 +2,8 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::branches_sharing_code)]
 
+pub mod settings;
+
 use maud::{html, Markup, PreEscaped};
 use moosicbox_app_native_image::image;
 use moosicbox_library_models::{ApiAlbum, ApiArtist, ApiLibraryAlbum, ApiLibraryArtist, ApiTrack};
@@ -48,18 +50,31 @@ pub fn sidebar_navigation() -> Markup {
     html! {
         aside sx-width="calc(max(240, min(280, 15%)))" sx-background="#080a0b" {
             div class="navigation-bar" {
-                div class="navigation-bar-header" {
+                div class="navigation-bar-header" sx-dir="row" {
                     a href="/" sx-dir="row" {
                         @let size = 36;
                         img
                             sx-width=(size)
                             sx-height=(size)
-                            class="navigation-bar-header-home-link-logo-icon"
                             src=(public_img!("icon128.png"));
 
                         h1 class="navigation-bar-header-home-link-text" {
                             ("MoosicBox")
                         }
+                    }
+                    @let size = 22;
+                    a href="/settings" sx-dir="row" sx-width=(size + 10) {
+                        img
+                            sx-width=(size)
+                            sx-height=(size)
+                            src=(public_img!("settings-gear-white.svg"));
+                    }
+                    @let size = 22;
+                    div sx-width=(size + 10) {
+                        img
+                            sx-width=(size)
+                            sx-height=(size)
+                            src=(public_img!("chevron-left-white.svg"));
                     }
                 }
                 ul {
