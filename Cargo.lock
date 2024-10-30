@@ -3798,6 +3798,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "gigachad_renderer_datastar"
+version = "0.1.0"
+dependencies = [
+ "actix-cors",
+ "actix-web",
+ "async-trait",
+ "flume",
+ "gigachad_renderer",
+ "gigachad_router",
+ "gigachad_transformer",
+ "log",
+ "moosicbox_app_native_image",
+ "moosicbox_assert",
+ "moosicbox_env_utils",
+ "moosicbox_logging",
+ "moosicbox_middleware",
+ "moosicbox_task",
+ "tokio",
+]
+
+[[package]]
 name = "gigachad_renderer_egui"
 version = "0.1.0"
 dependencies = [

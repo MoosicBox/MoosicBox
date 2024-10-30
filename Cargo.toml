@@ -33,6 +33,7 @@ members = [
     "packages/gigachad",
     "packages/gigachad/color",
     "packages/gigachad/renderer",
+    "packages/gigachad/renderer/datastar",
     "packages/gigachad/renderer/egui",
     "packages/gigachad/renderer/fltk",
     "packages/gigachad/renderer/htmx",
