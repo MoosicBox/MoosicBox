@@ -16,6 +16,7 @@ moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features 
 color-hex = { workspace = true }
 egui      = { workspace = true, optional = true }
 log       = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

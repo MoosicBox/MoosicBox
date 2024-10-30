@@ -2,6 +2,19 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 pub use color_hex::color_from_hex;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum ParseHexError {
+    #[error("Invalid character at index {0} '{1}'")]
+    InvalidCharacter(usize, char),
+    #[error("Invalid non-ASCII character at index {0}")]
+    InvalidNonAsciiCharacter(usize),
+    #[error("Hex string too long")]
+    StringTooLong,
+    #[error("Hex string invalid length")]
+    InvalidLength,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Color {
@@ -15,12 +28,11 @@ impl Color {
     /// Parses a hex string (a-f/A-F/0-9) as a `Color` from the &str,
     /// ignoring surrounding whitespace.
     ///
-    /// # Panics
+    /// # Errors
     ///
     /// * If a non-hex, non-whitespace character is encountered.
     #[allow(clippy::many_single_char_names)]
-    #[must_use]
-    pub fn from_hex(hex: &str) -> Self {
+    pub fn try_from_hex(hex: &str) -> Result<Self, ParseHexError> {
         let mut short_r = 0;
         let mut short_g = 0;
         let mut short_b = 0;
@@ -36,18 +48,19 @@ impl Color {
 
         let hex = hex.strip_prefix('#').unwrap_or(hex);
 
-        for (i, value) in hex
-            .trim()
-            .chars()
-            .map(|x| match x {
-                '0'..='9' => x as u8 - 48,
-                'A'..='F' => x as u8 - 55,
-                'a'..='f' => x as u8 - 87,
-                c if c.is_ascii() => panic!("encountered invalid character: `{x}`"),
-                _ => panic!("encountered invalid non-ASCII character"),
-            })
-            .enumerate()
-        {
+        for (i, value) in hex.trim().chars().enumerate().map(|(i, x)| {
+            (
+                i,
+                match x {
+                    '0'..='9' => Ok(x as u8 - 48),
+                    'A'..='F' => Ok(x as u8 - 55),
+                    'a'..='f' => Ok(x as u8 - 87),
+                    c if c.is_ascii() => Err(ParseHexError::InvalidCharacter(i, x)),
+                    _ => Err(ParseHexError::InvalidNonAsciiCharacter(i)),
+                },
+            )
+        }) {
+            let value = value?;
             match i {
                 0 => {
                     short_r = value;
@@ -79,17 +92,17 @@ impl Color {
                     maybe_a = Some(value << 4);
                 }
                 7 => {
-                    a = Some(maybe_a.unwrap() + value);
+                    a = maybe_a.map(|a| a + value);
                 }
                 _ => {
-                    panic!("hex string too long");
+                    return Err(ParseHexError::StringTooLong);
                 }
             }
         }
 
-        moosicbox_assert::assert_or_panic!(
+        moosicbox_assert::assert_or_err!(
             maybe_a.is_none() || a.is_some(),
-            "hex string invalid length"
+            ParseHexError::InvalidLength,
         );
 
         if three_chars {
@@ -104,7 +117,19 @@ impl Color {
             a = Some((short_a << 4) + short_a);
         }
 
-        Self { r, g, b, a }
+        Ok(Self { r, g, b, a })
+    }
+
+    /// Parses a hex string (a-f/A-F/0-9) as a `Color` from the &str,
+    /// ignoring surrounding whitespace.
+    ///
+    /// # Panics
+    ///
+    /// * If a non-hex, non-whitespace character is encountered.
+    #[allow(clippy::many_single_char_names)]
+    #[must_use]
+    pub fn from_hex(hex: &str) -> Self {
+        Self::try_from_hex(hex).unwrap()
     }
 }
 
