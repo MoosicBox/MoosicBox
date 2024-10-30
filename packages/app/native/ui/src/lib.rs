@@ -112,7 +112,7 @@ pub fn sidebar_navigation() -> Markup {
 #[must_use]
 pub fn player() -> Markup {
     html! {
-        div sx-height=(100) sx-dir="row" {
+        div sx-height=(100) sx-dir="row" sx-border-top="3, #222" {
             div sx-dir="row" {
                 @let size = 70;
                 a href={"/albums?albumId="(1)} sx-width=(size) sx-height=(size) {
