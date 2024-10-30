@@ -230,13 +230,21 @@ pub struct ContainerElement {
     pub hidden: Option<bool>,
     pub route: Option<Route>,
     pub actions: Vec<ActionType>,
+    #[cfg(feature = "calc")]
     pub margin_left: Option<f32>,
+    #[cfg(feature = "calc")]
     pub margin_right: Option<f32>,
+    #[cfg(feature = "calc")]
     pub margin_top: Option<f32>,
+    #[cfg(feature = "calc")]
     pub margin_bottom: Option<f32>,
+    #[cfg(feature = "calc")]
     pub padding_left: Option<f32>,
+    #[cfg(feature = "calc")]
     pub padding_right: Option<f32>,
+    #[cfg(feature = "calc")]
     pub padding_top: Option<f32>,
+    #[cfg(feature = "calc")]
     pub padding_bottom: Option<f32>,
     #[cfg(feature = "calc")]
     pub calculated_width: Option<f32>,
