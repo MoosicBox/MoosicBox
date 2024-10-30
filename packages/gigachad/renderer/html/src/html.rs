@@ -11,6 +11,9 @@ use gigachad_transformer::{
 };
 
 pub trait HtmlTagRenderer {
+    /// # Errors
+    ///
+    /// * If the `HtmlTagRenderer` fails to write the element attributes
     fn element_attrs_to_html(
         &self,
         f: &mut dyn Write,
@@ -48,6 +51,9 @@ pub trait HtmlTagRenderer {
     }
 }
 
+/// # Errors
+///
+/// * If any of the elements fail to be written as HTML
 pub fn elements_to_html(
     f: &mut dyn Write,
     elements: &[Element],
@@ -60,6 +66,9 @@ pub fn elements_to_html(
     Ok(())
 }
 
+/// # Errors
+///
+/// * If there was an IO error writing the attribute
 pub fn write_attr(f: &mut dyn Write, attr: &[u8], value: &[u8]) -> Result<(), std::io::Error> {
     f.write_all(b" ")?;
     f.write_all(attr)?;
@@ -69,6 +78,9 @@ pub fn write_attr(f: &mut dyn Write, attr: &[u8], value: &[u8]) -> Result<(), st
     Ok(())
 }
 
+/// # Errors
+///
+/// * If there was an IO error writing the css attribute
 pub fn write_css_attr(f: &mut dyn Write, attr: &[u8], value: &[u8]) -> Result<(), std::io::Error> {
     f.write_all(attr)?;
     f.write_all(b":")?;
@@ -77,6 +89,7 @@ pub fn write_css_attr(f: &mut dyn Write, attr: &[u8], value: &[u8]) -> Result<()
     Ok(())
 }
 
+#[must_use]
 pub fn number_to_css_string(number: &Number) -> String {
     match number {
         Number::Real(x) => format!("{x}px"),
@@ -87,6 +100,7 @@ pub fn number_to_css_string(number: &Number) -> String {
     }
 }
 
+#[must_use]
 pub fn color_to_css_string(color: Color) -> String {
     color.a.map_or_else(
         || format!("rgb({},{},{})", color.r, color.g, color.b),
@@ -94,6 +108,7 @@ pub fn color_to_css_string(color: Color) -> String {
     )
 }
 
+#[must_use]
 pub fn calc_to_css_string(calc: &Calculation) -> String {
     match calc {
         Calculation::Number(number) => number_to_css_string(number),
@@ -131,6 +146,9 @@ pub fn calc_to_css_string(calc: &Calculation) -> String {
     }
 }
 
+/// # Errors
+///
+/// * If there were any IO errors writing the element style attribute
 #[allow(clippy::too_many_lines)]
 pub fn element_style_to_html(
     f: &mut dyn Write,
@@ -264,6 +282,9 @@ pub fn element_style_to_html(
     Ok(())
 }
 
+/// # Errors
+///
+/// * If there were any IO errors writing the element as HTML
 #[allow(clippy::too_many_lines)]
 pub fn element_to_html(
     f: &mut dyn Write,
@@ -404,6 +425,9 @@ pub fn element_to_html(
     Ok(())
 }
 
+/// # Errors
+///
+/// * If there were any IO errors writing the `ContainerElement` as HTML
 pub fn container_element_to_html(
     container: &ContainerElement,
     tag_renderer: &dyn HtmlTagRenderer,
@@ -417,6 +441,9 @@ pub fn container_element_to_html(
         .to_string())
 }
 
+/// # Errors
+///
+/// * If there were any IO errors writing the `ContainerElement` as an HTML response
 #[allow(clippy::similar_names)]
 pub fn container_element_to_html_response(
     headers: &HeaderMap,

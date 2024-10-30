@@ -165,6 +165,7 @@ impl NativeAppBuilder {
     /// # Errors
     ///
     /// Will error if there was an error starting the FLTK app
+    #[allow(clippy::too_many_lines)]
     pub async fn start(self) -> Result<NativeApp, NativeAppError> {
         let router = self.router.unwrap();
 
