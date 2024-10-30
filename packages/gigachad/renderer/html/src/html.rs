@@ -2,23 +2,65 @@
 
 use std::io::Write;
 
-use actix_htmx::Htmx;
+use actix_web::http::header::HeaderMap;
 use gigachad_renderer::Color;
 use gigachad_router::ContainerElement;
 use gigachad_transformer::{
     Calculation, Element, HeaderSize, Input, JustifyContent, LayoutDirection, LayoutOverflow,
-    Number, Route,
+    Number,
 };
 
-pub fn elements_to_html(f: &mut dyn Write, elements: &[Element]) -> Result<(), std::io::Error> {
+pub trait HtmlTagRenderer {
+    fn element_attrs_to_html(
+        &self,
+        f: &mut dyn Write,
+        element: &ContainerElement,
+    ) -> Result<(), std::io::Error> {
+        element_style_to_html(f, element)?;
+
+        Ok(())
+    }
+
+    fn root_html(
+        &self,
+        _headers: &HeaderMap,
+        content: String,
+        background: Option<Color>,
+    ) -> String {
+        format!(
+            r#"
+            <html>
+                <head>
+                    <style>
+                        body {{
+                            margin: 0;{background}
+                        }}
+                    </style>
+                </head>
+                <body>{content}</body>
+            </html>
+            "#,
+            background = background
+                .map(|x| format!("background:rgb({},{},{})", x.r, x.g, x.b))
+                .as_deref()
+                .unwrap_or("")
+        )
+    }
+}
+
+pub fn elements_to_html(
+    f: &mut dyn Write,
+    elements: &[Element],
+    tag_renderer: &dyn HtmlTagRenderer,
+) -> Result<(), std::io::Error> {
     for element in elements {
-        element_to_html(f, element)?;
+        element_to_html(f, element, tag_renderer)?;
     }
 
     Ok(())
 }
 
-fn write_attr(f: &mut dyn Write, attr: &[u8], value: &[u8]) -> Result<(), std::io::Error> {
+pub fn write_attr(f: &mut dyn Write, attr: &[u8], value: &[u8]) -> Result<(), std::io::Error> {
     f.write_all(b" ")?;
     f.write_all(attr)?;
     f.write_all(b"=\"")?;
@@ -27,7 +69,7 @@ fn write_attr(f: &mut dyn Write, attr: &[u8], value: &[u8]) -> Result<(), std::i
     Ok(())
 }
 
-fn write_css_attr(f: &mut dyn Write, attr: &[u8], value: &[u8]) -> Result<(), std::io::Error> {
+pub fn write_css_attr(f: &mut dyn Write, attr: &[u8], value: &[u8]) -> Result<(), std::io::Error> {
     f.write_all(attr)?;
     f.write_all(b":")?;
     f.write_all(value)?;
@@ -35,7 +77,7 @@ fn write_css_attr(f: &mut dyn Write, attr: &[u8], value: &[u8]) -> Result<(), st
     Ok(())
 }
 
-fn number_to_css_string(number: &Number) -> String {
+pub fn number_to_css_string(number: &Number) -> String {
     match number {
         Number::Real(x) => format!("{x}px"),
         Number::Integer(x) => format!("{x}px"),
@@ -45,14 +87,14 @@ fn number_to_css_string(number: &Number) -> String {
     }
 }
 
-fn color_to_css_string(color: Color) -> String {
+pub fn color_to_css_string(color: Color) -> String {
     color.a.map_or_else(
         || format!("rgb({},{},{})", color.r, color.g, color.b),
         |a| format!("rgba({},{},{},{})", color.r, color.g, color.b, a),
     )
 }
 
-fn calc_to_css_string(calc: &Calculation) -> String {
+pub fn calc_to_css_string(calc: &Calculation) -> String {
     match calc {
         Calculation::Number(number) => number_to_css_string(number),
         Calculation::Add(left, right) => format!(
@@ -222,36 +264,12 @@ pub fn element_style_to_html(
     Ok(())
 }
 
-pub fn element_attrs_to_html(
-    f: &mut dyn Write,
-    element: &ContainerElement,
-) -> Result<(), std::io::Error> {
-    if let Some(route) = &element.route {
-        match route {
-            Route::Get { route, trigger } => {
-                write_attr(f, b"hx-swap", b"outerHTML")?;
-                write_attr(f, b"hx-get", route.as_bytes())?;
-                if let Some(trigger) = trigger {
-                    write_attr(f, b"hx-trigger", trigger.as_bytes())?;
-                }
-            }
-            Route::Post { route, trigger } => {
-                write_attr(f, b"hx-swap", b"outerHTML")?;
-                write_attr(f, b"hx-post", route.as_bytes())?;
-                if let Some(trigger) = trigger {
-                    write_attr(f, b"hx-trigger", trigger.as_bytes())?;
-                }
-            }
-        }
-    }
-
-    element_style_to_html(f, element)?;
-
-    Ok(())
-}
-
 #[allow(clippy::too_many_lines)]
-pub fn element_to_html(f: &mut dyn Write, element: &Element) -> Result<(), std::io::Error> {
+pub fn element_to_html(
+    f: &mut dyn Write,
+    element: &Element,
+    tag_renderer: &dyn HtmlTagRenderer,
+) -> Result<(), std::io::Error> {
     match element {
         Element::Raw { value } => {
             f.write_all(value.as_bytes())?;
@@ -266,9 +284,9 @@ pub fn element_to_html(f: &mut dyn Write, element: &Element) -> Result<(), std::
                 f.write_all(source.as_bytes())?;
                 f.write_all(b"\"")?;
             }
-            element_attrs_to_html(f, element)?;
+            tag_renderer.element_attrs_to_html(f, element)?;
             f.write_all(b">")?;
-            elements_to_html(f, &element.elements)?;
+            elements_to_html(f, &element.elements, tag_renderer)?;
             f.write_all(b"</")?;
             f.write_all(TAG_NAME)?;
             f.write_all(b">")?;
@@ -283,9 +301,9 @@ pub fn element_to_html(f: &mut dyn Write, element: &Element) -> Result<(), std::
                 f.write_all(href.as_bytes())?;
                 f.write_all(b"\"")?;
             }
-            element_attrs_to_html(f, element)?;
+            tag_renderer.element_attrs_to_html(f, element)?;
             f.write_all(b">")?;
-            elements_to_html(f, &element.elements)?;
+            elements_to_html(f, &element.elements, tag_renderer)?;
             f.write_all(b"</")?;
             f.write_all(TAG_NAME)?;
             f.write_all(b">")?;
@@ -302,9 +320,9 @@ pub fn element_to_html(f: &mut dyn Write, element: &Element) -> Result<(), std::
             };
             f.write_all(b"<")?;
             f.write_all(tag_name)?;
-            element_attrs_to_html(f, element)?;
+            tag_renderer.element_attrs_to_html(f, element)?;
             f.write_all(b">")?;
-            elements_to_html(f, &element.elements)?;
+            elements_to_html(f, &element.elements, tag_renderer)?;
             f.write_all(b"</")?;
             f.write_all(tag_name)?;
             f.write_all(b">")?;
@@ -375,9 +393,9 @@ pub fn element_to_html(f: &mut dyn Write, element: &Element) -> Result<(), std::
     if let Some((tag_name, container)) = tag_name {
         f.write_all(b"<")?;
         f.write_all(tag_name.as_bytes())?;
-        element_attrs_to_html(f, container)?;
+        tag_renderer.element_attrs_to_html(f, container)?;
         f.write_all(b">")?;
-        elements_to_html(f, &container.elements)?;
+        elements_to_html(f, &container.elements, tag_renderer)?;
         f.write_all(b"</")?;
         f.write_all(tag_name.as_bytes())?;
         f.write_all(b">")?;
@@ -386,10 +404,13 @@ pub fn element_to_html(f: &mut dyn Write, element: &Element) -> Result<(), std::
     Ok(())
 }
 
-pub fn container_element_to_html(container: &ContainerElement) -> Result<String, std::io::Error> {
+pub fn container_element_to_html(
+    container: &ContainerElement,
+    tag_renderer: &dyn HtmlTagRenderer,
+) -> Result<String, std::io::Error> {
     let mut buffer = vec![];
 
-    elements_to_html(&mut buffer, &container.elements)?;
+    elements_to_html(&mut buffer, &container.elements, tag_renderer)?;
 
     Ok(std::str::from_utf8(&buffer)
         .map_err(std::io::Error::other)?
@@ -398,37 +419,14 @@ pub fn container_element_to_html(container: &ContainerElement) -> Result<String,
 
 #[allow(clippy::similar_names)]
 pub fn container_element_to_html_response(
+    headers: &HeaderMap,
     container: &ContainerElement,
     background: Option<Color>,
-    htmx: &Htmx,
+    tag_renderer: &dyn HtmlTagRenderer,
 ) -> Result<String, std::io::Error> {
-    let html = container_element_to_html(container)?;
-
-    Ok(if htmx.is_htmx {
-        html
-    } else {
-        format!(
-            r#"
-            <html>
-                <head>
-                    <script
-                        src="https://unpkg.com/htmx.org@2.0.2"
-                        integrity="sha384-Y7hw+L/jvKeWIRRkqWYfPcvVxHzVzn5REgzbawhxAuQGwX1XWe70vji+VSeHOThJ"
-                        crossorigin="anonymous">
-                    </script>
-                    <style>
-                        body {{
-                            margin: 0;{background}
-                        }}
-                    </style>
-                </head>
-                <body>{html}</body>
-            </html>
-            "#,
-            background = background
-                .map(|x| format!("background:rgb({},{},{})", x.r, x.g, x.b))
-                .as_deref()
-                .unwrap_or("")
-        )
-    })
+    Ok(tag_renderer.root_html(
+        headers,
+        container_element_to_html(container, tag_renderer)?,
+        background,
+    ))
 }

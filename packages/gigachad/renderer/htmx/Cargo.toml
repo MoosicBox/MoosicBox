@@ -14,25 +14,13 @@ version     = "0.1.0"
 ignored = ["image"]
 
 [dependencies]
-gigachad_renderer = { version = "0.1.0", path = "../", default-features = false, features = [
-    "viewport-immediate",
-] }
+gigachad_renderer = { version = "0.1.0", path = "..", default-features = false }
+gigachad_renderer_html = { version = "0.1.0", path = "../html", default-features = false }
 gigachad_router = { version = "0.1.0", path = "../../../gigachad/router", default-features = false }
 gigachad_transformer = { version = "0.1.0", path = "../../transformer", default-features = false, features = [
     "html",
 ] }
-moosicbox_app_native_image = { version = "0.1.0", path = "../../../app/native/image", default-features = false }
-moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
-moosicbox_env_utils = { version = "0.1.0", path = "../../../env_utils", default-features = false }
-moosicbox_logging = { version = "0.1.0", path = "../../../logging", default-features = false, features = [
-    "macros",
-] }
-moosicbox_middleware = { version = "0.1.0", path = "../../../middleware", default-features = false }
-moosicbox_task = { version = "0.1.0", path = "../../../task", default-features = false }
 
-actix-cors  = { workspace = true }
-actix-htmx  = { workspace = true }
-actix-web   = { workspace = true }
 async-trait = { workspace = true }
 flume       = { workspace = true }
 log         = { workspace = true }
