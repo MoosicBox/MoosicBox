@@ -213,6 +213,23 @@ impl NativeAppBuilder {
                     }
                     #[cfg(not(feature = "fltk"))]
                     unreachable!()
+                } else if cfg!(feature = "datastar") {
+                    #[cfg(feature = "datastar")]
+                    {
+                        let runtime = self
+                            .runtime
+                            .clone()
+                            .ok_or(NativeAppError::RuntimeRequired)?;
+                        let action_tx = Self::listen_actions(self.action_handlers);
+                        let renderer = gigachad_renderer_datastar::DatastarRenderer::new(
+                            router.clone(),
+                            runtime,
+                            action_tx,
+                        );
+                        Box::new(renderer) as Box<dyn Renderer>
+                    }
+                    #[cfg(not(feature = "datastar"))]
+                    unreachable!()
                 } else if cfg!(feature = "htmx") {
                     #[cfg(feature = "htmx")]
                     {

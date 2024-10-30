@@ -5885,6 +5885,7 @@ version = "0.1.0"
 dependencies = [
  "flume",
  "gigachad_renderer",
+ "gigachad_renderer_datastar",
  "gigachad_renderer_egui",
  "gigachad_renderer_fltk",
  "gigachad_renderer_htmx",
