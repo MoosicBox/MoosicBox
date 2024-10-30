@@ -227,6 +227,10 @@ pub struct ContainerElement {
     pub height: Option<Number>,
     pub gap: Option<Number>,
     pub background: Option<Color>,
+    pub border_top: Option<(Color, Number)>,
+    pub border_right: Option<(Color, Number)>,
+    pub border_bottom: Option<(Color, Number)>,
+    pub border_left: Option<(Color, Number)>,
     pub hidden: Option<bool>,
     pub route: Option<Route>,
     pub actions: Vec<ActionType>,
@@ -256,6 +260,14 @@ pub struct ContainerElement {
     pub calculated_y: Option<f32>,
     #[cfg(feature = "calc")]
     pub calculated_position: Option<LayoutPosition>,
+    #[cfg(feature = "calc")]
+    pub calculated_border_top: Option<(Color, f32)>,
+    #[cfg(feature = "calc")]
+    pub calculated_border_right: Option<(Color, f32)>,
+    #[cfg(feature = "calc")]
+    pub calculated_border_bottom: Option<(Color, f32)>,
+    #[cfg(feature = "calc")]
+    pub calculated_border_left: Option<(Color, f32)>,
 }
 
 fn visible_elements(elements: &[Element]) -> impl Iterator<Item = &Element> {

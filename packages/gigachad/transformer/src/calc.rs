@@ -352,6 +352,16 @@ impl ContainerElement {
             return;
         }
 
+        let (Some(container_width), Some(container_height)) =
+            (self.calculated_width, self.calculated_height)
+        else {
+            moosicbox_assert::die_or_panic!(
+                "calc_inner requires calculated_width and calculated_height to be set"
+            );
+        };
+
+        self.calc_borders(container_width, container_height);
+
         let (Some(container_width), Some(container_height)) = (
             self.calculated_width_minus_padding(),
             self.calculated_height_minus_padding(),
@@ -407,6 +417,21 @@ impl ContainerElement {
             }
 
             log::debug!("handle_overflow: attempt {}", attempt + 1);
+        }
+    }
+
+    fn calc_borders(&mut self, container_width: f32, container_height: f32) {
+        if let Some((color, size)) = &self.border_top {
+            self.calculated_border_top = Some((*color, calc_number(size, container_height)));
+        }
+        if let Some((color, size)) = &self.border_bottom {
+            self.calculated_border_bottom = Some((*color, calc_number(size, container_height)));
+        }
+        if let Some((color, size)) = &self.border_left {
+            self.calculated_border_left = Some((*color, calc_number(size, container_width)));
+        }
+        if let Some((color, size)) = &self.border_right {
+            self.calculated_border_right = Some((*color, calc_number(size, container_width)));
         }
     }
 
@@ -1301,10 +1326,43 @@ impl ContainerElement {
     }
 
     #[must_use]
+    pub fn horizontal_borders(&self) -> Option<f32> {
+        let mut borders = None;
+        if let Some((_, border_left)) = self.calculated_border_left {
+            borders = Some(border_left);
+        }
+        if let Some((_, border_right)) = self.calculated_border_right {
+            borders.replace(borders.map_or(border_right, |x| x + border_right));
+        }
+        borders
+    }
+
+    #[must_use]
+    pub fn vertical_borders(&self) -> Option<f32> {
+        let mut borders = None;
+        if let Some((_, border_top)) = self.calculated_border_top {
+            borders = Some(border_top);
+        }
+        if let Some((_, border_bottom)) = self.calculated_border_bottom {
+            borders.replace(borders.map_or(border_bottom, |x| x + border_bottom));
+        }
+        borders
+    }
+
+    #[must_use]
     pub fn calculated_width_minus_padding(&self) -> Option<f32> {
         self.calculated_width.map(|x| {
-            self.horizontal_padding().map_or(x, |padding| {
+            let x = self.horizontal_padding().map_or(x, |padding| {
                 let x = x - padding;
+                if x < 0.0 {
+                    0.0
+                } else {
+                    x
+                }
+            });
+
+            self.horizontal_borders().map_or(x, |borders| {
+                let x = x - borders;
                 if x < 0.0 {
                     0.0
                 } else {
@@ -1317,8 +1375,17 @@ impl ContainerElement {
     #[must_use]
     pub fn calculated_height_minus_padding(&self) -> Option<f32> {
         self.calculated_height.map(|x| {
-            self.vertical_padding().map_or(x, |padding| {
+            let x = self.vertical_padding().map_or(x, |padding| {
                 let x = x - padding;
+                if x < 0.0 {
+                    0.0
+                } else {
+                    x
+                }
+            });
+
+            self.vertical_borders().map_or(x, |borders| {
+                let x = x - borders;
                 if x < 0.0 {
                     0.0
                 } else {
