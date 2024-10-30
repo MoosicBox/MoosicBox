@@ -1,1 +1,1 @@
-# MoosicBox GigaChad egui Renderer crate
+# MoosicBox GigaChad HTMX Renderer crate
