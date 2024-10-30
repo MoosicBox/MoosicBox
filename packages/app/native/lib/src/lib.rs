@@ -247,6 +247,23 @@ impl NativeAppBuilder {
                     }
                     #[cfg(not(feature = "htmx"))]
                     unreachable!()
+                } else if cfg!(feature = "html") {
+                    #[cfg(feature = "html")]
+                    {
+                        let runtime = self
+                            .runtime
+                            .clone()
+                            .ok_or(NativeAppError::RuntimeRequired)?;
+                        let action_tx = Self::listen_actions(self.action_handlers);
+                        let renderer = gigachad_renderer_html::HtmlRenderer::new(
+                            router.clone(),
+                            runtime,
+                            action_tx,
+                        );
+                        Box::new(renderer) as Box<dyn Renderer>
+                    }
+                    #[cfg(not(feature = "html"))]
+                    unreachable!()
                 } else {
                     panic!("Missing renderer")
                 })

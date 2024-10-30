@@ -64,7 +64,7 @@ thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]
-default = ["datastar", "egui-wgpu", "fltk", "htmx", "unsafe"]
+default = ["datastar", "egui-wgpu", "fltk", "html", "htmx", "unsafe"]
 
 fail-on-warnings = []
 
@@ -72,6 +72,7 @@ datastar  = ["moosicbox_app_native_lib/datastar"]
 egui      = ["moosicbox_app_native_lib/egui"]
 egui-wgpu = ["egui", "moosicbox_app_native_lib/egui-wgpu"]
 fltk      = ["moosicbox_app_native_lib/fltk"]
+html      = ["moosicbox_app_native_lib/html"]
 htmx      = ["moosicbox_app_native_lib/htmx"]
 
 bundled = ["dep:moosicbox_app_native_bundled"]

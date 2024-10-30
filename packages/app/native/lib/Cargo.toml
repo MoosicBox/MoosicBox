@@ -15,6 +15,7 @@ gigachad_renderer          = { version = "0.1.0", path = "../../../gigachad/rend
 gigachad_renderer_datastar = { version = "0.1.0", path = "../../../gigachad/renderer/datastar", optional = true, default-features = false }
 gigachad_renderer_egui     = { version = "0.1.0", path = "../../../gigachad/renderer/egui", optional = true, default-features = false }
 gigachad_renderer_fltk     = { version = "0.1.0", path = "../../../gigachad/renderer/fltk", optional = true, default-features = false }
+gigachad_renderer_html     = { version = "0.1.0", path = "../../../gigachad/renderer/html", optional = true, default-features = false }
 gigachad_renderer_htmx     = { version = "0.1.0", path = "../../../gigachad/renderer/htmx", optional = true, default-features = false }
 gigachad_router            = { version = "0.1.0", path = "../../../gigachad/router", default-features = false }
 moosicbox_assert           = { version = "0.1.0", path = "../../../assert", default-features = false }
@@ -27,7 +28,7 @@ thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["rt-multi-thread", "sync"] }
 
 [features]
-default = ["datastar", "egui-wgpu", "fltk", "format", "htmx", "maud"]
+default = ["datastar", "egui-wgpu", "fltk", "format", "html", "htmx", "maud"]
 
 fail-on-warnings = []
 
@@ -37,6 +38,7 @@ datastar  = ["dep:gigachad_renderer_datastar"]
 egui      = ["dep:gigachad_renderer_egui"]
 egui-wgpu = ["egui", "gigachad_renderer_egui/wgpu"]
 fltk      = ["dep:gigachad_renderer_fltk"]
+html      = ["dep:gigachad_renderer_html"]
 htmx      = ["dep:gigachad_renderer_htmx"]
 
 debug  = ["gigachad_renderer_egui?/debug", "gigachad_renderer_fltk?/debug"]

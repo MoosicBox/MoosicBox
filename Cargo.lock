@@ -5893,6 +5893,7 @@ dependencies = [
  "gigachad_renderer_datastar",
  "gigachad_renderer_egui",
  "gigachad_renderer_fltk",
+ "gigachad_renderer_html",
  "gigachad_renderer_htmx",
  "gigachad_router",
  "log",
