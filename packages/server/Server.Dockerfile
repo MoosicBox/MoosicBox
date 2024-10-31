@@ -45,6 +45,7 @@ RUN cat Cargo.toml | \
     \"packages\/search\",\r\
     \"packages\/server\",\r\
     \"packages\/session\",\r\
+    \"packages\/session\/models\",\r\
     \"packages\/stream_utils\",\r\
     \"packages\/task\",\r\
     \"packages\/tidal\",\r\
@@ -94,6 +95,7 @@ COPY packages/schema/Cargo.toml packages/schema/Cargo.toml
 COPY packages/search/Cargo.toml packages/search/Cargo.toml
 COPY packages/server/Cargo.toml packages/server/Cargo.toml
 COPY packages/session/Cargo.toml packages/session/Cargo.toml
+COPY packages/session/models/Cargo.toml packages/session/models/Cargo.toml
 COPY packages/stream_utils/Cargo.toml packages/stream_utils/Cargo.toml
 COPY packages/task/Cargo.toml packages/task/Cargo.toml
 COPY packages/tidal/Cargo.toml packages/tidal/Cargo.toml
@@ -146,6 +148,7 @@ packages/schema|\
 packages/search|\
 packages/server|\
 packages/session|\
+packages/session/models|\
 packages/stream_utils|\
 packages/task|\
 packages/tidal|\

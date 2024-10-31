@@ -10,16 +10,14 @@ readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
-[package.metadata.cargo-machete]
-ignored = ["strum"]
-
 [dependencies]
-moosicbox_assert     = { version = "0.1.0", path = "../assert", default-features = false }
-moosicbox_audio_zone = { version = "0.1.0", path = "../audio_zone", default-features = false }
-moosicbox_core       = { version = "0.1.0", path = "../core", default-features = false }
-moosicbox_database   = { version = "0.1.0", path = "../database", default-features = false }
-moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false }
-moosicbox_library    = { version = "0.1.0", path = "../library", default-features = false }
+moosicbox_assert         = { version = "0.1.0", path = "../assert", default-features = false }
+moosicbox_audio_zone     = { version = "0.1.0", path = "../audio_zone", default-features = false }
+moosicbox_core           = { version = "0.1.0", path = "../core", default-features = false }
+moosicbox_database       = { version = "0.1.0", path = "../database", default-features = false }
+moosicbox_json_utils     = { version = "0.1.0", path = "../json_utils", default-features = false }
+moosicbox_library        = { version = "0.1.0", path = "../library", default-features = false }
+moosicbox_session_models = { version = "0.1.0", path = "models", default-features = false }
 
 # API Dependencies
 actix-web        = { workspace = true, optional = true }
@@ -30,25 +28,27 @@ utoipa           = { workspace = true, optional = true }
 moosicbox_task = { version = "0.1.0", path = "../task", default-features = false, optional = true }
 tokio          = { workspace = true, optional = true }
 
-async-trait  = { workspace = true }
 log          = { workspace = true }
 serde        = { workspace = true, features = ["derive"] }
-serde_json   = { workspace = true }
-strum        = { workspace = true }
-strum_macros = { workspace = true }
 
 [features]
 default = ["aac", "api", "events", "flac", "mp3", "openapi", "opus"]
 
 fail-on-warnings = []
 
-api = ["dep:actix-web", "dep:moosicbox_paging", "moosicbox_database/api"]
+api = [
+    "dep:actix-web",
+    "dep:moosicbox_paging",
+    "moosicbox_database/api",
+    "moosicbox_session_models/api",
+]
 openapi = [
     "dep:utoipa",
     "moosicbox_audio_zone/openapi",
     "moosicbox_core/openapi",
     "moosicbox_library/openapi",
     "moosicbox_paging/openapi",
+    "moosicbox_session_models/openapi",
 ]
 
 events = ["dep:moosicbox_task", "dep:tokio"]

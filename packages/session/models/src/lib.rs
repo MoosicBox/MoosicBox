@@ -1,3 +1,6 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+
 use std::sync::{Arc, LazyLock};
 
 use async_trait::async_trait;
@@ -5,7 +8,7 @@ use moosicbox_audio_zone::models::{ApiPlayer, Player};
 use moosicbox_core::{
     sqlite::{
         db::DbError,
-        models::{ApiSource, AsModelQuery, AsModelResult, AsModelResultMappedQuery, Id, ToApi},
+        models::{ApiSource, AsModelResult, AsModelResultMappedQuery, Id, ToApi},
     },
     types::PlaybackQuality,
 };
@@ -21,16 +24,14 @@ use moosicbox_library::{
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 
-use crate::db::{get_players, get_session_playlist, get_session_playlist_tracks};
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SetSessionAudioZone {
     pub session_id: u64,
     pub audio_zone_id: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSession {
     pub name: String,
@@ -38,13 +39,13 @@ pub struct CreateSession {
     pub playlist: CreateSessionPlaylist,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSessionPlaylist {
     pub tracks: Vec<u64>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, EnumString, AsRefStr, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, EnumString, AsRefStr, PartialEq, Eq)]
 #[serde(tag = "type")]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
@@ -62,12 +63,12 @@ pub enum PlaybackTarget {
 const DEFAULT_AUDIO_ZONE: PlaybackTarget = PlaybackTarget::AudioZone { audio_zone_id: 0 };
 static DEFAULT_CONNECTION_OUTPUT: LazyLock<PlaybackTarget> =
     LazyLock::new(|| PlaybackTarget::ConnectionOutput {
-        connection_id: "".to_string(),
-        output_id: "".to_string(),
+        connection_id: String::new(),
+        output_id: String::new(),
     });
 
 impl PlaybackTarget {
-    pub fn default_from_str(r#type: &str) -> Option<PlaybackTarget> {
+    pub fn default_from_str(r#type: &str) -> Option<Self> {
         if DEFAULT_AUDIO_ZONE.as_ref() == r#type {
             Some(DEFAULT_AUDIO_ZONE)
         } else if DEFAULT_CONNECTION_OUTPUT.as_ref() == r#type {
@@ -87,13 +88,11 @@ impl Default for PlaybackTarget {
 impl From<ApiPlaybackTarget> for PlaybackTarget {
     fn from(value: ApiPlaybackTarget) -> Self {
         match value {
-            ApiPlaybackTarget::AudioZone { audio_zone_id } => {
-                PlaybackTarget::AudioZone { audio_zone_id }
-            }
+            ApiPlaybackTarget::AudioZone { audio_zone_id } => Self::AudioZone { audio_zone_id },
             ApiPlaybackTarget::ConnectionOutput {
                 connection_id,
                 output_id,
-            } => PlaybackTarget::ConnectionOutput {
+            } => Self::ConnectionOutput {
                 connection_id,
                 output_id,
             },
@@ -130,7 +129,8 @@ pub struct UpdateSession {
 }
 
 impl UpdateSession {
-    pub fn playback_updated(&self) -> bool {
+    #[must_use]
+    pub const fn playback_updated(&self) -> bool {
         self.play.is_some()
             || self.stop.is_some()
             || self.active.is_some()
@@ -141,6 +141,9 @@ impl UpdateSession {
             || self.playlist.is_some()
     }
 
+    /// # Errors
+    ///
+    /// * If the audio zone fails to be fetched
     pub async fn audio_output_ids(
         &self,
         db: &ConfigDatabase,
@@ -176,7 +179,7 @@ impl From<ApiUpdateSession> for UpdateSession {
             position: value.position,
             seek: value.seek,
             volume: value.volume,
-            playlist: value.playlist.map(|x| x.into()),
+            playlist: value.playlist.map(Into::into),
             quality: value.quality,
         }
     }
@@ -196,13 +199,13 @@ impl From<UpdateSession> for ApiUpdateSession {
             position: value.position,
             seek: value.seek,
             volume: value.volume,
-            playlist: value.playlist.as_ref().map(|p| p.to_api()),
+            playlist: value.playlist.as_ref().map(ToApi::to_api),
             quality: value.quality,
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSessionPlaylist {
     pub session_playlist_id: u64,
@@ -213,16 +216,12 @@ impl From<ApiUpdateSessionPlaylist> for UpdateSessionPlaylist {
     fn from(value: ApiUpdateSessionPlaylist) -> Self {
         Self {
             session_playlist_id: value.session_playlist_id,
-            tracks: value
-                .tracks
-                .into_iter()
-                .map(|x| x.into())
-                .collect::<Vec<_>>(),
+            tracks: value.tracks.into_iter().map(Into::into).collect::<Vec<_>>(),
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSessionPlaylistTrack {
     pub id: String,
@@ -253,7 +252,7 @@ impl From<ApiUpdateSessionPlaylistTrack> for UpdateSessionPlaylistTrack {
 
 impl From<UpdateSessionPlaylistTrack> for SessionPlaylistTrack {
     fn from(value: UpdateSessionPlaylistTrack) -> Self {
-        SessionPlaylistTrack {
+        Self {
             id: value.id,
             r#type: value.r#type,
             data: value.data,
@@ -261,7 +260,7 @@ impl From<UpdateSessionPlaylistTrack> for SessionPlaylistTrack {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiUpdateSessionPlaylistTrack {
     pub id: String,
@@ -294,7 +293,7 @@ impl ToApi<ApiUpdateSessionPlaylist> for UpdateSessionPlaylist {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, EnumString, AsRefStr, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, EnumString, AsRefStr, PartialEq, Eq)]
 #[serde(tag = "type")]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
@@ -317,13 +316,11 @@ impl Default for ApiPlaybackTarget {
 impl From<PlaybackTarget> for ApiPlaybackTarget {
     fn from(value: PlaybackTarget) -> Self {
         match value {
-            PlaybackTarget::AudioZone { audio_zone_id } => {
-                ApiPlaybackTarget::AudioZone { audio_zone_id }
-            }
+            PlaybackTarget::AudioZone { audio_zone_id } => Self::AudioZone { audio_zone_id },
             PlaybackTarget::ConnectionOutput {
                 connection_id,
                 output_id,
-            } => ApiPlaybackTarget::ConnectionOutput {
+            } => Self::ConnectionOutput {
                 connection_id,
                 output_id,
             },
@@ -366,7 +363,7 @@ pub struct ApiUpdateSessionPlaylist {
     pub tracks: Vec<ApiTrack>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteSession {
     pub session_id: u64,
@@ -417,44 +414,9 @@ impl ToValueType<Session> for &moosicbox_database::Row {
     }
 }
 
-#[async_trait]
-impl AsModelQuery<Session> for &moosicbox_database::Row {
-    async fn as_model_query(&self, db: Arc<Box<dyn Database>>) -> Result<Session, DbError> {
-        let id = self.to_value("id")?;
-        let playback_target_type: Option<String> = self.to_value("playback_target")?;
-        let playback_target_type =
-            playback_target_type.and_then(|x| PlaybackTarget::default_from_str(&x));
-
-        match get_session_playlist(&db.into(), id).await? {
-            Some(playlist) => Ok(Session {
-                id,
-                name: self.to_value("name")?,
-                active: self.to_value("active")?,
-                playing: self.to_value("playing")?,
-                position: self.to_value("position")?,
-                seek: self.to_value("seek")?,
-                volume: self.to_value("volume")?,
-                playback_target: match playback_target_type {
-                    Some(PlaybackTarget::AudioZone { .. }) => Some(PlaybackTarget::AudioZone {
-                        audio_zone_id: self.to_value("audio_zone_id")?,
-                    }),
-                    Some(PlaybackTarget::ConnectionOutput { .. }) => {
-                        Some(PlaybackTarget::ConnectionOutput {
-                            connection_id: self.to_value("connection_id")?,
-                            output_id: self.to_value("output_id")?,
-                        })
-                    }
-                    None => None,
-                },
-                playlist,
-            }),
-            None => Err(DbError::InvalidRequest),
-        }
-    }
-}
-
 impl AsId for Session {
     fn as_id(&self) -> DatabaseValue {
+        #[allow(clippy::cast_possible_wrap)]
         DatabaseValue::Number(self.id as i64)
     }
 }
@@ -507,7 +469,7 @@ impl ToValueType<SessionPlaylist> for &moosicbox_database::Row {
 }
 
 #[derive(Debug)]
-pub struct SessionPlaylistTracks(Vec<SessionPlaylistTrack>);
+pub struct SessionPlaylistTracks(pub Vec<SessionPlaylistTrack>);
 
 #[async_trait]
 impl AsModelResultMappedQuery<ApiTrack, DbError> for SessionPlaylistTracks {
@@ -539,36 +501,21 @@ impl AsModelResultMappedQuery<ApiTrack, DbError> for SessionPlaylistTracks {
                         .find(|lib| lib.id.to_string() == t.id)
                         .ok_or(DbError::Unknown)?
                         .to_api(),
-                    ApiSource::Tidal => t.to_api(),
-                    ApiSource::Qobuz => t.to_api(),
-                    ApiSource::Yt => t.to_api(),
+                    ApiSource::Tidal | ApiSource::Qobuz | ApiSource::Yt => t.to_api(),
                 })
             })
             .collect::<Result<Vec<_>, DbError>>()?)
     }
 }
 
-#[async_trait]
-impl AsModelQuery<SessionPlaylist> for &moosicbox_database::Row {
-    async fn as_model_query(&self, db: Arc<Box<dyn Database>>) -> Result<SessionPlaylist, DbError> {
-        let id = self.to_value("id")?;
-        let tracks =
-            SessionPlaylistTracks(get_session_playlist_tracks(&db.clone().into(), id).await?)
-                .as_model_mapped_query(db)
-                .await?;
-        log::trace!("Got SessionPlaylistTracks for session_playlist {id}: {tracks:?}");
-
-        Ok(SessionPlaylist { id, tracks })
-    }
-}
-
 impl AsId for SessionPlaylist {
     fn as_id(&self) -> DatabaseValue {
+        #[allow(clippy::cast_possible_wrap)]
         DatabaseValue::Number(self.id as i64)
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionPlaylistTrack {
     pub id: String,
@@ -700,7 +647,7 @@ impl AsModelResult<SessionPlaylistTrack, ParseError> for &moosicbox_database::Ro
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiSessionPlaylistTrack {
@@ -737,7 +684,7 @@ impl ToApi<ApiSessionPlaylist> for SessionPlaylist {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterConnection {
     pub connection_id: String,
@@ -753,21 +700,6 @@ pub struct Connection {
     pub created: String,
     pub updated: String,
     pub players: Vec<Player>,
-}
-
-#[async_trait]
-impl AsModelQuery<Connection> for &moosicbox_database::Row {
-    async fn as_model_query(&self, db: Arc<Box<dyn Database>>) -> Result<Connection, DbError> {
-        let id = self.to_value::<String>("id")?;
-        let players = get_players(&db.clone().into(), &id).await?;
-        Ok(Connection {
-            id,
-            name: self.to_value("name")?,
-            created: self.to_value("created")?,
-            updated: self.to_value("updated")?,
-            players,
-        })
-    }
 }
 
 impl ToValueType<Connection> for &moosicbox_database::Row {
@@ -803,12 +735,12 @@ impl ToApi<ApiConnection> for Connection {
             connection_id: self.id,
             name: self.name,
             alive: false,
-            players: self.players.iter().map(|p| p.to_api()).collect(),
+            players: self.players.iter().map(ToApi::to_api).collect(),
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct RegisterPlayer {

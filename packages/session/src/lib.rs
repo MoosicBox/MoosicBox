@@ -1,15 +1,15 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
-use models::{
-    CreateSession, Session, SessionPlaylist, SessionPlaylistTrack, SetSessionAudioZone,
-    UpdateSession,
-};
 use moosicbox_audio_zone::models::{AudioZone, Player};
 use moosicbox_core::sqlite::db::DbError;
 use moosicbox_database::{config::ConfigDatabase, profiles::LibraryDatabase, TryIntoDb};
+use moosicbox_session_models::{
+    CreateSession, Session, SessionPlaylist, SessionPlaylistTrack, SetSessionAudioZone,
+    UpdateSession,
+};
 
 mod db;
-pub mod models;
+pub use moosicbox_session_models as models;
 
 #[cfg(feature = "api")]
 pub mod api;

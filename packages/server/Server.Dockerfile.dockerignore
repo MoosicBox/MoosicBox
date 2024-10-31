@@ -37,6 +37,7 @@
 !/packages/search
 !/packages/server
 !/packages/session
+!/packages/session/models
 !/packages/stream_utils
 !/packages/task
 !/packages/tidal

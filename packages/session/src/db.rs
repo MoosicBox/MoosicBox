@@ -1,16 +1,16 @@
+use std::sync::Arc;
+
 use moosicbox_audio_zone::{db::models::AudioZoneModel, models::Player};
-use moosicbox_core::sqlite::{
-    db::DbError,
-    models::{AsModelQuery as _, Id},
-};
+use moosicbox_core::sqlite::{db::DbError, models::Id};
 use moosicbox_database::{
     config::ConfigDatabase,
     profiles::LibraryDatabase,
     query::{select, where_in, FilterableQuery as _, SortDirection},
-    DatabaseValue,
+    Database, DatabaseValue,
 };
-use moosicbox_json_utils::ToValueType;
+use moosicbox_json_utils::{database::ToValue as _, ToValueType};
 use moosicbox_library::db::get_tracks;
+use moosicbox_session_models::{Connection, SessionPlaylistTracks};
 
 use crate::models::{
     self, CreateSession, PlaybackTarget, Session, SessionPlaylist, SessionPlaylistTrack,
@@ -40,7 +40,9 @@ pub async fn get_session_playlist(
         .execute_first(db)
         .await?
     {
-        Ok(Some(playlist.as_model_query(db.into()).await?))
+        Ok(Some(
+            session_playlist_as_model_query(playlist, db.into()).await?,
+        ))
     } else {
         Ok(None)
     }
@@ -85,7 +87,7 @@ pub async fn get_session(db: &LibraryDatabase, id: u64) -> Result<Option<Session
             .execute_first(db)
             .await?
         {
-            Some(session.as_model_query(db.into()).await?)
+            Some(session_as_model_query(session, db.into()).await?)
         } else {
             None
         },
@@ -96,7 +98,7 @@ pub async fn get_sessions(db: &LibraryDatabase) -> Result<Vec<Session>, DbError>
     let mut sessions = vec![];
 
     for ref session in db.select("sessions").execute(db).await? {
-        sessions.push(session.as_model_query(db.into()).await?);
+        sessions.push(session_as_model_query(session, db.into()).await?);
     }
 
     Ok(sessions)
@@ -318,7 +320,7 @@ pub async fn get_connections(db: &ConfigDatabase) -> Result<Vec<models::Connecti
     let mut connections = vec![];
 
     for ref connection in db.select("connections").execute(db).await? {
-        connections.push(connection.as_model_query(db.into()).await?);
+        connections.push(connection_as_model_query(connection, db.into()).await?);
     }
 
     Ok(connections)
@@ -447,4 +449,70 @@ pub async fn delete_session_playlist_tracks_by_track_id(
         .execute(db)
         .await?
         .to_value_type()?)
+}
+
+async fn connection_as_model_query(
+    row: &moosicbox_database::Row,
+    db: Arc<Box<dyn Database>>,
+) -> Result<Connection, DbError> {
+    let id = row.to_value::<String>("id")?;
+    let players = get_players(&db.clone().into(), &id).await?;
+    Ok(Connection {
+        id,
+        name: row.to_value("name")?,
+        created: row.to_value("created")?,
+        updated: row.to_value("updated")?,
+        players,
+    })
+}
+
+async fn session_as_model_query(
+    row: &moosicbox_database::Row,
+    db: Arc<Box<dyn Database>>,
+) -> Result<Session, DbError> {
+    let id = row.to_value("id")?;
+    let playback_target_type: Option<String> = row.to_value("playback_target")?;
+    let playback_target_type =
+        playback_target_type.and_then(|x| PlaybackTarget::default_from_str(&x));
+
+    match get_session_playlist(&db.into(), id).await? {
+        Some(playlist) => Ok(Session {
+            id,
+            name: row.to_value("name")?,
+            active: row.to_value("active")?,
+            playing: row.to_value("playing")?,
+            position: row.to_value("position")?,
+            seek: row.to_value("seek")?,
+            volume: row.to_value("volume")?,
+            playback_target: match playback_target_type {
+                Some(PlaybackTarget::AudioZone { .. }) => Some(PlaybackTarget::AudioZone {
+                    audio_zone_id: row.to_value("audio_zone_id")?,
+                }),
+                Some(PlaybackTarget::ConnectionOutput { .. }) => {
+                    Some(PlaybackTarget::ConnectionOutput {
+                        connection_id: row.to_value("connection_id")?,
+                        output_id: row.to_value("output_id")?,
+                    })
+                }
+                None => None,
+            },
+            playlist,
+        }),
+        None => Err(DbError::InvalidRequest),
+    }
+}
+
+async fn session_playlist_as_model_query(
+    row: &moosicbox_database::Row,
+    db: Arc<Box<dyn Database>>,
+) -> Result<SessionPlaylist, DbError> {
+    use moosicbox_core::sqlite::models::AsModelResultMappedQuery as _;
+
+    let id = row.to_value("id")?;
+    let tracks = SessionPlaylistTracks(get_session_playlist_tracks(&db.clone().into(), id).await?)
+        .as_model_mapped_query(db)
+        .await?;
+    log::trace!("Got SessionPlaylistTracks for session_playlist {id}: {tracks:?}");
+
+    Ok(SessionPlaylist { id, tracks })
 }

@@ -41,6 +41,7 @@ pub use moosicbox_scan as scan;
 pub use moosicbox_schema as schema;
 pub use moosicbox_search as search;
 pub use moosicbox_session as session;
+pub use moosicbox_session_models as session_models;
 pub use moosicbox_stream_utils as stream_utils;
 pub use moosicbox_task as task;
 pub use moosicbox_tidal as tidal;
