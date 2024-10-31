@@ -6795,13 +6795,12 @@ dependencies = [
 name = "moosicbox_session_models"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "log",
  "moosicbox_audio_zone_models",
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_json_utils",
- "moosicbox_library",
+ "moosicbox_library_models",
  "serde",
  "serde_json",
  "strum",

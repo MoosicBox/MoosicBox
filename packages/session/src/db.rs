@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use moosicbox_audio_zone::{db::models::AudioZoneModel, models::Player};
-use moosicbox_core::sqlite::{db::DbError, models::Id};
+use moosicbox_core::sqlite::{
+    db::DbError,
+    models::{ApiSource, Id, ToApi as _},
+};
 use moosicbox_database::{
     config::ConfigDatabase,
     profiles::LibraryDatabase,
@@ -9,7 +12,7 @@ use moosicbox_database::{
     Database, DatabaseValue,
 };
 use moosicbox_json_utils::{database::ToValue as _, ToValueType};
-use moosicbox_library::db::get_tracks;
+use moosicbox_library::{db::get_tracks, models::ApiTrack};
 use moosicbox_session_models::{Connection, SessionPlaylistTracks};
 
 use crate::models::{
@@ -506,13 +509,46 @@ async fn session_playlist_as_model_query(
     row: &moosicbox_database::Row,
     db: Arc<Box<dyn Database>>,
 ) -> Result<SessionPlaylist, DbError> {
-    use moosicbox_core::sqlite::models::AsModelResultMappedQuery as _;
-
     let id = row.to_value("id")?;
-    let tracks = SessionPlaylistTracks(get_session_playlist_tracks(&db.clone().into(), id).await?)
-        .as_model_mapped_query(db)
-        .await?;
+    let tracks = session_playlist_tracks_as_model_mapped_query(
+        &SessionPlaylistTracks(get_session_playlist_tracks(&db.clone().into(), id).await?),
+        db,
+    )
+    .await?;
     log::trace!("Got SessionPlaylistTracks for session_playlist {id}: {tracks:?}");
 
     Ok(SessionPlaylist { id, tracks })
+}
+
+async fn session_playlist_tracks_as_model_mapped_query(
+    tracks: &SessionPlaylistTracks,
+    db: Arc<Box<dyn Database>>,
+) -> Result<Vec<ApiTrack>, DbError> {
+    log::trace!("Mapping tracks to ApiTracks: {tracks:?}");
+
+    let library_track_ids = tracks
+        .0
+        .iter()
+        .filter(|t| t.r#type == ApiSource::Library)
+        .filter_map(|t| t.id.parse::<u64>().ok())
+        .map(Id::Number)
+        .collect::<Vec<_>>();
+
+    log::trace!("Fetching tracks by ids: {library_track_ids:?}");
+    let library_tracks = get_tracks(&db.into(), Some(&library_track_ids)).await?;
+
+    tracks
+        .0
+        .iter()
+        .map(|t| {
+            Ok(match t.r#type {
+                ApiSource::Library => library_tracks
+                    .iter()
+                    .find(|lib| lib.id.to_string() == t.id)
+                    .ok_or(DbError::Unknown)?
+                    .to_api(),
+                ApiSource::Tidal | ApiSource::Qobuz | ApiSource::Yt => t.to_api(),
+            })
+        })
+        .collect::<Result<Vec<_>, DbError>>()
 }

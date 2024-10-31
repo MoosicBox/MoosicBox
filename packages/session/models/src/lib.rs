@@ -1,23 +1,16 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use std::sync::{Arc, LazyLock};
+use std::sync::LazyLock;
 
-use async_trait::async_trait;
 use moosicbox_audio_zone_models::{ApiPlayer, Player};
 use moosicbox_core::{
-    sqlite::{
-        db::DbError,
-        models::{ApiSource, AsModelResult, AsModelResultMappedQuery, Id, ToApi},
-    },
+    sqlite::models::{ApiSource, AsModelResult, ToApi},
     types::PlaybackQuality,
 };
-use moosicbox_database::{AsId, Database, DatabaseValue};
+use moosicbox_database::{AsId, DatabaseValue};
 use moosicbox_json_utils::{database::ToValue as _, ParseError, ToValueType};
-use moosicbox_library::{
-    db::get_tracks,
-    models::{ApiLibraryTrack, ApiTrack},
-};
+use moosicbox_library_models::{ApiLibraryTrack, ApiTrack};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 
@@ -444,43 +437,6 @@ impl ToValueType<SessionPlaylist> for &moosicbox_database::Row {
 
 #[derive(Debug)]
 pub struct SessionPlaylistTracks(pub Vec<SessionPlaylistTrack>);
-
-#[async_trait]
-impl AsModelResultMappedQuery<ApiTrack, DbError> for SessionPlaylistTracks {
-    async fn as_model_mapped_query(
-        &self,
-        db: Arc<Box<dyn Database>>,
-    ) -> Result<Vec<ApiTrack>, DbError> {
-        let tracks = self;
-        log::trace!("Mapping tracks to ApiTracks: {tracks:?}");
-
-        let library_track_ids = tracks
-            .0
-            .iter()
-            .filter(|t| t.r#type == ApiSource::Library)
-            .filter_map(|t| t.id.parse::<u64>().ok())
-            .map(Id::Number)
-            .collect::<Vec<_>>();
-
-        log::trace!("Fetching tracks by ids: {library_track_ids:?}");
-        let library_tracks = get_tracks(&db.into(), Some(&library_track_ids)).await?;
-
-        Ok(tracks
-            .0
-            .iter()
-            .map(|t| {
-                Ok(match t.r#type {
-                    ApiSource::Library => library_tracks
-                        .iter()
-                        .find(|lib| lib.id.to_string() == t.id)
-                        .ok_or(DbError::Unknown)?
-                        .to_api(),
-                    ApiSource::Tidal | ApiSource::Qobuz | ApiSource::Yt => t.to_api(),
-                })
-            })
-            .collect::<Result<Vec<_>, DbError>>()?)
-    }
-}
 
 impl AsId for SessionPlaylist {
     fn as_id(&self) -> DatabaseValue {
