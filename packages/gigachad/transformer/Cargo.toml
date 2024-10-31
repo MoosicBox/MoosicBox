@@ -20,6 +20,7 @@ moosicbox_logging = { version = "0.1.0", path = "../../logging", default-feature
 html-escape = { workspace = true, optional = true }
 itertools   = { workspace = true, optional = true }
 log         = { workspace = true }
+serde_json  = { workspace = true }
 thiserror   = { workspace = true }
 tl          = { workspace = true, optional = true }
 xml         = { workspace = true, optional = true }

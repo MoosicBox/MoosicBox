@@ -4,6 +4,7 @@
 use std::{fmt::Display, io::Write};
 
 use gigachad_color::Color;
+use serde_json::Value;
 
 #[cfg(feature = "calc")]
 pub mod calc;
@@ -231,6 +232,7 @@ pub struct ContainerElement {
     pub border_right: Option<(Color, Number)>,
     pub border_bottom: Option<(Color, Number)>,
     pub border_left: Option<(Color, Number)>,
+    pub state: Option<Value>,
     pub hidden: Option<bool>,
     pub route: Option<Route>,
     pub actions: Vec<ActionType>,

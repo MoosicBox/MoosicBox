@@ -3907,6 +3907,7 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_logging",
  "pretty_assertions",
+ "serde_json",
  "test-log",
  "thiserror",
  "tl",

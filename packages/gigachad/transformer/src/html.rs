@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
 use gigachad_color::Color;
+use serde_json::Value;
 pub use tl::ParseError;
 use tl::{Children, HTMLTag, Node, NodeHandle, Parser, ParserOptions};
 
@@ -93,6 +94,14 @@ fn get_border(tag: &HTMLTag, name: &str) -> Option<(Color, Number)> {
         .map(|(size, color)| (color, size))
 }
 
+fn get_state(tag: &HTMLTag, name: &str) -> Option<Value> {
+    get_tag_attr_value(tag, name)
+        .as_deref()
+        .map(html_escape::decode_html_entities)
+        .as_deref()
+        .and_then(|x| serde_json::from_str(x).ok())
+}
+
 fn get_hidden(tag: &HTMLTag) -> Option<bool> {
     match get_tag_attr_value_lower(tag, "sx-hidden").as_deref() {
         Some("true" | "") => Some(true),
@@ -177,6 +186,7 @@ fn parse_element(
         border_right: get_border(tag, "sx-border-right"),
         border_bottom: get_border(tag, "sx-border-bottom"),
         border_left: get_border(tag, "sx-border-left"),
+        state: get_state(tag, "state"),
         hidden: get_hidden(tag),
         overflow_x: get_overflow(tag, "sx-overflow-x"),
         overflow_y: get_overflow(tag, "sx-overflow-y"),
