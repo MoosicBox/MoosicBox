@@ -2,6 +2,7 @@ use std::sync::LazyLock;
 use std::{collections::HashMap, sync::Arc};
 
 use moosicbox_database::profiles::PROFILES;
+use moosicbox_session::update_session_audio_output_ids;
 use moosicbox_upnp::UpnpDeviceScannerError;
 use thiserror::Error;
 
@@ -146,13 +147,14 @@ fn handle_upnp_playback_update(
                         .get(&update.session_id)
                         .cloned()
                 };
-                let audio_output_ids = match update.audio_output_ids(&config_db).await {
-                    Ok(ids) => ids,
-                    Err(e) => {
-                        log::error!("Failed to get audio output IDs: {e:?}");
-                        return;
-                    }
-                };
+                let audio_output_ids =
+                    match update_session_audio_output_ids(&update, &config_db).await {
+                        Ok(ids) => ids,
+                        Err(e) => {
+                            log::error!("Failed to get audio output IDs: {e:?}");
+                            return;
+                        }
+                    };
                 let existing = existing
                     .filter(|(output, _)| !audio_output_ids.iter().any(|p| p != &output.id));
 

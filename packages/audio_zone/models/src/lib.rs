@@ -1,17 +1,12 @@
-use std::sync::Arc;
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use async_trait::async_trait;
 use moosicbox_core::sqlite::models::ToApi;
-use moosicbox_database::{AsId, Database, DatabaseValue, TryFromDb};
-use moosicbox_json_utils::{
-    database::{DatabaseFetchError, ToValue as _},
-    MissingValue, ParseError, ToValueType,
-};
+use moosicbox_database::{AsId, DatabaseValue};
+use moosicbox_json_utils::{database::ToValue as _, MissingValue, ParseError, ToValueType};
 use serde::{Deserialize, Serialize};
 
-use crate::db::models::{AudioZoneModel, AudioZoneWithSessionModel};
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AudioZone {
     pub id: u64,
     pub name: String,
@@ -26,29 +21,13 @@ impl From<ApiAudioZone> for AudioZone {
             players: value
                 .players
                 .into_iter()
-                .map(|x| x.into())
+                .map(Into::into)
                 .collect::<Vec<_>>(),
         }
     }
 }
 
-#[async_trait]
-impl TryFromDb<AudioZoneModel> for AudioZone {
-    type Error = DatabaseFetchError;
-
-    async fn try_from_db(
-        value: AudioZoneModel,
-        db: Arc<Box<dyn Database>>,
-    ) -> Result<Self, Self::Error> {
-        Ok(AudioZone {
-            id: value.id,
-            name: value.name,
-            players: crate::db::get_players(&db.into(), value.id).await?,
-        })
-    }
-}
-
-#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiAudioZone {
@@ -65,13 +44,13 @@ impl From<AudioZone> for ApiAudioZone {
             players: value
                 .players
                 .into_iter()
-                .map(|x| x.to_api())
+                .map(ToApi::to_api)
                 .collect::<Vec<_>>(),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AudioZoneWithSession {
     pub id: u64,
     pub session_id: u64,
@@ -88,30 +67,13 @@ impl From<ApiAudioZoneWithSession> for AudioZoneWithSession {
             players: value
                 .players
                 .into_iter()
-                .map(|x| x.into())
+                .map(Into::into)
                 .collect::<Vec<_>>(),
         }
     }
 }
 
-#[async_trait]
-impl TryFromDb<AudioZoneWithSessionModel> for AudioZoneWithSession {
-    type Error = DatabaseFetchError;
-
-    async fn try_from_db(
-        value: AudioZoneWithSessionModel,
-        db: Arc<Box<dyn Database>>,
-    ) -> Result<Self, Self::Error> {
-        Ok(AudioZoneWithSession {
-            id: value.id,
-            session_id: value.session_id,
-            name: value.name,
-            players: crate::db::get_players(&db.into(), value.id).await?,
-        })
-    }
-}
-
-#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiAudioZoneWithSession {
@@ -130,13 +92,13 @@ impl From<AudioZoneWithSession> for ApiAudioZoneWithSession {
             players: value
                 .players
                 .into_iter()
-                .map(|x| x.to_api())
+                .map(ToApi::to_api)
                 .collect::<Vec<_>>(),
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Player {
     pub id: u64,
@@ -154,8 +116,8 @@ impl From<ApiPlayer> for Player {
             audio_output_id: value.audio_output_id,
             name: value.name,
             playing: value.playing,
-            created: "".to_string(),
-            updated: "".to_string(),
+            created: String::new(),
+            updated: String::new(),
         }
     }
 }
@@ -176,11 +138,12 @@ impl ToValueType<Player> for &moosicbox_database::Row {
 
 impl AsId for Player {
     fn as_id(&self) -> DatabaseValue {
+        #[allow(clippy::cast_possible_wrap)]
         DatabaseValue::Number(self.id as i64)
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiPlayer {
@@ -201,13 +164,13 @@ impl ToApi<ApiPlayer> for Player {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateAudioZone {
     pub name: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct UpdateAudioZone {
     pub id: u64,

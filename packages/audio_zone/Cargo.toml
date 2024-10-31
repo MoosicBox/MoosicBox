@@ -12,7 +12,7 @@ version     = "0.1.0"
 
 [dependencies]
 moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
-moosicbox_core = { version = "0.1.0", path = "../core", default-features = false }
+moosicbox_audio_zone_models = { version = "0.1.0", path = "models", default-features = false }
 moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
 moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
     "database",
@@ -26,17 +26,25 @@ utoipa           = { workspace = true, optional = true }
 # Events Dependencies
 moosicbox_task = { version = "0.1.0", path = "../task", default-features = false, optional = true }
 
-async-trait = { workspace = true }
-log         = { workspace = true }
-serde       = { workspace = true }
-tokio       = { workspace = true, features = ["rt-multi-thread", "tracing"] }
+log   = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "tracing"] }
 
 [features]
 default = ["api", "events", "openapi"]
 
 fail-on-warnings = []
 
-api     = ["dep:actix-web", "dep:moosicbox_paging", "moosicbox_database/api"]
-openapi = ["dep:utoipa", "moosicbox_paging/openapi"]
+api = [
+    "dep:actix-web",
+    "dep:moosicbox_paging",
+    "moosicbox_audio_zone_models/api",
+    "moosicbox_database/api",
+]
+openapi = [
+    "dep:utoipa",
+    "moosicbox_audio_zone_models/openapi",
+    "moosicbox_paging/openapi",
+]
 
 events = ["dep:moosicbox_task"]

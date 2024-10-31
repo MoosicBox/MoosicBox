@@ -5701,6 +5701,7 @@ dependencies = [
  "moosicbox_audio_encoder",
  "moosicbox_audio_output",
  "moosicbox_audio_zone",
+ "moosicbox_audio_zone_models",
  "moosicbox_auth",
  "moosicbox_channel_utils",
  "moosicbox_config",
@@ -6073,16 +6074,28 @@ name = "moosicbox_audio_zone"
 version = "0.1.0"
 dependencies = [
  "actix-web",
- "async-trait",
  "log",
  "moosicbox_assert",
- "moosicbox_core",
+ "moosicbox_audio_zone_models",
  "moosicbox_database",
  "moosicbox_json_utils",
  "moosicbox_paging",
  "moosicbox_task",
  "serde",
  "tokio",
+ "utoipa",
+]
+
+[[package]]
+name = "moosicbox_audio_zone_models"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "moosicbox_assert",
+ "moosicbox_core",
+ "moosicbox_database",
+ "moosicbox_json_utils",
+ "serde",
  "utoipa",
 ]
 
@@ -6784,8 +6797,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "log",
- "moosicbox_assert",
- "moosicbox_audio_zone",
+ "moosicbox_audio_zone_models",
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_json_utils",

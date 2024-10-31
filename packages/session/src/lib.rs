@@ -1,11 +1,15 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
-use moosicbox_audio_zone::models::{AudioZone, Player};
+use moosicbox_audio_zone::{
+    db::audio_zone_try_from_db,
+    models::{AudioZone, Player},
+};
 use moosicbox_core::sqlite::db::DbError;
-use moosicbox_database::{config::ConfigDatabase, profiles::LibraryDatabase, TryIntoDb};
+use moosicbox_database::{config::ConfigDatabase, profiles::LibraryDatabase};
+use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_session_models::{
-    CreateSession, Session, SessionPlaylist, SessionPlaylistTrack, SetSessionAudioZone,
-    UpdateSession,
+    CreateSession, PlaybackTarget, Session, SessionPlaylist, SessionPlaylistTrack,
+    SetSessionAudioZone, UpdateSession,
 };
 
 mod db;
@@ -35,10 +39,13 @@ pub async fn get_session_audio_zone(
     db: &LibraryDatabase,
     session_id: u64,
 ) -> Result<Option<AudioZone>, DbError> {
-    Ok(crate::db::get_session_audio_zone(db, session_id)
-        .await?
-        .try_into_db(db.into())
-        .await?)
+    Ok(
+        if let Some(zone) = crate::db::get_session_audio_zone(db, session_id).await? {
+            Some(audio_zone_try_from_db(zone, db.into()).await?)
+        } else {
+            None
+        },
+    )
 }
 
 pub async fn set_session_audio_zone(
@@ -177,4 +184,27 @@ pub async fn delete_session_playlist_tracks_by_track_id(
     ids: Option<&Vec<u64>>,
 ) -> Result<Vec<SessionPlaylistTrack>, DbError> {
     crate::db::delete_session_playlist_tracks_by_track_id(db, ids).await
+}
+
+/// # Errors
+///
+/// * If the audio zone fails to be fetched
+pub async fn update_session_audio_output_ids(
+    session: &UpdateSession,
+    db: &ConfigDatabase,
+) -> Result<Vec<String>, DatabaseFetchError> {
+    Ok(match &session.playback_target {
+        PlaybackTarget::AudioZone { audio_zone_id } => {
+            let Some(output) = moosicbox_audio_zone::get_zone(db, *audio_zone_id).await? else {
+                return Ok(vec![]);
+            };
+
+            output
+                .players
+                .into_iter()
+                .map(|x| x.audio_output_id)
+                .collect::<Vec<_>>()
+        }
+        PlaybackTarget::ConnectionOutput { output_id, .. } => vec![output_id.to_owned()],
+    })
 }

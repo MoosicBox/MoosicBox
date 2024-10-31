@@ -23,6 +23,7 @@ moosicbox_audio_decoder       = { version = "0.1.0", path = "../audio_decoder", 
 moosicbox_audio_encoder       = { version = "0.1.0", path = "../audio_encoder", default-features = false }
 moosicbox_audio_output        = { version = "0.1.0", path = "../audio_output", default-features = false }
 moosicbox_audio_zone          = { version = "0.1.0", path = "../audio_zone", default-features = false }
+moosicbox_audio_zone_models   = { version = "0.1.0", path = "../audio_zone/models", default-features = false }
 moosicbox_auth                = { version = "0.1.0", path = "../auth", default-features = false }
 moosicbox_channel_utils       = { version = "0.1.0", path = "../channel_utils", default-features = false }
 moosicbox_config              = { version = "0.1.0", path = "../config", default-features = false }

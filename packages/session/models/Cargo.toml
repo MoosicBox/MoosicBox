@@ -14,12 +14,11 @@ version     = "0.1.0"
 ignored = ["strum"]
 
 [dependencies]
-moosicbox_assert     = { version = "0.1.0", path = "../../assert", default-features = false }
-moosicbox_audio_zone = { version = "0.1.0", path = "../../audio_zone", default-features = false }
-moosicbox_core       = { version = "0.1.0", path = "../../core", default-features = false }
-moosicbox_database   = { version = "0.1.0", path = "../../database", default-features = false }
-moosicbox_json_utils = { version = "0.1.0", path = "../../json_utils", default-features = false }
-moosicbox_library    = { version = "0.1.0", path = "../../library", default-features = false }
+moosicbox_audio_zone_models = { version = "0.1.0", path = "../../audio_zone/models", default-features = false }
+moosicbox_core              = { version = "0.1.0", path = "../../core", default-features = false }
+moosicbox_database          = { version = "0.1.0", path = "../../database", default-features = false }
+moosicbox_json_utils        = { version = "0.1.0", path = "../../json_utils", default-features = false }
+moosicbox_library           = { version = "0.1.0", path = "../../library", default-features = false }
 
 # API Dependencies
 utoipa = { workspace = true, optional = true }
@@ -39,7 +38,7 @@ fail-on-warnings = []
 api = ["moosicbox_database/api"]
 openapi = [
     "dep:utoipa",
-    "moosicbox_audio_zone/openapi",
+    "moosicbox_audio_zone_models/openapi",
     "moosicbox_core/openapi",
     "moosicbox_library/openapi",
 ]

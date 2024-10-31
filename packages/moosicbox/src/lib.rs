@@ -12,6 +12,7 @@ pub use moosicbox_audio_decoder as audio_decoder;
 pub use moosicbox_audio_encoder as audio_encoder;
 pub use moosicbox_audio_output as audio_output;
 pub use moosicbox_audio_zone as audio_zone;
+pub use moosicbox_audio_zone_models as audio_zone_models;
 pub use moosicbox_auth as auth;
 pub use moosicbox_channel_utils as channel_utils;
 pub use moosicbox_config as config;

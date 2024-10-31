@@ -1,5 +1,9 @@
+use std::sync::Arc;
+
+use models::AudioZoneWithSessionModel;
+use moosicbox_audio_zone_models::{AudioZone, AudioZoneWithSession};
 use moosicbox_database::{
-    boxed, config::ConfigDatabase, profiles::LibraryDatabase, query::*, DatabaseValue,
+    boxed, config::ConfigDatabase, profiles::LibraryDatabase, query::*, Database, DatabaseValue,
 };
 use moosicbox_json_utils::{database::DatabaseFetchError, ToValueType};
 
@@ -160,4 +164,27 @@ pub async fn get_players(
         .execute(db)
         .await?
         .to_value_type()?)
+}
+
+pub async fn audio_zone_try_from_db(
+    value: AudioZoneModel,
+    db: Arc<Box<dyn Database>>,
+) -> Result<AudioZone, DatabaseFetchError> {
+    Ok(AudioZone {
+        id: value.id,
+        name: value.name,
+        players: crate::db::get_players(&db.into(), value.id).await?,
+    })
+}
+
+pub async fn audio_zone_with_session_try_from_db(
+    value: AudioZoneWithSessionModel,
+    db: Arc<Box<dyn Database>>,
+) -> Result<AudioZoneWithSession, DatabaseFetchError> {
+    Ok(AudioZoneWithSession {
+        id: value.id,
+        session_id: value.session_id,
+        name: value.name,
+        players: crate::db::get_players(&db.into(), value.id).await?,
+    })
 }

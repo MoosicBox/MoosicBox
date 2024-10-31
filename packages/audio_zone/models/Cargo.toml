@@ -1,0 +1,33 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools"]
+description = "MoosicBox audio zone models package"
+edition     = "2021"
+keywords    = ["audio", "group", "grouping", "models", "playback"]
+license     = "MPL-2.0"
+name        = "moosicbox_audio_zone_models"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
+moosicbox_core = { version = "0.1.0", path = "../../core", default-features = false }
+moosicbox_database = { version = "0.1.0", path = "../../database", default-features = false }
+moosicbox_json_utils = { version = "0.1.0", path = "../../json_utils", default-features = false, features = [
+    "database",
+] }
+
+# API Dependencies
+utoipa = { workspace = true, optional = true }
+
+log   = { workspace = true }
+serde = { workspace = true }
+
+[features]
+default = ["api", "openapi"]
+
+fail-on-warnings = []
+
+api     = ["moosicbox_database/api"]
+openapi = ["dep:utoipa"]

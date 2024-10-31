@@ -15,6 +15,7 @@ RUN cat Cargo.toml | \
     \"packages\/audio_encoder\",\r\
     \"packages\/audio_output\",\r\
     \"packages\/audio_zone\",\r\
+    \"packages\/audio_zone\/models\",\r\
     \"packages\/auth\",\r\
     \"packages\/channel_utils\",\r\
     \"packages\/config\",\r\
@@ -65,6 +66,7 @@ COPY packages/audio_decoder/Cargo.toml packages/audio_decoder/Cargo.toml
 COPY packages/audio_encoder/Cargo.toml packages/audio_encoder/Cargo.toml
 COPY packages/audio_output/Cargo.toml packages/audio_output/Cargo.toml
 COPY packages/audio_zone/Cargo.toml packages/audio_zone/Cargo.toml
+COPY packages/audio_zone/models/Cargo.toml packages/audio_zone/models/Cargo.toml
 COPY packages/auth/Cargo.toml packages/auth/Cargo.toml
 COPY packages/channel_utils/Cargo.toml packages/channel_utils/Cargo.toml
 COPY packages/config/Cargo.toml packages/config/Cargo.toml
@@ -118,6 +120,7 @@ packages/audio_decoder|\
 packages/audio_encoder|\
 packages/audio_output|\
 packages/audio_zone|\
+packages/audio_zone/models|\
 packages/auth|\
 packages/channel_utils|\
 packages/config|\

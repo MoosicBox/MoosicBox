@@ -4,7 +4,7 @@
 use std::sync::{Arc, LazyLock};
 
 use async_trait::async_trait;
-use moosicbox_audio_zone::models::{ApiPlayer, Player};
+use moosicbox_audio_zone_models::{ApiPlayer, Player};
 use moosicbox_core::{
     sqlite::{
         db::DbError,
@@ -12,11 +12,8 @@ use moosicbox_core::{
     },
     types::PlaybackQuality,
 };
-use moosicbox_database::{config::ConfigDatabase, AsId, Database, DatabaseValue};
-use moosicbox_json_utils::{
-    database::{DatabaseFetchError, ToValue as _},
-    ParseError, ToValueType,
-};
+use moosicbox_database::{AsId, Database, DatabaseValue};
+use moosicbox_json_utils::{database::ToValue as _, ParseError, ToValueType};
 use moosicbox_library::{
     db::get_tracks,
     models::{ApiLibraryTrack, ApiTrack},
@@ -139,29 +136,6 @@ impl UpdateSession {
             || self.volume.is_some()
             || self.seek.is_some()
             || self.playlist.is_some()
-    }
-
-    /// # Errors
-    ///
-    /// * If the audio zone fails to be fetched
-    pub async fn audio_output_ids(
-        &self,
-        db: &ConfigDatabase,
-    ) -> Result<Vec<String>, DatabaseFetchError> {
-        Ok(match &self.playback_target {
-            PlaybackTarget::AudioZone { audio_zone_id } => {
-                let Some(output) = moosicbox_audio_zone::get_zone(db, *audio_zone_id).await? else {
-                    return Ok(vec![]);
-                };
-
-                output
-                    .players
-                    .into_iter()
-                    .map(|x| x.audio_output_id)
-                    .collect::<Vec<_>>()
-            }
-            PlaybackTarget::ConnectionOutput { output_id, .. } => vec![output_id.to_owned()],
-        })
     }
 }
 
@@ -692,7 +666,7 @@ pub struct RegisterConnection {
     pub players: Vec<RegisterPlayer>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Connection {
     pub id: String,
@@ -720,7 +694,7 @@ impl AsId for Connection {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiConnection {
     pub connection_id: String,
