@@ -2,7 +2,7 @@
 
 use maud::{html, Markup};
 
-use crate::page;
+use crate::{page, state::State};
 
 #[must_use]
 pub fn settings_page_content() -> Markup {
@@ -12,6 +12,6 @@ pub fn settings_page_content() -> Markup {
 }
 
 #[must_use]
-pub fn settings() -> Markup {
-    page(&settings_page_content())
+pub fn settings(state: &State) -> Markup {
+    page(state, &settings_page_content())
 }

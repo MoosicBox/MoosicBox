@@ -3,6 +3,7 @@
 #![allow(clippy::branches_sharing_code)]
 
 pub mod settings;
+pub mod state;
 
 use maud::{html, Markup, PreEscaped};
 use moosicbox_app_native_image::image;
@@ -10,6 +11,7 @@ use moosicbox_library_models::{ApiAlbum, ApiArtist, ApiLibraryAlbum, ApiLibraryA
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_paging::Page;
 use serde::{Deserialize, Serialize};
+use state::State;
 
 macro_rules! public_img {
     ($path:expr $(,)?) => {
@@ -190,17 +192,23 @@ pub fn main(slot: &Markup) -> Markup {
 }
 
 #[must_use]
-pub fn home() -> Markup {
-    page(&html! {
-        ("home")
-    })
+pub fn home(state: &State) -> Markup {
+    page(
+        state,
+        &html! {
+            ("home")
+        },
+    )
 }
 
 #[must_use]
-pub fn downloads() -> Markup {
-    page(&html! {
-        ("downloads")
-    })
+pub fn downloads(state: &State) -> Markup {
+    page(
+        state,
+        &html! {
+            ("downloads")
+        },
+    )
 }
 
 fn artist_cover_url(artist: &ApiLibraryArtist, width: u16, height: u16) -> String {
@@ -372,8 +380,8 @@ pub fn album_page_content(album: ApiAlbum, versions: &[ApiAlbumVersion]) -> Mark
 }
 
 #[must_use]
-pub fn album(album_id: u64) -> Markup {
-    page(&album_page_immediate(album_id))
+pub fn album(state: &State, album_id: u64) -> Markup {
+    page(state, &album_page_immediate(album_id))
 }
 
 #[must_use]
@@ -488,8 +496,8 @@ pub fn albums_page_content() -> Markup {
 }
 
 #[must_use]
-pub fn albums() -> Markup {
-    page(&albums_page_content())
+pub fn albums(state: &State) -> Markup {
+    page(state, &albums_page_content())
 }
 
 #[must_use]
@@ -510,8 +518,8 @@ pub fn artist_page_content(artist: ApiArtist) -> Markup {
 }
 
 #[must_use]
-pub fn artist(artist: ApiArtist) -> Markup {
-    page(&artist_page_content(artist))
+pub fn artist(state: &State, artist: ApiArtist) -> Markup {
+    page(state, &artist_page_content(artist))
 }
 
 #[must_use]
@@ -544,14 +552,14 @@ pub fn artists_page_content(artists: Vec<ApiArtist>) -> Markup {
 }
 
 #[must_use]
-pub fn artists(artists: Vec<ApiArtist>) -> Markup {
-    page(&artists_page_content(artists))
+pub fn artists(state: &State, artists: Vec<ApiArtist>) -> Markup {
+    page(state, &artists_page_content(artists))
 }
 
 #[must_use]
-pub fn page(slot: &Markup) -> Markup {
+pub fn page(state: &State, slot: &Markup) -> Markup {
     html! {
-        div id="root" class="dark" sx-width="100%" sx-height="100%" {
+        div state=(state) id="root" class="dark" sx-width="100%" sx-height="100%" {
             section class="navigation-bar-and-main-content" sx-dir="row" sx-height="calc(100% - 100px)" {
                 (sidebar_navigation())
                 (main(&slot))

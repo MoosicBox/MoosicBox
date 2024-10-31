@@ -1,18 +1,26 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-use std::{num::ParseIntError, sync::Arc};
+use std::{
+    num::ParseIntError,
+    ops::Deref,
+    sync::{Arc, LazyLock},
+};
 
 use flume::SendError;
 use moosicbox_app_native_lib::{
     renderer::{Color, View},
     router::{ContainerElement, RouteRequest, Router},
 };
-use moosicbox_app_native_ui::Action;
+use moosicbox_app_native_ui::{state, Action};
 use moosicbox_env_utils::{default_env_usize, option_env_i32, option_env_u16};
 use moosicbox_library_models::{ApiAlbum, ApiArtist};
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_paging::Page;
 use thiserror::Error;
+use tokio::sync::RwLock;
+
+static STATE: LazyLock<Arc<RwLock<state::State>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(state::State::default())));
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     moosicbox_logging::init(None)?;
@@ -30,13 +38,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let router = Router::new()
         .with_route(&["/", "/home"], |_| async {
-            moosicbox_app_native_ui::home()
+            moosicbox_app_native_ui::home(STATE.read().await.deref())
         })
         .with_route("/downloads", |_| async {
-            moosicbox_app_native_ui::downloads()
+            moosicbox_app_native_ui::downloads(STATE.read().await.deref())
         })
         .with_route("/settings", |_| async {
-            moosicbox_app_native_ui::settings::settings()
+            moosicbox_app_native_ui::settings::settings(STATE.read().await.deref())
         })
         .with_route_result("/albums", |req| async move {
             Ok::<_, Box<dyn std::error::Error>>(if let Some(album_id) = req.query.get("albumId") {
@@ -80,15 +88,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     container
                 } else {
-                    let container: ContainerElement =
-                        moosicbox_app_native_ui::album(album_id.parse::<u64>()?)
-                            .into_string()
-                            .try_into()?;
+                    let container: ContainerElement = moosicbox_app_native_ui::album(
+                        STATE.read().await.deref(),
+                        album_id.parse::<u64>()?,
+                    )
+                    .into_string()
+                    .try_into()?;
 
                     container
                 }
             } else {
-                moosicbox_app_native_ui::albums().into_string().try_into()?
+                moosicbox_app_native_ui::albums(STATE.read().await.deref())
+                    .into_string()
+                    .try_into()?
             })
         })
         .with_route_result("/albums-list-start", |req| async move {
@@ -117,9 +129,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     log::debug!("artist: {artist:?}");
 
-                    let container: ContainerElement = moosicbox_app_native_ui::artist(artist)
-                        .into_string()
-                        .try_into()?;
+                    let container: ContainerElement =
+                        moosicbox_app_native_ui::artist(STATE.read().await.deref(), artist)
+                            .into_string()
+                            .try_into()?;
 
                     container
                 } else {
@@ -139,7 +152,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     log::trace!("artists: {artists:?}");
 
-                    moosicbox_app_native_ui::artists(artists)
+                    moosicbox_app_native_ui::artists(STATE.read().await.deref(), artists)
                         .into_string()
                         .try_into()?
                 },
