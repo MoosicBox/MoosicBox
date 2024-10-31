@@ -150,6 +150,7 @@ pub fn calc_to_css_string(calc: &Calculation) -> String {
 ///
 /// * If there were any IO errors writing the element style attribute
 #[allow(clippy::too_many_lines)]
+#[allow(clippy::cognitive_complexity)]
 pub fn element_style_to_html(
     f: &mut dyn Write,
     element: &ContainerElement,
@@ -273,6 +274,74 @@ pub fn element_style_to_html(
             f.write_all(b" style=\"")?;
         }
         write_css_attr(f, b"background", color_to_css_string(background).as_bytes())?;
+    }
+
+    if let Some((color, size)) = &element.border_top {
+        if !printed_start {
+            printed_start = true;
+            f.write_all(b" style=\"")?;
+        }
+        write_css_attr(
+            f,
+            b"border-top",
+            &[
+                number_to_css_string(size).as_bytes(),
+                b" solid ",
+                color_to_css_string(*color).as_bytes(),
+            ]
+            .concat(),
+        )?;
+    }
+
+    if let Some((color, size)) = &element.border_right {
+        if !printed_start {
+            printed_start = true;
+            f.write_all(b" style=\"")?;
+        }
+        write_css_attr(
+            f,
+            b"border-right",
+            &[
+                number_to_css_string(size).as_bytes(),
+                b" solid ",
+                color_to_css_string(*color).as_bytes(),
+            ]
+            .concat(),
+        )?;
+    }
+
+    if let Some((color, size)) = &element.border_bottom {
+        if !printed_start {
+            printed_start = true;
+            f.write_all(b" style=\"")?;
+        }
+        write_css_attr(
+            f,
+            b"border-bottom",
+            &[
+                number_to_css_string(size).as_bytes(),
+                b" solid ",
+                color_to_css_string(*color).as_bytes(),
+            ]
+            .concat(),
+        )?;
+    }
+
+    if let Some((color, size)) = &element.border_left {
+        if !printed_start {
+            printed_start = true;
+            f.write_all(b" style=\"")?;
+        }
+        write_css_attr(
+            f,
+            b"border-left",
+            &[
+                number_to_css_string(size).as_bytes(),
+                b" solid ",
+                color_to_css_string(*color).as_bytes(),
+            ]
+            .concat(),
+        )?;
     }
 
     if printed_start {
