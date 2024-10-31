@@ -4,18 +4,18 @@ use std::{
     sync::{Arc, LazyLock, OnceLock},
 };
 
-use moosicbox_app_state::{ws::WsConnectMessage, AppStateError, UPNP_LISTENER_HANDLE};
-use moosicbox_audio_zone::models::ApiAudioZoneWithSession;
+use moosicbox_app_state::{
+    ws::WsConnectMessage, AppStateError, UpdateAppState, UPNP_LISTENER_HANDLE,
+};
 use moosicbox_core::{
     sqlite::models::{ApiSource, Id},
     types::PlaybackQuality,
 };
 use moosicbox_mdns::scanner::service::Commander;
 use moosicbox_music_api::FromId;
-use moosicbox_paging::Page;
 use moosicbox_player::{Playback, PlayerError};
 use moosicbox_session::models::{
-    ApiSession, ApiUpdateSession, PlaybackTarget, UpdateSession, UpdateSessionPlaylistTrack,
+    ApiSession, ApiUpdateSession, UpdateSession, UpdateSessionPlaylistTrack,
 };
 use moosicbox_ws::models::{
     InboundPayload, OutboundPayload, SessionUpdatedPayload, UpdateSessionPayload,
@@ -64,6 +64,7 @@ static STATE: LazyLock<moosicbox_app_state::AppState> = LazyLock::new(|| {
         .with_on_after_update_playlist_listener(update_player_plugin_playlist)
         .with_on_before_handle_ws_message_listener(handle_before_ws_message)
         .with_on_after_handle_ws_message_listener(handle_after_ws_message)
+        .with_on_before_set_state_listener(update_log_layer)
 });
 
 #[cfg(feature = "bundled")]
@@ -105,31 +106,13 @@ async fn on_startup() -> Result<(), tauri::Error> {
     Ok(())
 }
 
-#[derive(Debug, Default, Error, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdateAppState {
-    connection_id: Option<String>,
-    connection_name: Option<String>,
-    api_url: Option<String>,
-    client_id: Option<String>,
-    signature_token: Option<String>,
-    api_token: Option<String>,
-    profile: Option<String>,
-    playback_target: Option<PlaybackTarget>,
-    current_session_id: Option<u64>,
-}
-
-impl std::fmt::Display for UpdateAppState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{self:?}"))
-    }
-}
-
 #[tauri::command]
 async fn set_state(state: UpdateAppState) -> Result<(), TauriPlayerError> {
-    log::debug!("set_state: state={state:?}");
+    Ok(STATE.set_state(state).await?)
+}
 
-    let mut updated_connection_details = false;
+async fn update_log_layer(state: UpdateAppState) {
+    log::debug!("update_log_layer: state={state:?}");
 
     {
         if let Some(connection_id) = &state.connection_id {
@@ -138,20 +121,6 @@ async fn set_state(state: UpdateAppState) -> Result<(), TauriPlayerError> {
                 .map(|x| x.set_property("connectionId", connection_id.to_owned().into()));
         } else {
             LOG_LAYER.get().map(|x| x.remove_property("connectionId"));
-        }
-
-        let mut connection_id = STATE.connection_id.write().await;
-
-        if connection_id.as_ref() != state.connection_id.as_ref() {
-            log::debug!(
-                "set_state: updating CONNECTION_ID from '{:?}' -> '{:?}'",
-                connection_id.as_ref(),
-                state.connection_id.as_ref()
-            );
-            *connection_id = state.connection_id;
-            updated_connection_details = true;
-        } else {
-            log::debug!("set_state: no update to CONNECTION_ID");
         }
     }
 
@@ -173,52 +142,6 @@ async fn set_state(state: UpdateAppState) -> Result<(), TauriPlayerError> {
         } else {
             LOG_LAYER.get().map(|x| x.remove_property("clientId"));
         }
-
-        let mut client_id = STATE.client_id.write().await;
-
-        if client_id.as_ref() != state.client_id.as_ref() {
-            log::debug!(
-                "set_state: updating CLIENT_ID from '{:?}' -> '{:?}'",
-                client_id.as_ref(),
-                state.client_id.as_ref()
-            );
-            *client_id = state.client_id;
-            updated_connection_details = true;
-        } else {
-            log::debug!("set_state: no update to CLIENT_ID");
-        }
-    }
-
-    {
-        let mut signature_token = STATE.signature_token.write().await;
-
-        if signature_token.as_ref() != state.signature_token.as_ref() {
-            log::debug!(
-                "set_state: updating SIGNATURE_TOKEN from '{:?}' -> '{:?}'",
-                signature_token.as_ref(),
-                state.signature_token.as_ref()
-            );
-            *signature_token = state.signature_token;
-            updated_connection_details = true;
-        } else {
-            log::debug!("set_state: no update to SIGNATURE_TOKEN");
-        }
-    }
-
-    {
-        let mut api_token = STATE.api_token.write().await;
-
-        if api_token.as_ref() != state.api_token.as_ref() {
-            log::debug!(
-                "set_state: updating API_TOKEN from '{:?}' -> '{:?}'",
-                api_token.as_ref(),
-                state.api_token.as_ref()
-            );
-            *api_token = state.api_token;
-            updated_connection_details = true;
-        } else {
-            log::debug!("set_state: no update to API_TOKEN");
-        }
     }
 
     {
@@ -228,20 +151,6 @@ async fn set_state(state: UpdateAppState) -> Result<(), TauriPlayerError> {
                 .map(|x| x.set_property("apiUrl", api_url.to_owned().into()));
         } else {
             LOG_LAYER.get().map(|x| x.remove_property("apiUrl"));
-        }
-
-        let mut api_url = STATE.api_url.write().await;
-
-        if api_url.as_ref() != state.api_url.as_ref() {
-            log::debug!(
-                "set_state: updating API_URL from '{:?}' -> '{:?}'",
-                api_url.as_ref(),
-                state.api_url.as_ref()
-            );
-            *api_url = state.api_url;
-            updated_connection_details = true;
-        } else {
-            log::debug!("set_state: no update to API_URL");
         }
     }
 
@@ -253,39 +162,7 @@ async fn set_state(state: UpdateAppState) -> Result<(), TauriPlayerError> {
         } else {
             LOG_LAYER.get().map(|x| x.remove_property("profile"));
         }
-
-        let mut profile = STATE.profile.write().await;
-
-        if profile.as_ref() != state.profile.as_ref() {
-            log::debug!(
-                "set_state: updating PROFILE from '{:?}' -> '{:?}'",
-                profile.as_ref(),
-                state.profile.as_ref()
-            );
-            *profile = state.profile;
-            updated_connection_details = true;
-        } else {
-            log::debug!("set_state: no update to PROFILE");
-        }
     }
-
-    {
-        *STATE.current_playback_target.write().await = state.playback_target;
-    }
-
-    {
-        *STATE.current_session_id.write().await = state.current_session_id;
-    }
-
-    if state.current_session_id.is_some() {
-        STATE.update_playlist().await;
-    }
-
-    if updated_connection_details {
-        update_connection_state().await?;
-    }
-
-    Ok(())
 }
 
 async fn get_url_and_query() -> Option<(String, String)> {
@@ -354,49 +231,6 @@ async fn handle_after_ws_message(message: OutboundPayload) {
     if let Err(e) = APP.get().unwrap().emit("ws-message", message) {
         log::error!("Failed to emit ws-message: {e:?}");
     }
-}
-
-pub async fn update_connection_state() -> Result<(), TauriPlayerError> {
-    let has_connection_id = { STATE.connection_id.read().await.is_some() };
-    log::debug!("update_state: has_connection_id={has_connection_id}");
-
-    if has_connection_id {
-        moosicbox_task::spawn("set_state: scan_outputs", async {
-            log::debug!("Attempting to scan_outputs...");
-            STATE.scan_outputs().await
-        });
-
-        let inited_upnp_players =
-            moosicbox_task::spawn("set_state: init_upnp_players", async move {
-                log::debug!("Attempting to init_upnp_players...");
-                STATE.init_upnp_players().await
-            });
-
-        let reinited_players = moosicbox_task::spawn("set_state: reinit_players", async move {
-            inited_upnp_players
-                .await
-                .map_err(|e| AppStateError::unknown(e.to_string()))?
-                .map_err(|e| AppStateError::unknown(e.to_string()))?;
-            log::debug!("Attempting to reinit_players...");
-            STATE.reinit_players().await
-        });
-
-        moosicbox_task::spawn("set_state: fetch_audio_zones", async move {
-            reinited_players
-                .await
-                .map_err(|e| TauriPlayerError::Unknown(e.to_string()))?
-                .map_err(|e| TauriPlayerError::Unknown(e.to_string()))?;
-            log::debug!("Attempting to fetch_audio_zones...");
-            fetch_audio_zones().await
-        });
-    }
-
-    moosicbox_task::spawn("set_state: init_ws_connection", async move {
-        log::debug!("Attempting to init_ws_connection...");
-        STATE.init_ws_connection().await
-    });
-
-    Ok(())
 }
 
 #[derive(Copy, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone)]
@@ -552,65 +386,6 @@ pub fn on_playback_event(update: &UpdateSession, _current: &Playback) {
         "moosicbox_app: on_playback_event",
         propagate_playback_event(update.to_owned(), true),
     );
-}
-
-#[derive(Debug, Error)]
-pub enum FetchAudioZonesError {
-    #[error(transparent)]
-    Serde(#[from] serde_json::Error),
-    #[error(transparent)]
-    TauriPlayer(#[from] TauriPlayerError),
-    #[error(transparent)]
-    AppState(#[from] AppStateError),
-    #[error("Missing profile")]
-    MissingProfile,
-}
-
-async fn fetch_audio_zones() -> Result<(), FetchAudioZonesError> {
-    let api_token = STATE.api_token.read().await.clone();
-    let client_id = STATE
-        .client_id
-        .read()
-        .await
-        .clone()
-        .filter(|x| !x.is_empty())
-        .map(|x| format!("?clientId={x}"))
-        .unwrap_or_default();
-
-    let profile = { STATE.profile.read().await.clone() };
-    let Some(profile) = profile else {
-        return Err(FetchAudioZonesError::MissingProfile);
-    };
-
-    let mut headers = serde_json::Map::new();
-
-    headers.insert(
-        "moosicbox-profile".to_string(),
-        serde_json::Value::String(profile),
-    );
-
-    if let Some(api_token) = api_token {
-        headers.insert(
-            "Authorization".to_string(),
-            serde_json::Value::String(format!("bearer {api_token}")),
-        );
-    }
-
-    let response = api_proxy_get(
-        format!("audio-zone/with-session{client_id}",),
-        Some(serde_json::Value::Object(headers)),
-    )
-    .await?;
-
-    log::debug!("fetch_audio_zones: audio_zones={response}");
-
-    let zones: Page<ApiAudioZoneWithSession> = serde_json::from_value(response)?;
-
-    *STATE.current_audio_zones.write().await = zones.items();
-
-    STATE.update_audio_zones().await?;
-
-    Ok(())
 }
 
 async fn propagate_state_to_plugin(update: ApiUpdateSession) {

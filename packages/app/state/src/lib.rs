@@ -12,15 +12,18 @@ use moosicbox_app_ws::WsHandle;
 use moosicbox_audio_output::{AudioOutputFactory, AudioOutputScannerError};
 use moosicbox_audio_zone::models::{ApiAudioZoneWithSession, ApiPlayer};
 use moosicbox_core::types::PlaybackQuality;
+use moosicbox_paging::Page;
 use moosicbox_player::{
     local::LocalPlayer, PlaybackHandler, PlaybackType, PlayerError, PlayerSource,
 };
+pub use moosicbox_session::models::PlaybackTarget;
 use moosicbox_session::models::{
     ApiConnection, ApiPlaybackTarget, ApiSession, ApiUpdateSession, ApiUpdateSessionPlaylist,
-    PlaybackTarget, RegisterPlayer,
+    RegisterPlayer,
 };
 use moosicbox_ws::models::{InboundPayload, OutboundPayload};
 use reqwest::RequestBuilder;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::{sync::RwLock, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -51,6 +54,14 @@ impl moosicbox_music_api::SourceToMusicApi for SourceToRemoteLibrary {
             moosicbox_remote_library::RemoteLibraryMusicApi::new(self.host.clone(), source),
         )))
     }
+}
+
+#[derive(Debug, Error)]
+pub enum FetchAudioZonesError {
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
+    #[error("Missing profile")]
+    MissingProfile,
 }
 
 #[derive(Debug, Error)]
@@ -99,11 +110,33 @@ pub enum AppStateError {
     CloseWs(#[from] ws::CloseWsError),
     #[error(transparent)]
     SendWsMessage(#[from] ws::SendWsMessageError),
+    #[error(transparent)]
+    FetchAudioZones(#[from] FetchAudioZonesError),
 }
 
 impl AppStateError {
     pub fn unknown(message: impl Into<String>) -> Self {
         Self::Unknown(message.into())
+    }
+}
+
+#[derive(Debug, Clone, Default, Error, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateAppState {
+    pub connection_id: Option<String>,
+    pub connection_name: Option<String>,
+    pub api_url: Option<String>,
+    pub client_id: Option<String>,
+    pub signature_token: Option<String>,
+    pub api_token: Option<String>,
+    pub profile: Option<String>,
+    pub playback_target: Option<PlaybackTarget>,
+    pub current_session_id: Option<u64>,
+}
+
+impl std::fmt::Display for UpdateAppState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{self:?}"))
     }
 }
 
@@ -224,6 +257,26 @@ pub struct AppState {
             >,
         >,
     >,
+    #[allow(clippy::type_complexity)]
+    pub on_before_set_state_listeners: Vec<
+        Arc<
+            Box<
+                dyn Fn(&UpdateAppState) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+                    + Send
+                    + Sync,
+            >,
+        >,
+    >,
+    #[allow(clippy::type_complexity)]
+    pub on_after_set_state_listeners: Vec<
+        Arc<
+            Box<
+                dyn Fn(&UpdateAppState) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+                    + Send
+                    + Sync,
+            >,
+        >,
+    >,
 }
 
 impl AppState {
@@ -308,6 +361,36 @@ impl AppState {
     ) -> Self {
         let listener = Arc::new(Box::new(listener));
         self.on_after_handle_ws_message_listeners
+            .push(Arc::new(Box::new(move |message| {
+                let listener = listener.clone();
+                let message = message.to_owned();
+                Box::pin(async move { listener(message).await })
+            })));
+        self
+    }
+
+    #[must_use]
+    pub fn with_on_before_set_state_listener<F: Future<Output = ()> + Send + Sync>(
+        mut self,
+        listener: impl Fn(UpdateAppState) -> F + Send + Sync + 'static,
+    ) -> Self {
+        let listener = Arc::new(Box::new(listener));
+        self.on_before_set_state_listeners
+            .push(Arc::new(Box::new(move |message| {
+                let listener = listener.clone();
+                let message = message.to_owned();
+                Box::pin(async move { listener(message).await })
+            })));
+        self
+    }
+
+    #[must_use]
+    pub fn with_on_after_set_state_listener<F: Future<Output = ()> + Send + Sync>(
+        mut self,
+        listener: impl Fn(UpdateAppState) -> F + Send + Sync + 'static,
+    ) -> Self {
+        let listener = Arc::new(Box::new(listener));
+        self.on_after_set_state_listeners
             .push(Arc::new(Box::new(move |message| {
                 let listener = listener.clone();
                 let message = message.to_owned();
@@ -1225,5 +1308,257 @@ impl AppState {
         }
 
         update
+    }
+
+    /// # Errors
+    ///
+    /// * If fails to `updated_connection_details`
+    #[allow(clippy::too_many_lines)]
+    pub async fn set_state(&self, state: UpdateAppState) -> Result<(), AppStateError> {
+        log::debug!("set_state: state={state:?}");
+
+        for listener in &self.on_before_set_state_listeners {
+            listener(&state).await;
+        }
+
+        let mut updated_connection_details = false;
+
+        {
+            let mut connection_id = self.connection_id.write().await;
+
+            if connection_id.as_ref() == state.connection_id.as_ref() {
+                log::debug!("set_state: no update to CONNECTION_ID");
+            } else {
+                log::debug!(
+                    "set_state: updating CONNECTION_ID from '{:?}' -> '{:?}'",
+                    connection_id.as_ref(),
+                    state.connection_id.as_ref()
+                );
+                (*connection_id).clone_from(&state.connection_id);
+                drop(connection_id);
+                updated_connection_details = true;
+            }
+        }
+
+        {
+            let mut client_id = self.client_id.write().await;
+
+            if client_id.as_ref() == state.client_id.as_ref() {
+                log::debug!("set_state: no update to CLIENT_ID");
+            } else {
+                log::debug!(
+                    "set_state: updating CLIENT_ID from '{:?}' -> '{:?}'",
+                    client_id.as_ref(),
+                    state.client_id.as_ref()
+                );
+                (*client_id).clone_from(&state.client_id);
+                drop(client_id);
+                updated_connection_details = true;
+            }
+        }
+
+        {
+            let mut signature_token = self.signature_token.write().await;
+
+            if signature_token.as_ref() == state.signature_token.as_ref() {
+                log::debug!("set_state: no update to SIGNATURE_TOKEN");
+            } else {
+                log::debug!(
+                    "set_state: updating SIGNATURE_TOKEN from '{:?}' -> '{:?}'",
+                    signature_token.as_ref(),
+                    state.signature_token.as_ref()
+                );
+                (*signature_token).clone_from(&state.signature_token);
+                drop(signature_token);
+                updated_connection_details = true;
+            }
+        }
+
+        {
+            let mut api_token = self.api_token.write().await;
+
+            if api_token.as_ref() == state.api_token.as_ref() {
+                log::debug!("set_state: no update to API_TOKEN");
+            } else {
+                log::debug!(
+                    "set_state: updating API_TOKEN from '{:?}' -> '{:?}'",
+                    api_token.as_ref(),
+                    state.api_token.as_ref()
+                );
+                (*api_token).clone_from(&state.api_token);
+                drop(api_token);
+                updated_connection_details = true;
+            }
+        }
+
+        {
+            let mut api_url = self.api_url.write().await;
+
+            if api_url.as_ref() == state.api_url.as_ref() {
+                log::debug!("set_state: no update to API_URL");
+            } else {
+                log::debug!(
+                    "set_state: updating API_URL from '{:?}' -> '{:?}'",
+                    api_url.as_ref(),
+                    state.api_url.as_ref()
+                );
+                (*api_url).clone_from(&state.api_url);
+                drop(api_url);
+                updated_connection_details = true;
+            }
+        }
+
+        {
+            let mut profile = self.profile.write().await;
+
+            if profile.as_ref() == state.profile.as_ref() {
+                log::debug!("set_state: no update to PROFILE");
+            } else {
+                log::debug!(
+                    "set_state: updating PROFILE from '{:?}' -> '{:?}'",
+                    profile.as_ref(),
+                    state.profile.as_ref()
+                );
+                (*profile).clone_from(&state.profile);
+                drop(profile);
+                updated_connection_details = true;
+            }
+        }
+
+        {
+            (*self.current_playback_target.write().await).clone_from(&state.playback_target);
+        }
+
+        {
+            *self.current_session_id.write().await = state.current_session_id;
+        }
+
+        if state.current_session_id.is_some() {
+            self.update_playlist().await;
+        }
+
+        if updated_connection_details {
+            self.update_connection_state().await?;
+        }
+
+        for listener in &self.on_after_set_state_listeners {
+            listener(&state).await;
+        }
+
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// * If any of the connection state fails to update
+    pub async fn update_connection_state(&self) -> Result<(), AppStateError> {
+        let has_connection_id = { self.connection_id.read().await.is_some() };
+        log::debug!("update_state: has_connection_id={has_connection_id}");
+
+        if has_connection_id {
+            moosicbox_task::spawn("set_state: scan_outputs", {
+                let state = self.clone();
+                async move {
+                    log::debug!("Attempting to scan_outputs...");
+                    state.scan_outputs().await
+                }
+            });
+
+            #[cfg(feature = "upnp")]
+            let inited_upnp_players = moosicbox_task::spawn("set_state: init_upnp_players", {
+                let state = self.clone();
+                async move {
+                    log::debug!("Attempting to init_upnp_players...");
+                    state.init_upnp_players().await
+                }
+            });
+
+            let reinited_players = moosicbox_task::spawn("set_state: reinit_players", {
+                let state = self.clone();
+                async move {
+                    #[cfg(feature = "upnp")]
+                    inited_upnp_players
+                        .await
+                        .map_err(|e| AppStateError::unknown(e.to_string()))??;
+                    log::debug!("Attempting to reinit_players...");
+                    state.reinit_players().await
+                }
+            });
+
+            moosicbox_task::spawn("set_state: fetch_audio_zones", {
+                let state = self.clone();
+                async move {
+                    reinited_players
+                        .await
+                        .map_err(|e| AppStateError::unknown(e.to_string()))??;
+                    log::debug!("Attempting to fetch_audio_zones...");
+                    state.fetch_audio_zones().await
+                }
+            });
+        }
+
+        moosicbox_task::spawn("set_state: init_ws_connection", {
+            let state = self.clone();
+            async move {
+                log::debug!("Attempting to init_ws_connection...");
+                state.init_ws_connection().await
+            }
+        });
+
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// * If the http proxy request fails
+    /// * If the http response fails to deserialize
+    /// * If the audio zones fail to update
+    pub async fn fetch_audio_zones(&self) -> Result<(), AppStateError> {
+        let api_token = self.api_token.read().await.clone();
+        let client_id = self
+            .client_id
+            .read()
+            .await
+            .clone()
+            .filter(|x| !x.is_empty())
+            .map(|x| format!("?clientId={x}"))
+            .unwrap_or_default();
+
+        let profile = { self.profile.read().await.clone() };
+        let Some(profile) = profile else {
+            return Err(FetchAudioZonesError::MissingProfile.into());
+        };
+
+        let mut headers = serde_json::Map::new();
+
+        headers.insert(
+            "moosicbox-profile".to_string(),
+            serde_json::Value::String(profile),
+        );
+
+        if let Some(api_token) = api_token {
+            headers.insert(
+                "Authorization".to_string(),
+                serde_json::Value::String(format!("bearer {api_token}")),
+            );
+        }
+
+        let response = self
+            .api_proxy_get(
+                format!("audio-zone/with-session{client_id}",),
+                Some(serde_json::Value::Object(headers)),
+            )
+            .await?;
+
+        log::debug!("fetch_audio_zones: audio_zones={response}");
+
+        let zones: Page<ApiAudioZoneWithSession> =
+            serde_json::from_value(response).map_err(FetchAudioZonesError::Serde)?;
+
+        *self.current_audio_zones.write().await = zones.items();
+
+        self.update_audio_zones().await?;
+
+        Ok(())
     }
 }

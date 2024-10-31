@@ -5918,6 +5918,7 @@ dependencies = [
  "moosicbox_env_utils",
  "moosicbox_logging",
  "moosicbox_music_api",
+ "moosicbox_paging",
  "moosicbox_player",
  "moosicbox_remote_library",
  "moosicbox_session",
