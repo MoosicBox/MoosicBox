@@ -282,6 +282,8 @@ impl Router {
     ///
     /// Will panic if routes `RwLock` is poisoned.
     pub async fn navigate(&self, path: &str) -> Result<View, NavigateError> {
+        log::debug!("navigate: path={path}");
+
         let req = RouteRequest::from_path(path);
         let handler = {
             self.routes
@@ -315,6 +317,8 @@ impl Router {
     ///
     /// Will panic if routes `RwLock` is poisoned.
     pub async fn navigate_send(&mut self, path: &str) -> Result<(), NavigateError> {
+        log::debug!("navigate_send: path={path}");
+
         let view = {
             let req = RouteRequest::from_path(path);
             let handler = {
@@ -355,6 +359,8 @@ impl Router {
         &mut self,
         path: &str,
     ) -> JoinHandle<Result<(), Box<dyn std::error::Error + Send>>> {
+        log::debug!("navigate_spawn: path={path}");
+
         self.navigate_spawn_on(&tokio::runtime::Handle::current(), path)
     }
 
@@ -366,6 +372,8 @@ impl Router {
         handle: &tokio::runtime::Handle,
         path: &str,
     ) -> JoinHandle<Result<(), Box<dyn std::error::Error + Send>>> {
+        log::debug!("navigate_spawn_on: path={path}");
+
         let path = path.to_owned();
         let mut router = self.clone();
         moosicbox_task::spawn_on("NativeApp navigate_spawn", handle, async move {
