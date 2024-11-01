@@ -509,6 +509,42 @@ impl AppState {
             listener(update).await;
         }
 
+        {
+            let mut binding = self.current_sessions.write().await;
+            let session = binding
+                .iter_mut()
+                .find(|x| x.session_id == update.session_id);
+
+            if let Some(session) = session {
+                if let Some(seek) = update.seek {
+                    #[allow(clippy::cast_precision_loss)]
+                    #[allow(clippy::cast_sign_loss)]
+                    #[allow(clippy::cast_possible_truncation)]
+                    session.seek.replace(seek as u64);
+                }
+                if let Some(name) = update.name.clone() {
+                    session.name = name;
+                }
+                if let Some(active) = update.active {
+                    session.active = active;
+                }
+                if let Some(playing) = update.playing {
+                    session.playing = playing;
+                }
+                if let Some(volume) = update.volume {
+                    session.volume.replace(volume);
+                }
+                if let Some(position) = update.position {
+                    session.position.replace(position);
+                }
+                if let Some(playlist) = update.playlist.clone() {
+                    session.playlist.tracks = playlist.tracks;
+                }
+
+                drop(binding);
+            }
+        }
+
         let players = self
             .get_players(update.session_id, Some(&update.playback_target))
             .await;
