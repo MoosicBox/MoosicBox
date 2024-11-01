@@ -3904,6 +3904,7 @@ dependencies = [
  "html-escape",
  "itertools 0.13.0",
  "log",
+ "maud",
  "moosicbox_assert",
  "moosicbox_logging",
  "pretty_assertions",

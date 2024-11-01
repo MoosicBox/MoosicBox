@@ -20,6 +20,7 @@ moosicbox_logging = { version = "0.1.0", path = "../../logging", default-feature
 html-escape = { workspace = true, optional = true }
 itertools   = { workspace = true, optional = true }
 log         = { workspace = true }
+maud        = { workspace = true, optional = true }
 serde_json  = { workspace = true }
 thiserror   = { workspace = true }
 tl          = { workspace = true, optional = true }
@@ -30,11 +31,12 @@ pretty_assertions = { workspace = true }
 test-log          = { workspace = true }
 
 [features]
-default = ["calc", "format", "html", "id"]
+default = ["calc", "format", "html", "id", "maud"]
 
 fail-on-warnings = []
 
 calc = ["dep:itertools"]
+maud = ["dep:maud", "html"]
 
 html = ["dep:html-escape", "dep:tl"]
 simd = ["tl?/simd"]

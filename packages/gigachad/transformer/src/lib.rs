@@ -272,6 +272,15 @@ pub struct ContainerElement {
     pub calculated_border_left: Option<(Color, f32)>,
 }
 
+#[cfg(feature = "maud")]
+impl TryFrom<maud::Markup> for ContainerElement {
+    type Error = tl::ParseError;
+
+    fn try_from(value: maud::Markup) -> Result<Self, Self::Error> {
+        value.into_string().try_into()
+    }
+}
+
 fn visible_elements(elements: &[Element]) -> impl Iterator<Item = &Element> {
     elements.iter().filter(|x| {
         !x.container_element()
