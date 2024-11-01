@@ -125,14 +125,14 @@ pub fn player(state: &State) -> Markup {
                     img
                         sx-width=(size)
                         sx-height=(size)
-                        src=(public_img!("chevron-left-white.svg"));
+                        src=(public_img!("previous-button-white.svg"));
                 }
                 (player_play_button_from_state(state))
                 button sx-width=(size) sx-height=(size) fx-click=(Action::NextTrack) {
                     img
                         sx-width=(size)
                         sx-height=(size)
-                        src=(public_img!("chevron-right-white.svg"));
+                        src=(public_img!("next-button-white.svg"));
                 }
             }
             div sx-dir="row" {
