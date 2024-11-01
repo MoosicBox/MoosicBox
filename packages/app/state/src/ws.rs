@@ -417,13 +417,13 @@ impl AppState {
                     _ => {}
                 }
 
+                for listener in &state.on_after_handle_ws_message_listeners {
+                    listener(&message).await;
+                }
+
                 Ok::<_, AppStateError>(())
             }
         });
-
-        for listener in &self.on_after_handle_ws_message_listeners {
-            listener(&message).await;
-        }
 
         Ok(())
     }
