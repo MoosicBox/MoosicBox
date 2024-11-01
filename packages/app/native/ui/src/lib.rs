@@ -191,12 +191,32 @@ fn player_play_button_from_state(state: &State) -> Markup {
     )
 }
 
-fn player_current_album(album_id: u64, contains_cover: bool) -> Markup {
+fn player_current_album(
+    album_id: u64,
+    contains_cover: bool,
+    track: &str,
+    artist_id: u64,
+    artist: &str,
+    album: &str,
+) -> Markup {
     html! {
-        div sx-dir="row" id="player-album-cover" {
+        div id="player-current-playing" sx-dir="row" {
             @let size = 70;
-            a href={"/albums?albumId="(album_id)} sx-width=(size) sx-height=(size) {
-                (album_cover_img(&ApiLibraryAlbum { album_id, contains_cover, ..Default::default() }, size))
+            div sx-width=(size) sx-height=(size) {
+                a href={"/albums?albumId="(album_id)} sx-width=(size) sx-height=(size) {
+                    (album_cover_img(&ApiLibraryAlbum { album_id, contains_cover, ..Default::default() }, size))
+                }
+            }
+            div {
+                div {
+                    a href={"/albums?albumId="(album_id)} { (track) }
+                }
+                div {
+                    a href={"/artists?artistId="(artist_id)} { (artist) }
+                }
+                div sx-dir="row" {
+                    "Playing from:" a href={"/albums?albumId="(album_id)} { (album) }
+                }
             }
         }
     }
@@ -208,16 +228,25 @@ fn player_current_album_from_state(state: &State) -> Markup {
             .tracks
             .get(playback.position as usize)
             .and_then(|x| match x {
-                ApiTrack::Library { data, .. } => Some((data.album_id, data.contains_cover)),
+                ApiTrack::Library { data, .. } => Some((
+                    data.album_id,
+                    data.contains_cover,
+                    data.title.as_str(),
+                    data.artist_id,
+                    data.artist.as_str(),
+                    data.album.as_str(),
+                )),
                 ApiTrack::Tidal { .. } | ApiTrack::Qobuz { .. } | ApiTrack::Yt { .. } => None,
             });
 
-        if let Some((album_id, contains_cover)) = album {
-            return player_current_album(album_id, contains_cover);
+        if let Some((album_id, contains_cover, track, artist_id, artist, album)) = album {
+            return player_current_album(album_id, contains_cover, track, artist_id, artist, album);
         }
     }
 
-    player_current_album(1, true)
+    html! {
+        div id="player-current-playing" sx-dir="row" {}
+    }
 }
 
 #[must_use]
@@ -230,14 +259,21 @@ pub fn session_updated(update: &UpdateSession, session: &ApiSession) -> Vec<(Str
             .tracks
             .get(session.position.unwrap_or(0) as usize)
             .and_then(|x| match x {
-                ApiTrack::Library { data, .. } => Some((data.album_id, data.contains_cover)),
+                ApiTrack::Library { data, .. } => Some((
+                    data.album_id,
+                    data.contains_cover,
+                    data.title.as_str(),
+                    data.artist_id,
+                    data.artist.as_str(),
+                    data.album.as_str(),
+                )),
                 ApiTrack::Tidal { .. } | ApiTrack::Qobuz { .. } | ApiTrack::Yt { .. } => None,
             });
 
-        if let Some((album_id, contains_cover)) = album {
+        if let Some((album_id, contains_cover, track, artist_id, artist, album)) = album {
             partials.push((
-                "player-album-cover".to_string(),
-                player_current_album(album_id, contains_cover),
+                "player-current-playing".to_string(),
+                player_current_album(album_id, contains_cover, track, artist_id, artist, album),
             ));
         }
     }
