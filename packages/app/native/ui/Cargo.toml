@@ -17,6 +17,7 @@ moosicbox_menu_models = { version = "0.1.0", path = "../../../menu/models", defa
     "api",
 ] }
 moosicbox_paging = { version = "0.1.0", path = "../../../paging", default-features = false }
+moosicbox_session_models = { version = "0.1.0", path = "../../../session/models", default-features = false }
 
 log        = { workspace = true }
 maud       = { workspace = true }

@@ -40,6 +40,7 @@ moosicbox_app_native_lib = { version = "0.1.0", path = "lib", default-features =
     "maud",
 ] }
 moosicbox_app_native_ui = { version = "0.1.0", path = "ui", default-features = false }
+moosicbox_app_state = { version = "0.1.0", path = "../state", default-features = false }
 moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../../env_utils", default-features = false }
 moosicbox_library_models = { version = "0.1.0", path = "../../library/models", default-features = false, features = [
@@ -52,7 +53,10 @@ moosicbox_menu_models = { version = "0.1.0", path = "../../menu/models", default
     "api",
 ] }
 moosicbox_paging = { version = "0.1.0", path = "../../paging", default-features = false }
+moosicbox_player = { version = "0.1.0", path = "../../player", default-features = false }
+moosicbox_session_models = { version = "0.1.0", path = "../../session/models", default-features = false }
 moosicbox_task = { version = "0.1.0", path = "../../task", default-features = false }
+moosicbox_ws = { version = "0.1.0", path = "../../ws", default-features = false }
 
 # Bundled dependencies
 moosicbox_app_native_bundled = { version = "0.1.0", path = "bundled", optional = true, default-features = false }

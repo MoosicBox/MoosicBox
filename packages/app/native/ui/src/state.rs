@@ -1,5 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
+use moosicbox_library_models::ApiTrack;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -9,6 +10,7 @@ pub struct PlaybackState {
     pub playing: bool,
     pub position: u16,
     pub seek: f32,
+    pub tracks: Vec<ApiTrack>,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]

@@ -295,7 +295,7 @@ pub struct NativeApp {
     width: Option<u16>,
     height: Option<u16>,
     pub router: Router,
-    renderer: Arc<RwLock<Box<dyn Renderer>>>,
+    pub renderer: Arc<RwLock<Box<dyn Renderer>>>,
     runtime_handle: Option<tokio::runtime::Handle>,
     runtime: Option<Arc<tokio::runtime::Runtime>>,
 }

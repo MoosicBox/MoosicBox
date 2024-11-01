@@ -10,6 +10,7 @@ use moosicbox_app_native_image::image;
 use moosicbox_library_models::{ApiAlbum, ApiArtist, ApiLibraryAlbum, ApiLibraryArtist, ApiTrack};
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_paging::Page;
+use moosicbox_session_models::{ApiSession, UpdateSession};
 use serde::{Deserialize, Serialize};
 use state::State;
 
@@ -112,15 +113,10 @@ pub fn sidebar_navigation() -> Markup {
 }
 
 #[must_use]
-pub fn player() -> Markup {
+pub fn player(state: &State) -> Markup {
     html! {
         div sx-height=(100) sx-dir="row" sx-border-top="3, #222" {
-            div sx-dir="row" {
-                @let size = 70;
-                a href={"/albums?albumId="(1)} sx-width=(size) sx-height=(size) {
-                    (album_cover_img(&ApiLibraryAlbum { album_id: 1, contains_cover: true, ..Default::default() }, size))
-                }
-            }
+            (player_current_album_from_state(state))
             div sx-dir="row" {
                 @let size = 36;
                 button sx-width=(size) sx-height=(size) fx-click=(Action::PreviousTrack) {
@@ -173,11 +169,65 @@ pub fn player() -> Markup {
     }
 }
 
+fn player_current_album(album_id: u64, contains_cover: bool) -> Markup {
+    html! {
+        div sx-dir="row" id="player-album-cover" {
+            @let size = 70;
+            a href={"/albums?albumId="(album_id)} sx-width=(size) sx-height=(size) {
+                (album_cover_img(&ApiLibraryAlbum { album_id, contains_cover, ..Default::default() }, size))
+            }
+        }
+    }
+}
+
+fn player_current_album_from_state(state: &State) -> Markup {
+    if let Some(playback) = &state.player.playback {
+        let album = playback
+            .tracks
+            .get(playback.position as usize)
+            .and_then(|x| match x {
+                ApiTrack::Library { data, .. } => Some((data.album_id, data.contains_cover)),
+                ApiTrack::Tidal { .. } | ApiTrack::Qobuz { .. } | ApiTrack::Yt { .. } => None,
+            });
+
+        if let Some((album_id, contains_cover)) = album {
+            return player_current_album(album_id, contains_cover);
+        }
+    }
+
+    player_current_album(1, true)
+}
+
 #[must_use]
-pub fn footer() -> Markup {
+pub fn session_updated(update: &UpdateSession, session: &ApiSession) -> Vec<(String, Markup)> {
+    let mut partials = vec![];
+
+    if update.position.is_some() || update.playlist.is_some() {
+        let album = session
+            .playlist
+            .tracks
+            .get(session.position.unwrap_or(0) as usize)
+            .and_then(|x| match x {
+                ApiTrack::Library { data, .. } => Some((data.album_id, data.contains_cover)),
+                ApiTrack::Tidal { .. } | ApiTrack::Qobuz { .. } | ApiTrack::Yt { .. } => None,
+            });
+
+        if let Some((album_id, contains_cover)) = album {
+            partials.push((
+                "player-album-cover".to_string(),
+                player_current_album(album_id, contains_cover),
+            ));
+        }
+    }
+
+    partials
+}
+
+#[must_use]
+pub fn footer(state: &State) -> Markup {
     html! {
         footer sx-height=(100) sx-background="#080a0b" {
-            (player())
+            (player(state))
         }
     }
 }
@@ -564,7 +614,7 @@ pub fn page(state: &State, slot: &Markup) -> Markup {
                 (sidebar_navigation())
                 (main(&slot))
             }
-            (footer())
+            (footer(state))
         }
     }
 }
