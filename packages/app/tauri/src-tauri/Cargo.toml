@@ -30,7 +30,6 @@ moosicbox_app_state = { version = "0.1.0", path = "../../state", default-feature
 ] }
 
 moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
-moosicbox_audio_zone = { version = "0.1.0", path = "../../../audio_zone", default-features = false }
 moosicbox_core = { version = "0.1.0", path = "../../../core", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../../../env_utils", default-features = false }
 moosicbox_library = { version = "0.1.0", path = "../../../library", default-features = false }
@@ -41,7 +40,6 @@ moosicbox_mdns = { version = "0.1.0", path = "../../../mdns", default-features =
     "scanner",
 ] }
 moosicbox_music_api = { version = "0.1.0", path = "../../../music_api", default-features = false }
-moosicbox_paging = { version = "0.1.0", path = "../../../paging", default-features = false }
 moosicbox_player = { version = "0.1.0", path = "../../../player", default-features = false, features = [
     "local",
 ] }
