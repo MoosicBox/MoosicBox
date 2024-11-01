@@ -149,7 +149,7 @@ impl Renderer for EguiRenderer {
 
     /// # Errors
     ///
-    /// Will error if egui fails to render the elements.
+    /// Will error if egui fails to render the view.
     ///
     /// # Panics
     ///
@@ -176,6 +176,36 @@ impl Renderer for EguiRenderer {
         log::debug!("render: finished");
         if let Some(ctx) = &*self.app.ctx.read().unwrap() {
             ctx.request_repaint();
+        }
+
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// Will error if egui fails to render the partial view.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if elements `Mutex` is poisoned.
+    fn render_partial(
+        &mut self,
+        view: PartialView,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        moosicbox_logging::debug_or_trace!(
+            ("render_partial: start"),
+            ("render_partial: start {:?}", view)
+        );
+
+        let mut page = self.app.container.write().unwrap();
+        if page.replace_str_id_with_elements(view.container.elements, &view.target) {
+            page.calc();
+            drop(page);
+            if let Some(ctx) = &*self.app.ctx.read().unwrap() {
+                ctx.request_repaint();
+            }
+        } else {
+            moosicbox_assert::die_or_warn!("Unable to find element with id {}", view.target);
         }
 
         Ok(())

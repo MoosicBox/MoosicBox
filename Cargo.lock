@@ -3839,6 +3839,7 @@ dependencies = [
  "log",
  "moosicbox_app_native_image",
  "moosicbox_assert",
+ "moosicbox_logging",
  "moosicbox_task",
  "reqwest 0.12.9",
  "thiserror",

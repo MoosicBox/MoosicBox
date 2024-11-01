@@ -5,7 +5,7 @@ use std::{io::Write, sync::Arc};
 
 use async_trait::async_trait;
 use flume::Sender;
-use gigachad_renderer::{Color, RenderRunner, Renderer, View};
+use gigachad_renderer::{Color, PartialView, RenderRunner, Renderer, View};
 use gigachad_renderer_html::{
     html::{element_style_to_html, HtmlTagRenderer},
     HeaderMap, HtmlRenderer,
@@ -123,6 +123,18 @@ impl Renderer for DatastarRenderer {
         elements: View,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         self.html_renderer.render(elements)?;
+
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// Will error if Datastar fails to render the partial view.
+    fn render_partial(
+        &mut self,
+        view: PartialView,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        self.html_renderer.render_partial(view)?;
 
         Ok(())
     }

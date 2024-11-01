@@ -10,6 +10,12 @@ use async_trait::async_trait;
 pub use gigachad_color::Color;
 use gigachad_transformer::{html::ParseError, ContainerElement};
 
+#[derive(Default, Debug, Clone)]
+pub struct PartialView {
+    pub target: String,
+    pub container: ContainerElement,
+}
+
 #[derive(Default)]
 pub struct View {
     pub future: Option<Pin<Box<dyn Future<Output = ContainerElement> + Send>>>,
@@ -86,7 +92,14 @@ pub trait Renderer: Send + Sync {
 
     /// # Errors
     ///
-    /// Will error if `Renderer` implementation fails to render the elements.
-    fn render(&mut self, elements: View)
-        -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
+    /// Will error if `Renderer` implementation fails to render the view.
+    fn render(&mut self, view: View) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
+
+    /// # Errors
+    ///
+    /// Will error if `Renderer` implementation fails to render the partial elements.
+    fn render_partial(
+        &mut self,
+        partial: PartialView,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
 }

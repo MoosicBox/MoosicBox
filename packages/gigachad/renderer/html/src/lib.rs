@@ -13,7 +13,7 @@ use actix_web::{
 };
 use async_trait::async_trait;
 use flume::{Receiver, Sender};
-use gigachad_renderer::{Color, RenderRunner, Renderer, View};
+use gigachad_renderer::{Color, PartialView, RenderRunner, Renderer, View};
 use gigachad_router::Router;
 use html::{container_element_to_html_response, HtmlTagRenderer};
 use moosicbox_app_native_image::image;
@@ -270,6 +270,25 @@ impl Renderer for HtmlRenderer {
         );
 
         log::debug!("render: finished");
+
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// Will error if html fails to render the partial view.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if elements `Mutex` is poisoned.
+    fn render_partial(
+        &mut self,
+        view: PartialView,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        moosicbox_logging::debug_or_trace!(
+            ("render_partial: start"),
+            ("render_partial: start {:?}", view)
+        );
 
         Ok(())
     }

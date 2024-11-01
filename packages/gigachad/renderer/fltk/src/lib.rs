@@ -1320,6 +1320,25 @@ impl Renderer for FltkRenderer {
 
         Ok(())
     }
+
+    /// # Errors
+    ///
+    /// Will error if FLTK fails to render the partial view.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if elements `Mutex` is poisoned.
+    fn render_partial(
+        &mut self,
+        view: PartialView,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        moosicbox_logging::debug_or_trace!(
+            ("render_partial: start"),
+            ("render_partial: start {:?}", view)
+        );
+
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
