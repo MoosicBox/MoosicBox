@@ -219,6 +219,7 @@ pub enum ActionType {
 pub struct ContainerElement {
     #[cfg(feature = "id")]
     pub id: usize,
+    pub str_id: Option<String>,
     pub elements: Vec<Element>,
     pub direction: LayoutDirection,
     pub overflow_x: LayoutOverflow,
@@ -399,6 +400,25 @@ impl ContainerElement {
         }
     }
 
+    #[must_use]
+    pub fn find_parent_by_str_id_mut(&mut self, id: &str) -> Option<&mut Self> {
+        if self
+            .elements
+            .iter()
+            .filter_map(|x| x.container_element())
+            .filter_map(|x| x.str_id.as_ref())
+            .map(String::as_str)
+            .any(|x| x == id)
+        {
+            Some(self)
+        } else {
+            self.elements
+                .iter_mut()
+                .filter_map(|x| x.container_element_mut())
+                .find_map(|x| x.find_parent_by_str_id_mut(id))
+        }
+    }
+
     pub fn replace_with(&mut self, replacement: Self) {
         *self = replacement;
     }
@@ -460,6 +480,39 @@ impl ContainerElement {
                         }
                     },
                 )
+            })
+            .unwrap_or_else(|| panic!("ContainerElement is not attached properly to tree"));
+
+        parent.elements.remove(index);
+
+        for (i, element) in replacement.into_iter().enumerate() {
+            parent.elements.insert(index + i, element);
+        }
+
+        true
+    }
+
+    /// # Panics
+    ///
+    /// * If the `ContainerElement` is not properly attached to the tree
+    #[cfg(feature = "id")]
+    pub fn replace_str_id_with_elements(&mut self, replacement: Vec<Element>, id: &str) -> bool {
+        let Some(parent) = &mut self.find_parent_by_str_id_mut(id) else {
+            return false;
+        };
+
+        let index = parent
+            .elements
+            .iter()
+            .enumerate()
+            .find_map(|(i, x)| {
+                x.container_element().and_then(|container| {
+                    if container.str_id.as_ref().is_some_and(|x| x.as_str() == id) {
+                        Some(i)
+                    } else {
+                        None
+                    }
+                })
             })
             .unwrap_or_else(|| panic!("ContainerElement is not attached properly to tree"));
 

@@ -180,6 +180,7 @@ fn parse_element(
     crate::ContainerElement {
         #[cfg(feature = "id")]
         id: CURRENT_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+        str_id: get_tag_attr_value_owned(tag, "id"),
         direction: get_direction(tag),
         background: get_color(tag, "sx-background"),
         border_top: get_border(tag, "sx-border-top"),
