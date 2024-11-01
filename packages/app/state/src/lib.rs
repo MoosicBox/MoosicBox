@@ -197,6 +197,16 @@ pub struct AppState {
     pub current_connections: Arc<RwLock<Vec<ApiConnection>>>,
     pub pending_player_sessions: Arc<RwLock<HashMap<u64, u64>>>,
     pub current_sessions: Arc<RwLock<Vec<ApiSession>>>,
+    #[allow(clippy::type_complexity)]
+    pub on_current_sessions_updated_listeners: Vec<
+        Arc<
+            Box<
+                dyn Fn(&[ApiSession]) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+                    + Send
+                    + Sync,
+            >,
+        >,
+    >,
     pub current_session_id: Arc<RwLock<Option<u64>>>,
     pub current_audio_zones: Arc<RwLock<Vec<ApiAudioZoneWithSession>>>,
     #[allow(clippy::type_complexity)]
@@ -391,6 +401,21 @@ impl AppState {
     ) -> Self {
         let listener = Arc::new(Box::new(listener));
         self.on_after_set_state_listeners
+            .push(Arc::new(Box::new(move |message| {
+                let listener = listener.clone();
+                let message = message.to_owned();
+                Box::pin(async move { listener(message).await })
+            })));
+        self
+    }
+
+    #[must_use]
+    pub fn with_on_current_sessions_updated_listener<F: Future<Output = ()> + Send + Sync>(
+        mut self,
+        listener: impl Fn(Vec<ApiSession>) -> F + Send + Sync + 'static,
+    ) -> Self {
+        let listener = Arc::new(Box::new(listener));
+        self.on_current_sessions_updated_listeners
             .push(Arc::new(Box::new(move |message| {
                 let listener = listener.clone();
                 let message = message.to_owned();
