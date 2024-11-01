@@ -125,12 +125,7 @@ pub fn player(state: &State) -> Markup {
                         sx-height=(size)
                         src=(public_img!("chevron-left-white.svg"));
                 }
-                button sx-width=(size) sx-height=(size) fx-click=(Action::TogglePlayback) {
-                    img
-                        sx-width=(size)
-                        sx-height=(size)
-                        src=(public_img!("pause-button-white.svg"));
-                }
+                (player_play_button_from_state(state))
                 button sx-width=(size) sx-height=(size) fx-click=(Action::NextTrack) {
                     img
                         sx-width=(size)
@@ -167,6 +162,31 @@ pub fn player(state: &State) -> Markup {
             }
         }
     }
+}
+
+fn player_play_button(playing: bool) -> Markup {
+    html! {
+        @let size = 28;
+        button id="player-play-button" sx-width=(size) sx-height=(size) fx-click=(Action::TogglePlayback) {
+            img
+                sx-width=(size)
+                sx-height=(size)
+                src=(
+                    if playing {
+                        public_img!("pause-button-white.svg")
+                    } else {
+                        public_img!("play-button-white.svg")
+                    }
+                );
+        }
+    }
+}
+
+fn player_play_button_from_state(state: &State) -> Markup {
+    state.player.playback.as_ref().map_or_else(
+        || player_play_button(false),
+        |playback| player_play_button(playback.playing),
+    )
 }
 
 fn player_current_album(album_id: u64, contains_cover: bool) -> Markup {
@@ -218,6 +238,12 @@ pub fn session_updated(update: &UpdateSession, session: &ApiSession) -> Vec<(Str
                 player_current_album(album_id, contains_cover),
             ));
         }
+    }
+    if let Some(playing) = update.playing {
+        partials.push((
+            "player-play-button".to_string(),
+            player_play_button(playing),
+        ));
     }
 
     partials
