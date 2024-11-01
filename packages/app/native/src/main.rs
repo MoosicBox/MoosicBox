@@ -233,13 +233,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     log::debug!("versions: {versions:?}");
 
                     let container: ContainerElement =
-                        moosicbox_app_native_ui::album_page_content(album, &versions)
+                        moosicbox_app_native_ui::albums::album_page_content(album, &versions)
                             .into_string()
                             .try_into()?;
 
                     container
                 } else {
-                    let container: ContainerElement = moosicbox_app_native_ui::album(
+                    let container: ContainerElement = moosicbox_app_native_ui::albums::album(
                         &convert_state(&STATE).await,
                         album_id.parse::<u64>()?,
                     )
@@ -249,7 +249,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     container
                 }
             } else {
-                moosicbox_app_native_ui::albums(&convert_state(&STATE).await)
+                moosicbox_app_native_ui::albums::albums(&convert_state(&STATE).await)
                     .into_string()
                     .try_into()?
             })
@@ -280,10 +280,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     log::debug!("artist: {artist:?}");
 
-                    let container: ContainerElement =
-                        moosicbox_app_native_ui::artist(&convert_state(&STATE).await, artist)
-                            .into_string()
-                            .try_into()?;
+                    let container: ContainerElement = moosicbox_app_native_ui::artists::artist(
+                        &convert_state(&STATE).await,
+                        artist,
+                    )
+                    .into_string()
+                    .try_into()?;
 
                     container
                 } else {
@@ -303,7 +305,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     log::trace!("artists: {artists:?}");
 
-                    moosicbox_app_native_ui::artists(&convert_state(&STATE).await, artists)
+                    moosicbox_app_native_ui::artists::artists(&convert_state(&STATE).await, artists)
                         .into_string()
                         .try_into()?
                 },
@@ -492,7 +494,7 @@ async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteError> 
 
     log::trace!("albums_list_start_route: albums={albums:?}");
 
-    moosicbox_app_native_ui::albums_list_start(&albums, size)
+    moosicbox_app_native_ui::albums::albums_list_start(&albums, size)
         .into_string()
         .try_into()
         .map_err(|e| {
@@ -530,7 +532,7 @@ async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
 
     log::trace!("albums_list_route: albums={albums:?}");
 
-    moosicbox_app_native_ui::albums_list(&albums, size)
+    moosicbox_app_native_ui::albums::albums_list(&albums, size)
         .into_string()
         .try_into()
         .map_err(|e| {
