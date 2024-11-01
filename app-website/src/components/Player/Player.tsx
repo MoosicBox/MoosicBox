@@ -312,7 +312,7 @@ export default function player() {
                             >
                                 <img
                                     class="previous-track-button"
-                                    src="/img/next-button-white.svg"
+                                    src="/img/previous-button-white.svg"
                                     alt="Previous Track"
                                 />
                             </button>

@@ -217,7 +217,6 @@
 
 .previous-track-button {
     width: 18px;
-    transform: scaleX(-1);
     position: relative;
     top: 2px;
     right: 1px;
