@@ -25,7 +25,7 @@ default = ["maud", "viewport", "viewport-immediate", "viewport-retained"]
 
 fail-on-warnings = []
 
-maud = ["dep:maud"]
+maud = ["dep:maud", "gigachad_transformer/maud"]
 
 viewport           = []
 viewport-immediate = ["viewport"]
