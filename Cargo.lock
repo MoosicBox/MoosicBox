@@ -6369,6 +6369,7 @@ dependencies = [
  "moosicbox_json_utils",
  "serde",
  "serde_json",
+ "thiserror",
  "utoipa",
 ]
 

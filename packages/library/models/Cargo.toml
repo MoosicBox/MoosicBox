@@ -24,6 +24,7 @@ async-trait = { workspace = true, optional = true }
 log         = { workspace = true }
 serde       = { workspace = true, features = ["derive"] }
 serde_json  = { workspace = true }
+thiserror   = { workspace = true }
 
 [features]
 default = ["all-formats", "api", "db", "openapi"]

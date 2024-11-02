@@ -19,6 +19,7 @@ use moosicbox_json_utils::database::ToValue as _;
 #[cfg(feature = "db")]
 use moosicbox_json_utils::{MissingValue, ParseError, ToValueType};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 pub struct LibraryArtist {
@@ -441,6 +442,13 @@ pub enum ApiAlbum {
     Library(ApiLibraryAlbum),
 }
 
+impl From<ApiAlbum> for Album {
+    fn from(value: ApiAlbum) -> Self {
+        let ApiAlbum::Library(album) = value;
+        album.into()
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -458,6 +466,30 @@ pub struct ApiLibraryAlbum {
     pub tidal_id: Option<u64>,
     pub qobuz_id: Option<String>,
     pub yt_id: Option<u64>,
+}
+
+impl From<ApiLibraryAlbum> for Album {
+    fn from(value: ApiLibraryAlbum) -> Self {
+        Self {
+            id: value.album_id.into(),
+            title: value.title,
+            artist: value.artist,
+            artist_id: value.artist_id.into(),
+            date_released: value.date_released,
+            date_added: value.date_added,
+            artwork: if value.contains_cover {
+                Some(value.album_id.to_string())
+            } else {
+                None
+            },
+            directory: None,
+            blur: value.blur,
+            versions: vec![],
+            source: value.source,
+            artist_sources: ApiSources::default(),
+            album_sources: ApiSources::default(),
+        }
+    }
 }
 
 impl ToApi<ApiLibraryAlbum> for LibraryAlbum {
@@ -690,6 +722,283 @@ pub enum ApiTrack {
         track_id: String,
         data: serde_json::Value,
     },
+}
+
+#[derive(Debug, Error)]
+pub enum TryFromApiTrackError {
+    #[error("Missing field")]
+    MissingField,
+    #[error(transparent)]
+    TryFromInt(#[from] std::num::TryFromIntError),
+}
+
+impl TryFrom<&ApiTrack> for Track {
+    type Error = TryFromApiTrackError;
+
+    fn try_from(value: &ApiTrack) -> Result<Self, Self::Error> {
+        value.clone().try_into()
+    }
+}
+
+impl TryFrom<ApiTrack> for Track {
+    type Error = TryFromApiTrackError;
+
+    #[allow(clippy::too_many_lines)]
+    fn try_from(value: ApiTrack) -> Result<Self, Self::Error> {
+        Ok(match value {
+            ApiTrack::Library { track_id, data } => Self {
+                id: track_id.into(),
+                number: data.number,
+                title: data.title,
+                duration: data.duration,
+                album: data.album,
+                album_id: data.album_id.into(),
+                date_released: data.date_released,
+                date_added: data.date_added,
+                artist: data.artist,
+                artist_id: data.artist_id.into(),
+                file: None,
+                artwork: if data.contains_cover {
+                    Some(data.album_id.to_string())
+                } else {
+                    None
+                },
+                blur: data.blur,
+                bytes: data.bytes,
+                format: data.format,
+                bit_depth: data.bit_depth,
+                audio_bitrate: data.audio_bitrate,
+                overall_bitrate: data.overall_bitrate,
+                sample_rate: data.sample_rate,
+                channels: data.channels,
+                source: data.source,
+                api_source: ApiSource::Library,
+                sources: ApiSources::default(),
+            },
+            ApiTrack::Tidal { track_id, data } => {
+                let album_id = data
+                    .get("albumId")
+                    .ok_or(TryFromApiTrackError::MissingField)?
+                    .as_u64()
+                    .ok_or(TryFromApiTrackError::MissingField)?;
+                Self {
+                    id: track_id.into(),
+                    number: u32::try_from(
+                        data.get("number")
+                            .ok_or(TryFromApiTrackError::MissingField)?
+                            .as_u64()
+                            .ok_or(TryFromApiTrackError::MissingField)?,
+                    )?,
+                    title: data
+                        .get("title")
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .as_str()
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .to_string(),
+                    #[allow(clippy::cast_precision_loss)]
+                    duration: data
+                        .get("duration")
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .as_u64()
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        as f64,
+                    album: data
+                        .get("album")
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .as_str()
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .to_string(),
+                    album_id: album_id.into(),
+                    date_released: data
+                        .get("dateReleased")
+                        .and_then(|x| x.as_str().map(str::to_string)),
+                    date_added: data
+                        .get("dateAdded")
+                        .and_then(|x| x.as_str().map(str::to_string)),
+                    artist: data
+                        .get("artist")
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .as_str()
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .to_string(),
+                    artist_id: data
+                        .get("artistId")
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .as_u64()
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .into(),
+                    file: None,
+                    artwork: if data
+                        .get("containsCover")
+                        .is_some_and(|x| x.as_bool().is_some_and(|x| x))
+                    {
+                        Some(album_id.to_string())
+                    } else {
+                        None
+                    },
+                    blur: false,
+                    bytes: 0,
+                    format: None,
+                    bit_depth: None,
+                    audio_bitrate: None,
+                    overall_bitrate: None,
+                    sample_rate: None,
+                    channels: None,
+                    source: TrackApiSource::Tidal,
+                    api_source: ApiSource::Tidal,
+                    sources: ApiSources::default().with_source(ApiSource::Tidal, track_id.into()),
+                }
+            }
+            ApiTrack::Qobuz { track_id, data } => {
+                let album_id = data
+                    .get("albumId")
+                    .ok_or(TryFromApiTrackError::MissingField)?
+                    .as_str()
+                    .ok_or(TryFromApiTrackError::MissingField)?;
+                Self {
+                    id: track_id.into(),
+                    number: u32::try_from(
+                        data.get("number")
+                            .ok_or(TryFromApiTrackError::MissingField)?
+                            .as_u64()
+                            .ok_or(TryFromApiTrackError::MissingField)?,
+                    )?,
+                    title: data
+                        .get("title")
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .as_str()
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .to_string(),
+                    #[allow(clippy::cast_precision_loss)]
+                    duration: data
+                        .get("duration")
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .as_u64()
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        as f64,
+                    album: data
+                        .get("album")
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .as_str()
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .to_string(),
+                    album_id: album_id.into(),
+                    date_released: data
+                        .get("dateReleased")
+                        .and_then(|x| x.as_str().map(str::to_string)),
+                    date_added: data
+                        .get("dateAdded")
+                        .and_then(|x| x.as_str().map(str::to_string)),
+                    artist: data
+                        .get("artist")
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .as_str()
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .to_string(),
+                    artist_id: data
+                        .get("artistId")
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .as_u64()
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .into(),
+                    file: None,
+                    artwork: if data
+                        .get("containsCover")
+                        .is_some_and(|x| x.as_bool().is_some_and(|x| x))
+                    {
+                        Some(album_id.to_string())
+                    } else {
+                        None
+                    },
+                    blur: false,
+                    bytes: 0,
+                    format: None,
+                    bit_depth: None,
+                    audio_bitrate: None,
+                    overall_bitrate: None,
+                    sample_rate: None,
+                    channels: None,
+                    source: TrackApiSource::Qobuz,
+                    api_source: ApiSource::Qobuz,
+                    sources: ApiSources::default().with_source(ApiSource::Qobuz, track_id.into()),
+                }
+            }
+            ApiTrack::Yt { track_id, data } => {
+                let album_id = data
+                    .get("albumId")
+                    .ok_or(TryFromApiTrackError::MissingField)?
+                    .as_u64()
+                    .ok_or(TryFromApiTrackError::MissingField)?;
+                Self {
+                    id: track_id.clone().into(),
+                    number: u32::try_from(
+                        data.get("number")
+                            .ok_or(TryFromApiTrackError::MissingField)?
+                            .as_u64()
+                            .ok_or(TryFromApiTrackError::MissingField)?,
+                    )?,
+                    title: data
+                        .get("title")
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .as_str()
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .to_string(),
+                    #[allow(clippy::cast_precision_loss)]
+                    duration: data
+                        .get("duration")
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .as_u64()
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        as f64,
+                    album: data
+                        .get("album")
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .as_str()
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .to_string(),
+                    album_id: album_id.into(),
+                    date_released: data
+                        .get("dateReleased")
+                        .and_then(|x| x.as_str().map(str::to_string)),
+                    date_added: data
+                        .get("dateAdded")
+                        .and_then(|x| x.as_str().map(str::to_string)),
+                    artist: data
+                        .get("artist")
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .as_str()
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .to_string(),
+                    artist_id: data
+                        .get("artistId")
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .as_u64()
+                        .ok_or(TryFromApiTrackError::MissingField)?
+                        .into(),
+                    file: None,
+                    artwork: if data
+                        .get("containsCover")
+                        .is_some_and(|x| x.as_bool().is_some_and(|x| x))
+                    {
+                        Some(album_id.to_string())
+                    } else {
+                        None
+                    },
+                    blur: false,
+                    bytes: 0,
+                    format: None,
+                    bit_depth: None,
+                    audio_bitrate: None,
+                    overall_bitrate: None,
+                    sample_rate: None,
+                    channels: None,
+                    source: TrackApiSource::Yt,
+                    api_source: ApiSource::Yt,
+                    sources: ApiSources::default().with_source(ApiSource::Yt, track_id.into()),
+                }
+            }
+        })
+    }
 }
 
 impl Serialize for ApiTrack {

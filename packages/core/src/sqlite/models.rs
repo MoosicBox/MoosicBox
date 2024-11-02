@@ -472,6 +472,32 @@ pub struct Album {
     pub album_sources: ApiSources,
 }
 
+impl From<&Track> for Album {
+    fn from(value: &Track) -> Self {
+        value.clone().into()
+    }
+}
+
+impl From<Track> for Album {
+    fn from(value: Track) -> Self {
+        Self {
+            directory: value.directory(),
+            id: value.album_id,
+            title: value.album,
+            artist: value.artist,
+            artist_id: value.artist_id,
+            date_released: value.date_released,
+            date_added: value.date_added,
+            artwork: value.artwork,
+            blur: value.blur,
+            versions: vec![],
+            source: value.source.into(),
+            artist_sources: value.sources.clone(),
+            album_sources: value.sources,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
@@ -491,6 +517,17 @@ pub enum AlbumSource {
     Tidal,
     Qobuz,
     Yt,
+}
+
+impl From<AlbumSource> for ApiSource {
+    fn from(value: AlbumSource) -> Self {
+        match value {
+            AlbumSource::Local => Self::Library,
+            AlbumSource::Tidal => Self::Tidal,
+            AlbumSource::Qobuz => Self::Qobuz,
+            AlbumSource::Yt => Self::Yt,
+        }
+    }
 }
 
 impl From<TrackApiSource> for AlbumSource {
@@ -560,6 +597,22 @@ pub enum ApiSource {
     Tidal,
     Qobuz,
     Yt,
+}
+
+impl TryFrom<&String> for ApiSource {
+    type Error = strum::ParseError;
+
+    fn try_from(value: &String) -> Result<Self, Self::Error> {
+        ApiSource::from_str(value.as_str())
+    }
+}
+
+impl TryFrom<String> for ApiSource {
+    type Error = strum::ParseError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        ApiSource::from_str(value.as_str())
+    }
 }
 
 impl Display for ApiSource {
