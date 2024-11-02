@@ -18,7 +18,7 @@ name              = "moosicbox_lb"
 path              = "src/main.rs"
 required-features = []
 
-[target.'cfg(not(target_os = "windows"))'.dependencies]
+[dependencies]
 moosicbox_env_utils = { version = "0.1.0", path = "../env_utils", default-features = false }
 moosicbox_logging = { version = "0.1.0", path = "../logging", default-features = false, features = [
     "free_log",
