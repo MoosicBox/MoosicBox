@@ -1,20 +1,23 @@
 #![allow(clippy::module_name_repetitions)]
 
-use maud::{html, Markup};
-use moosicbox_library_models::{ApiAlbum, ApiLibraryAlbum, ApiTrack};
+use maud::{html, Markup, PreEscaped};
+use moosicbox_core::sqlite::models::{Album, ApiSource};
+use moosicbox_library_models::{ApiAlbum, ApiTrack};
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_paging::Page;
 
 use crate::{page, pre_escaped, public_img, state::State, TimeFormat as _};
 
-pub fn album_cover_url(album: &ApiLibraryAlbum, width: u16, height: u16) -> String {
-    if album.contains_cover {
+pub fn album_cover_url(album: &Album, width: u16, height: u16) -> String {
+    if album.artwork.is_some() {
+        let api_source: ApiSource = album.source.into();
         format!(
-            "{}/files/albums/{}/{width}x{height}?moosicboxProfile=master",
+            "{}/files/albums/{}/{width}x{height}?moosicboxProfile=master&source={}",
             std::env::var("MOOSICBOX_HOST")
                 .as_deref()
                 .unwrap_or("http://localhost:8500"),
-            album.album_id
+            album.id,
+            api_source,
         )
     } else {
         public_img!("album.svg").to_string()
@@ -22,20 +25,24 @@ pub fn album_cover_url(album: &ApiLibraryAlbum, width: u16, height: u16) -> Stri
 }
 
 #[must_use]
-pub fn album_cover_img(album: &ApiLibraryAlbum, size: u16) -> Markup {
+pub fn album_cover_img(album: &Album, size: u16) -> Markup {
     #[allow(clippy::cast_sign_loss)]
     #[allow(clippy::cast_possible_truncation)]
     let request_size = (f64::from(size) * 1.33).round() as u16;
 
     html! {
-        img src=(album_cover_url(&album, request_size, request_size)) sx-width=(size) sx-height=(size);
+        img src=(PreEscaped(album_cover_url(album, request_size, request_size))) sx-width=(size) sx-height=(size);
     }
 }
 
 #[must_use]
-pub fn album_page_immediate(album_id: u64) -> Markup {
+pub fn album_page_immediate(album_id: &str, source: Option<ApiSource>) -> Markup {
+    let path = pre_escaped!(
+        "/albums?full=true&albumId={album_id}{}",
+        source.map_or_else(String::new, |x| format!("&source={x}"))
+    );
     html! {
-        div hx-get=(pre_escaped!("/albums?full=true&albumId={album_id}")) hx-trigger="load" {
+        div hx-get=(path) hx-trigger="load" {
             div sx-dir="row" {
                 @let size = 200;
                 div sx-width=(size) sx-height=(size + 30) {
@@ -73,6 +80,7 @@ pub fn album_page_immediate(album_id: u64) -> Markup {
 #[must_use]
 pub fn album_page_content(album: ApiAlbum, versions: &[ApiAlbumVersion]) -> Markup {
     let ApiAlbum::Library(album) = album;
+    let album: Album = album.into();
 
     html! {
         div sx-dir="row" {
@@ -121,12 +129,12 @@ pub fn album_page_content(album: ApiAlbum, versions: &[ApiAlbumVersion]) -> Mark
 }
 
 #[must_use]
-pub fn album(state: &State, album_id: u64) -> Markup {
-    page(state, &album_page_immediate(album_id))
+pub fn album(state: &State, album_id: &str, source: Option<ApiSource>) -> Markup {
+    page(state, &album_page_immediate(album_id, source))
 }
 
 #[must_use]
-pub fn albums_list_start(albums: &Page<ApiAlbum>, size: u16) -> Markup {
+pub fn albums_list_start(albums: &Page<Album>, size: u16) -> Markup {
     static MAX_PARALLEL_REQUESTS: u32 = 6;
     static MIN_PAGE_THRESHOLD: u32 = 30;
     let limit = albums.limit();
@@ -176,31 +184,22 @@ pub fn albums_list_start(albums: &Page<ApiAlbum>, size: u16) -> Markup {
     } else {
         html! {}
     };
-    let albums = albums.iter().map(|x| {
-        let ApiAlbum::Library(album) = x;
-        album
-    });
 
     html! {
-        (show_albums(albums, size))
+        (show_albums(albums.iter(), size))
         (remaining)
     }
 }
 
 #[must_use]
-pub fn albums_list(albums: &Page<ApiAlbum>, size: u16) -> Markup {
-    let albums = albums.iter().map(|x| {
-        let ApiAlbum::Library(album) = x;
-        album
-    });
-
-    show_albums(albums, size)
+pub fn albums_list(albums: &Page<Album>, size: u16) -> Markup {
+    show_albums(albums.iter(), size)
 }
 
-fn show_albums<'a>(albums: impl Iterator<Item = &'a ApiLibraryAlbum>, size: u16) -> Markup {
+fn show_albums<'a>(albums: impl Iterator<Item = &'a Album>, size: u16) -> Markup {
     html! {
         @for album in albums {
-            a href={"/albums?albumId="(album.album_id)} sx-width=(size) sx-height=(size + 30) {
+            a href={"/albums?albumId="(album.id)} sx-width=(size) sx-height=(size + 30) {
                 div sx-width=(size) sx-height=(size + 30) {
                     (album_cover_img(album, size))
                     (album.title)

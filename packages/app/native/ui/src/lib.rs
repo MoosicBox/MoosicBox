@@ -9,7 +9,7 @@ pub mod state;
 
 use albums::album_cover_img;
 use maud::{html, Markup};
-use moosicbox_library_models::{ApiLibraryAlbum, ApiTrack};
+use moosicbox_core::sqlite::models::Track;
 use moosicbox_session_models::{ApiSession, UpdateSession};
 use serde::{Deserialize, Serialize};
 use state::State;
@@ -191,31 +191,24 @@ fn player_play_button_from_state(state: &State) -> Markup {
     )
 }
 
-fn player_current_album(
-    album_id: u64,
-    contains_cover: bool,
-    track: &str,
-    artist_id: u64,
-    artist: &str,
-    album: &str,
-) -> Markup {
+fn player_current_album(track: &Track) -> Markup {
     html! {
         div id="player-current-playing" sx-dir="row" {
             @let size = 70;
             div sx-width=(size) sx-height=(size) {
-                a href={"/albums?albumId="(album_id)} sx-width=(size) sx-height=(size) {
-                    (album_cover_img(&ApiLibraryAlbum { album_id, contains_cover, ..Default::default() }, size))
+                a href=(pre_escaped!("/albums?albumId={}&source={}", track.album_id, track.api_source)) sx-width=(size) sx-height=(size) {
+                    (album_cover_img(&track.into(), size))
                 }
             }
             div {
                 div {
-                    a href={"/albums?albumId="(album_id)} { (track) }
+                    a href=(pre_escaped!("/albums?albumId={}&source={}", track.album_id, track.api_source)) { (track.title) }
                 }
                 div {
-                    a href={"/artists?artistId="(artist_id)} { (artist) }
+                    a href=(pre_escaped!("/artists?artistId={}&source={}", track.artist_id, track.api_source)) { (track.artist) }
                 }
                 div sx-dir="row" {
-                    "Playing from:" a href={"/albums?albumId="(album_id)} { (album) }
+                    "Playing from:" a href=(pre_escaped!("/albums?albumId={}&source={}", track.album_id, track.api_source)) { (track.album) }
                 }
             }
         }
@@ -224,23 +217,14 @@ fn player_current_album(
 
 fn player_current_album_from_state(state: &State) -> Markup {
     if let Some(playback) = &state.player.playback {
-        let album = playback
+        let track: Result<Option<Track>, _> = playback
             .tracks
             .get(playback.position as usize)
-            .and_then(|x| match x {
-                ApiTrack::Library { data, .. } => Some((
-                    data.album_id,
-                    data.contains_cover,
-                    data.title.as_str(),
-                    data.artist_id,
-                    data.artist.as_str(),
-                    data.album.as_str(),
-                )),
-                ApiTrack::Tidal { .. } | ApiTrack::Qobuz { .. } | ApiTrack::Yt { .. } => None,
-            });
+            .map(TryInto::try_into)
+            .transpose();
 
-        if let Some((album_id, contains_cover, track, artist_id, artist, album)) = album {
-            return player_current_album(album_id, contains_cover, track, artist_id, artist, album);
+        if let Ok(Some(track)) = track {
+            return player_current_album(&track);
         }
     }
 
@@ -254,26 +238,17 @@ pub fn session_updated(update: &UpdateSession, session: &ApiSession) -> Vec<(Str
     let mut partials = vec![];
 
     if update.position.is_some() || update.playlist.is_some() {
-        let album = session
+        let track: Result<Option<Track>, _> = session
             .playlist
             .tracks
             .get(session.position.unwrap_or(0) as usize)
-            .and_then(|x| match x {
-                ApiTrack::Library { data, .. } => Some((
-                    data.album_id,
-                    data.contains_cover,
-                    data.title.as_str(),
-                    data.artist_id,
-                    data.artist.as_str(),
-                    data.album.as_str(),
-                )),
-                ApiTrack::Tidal { .. } | ApiTrack::Qobuz { .. } | ApiTrack::Yt { .. } => None,
-            });
+            .map(TryInto::try_into)
+            .transpose();
 
-        if let Some((album_id, contains_cover, track, artist_id, artist, album)) = album {
+        if let Ok(Some(track)) = track {
             partials.push((
                 "player-current-playing".to_string(),
-                player_current_album(album_id, contains_cover, track, artist_id, artist, album),
+                player_current_album(&track),
             ));
         }
     }
