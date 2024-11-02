@@ -10,7 +10,7 @@ use actix_web::{
 };
 use moosicbox_core::{
     integer_range::parse_integer_ranges_to_ids,
-    sqlite::models::{ApiSource, Id},
+    sqlite::models::{ApiSource, Id, IdType},
 };
 use moosicbox_core::{
     integer_range::ParseIntegersError,
@@ -524,9 +524,10 @@ pub async fn get_artist_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetAlbumQuery {
-    album_id: Option<u64>,
-    tidal_album_id: Option<u64>,
+    album_id: Option<String>,
+    tidal_album_id: Option<String>,
     qobuz_album_id: Option<String>,
+    source: Option<ApiSource>,
 }
 
 #[cfg_attr(
@@ -536,9 +537,10 @@ pub struct GetAlbumQuery {
         path = "/album",
         description = "Get the album for the specified criteria",
         params(
-            ("albumId" = Option<i32>, Query, description = "Album ID to filter by"),
-            ("tidalAlbumId" = Option<i32>, Query, description = "Tidal album ID to filter by"),
-            ("qobuzAlbumId" = Option<i32>, Query, description = "Qobuz album ID to filter by"),
+            ("albumId" = Option<String>, Query, description = "Album ID to filter by"),
+            ("tidalAlbumId" = Option<String>, Query, description = "Tidal album ID to filter by"),
+            ("qobuzAlbumId" = Option<String>, Query, description = "Qobuz album ID to filter by"),
+            ("source" = Option<String>, Query, description = "Album source to retrieve"),
         ),
         responses(
             (
@@ -554,12 +556,22 @@ pub async fn get_album_endpoint(
     query: web::Query<GetAlbumQuery>,
     db: LibraryDatabase,
 ) -> Result<Json<ApiAlbum>> {
-    let (id, source) = if let Some(id) = query.album_id {
-        (id.into(), ApiSource::Library)
-    } else if let Some(id) = query.tidal_album_id {
-        (id.into(), ApiSource::Tidal)
+    let (id, source) = if let Some(id) = &query.album_id {
+        let source = query.source.unwrap_or(ApiSource::Library);
+        (
+            Id::try_from_str(id, source, IdType::Album).map_err(ErrorBadRequest)?,
+            source,
+        )
+    } else if let Some(id) = &query.tidal_album_id {
+        (
+            Id::try_from_str(id, ApiSource::Tidal, IdType::Album).map_err(ErrorBadRequest)?,
+            ApiSource::Tidal,
+        )
     } else if let Some(id) = &query.qobuz_album_id {
-        (id.into(), ApiSource::Qobuz)
+        (
+            Id::try_from_str(id, ApiSource::Qobuz, IdType::Album).map_err(ErrorBadRequest)?,
+            ApiSource::Qobuz,
+        )
     } else {
         return Err(ErrorNotFound("Album not found"));
     };
