@@ -184,6 +184,37 @@ impl<T> Page<T> {
             Self::WithHasMore { items, .. } => items,
         }
     }
+
+    pub fn map<U, F>(self, mut f: F) -> Page<U>
+    where
+        F: FnMut(T) -> U + Send + Clone + 'static,
+        T: 'static,
+    {
+        match self {
+            Page::WithTotal {
+                items,
+                offset,
+                limit,
+                total,
+            } => Page::WithTotal {
+                items: items.into_iter().map(&mut f).collect::<Vec<_>>(),
+                offset,
+                limit,
+                total,
+            },
+            Page::WithHasMore {
+                items,
+                offset,
+                limit,
+                has_more,
+            } => Page::WithHasMore {
+                items: items.into_iter().map(&mut f).collect::<Vec<_>>(),
+                offset,
+                limit,
+                has_more,
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -344,37 +375,14 @@ impl<T, E> PagingResponse<T, E> {
         self.page.items()
     }
 
-    pub fn map<U, F, OE>(self, mut f: F) -> PagingResponse<U, OE>
+    pub fn map<U, F, OE>(self, f: F) -> PagingResponse<U, OE>
     where
         F: FnMut(T) -> U + Send + Clone + 'static,
         T: 'static,
         OE: 'static,
         E: Into<OE> + 'static,
     {
-        let page = match self.page {
-            Page::WithTotal {
-                items,
-                offset,
-                limit,
-                total,
-            } => Page::WithTotal {
-                items: items.into_iter().map(&mut f).collect::<Vec<_>>(),
-                offset,
-                limit,
-                total,
-            },
-            Page::WithHasMore {
-                items,
-                offset,
-                limit,
-                has_more,
-            } => Page::WithHasMore {
-                items: items.into_iter().map(&mut f).collect::<Vec<_>>(),
-                offset,
-                limit,
-                has_more,
-            },
-        };
+        let page = self.page.map(f.clone());
 
         let fetch = self.fetch;
 
