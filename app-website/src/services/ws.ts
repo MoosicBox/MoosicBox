@@ -119,7 +119,6 @@ export const offConnect = onConnectListener.off;
 
 onConnect((id) => {
     setConnectionId(`${connection.get()?.id}`, id);
-    wsService.getSessions();
 });
 
 connection.listen((connection) => {
