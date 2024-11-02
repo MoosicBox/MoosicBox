@@ -208,6 +208,8 @@ pub async fn message(
     match message {
         InboundPayload::GetConnectionId(_) => {
             get_connection_id(sender, context).await?;
+            let db = db.ok_or(WebsocketMessageError::MissingProfile)?;
+            broadcast_sessions(&db, sender, context, false).await?;
             Ok::<_, WebsocketMessageError>(())
         }
         InboundPayload::GetSessions(_) => {
