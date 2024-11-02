@@ -168,6 +168,8 @@ async fn handle_playback_event(update: UpdateSession) {
                 log::error!("Failed to render_partial: {e:?}");
             }
         }
+    } else {
+        log::debug!("handle_playback_event: no session");
     }
 }
 
