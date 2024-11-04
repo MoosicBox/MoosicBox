@@ -27,7 +27,7 @@ serde_json  = { workspace = true }
 thiserror   = { workspace = true }
 
 [features]
-default = ["all-formats", "api", "db", "openapi"]
+default = ["all-formats", "all-sources", "api", "db", "openapi"]
 
 fail-on-warnings = []
 
@@ -46,3 +46,9 @@ aac  = ["moosicbox_core/aac"]
 flac = ["moosicbox_core/flac"]
 mp3  = ["moosicbox_core/mp3"]
 opus = ["moosicbox_core/opus"]
+
+all-sources = ["qobuz", "tidal", "yt"]
+
+qobuz = ["moosicbox_core/qobuz"]
+tidal = ["moosicbox_core/tidal"]
+yt    = ["moosicbox_core/yt"]

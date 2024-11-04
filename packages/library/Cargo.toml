@@ -51,7 +51,7 @@ thiserror       = { workspace = true }
 tokio           = { workspace = true, features = ["macros", "rt", "tracing"] }
 
 [features]
-default = ["all-formats", "api", "openapi"]
+default = ["all-formats", "all-sources", "api", "openapi"]
 
 fail-on-warnings = []
 
@@ -100,3 +100,9 @@ opus = [
     "moosicbox_files/opus",
     "moosicbox_library_models/opus",
 ]
+
+all-sources = ["qobuz", "tidal", "yt"]
+
+qobuz = ["moosicbox_core/qobuz", "moosicbox_library_models/qobuz"]
+tidal = ["moosicbox_core/tidal", "moosicbox_library_models/tidal"]
+yt    = ["moosicbox_core/yt", "moosicbox_library_models/yt"]

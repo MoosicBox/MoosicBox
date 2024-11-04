@@ -28,11 +28,20 @@ utoipa           = { workspace = true, optional = true }
 moosicbox_task = { version = "0.1.0", path = "../task", default-features = false, optional = true }
 tokio          = { workspace = true, optional = true }
 
-log          = { workspace = true }
-serde        = { workspace = true, features = ["derive"] }
+log   = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 
 [features]
-default = ["aac", "api", "events", "flac", "mp3", "openapi", "opus"]
+default = [
+    "aac",
+    "all-sources",
+    "api",
+    "events",
+    "flac",
+    "mp3",
+    "openapi",
+    "opus",
+]
 
 fail-on-warnings = []
 
@@ -57,3 +66,9 @@ aac  = ["moosicbox_library/aac"]
 flac = ["moosicbox_library/flac"]
 mp3  = ["moosicbox_library/mp3"]
 opus = ["moosicbox_library/opus"]
+
+all-sources = ["qobuz", "tidal", "yt"]
+
+qobuz = ["moosicbox_core/qobuz", "moosicbox_library/qobuz"]
+tidal = ["moosicbox_core/tidal", "moosicbox_library/tidal"]
+yt    = ["moosicbox_core/yt", "moosicbox_library/yt"]

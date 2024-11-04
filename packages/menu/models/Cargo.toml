@@ -22,7 +22,7 @@ log   = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 
 [features]
-default = ["api", "openapi"]
+default = ["all-sources", "api", "openapi"]
 
 fail-on-warnings = []
 
@@ -32,3 +32,9 @@ openapi = [
     "moosicbox_core/openapi",
     "moosicbox_library_models/openapi",
 ]
+
+all-sources = ["qobuz", "tidal", "yt"]
+
+qobuz = []
+tidal = []
+yt    = []

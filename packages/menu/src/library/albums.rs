@@ -77,14 +77,17 @@ pub enum GetAlbumVersionsError {
 }
 
 pub async fn get_album_versions_from_source(
-    db: &LibraryDatabase,
+    #[allow(unused)] db: &LibraryDatabase,
     library_api: &LibraryMusicApi,
     album_id: &Id,
     source: ApiSource,
 ) -> Result<Vec<AlbumVersion>, GetAlbumVersionsError> {
+    #[allow(unreachable_code)]
     Ok(match source {
         ApiSource::Library => get_library_album_versions(library_api, album_id).await?,
+        #[allow(unreachable_patterns)]
         _ => {
+            #[allow(unused)]
             let tracks: Vec<Track> = match source {
                 ApiSource::Library => unreachable!(),
                 #[cfg(feature = "tidal")]
@@ -124,8 +127,11 @@ pub async fn get_album_versions_from_source(
                 channels: None,
                 source: match source {
                     ApiSource::Library => unreachable!(),
+                    #[cfg(feature = "tidal")]
                     ApiSource::Tidal => TrackApiSource::Tidal,
+                    #[cfg(feature = "qobuz")]
                     ApiSource::Qobuz => TrackApiSource::Qobuz,
+                    #[cfg(feature = "yt")]
                     ApiSource::Yt => TrackApiSource::Yt,
                 },
             }]
@@ -348,6 +354,7 @@ pub async fn remove_album(
         api.source()
     );
 
+    #[allow(unused_mut)]
     let mut album = library_api
         .library_album_from_source(album_id, api.source())
         .await?
@@ -372,7 +379,9 @@ pub async fn remove_album(
     let target_tracks = tracks
         .into_iter()
         .filter(|track| match track.source {
+            #[cfg(feature = "tidal")]
             TrackApiSource::Tidal => album.tidal_id.is_some(),
+            #[cfg(feature = "qobuz")]
             TrackApiSource::Qobuz => album.qobuz_id.is_some(),
             _ => false,
         })
@@ -400,13 +409,16 @@ pub async fn remove_album(
     )
     .await?;
 
-    let mut album_field_updates = vec![];
+    #[allow(unused_mut)]
+    let mut album_field_updates: Vec<(&str, DatabaseValue)> = vec![];
 
     match api.source() {
+        #[cfg(feature = "tidal")]
         ApiSource::Tidal => {
             album_field_updates.push(("tidal_id", DatabaseValue::Null));
             album.tidal_id = None;
         }
+        #[cfg(feature = "qobuz")]
         ApiSource::Qobuz => {
             album_field_updates.push(("qobuz_id", DatabaseValue::Null));
             album.qobuz_id = None;
@@ -433,7 +445,9 @@ pub async fn remove_album(
 
     if has_local_tracks
         || match api.source() {
+            #[cfg(feature = "tidal")]
             ApiSource::Tidal => album.tidal_id.is_some(),
+            #[cfg(feature = "qobuz")]
             ApiSource::Qobuz => album.qobuz_id.is_some(),
             _ => false,
         }

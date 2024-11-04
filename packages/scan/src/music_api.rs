@@ -3,7 +3,7 @@ use std::sync::Arc;
 use moosicbox_core::{
     sqlite::{
         db::DbError,
-        models::{Album, ApiSource, Track, TrackApiSource},
+        models::{Album, ApiSource, Track},
     },
     types::AudioFormat,
 };
@@ -244,11 +244,19 @@ async fn scan_tracks(
     api: &dyn MusicApi,
     tracks: &[Track],
     scan_album: Arc<RwLock<ScanAlbum>>,
-    scanner: Option<Scanner>,
+    #[allow(unused)] scanner: Option<Scanner>,
 ) -> Result<(), ScanError> {
     log::debug!("Processing music api tracks count={}", tracks.len());
 
+    let source = api.source();
+
+    if source == ApiSource::Library {
+        moosicbox_assert::die!("Invalid api source");
+        return Ok(());
+    }
+
     for track in tracks {
+        #[allow(unreachable_code)]
         let _ = scan_album
             .write()
             .await
@@ -264,14 +272,17 @@ async fn scan_tracks(
                 &None,
                 &None,
                 &None,
-                match api.source() {
-                    ApiSource::Library => unreachable!(),
-                    ApiSource::Tidal => TrackApiSource::Tidal,
-                    ApiSource::Qobuz => TrackApiSource::Qobuz,
-                    ApiSource::Yt => TrackApiSource::Yt,
+                match source {
+                    ApiSource::Library => continue,
+                    #[cfg(feature = "tidal")]
+                    ApiSource::Tidal => moosicbox_core::sqlite::models::TrackApiSource::Tidal,
+                    #[cfg(feature = "qobuz")]
+                    ApiSource::Qobuz => moosicbox_core::sqlite::models::TrackApiSource::Qobuz,
+                    #[cfg(feature = "yt")]
+                    ApiSource::Yt => moosicbox_core::sqlite::models::TrackApiSource::Yt,
                 },
                 &Some(&track.id),
-                api.source(),
+                source,
             )
             .await;
         if let Some(scanner) = &scanner {

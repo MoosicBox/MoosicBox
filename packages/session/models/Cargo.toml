@@ -30,7 +30,7 @@ strum        = { workspace = true }
 strum_macros = { workspace = true }
 
 [features]
-default = ["api", "openapi"]
+default = ["all-sources", "api", "openapi"]
 
 fail-on-warnings = []
 
@@ -46,3 +46,9 @@ aac  = ["moosicbox_library_models/aac"]
 flac = ["moosicbox_library_models/flac"]
 mp3  = ["moosicbox_library_models/mp3"]
 opus = ["moosicbox_library_models/opus"]
+
+all-sources = ["qobuz", "tidal", "yt"]
+
+qobuz = ["moosicbox_core/qobuz", "moosicbox_library_models/qobuz"]
+tidal = ["moosicbox_core/tidal", "moosicbox_library_models/tidal"]
+yt    = ["moosicbox_core/yt", "moosicbox_library_models/yt"]

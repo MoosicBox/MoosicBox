@@ -60,6 +60,6 @@ openapi = [
 
 all-sources = ["qobuz", "tidal", "yt"]
 
-qobuz = ["dep:moosicbox_qobuz"]
-tidal = ["dep:moosicbox_tidal"]
-yt    = ["dep:moosicbox_yt"]
+qobuz = ["dep:moosicbox_qobuz", "moosicbox_core/qobuz"]
+tidal = ["dep:moosicbox_tidal", "moosicbox_core/tidal"]
+yt    = ["dep:moosicbox_yt", "moosicbox_core/yt"]

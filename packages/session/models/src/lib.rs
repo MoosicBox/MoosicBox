@@ -455,6 +455,7 @@ pub struct SessionPlaylistTrack {
 }
 
 impl ToApi<ApiTrack> for SessionPlaylistTrack {
+    #[allow(clippy::too_many_lines)]
     fn to_api(self) -> ApiTrack {
         match self.r#type {
             ApiSource::Library => {
@@ -475,6 +476,7 @@ impl ToApi<ApiTrack> for SessionPlaylistTrack {
                         }),
                 }
             }
+            #[cfg(feature = "tidal")]
             ApiSource::Tidal => {
                 let id = self.id.parse::<u64>().expect("Invalid Tidal Track ID");
                 match &self.data {
@@ -502,6 +504,7 @@ impl ToApi<ApiTrack> for SessionPlaylistTrack {
                     },
                 }
             }
+            #[cfg(feature = "qobuz")]
             ApiSource::Qobuz => {
                 let id = self.id.parse::<u64>().expect("Invalid Qobuz Track ID");
                 match &self.data {
@@ -529,6 +532,7 @@ impl ToApi<ApiTrack> for SessionPlaylistTrack {
                     },
                 }
             }
+            #[cfg(feature = "yt")]
             ApiSource::Yt => match &self.data {
                 Some(data) => ApiTrack::Yt {
                     track_id: self.id,

@@ -248,6 +248,7 @@ impl ScanAlbum {
     }
 
     pub fn to_sqlite_values<'a>(self, artist_id: u64) -> HashMap<&'a str, DatabaseValue> {
+        #[allow(unused_mut)]
         let mut values = HashMap::from([
             ("artist_id", DatabaseValue::Number(artist_id as i64)),
             ("title", DatabaseValue::String(self.name)),
@@ -258,15 +259,19 @@ impl ScanAlbum {
             ("artwork", DatabaseValue::StringOpt(self.cover)),
             ("directory", DatabaseValue::StringOpt(self.directory)),
         ]);
+        #[allow(unused)]
         if let Some(id) = &self.id {
             match self.api_source {
                 ApiSource::Library => {}
+                #[cfg(feature = "tidal")]
                 ApiSource::Tidal => {
                     values.insert("tidal_id", id.into());
                 }
+                #[cfg(feature = "qobuz")]
                 ApiSource::Qobuz => {
                     values.insert("qobuz_id", id.into());
                 }
+                #[cfg(feature = "yt")]
                 ApiSource::Yt => {
                     values.insert("yt_id", id.into());
                 }
@@ -276,6 +281,7 @@ impl ScanAlbum {
     }
 
     pub fn to_database_values<'a>(self, artist_id: u64) -> HashMap<&'a str, DatabaseValue> {
+        #[allow(unused_mut)]
         let mut values = HashMap::from([
             ("artist_id", DatabaseValue::Number(artist_id as i64)),
             ("title", DatabaseValue::String(self.name)),
@@ -286,15 +292,19 @@ impl ScanAlbum {
             ("artwork", DatabaseValue::StringOpt(self.cover)),
             ("directory", DatabaseValue::StringOpt(self.directory)),
         ]);
+        #[allow(unused)]
         if let Some(id) = &self.id {
             match self.api_source {
                 ApiSource::Library => {}
+                #[cfg(feature = "tidal")]
                 ApiSource::Tidal => {
                     values.insert("tidal_id", id.into());
                 }
+                #[cfg(feature = "qobuz")]
                 ApiSource::Qobuz => {
                     values.insert("qobuz_id", id.into());
                 }
+                #[cfg(feature = "yt")]
                 ApiSource::Yt => {
                     values.insert("yt_id", id.into());
                 }
@@ -397,19 +407,24 @@ impl ScanArtist {
     }
 
     pub fn to_sqlite_values<'a>(self) -> HashMap<&'a str, DatabaseValue> {
+        #[allow(unused_mut)]
         let mut values = HashMap::from([
             ("title", DatabaseValue::String(self.name.clone())),
             ("cover", DatabaseValue::StringOpt(self.cover.clone())),
         ]);
+        #[allow(unused)]
         if let Some(id) = &self.id {
             match self.api_source {
                 ApiSource::Library => {}
+                #[cfg(feature = "tidal")]
                 ApiSource::Tidal => {
                     values.insert("tidal_id", id.into());
                 }
+                #[cfg(feature = "qobuz")]
                 ApiSource::Qobuz => {
                     values.insert("qobuz_id", id.into());
                 }
+                #[cfg(feature = "yt")]
                 ApiSource::Yt => {
                     values.insert("yt_id", id.into());
                 }
@@ -419,19 +434,24 @@ impl ScanArtist {
     }
 
     pub fn to_database_values<'a>(self) -> HashMap<&'a str, DatabaseValue> {
+        #[allow(unused_mut)]
         let mut values = HashMap::from([
             ("title", DatabaseValue::String(self.name.clone())),
             ("cover", DatabaseValue::StringOpt(self.cover.clone())),
         ]);
+        #[allow(unused)]
         if let Some(id) = &self.id {
             match self.api_source {
                 ApiSource::Library => {}
+                #[cfg(feature = "tidal")]
                 ApiSource::Tidal => {
                     values.insert("tidal_id", id.into());
                 }
+                #[cfg(feature = "qobuz")]
                 ApiSource::Qobuz => {
                     values.insert("qobuz_id", id.into());
                 }
+                #[cfg(feature = "yt")]
                 ApiSource::Yt => {
                     values.insert("yt_id", id.into());
                 }
@@ -661,14 +681,20 @@ impl ScanOutput {
                         file: track.path.clone(),
                         qobuz_id: match track.api_source {
                             ApiSource::Library => None,
+                            #[cfg(feature = "tidal")]
                             ApiSource::Tidal => None,
+                            #[cfg(feature = "qobuz")]
                             ApiSource::Qobuz => track.id.as_ref().map(|x| x.into()),
+                            #[cfg(feature = "yt")]
                             ApiSource::Yt => None,
                         },
                         tidal_id: match track.api_source {
                             ApiSource::Library => None,
+                            #[cfg(feature = "tidal")]
                             ApiSource::Tidal => track.id.as_ref().map(|x| x.into()),
+                            #[cfg(feature = "qobuz")]
                             ApiSource::Qobuz => None,
+                            #[cfg(feature = "yt")]
                             ApiSource::Yt => None,
                         },
                         track: LibraryTrack {

@@ -161,8 +161,11 @@ impl AsId for StringId {
 pub enum TrackApiSource {
     #[default]
     Local,
+    #[cfg(feature = "tidal")]
     Tidal,
+    #[cfg(feature = "qobuz")]
     Qobuz,
+    #[cfg(feature = "yt")]
     Yt,
 }
 
@@ -176,8 +179,11 @@ impl From<TrackApiSource> for ApiSource {
     fn from(value: TrackApiSource) -> Self {
         match value {
             TrackApiSource::Local => ApiSource::Library,
+            #[cfg(feature = "tidal")]
             TrackApiSource::Tidal => ApiSource::Tidal,
+            #[cfg(feature = "qobuz")]
             TrackApiSource::Qobuz => ApiSource::Qobuz,
+            #[cfg(feature = "yt")]
             TrackApiSource::Yt => ApiSource::Yt,
         }
     }
@@ -187,8 +193,11 @@ impl From<AlbumSource> for TrackApiSource {
     fn from(value: AlbumSource) -> Self {
         match value {
             AlbumSource::Local => Self::Local,
+            #[cfg(feature = "tidal")]
             AlbumSource::Tidal => Self::Tidal,
+            #[cfg(feature = "qobuz")]
             AlbumSource::Qobuz => Self::Qobuz,
+            #[cfg(feature = "yt")]
             AlbumSource::Yt => Self::Yt,
         }
     }
@@ -295,15 +304,31 @@ impl From<TrackInner> for Track {
             channels: value.channels,
             source: value.source,
             api_source: ApiSource::Library,
-            sources: ApiSources::default()
-                .with_source_opt(ApiSource::Tidal, value.tidal_id.map(|x| x.into()))
-                .with_source_opt(ApiSource::Qobuz, value.qobuz_id.map(|x| x.into()))
-                .with_source_opt(ApiSource::Yt, value.yt_id.map(|x| x.into())),
+            sources: {
+                #[allow(unused_mut)]
+                let mut sources = ApiSources::default();
+                #[cfg(feature = "tidal")]
+                {
+                    sources =
+                        sources.with_source_opt(ApiSource::Tidal, value.tidal_id.map(Into::into));
+                }
+                #[cfg(feature = "qobuz")]
+                {
+                    sources =
+                        sources.with_source_opt(ApiSource::Qobuz, value.qobuz_id.map(Into::into));
+                }
+                #[cfg(feature = "yt")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Yt, value.yt_id.map(Into::into));
+                }
+                sources
+            },
         }
     }
 }
 
 impl Track {
+    #[must_use]
     pub fn directory(&self) -> Option<String> {
         self.file
             .as_ref()
@@ -654,8 +679,11 @@ pub struct ApiAlbumVersionQuality {
 pub enum AlbumSource {
     #[default]
     Local,
+    #[cfg(feature = "tidal")]
     Tidal,
+    #[cfg(feature = "qobuz")]
     Qobuz,
+    #[cfg(feature = "yt")]
     Yt,
 }
 
@@ -663,8 +691,11 @@ impl From<AlbumSource> for ApiSource {
     fn from(value: AlbumSource) -> Self {
         match value {
             AlbumSource::Local => Self::Library,
+            #[cfg(feature = "tidal")]
             AlbumSource::Tidal => Self::Tidal,
+            #[cfg(feature = "qobuz")]
             AlbumSource::Qobuz => Self::Qobuz,
+            #[cfg(feature = "yt")]
             AlbumSource::Yt => Self::Yt,
         }
     }
@@ -674,8 +705,11 @@ impl From<TrackApiSource> for AlbumSource {
     fn from(value: TrackApiSource) -> Self {
         match value {
             TrackApiSource::Local => Self::Local,
+            #[cfg(feature = "tidal")]
             TrackApiSource::Tidal => Self::Tidal,
+            #[cfg(feature = "qobuz")]
             TrackApiSource::Qobuz => Self::Qobuz,
+            #[cfg(feature = "yt")]
             TrackApiSource::Yt => Self::Yt,
         }
     }
@@ -687,8 +721,11 @@ impl FromStr for AlbumSource {
     fn from_str(input: &str) -> Result<AlbumSource, Self::Err> {
         match input.to_lowercase().as_str() {
             "local" => Ok(AlbumSource::Local),
+            #[cfg(feature = "tidal")]
             "tidal" => Ok(AlbumSource::Tidal),
+            #[cfg(feature = "qobuz")]
             "qobuz" => Ok(AlbumSource::Qobuz),
+            #[cfg(feature = "yt")]
             "yt" => Ok(AlbumSource::Yt),
             _ => Err(()),
         }
@@ -734,8 +771,11 @@ impl FromStr for AlbumSort {
 pub enum ApiSource {
     #[default]
     Library,
+    #[cfg(feature = "tidal")]
     Tidal,
+    #[cfg(feature = "qobuz")]
     Qobuz,
+    #[cfg(feature = "yt")]
     Yt,
 }
 
@@ -940,20 +980,29 @@ impl Id {
         Ok(match id_type {
             IdType::Artist => match source {
                 ApiSource::Library => Self::Number(value.parse::<u64>()?),
+                #[cfg(feature = "tidal")]
                 ApiSource::Tidal => Self::Number(value.parse::<u64>()?),
+                #[cfg(feature = "qobuz")]
                 ApiSource::Qobuz => Self::Number(value.parse::<u64>()?),
+                #[cfg(feature = "yt")]
                 ApiSource::Yt => Self::String(value.to_owned()),
             },
             IdType::Album => match source {
                 ApiSource::Library => Self::Number(value.parse::<u64>()?),
+                #[cfg(feature = "tidal")]
                 ApiSource::Tidal => Self::Number(value.parse::<u64>()?),
+                #[cfg(feature = "qobuz")]
                 ApiSource::Qobuz => Self::String(value.to_owned()),
+                #[cfg(feature = "yt")]
                 ApiSource::Yt => Self::String(value.to_owned()),
             },
             IdType::Track => match source {
                 ApiSource::Library => Self::Number(value.parse::<u64>()?),
+                #[cfg(feature = "tidal")]
                 ApiSource::Tidal => Self::Number(value.parse::<u64>()?),
+                #[cfg(feature = "qobuz")]
                 ApiSource::Qobuz => Self::Number(value.parse::<u64>()?),
+                #[cfg(feature = "yt")]
                 ApiSource::Yt => Self::String(value.to_owned()),
             },
         })
@@ -963,20 +1012,29 @@ impl Id {
         match id_type {
             IdType::Artist => match source {
                 ApiSource::Library => Self::Number(0),
+                #[cfg(feature = "tidal")]
                 ApiSource::Tidal => Self::Number(0),
+                #[cfg(feature = "qobuz")]
                 ApiSource::Qobuz => Self::Number(0),
+                #[cfg(feature = "yt")]
                 ApiSource::Yt => Self::String("".into()),
             },
             IdType::Album => match source {
                 ApiSource::Library => Self::Number(0),
+                #[cfg(feature = "tidal")]
                 ApiSource::Tidal => Self::Number(0),
+                #[cfg(feature = "qobuz")]
                 ApiSource::Qobuz => Self::String("".into()),
+                #[cfg(feature = "yt")]
                 ApiSource::Yt => Self::String("".into()),
             },
             IdType::Track => match source {
                 ApiSource::Library => Self::Number(0),
+                #[cfg(feature = "tidal")]
                 ApiSource::Tidal => Self::Number(0),
+                #[cfg(feature = "qobuz")]
                 ApiSource::Qobuz => Self::Number(0),
+                #[cfg(feature = "yt")]
                 ApiSource::Yt => Self::String("".into()),
             },
         }

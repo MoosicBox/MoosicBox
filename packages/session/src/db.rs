@@ -547,7 +547,12 @@ async fn session_playlist_tracks_as_model_mapped_query(
                     .find(|lib| lib.id.to_string() == t.id)
                     .ok_or(DbError::Unknown)?
                     .to_api(),
-                ApiSource::Tidal | ApiSource::Qobuz | ApiSource::Yt => t.to_api(),
+                #[cfg(feature = "tidal")]
+                ApiSource::Tidal => t.to_api(),
+                #[cfg(feature = "qobuz")]
+                ApiSource::Qobuz => t.to_api(),
+                #[cfg(feature = "yt")]
+                ApiSource::Yt => t.to_api(),
             })
         })
         .collect::<Result<Vec<_>, DbError>>()

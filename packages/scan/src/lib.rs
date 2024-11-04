@@ -44,8 +44,11 @@ pub fn cancel() {
 pub enum ScanOrigin {
     #[cfg(feature = "local")]
     Local,
+    #[cfg(feature = "tidal")]
     Tidal,
+    #[cfg(feature = "qobuz")]
     Qobuz,
+    #[cfg(feature = "yt")]
     Yt,
 }
 
@@ -56,8 +59,11 @@ impl From<ScanOrigin> for ApiSource {
             ScanOrigin::Local => {
                 moosicbox_assert::die_or_panic!("Local ScanOrigin cant map to ApiSource")
             }
+            #[cfg(feature = "tidal")]
             ScanOrigin::Tidal => ApiSource::Tidal,
+            #[cfg(feature = "qobuz")]
             ScanOrigin::Qobuz => ApiSource::Qobuz,
+            #[cfg(feature = "yt")]
             ScanOrigin::Yt => ApiSource::Yt,
         }
     }
@@ -69,8 +75,11 @@ impl From<ApiSource> for ScanOrigin {
             ApiSource::Library => {
                 moosicbox_assert::die_or_panic!("Library ApiSource cant map to ScanOrigin")
             }
+            #[cfg(feature = "tidal")]
             ApiSource::Tidal => ScanOrigin::Tidal,
+            #[cfg(feature = "qobuz")]
             ApiSource::Qobuz => ScanOrigin::Qobuz,
+            #[cfg(feature = "yt")]
             ApiSource::Yt => ScanOrigin::Yt,
         }
     }
@@ -89,8 +98,11 @@ impl From<TrackApiSource> for ScanOrigin {
                     moosicbox_assert::die_or_panic!("Local TrackApiSource cant map to ScanOrigin")
                 }
             }
+            #[cfg(feature = "tidal")]
             TrackApiSource::Tidal => ScanOrigin::Tidal,
+            #[cfg(feature = "qobuz")]
             TrackApiSource::Qobuz => ScanOrigin::Qobuz,
+            #[cfg(feature = "yt")]
             TrackApiSource::Yt => ScanOrigin::Yt,
         }
     }
@@ -101,8 +113,11 @@ impl From<ScanOrigin> for TrackApiSource {
         match value {
             #[cfg(feature = "local")]
             ScanOrigin::Local => TrackApiSource::Local,
+            #[cfg(feature = "tidal")]
             ScanOrigin::Tidal => TrackApiSource::Tidal,
+            #[cfg(feature = "qobuz")]
             ScanOrigin::Qobuz => TrackApiSource::Qobuz,
+            #[cfg(feature = "yt")]
             ScanOrigin::Yt => TrackApiSource::Yt,
         }
     }
@@ -189,6 +204,7 @@ impl Scanner {
     }
 
     #[allow(unused)]
+    #[allow(unused)]
     async fn on_total_updated(&self, total: usize) {
         let scanned = self.scanned.load(std::sync::atomic::Ordering::SeqCst);
         self.total.store(total, std::sync::atomic::Ordering::SeqCst);
@@ -199,6 +215,7 @@ impl Scanner {
             task: self.task.deref().clone(),
         };
 
+        #[allow(unreachable_code)]
         for listener in PROGRESS_LISTENERS.read().await.clone().iter_mut() {
             listener(&event).await;
         }
@@ -217,11 +234,13 @@ impl Scanner {
             task: self.task.deref().clone(),
         };
 
+        #[allow(unreachable_code)]
         for listener in PROGRESS_LISTENERS.read().await.clone().iter_mut() {
             listener(&event).await;
         }
     }
 
+    #[allow(unused)]
     pub async fn on_scan_finished(&self) {
         let scanned = self.scanned.load(std::sync::atomic::Ordering::SeqCst);
         let total = self.total.load(std::sync::atomic::Ordering::SeqCst);
@@ -232,6 +251,7 @@ impl Scanner {
             task: self.task.deref().clone(),
         };
 
+        #[allow(unreachable_code)]
         for listener in PROGRESS_LISTENERS.read().await.clone().iter_mut() {
             listener(&event).await;
         }

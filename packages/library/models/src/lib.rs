@@ -38,10 +38,25 @@ impl From<LibraryArtist> for Artist {
             title: value.title,
             cover: value.cover,
             source: ApiSource::Library,
-            sources: ApiSources::default()
-                .with_source_opt(ApiSource::Tidal, value.tidal_id.map(Into::into))
-                .with_source_opt(ApiSource::Qobuz, value.qobuz_id.map(Into::into))
-                .with_source_opt(ApiSource::Yt, value.yt_id.map(Into::into)),
+            sources: {
+                #[allow(unused_mut)]
+                let mut sources = ApiSources::default();
+                #[cfg(feature = "tidal")]
+                {
+                    sources =
+                        sources.with_source_opt(ApiSource::Tidal, value.tidal_id.map(Into::into));
+                }
+                #[cfg(feature = "qobuz")]
+                {
+                    sources =
+                        sources.with_source_opt(ApiSource::Qobuz, value.qobuz_id.map(Into::into));
+                }
+                #[cfg(feature = "yt")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Yt, value.yt_id.map(Into::into));
+                }
+                sources
+            },
         }
     }
 }
@@ -158,14 +173,45 @@ impl From<LibraryAlbum> for Album {
             blur: value.blur,
             versions: value.versions,
             source: value.source,
-            artist_sources: ApiSources::default()
-                .with_source_opt(ApiSource::Tidal, value.tidal_artist_id.map(Into::into))
-                .with_source_opt(ApiSource::Qobuz, value.qobuz_artist_id.map(Into::into))
-                .with_source_opt(ApiSource::Yt, value.yt_artist_id.map(Into::into)),
-            album_sources: ApiSources::default()
-                .with_source_opt(ApiSource::Tidal, value.tidal_id.map(Into::into))
-                .with_source_opt(ApiSource::Qobuz, value.qobuz_id.map(Into::into))
-                .with_source_opt(ApiSource::Yt, value.yt_id.map(Into::into)),
+            artist_sources: {
+                #[allow(unused_mut)]
+                let mut sources = ApiSources::default();
+                #[cfg(feature = "tidal")]
+                {
+                    sources = sources
+                        .with_source_opt(ApiSource::Tidal, value.tidal_artist_id.map(Into::into));
+                }
+                #[cfg(feature = "qobuz")]
+                {
+                    sources = sources
+                        .with_source_opt(ApiSource::Qobuz, value.qobuz_artist_id.map(Into::into));
+                }
+                #[cfg(feature = "yt")]
+                {
+                    sources =
+                        sources.with_source_opt(ApiSource::Yt, value.yt_artist_id.map(Into::into));
+                }
+                sources
+            },
+            album_sources: {
+                #[allow(unused_mut)]
+                let mut sources = ApiSources::default();
+                #[cfg(feature = "tidal")]
+                {
+                    sources =
+                        sources.with_source_opt(ApiSource::Tidal, value.tidal_id.map(Into::into));
+                }
+                #[cfg(feature = "qobuz")]
+                {
+                    sources =
+                        sources.with_source_opt(ApiSource::Qobuz, value.qobuz_id.map(Into::into));
+                }
+                #[cfg(feature = "yt")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Yt, value.yt_id.map(Into::into));
+                }
+                sources
+            },
         }
     }
 }
@@ -184,12 +230,54 @@ impl From<Album> for LibraryAlbum {
             blur: value.blur,
             versions: value.versions,
             source: AlbumSource::Local,
-            tidal_id: value.album_sources.get(ApiSource::Tidal).map(Into::into),
-            qobuz_id: value.album_sources.get(ApiSource::Qobuz).map(Into::into),
-            yt_id: value.album_sources.get(ApiSource::Yt).map(Into::into),
-            tidal_artist_id: value.artist_sources.get(ApiSource::Tidal).map(Into::into),
-            qobuz_artist_id: value.artist_sources.get(ApiSource::Qobuz).map(Into::into),
-            yt_artist_id: value.artist_sources.get(ApiSource::Yt).map(Into::into),
+            tidal_id: {
+                #[cfg(feature = "tidal")]
+                {
+                    value.album_sources.get(ApiSource::Tidal).map(Into::into)
+                }
+                #[cfg(not(feature = "tidal"))]
+                None
+            },
+            qobuz_id: {
+                #[cfg(feature = "qobuz")]
+                {
+                    value.album_sources.get(ApiSource::Qobuz).map(Into::into)
+                }
+                #[cfg(not(feature = "qobuz"))]
+                None
+            },
+            yt_id: {
+                #[cfg(feature = "yt")]
+                {
+                    value.album_sources.get(ApiSource::Yt).map(Into::into)
+                }
+                #[cfg(not(feature = "yt"))]
+                None
+            },
+            tidal_artist_id: {
+                #[cfg(feature = "tidal")]
+                {
+                    value.artist_sources.get(ApiSource::Tidal).map(Into::into)
+                }
+                #[cfg(not(feature = "tidal"))]
+                None
+            },
+            qobuz_artist_id: {
+                #[cfg(feature = "qobuz")]
+                {
+                    value.artist_sources.get(ApiSource::Qobuz).map(Into::into)
+                }
+                #[cfg(not(feature = "qobuz"))]
+                None
+            },
+            yt_artist_id: {
+                #[cfg(feature = "yt")]
+                {
+                    value.artist_sources.get(ApiSource::Yt).map(Into::into)
+                }
+                #[cfg(not(feature = "yt"))]
+                None
+            },
         }
     }
 }
@@ -259,8 +347,11 @@ impl moosicbox_core::sqlite::models::AsModelResult<LibraryAlbum, ParseError>
 pub const fn track_source_to_u8(source: TrackApiSource) -> u8 {
     match source {
         TrackApiSource::Local => 1,
+        #[cfg(feature = "tidal")]
         TrackApiSource::Tidal => 2,
+        #[cfg(feature = "qobuz")]
         TrackApiSource::Qobuz => 3,
+        #[cfg(feature = "yt")]
         TrackApiSource::Yt => 4,
     }
 }
@@ -335,6 +426,7 @@ impl moosicbox_core::sqlite::models::AsModelResultMapped<LibraryAlbum, DbError>
                         }
                     }
                 } else {
+                    #[cfg(feature = "tidal")]
                     if album.tidal_id.is_some() {
                         album.versions.push(AlbumVersionQuality {
                             format: None,
@@ -349,6 +441,7 @@ impl moosicbox_core::sqlite::models::AsModelResultMapped<LibraryAlbum, DbError>
                             album.versions.len()
                         );
                     }
+                    #[cfg(feature = "qobuz")]
                     if album.qobuz_id.is_some() {
                         album.versions.push(AlbumVersionQuality {
                             format: None,
@@ -363,6 +456,7 @@ impl moosicbox_core::sqlite::models::AsModelResultMapped<LibraryAlbum, DbError>
                             album.versions.len()
                         );
                     }
+                    #[cfg(feature = "yt")]
                     if album.yt_id.is_some() {
                         album.versions.push(AlbumVersionQuality {
                             format: None,
@@ -624,10 +718,25 @@ impl From<LibraryTrack> for Track {
             channels: value.channels,
             source: value.source,
             api_source: ApiSource::Library,
-            sources: ApiSources::default()
-                .with_source_opt(ApiSource::Tidal, value.tidal_id.map(Into::into))
-                .with_source_opt(ApiSource::Qobuz, value.qobuz_id.map(Into::into))
-                .with_source_opt(ApiSource::Yt, value.yt_id.map(Into::into)),
+            sources: {
+                #[allow(unused_mut)]
+                let mut sources = ApiSources::default();
+                #[cfg(feature = "tidal")]
+                {
+                    sources =
+                        sources.with_source_opt(ApiSource::Tidal, value.tidal_id.map(Into::into));
+                }
+                #[cfg(feature = "qobuz")]
+                {
+                    sources =
+                        sources.with_source_opt(ApiSource::Qobuz, value.qobuz_id.map(Into::into));
+                }
+                #[cfg(feature = "yt")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Yt, value.yt_id.map(Into::into));
+                }
+                sources
+            },
         }
     }
 }
@@ -733,8 +842,11 @@ impl AsId for LibraryTrack {
 #[serde(tag = "type")]
 enum ApiTrackInner {
     Library(ApiLibraryTrack),
+    #[cfg(feature = "tidal")]
     Tidal(serde_json::Value),
+    #[cfg(feature = "qobuz")]
     Qobuz(serde_json::Value),
+    #[cfg(feature = "yt")]
     Yt(serde_json::Value),
 }
 
@@ -745,14 +857,17 @@ pub enum ApiTrack {
         track_id: u64,
         data: ApiLibraryTrack,
     },
+    #[cfg(feature = "tidal")]
     Tidal {
         track_id: u64,
         data: serde_json::Value,
     },
+    #[cfg(feature = "qobuz")]
     Qobuz {
         track_id: u64,
         data: serde_json::Value,
     },
+    #[cfg(feature = "yt")]
     Yt {
         track_id: String,
         data: serde_json::Value,
@@ -810,6 +925,7 @@ impl TryFrom<ApiTrack> for Track {
                 api_source: ApiSource::Library,
                 sources: ApiSources::default(),
             },
+            #[cfg(feature = "tidal")]
             ApiTrack::Tidal { track_id, data } => {
                 let album_id = data
                     .get("albumId")
@@ -884,6 +1000,7 @@ impl TryFrom<ApiTrack> for Track {
                     sources: ApiSources::default().with_source(ApiSource::Tidal, track_id.into()),
                 }
             }
+            #[cfg(feature = "qobuz")]
             ApiTrack::Qobuz { track_id, data } => {
                 let album_id = data
                     .get("albumId")
@@ -958,6 +1075,7 @@ impl TryFrom<ApiTrack> for Track {
                     sources: ApiSources::default().with_source(ApiSource::Qobuz, track_id.into()),
                 }
             }
+            #[cfg(feature = "yt")]
             ApiTrack::Yt { track_id, data } => {
                 let album_id = data
                     .get("albumId")
@@ -1045,8 +1163,11 @@ impl Serialize for ApiTrack {
             Self::Library { data, .. } => {
                 ApiTrackInner::Library(data.clone()).serialize(serializer)
             }
+            #[cfg(feature = "tidal")]
             Self::Tidal { data, .. } => ApiTrackInner::Tidal(data.clone()).serialize(serializer),
+            #[cfg(feature = "qobuz")]
             Self::Qobuz { data, .. } => ApiTrackInner::Qobuz(data.clone()).serialize(serializer),
+            #[cfg(feature = "yt")]
             Self::Yt { data, .. } => ApiTrackInner::Yt(data.clone()).serialize(serializer),
         }
     }
@@ -1062,6 +1183,7 @@ impl<'de> Deserialize<'de> for ApiTrack {
                 track_id: track.track_id,
                 data: track,
             },
+            #[cfg(feature = "tidal")]
             ApiTrackInner::Tidal(data) => Self::Tidal {
                 track_id: data
                     .get("id")
@@ -1070,6 +1192,7 @@ impl<'de> Deserialize<'de> for ApiTrack {
                     .unwrap(),
                 data,
             },
+            #[cfg(feature = "qobuz")]
             ApiTrackInner::Qobuz(data) => Self::Qobuz {
                 track_id: data
                     .get("id")
@@ -1078,6 +1201,7 @@ impl<'de> Deserialize<'de> for ApiTrack {
                     .unwrap(),
                 data,
             },
+            #[cfg(feature = "yt")]
             ApiTrackInner::Yt(data) => Self::Yt {
                 track_id: data
                     .get("id")
@@ -1096,8 +1220,11 @@ impl ApiTrack {
     pub const fn api_source(&self) -> ApiSource {
         match self {
             Self::Library { .. } => ApiSource::Library,
+            #[cfg(feature = "tidal")]
             Self::Tidal { .. } => ApiSource::Tidal,
+            #[cfg(feature = "qobuz")]
             Self::Qobuz { .. } => ApiSource::Qobuz,
+            #[cfg(feature = "yt")]
             Self::Yt { .. } => ApiSource::Yt,
         }
     }
@@ -1105,20 +1232,27 @@ impl ApiTrack {
     #[must_use]
     pub fn track_id(&self) -> Id {
         match self {
-            Self::Library { track_id, .. }
-            | Self::Tidal { track_id, .. }
-            | Self::Qobuz { track_id, .. } => track_id.into(),
+            Self::Library { track_id, .. } => track_id.into(),
+            #[cfg(feature = "tidal")]
+            Self::Tidal { track_id, .. } => track_id.into(),
+            #[cfg(feature = "qobuz")]
+            Self::Qobuz { track_id, .. } => track_id.into(),
+            #[cfg(feature = "yt")]
             Self::Yt { track_id, .. } => track_id.into(),
         }
     }
 
+    #[allow(clippy::missing_const_for_fn)]
     #[must_use]
     pub fn data(&self) -> Option<serde_json::Value> {
         match self {
             Self::Library { .. } => None,
-            Self::Tidal { data, .. } | Self::Qobuz { data, .. } | Self::Yt { data, .. } => {
-                Some(data.clone())
-            }
+            #[cfg(feature = "tidal")]
+            Self::Tidal { data, .. } => Some(data.clone()),
+            #[cfg(feature = "qobuz")]
+            Self::Qobuz { data, .. } => Some(data.clone()),
+            #[cfg(feature = "yt")]
+            Self::Yt { data, .. } => Some(data.clone()),
         }
     }
 }
