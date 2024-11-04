@@ -253,7 +253,7 @@ tauri-plugin = { version = "2.0.2", features = ["build"] }
 tauri-plugin-dialog = "2.0.3"
 tauri-plugin-notification = "2.0.1"
 test-log = "0.2.16"
-thiserror = "1.0.66"
+thiserror = "1.0.67"
 throttle = "0.1.0"
 tl = "0.7.8"
 tokio = { version = "1.41.0" }
