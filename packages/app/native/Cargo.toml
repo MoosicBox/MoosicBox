@@ -88,7 +88,7 @@ fltk      = ["moosicbox_app_native_lib/fltk"]
 html      = ["moosicbox_app_native_lib/html"]
 htmx      = ["moosicbox_app_native_lib/htmx"]
 
-bundled = ["dep:moosicbox_app_native_bundled"]
+bundled = ["dep:moosicbox_app_native_bundled", "all-sources"]
 
 debug  = ["moosicbox_app_native_lib/debug"]
 format = ["moosicbox_app_native_lib/format"]
@@ -99,15 +99,21 @@ all-sources = ["qobuz", "tidal", "yt"]
 qobuz = [
     "moosicbox_app_state/qobuz",
     "moosicbox_core/qobuz",
+    "moosicbox_library_models/qobuz",
+    "moosicbox_menu_models/qobuz",
     "moosicbox_session_models/qobuz",
 ]
 tidal = [
     "moosicbox_app_state/tidal",
     "moosicbox_core/tidal",
+    "moosicbox_library_models/tidal",
+    "moosicbox_menu_models/tidal",
     "moosicbox_session_models/tidal",
 ]
 yt = [
     "moosicbox_app_state/yt",
     "moosicbox_core/yt",
+    "moosicbox_library_models/yt",
+    "moosicbox_menu_models/yt",
     "moosicbox_session_models/yt",
 ]
