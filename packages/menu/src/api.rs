@@ -83,17 +83,19 @@ pub struct Api;
 
 fn album_id_for_source(id: &str, source: ApiSource) -> Result<Id, actix_web::Error> {
     Ok(match source {
-        ApiSource::Tidal => id
-            .parse::<u64>()
-            .map_err(|_| ErrorBadRequest(format!("Bad Tidal album_id {id}")))?
-            .into(),
-
-        ApiSource::Qobuz => id.to_string().into(),
-        ApiSource::Yt => id.to_string().into(),
         ApiSource::Library => id
             .parse::<i32>()
             .map_err(|_| ErrorBadRequest(format!("Bad Tidal album_id {id}")))?
             .into(),
+        #[cfg(feature = "tidal")]
+        ApiSource::Tidal => id
+            .parse::<u64>()
+            .map_err(|_| ErrorBadRequest(format!("Bad Tidal album_id {id}")))?
+            .into(),
+        #[cfg(feature = "qobuz")]
+        ApiSource::Qobuz => id.to_string().into(),
+        #[cfg(feature = "yt")]
+        ApiSource::Yt => id.to_string().into(),
     })
 }
 
@@ -573,25 +575,42 @@ pub async fn get_album_endpoint(
                 .into();
         Json(serde_json::to_value(album).map_err(ErrorInternalServerError)?)
     } else {
+        #[allow(unused)]
         let (id, source) = if let Some(id) = &query.tidal_album_id {
-            (
-                Id::try_from_str(id, ApiSource::Tidal, IdType::Album).map_err(ErrorBadRequest)?,
-                ApiSource::Tidal,
-            )
+            #[cfg(feature = "tidal")]
+            {
+                (
+                    Id::try_from_str(id, ApiSource::Tidal, IdType::Album)
+                        .map_err(ErrorBadRequest)?,
+                    ApiSource::Tidal,
+                )
+            }
+            #[cfg(not(feature = "tidal"))]
+            return Err(ErrorNotFound("Unsupported ApiSource"));
         } else if let Some(id) = &query.qobuz_album_id {
-            (
-                Id::try_from_str(id, ApiSource::Qobuz, IdType::Album).map_err(ErrorBadRequest)?,
-                ApiSource::Qobuz,
-            )
+            #[cfg(feature = "qobuz")]
+            {
+                (
+                    Id::try_from_str(id, ApiSource::Qobuz, IdType::Album)
+                        .map_err(ErrorBadRequest)?,
+                    ApiSource::Qobuz,
+                )
+            }
+            #[cfg(not(feature = "qobuz"))]
+            return Err(ErrorNotFound("Unsupported ApiSource"));
         } else {
             return Err(ErrorNotFound("Album not found"));
         };
-        let album: ApiAlbum = get_library_album(&db, &id, source)
-            .await
-            .map_err(ErrorInternalServerError)?
-            .ok_or(ErrorNotFound("Album not found"))?
-            .to_api();
-        Json(serde_json::to_value(album).map_err(ErrorInternalServerError)?)
+
+        #[allow(unreachable_code)]
+        {
+            let album: ApiAlbum = get_library_album(&db, &id, source)
+                .await
+                .map_err(ErrorInternalServerError)?
+                .ok_or(ErrorNotFound("Album not found"))?
+                .to_api();
+            Json(serde_json::to_value(album).map_err(ErrorInternalServerError)?)
+        }
     })
 }
 
