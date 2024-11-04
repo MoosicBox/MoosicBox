@@ -185,6 +185,7 @@ mod test {
         );
     }
 
+    #[cfg(feature = "yt")]
     #[test_log::test]
     fn can_parse_string_track_id_ranges() {
         let result = parse_id_ranges("a,b,aaa,bbb,c-d,f", ApiSource::Yt, IdType::Track).unwrap();
