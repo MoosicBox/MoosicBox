@@ -41,8 +41,22 @@ tokio      = { workspace = true, features = ["macros"] }
 tokio-util = { workspace = true }
 
 [features]
-default = ["upnp"]
+default = ["all-sources", "upnp"]
 
 upnp = ["dep:moosicbox_upnp"]
 
 fail-on-warnings = []
+
+all-sources = ["qobuz", "tidal", "yt"]
+
+qobuz = [
+    "moosicbox_core/qobuz",
+    "moosicbox_player/qobuz",
+    "moosicbox_session/qobuz",
+]
+tidal = [
+    "moosicbox_core/tidal",
+    "moosicbox_player/tidal",
+    "moosicbox_session/tidal",
+]
+yt = ["moosicbox_core/yt", "moosicbox_player/yt", "moosicbox_session/yt"]

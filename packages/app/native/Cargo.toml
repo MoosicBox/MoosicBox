@@ -69,7 +69,15 @@ thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]
-default = ["datastar", "egui-wgpu", "fltk", "html", "htmx", "unsafe"]
+default = [
+    "all-sources",
+    "datastar",
+    "egui-wgpu",
+    "fltk",
+    "html",
+    "htmx",
+    "unsafe",
+]
 
 fail-on-warnings = []
 
@@ -85,3 +93,21 @@ bundled = ["dep:moosicbox_app_native_bundled"]
 debug  = ["moosicbox_app_native_lib/debug"]
 format = ["moosicbox_app_native_lib/format"]
 unsafe = ["moosicbox_app_native_lib/unsafe"]
+
+all-sources = ["qobuz", "tidal", "yt"]
+
+qobuz = [
+    "moosicbox_app_state/qobuz",
+    "moosicbox_core/qobuz",
+    "moosicbox_session_models/qobuz",
+]
+tidal = [
+    "moosicbox_app_state/tidal",
+    "moosicbox_core/tidal",
+    "moosicbox_session_models/tidal",
+]
+yt = [
+    "moosicbox_app_state/yt",
+    "moosicbox_core/yt",
+    "moosicbox_session_models/yt",
+]
