@@ -26,7 +26,7 @@ use moosicbox_core::{
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_database::profiles::LibraryDatabase;
-use moosicbox_json_utils::{serde_json::ToValue as _, ParseError};
+use moosicbox_json_utils::ParseError;
 use moosicbox_music_api::MusicApi;
 use moosicbox_session::{
     get_session_playlist,
@@ -237,8 +237,11 @@ impl Track {
                 .transpose()
                 .expect("Missing source")
                 .unwrap_or(TrackApiSource::Local),
+            #[cfg(feature = "tidal")]
             ApiSource::Tidal => TrackApiSource::Tidal,
+            #[cfg(feature = "qobuz")]
             ApiSource::Qobuz => TrackApiSource::Qobuz,
+            #[cfg(feature = "yt")]
             ApiSource::Yt => TrackApiSource::Yt,
         }
     }
@@ -328,12 +331,15 @@ pub async fn get_track_url(
                     serializer.append_pair("format", quality.format.as_ref());
                 }
             }
+            #[cfg(feature = "tidal")]
             ApiSource::Tidal => {
                 serializer.append_pair("audioQuality", "HIGH");
             }
+            #[cfg(feature = "qobuz")]
             ApiSource::Qobuz => {
                 serializer.append_pair("audioQuality", "LOW");
             }
+            #[cfg(feature = "yt")]
             ApiSource::Yt => {
                 serializer.append_pair("audioQuality", "LOW");
             }
@@ -345,8 +351,10 @@ pub async fn get_track_url(
     let query_string = format!("?{}", query_params);
 
     let url = match api_source {
-        ApiSource::Library => Ok(format!("{host}/files/track{query_string}")),
+        ApiSource::Library => Ok::<_, PlayerError>(format!("{host}/files/track{query_string}")),
+        #[cfg(feature = "tidal")]
         ApiSource::Tidal => {
+            use moosicbox_json_utils::serde_json::ToValue as _;
             let url = format!("{host}/tidal/track/url{query_string}");
             log::debug!("Fetching track file url from {url}");
 
@@ -361,7 +369,9 @@ pub async fn get_track_url(
                 .cloned()
                 .ok_or(PlayerError::TrackFetchFailed(track_id.to_string()))
         }
+        #[cfg(feature = "qobuz")]
         ApiSource::Qobuz => {
+            use moosicbox_json_utils::serde_json::ToValue as _;
             let url = format!("{host}/qobuz/track/url{query_string}");
             log::debug!("Fetching track file url from {url}");
 
@@ -373,7 +383,9 @@ pub async fn get_track_url(
                 .await?
                 .to_value::<String>("url")?)
         }
+        #[cfg(feature = "yt")]
         ApiSource::Yt => {
+            use moosicbox_json_utils::serde_json::ToValue as _;
             let url = format!("{host}/yt/track/url{query_string}");
             log::debug!("Fetching track file url from {url}");
 
@@ -1542,15 +1554,7 @@ async fn track_or_id_to_playable(
             )
             .await?
         }
-        (PlaybackType::File, ApiSource::Tidal)
-        | (PlaybackType::File, ApiSource::Qobuz)
-        | (PlaybackType::File, ApiSource::Yt)
-        | (PlaybackType::Default, ApiSource::Tidal)
-        | (PlaybackType::Default, ApiSource::Qobuz)
-        | (PlaybackType::Default, ApiSource::Yt)
-        | (PlaybackType::Stream, _) => {
-            track_to_playable_stream(track, quality, player_source, abort).await?
-        }
+        _ => track_to_playable_stream(track, quality, player_source, abort).await?,
     })
 }
 

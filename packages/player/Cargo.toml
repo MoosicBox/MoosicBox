@@ -53,6 +53,7 @@ url              = { workspace = true }
 [features]
 default = [
     "aac",
+    "all-sources",
     "api",
     "cpal",
     "flac",
@@ -100,3 +101,9 @@ opus = [
 ]
 
 local = []
+
+all-sources = ["qobuz", "tidal", "yt"]
+
+qobuz = ["moosicbox_core/qobuz", "moosicbox_session/qobuz"]
+tidal = ["moosicbox_core/tidal", "moosicbox_session/tidal"]
+yt    = ["moosicbox_core/yt", "moosicbox_session/yt"]

@@ -75,6 +75,7 @@ impl Player for LocalPlayer {
 
         let playback_type = match track_or_id.track_source() {
             TrackApiSource::Local => self.playback_type,
+            #[allow(unreachable_patterns)]
             _ => PlaybackType::Stream,
         };
 
