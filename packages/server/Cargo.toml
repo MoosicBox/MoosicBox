@@ -69,10 +69,7 @@ moosicbox_ws = { version = "0.1.0", path = "../ws", default-features = false, fe
 ] }
 
 # APIs
-moosicbox_admin_htmx = { version = "0.1.0", path = "../admin_htmx", default-features = false, features = [
-    "qobuz",
-    "tidal",
-], optional = true }
+moosicbox_admin_htmx = { version = "0.1.0", path = "../admin_htmx", default-features = false, optional = true }
 moosicbox_downloader = { version = "0.1.0", path = "../downloader", default-features = false, features = [
     "api",
 ], optional = true }
@@ -276,6 +273,7 @@ downloader = ["dep:throttle", "moosicbox_downloader/api"]
 library = ["moosicbox_library/api"]
 player = ["dep:moosicbox_library", "dep:moosicbox_player"]
 qobuz = [
+    "moosicbox_admin_htmx?/qobuz",
     "moosicbox_core/qobuz",
     "moosicbox_downloader?/qobuz",
     "moosicbox_files/qobuz",
@@ -290,6 +288,7 @@ qobuz = [
 scan = ["dep:throttle", "moosicbox_scan/api"]
 search = ["moosicbox_search/api"]
 tidal = [
+    "moosicbox_admin_htmx?/tidal",
     "moosicbox_core/tidal",
     "moosicbox_downloader?/tidal",
     "moosicbox_files/tidal",
