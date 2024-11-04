@@ -132,16 +132,22 @@ impl From<DownloadTaskState> for ApiDownloadTaskState {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum ApiDownloadApiSource {
+    #[cfg(feature = "tidal")]
     Tidal,
+    #[cfg(feature = "qobuz")]
     Qobuz,
+    #[cfg(feature = "yt")]
     Yt,
 }
 
 impl From<DownloadApiSource> for ApiDownloadApiSource {
     fn from(value: DownloadApiSource) -> Self {
         match value {
+            #[cfg(feature = "tidal")]
             DownloadApiSource::Tidal => ApiDownloadApiSource::Tidal,
+            #[cfg(feature = "qobuz")]
             DownloadApiSource::Qobuz => ApiDownloadApiSource::Qobuz,
+            #[cfg(feature = "yt")]
             DownloadApiSource::Yt => ApiDownloadApiSource::Yt,
         }
     }
@@ -381,6 +387,7 @@ pub struct ApiDownloadTask {
 
 impl From<DownloadTask> for ApiDownloadTask {
     fn from(value: DownloadTask) -> Self {
+        #[allow(unreachable_code)]
         Self {
             id: value.id,
             state: value.state.into(),

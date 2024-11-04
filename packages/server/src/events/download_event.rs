@@ -9,11 +9,14 @@ pub async fn init() {
     )));
     let bytes_buf = Arc::new(std::sync::atomic::AtomicUsize::new(0));
 
+    #[allow(unreachable_code)]
+    #[allow(unused)]
     moosicbox_downloader::api::add_progress_listener_to_download_queue(Box::new(move |event| {
         let bytes_throttle = bytes_throttle.clone();
         let bytes_buf = bytes_buf.clone();
         let event = event.clone();
         Box::pin(async move {
+            #[allow(irrefutable_let_patterns)]
             let event = if let moosicbox_downloader::queue::ProgressEvent::BytesRead {
                 task,
                 read,
