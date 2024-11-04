@@ -520,6 +520,7 @@ impl Drop for DownloadQueue {
     }
 }
 
+#[cfg(feature = "tidal")]
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
