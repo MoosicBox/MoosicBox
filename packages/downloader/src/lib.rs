@@ -121,6 +121,7 @@ pub async fn get_create_download_tasks(
 
     if let Some(album_id) = album_id {
         tasks.extend(
+            #[allow(unreachable_code)]
             get_create_download_tasks_for_album_ids(
                 api,
                 &[Id::try_from_str(&album_id, api.source(), IdType::Album)?],
@@ -135,6 +136,7 @@ pub async fn get_create_download_tasks(
     }
 
     if let Some(album_ids) = &album_ids {
+        #[allow(unreachable_code)]
         let album_ids = parse_id_ranges(album_ids, api.source(), IdType::Album)?;
 
         tasks.extend(
@@ -153,6 +155,7 @@ pub async fn get_create_download_tasks(
 
     if let Some(track_id) = track_id {
         tasks.extend(
+            #[allow(unreachable_code)]
             get_create_download_tasks_for_track_ids(
                 api,
                 &[Id::try_from_str(&track_id, api.source(), IdType::Track)?],
@@ -209,8 +212,11 @@ pub async fn get_create_download_tasks_for_tracks(
         } else {
             match track.source {
                 TrackApiSource::Local => return Err(GetCreateDownloadTasksError::InvalidSource),
+                #[cfg(feature = "tidal")]
                 TrackApiSource::Tidal => DownloadApiSource::Tidal,
+                #[cfg(feature = "qobuz")]
                 TrackApiSource::Qobuz => DownloadApiSource::Qobuz,
+                #[cfg(feature = "yt")]
                 TrackApiSource::Yt => DownloadApiSource::Yt,
             }
         };
@@ -323,6 +329,7 @@ pub async fn get_create_download_tasks_for_album_ids(
                 };
 
                 if artist.cover.is_some() {
+                    #[allow(unreachable_code)]
                     tasks.push(CreateDownloadTask {
                         file_path: path,
                         item: DownloadItem::ArtistCover {
@@ -337,6 +344,7 @@ pub async fn get_create_download_tasks_for_album_ids(
             }
 
             if download_album_cover && album.artwork.is_some() {
+                #[allow(unreachable_code)]
                 tasks.push(CreateDownloadTask {
                     file_path: path,
                     item: DownloadItem::AlbumCover {

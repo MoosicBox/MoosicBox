@@ -268,6 +268,7 @@ impl DownloadQueue {
             .await;
 
         for listener in self.progress_listeners.iter() {
+            #[allow(unreachable_code)]
             listener(&ProgressEvent::State {
                 task: task.clone(),
                 state,
@@ -293,6 +294,8 @@ impl DownloadQueue {
             .ok_or(UpdateTaskError::NoRow)
     }
 
+    #[allow(unreachable_code)]
+    #[allow(unused)]
     async fn process_task(
         &mut self,
         task: &mut DownloadTask,

@@ -85,16 +85,22 @@ impl ToValueType<DownloadTaskState> for &serde_json::Value {
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum DownloadApiSource {
+    #[cfg(feature = "tidal")]
     Tidal,
+    #[cfg(feature = "qobuz")]
     Qobuz,
+    #[cfg(feature = "yt")]
     Yt,
 }
 
 impl From<ApiSource> for DownloadApiSource {
     fn from(value: ApiSource) -> Self {
         match value {
+            #[cfg(feature = "tidal")]
             ApiSource::Tidal => DownloadApiSource::Tidal,
+            #[cfg(feature = "qobuz")]
             ApiSource::Qobuz => DownloadApiSource::Qobuz,
+            #[cfg(feature = "yt")]
             ApiSource::Yt => DownloadApiSource::Yt,
             _ => unreachable!(),
         }
@@ -104,8 +110,11 @@ impl From<ApiSource> for DownloadApiSource {
 impl From<DownloadApiSource> for ApiSource {
     fn from(value: DownloadApiSource) -> Self {
         match value {
+            #[cfg(feature = "tidal")]
             DownloadApiSource::Tidal => ApiSource::Tidal,
+            #[cfg(feature = "qobuz")]
             DownloadApiSource::Qobuz => ApiSource::Qobuz,
+            #[cfg(feature = "yt")]
             DownloadApiSource::Yt => ApiSource::Yt,
         }
     }
@@ -114,8 +123,11 @@ impl From<DownloadApiSource> for ApiSource {
 impl From<DownloadApiSource> for TrackApiSource {
     fn from(value: DownloadApiSource) -> Self {
         match value {
+            #[cfg(feature = "tidal")]
             DownloadApiSource::Tidal => TrackApiSource::Tidal,
+            #[cfg(feature = "qobuz")]
             DownloadApiSource::Qobuz => TrackApiSource::Qobuz,
+            #[cfg(feature = "yt")]
             DownloadApiSource::Yt => TrackApiSource::Yt,
         }
     }
@@ -124,8 +136,11 @@ impl From<DownloadApiSource> for TrackApiSource {
 impl From<TrackApiSource> for DownloadApiSource {
     fn from(value: TrackApiSource) -> Self {
         match value {
+            #[cfg(feature = "tidal")]
             TrackApiSource::Tidal => DownloadApiSource::Tidal,
+            #[cfg(feature = "qobuz")]
             TrackApiSource::Qobuz => DownloadApiSource::Qobuz,
+            #[cfg(feature = "yt")]
             TrackApiSource::Yt => DownloadApiSource::Yt,
             _ => panic!("Invalid TrackApiSource"),
         }
