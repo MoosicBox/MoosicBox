@@ -276,8 +276,10 @@ downloader = ["dep:throttle", "moosicbox_downloader/api"]
 library = ["moosicbox_library/api"]
 player = ["dep:moosicbox_library", "dep:moosicbox_player"]
 qobuz = [
+    "moosicbox_core/qobuz",
     "moosicbox_downloader?/qobuz",
     "moosicbox_files/qobuz",
+    "moosicbox_library?/qobuz",
     "moosicbox_menu?/qobuz",
     "moosicbox_player?/qobuz",
     "moosicbox_qobuz/api",
@@ -288,8 +290,10 @@ qobuz = [
 scan = ["dep:throttle", "moosicbox_scan/api"]
 search = ["moosicbox_search/api"]
 tidal = [
+    "moosicbox_core/tidal",
     "moosicbox_downloader?/tidal",
     "moosicbox_files/tidal",
+    "moosicbox_library?/tidal",
     "moosicbox_menu?/tidal",
     "moosicbox_player?/tidal",
     "moosicbox_scan?/tidal",
@@ -299,8 +303,10 @@ tidal = [
 ]
 upnp = ["dep:moosicbox_upnp", "player"]
 yt = [
+    "moosicbox_core/yt",
     "moosicbox_downloader?/yt",
     "moosicbox_files/yt",
+    "moosicbox_library?/yt",
     "moosicbox_menu?/yt",
     "moosicbox_player?/yt",
     "moosicbox_scan?/yt",

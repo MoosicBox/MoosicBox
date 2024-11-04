@@ -1477,8 +1477,11 @@ impl TunnelSender {
                                 ApiSource::Library => {
                                     album_id_string.parse::<u64>().map(Id::Number)
                                 }
+                                #[cfg(feature = "tidal")]
                                 ApiSource::Tidal => album_id_string.parse::<u64>().map(Id::Number),
+                                #[cfg(feature = "qobuz")]
                                 ApiSource::Qobuz => album_id_string.parse::<u64>().map(Id::Number),
+                                #[cfg(feature = "yt")]
                                 ApiSource::Yt => Ok(Id::String(album_id_string.to_owned())),
                             }
                             .map_err(|_| {

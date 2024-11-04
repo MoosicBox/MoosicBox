@@ -35,6 +35,7 @@ pub use moosicbox_music_api as music_api;
 pub use moosicbox_paging as paging;
 pub use moosicbox_player as player;
 pub use moosicbox_profiles as profiles;
+#[cfg(feature = "qobuz")]
 pub use moosicbox_qobuz as qobuz;
 pub use moosicbox_remote_library as remote_library;
 pub use moosicbox_resampler as resampler;
@@ -45,10 +46,12 @@ pub use moosicbox_session as session;
 pub use moosicbox_session_models as session_models;
 pub use moosicbox_stream_utils as stream_utils;
 pub use moosicbox_task as task;
+#[cfg(feature = "tidal")]
 pub use moosicbox_tidal as tidal;
 pub use moosicbox_tunnel as tunnel;
 pub use moosicbox_tunnel_sender as tunnel_sender;
 pub use moosicbox_upnp as upnp;
 pub use moosicbox_ws as ws;
+#[cfg(feature = "yt")]
 pub use moosicbox_yt as yt;
 pub use openport;

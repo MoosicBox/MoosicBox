@@ -46,7 +46,7 @@ moosicbox_music_api           = { version = "0.1.0", path = "../music_api", defa
 moosicbox_paging              = { version = "0.1.0", path = "../paging", default-features = false }
 moosicbox_player              = { version = "0.1.0", path = "../player", default-features = false }
 moosicbox_profiles            = { version = "0.1.0", path = "../profiles", default-features = false }
-moosicbox_qobuz               = { version = "0.1.0", path = "../qobuz", default-features = false }
+moosicbox_qobuz               = { version = "0.1.0", path = "../qobuz", optional = true, default-features = false }
 moosicbox_remote_library      = { version = "0.1.0", path = "../remote_library", default-features = false }
 moosicbox_resampler           = { version = "0.1.0", path = "../resampler", default-features = false }
 moosicbox_scan                = { version = "0.1.0", path = "../scan", default-features = false }
@@ -56,13 +56,54 @@ moosicbox_session             = { version = "0.1.0", path = "../session", defaul
 moosicbox_session_models      = { version = "0.1.0", path = "../session/models", default-features = false }
 moosicbox_stream_utils        = { version = "0.1.0", path = "../stream_utils", default-features = false }
 moosicbox_task                = { version = "0.1.0", path = "../task", default-features = false }
-moosicbox_tidal               = { version = "0.1.0", path = "../tidal", default-features = false }
+moosicbox_tidal               = { version = "0.1.0", path = "../tidal", optional = true, default-features = false }
 moosicbox_tunnel              = { version = "0.1.0", path = "../tunnel", default-features = false }
 moosicbox_tunnel_sender       = { version = "0.1.0", path = "../tunnel_sender", default-features = false }
 moosicbox_upnp                = { version = "0.1.0", path = "../upnp", default-features = false }
 moosicbox_ws                  = { version = "0.1.0", path = "../ws", default-features = false }
-moosicbox_yt                  = { version = "0.1.0", path = "../yt", default-features = false }
+moosicbox_yt                  = { version = "0.1.0", path = "../yt", optional = true, default-features = false }
 openport                      = { version = "0.1.0", path = "../openport", default-features = false }
 
 [features]
+default = ["all-sources"]
+
 fail-on-warnings = []
+
+all-sources = ["qobuz", "tidal", "yt"]
+
+qobuz = [
+    "dep:moosicbox_qobuz",
+    "moosicbox_core/qobuz",
+    "moosicbox_downloader/qobuz",
+    "moosicbox_files/qobuz",
+    "moosicbox_library/qobuz",
+    "moosicbox_menu/qobuz",
+    "moosicbox_player/qobuz",
+    "moosicbox_scan/qobuz",
+    "moosicbox_session/qobuz",
+    "moosicbox_tunnel_sender/qobuz",
+]
+tidal = [
+    "dep:moosicbox_tidal",
+    "moosicbox_core/tidal",
+    "moosicbox_downloader/tidal",
+    "moosicbox_files/tidal",
+    "moosicbox_library/tidal",
+    "moosicbox_menu/tidal",
+    "moosicbox_player/tidal",
+    "moosicbox_scan/tidal",
+    "moosicbox_session/tidal",
+    "moosicbox_tunnel_sender/tidal",
+]
+yt = [
+    "dep:moosicbox_yt",
+    "moosicbox_core/yt",
+    "moosicbox_downloader/yt",
+    "moosicbox_files/yt",
+    "moosicbox_library/yt",
+    "moosicbox_menu/yt",
+    "moosicbox_player/yt",
+    "moosicbox_scan/yt",
+    "moosicbox_session/yt",
+    "moosicbox_tunnel_sender/yt",
+]

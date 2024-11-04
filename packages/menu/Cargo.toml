@@ -63,6 +63,7 @@ all-sources = ["qobuz", "tidal", "yt"]
 qobuz = [
     "dep:moosicbox_qobuz",
     "moosicbox_core/qobuz",
+    "moosicbox_library/qobuz",
     "moosicbox_menu_models/qobuz",
     "moosicbox_qobuz/db",
     "moosicbox_scan/qobuz",
@@ -71,6 +72,7 @@ qobuz = [
 tidal = [
     "dep:moosicbox_tidal",
     "moosicbox_core/tidal",
+    "moosicbox_library/tidal",
     "moosicbox_menu_models/tidal",
     "moosicbox_scan/tidal",
     "moosicbox_session/tidal",
@@ -79,6 +81,7 @@ tidal = [
 yt = [
     "dep:moosicbox_yt",
     "moosicbox_core/yt",
+    "moosicbox_library/yt",
     "moosicbox_menu_models/yt",
     "moosicbox_scan/yt",
     "moosicbox_session/yt",
