@@ -93,6 +93,14 @@ opus = [
 
 all-sources = ["qobuz", "tidal", "yt"]
 
-qobuz = ["moosicbox_core/qobuz", "moosicbox_player/qobuz"]
-tidal = ["moosicbox_core/tidal", "moosicbox_player/tidal"]
-yt    = ["moosicbox_core/yt", "moosicbox_player/yt"]
+qobuz = [
+    "moosicbox_core/qobuz",
+    "moosicbox_files/qobuz",
+    "moosicbox_player/qobuz",
+]
+tidal = [
+    "moosicbox_core/tidal",
+    "moosicbox_files/tidal",
+    "moosicbox_player/tidal",
+]
+yt = ["moosicbox_core/yt", "moosicbox_files/yt", "moosicbox_player/yt"]

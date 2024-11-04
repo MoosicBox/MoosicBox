@@ -674,8 +674,11 @@ pub async fn artist_source_artwork_endpoint(
     let source = query.source.unwrap_or(ApiSource::Library);
     let artist_id = match source {
         ApiSource::Library => artist_id_string.parse::<u64>().map(Id::Number),
+        #[cfg(feature = "tidal")]
         ApiSource::Tidal => artist_id_string.parse::<u64>().map(Id::Number),
+        #[cfg(feature = "qobuz")]
         ApiSource::Qobuz => Ok(Id::String(artist_id_string)),
+        #[cfg(feature = "yt")]
         ApiSource::Yt => Ok(Id::String(artist_id_string)),
     }
     .map_err(|_e| ErrorBadRequest("Invalid artist_id"))?;
@@ -736,8 +739,11 @@ pub async fn artist_cover_endpoint(
     let source = query.source.unwrap_or(ApiSource::Library);
     let artist_id = match source {
         ApiSource::Library => artist_id_string.parse::<u64>().map(Id::Number),
+        #[cfg(feature = "tidal")]
         ApiSource::Tidal => artist_id_string.parse::<u64>().map(Id::Number),
+        #[cfg(feature = "qobuz")]
         ApiSource::Qobuz => Ok(Id::String(artist_id_string)),
+        #[cfg(feature = "yt")]
         ApiSource::Yt => Ok(Id::String(artist_id_string)),
     }
     .map_err(|_e| ErrorBadRequest("Invalid artist_id"))?;
@@ -828,8 +834,11 @@ pub async fn album_source_artwork_endpoint(
     let source = query.source.unwrap_or(ApiSource::Library);
     let album_id = match source {
         ApiSource::Library => album_id_string.parse::<u64>().map(Id::Number),
+        #[cfg(feature = "tidal")]
         ApiSource::Tidal => album_id_string.parse::<u64>().map(Id::Number),
+        #[cfg(feature = "qobuz")]
         ApiSource::Qobuz => Ok(Id::String(album_id_string)),
+        #[cfg(feature = "yt")]
         ApiSource::Yt => Ok(Id::String(album_id_string)),
     }
     .map_err(|_e| ErrorBadRequest("Invalid album_id"))?;
@@ -890,8 +899,11 @@ pub async fn album_artwork_endpoint(
     let source = query.source.unwrap_or(ApiSource::Library);
     let album_id = match source {
         ApiSource::Library => album_id_string.parse::<u64>().map(Id::Number),
+        #[cfg(feature = "tidal")]
         ApiSource::Tidal => album_id_string.parse::<u64>().map(Id::Number),
+        #[cfg(feature = "qobuz")]
         ApiSource::Qobuz => Ok(Id::String(album_id_string)),
+        #[cfg(feature = "yt")]
         ApiSource::Yt => Ok(Id::String(album_id_string)),
     }
     .map_err(|_e| ErrorBadRequest("Invalid album_id"))?;

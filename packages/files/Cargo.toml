@@ -53,6 +53,7 @@ tokio-util          = { workspace = true, optional = true }
 [features]
 default = [
     "aac",
+    "all-sources",
     "api",
     "files",
     "flac",
@@ -107,3 +108,9 @@ aac  = ["moosicbox_audio_output?/aac", "moosicbox_core?/aac"]
 flac = ["moosicbox_audio_output?/flac", "moosicbox_core?/flac"]
 mp3  = ["moosicbox_audio_output?/mp3", "moosicbox_core?/mp3"]
 opus = ["moosicbox_audio_output?/opus", "moosicbox_core?/opus"]
+
+all-sources = ["qobuz", "tidal", "yt"]
+
+qobuz = ["moosicbox_core/qobuz"]
+tidal = ["moosicbox_core/tidal"]
+yt    = ["moosicbox_core/yt"]
