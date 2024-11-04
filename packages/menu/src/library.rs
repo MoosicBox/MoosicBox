@@ -3,7 +3,7 @@ pub mod artists;
 
 use moosicbox_core::sqlite::{
     db::DbError,
-    models::{ApiSource, Id},
+    models::{Album, ApiSource, Id},
 };
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_library::{
@@ -168,7 +168,39 @@ impl<T> From<PoisonError<T>> for GetAlbumError {
     }
 }
 
-pub async fn get_album(
+pub async fn get_album_from_source(
+    db: &LibraryDatabase,
+    album_id: &Id,
+    source: ApiSource,
+) -> Result<Option<Album>, GetAlbumError> {
+    Ok(match source {
+        ApiSource::Library => {
+            let albums = get_albums(db).await?;
+            albums
+                .iter()
+                .find(|album| &Into::<Id>::into(album.id) == album_id)
+                .cloned()
+                .map(Into::into)
+        }
+        #[cfg(feature = "tidal")]
+        ApiSource::Tidal => moosicbox_tidal::album(db, album_id, None, None, None, None)
+            .await
+            .ok()
+            .map(Into::into),
+        #[cfg(feature = "qobuz")]
+        ApiSource::Qobuz => moosicbox_qobuz::album(db, album_id, None, None)
+            .await
+            .ok()
+            .map(Into::into),
+        #[cfg(feature = "yt")]
+        ApiSource::Yt => moosicbox_yt::album(db, album_id, None, None, None, None)
+            .await
+            .ok()
+            .map(Into::into),
+    })
+}
+
+pub async fn get_library_album(
     db: &LibraryDatabase,
     album_id: &Id,
     source: ApiSource,
@@ -180,6 +212,7 @@ pub async fn get_album(
             .iter()
             .find(|album| &Into::<Id>::into(album.id) == album_id)
             .cloned(),
+        #[cfg(feature = "tidal")]
         ApiSource::Tidal => albums
             .iter()
             .find(|album| {
@@ -188,6 +221,7 @@ pub async fn get_album(
                     .is_some_and(|id| &Into::<Id>::into(id) == album_id)
             })
             .cloned(),
+        #[cfg(feature = "qobuz")]
         ApiSource::Qobuz => albums
             .iter()
             .find(|album| {
@@ -197,6 +231,7 @@ pub async fn get_album(
                     .is_some_and(|id| &Into::<Id>::into(id) == album_id)
             })
             .cloned(),
+        #[cfg(feature = "yt")]
         ApiSource::Yt => albums
             .iter()
             .find(|album| {

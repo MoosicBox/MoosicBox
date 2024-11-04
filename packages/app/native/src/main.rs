@@ -11,9 +11,9 @@ use moosicbox_app_native_lib::{
     router::{ContainerElement, RouteRequest, Router},
 };
 use moosicbox_app_native_ui::{state, Action};
-use moosicbox_core::sqlite::models::ApiSource;
+use moosicbox_core::sqlite::models::{ApiAlbum, ApiSource};
 use moosicbox_env_utils::{default_env_usize, option_env_i32, option_env_u16};
-use moosicbox_library_models::{ApiAlbum, ApiArtist};
+use moosicbox_library_models::ApiArtist;
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_paging::Page;
 use moosicbox_player::Playback;
@@ -202,29 +202,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .with_route_result("/albums", |req| async move {
             Ok::<_, Box<dyn std::error::Error>>(if let Some(album_id) = req.query.get("albumId") {
+                let source: Option<ApiSource> =
+                    req.query.get("source").map(TryFrom::try_from).transpose()?;
+
                 if req.query.get("full").map(|x| x.as_str()) == Some("true") {
-                    let source: Option<ApiSource> =
-                        req.query.get("source").map(TryFrom::try_from).transpose()?;
-                    let url = match source {
-                        Some(ApiSource::Qobuz) => format!(
-                            "{}/qobuz/albums?moosicboxProfile=master&albumId={album_id}",
-                            std::env::var("MOOSICBOX_HOST")
-                                .as_deref()
-                                .unwrap_or("http://localhost:8500"),
-                        ),
-                        Some(ApiSource::Tidal) => format!(
-                            "{}/tidal/albums?moosicboxProfile=master&albumId={album_id}",
-                            std::env::var("MOOSICBOX_HOST")
-                                .as_deref()
-                                .unwrap_or("http://localhost:8500"),
-                        ),
-                        _ => format!(
-                            "{}/menu/album?moosicboxProfile=master&albumId={album_id}",
-                            std::env::var("MOOSICBOX_HOST")
-                                .as_deref()
-                                .unwrap_or("http://localhost:8500"),
-                        ),
-                    };
+                    let url = format!(
+                        "{}/menu/album?moosicboxProfile=master&albumId={album_id}{}",
+                        std::env::var("MOOSICBOX_HOST")
+                            .as_deref()
+                            .unwrap_or("http://localhost:8500"),
+                        source.map_or_else(String::new, |x| format!("&source={x}")),
+                    );
 
                     let response = reqwest::get(url).await?;
 
@@ -242,9 +230,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         std::env::var("MOOSICBOX_HOST")
                             .as_deref()
                             .unwrap_or("http://localhost:8500"),
-                        req.query
-                            .get("source")
-                            .map_or_else(String::new, |x| format!("&source={x}")),
+                        source.map_or_else(String::new, |x| format!("&source={x}")),
                     ))
                     .await?;
 
@@ -258,7 +244,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     log::debug!("versions: {versions:?}");
 
                     let container: ContainerElement =
-                        moosicbox_app_native_ui::albums::album_page_content(album, &versions)
+                        moosicbox_app_native_ui::albums::album_page_content(&album, &versions)
                             .into_string()
                             .try_into()?;
 
@@ -267,7 +253,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let container: ContainerElement = moosicbox_app_native_ui::albums::album(
                         &convert_state(&STATE).await,
                         album_id,
-                        req.query.get("source").map(TryInto::try_into).transpose()?,
+                        source,
                     )
                     .into_string()
                     .try_into()?;
@@ -521,7 +507,7 @@ async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteError> 
         return Err(RouteError::RouteFailed);
     }
 
-    let albums: Page<ApiAlbum> = response.json().await?;
+    let albums: Page<moosicbox_library_models::ApiAlbum> = response.json().await?;
     let albums = albums.map(Into::into);
 
     log::trace!("albums_list_start_route: albums={albums:?}");
@@ -561,7 +547,7 @@ async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
         return Err(RouteError::RouteFailed);
     }
 
-    let albums: Page<ApiAlbum> = response.json().await?;
+    let albums: Page<moosicbox_library_models::ApiAlbum> = response.json().await?;
     let albums = albums.map(Into::into);
 
     log::trace!("albums_list_route: albums={albums:?}");

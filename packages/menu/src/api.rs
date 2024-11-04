@@ -26,12 +26,13 @@ use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_music_api::{AlbumFilters, AlbumsRequest, MusicApis, SourceToMusicApi as _};
 use moosicbox_paging::{Page, PagingRequest};
 use serde::Deserialize;
+use serde_json::Value;
 use thiserror::Error;
 
 use crate::library::{
-    albums::{add_album, get_album_versions, refavorite_album, remove_album},
+    albums::{add_album, get_album_versions_from_source, refavorite_album, remove_album},
     artists::{get_all_artists, ArtistFilters, ArtistsRequest},
-    get_album, get_artist, get_artist_albums, GetArtistError,
+    get_album_from_source, get_artist, get_artist_albums, get_library_album, GetArtistError,
 };
 
 pub fn bind_services<
@@ -371,7 +372,8 @@ pub async fn get_album_tracks_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetAlbumVersionsQuery {
-    album_id: i32,
+    album_id: String,
+    source: Option<ApiSource>,
 }
 
 #[cfg_attr(
@@ -382,6 +384,7 @@ pub struct GetAlbumVersionsQuery {
         description = "Get the album versions for the specified album",
         params(
             ("albumId" = String, Query, description = "Album ID to fetch the versions for"),
+            ("source" = Option<ApiSource>, Query, description = "Album source to retrieve"),
         ),
         responses(
             (
@@ -396,9 +399,12 @@ pub struct GetAlbumVersionsQuery {
 pub async fn get_album_versions_endpoint(
     query: web::Query<GetAlbumVersionsQuery>,
     library_api: LibraryMusicApi,
+    db: LibraryDatabase,
 ) -> Result<Json<Vec<ApiAlbumVersion>>> {
+    let source = query.source.unwrap_or(ApiSource::Library);
+    let id = Id::try_from_str(&query.album_id, source, IdType::Album).map_err(ErrorBadRequest)?;
     Ok(Json(
-        get_album_versions(&library_api, &query.album_id.into())
+        get_album_versions_from_source(&db, &library_api, &id, source)
             .await
             .map_err(|_e| ErrorInternalServerError("Failed to fetch album versions"))?
             .into_iter()
@@ -540,13 +546,13 @@ pub struct GetAlbumQuery {
             ("albumId" = Option<String>, Query, description = "Album ID to filter by"),
             ("tidalAlbumId" = Option<String>, Query, description = "Tidal album ID to filter by"),
             ("qobuzAlbumId" = Option<String>, Query, description = "Qobuz album ID to filter by"),
-            ("source" = Option<String>, Query, description = "Album source to retrieve"),
+            ("source" = Option<ApiSource>, Query, description = "Album source to retrieve"),
         ),
         responses(
             (
                 status = 200,
                 description = "The matching album",
-                body = ApiAlbum,
+                body = Value,
             )
         )
     )
@@ -555,34 +561,38 @@ pub struct GetAlbumQuery {
 pub async fn get_album_endpoint(
     query: web::Query<GetAlbumQuery>,
     db: LibraryDatabase,
-) -> Result<Json<ApiAlbum>> {
-    let (id, source) = if let Some(id) = &query.album_id {
+) -> Result<Json<Value>> {
+    Ok(if let Some(id) = &query.album_id {
         let source = query.source.unwrap_or(ApiSource::Library);
-        (
-            Id::try_from_str(id, source, IdType::Album).map_err(ErrorBadRequest)?,
-            source,
-        )
-    } else if let Some(id) = &query.tidal_album_id {
-        (
-            Id::try_from_str(id, ApiSource::Tidal, IdType::Album).map_err(ErrorBadRequest)?,
-            ApiSource::Tidal,
-        )
-    } else if let Some(id) = &query.qobuz_album_id {
-        (
-            Id::try_from_str(id, ApiSource::Qobuz, IdType::Album).map_err(ErrorBadRequest)?,
-            ApiSource::Qobuz,
-        )
+        let id = Id::try_from_str(id, source, IdType::Album).map_err(ErrorBadRequest)?;
+        let album: moosicbox_core::sqlite::models::ApiAlbum =
+            get_album_from_source(&db, &id, source)
+                .await
+                .map_err(ErrorInternalServerError)?
+                .ok_or(ErrorNotFound("Album not found"))?
+                .into();
+        Json(serde_json::to_value(album).map_err(ErrorInternalServerError)?)
     } else {
-        return Err(ErrorNotFound("Album not found"));
-    };
-
-    Ok(Json(
-        get_album(&db, &id, source)
+        let (id, source) = if let Some(id) = &query.tidal_album_id {
+            (
+                Id::try_from_str(id, ApiSource::Tidal, IdType::Album).map_err(ErrorBadRequest)?,
+                ApiSource::Tidal,
+            )
+        } else if let Some(id) = &query.qobuz_album_id {
+            (
+                Id::try_from_str(id, ApiSource::Qobuz, IdType::Album).map_err(ErrorBadRequest)?,
+                ApiSource::Qobuz,
+            )
+        } else {
+            return Err(ErrorNotFound("Album not found"));
+        };
+        let album: ApiAlbum = get_library_album(&db, &id, source)
             .await
             .map_err(ErrorInternalServerError)?
             .ok_or(ErrorNotFound("Album not found"))?
-            .to_api(),
-    ))
+            .to_api();
+        Json(serde_json::to_value(album).map_err(ErrorInternalServerError)?)
+    })
 }
 
 #[derive(Deserialize, Clone)]

@@ -2,7 +2,7 @@ use std::sync::{Arc, PoisonError};
 
 use moosicbox_core::sqlite::{
     db::DbError,
-    models::{Album, ApiSource, Artist, Id, TrackApiSource},
+    models::{Album, ApiSource, Artist, Id, Track, TrackApiSource},
 };
 use moosicbox_database::{profiles::LibraryDatabase, query::*, DatabaseError, DatabaseValue};
 use moosicbox_library::{
@@ -65,9 +65,75 @@ pub enum GetAlbumVersionsError {
     Tracks(#[from] TracksError),
     #[error(transparent)]
     LibraryAlbumTracks(#[from] LibraryAlbumTracksError),
+    #[cfg(feature = "tidal")]
+    #[error(transparent)]
+    TidalAlbumTracks(#[from] moosicbox_tidal::TidalAlbumTracksError),
+    #[cfg(feature = "qobuz")]
+    #[error(transparent)]
+    QobuzAlbumTracks(#[from] moosicbox_qobuz::QobuzAlbumTracksError),
+    #[cfg(feature = "yt")]
+    #[error(transparent)]
+    YtAlbumTracks(#[from] moosicbox_yt::YtAlbumTracksError),
 }
 
-pub async fn get_album_versions(
+pub async fn get_album_versions_from_source(
+    db: &LibraryDatabase,
+    library_api: &LibraryMusicApi,
+    album_id: &Id,
+    source: ApiSource,
+) -> Result<Vec<AlbumVersion>, GetAlbumVersionsError> {
+    Ok(match source {
+        ApiSource::Library => get_library_album_versions(library_api, album_id).await?,
+        _ => {
+            let tracks: Vec<Track> = match source {
+                ApiSource::Library => unreachable!(),
+                #[cfg(feature = "tidal")]
+                ApiSource::Tidal => {
+                    moosicbox_tidal::album_tracks(db, album_id, None, None, None, None, None, None)
+                        .await?
+                        .items()
+                        .into_iter()
+                        .map(Into::into)
+                        .collect::<Vec<_>>()
+                }
+
+                #[cfg(feature = "qobuz")]
+                ApiSource::Qobuz => {
+                    moosicbox_qobuz::album_tracks(db, album_id, None, None, None, None)
+                        .await?
+                        .items()
+                        .into_iter()
+                        .map(Into::into)
+                        .collect::<Vec<_>>()
+                }
+                #[cfg(feature = "yt")]
+                ApiSource::Yt => {
+                    moosicbox_yt::album_tracks(db, album_id, None, None, None, None, None, None)
+                        .await?
+                        .items()
+                        .into_iter()
+                        .map(Into::into)
+                        .collect::<Vec<_>>()
+                }
+            };
+            vec![AlbumVersion {
+                tracks,
+                format: None,
+                bit_depth: None,
+                sample_rate: None,
+                channels: None,
+                source: match source {
+                    ApiSource::Library => unreachable!(),
+                    ApiSource::Tidal => TrackApiSource::Tidal,
+                    ApiSource::Qobuz => TrackApiSource::Qobuz,
+                    ApiSource::Yt => TrackApiSource::Yt,
+                },
+            }]
+        }
+    })
+}
+
+pub async fn get_library_album_versions(
     library_api: &LibraryMusicApi,
     album_id: &Id,
 ) -> Result<Vec<AlbumVersion>, GetAlbumVersionsError> {
@@ -84,7 +150,7 @@ pub async fn get_album_versions(
         if versions.is_empty() {
             log::trace!("No versions exist yet. Creating first version");
             versions.push(AlbumVersion {
-                tracks: vec![track.clone()],
+                tracks: vec![track.clone().into()],
                 format: track.format,
                 bit_depth: track.bit_depth,
                 sample_rate: track.sample_rate,
@@ -101,11 +167,11 @@ pub async fn get_album_versions(
                 && v.source == track.source
         }) {
             log::trace!("Adding track to existing version");
-            existing_version.tracks.push(track);
+            existing_version.tracks.push(track.into());
         } else {
             log::trace!("Adding track to new version");
             versions.push(AlbumVersion {
-                tracks: vec![track.clone()],
+                tracks: vec![track.clone().into()],
                 format: track.format,
                 bit_depth: track.bit_depth,
                 sample_rate: track.sample_rate,
@@ -197,7 +263,7 @@ pub async fn add_album(
 
     for album in &results.albums {
         if let Some(album) =
-            crate::library::get_album(db, &album.id.into(), ApiSource::Library).await?
+            crate::library::get_library_album(db, &album.id.into(), ApiSource::Library).await?
         {
             albums.push(album);
         }

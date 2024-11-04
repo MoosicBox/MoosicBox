@@ -24,17 +24,22 @@ moosicbox_scan = { version = "0.1.0", path = "../scan", default-features = false
 moosicbox_search = { version = "0.1.0", path = "../search", default-features = false }
 moosicbox_session = { version = "0.1.0", path = "../session", default-features = false }
 
+moosicbox_qobuz = { version = "0.1.0", path = "../qobuz", optional = true, default-features = false }
+moosicbox_tidal = { version = "0.1.0", path = "../tidal", optional = true, default-features = false }
+moosicbox_yt    = { version = "0.1.0", path = "../yt", optional = true, default-features = false }
+
 # API Dependencies
 utoipa = { workspace = true, optional = true }
 
-actix-web = { workspace = true, optional = true }
-log       = { workspace = true }
-serde     = { workspace = true, features = ["derive"] }
-thiserror = { workspace = true }
-tokio     = { workspace = true }
+actix-web  = { workspace = true, optional = true }
+log        = { workspace = true }
+serde      = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror  = { workspace = true }
+tokio      = { workspace = true }
 
 [features]
-default = ["api", "local", "openapi"]
+default = ["all-sources", "api", "local", "openapi"]
 
 fail-on-warnings = []
 
@@ -52,3 +57,9 @@ openapi = [
     "moosicbox_library/openapi",
     "moosicbox_menu_models/openapi",
 ]
+
+all-sources = ["qobuz", "tidal", "yt"]
+
+qobuz = ["dep:moosicbox_qobuz"]
+tidal = ["dep:moosicbox_tidal"]
+yt    = ["dep:moosicbox_yt"]

@@ -442,6 +442,13 @@ pub enum ApiAlbum {
     Library(ApiLibraryAlbum),
 }
 
+impl From<ApiAlbum> for moosicbox_core::sqlite::models::ApiAlbum {
+    fn from(value: ApiAlbum) -> Self {
+        let ApiAlbum::Library(album) = value;
+        album.into()
+    }
+}
+
 impl From<ApiAlbum> for Album {
     fn from(value: ApiAlbum) -> Self {
         let ApiAlbum::Library(album) = value;
@@ -466,6 +473,34 @@ pub struct ApiLibraryAlbum {
     pub tidal_id: Option<u64>,
     pub qobuz_id: Option<String>,
     pub yt_id: Option<u64>,
+}
+
+impl From<ApiLibraryAlbum> for moosicbox_core::sqlite::models::ApiAlbum {
+    fn from(value: ApiLibraryAlbum) -> Self {
+        Self {
+            album_id: value.album_id.into(),
+            title: value.title,
+            artist: value.artist,
+            artist_id: value.artist_id.into(),
+            date_released: value.date_released,
+            date_added: value.date_added,
+            artwork: if value.contains_cover {
+                Some(value.album_id.to_string())
+            } else {
+                None
+            },
+            directory: None,
+            blur: value.blur,
+            versions: value
+                .versions
+                .into_iter()
+                .map(Into::into)
+                .collect::<Vec<_>>(),
+            source: value.source,
+            artist_sources: ApiSources::default(),
+            album_sources: ApiSources::default(),
+        }
+    }
 }
 
 impl From<ApiLibraryAlbum> for Album {

@@ -1,8 +1,7 @@
 use moosicbox_core::{
-    sqlite::models::{ToApi, TrackApiSource},
+    sqlite::models::{ApiTrack, ToApi, TrackApiSource},
     types::AudioFormat,
 };
-use moosicbox_library_models::ApiTrack;
 use serde::{Deserialize, Serialize};
 
 use crate::AlbumVersion;
@@ -22,7 +21,7 @@ pub struct ApiAlbumVersion {
 impl ToApi<ApiAlbumVersion> for AlbumVersion {
     fn to_api(self) -> ApiAlbumVersion {
         ApiAlbumVersion {
-            tracks: self.tracks.iter().map(|track| track.to_api()).collect(),
+            tracks: self.tracks.into_iter().map(|track| track.into()).collect(),
             format: self.format,
             bit_depth: self.bit_depth,
             sample_rate: self.sample_rate,

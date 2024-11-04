@@ -313,6 +313,65 @@ impl Track {
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct ApiTrack {
+    pub track_id: Id,
+    pub number: u32,
+    pub title: String,
+    pub duration: f64,
+    pub album: String,
+    pub album_id: Id,
+    pub date_released: Option<String>,
+    pub date_added: Option<String>,
+    pub artist: String,
+    pub artist_id: Id,
+    pub file: Option<String>,
+    pub artwork: Option<String>,
+    pub blur: bool,
+    pub bytes: u64,
+    pub format: Option<AudioFormat>,
+    pub bit_depth: Option<u8>,
+    pub audio_bitrate: Option<u32>,
+    pub overall_bitrate: Option<u32>,
+    pub sample_rate: Option<u32>,
+    pub channels: Option<u8>,
+    pub source: TrackApiSource,
+    pub api_source: ApiSource,
+    pub sources: ApiSources,
+}
+
+impl From<Track> for ApiTrack {
+    fn from(value: Track) -> Self {
+        Self {
+            track_id: value.id,
+            number: value.number,
+            title: value.title,
+            duration: value.duration,
+            album: value.album,
+            album_id: value.album_id,
+            date_released: value.date_released,
+            date_added: value.date_added,
+            artist: value.artist,
+            artist_id: value.artist_id,
+            file: value.file,
+            artwork: value.artwork,
+            blur: value.blur,
+            bytes: value.bytes,
+            format: value.format,
+            bit_depth: value.bit_depth,
+            audio_bitrate: value.audio_bitrate,
+            overall_bitrate: value.overall_bitrate,
+            sample_rate: value.sample_rate,
+            channels: value.channels,
+            source: value.source,
+            api_source: value.api_source,
+            sources: value.sources,
+        }
+    }
+}
+
+#[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Artist {
     pub id: Id,
     pub title: String,
@@ -347,6 +406,24 @@ pub struct AlbumVersionQuality {
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
     pub source: TrackApiSource,
+}
+
+impl From<ApiAlbumVersionQuality> for AlbumVersionQuality {
+    fn from(value: ApiAlbumVersionQuality) -> Self {
+        AlbumVersionQuality {
+            format: value.format,
+            bit_depth: value.bit_depth,
+            sample_rate: value.sample_rate,
+            channels: value.channels,
+            source: value.source,
+        }
+    }
+}
+
+impl From<AlbumVersionQuality> for ApiAlbumVersionQuality {
+    fn from(value: AlbumVersionQuality) -> Self {
+        value.to_api()
+    }
 }
 
 impl ToApi<ApiAlbumVersionQuality> for AlbumVersionQuality {
@@ -483,6 +560,69 @@ impl From<Track> for Album {
         Self {
             directory: value.directory(),
             id: value.album_id,
+            title: value.album,
+            artist: value.artist,
+            artist_id: value.artist_id,
+            date_released: value.date_released,
+            date_added: value.date_added,
+            artwork: value.artwork,
+            blur: value.blur,
+            versions: vec![],
+            source: value.source.into(),
+            artist_sources: value.sources.clone(),
+            album_sources: value.sources,
+        }
+    }
+}
+
+#[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct ApiAlbum {
+    pub album_id: Id,
+    pub title: String,
+    pub artist: String,
+    pub artist_id: Id,
+    pub date_released: Option<String>,
+    pub date_added: Option<String>,
+    pub artwork: Option<String>,
+    pub directory: Option<String>,
+    pub blur: bool,
+    pub versions: Vec<AlbumVersionQuality>,
+    pub source: AlbumSource,
+    pub artist_sources: ApiSources,
+    pub album_sources: ApiSources,
+}
+
+impl From<Album> for ApiAlbum {
+    fn from(value: Album) -> Self {
+        Self {
+            album_id: value.id,
+            title: value.title,
+            artist: value.artist,
+            artist_id: value.artist_id,
+            date_released: value.date_released,
+            date_added: value.date_added,
+            artwork: value.artwork,
+            directory: value.directory,
+            blur: value.blur,
+            versions: value.versions,
+            source: value.source,
+            artist_sources: value.artist_sources,
+            album_sources: value.album_sources,
+        }
+    }
+}
+impl From<&Track> for ApiAlbum {
+    fn from(value: &Track) -> Self {
+        value.clone().into()
+    }
+}
+
+impl From<Track> for ApiAlbum {
+    fn from(value: Track) -> Self {
+        Self {
+            directory: value.directory(),
+            album_id: value.album_id,
             title: value.album,
             artist: value.artist,
             artist_id: value.artist_id,

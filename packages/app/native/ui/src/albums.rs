@@ -1,14 +1,13 @@
 #![allow(clippy::module_name_repetitions)]
 
 use maud::{html, Markup, PreEscaped};
-use moosicbox_core::sqlite::models::{Album, ApiSource};
-use moosicbox_library_models::{ApiAlbum, ApiTrack};
+use moosicbox_core::sqlite::models::{ApiAlbum, ApiSource};
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_paging::Page;
 
 use crate::{page, pre_escaped, public_img, state::State, TimeFormat as _};
 
-pub fn album_cover_url(album: &Album, width: u16, height: u16) -> String {
+pub fn album_cover_url(album: &ApiAlbum, width: u16, height: u16) -> String {
     if album.artwork.is_some() {
         let api_source: ApiSource = album.source.into();
         format!(
@@ -16,7 +15,7 @@ pub fn album_cover_url(album: &Album, width: u16, height: u16) -> String {
             std::env::var("MOOSICBOX_HOST")
                 .as_deref()
                 .unwrap_or("http://localhost:8500"),
-            album.id,
+            album.album_id,
             api_source,
         )
     } else {
@@ -25,7 +24,7 @@ pub fn album_cover_url(album: &Album, width: u16, height: u16) -> String {
 }
 
 #[must_use]
-pub fn album_cover_img(album: &Album, size: u16) -> Markup {
+pub fn album_cover_img(album: &ApiAlbum, size: u16) -> Markup {
     #[allow(clippy::cast_sign_loss)]
     #[allow(clippy::cast_possible_truncation)]
     let request_size = (f64::from(size) * 1.33).round() as u16;
@@ -78,10 +77,7 @@ pub fn album_page_immediate(album_id: &str, source: Option<ApiSource>) -> Markup
 }
 
 #[must_use]
-pub fn album_page_content(album: ApiAlbum, versions: &[ApiAlbumVersion]) -> Markup {
-    let ApiAlbum::Library(album) = album;
-    let album: Album = album.into();
-
+pub fn album_page_content(album: &ApiAlbum, versions: &[ApiAlbumVersion]) -> Markup {
     html! {
         div sx-dir="row" {
             @let size = 200;
@@ -108,12 +104,7 @@ pub fn album_page_content(album: ApiAlbum, versions: &[ApiAlbumVersion]) -> Mark
                         }
                     }
                     tbody {
-                        @for track in version.tracks.iter().filter_map(|x| match x {
-                            ApiTrack::Library { data, .. } => Some(data),
-                            ApiTrack::Tidal { .. } |
-                            ApiTrack::Qobuz { .. } |
-                            ApiTrack::Yt { .. } => None,
-                        }) {
+                        @for track in &version.tracks {
                             tr {
                                 td { (track.number) }
                                 td { (track.title) }
@@ -134,7 +125,7 @@ pub fn album(state: &State, album_id: &str, source: Option<ApiSource>) -> Markup
 }
 
 #[must_use]
-pub fn albums_list_start(albums: &Page<Album>, size: u16) -> Markup {
+pub fn albums_list_start(albums: &Page<ApiAlbum>, size: u16) -> Markup {
     static MAX_PARALLEL_REQUESTS: u32 = 6;
     static MIN_PAGE_THRESHOLD: u32 = 30;
     let limit = albums.limit();
@@ -192,14 +183,14 @@ pub fn albums_list_start(albums: &Page<Album>, size: u16) -> Markup {
 }
 
 #[must_use]
-pub fn albums_list(albums: &Page<Album>, size: u16) -> Markup {
+pub fn albums_list(albums: &Page<ApiAlbum>, size: u16) -> Markup {
     show_albums(albums.iter(), size)
 }
 
-fn show_albums<'a>(albums: impl Iterator<Item = &'a Album>, size: u16) -> Markup {
+fn show_albums<'a>(albums: impl Iterator<Item = &'a ApiAlbum>, size: u16) -> Markup {
     html! {
         @for album in albums {
-            a href={"/albums?albumId="(album.id)} sx-width=(size) sx-height=(size + 30) {
+            a href={"/albums?albumId="(album.album_id)} sx-width=(size) sx-height=(size + 30) {
                 div sx-width=(size) sx-height=(size + 30) {
                     (album_cover_img(album, size))
                     (album.title)
