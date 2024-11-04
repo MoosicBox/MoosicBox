@@ -35,6 +35,6 @@ openapi = [
 
 all-sources = ["qobuz", "tidal", "yt"]
 
-qobuz = []
-tidal = []
-yt    = []
+qobuz = ["moosicbox_core/qobuz", "moosicbox_library_models/qobuz"]
+tidal = ["moosicbox_core/tidal", "moosicbox_library_models/tidal"]
+yt    = ["moosicbox_core/yt", "moosicbox_library_models/yt"]

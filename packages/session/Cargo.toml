@@ -69,6 +69,18 @@ opus = ["moosicbox_library/opus"]
 
 all-sources = ["qobuz", "tidal", "yt"]
 
-qobuz = ["moosicbox_core/qobuz", "moosicbox_library/qobuz"]
-tidal = ["moosicbox_core/tidal", "moosicbox_library/tidal"]
-yt    = ["moosicbox_core/yt", "moosicbox_library/yt"]
+qobuz = [
+    "moosicbox_core/qobuz",
+    "moosicbox_library/qobuz",
+    "moosicbox_session_models/qobuz",
+]
+tidal = [
+    "moosicbox_core/tidal",
+    "moosicbox_library/tidal",
+    "moosicbox_session_models/tidal",
+]
+yt = [
+    "moosicbox_core/yt",
+    "moosicbox_library/yt",
+    "moosicbox_session_models/yt",
+]
