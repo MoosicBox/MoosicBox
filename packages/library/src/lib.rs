@@ -1359,7 +1359,7 @@ pub async fn reindex_global_search_index(db: &LibraryDatabase) -> Result<(), Rei
 
 #[cfg(test)]
 mod test {
-    use moosicbox_core::sqlite::models::{AlbumSource, AlbumVersionQuality, TrackApiSource};
+    use moosicbox_core::sqlite::models::AlbumSource;
     use moosicbox_music_api::AlbumFilters;
 
     use super::*;
@@ -1384,8 +1384,11 @@ mod test {
         assert_eq!(result, vec![]);
     }
 
+    #[cfg(all(feature = "qobuz", feature = "tidal"))]
     #[test]
     fn filter_albums_filters_albums_of_sources_that_dont_match() {
+        use moosicbox_core::sqlite::models::{AlbumVersionQuality, TrackApiSource};
+
         let local = LibraryAlbum {
             id: 0,
             title: "".to_string(),
