@@ -64,6 +64,7 @@ qobuz = [
     "dep:moosicbox_qobuz",
     "moosicbox_core/qobuz",
     "moosicbox_menu_models/qobuz",
+    "moosicbox_qobuz/db",
     "moosicbox_scan/qobuz",
     "moosicbox_session/qobuz",
 ]
@@ -73,6 +74,7 @@ tidal = [
     "moosicbox_menu_models/tidal",
     "moosicbox_scan/tidal",
     "moosicbox_session/tidal",
+    "moosicbox_tidal/db",
 ]
 yt = [
     "dep:moosicbox_yt",
@@ -80,4 +82,5 @@ yt = [
     "moosicbox_menu_models/yt",
     "moosicbox_scan/yt",
     "moosicbox_session/yt",
+    "moosicbox_yt/db",
 ]
