@@ -11,9 +11,8 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert         = { version = "0.1.0", path = "../../assert", default-features = false }
-moosicbox_core           = { version = "0.1.0", path = "../../core", default-features = false }
-moosicbox_library_models = { version = "0.1.0", path = "../../library/models", default-features = false }
+moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
+moosicbox_core   = { version = "0.1.0", path = "../../core", default-features = false }
 
 # API Dependencies
 utoipa = { workspace = true, optional = true }
@@ -26,15 +25,11 @@ default = ["all-sources", "api", "openapi"]
 
 fail-on-warnings = []
 
-api = ["moosicbox_library_models/api"]
-openapi = [
-    "dep:utoipa",
-    "moosicbox_core/openapi",
-    "moosicbox_library_models/openapi",
-]
+api     = []
+openapi = ["dep:utoipa", "moosicbox_core/openapi"]
 
 all-sources = ["qobuz", "tidal", "yt"]
 
-qobuz = ["moosicbox_core/qobuz", "moosicbox_library_models/qobuz"]
-tidal = ["moosicbox_core/tidal", "moosicbox_library_models/tidal"]
-yt    = ["moosicbox_core/yt", "moosicbox_library_models/yt"]
+qobuz = ["moosicbox_core/qobuz"]
+tidal = ["moosicbox_core/tidal"]
+yt    = ["moosicbox_core/yt"]
