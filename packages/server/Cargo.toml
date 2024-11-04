@@ -281,6 +281,7 @@ qobuz = [
     "moosicbox_qobuz/api",
     "moosicbox_scan?/qobuz",
     "moosicbox_session/qobuz",
+    "moosicbox_tunnel_sender?/qobuz",
 ]
 scan = ["dep:throttle", "moosicbox_scan/api"]
 search = ["moosicbox_search/api"]
@@ -290,6 +291,7 @@ tidal = [
     "moosicbox_scan?/tidal",
     "moosicbox_session/tidal",
     "moosicbox_tidal/api",
+    "moosicbox_tunnel_sender?/tidal",
 ]
 upnp = ["dep:moosicbox_upnp", "player"]
 yt = [
@@ -297,6 +299,7 @@ yt = [
     "moosicbox_player?/yt",
     "moosicbox_scan?/yt",
     "moosicbox_session/yt",
+    "moosicbox_tunnel_sender?/yt",
     "moosicbox_yt/api",
 ]
 

@@ -60,7 +60,7 @@ tokio-tungstenite = { workspace = true }
 tokio-util        = { workspace = true }
 
 [features]
-default = ["aac", "base64", "flac", "mp3", "opus"]
+default = ["aac", "all-sources", "base64", "flac", "mp3", "opus"]
 
 fail-on-warnings = []
 
@@ -90,3 +90,9 @@ opus = [
     "moosicbox_files/opus",
     "moosicbox_ws/opus",
 ]
+
+all-sources = ["qobuz", "tidal", "yt"]
+
+qobuz = ["moosicbox_core/qobuz", "moosicbox_player/qobuz"]
+tidal = ["moosicbox_core/tidal", "moosicbox_player/tidal"]
+yt    = ["moosicbox_core/yt", "moosicbox_player/yt"]
