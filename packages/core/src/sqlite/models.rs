@@ -512,44 +512,55 @@ impl AsModelResult<AlbumVersionQuality, ParseError> for &moosicbox_database::Row
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub struct ApiSources(Vec<(ApiSource, Id)>);
+pub struct ApiSourceMapping {
+    pub source: ApiSource,
+    pub id: Id,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct ApiSources(Vec<ApiSourceMapping>);
 
 impl ApiSources {
     pub fn add_source(&mut self, source: ApiSource, id: Id) {
-        self.0.push((source, id));
+        self.0.push(ApiSourceMapping { source, id });
     }
 
     pub fn remove_source(&mut self, source: ApiSource) {
-        self.0.retain_mut(|x| x.0 != source);
+        self.0.retain_mut(|x| x.source != source);
     }
 
     pub fn add_source_opt(&mut self, source: ApiSource, id: Option<Id>) {
         if let Some(id) = id {
-            self.0.push((source, id));
+            self.0.push(ApiSourceMapping { source, id });
         }
     }
 
     pub fn with_source(mut self, source: ApiSource, id: Id) -> Self {
-        self.0.push((source, id));
+        self.0.push(ApiSourceMapping { source, id });
         self
     }
 
     pub fn with_source_opt(mut self, source: ApiSource, id: Option<Id>) -> Self {
         if let Some(id) = id {
-            self.0.push((source, id));
+            self.0.push(ApiSourceMapping { source, id });
         }
         self
     }
 
     pub fn get(&self, source: ApiSource) -> Option<&Id> {
-        self.deref()
-            .iter()
-            .find_map(|x| if x.0 == source { Some(&x.1) } else { None })
+        self.deref().iter().find_map(|x| {
+            if x.source == source {
+                Some(&x.id)
+            } else {
+                None
+            }
+        })
     }
 }
 
 impl Deref for ApiSources {
-    type Target = [(ApiSource, Id)];
+    type Target = [ApiSourceMapping];
 
     fn deref(&self) -> &Self::Target {
         &self.0
