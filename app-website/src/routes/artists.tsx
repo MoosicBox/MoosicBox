@@ -12,9 +12,9 @@ export default function artistPage() {
             {artistId ? (
                 <ArtistPage artistId={parseInt(artistId!)} />
             ) : tidalArtistId ? (
-                <ArtistPage tidalArtistId={parseInt(tidalArtistId!)} />
+                <ArtistPage tidalArtistId={tidalArtistId!} />
             ) : qobuzArtistId ? (
-                <ArtistPage qobuzArtistId={parseInt(qobuzArtistId!)} />
+                <ArtistPage qobuzArtistId={qobuzArtistId!} />
             ) : (
                 <ArtistsPage />
             )}

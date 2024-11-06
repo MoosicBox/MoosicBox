@@ -2290,8 +2290,8 @@ impl MusicApi for YtMusicApi {
     }
 
     async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, ArtistError> {
-        Ok(Some(
-            artist(
+        Ok(
+            match artist(
                 #[cfg(feature = "db")]
                 &self.db,
                 artist_id,
@@ -2300,9 +2300,23 @@ impl MusicApi for YtMusicApi {
                 None,
                 None,
             )
-            .await?
-            .into(),
-        ))
+            .await
+            {
+                Ok(artist) => Some(artist.into()),
+                Err(e) => {
+                    if let YtArtistError::AuthenticatedRequest(
+                        AuthenticatedRequestError::RequestFailed(status, _),
+                    ) = &e
+                    {
+                        if *status == 404 {
+                            return Ok(None);
+                        }
+                    }
+
+                    return Err(e.into());
+                }
+            },
+        )
     }
 
     async fn add_artist(&self, artist_id: &Id) -> Result<(), AddArtistError> {

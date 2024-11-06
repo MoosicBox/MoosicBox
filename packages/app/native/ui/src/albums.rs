@@ -108,7 +108,7 @@ pub fn album_page_content(album: &ApiAlbum, versions: &[ApiAlbumVersion]) -> Mar
                             tr {
                                 td { (track.number) }
                                 td { (track.title) }
-                                td { a href={"/artists?artistId="(track.artist_id)} { (track.artist) } }
+                                td { a href=(pre_escaped!("/artists?artistId={}&source={}", track.artist_id, track.api_source)) { (track.artist) } }
                                 td { (track.duration.into_formatted()) }
                             }
                         }
@@ -190,7 +190,7 @@ pub fn albums_list(albums: &Page<ApiAlbum>, size: u16) -> Markup {
 pub fn show_albums<'a>(albums: impl Iterator<Item = &'a ApiAlbum>, size: u16) -> Markup {
     html! {
         @for album in albums {
-            a href={"/albums?albumId="(album.album_id)} sx-width=(size) sx-height=(size + 30) {
+            a href=(pre_escaped!("/albums?albumId={}&source={}", album.album_id, album.api_source)) sx-width=(size) sx-height=(size + 30) {
                 div sx-width=(size) sx-height=(size + 30) {
                     (album_cover_img(album, size))
                     (album.title)

@@ -12,7 +12,7 @@ export default function albumPage() {
             {albumId ? (
                 <AlbumPage albumId={parseInt(albumId!)} />
             ) : tidalAlbumId ? (
-                <AlbumPage tidalAlbumId={parseInt(tidalAlbumId!)} />
+                <AlbumPage tidalAlbumId={tidalAlbumId!} />
             ) : qobuzAlbumId ? (
                 <AlbumPage qobuzAlbumId={qobuzAlbumId!} />
             ) : (

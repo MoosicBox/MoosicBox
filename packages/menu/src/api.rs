@@ -10,7 +10,7 @@ use actix_web::{
 };
 use moosicbox_core::{
     integer_range::parse_integer_ranges_to_ids,
-    sqlite::models::{AlbumType, ApiAlbum, ApiSource, Id, IdType},
+    sqlite::models::{AlbumType, ApiAlbum, ApiArtist, ApiSource, Id, IdType},
 };
 use moosicbox_core::{
     integer_range::ParseIntegersError,
@@ -19,7 +19,7 @@ use moosicbox_core::{
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_library::{
     db::{get_album_tracks, get_tracks},
-    models::{ApiArtist, ApiTrack},
+    models::ApiTrack,
     LibraryMusicApi,
 };
 use moosicbox_menu_models::api::ApiAlbumVersion;
@@ -29,7 +29,6 @@ use moosicbox_music_api::{
 };
 use moosicbox_paging::{Page, PagingRequest};
 use serde::Deserialize;
-use serde_json::Value;
 use thiserror::Error;
 
 use crate::library::{
@@ -181,7 +180,7 @@ pub async fn get_artists_endpoint(
             .await
             .map_err(|e| ErrorInternalServerError(format!("Failed to fetch artists: {e:?}")))?
             .into_iter()
-            .map(|t| t.to_api())
+            .map(Into::into)
             .collect(),
     ))
 }
@@ -486,17 +485,7 @@ pub async fn get_artist_albums_endpoint(
 impl From<GetArtistError> for actix_web::Error {
     fn from(e: GetArtistError) -> Self {
         match e {
-            GetArtistError::ArtistNotFound(_) => {
-                ErrorNotFound(format!("Failed to fetch artist: {e:?}"))
-            }
-            GetArtistError::AlbumArtistNotFound(_) => {
-                ErrorNotFound(format!("Failed to fetch artist: {e:?}"))
-            }
-            GetArtistError::UnknownSource { .. }
-            | GetArtistError::PoisonError
-            | GetArtistError::DbError(_) => {
-                ErrorInternalServerError(format!("Failed to fetch artist: {e:?}"))
-            }
+            GetArtistError::Artist(_) => ErrorInternalServerError(e),
             GetArtistError::InvalidRequest => {
                 ErrorBadRequest(format!("Failed to fetch artist: {e:?}"))
             }
@@ -507,12 +496,9 @@ impl From<GetArtistError> for actix_web::Error {
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetArtistQuery {
-    artist_id: Option<u64>,
-    tidal_artist_id: Option<u64>,
-    qobuz_artist_id: Option<u64>,
-    album_id: Option<u64>,
-    tidal_album_id: Option<u64>,
-    qobuz_album_id: Option<String>,
+    artist_id: Option<String>,
+    album_id: Option<String>,
+    source: Option<ApiSource>,
 }
 
 #[cfg_attr(
@@ -522,12 +508,9 @@ pub struct GetArtistQuery {
         path = "/artist",
         description = "Get the artist for the specified criteria",
         params(
-            ("artistId" = Option<i32>, Query, description = "Artist ID to filter by"),
-            ("tidalArtistId" = Option<i32>, Query, description = "Tidal artist ID to filter by"),
-            ("qobuzArtistId" = Option<i32>, Query, description = "Qobuz artist ID to filter by"),
-            ("albumId" = Option<i32>, Query, description = "Album ID to filter by"),
-            ("tidalAlbumId" = Option<i32>, Query, description = "Tidal album ID to filter by"),
-            ("qobuzAlbumId" = Option<String>, Query, description = "Qobuz album ID to filter by"),
+            ("artistId" = Option<String>, Query, description = "Artist ID to filter by"),
+            ("albumId" = Option<String>, Query, description = "Album ID to filter by"),
+            ("source" = Option<ApiSource>, Query, description = "Artist source to retrieve"),
         ),
         responses(
             (
@@ -541,20 +524,27 @@ pub struct GetArtistQuery {
 #[get("/artist")]
 pub async fn get_artist_endpoint(
     query: web::Query<GetArtistQuery>,
-    db: LibraryDatabase,
+    music_apis: MusicApis,
 ) -> Result<Json<ApiArtist>> {
+    let source = query.source.unwrap_or(ApiSource::Library);
+    let api = music_apis.get(source).map_err(ErrorBadRequest)?;
     Ok(Json(
         get_artist(
-            query.artist_id,
-            query.tidal_artist_id,
-            query.qobuz_artist_id,
-            query.album_id,
-            query.tidal_album_id,
-            query.qobuz_album_id.clone(),
-            &db,
+            &**api,
+            query
+                .artist_id
+                .as_ref()
+                .and_then(|x| Id::try_from_str(x, source, IdType::Artist).ok())
+                .as_ref(),
+            query
+                .album_id
+                .as_ref()
+                .and_then(|x| Id::try_from_str(x, source, IdType::Album).ok())
+                .as_ref(),
         )
         .await?
-        .to_api(),
+        .ok_or_else(|| ErrorNotFound("Artist not found"))?
+        .into(),
     ))
 }
 
@@ -592,17 +582,15 @@ pub struct GetAlbumQuery {
 pub async fn get_album_endpoint(
     query: web::Query<GetAlbumQuery>,
     db: LibraryDatabase,
-) -> Result<Json<Value>> {
-    Ok(if let Some(id) = &query.album_id {
+) -> Result<Json<ApiAlbum>> {
+    Ok(Json(if let Some(id) = &query.album_id {
         let source = query.source.unwrap_or(ApiSource::Library);
         let id = Id::try_from_str(id, source, IdType::Album).map_err(ErrorBadRequest)?;
-        let album: moosicbox_core::sqlite::models::ApiAlbum =
-            get_album_from_source(&db, &id, source)
-                .await
-                .map_err(ErrorInternalServerError)?
-                .ok_or(ErrorNotFound("Album not found"))?
-                .into();
-        Json(serde_json::to_value(album).map_err(ErrorInternalServerError)?)
+        get_album_from_source(&db, &id, source)
+            .await
+            .map_err(ErrorInternalServerError)?
+            .ok_or(ErrorNotFound("Album not found"))?
+            .into()
     } else {
         #[allow(unused)]
         let (id, source) = if let Some(id) = &query.tidal_album_id {
@@ -633,14 +621,13 @@ pub async fn get_album_endpoint(
 
         #[allow(unreachable_code)]
         {
-            let album: ApiAlbum = get_library_album(&db, &id, source)
+            get_library_album(&db, &id, source)
                 .await
                 .map_err(ErrorInternalServerError)?
                 .ok_or(ErrorNotFound("Album not found"))?
-                .into();
-            Json(serde_json::to_value(album).map_err(ErrorInternalServerError)?)
+                .into()
         }
-    })
+    }))
 }
 
 #[derive(Deserialize, Clone)]

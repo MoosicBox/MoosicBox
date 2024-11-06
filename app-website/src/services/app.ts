@@ -107,7 +107,7 @@ export const [appState, setAppState] = createStore<AppState>({
 
 export const [currentArtistSearch, setCurrentArtistSearch] = createSignal<{
     query: string;
-    results: Api.LibraryArtist[];
+    results: Api.Artist[];
 }>();
 
 export const [currentAlbumSearch, setCurrentAlbumSearch] = createSignal<{

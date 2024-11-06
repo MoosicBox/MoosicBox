@@ -2,39 +2,38 @@ import './artist-page.css';
 import { createEffect, createSignal, For, on, Show } from 'solid-js';
 import Album from '~/components/Album';
 import Artist from '~/components/Artist';
-import { Api, api, type Artist as ApiArtist } from '~/services/api';
+import { Api, api } from '~/services/api';
 import { historyBack } from '~/services/util';
 
 export default function artistPage(props: {
     artistId?: number;
-    tidalArtistId?: number;
-    qobuzArtistId?: number;
+    tidalArtistId?: string;
+    qobuzArtistId?: string;
 }) {
-    const [libraryArtist, setLibraryArtist] =
-        createSignal<Api.LibraryArtist | null>();
+    const [libraryArtist, setLibraryArtist] = createSignal<Api.Artist | null>();
     const [libraryAlbums, setLibraryAlbums] = createSignal<
         Api.Album[] | null
     >();
 
-    const [tidalArtist, setTidalArtist] = createSignal<Api.TidalArtist>();
-    const [tidalAlbums, setTidalAlbums] = createSignal<Api.TidalAlbum[]>();
+    const [tidalArtist, setTidalArtist] = createSignal<Api.Artist>();
+    const [tidalAlbums, setTidalAlbums] = createSignal<Api.Album[]>();
     const [tidalEpsAndSingles, setTidalEpsAndSingles] =
-        createSignal<Api.TidalAlbum[]>();
+        createSignal<Api.Album[]>();
     const [tidalCompilations, setTidalCompilations] =
-        createSignal<Api.TidalAlbum[]>();
+        createSignal<Api.Album[]>();
 
-    const [qobuzArtist, setQobuzArtist] = createSignal<Api.QobuzArtist>();
-    const [qobuzAlbums, setQobuzAlbums] = createSignal<Api.QobuzAlbum[]>();
+    const [qobuzArtist, setQobuzArtist] = createSignal<Api.Artist>();
+    const [qobuzAlbums, setQobuzAlbums] = createSignal<Api.Album[]>();
     const [qobuzEpsAndSingles, setQobuzEpsAndSingles] =
-        createSignal<Api.QobuzAlbum[]>();
+        createSignal<Api.Album[]>();
     const [qobuzCompilations, setQobuzCompilations] =
-        createSignal<Api.QobuzAlbum[]>();
+        createSignal<Api.Album[]>();
 
-    function getArtist(): ApiArtist | null | undefined {
+    function getArtist(): Api.Artist | null | undefined {
         return libraryArtist() ?? tidalArtist() ?? qobuzArtist();
     }
 
-    async function loadQobuzAlbums(qobuzId: number) {
+    async function loadQobuzAlbums(qobuzId: string) {
         await Promise.all([
             api.getAllQobuzArtistAlbums(qobuzId, setQobuzAlbums, ['LP']),
             api.getAllQobuzArtistAlbums(qobuzId, setQobuzEpsAndSingles, [
@@ -46,7 +45,7 @@ export default function artistPage(props: {
         ]);
     }
 
-    async function loadTidalAlbums(tidalId: number) {
+    async function loadTidalAlbums(tidalId: string) {
         await Promise.all([
             api.getAllTidalArtistAlbums(tidalId, setTidalAlbums, ['LP']),
             api.getAllTidalArtistAlbums(tidalId, setTidalEpsAndSingles, [
@@ -58,7 +57,7 @@ export default function artistPage(props: {
         ]);
     }
 
-    async function loadLibraryArtist(): Promise<Api.LibraryArtist | undefined> {
+    async function loadLibraryArtist(): Promise<Api.Artist | undefined> {
         if (props.artistId) {
             const artist = await api.getArtist(props.artistId);
             setLibraryArtist(artist);
@@ -69,8 +68,10 @@ export default function artistPage(props: {
             );
             setLibraryArtist(artist);
 
-            if (artist.qobuzId) {
-                loadQobuzAlbums(artist.qobuzId);
+            const qobuzId = artist.apiSources.find((x) => x.source === 'QOBUZ')
+                ?.id as string | undefined;
+            if (qobuzId) {
+                loadQobuzAlbums(qobuzId);
             }
 
             return artist;
@@ -80,8 +81,10 @@ export default function artistPage(props: {
             );
             setLibraryArtist(artist);
 
-            if (artist.tidalId) {
-                loadTidalAlbums(artist.tidalId);
+            const tidalId = artist.apiSources.find((x) => x.source === 'TIDAL')
+                ?.id as string | undefined;
+            if (tidalId) {
+                loadTidalAlbums(tidalId);
             }
 
             return artist;
@@ -91,16 +94,16 @@ export default function artistPage(props: {
     }
 
     async function loadTidalArtist(
-        tidalArtistId: number,
-    ): Promise<Api.TidalArtist | undefined> {
+        tidalArtistId: string,
+    ): Promise<Api.Artist | undefined> {
         const tidalArtist = await api.getTidalArtist(tidalArtistId);
         setTidalArtist(tidalArtist);
         return tidalArtist;
     }
 
     async function loadQobuzArtist(
-        qobuzArtistId: number,
-    ): Promise<Api.QobuzArtist | undefined> {
+        qobuzArtistId: string,
+    ): Promise<Api.Artist | undefined> {
         const qobuzArtist = await api.getQobuzArtist(qobuzArtistId);
         setQobuzArtist(qobuzArtist);
         return qobuzArtist;
@@ -114,11 +117,15 @@ export default function artistPage(props: {
             const artist = await loadLibraryArtist();
             loadedArtist = true;
 
-            if (artist?.tidalId) {
-                promises.push(loadTidalAlbums(artist.tidalId));
+            const tidalId = artist?.apiSources.find((x) => x.source === 'TIDAL')
+                ?.id as string | undefined;
+            if (tidalId) {
+                promises.push(loadTidalAlbums(tidalId));
             }
-            if (artist?.qobuzId) {
-                promises.push(loadQobuzAlbums(artist.qobuzId));
+            const qobuzId = artist?.apiSources.find((x) => x.source === 'QOBUZ')
+                ?.id as string | undefined;
+            if (qobuzId) {
+                promises.push(loadQobuzAlbums(qobuzId));
             }
         }
         if (props.tidalArtistId) {

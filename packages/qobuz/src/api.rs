@@ -5,7 +5,9 @@ use actix_web::{
     web::{self, Json},
     HttpRequest, Result, Scope,
 };
-use moosicbox_core::sqlite::models::{ApiAlbum, ApiSource, ApiSources, ToApi, TrackApiSource};
+use moosicbox_core::sqlite::models::{
+    ApiAlbum, ApiArtist, ApiSource, ApiSources, ToApi, TrackApiSource,
+};
 #[cfg(feature = "db")]
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_paging::Page;
@@ -17,10 +19,10 @@ use strum_macros::{AsRefStr, EnumString};
 use crate::{
     album, album_tracks, artist, artist_albums, favorite_albums, favorite_artists, favorite_tracks,
     format_title, search, track, track_file_url, user_login, QobuzAlbumError, QobuzAlbumOrder,
-    QobuzAlbumReleaseType, QobuzAlbumSort, QobuzAlbumTracksError, QobuzArtist,
-    QobuzArtistAlbumsError, QobuzArtistError, QobuzAudioQuality, QobuzFavoriteAlbumsError,
-    QobuzFavoriteArtistsError, QobuzFavoriteTracksError, QobuzRelease, QobuzSearchError,
-    QobuzTrack, QobuzTrackError, QobuzTrackFileUrlError, QobuzUserLoginError,
+    QobuzAlbumReleaseType, QobuzAlbumSort, QobuzAlbumTracksError, QobuzArtistAlbumsError,
+    QobuzArtistError, QobuzAudioQuality, QobuzFavoriteAlbumsError, QobuzFavoriteArtistsError,
+    QobuzFavoriteTracksError, QobuzRelease, QobuzSearchError, QobuzTrack, QobuzTrackError,
+    QobuzTrackFileUrlError, QobuzUserLoginError,
 };
 
 pub fn bind_services<
@@ -272,25 +274,6 @@ impl From<ApiQobuzTrack> for moosicbox_core::sqlite::models::ApiTrack {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[serde(tag = "type")]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub enum ApiArtist {
-    Qobuz(ApiQobuzArtist),
-}
-
-impl ToApi<ApiArtist> for QobuzArtist {
-    fn to_api(self) -> ApiArtist {
-        ApiArtist::Qobuz(ApiQobuzArtist {
-            id: self.id,
-            contains_cover: self.cover_url().is_some(),
-            title: self.name.clone(),
-            api_source: ApiSource::Qobuz,
-        })
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -354,7 +337,7 @@ pub async fn artist_endpoint(
     )
     .await?;
 
-    Ok(Json(artist.to_api()))
+    Ok(Json(artist.into()))
 }
 
 impl From<QobuzFavoriteArtistsError> for actix_web::Error {
@@ -409,7 +392,7 @@ pub async fn favorite_artists_endpoint(
                 .map(|x| x.to_str().unwrap().to_string()),
         )
         .await?
-        .to_api()
+        .map(Into::into)
         .into(),
     ))
 }

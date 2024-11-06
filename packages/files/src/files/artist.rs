@@ -305,7 +305,7 @@ async fn get_remote_artist_cover_request(
         ImageCoverSource::RemoteUrl(url) => {
             let file_path = get_artist_cover_path(
                 &size.to_string(),
-                artist.source.as_ref(),
+                artist.api_source.as_ref(),
                 &artist.id.to_string(),
                 &artist.title,
             );

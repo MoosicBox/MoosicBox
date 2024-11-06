@@ -8,12 +8,6 @@ import {
     throwExpression,
 } from './util';
 import { makePersisted } from '@solid-primitives/storage';
-export type Artist =
-    | Api.LibraryArtist
-    | Api.TidalArtist
-    | Api.QobuzArtist
-    | Api.YtArtist;
-export type ArtistType = Artist['type'];
 
 export type Track =
     | Api.LibraryTrack
@@ -148,14 +142,12 @@ export namespace Api {
         players: Player[];
     }
 
-    export interface LibraryArtist {
+    export interface Artist {
         artistId: number;
         title: string;
         containsCover: boolean;
-        blur: boolean;
-        tidalId?: number;
-        qobuzId?: number;
-        type: 'LIBRARY';
+        apiSource: ApiSource;
+        apiSources: ApiSourceMapping[];
     }
 
     export enum TrackSource {
@@ -178,6 +170,14 @@ export namespace Api {
         id: string | number;
     }
 
+    export type AlbumType =
+        | 'LP'
+        | 'LIVE'
+        | 'COMPILATIONS'
+        | 'EPS_AND_SINGLES'
+        | 'OTHER'
+        | 'DOWNLOAD';
+
     export interface Album {
         albumId: string | number;
         title: string;
@@ -187,6 +187,7 @@ export namespace Api {
         blur: boolean;
         dateReleased: string;
         dateAdded: string;
+        albumType: AlbumType;
         albumSource: TrackSource;
         apiSource: ApiSource;
         versions: AlbumVersionQuality[];
@@ -354,8 +355,8 @@ export namespace Api {
 
     export type AlbumsRequest = {
         artistId?: number | undefined;
-        tidalArtistId?: number | undefined;
-        qobuzArtistId?: number | undefined;
+        tidalArtistId?: string | undefined;
+        qobuzArtistId?: string | undefined;
         sources?: AlbumSource[] | undefined;
         sort?: AlbumSort | undefined;
         filters?: AlbumFilters | undefined;
@@ -415,33 +416,6 @@ export namespace Api {
         | PagingResponseWithTotal<T>
         | PagingResponseWithHasMore<T>;
 
-    export interface TidalArtist {
-        id: number;
-        title: string;
-        containsCover: boolean;
-        blur: boolean;
-        type: 'TIDAL';
-        apiSource: 'TIDAL';
-    }
-
-    export interface TidalAlbum {
-        id: number;
-        title: string;
-        artist: string;
-        artistId: number;
-        containsCover: boolean;
-        explicit: boolean;
-        copyright?: string | undefined;
-        dateReleased: string;
-        numberOfTracks: number;
-        audioQuality: 'LOSSLESS' | 'HIRES';
-        mediaMetadataTags: TidalMediaMetadataTag[];
-        blur: boolean;
-        type: 'TIDAL';
-        apiSource: 'TIDAL';
-    }
-
-    export type TidalAlbumType = 'LP' | 'EPS_AND_SINGLES' | 'COMPILATIONS';
     export type TidalMediaMetadataTag =
         | 'LOSSLESS'
         | 'HIRES_LOSSLESS'
@@ -467,31 +441,6 @@ export namespace Api {
         apiSource: 'TIDAL';
     }
 
-    export interface QobuzArtist {
-        id: number;
-        title: string;
-        containsCover: boolean;
-        blur: boolean;
-        type: 'QOBUZ';
-        apiSource: 'QOBUZ';
-    }
-
-    export interface QobuzAlbum {
-        id: string;
-        title: string;
-        artist: string;
-        artistId: number;
-        containsCover: boolean;
-        parentalWarning: boolean;
-        dateReleased: string;
-        numberOfTracks: number;
-        blur: boolean;
-        type: 'QOBUZ';
-        apiSource: 'QOBUZ';
-    }
-
-    export type QobuzAlbumType = 'LP' | 'EPS_AND_SINGLES' | 'COMPILATIONS';
-
     export interface QobuzTrack {
         id: number;
         number: number;
@@ -509,28 +458,6 @@ export namespace Api {
         mediaMetadataTags: ('LOSSLESS' | 'HIRES_LOSSLESS' | 'MQA')[];
         type: 'QOBUZ';
         apiSource: 'QOBUZ';
-    }
-
-    export interface YtArtist {
-        id: string;
-        title: string;
-        containsCover: boolean;
-        blur: boolean;
-        type: 'YT';
-        apiSource: 'YT';
-    }
-
-    export interface YtAlbum {
-        id: string;
-        title: string;
-        artist: string;
-        artistId: string;
-        containsCover: boolean;
-        dateReleased: string;
-        numberOfTracks: number;
-        blur: boolean;
-        type: 'YT';
-        apiSource: 'YT';
     }
 
     export interface YtTrack {
@@ -798,14 +725,14 @@ export interface ApiType {
     getArtist(
         artistId: number,
         signal?: AbortSignal | null,
-    ): Promise<Api.LibraryArtist>;
+    ): Promise<Api.Artist>;
     getArtistCover(
-        artist: Artist | Api.Album | Track | undefined,
+        artist: Api.Artist | Api.Album | Track | undefined,
         width: number,
         height: number,
     ): string;
     getArtistSourceCover(
-        artist: Artist | Api.Album | Track | undefined,
+        artist: Api.Artist | Api.Album | Track | undefined,
     ): string;
     getAlbum(id: number, signal?: AbortSignal | null): Promise<Api.Album>;
     getAlbums(
@@ -846,7 +773,7 @@ export interface ApiType {
     getArtists(
         request?: Api.ArtistsRequest | undefined,
         signal?: AbortSignal | null,
-    ): Promise<Api.LibraryArtist[]>;
+    ): Promise<Api.Artist[]>;
     fetchSignatureToken(
         signal?: AbortSignal | null,
     ): Promise<string | undefined>;
@@ -885,57 +812,57 @@ export interface ApiType {
         signal?: AbortSignal | null,
     ): Promise<Api.GlobalSearchResult[]>;
     getArtistFromTidalArtistId(
-        tidalArtistId: number,
+        tidalArtistId: string,
         signal?: AbortSignal | null,
-    ): Promise<Api.LibraryArtist>;
+    ): Promise<Api.Artist>;
     getArtistFromQobuzArtistId(
-        qobuzArtistId: number,
+        qobuzArtistId: string,
         signal?: AbortSignal | null,
-    ): Promise<Api.LibraryArtist>;
+    ): Promise<Api.Artist>;
     getArtistFromTidalAlbumId(
-        tidalAlbumId: number,
+        tidalAlbumId: string,
         signal?: AbortSignal | null,
-    ): Promise<Api.LibraryArtist>;
+    ): Promise<Api.Artist>;
     getTidalArtist(
-        tidalArtistId: number,
+        tidalArtistId: string,
         signal?: AbortSignal | null,
-    ): Promise<Api.TidalArtist>;
+    ): Promise<Api.Artist>;
     getQobuzArtist(
-        qobuzArtistId: number,
+        qobuzArtistId: string,
         signal?: AbortSignal | null,
-    ): Promise<Api.QobuzArtist>;
+    ): Promise<Api.Artist>;
     getAllTidalArtistAlbums(
-        tidalArtistId: number,
-        setter?: Setter<Api.TidalAlbum[] | undefined>,
-        types?: Api.TidalAlbumType[],
+        tidalArtistId: string,
+        setter?: Setter<Api.Album[] | undefined>,
+        types?: Api.AlbumType[],
         signal?: AbortSignal | null,
     ): Promise<{
-        lps: Api.TidalAlbum[];
-        epsAndSingles: Api.TidalAlbum[];
-        compilations: Api.TidalAlbum[];
+        lps: Api.Album[];
+        epsAndSingles: Api.Album[];
+        compilations: Api.Album[];
     }>;
     getAllQobuzArtistAlbums(
-        qobuzArtistId: number,
-        setter?: Setter<Api.QobuzAlbum[] | undefined>,
-        types?: Api.QobuzAlbumType[],
+        qobuzArtistId: string,
+        setter?: Setter<Api.Album[] | undefined>,
+        types?: Api.AlbumType[],
         signal?: AbortSignal | null,
     ): Promise<{
-        lps: Api.QobuzAlbum[];
-        epsAndSingles: Api.QobuzAlbum[];
-        compilations: Api.QobuzAlbum[];
+        lps: Api.Album[];
+        epsAndSingles: Api.Album[];
+        compilations: Api.Album[];
     }>;
     getTidalArtistAlbums(
-        tidalArtistId: number,
-        albumType?: Api.TidalAlbumType,
+        tidalArtistId: string,
+        albumType?: Api.AlbumType,
         signal?: AbortSignal | null,
-    ): Promise<Api.PagingResponse<Api.TidalAlbum>>;
+    ): Promise<Api.PagingResponse<Api.Album>>;
     getQobuzArtistAlbums(
-        qobuzArtistId: number,
-        albumType?: Api.QobuzAlbumType,
+        qobuzArtistId: string,
+        albumType?: Api.AlbumType,
         signal?: AbortSignal | null,
-    ): Promise<Api.QobuzPagingResponse<Api.QobuzAlbum>>;
+    ): Promise<Api.QobuzPagingResponse<Api.Album>>;
     getAlbumFromTidalAlbumId(
-        tidalAlbumId: number,
+        tidalAlbumId: string,
         signal?: AbortSignal | null,
     ): Promise<Api.Album>;
     getAlbumFromQobuzAlbumId(
@@ -943,23 +870,23 @@ export interface ApiType {
         signal?: AbortSignal | null,
     ): Promise<Api.Album>;
     getLibraryAlbumsFromTidalArtistId(
-        tidalArtistId: number,
+        tidalArtistId: string,
         signal?: AbortSignal | null,
     ): Promise<Api.Album[]>;
     getLibraryAlbumsFromQobuzArtistId(
-        qobuzArtistId: number,
+        qobuzArtistId: string,
         signal?: AbortSignal | null,
     ): Promise<Api.Album[]>;
     getTidalAlbum(
-        tidalAlbumId: number,
+        tidalAlbumId: string,
         signal?: AbortSignal | null,
-    ): Promise<Api.TidalAlbum>;
+    ): Promise<Api.Album>;
     getQobuzAlbum(
         qobuzAlbumId: string,
         signal?: AbortSignal | null,
-    ): Promise<Api.QobuzAlbum>;
+    ): Promise<Api.Album>;
     getTidalAlbumTracks(
-        tidalAlbumId: number,
+        tidalAlbumId: string,
         signal?: AbortSignal | null,
     ): Promise<Api.PagingResponse<Api.TidalTrack>>;
     getQobuzAlbumTracks(
@@ -971,7 +898,7 @@ export interface ApiType {
         signal?: AbortSignal | null,
     ): Promise<Api.PagingResponse<Api.YtTrack>>;
     getTidalTrack(
-        tidalTrackId: number,
+        tidalTrackId: string,
         signal?: AbortSignal | null,
     ): Promise<Api.TidalTrack>;
     getTrackUrlForSource(
@@ -1064,7 +991,7 @@ export function getConnection(): Connection {
 async function getArtist(
     artistId: number,
     signal?: AbortSignal | null,
-): Promise<Api.LibraryArtist> {
+): Promise<Api.Artist> {
     const con = getConnection();
 
     const query = new QueryParams({
@@ -1077,246 +1004,104 @@ async function getArtist(
 }
 
 function getAlbumArtwork(
-    album:
-        | Api.Album
-        | Api.TidalAlbum
-        | Api.QobuzAlbum
-        | Api.YtAlbum
-        | Track
-        | undefined,
+    album: Api.Album | Track | undefined,
     width: number,
     height: number,
 ): string {
     if (!album) return '/img/album.svg';
 
-    if ('type' in album) {
-        const albumType = album.type;
-        const query = new QueryParams({
-            source: albumType,
-            artistId: album.artistId?.toString(),
-            moosicboxProfile: $connection()?.profile,
-        });
+    const apiSource = album.apiSource;
+    const query = new QueryParams({
+        source: apiSource,
+        artistId: album.artistId?.toString(),
+        moosicboxProfile: $connection()?.profile,
+    });
 
-        switch (albumType) {
-            case 'LIBRARY':
-                if (album.containsCover) {
-                    return Api.getPath(
-                        `files/albums/${album.albumId}/${width}x${height}?${query}`,
-                    );
-                }
-                break;
+    switch (apiSource) {
+        case 'LIBRARY':
+            if (album.containsCover) {
+                return Api.getPath(
+                    `files/albums/${album.albumId}/${width}x${height}?${query}`,
+                );
+            }
+            break;
 
-            case 'TIDAL':
-                if (album.containsCover) {
-                    if ('albumId' in album) {
-                        return Api.getPath(
-                            `files/albums/${album.albumId}/${width}x${height}?${query}`,
-                        );
-                    } else if ('id' in album) {
-                        return Api.getPath(
-                            `files/albums/${album.id}/${width}x${height}?${query}`,
-                        );
-                    }
-                }
-                break;
+        case 'TIDAL':
+            if (album.containsCover) {
+                return Api.getPath(
+                    `files/albums/${album.albumId}/${width}x${height}?${query}`,
+                );
+            }
+            break;
 
-            case 'QOBUZ':
-                if (album.containsCover) {
-                    if ('albumId' in album) {
-                        return Api.getPath(
-                            `files/albums/${album.albumId}/${width}x${height}?${query}`,
-                        );
-                    } else if ('id' in album) {
-                        return Api.getPath(
-                            `files/albums/${album.id}/${width}x${height}?${query}`,
-                        );
-                    }
-                }
-                break;
+        case 'QOBUZ':
+            if (album.containsCover) {
+                return Api.getPath(
+                    `files/albums/${album.albumId}/${width}x${height}?${query}`,
+                );
+            }
+            break;
 
-            case 'YT':
-                if (album.containsCover) {
-                    if ('albumId' in album) {
-                        return Api.getPath(
-                            `files/albums/${album.albumId}/${width}x${height}?${query}`,
-                        );
-                    } else if ('id' in album) {
-                        return Api.getPath(
-                            `files/albums/${album.id}/${width}x${height}?${query}`,
-                        );
-                    }
-                }
-                break;
+        case 'YT':
+            if (album.containsCover) {
+                return Api.getPath(
+                    `files/albums/${album.albumId}/${width}x${height}?${query}`,
+                );
+            }
+            break;
 
-            default:
-                albumType satisfies never;
-        }
-    } else {
-        const apiSource = album.apiSource;
-        const query = new QueryParams({
-            source: apiSource,
-            artistId: album.artistId?.toString(),
-            moosicboxProfile: $connection()?.profile,
-        });
-
-        switch (apiSource) {
-            case 'LIBRARY':
-                if (album.containsCover) {
-                    return Api.getPath(
-                        `files/albums/${album.albumId}/${width}x${height}?${query}`,
-                    );
-                }
-                break;
-
-            case 'TIDAL':
-                if (album.containsCover) {
-                    return Api.getPath(
-                        `files/albums/${album.albumId}/${width}x${height}?${query}`,
-                    );
-                }
-                break;
-
-            case 'QOBUZ':
-                if (album.containsCover) {
-                    return Api.getPath(
-                        `files/albums/${album.albumId}/${width}x${height}?${query}`,
-                    );
-                }
-                break;
-
-            case 'YT':
-                if (album.containsCover) {
-                    return Api.getPath(
-                        `files/albums/${album.albumId}/${width}x${height}?${query}`,
-                    );
-                }
-                break;
-
-            default:
-                apiSource satisfies never;
-        }
+        default:
+            apiSource satisfies never;
     }
 
     return '/img/album.svg';
 }
 
-function getAlbumSourceArtwork(
-    album:
-        | Api.Album
-        | Api.TidalAlbum
-        | Api.QobuzAlbum
-        | Api.YtAlbum
-        | Track
-        | undefined,
-): string {
+function getAlbumSourceArtwork(album: Api.Album | Track | undefined): string {
     if (!album) return '/img/album.svg';
 
-    if ('type' in album) {
-        const albumType = album.type;
-        const query = new QueryParams({
-            source: albumType,
-            artistId: album.artistId.toString(),
-            moosicboxProfile: $connection()?.profile,
-        });
+    const apiSource = album.apiSource;
+    const query = new QueryParams({
+        source: apiSource,
+        artistId: album.artistId.toString(),
+        moosicboxProfile: $connection()?.profile,
+    });
 
-        switch (albumType) {
-            case 'LIBRARY':
-                if (album.containsCover) {
-                    return Api.getPath(
-                        `files/albums/${album.albumId}/source?${query}`,
-                    );
-                }
-                break;
+    switch (apiSource) {
+        case 'LIBRARY':
+            if (album.containsCover) {
+                return Api.getPath(
+                    `files/albums/${album.albumId}/source?${query}`,
+                );
+            }
+            break;
 
-            case 'TIDAL':
-                if (album.containsCover) {
-                    if ('albumId' in album) {
-                        return Api.getPath(
-                            `files/albums/${album.albumId}/source?${query}`,
-                        );
-                    } else if ('id' in album) {
-                        return Api.getPath(
-                            `files/albums/${album.id}/source?${query}`,
-                        );
-                    }
-                }
-                break;
+        case 'TIDAL':
+            if (album.containsCover) {
+                return Api.getPath(
+                    `files/albums/${album.albumId}/source?${query}`,
+                );
+            }
+            break;
 
-            case 'QOBUZ':
-                if (album.containsCover) {
-                    if ('albumId' in album) {
-                        return Api.getPath(
-                            `files/albums/${album.albumId}/source?${query}`,
-                        );
-                    } else if ('id' in album) {
-                        return Api.getPath(
-                            `files/albums/${album.id}/source?${query}`,
-                        );
-                    }
-                }
-                break;
+        case 'QOBUZ':
+            if (album.containsCover) {
+                return Api.getPath(
+                    `files/albums/${album.albumId}/source?${query}`,
+                );
+            }
+            break;
 
-            case 'YT':
-                if (album.containsCover) {
-                    if ('albumId' in album) {
-                        return Api.getPath(
-                            `files/albums/${album.albumId}/source?${query}`,
-                        );
-                    } else if ('id' in album) {
-                        return Api.getPath(
-                            `files/albums/${album.id}/source?${query}`,
-                        );
-                    }
-                }
-                break;
+        case 'YT':
+            if (album.containsCover) {
+                return Api.getPath(
+                    `files/albums/${album.albumId}/source?${query}`,
+                );
+            }
+            break;
 
-            default:
-                albumType satisfies never;
-        }
-    } else {
-        const apiSource = album.apiSource;
-        const query = new QueryParams({
-            source: apiSource,
-            artistId: album.artistId.toString(),
-            moosicboxProfile: $connection()?.profile,
-        });
-
-        switch (apiSource) {
-            case 'LIBRARY':
-                if (album.containsCover) {
-                    return Api.getPath(
-                        `files/albums/${album.albumId}/source?${query}`,
-                    );
-                }
-                break;
-
-            case 'TIDAL':
-                if (album.containsCover) {
-                    return Api.getPath(
-                        `files/albums/${album.albumId}/source?${query}`,
-                    );
-                }
-                break;
-
-            case 'QOBUZ':
-                if (album.containsCover) {
-                    return Api.getPath(
-                        `files/albums/${album.albumId}/source?${query}`,
-                    );
-                }
-                break;
-
-            case 'YT':
-                if (album.containsCover) {
-                    return Api.getPath(
-                        `files/albums/${album.albumId}/source?${query}`,
-                    );
-                }
-                break;
-
-            default:
-                apiSource satisfies never;
-        }
+        default:
+            apiSource satisfies never;
     }
 
     return '/img/album.svg';
@@ -1412,230 +1197,104 @@ async function getAllAlbums(
 }
 
 function getArtistCover(
-    artist: Artist | Api.Album | Track | undefined,
+    artist: Api.Artist | Api.Album | Track | undefined,
     width: number,
     height: number,
 ): string {
     if (!artist) return '/img/album.svg';
 
-    if ('type' in artist) {
-        const artistType = artist.type;
-        const query = new QueryParams({
-            source: artistType,
-            moosicboxProfile: $connection()?.profile,
-        });
+    const apiSource = artist.apiSource;
+    const query = new QueryParams({
+        source: apiSource,
+        moosicboxProfile: $connection()?.profile,
+    });
 
-        switch (artistType) {
-            case 'LIBRARY':
-                if (artist.containsCover) {
-                    return Api.getPath(
-                        `files/artists/${artist.artistId}/${width}x${height}?${query}`,
-                    );
-                }
-                break;
+    switch (apiSource) {
+        case 'LIBRARY':
+            if (artist.containsCover) {
+                return Api.getPath(
+                    `files/artists/${artist.artistId}/${width}x${height}?${query}`,
+                );
+            }
+            break;
 
-            case 'TIDAL':
-                if (artist.containsCover) {
-                    if ('artistId' in artist) {
-                        return Api.getPath(
-                            `files/artists/${artist.artistId}/${width}x${height}?${query}`,
-                        );
-                    } else if ('id' in artist) {
-                        return Api.getPath(
-                            `files/artists/${artist.id}/${width}x${height}?${query}`,
-                        );
-                    }
-                }
-                break;
+        case 'TIDAL':
+            if (artist.containsCover) {
+                return Api.getPath(
+                    `files/artists/${artist.artistId}/${width}x${height}?${query}`,
+                );
+            }
+            break;
 
-            case 'QOBUZ':
-                if (artist.containsCover) {
-                    if ('artistId' in artist) {
-                        return Api.getPath(
-                            `files/artists/${artist.artistId}/${width}x${height}?${query}`,
-                        );
-                    } else if ('id' in artist) {
-                        return Api.getPath(
-                            `files/artists/${artist.id}/${width}x${height}?${query}`,
-                        );
-                    }
-                }
-                break;
+        case 'QOBUZ':
+            if (artist.containsCover) {
+                return Api.getPath(
+                    `files/artists/${artist.artistId}/${width}x${height}?${query}`,
+                );
+            }
+            break;
 
-            case 'YT':
-                if (artist.containsCover) {
-                    if ('artistId' in artist) {
-                        return Api.getPath(
-                            `files/artists/${artist.artistId}/${width}x${height}?${query}`,
-                        );
-                    } else if ('id' in artist) {
-                        return Api.getPath(
-                            `files/artists/${artist.id}/${width}x${height}?${query}`,
-                        );
-                    }
-                }
-                break;
+        case 'YT':
+            if (artist.containsCover) {
+                return Api.getPath(
+                    `files/artists/${artist.artistId}/${width}x${height}?${query}`,
+                );
+            }
+            break;
 
-            default:
-                artistType satisfies never;
-        }
-    } else {
-        const apiSource = artist.apiSource;
-        const query = new QueryParams({
-            source: apiSource,
-            moosicboxProfile: $connection()?.profile,
-        });
-
-        switch (apiSource) {
-            case 'LIBRARY':
-                if (artist.containsCover) {
-                    return Api.getPath(
-                        `files/artists/${artist.artistId}/${width}x${height}?${query}`,
-                    );
-                }
-                break;
-
-            case 'TIDAL':
-                if (artist.containsCover) {
-                    return Api.getPath(
-                        `files/artists/${artist.artistId}/${width}x${height}?${query}`,
-                    );
-                }
-                break;
-
-            case 'QOBUZ':
-                if (artist.containsCover) {
-                    return Api.getPath(
-                        `files/artists/${artist.artistId}/${width}x${height}?${query}`,
-                    );
-                }
-                break;
-
-            case 'YT':
-                if (artist.containsCover) {
-                    return Api.getPath(
-                        `files/artists/${artist.artistId}/${width}x${height}?${query}`,
-                    );
-                }
-                break;
-
-            default:
-                apiSource satisfies never;
-        }
+        default:
+            apiSource satisfies never;
     }
 
     return '/img/album.svg';
 }
 
 function getArtistSourceCover(
-    artist: Artist | Api.Album | Track | undefined,
+    artist: Api.Artist | Api.Album | Track | undefined,
 ): string {
     if (!artist) return '/img/album.svg';
 
-    if ('type' in artist) {
-        const artistType = artist.type;
-        const query = new QueryParams({
-            source: artistType,
-            moosicboxProfile: $connection()?.profile,
-        });
+    const apiSource = artist.apiSource;
+    const query = new QueryParams({
+        source: apiSource,
+        moosicboxProfile: $connection()?.profile,
+    });
 
-        switch (artistType) {
-            case 'LIBRARY':
-                if (artist.containsCover) {
-                    return Api.getPath(
-                        `files/artists/${artist.artistId}/source?${query}`,
-                    );
-                }
-                break;
+    switch (apiSource) {
+        case 'LIBRARY':
+            if (artist.containsCover) {
+                return Api.getPath(
+                    `files/artists/${artist.artistId}/source?${query}`,
+                );
+            }
+            break;
 
-            case 'TIDAL':
-                if (artist.containsCover) {
-                    if ('artistId' in artist) {
-                        return Api.getPath(
-                            `files/artists/${artist.artistId}/source?${query}`,
-                        );
-                    } else if ('id' in artist) {
-                        return Api.getPath(
-                            `files/artists/${artist.id}/source?${query}`,
-                        );
-                    }
-                }
-                break;
+        case 'TIDAL':
+            if (artist.containsCover) {
+                return Api.getPath(
+                    `files/artists/${artist.artistId}/source?${query}`,
+                );
+            }
+            break;
 
-            case 'QOBUZ':
-                if (artist.containsCover) {
-                    if ('artistId' in artist) {
-                        return Api.getPath(
-                            `files/artists/${artist.artistId}/source?${query}`,
-                        );
-                    } else if ('id' in artist) {
-                        return Api.getPath(
-                            `files/artists/${artist.id}/source?${query}`,
-                        );
-                    }
-                }
-                break;
+        case 'QOBUZ':
+            if (artist.containsCover) {
+                return Api.getPath(
+                    `files/artists/${artist.artistId}/source?${query}`,
+                );
+            }
+            break;
 
-            case 'YT':
-                if (artist.containsCover) {
-                    if ('artistId' in artist) {
-                        return Api.getPath(
-                            `files/artists/${artist.artistId}/source?${query}`,
-                        );
-                    } else if ('id' in artist) {
-                        return Api.getPath(
-                            `files/artists/${artist.id}/source?${query}`,
-                        );
-                    }
-                }
-                break;
+        case 'YT':
+            if (artist.containsCover) {
+                return Api.getPath(
+                    `files/artists/${artist.artistId}/source?${query}`,
+                );
+            }
+            break;
 
-            default:
-                artistType satisfies never;
-        }
-    } else {
-        const apiSource = artist.apiSource;
-        const query = new QueryParams({
-            source: apiSource,
-            moosicboxProfile: $connection()?.profile,
-        });
-
-        switch (apiSource) {
-            case 'LIBRARY':
-                if (artist.containsCover) {
-                    return Api.getPath(
-                        `files/artists/${artist.artistId}/source?${query}`,
-                    );
-                }
-                break;
-
-            case 'TIDAL':
-                if (artist.containsCover) {
-                    return Api.getPath(
-                        `files/artists/${artist.artistId}/source?${query}`,
-                    );
-                }
-                break;
-
-            case 'QOBUZ':
-                if (artist.containsCover) {
-                    return Api.getPath(
-                        `files/artists/${artist.artistId}/source?${query}`,
-                    );
-                }
-                break;
-
-            case 'YT':
-                if (artist.containsCover) {
-                    return Api.getPath(
-                        `files/artists/${artist.artistId}/source?${query}`,
-                    );
-                }
-                break;
-
-            default:
-                apiSource satisfies never;
-        }
+        default:
+            apiSource satisfies never;
     }
 
     return '/img/album.svg';
@@ -1686,7 +1345,7 @@ async function getTracks(
 async function getArtists(
     artistsRequest: Api.ArtistsRequest | undefined = undefined,
     signal?: AbortSignal | null,
-): Promise<Api.LibraryArtist[]> {
+): Promise<Api.Artist[]> {
     const con = getConnection();
     const query = new QueryParams();
     if (artistsRequest?.sources)
@@ -1907,12 +1566,13 @@ async function searchAll(
 }
 
 async function getArtistFromTidalArtistId(
-    tidalArtistId: number,
+    tidalArtistId: string,
     signal?: AbortSignal | null,
-): Promise<Api.LibraryArtist> {
+): Promise<Api.Artist> {
     const con = getConnection();
     const query = new QueryParams({
-        tidalArtistId: `${tidalArtistId}`,
+        artistId: `${tidalArtistId}`,
+        source: 'TIDAL',
     });
 
     return await requestJson(`${con.apiUrl}/menu/artist?${query}`, {
@@ -1921,12 +1581,13 @@ async function getArtistFromTidalArtistId(
 }
 
 async function getArtistFromQobuzArtistId(
-    qobuzArtistId: number,
+    qobuzArtistId: string,
     signal?: AbortSignal | null,
-): Promise<Api.LibraryArtist> {
+): Promise<Api.Artist> {
     const con = getConnection();
     const query = new QueryParams({
-        qobuzArtistId: `${qobuzArtistId}`,
+        artistId: `${qobuzArtistId}`,
+        source: 'QOBUZ',
     });
 
     return await requestJson(`${con.apiUrl}/menu/artist?${query}`, {
@@ -1935,12 +1596,13 @@ async function getArtistFromQobuzArtistId(
 }
 
 async function getArtistFromTidalAlbumId(
-    tidalAlbumId: number,
+    tidalAlbumId: string,
     signal?: AbortSignal | null,
-): Promise<Api.LibraryArtist> {
+): Promise<Api.Artist> {
     const con = getConnection();
     const query = new QueryParams({
-        tidalAlbumId: `${tidalAlbumId}`,
+        albumId: `${tidalAlbumId}`,
+        source: 'TIDAL',
     });
 
     return await requestJson(`${con.apiUrl}/menu/artist?${query}`, {
@@ -1949,29 +1611,31 @@ async function getArtistFromTidalAlbumId(
 }
 
 async function getTidalArtist(
-    tidalArtistId: number,
+    tidalArtistId: string,
     signal?: AbortSignal | null,
-): Promise<Api.TidalArtist> {
+): Promise<Api.Artist> {
     const con = getConnection();
     const query = new QueryParams({
         artistId: `${tidalArtistId}`,
+        source: 'TIDAL',
     });
 
-    return await requestJson(`${con.apiUrl}/tidal/artists?${query}`, {
+    return await requestJson(`${con.apiUrl}/menu/artist?${query}`, {
         signal: signal ?? null,
     });
 }
 
 async function getQobuzArtist(
-    qobuzArtistId: number,
+    qobuzArtistId: string,
     signal?: AbortSignal | null,
-): Promise<Api.QobuzArtist> {
+): Promise<Api.Artist> {
     const con = getConnection();
     const query = new QueryParams({
         artistId: `${qobuzArtistId}`,
+        source: 'QOBUZ',
     });
 
-    return await requestJson(`${con.apiUrl}/qobuz/artists?${query}`, {
+    return await requestJson(`${con.apiUrl}/menu/artist?${query}`, {
         signal: signal ?? null,
     });
 }
@@ -1988,14 +1652,14 @@ export function sortAlbumsByDateDesc<T extends { dateReleased: string }>(
 }
 
 async function getAllTidalArtistAlbums(
-    tidalArtistId: number,
-    setter?: Setter<Api.TidalAlbum[] | undefined>,
-    types?: Api.TidalAlbumType[],
+    tidalArtistId: string,
+    setter?: Setter<Api.Album[] | undefined>,
+    types?: Api.AlbumType[],
     signal?: AbortSignal | null,
 ): Promise<{
-    lps: Api.TidalAlbum[];
-    epsAndSingles: Api.TidalAlbum[];
-    compilations: Api.TidalAlbum[];
+    lps: Api.Album[];
+    epsAndSingles: Api.Album[];
+    compilations: Api.Album[];
 }> {
     const albums: Awaited<ReturnType<typeof getAllTidalArtistAlbums>> = {
         lps: [],
@@ -2084,14 +1748,14 @@ async function getAllTidalArtistAlbums(
 }
 
 async function getAllQobuzArtistAlbums(
-    qobuzArtistId: number,
-    setter?: Setter<Api.QobuzAlbum[] | undefined>,
-    types?: Api.QobuzAlbumType[],
+    qobuzArtistId: string,
+    setter?: Setter<Api.Album[] | undefined>,
+    types?: Api.AlbumType[],
     signal?: AbortSignal | null,
 ): Promise<{
-    lps: Api.QobuzAlbum[];
-    epsAndSingles: Api.QobuzAlbum[];
-    compilations: Api.QobuzAlbum[];
+    lps: Api.Album[];
+    epsAndSingles: Api.Album[];
+    compilations: Api.Album[];
 }> {
     const albums: Awaited<ReturnType<typeof getAllQobuzArtistAlbums>> = {
         lps: [],
@@ -2180,10 +1844,10 @@ async function getAllQobuzArtistAlbums(
 }
 
 async function getTidalArtistAlbums(
-    tidalArtistId: number,
-    albumType?: Api.TidalAlbumType,
+    tidalArtistId: string,
+    albumType?: Api.AlbumType,
     signal?: AbortSignal | null,
-): Promise<Api.PagingResponse<Api.TidalAlbum>> {
+): Promise<Api.PagingResponse<Api.Album>> {
     const con = getConnection();
     const query = new QueryParams({
         artistId: `${tidalArtistId}`,
@@ -2199,10 +1863,10 @@ async function getTidalArtistAlbums(
 }
 
 async function getQobuzArtistAlbums(
-    qobuzArtistId: number,
-    albumType?: Api.QobuzAlbumType,
+    qobuzArtistId: string,
+    albumType?: Api.AlbumType,
     signal?: AbortSignal | null,
-): Promise<Api.QobuzPagingResponse<Api.QobuzAlbum>> {
+): Promise<Api.QobuzPagingResponse<Api.Album>> {
     const con = getConnection();
     const query = new QueryParams({
         artistId: `${qobuzArtistId}`,
@@ -2218,7 +1882,7 @@ async function getQobuzArtistAlbums(
 }
 
 async function getAlbumFromTidalAlbumId(
-    tidalAlbumId: number,
+    tidalAlbumId: string,
     signal?: AbortSignal | null,
 ): Promise<Api.Album> {
     const con = getConnection();
@@ -2246,7 +1910,7 @@ async function getAlbumFromQobuzAlbumId(
 }
 
 async function getLibraryAlbumsFromTidalArtistId(
-    tidalArtistId: number,
+    tidalArtistId: string,
     signal?: AbortSignal | null,
 ): Promise<Api.Album[]> {
     const con = getConnection();
@@ -2260,7 +1924,7 @@ async function getLibraryAlbumsFromTidalArtistId(
 }
 
 async function getLibraryAlbumsFromQobuzArtistId(
-    qobuzArtistId: number,
+    qobuzArtistId: string,
     signal?: AbortSignal | null,
 ): Promise<Api.Album[]> {
     const con = getConnection();
@@ -2274,9 +1938,9 @@ async function getLibraryAlbumsFromQobuzArtistId(
 }
 
 async function getTidalAlbum(
-    tidalAlbumId: number,
+    tidalAlbumId: string,
     signal?: AbortSignal | null,
-): Promise<Api.TidalAlbum> {
+): Promise<Api.Album> {
     const con = getConnection();
     const query = new QueryParams({
         albumId: `${tidalAlbumId}`,
@@ -2290,7 +1954,7 @@ async function getTidalAlbum(
 async function getQobuzAlbum(
     qobuzAlbumId: string,
     signal?: AbortSignal | null,
-): Promise<Api.QobuzAlbum> {
+): Promise<Api.Album> {
     const con = getConnection();
     const query = new QueryParams({
         albumId: `${qobuzAlbumId}`,
@@ -2302,7 +1966,7 @@ async function getQobuzAlbum(
 }
 
 async function getTidalAlbumTracks(
-    tidalAlbumId: number,
+    tidalAlbumId: string,
     signal?: AbortSignal | null,
 ): Promise<Api.PagingResponse<Api.TidalTrack>> {
     const con = getConnection();
@@ -2344,7 +2008,7 @@ async function getYtAlbumTracks(
 }
 
 async function getTidalTrack(
-    tidalTrackId: number,
+    tidalTrackId: string,
     signal?: AbortSignal | null,
 ): Promise<Api.TidalTrack> {
     const con = getConnection();
@@ -2382,7 +2046,7 @@ async function getTrackUrlForSource(
 
 async function addAlbumToLibrary(
     albumId: {
-        tidalAlbumId?: number;
+        tidalAlbumId?: string;
         qobuzAlbumId?: string;
     },
     signal?: AbortSignal | null,
@@ -2405,7 +2069,7 @@ async function addAlbumToLibrary(
 
 async function removeAlbumFromLibrary(
     albumId: {
-        tidalAlbumId?: number;
+        tidalAlbumId?: string;
         qobuzAlbumId?: string;
     },
     signal?: AbortSignal | null,
@@ -2428,7 +2092,7 @@ async function removeAlbumFromLibrary(
 
 async function refavoriteAlbum(
     albumId: {
-        tidalAlbumId?: number;
+        tidalAlbumId?: string;
         qobuzAlbumId?: string;
     },
     signal?: AbortSignal | null,

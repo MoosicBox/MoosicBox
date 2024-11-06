@@ -5,7 +5,9 @@ use actix_web::{
     web::{self, Json},
     HttpRequest, Result, Scope,
 };
-use moosicbox_core::sqlite::models::{ApiAlbum, ApiSource, ApiSources, ToApi, TrackApiSource};
+use moosicbox_core::sqlite::models::{
+    ApiAlbum, ApiArtist, ApiSource, ApiSources, ToApi, TrackApiSource,
+};
 #[cfg(feature = "db")]
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_paging::Page;
@@ -21,7 +23,7 @@ use crate::{
     remove_favorite_track, search, track, track_file_url, track_playback_info,
     AuthenticatedRequestError, SearchType, TidalAddFavoriteAlbumError, TidalAddFavoriteArtistError,
     TidalAddFavoriteTrackError, TidalAlbumError, TidalAlbumOrder, TidalAlbumOrderDirection,
-    TidalAlbumTracksError, TidalAlbumType, TidalArtist, TidalArtistAlbumsError, TidalArtistError,
+    TidalAlbumTracksError, TidalAlbumType, TidalArtistAlbumsError, TidalArtistError,
     TidalArtistOrder, TidalArtistOrderDirection, TidalAudioQuality, TidalDeviceAuthorizationError,
     TidalDeviceAuthorizationTokenError, TidalDeviceType, TidalFavoriteAlbumsError,
     TidalFavoriteArtistsError, TidalFavoriteTracksError, TidalRemoveFavoriteAlbumError,
@@ -195,25 +197,6 @@ impl From<ApiTidalTrack> for moosicbox_core::sqlite::models::ApiTrack {
             api_source: ApiSource::Tidal,
             sources: ApiSources::default().with_source(ApiSource::Tidal, value.id.into()),
         }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[serde(tag = "type")]
-pub enum ApiArtist {
-    Tidal(ApiTidalArtist),
-}
-
-impl ToApi<ApiArtist> for TidalArtist {
-    fn to_api(self) -> ApiArtist {
-        ApiArtist::Tidal(ApiTidalArtist {
-            id: self.id,
-            contains_cover: self.contains_cover,
-            popularity: self.popularity,
-            title: self.name.clone(),
-            api_source: ApiSource::Tidal,
-        })
     }
 }
 
@@ -503,7 +486,7 @@ pub async fn favorite_artists_endpoint(
             query.user_id,
         )
         .await?
-        .to_api()
+        .map(Into::into)
         .into(),
     ))
 }
@@ -1322,7 +1305,7 @@ pub async fn artist_endpoint(
     )
     .await?;
 
-    Ok(Json(artist.to_api()))
+    Ok(Json(artist.into()))
 }
 
 impl From<TidalTrackError> for actix_web::Error {

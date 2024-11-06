@@ -200,14 +200,7 @@ export const setCurrentTrackLength = (
 };
 
 export const [currentAlbum, setCurrentAlbum] = makePersisted(
-    createSignal<
-        | Api.Album
-        | Api.TidalAlbum
-        | Api.QobuzAlbum
-        | Api.YtAlbum
-        | Track
-        | undefined
-    >(undefined, {
+    createSignal<Api.Album | Track | undefined>(undefined, {
         equals: false,
     }),
     {
@@ -462,21 +455,17 @@ const playAlbumListener = createListener<() => void>();
 export const onPlayAlbum = playAlbumListener.on;
 export const offPlayAlbum = playAlbumListener.off;
 
-export async function playAlbum(
-    album: Api.Album | Api.TidalAlbum | Api.QobuzAlbum | Api.YtAlbum | Track,
-) {
+export async function playAlbum(album: Api.Album | Track) {
     console.debug('playAlbum', album);
     setCurrentAlbum(album);
 
-    const albumType = 'type' in album ? album.type : 'TRACK';
+    const albumType = 'apiSource' in album ? album.apiSource : 'TRACK';
 
     switch (albumType) {
         case 'LIBRARY': {
             let id: string | number;
             if ('albumId' in album) {
                 id = album.albumId;
-            } else if ('id' in album) {
-                id = album.id;
             } else {
                 throw new Error(`Invalid album: ${JSON.stringify(album)}`);
             }
@@ -493,22 +482,22 @@ export async function playAlbum(
             break;
         }
         case 'TIDAL': {
-            album = album as Api.TidalAlbum;
-            const page = await api.getTidalAlbumTracks(album.id);
+            album = album as Api.Album;
+            const page = await api.getTidalAlbumTracks(album.albumId as string);
             const tracks = page.items;
             await playPlaylist(tracks);
             break;
         }
         case 'QOBUZ': {
-            album = album as Api.QobuzAlbum;
-            const page = await api.getQobuzAlbumTracks(album.id);
+            album = album as Api.Album;
+            const page = await api.getQobuzAlbumTracks(album.albumId as string);
             const tracks = page.items;
             await playPlaylist(tracks);
             break;
         }
         case 'YT': {
-            album = album as Api.YtAlbum;
-            const page = await api.getYtAlbumTracks(album.id);
+            album = album as Api.Album;
+            const page = await api.getYtAlbumTracks(album.albumId as string);
             const tracks = page.items;
             await playPlaylist(tracks);
             break;
@@ -541,20 +530,16 @@ const addAlbumToQueueListener = createListener<() => void>();
 export const onAddAlbumToQueue = addAlbumToQueueListener.on;
 export const offAddAlbumToQueue = addAlbumToQueueListener.off;
 
-export async function addAlbumToQueue(
-    album: Api.Album | Api.TidalAlbum | Api.QobuzAlbum | Api.YtAlbum | Track,
-) {
+export async function addAlbumToQueue(album: Api.Album | Track) {
     console.debug('addAlbumToQueue', album);
 
-    const albumType = 'type' in album ? album.type : 'TRACK';
+    const albumType = 'apiSource' in album ? album.apiSource : 'TRACK';
 
     switch (albumType) {
         case 'LIBRARY': {
             let id: string | number;
             if ('albumId' in album) {
                 id = album.albumId;
-            } else if ('id' in album) {
-                id = album.id;
             } else {
                 throw new Error(`Invalid album: ${JSON.stringify(album)}`);
             }
@@ -569,20 +554,20 @@ export async function addAlbumToQueue(
             return addTracksToQueue(tracks);
         }
         case 'TIDAL': {
-            album = album as Api.TidalAlbum;
-            const page = await api.getTidalAlbumTracks(album.id);
+            album = album as Api.Album;
+            const page = await api.getTidalAlbumTracks(album.albumId as string);
             const tracks = page.items;
             return addTracksToQueue(tracks);
         }
         case 'QOBUZ': {
-            album = album as Api.QobuzAlbum;
-            const page = await api.getQobuzAlbumTracks(album.id);
+            album = album as Api.Album;
+            const page = await api.getQobuzAlbumTracks(album.albumId as string);
             const tracks = page.items;
             return addTracksToQueue(tracks);
         }
         case 'YT': {
-            album = album as Api.YtAlbum;
-            const page = await api.getYtAlbumTracks(album.id);
+            album = album as Api.Album;
+            const page = await api.getYtAlbumTracks(album.albumId as string);
             const tracks = page.items;
             return addTracksToQueue(tracks);
         }

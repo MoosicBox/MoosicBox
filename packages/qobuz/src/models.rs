@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use moosicbox_core::sqlite::models::{
-    Album, AlbumSource, ApiAlbum, ApiSource, ApiSources, Artist, AsModelResult, Track,
+    Album, AlbumSource, ApiAlbum, ApiArtist, ApiSource, ApiSources, Artist, AsModelResult, Track,
     TrackApiSource,
 };
 use moosicbox_json_utils::{
@@ -581,8 +581,20 @@ impl From<QobuzArtist> for Artist {
             id: value.id.into(),
             title: value.name,
             cover,
-            source: ApiSource::Qobuz,
-            sources: ApiSources::default().with_source(ApiSource::Qobuz, value.id.into()),
+            api_source: ApiSource::Qobuz,
+            api_sources: ApiSources::default().with_source(ApiSource::Qobuz, value.id.into()),
+        }
+    }
+}
+
+impl From<QobuzArtist> for ApiArtist {
+    fn from(value: QobuzArtist) -> Self {
+        Self {
+            artist_id: value.id.into(),
+            title: value.name,
+            contains_cover: value.image.is_some(),
+            api_source: ApiSource::Qobuz,
+            api_sources: ApiSources::default().with_source(ApiSource::Qobuz, value.id.into()),
         }
     }
 }

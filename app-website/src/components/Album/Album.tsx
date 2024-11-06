@@ -35,91 +35,38 @@ function albumControls(album: Api.Album | Track) {
 }
 
 function getAlbumTitleDisplay(props: AlbumProps): string {
-    if ('apiSource' in props.album) {
-        const apiSource = props.album.apiSource;
+    const apiSource = props.album.apiSource;
 
-        switch (apiSource) {
-            case 'LIBRARY':
-                return props.album.title;
-            case 'TIDAL':
-                return props.album.title;
-            case 'QOBUZ':
-                return props.album.title;
-            case 'YT':
-                return props.album.title;
-            default:
-                apiSource satisfies never;
-                throw new Error(`Invalid apiSource: ${apiSource}`);
-        }
-    } else {
-        const album = props.album as unknown as
-            | Api.LibraryAlbum
-            | Api.TidalAlbum
-            | Api.QobuzAlbum
-            | Api.YtAlbum;
-        const albumType = album.type;
-
-        switch (albumType) {
-            case 'LIBRARY':
-                return album.title;
-            case 'TIDAL': {
-                let title = album.title;
-
-                if (album.mediaMetadataTags?.includes('DOLBY_ATMOS')) {
-                    title += ' (Dolby Atmos)';
-                }
-
-                return title;
-            }
-            case 'QOBUZ':
-                return album.title;
-            case 'YT':
-                return album.title;
-            default:
-                albumType satisfies never;
-                throw new Error(`Invalid albumType: ${albumType}`);
-        }
+    switch (apiSource) {
+        case 'LIBRARY':
+            return props.album.title;
+        case 'TIDAL':
+            return props.album.title;
+        case 'QOBUZ':
+            return props.album.title;
+        case 'YT':
+            return props.album.title;
+        default:
+            apiSource satisfies never;
+            throw new Error(`Invalid apiSource: ${apiSource}`);
     }
 }
 
 function isExplicit(props: AlbumProps): boolean {
-    if ('apiSource' in props.album) {
-        const apiSource = props.album.apiSource;
+    const apiSource = props.album.apiSource;
 
-        switch (apiSource) {
-            case 'LIBRARY':
-                return false;
-            case 'TIDAL':
-                return false;
-            case 'QOBUZ':
-                return false;
-            case 'YT':
-                return false;
-            default:
-                apiSource satisfies never;
-                throw new Error(`Invalid apiSource: ${apiSource}`);
-        }
-    } else {
-        const album = props.album as unknown as
-            | Api.LibraryAlbum
-            | Api.TidalAlbum
-            | Api.QobuzAlbum
-            | Api.YtAlbum;
-        const albumType = album.type;
-
-        switch (albumType) {
-            case 'LIBRARY':
-                return false;
-            case 'TIDAL':
-                return album.explicit;
-            case 'QOBUZ':
-                return album.parentalWarning;
-            case 'YT':
-                return false;
-            default:
-                albumType satisfies never;
-                throw new Error(`Invalid albumType: ${albumType}`);
-        }
+    switch (apiSource) {
+        case 'LIBRARY':
+            return false;
+        case 'TIDAL':
+            return false;
+        case 'QOBUZ':
+            return false;
+        case 'YT':
+            return false;
+        default:
+            apiSource satisfies never;
+            throw new Error(`Invalid apiSource: ${apiSource}`);
     }
 }
 

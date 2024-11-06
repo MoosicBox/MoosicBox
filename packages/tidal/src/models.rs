@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use moosicbox_core::sqlite::models::{
-    AlbumSource, ApiAlbum, ApiSource, ApiSources, TrackApiSource,
+    AlbumSource, ApiAlbum, ApiArtist, ApiSource, ApiSources, TrackApiSource,
 };
 use moosicbox_json_utils::{
     serde_json::{ToNestedValue, ToValue},
@@ -35,8 +35,20 @@ impl From<TidalArtist> for Artist {
             id: value.id.into(),
             title: value.name,
             cover: value.picture,
-            source: ApiSource::Tidal,
-            sources: ApiSources::default().with_source(ApiSource::Tidal, value.id.into()),
+            api_source: ApiSource::Tidal,
+            api_sources: ApiSources::default().with_source(ApiSource::Tidal, value.id.into()),
+        }
+    }
+}
+
+impl From<TidalArtist> for ApiArtist {
+    fn from(value: TidalArtist) -> Self {
+        Self {
+            artist_id: value.id.into(),
+            title: value.name,
+            contains_cover: value.contains_cover,
+            api_source: ApiSource::Tidal,
+            api_sources: ApiSources::default().with_source(ApiSource::Tidal, value.id.into()),
         }
     }
 }

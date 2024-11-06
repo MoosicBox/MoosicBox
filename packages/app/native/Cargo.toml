@@ -44,9 +44,6 @@ moosicbox_app_state = { version = "0.1.0", path = "../state", default-features =
 moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
 moosicbox_core = { version = "0.1.0", path = "../../core", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../../env_utils", default-features = false }
-moosicbox_library_models = { version = "0.1.0", path = "../../library/models", default-features = false, features = [
-    "all-formats",
-] }
 moosicbox_logging = { version = "0.1.0", path = "../../logging", default-features = false, features = [
     "free_log",
 ] }
@@ -101,7 +98,6 @@ qobuz = [
     "moosicbox_app_native_ui/qobuz",
     "moosicbox_app_state/qobuz",
     "moosicbox_core/qobuz",
-    "moosicbox_library_models/qobuz",
     "moosicbox_menu_models/qobuz",
     "moosicbox_session_models/qobuz",
 ]
@@ -109,7 +105,6 @@ tidal = [
     "moosicbox_app_native_ui/tidal",
     "moosicbox_app_state/tidal",
     "moosicbox_core/tidal",
-    "moosicbox_library_models/tidal",
     "moosicbox_menu_models/tidal",
     "moosicbox_session_models/tidal",
 ]
@@ -117,7 +112,6 @@ yt = [
     "moosicbox_app_native_ui/yt",
     "moosicbox_app_state/yt",
     "moosicbox_core/yt",
-    "moosicbox_library_models/yt",
     "moosicbox_menu_models/yt",
     "moosicbox_session_models/yt",
 ]

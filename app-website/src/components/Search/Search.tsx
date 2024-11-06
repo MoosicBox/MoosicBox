@@ -2,13 +2,7 @@ import './search.css';
 import { For, Show, createSignal, onCleanup, onMount } from 'solid-js';
 import type { JSXElement } from 'solid-js';
 import { debounce } from '@solid-primitives/scheduled';
-import {
-    Api,
-    api,
-    type ApiSource,
-    type Artist as ApiArtist,
-    once,
-} from '~/services/api';
+import { Api, api, type ApiSource, once } from '~/services/api';
 import Artist from '../Artist';
 import Album from '../Album';
 import { isServer } from 'solid-js/web';
@@ -61,36 +55,13 @@ export default function searchInput() {
     function searchResultToApiArtist(
         source: ApiSource,
         result: Api.GlobalArtistSearchResult | Api.GlobalTrackSearchResult,
-    ): ApiArtist {
-        switch (source) {
-            case 'LIBRARY':
-                return {
-                    ...result,
-                    type: 'LIBRARY',
-                    artistId: result.artistId as number,
-                };
-            case 'TIDAL':
-                return {
-                    ...result,
-                    type: 'TIDAL',
-                    id: result.artistId as number,
-                } as unknown as Api.TidalArtist;
-            case 'QOBUZ':
-                return {
-                    ...result,
-                    type: 'QOBUZ',
-                    id: result.artistId as number,
-                } as unknown as Api.QobuzArtist;
-            case 'YT':
-                return {
-                    ...result,
-                    type: 'YT',
-                    id: result.artistId as string,
-                } as unknown as Api.YtArtist;
-            default:
-                source satisfies never;
-                throw new Error(`Invalid ApiSource: "${source}"`);
-        }
+    ): Api.Artist {
+        return {
+            ...result,
+            apiSource: source,
+            apiSources: [{ source: source, id: result.artistId }],
+            artistId: result.artistId as number,
+        };
     }
 
     function searchResultToApiAlbum(
@@ -164,7 +135,7 @@ export default function searchInput() {
 
         switch (resultType) {
             case 'ARTIST':
-                return artistRoute({ id: result.artistId, type: source });
+                return artistRoute({ id: result.artistId, apiSource: source });
             case 'ALBUM':
                 return albumRoute({ id: result.albumId, type: source });
             case 'TRACK':
@@ -202,7 +173,7 @@ export default function searchInput() {
                             <a
                                 href={artistRoute({
                                     id: artist.artistId,
-                                    type: source,
+                                    apiSource: source,
                                 })}
                                 class="search-results-result-details-artist"
                                 tabindex="-1"
@@ -250,7 +221,7 @@ export default function searchInput() {
                             <a
                                 href={artistRoute({
                                     id: album.artistId,
-                                    type: source,
+                                    apiSource: source,
                                 })}
                                 class="search-results-result-details-artist"
                                 tabindex="-1"
@@ -311,7 +282,7 @@ export default function searchInput() {
                             <a
                                 href={artistRoute({
                                     id: track.artistId,
-                                    type: source,
+                                    apiSource: source,
                                 })}
                                 class="search-results-result-details-artist"
                                 tabindex="-1"

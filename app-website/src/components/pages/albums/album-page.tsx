@@ -22,7 +22,7 @@ import { areEqualShallow, historyBack } from '~/services/util';
 
 export default function albumPage(props: {
     albumId?: number;
-    tidalAlbumId?: number;
+    tidalAlbumId?: string;
     qobuzAlbumId?: string;
 }) {
     const [versions, setVersions] = createSignal<Api.AlbumVersion[]>();
@@ -33,10 +33,10 @@ export default function albumPage(props: {
 
     const [libraryAlbum, setLibraryAlbum] = createSignal<Api.Album | null>();
 
-    const [tidalAlbum, setTidalAlbum] = createSignal<Api.TidalAlbum>();
+    const [tidalAlbum, setTidalAlbum] = createSignal<Api.Album>();
     const [tidalTracks, setTidalTracks] = createSignal<Api.TidalTrack[]>();
 
-    const [qobuzAlbum, setQobuzAlbum] = createSignal<Api.QobuzAlbum>();
+    const [qobuzAlbum, setQobuzAlbum] = createSignal<Api.Album>();
     const [qobuzTracks, setQobuzTracks] = createSignal<Api.QobuzTrack[]>();
 
     let sourceImageRef: HTMLImageElement | undefined;

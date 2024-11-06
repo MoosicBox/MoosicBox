@@ -11,9 +11,8 @@ use moosicbox_app_native_lib::{
     router::{ContainerElement, RouteRequest, Router},
 };
 use moosicbox_app_native_ui::{state, Action};
-use moosicbox_core::sqlite::models::{AlbumType, ApiAlbum, ApiSource};
+use moosicbox_core::sqlite::models::{AlbumType, ApiAlbum, ApiArtist, ApiSource};
 use moosicbox_env_utils::{default_env_usize, option_env_i32, option_env_u16};
-use moosicbox_library_models::ApiArtist;
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_paging::Page;
 use moosicbox_player::Playback;
@@ -276,11 +275,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_route_result("/artists", |req| async move {
             Ok::<_, Box<dyn std::error::Error>>(
                 if let Some(artist_id) = req.query.get("artistId") {
+                    let source: Option<ApiSource> =
+                        req.query.get("source").map(TryFrom::try_from).transpose()?;
+
                     let response = reqwest::get(format!(
-                        "{}/menu/artist?moosicboxProfile=master&artistId={artist_id}",
+                        "{}/menu/artist?moosicboxProfile=master&artistId={artist_id}{}",
                         std::env::var("MOOSICBOX_HOST")
                             .as_deref()
-                            .unwrap_or("http://localhost:8500")
+                            .unwrap_or("http://localhost:8500"),
+                        source.map_or_else(String::new, |x| format!("&source={x}")),
                     ))
                     .await?;
 
@@ -295,7 +298,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     let container: ContainerElement = moosicbox_app_native_ui::artists::artist(
                         &convert_state(&STATE).await,
-                        artist,
+                        &artist,
                     )
                     .into_string()
                     .try_into()?;
@@ -319,9 +322,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     log::trace!("artists: {artists:?}");
 
-                    moosicbox_app_native_ui::artists::artists(&convert_state(&STATE).await, artists)
-                        .into_string()
-                        .try_into()?
+                    moosicbox_app_native_ui::artists::artists(
+                        &convert_state(&STATE).await,
+                        &artists,
+                    )
+                    .into_string()
+                    .try_into()?
                 },
             )
         })

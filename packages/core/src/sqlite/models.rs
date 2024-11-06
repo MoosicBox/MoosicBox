@@ -433,12 +433,13 @@ impl From<ApiTrack> for Track {
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct Artist {
     pub id: Id,
     pub title: String,
     pub cover: Option<String>,
-    pub source: ApiSource,
-    pub sources: ApiSources,
+    pub api_source: ApiSource,
+    pub api_sources: ApiSources,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -455,6 +456,45 @@ impl FromStr for ArtistSort {
             "name-asc" | "name" => Ok(ArtistSort::NameAsc),
             "name-desc" => Ok(ArtistSort::NameDesc),
             _ => Err(()),
+        }
+    }
+}
+
+#[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct ApiArtist {
+    pub artist_id: Id,
+    pub title: String,
+    pub contains_cover: bool,
+    pub api_source: ApiSource,
+    pub api_sources: ApiSources,
+}
+
+impl From<Artist> for ApiArtist {
+    fn from(value: Artist) -> Self {
+        Self {
+            artist_id: value.id,
+            title: value.title,
+            contains_cover: value.cover.is_some(),
+            api_source: value.api_source,
+            api_sources: value.api_sources,
+        }
+    }
+}
+
+impl From<ApiArtist> for Artist {
+    fn from(value: ApiArtist) -> Self {
+        Self {
+            id: value.artist_id.clone(),
+            title: value.title,
+            cover: if value.contains_cover {
+                Some(value.artist_id.to_string())
+            } else {
+                None
+            },
+            api_source: value.api_source,
+            api_sources: value.api_sources,
         }
     }
 }

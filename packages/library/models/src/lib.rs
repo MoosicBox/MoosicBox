@@ -33,14 +33,21 @@ pub struct LibraryArtist {
     pub yt_id: Option<u64>,
 }
 
+impl From<LibraryArtist> for moosicbox_core::sqlite::models::ApiArtist {
+    fn from(value: LibraryArtist) -> Self {
+        let artist: Artist = value.into();
+        artist.into()
+    }
+}
+
 impl From<LibraryArtist> for Artist {
     fn from(value: LibraryArtist) -> Self {
         Self {
             id: value.id.into(),
             title: value.title,
             cover: value.cover,
-            source: ApiSource::Library,
-            sources: {
+            api_source: ApiSource::Library,
+            api_sources: {
                 #[allow(unused_mut)]
                 let mut sources = ApiSources::default();
                 #[cfg(feature = "tidal")]
@@ -117,27 +124,6 @@ pub struct ApiLibraryArtist {
     pub tidal_id: Option<u64>,
     pub qobuz_id: Option<u64>,
     pub yt_id: Option<u64>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[serde(tag = "type")]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub enum ApiArtist {
-    Library(ApiLibraryArtist),
-}
-
-impl ToApi<ApiArtist> for LibraryArtist {
-    fn to_api(self) -> ApiArtist {
-        ApiArtist::Library(ApiLibraryArtist {
-            artist_id: self.id,
-            title: self.title.clone(),
-            contains_cover: self.cover.is_some(),
-            tidal_id: self.tidal_id,
-            qobuz_id: self.qobuz_id,
-            yt_id: self.yt_id,
-        })
-    }
 }
 
 #[derive(

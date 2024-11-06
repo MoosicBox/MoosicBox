@@ -1,108 +1,42 @@
 import './artist.css';
 import { Api, api } from '~/services/api';
-import type { Artist, ArtistType, Track } from '~/services/api';
+import type { ApiSource, Track } from '~/services/api';
 import { createComputed, createSignal } from 'solid-js';
 
 export function artistRoute(
     artist:
-        | Artist
+        | Api.Artist
         | Api.Album
         | Track
-        | { id: string | number; type: ArtistType }
-        | { artistId: string | number; type: ArtistType },
+        | { id: string | number; apiSource: ApiSource }
+        | { artistId: string | number; apiSource: ApiSource },
 ): string {
-    if ('apiSource' in artist) {
-        const apiSource = artist.apiSource;
+    const apiSource = artist.apiSource;
 
-        switch (apiSource) {
-            case 'LIBRARY':
-                if ('artistId' in artist) {
-                    return `/artists?artistId=${
-                        (artist as { artistId: number }).artistId
-                    }`;
-                } else {
-                    return `/artists?artistId=${(artist as { id: number }).id}`;
-                }
-            case 'TIDAL':
-                if ('artistId' in artist) {
-                    return `/artists?tidalArtistId=${
-                        (artist as { artistId: number }).artistId
-                    }`;
-                } else {
-                    return `/artists?tidalArtistId=${
-                        (artist as Api.TidalArtist).id
-                    }`;
-                }
-            case 'QOBUZ':
-                if ('artistId' in artist) {
-                    return `/artists?qobuzArtistId=${
-                        (artist as { artistId: number }).artistId
-                    }`;
-                } else {
-                    return `/artists?qobuzArtistId=${
-                        (artist as Api.QobuzArtist).id
-                    }`;
-                }
-            case 'YT':
-                if ('artistId' in artist) {
-                    return `/artists?ytArtistId=${
-                        (artist as { artistId: number }).artistId
-                    }`;
-                } else {
-                    return `/artists?ytArtistId=${(artist as Api.YtArtist).id}`;
-                }
-            default:
-                apiSource satisfies never;
-                throw new Error(`Invalid apiSource: ${apiSource}`);
-        }
-    } else {
-        const artistType = artist.type;
-
-        switch (artistType) {
-            case 'LIBRARY':
-                if ('artistId' in artist) {
-                    return `/artists?artistId=${
-                        (artist as { artistId: number }).artistId
-                    }`;
-                } else {
-                    return `/artists?artistId=${(artist as { id: number }).id}`;
-                }
-            case 'TIDAL':
-                if ('artistId' in artist) {
-                    return `/artists?tidalArtistId=${
-                        (artist as { artistId: number }).artistId
-                    }`;
-                } else {
-                    return `/artists?tidalArtistId=${
-                        (artist as Api.TidalArtist).id
-                    }`;
-                }
-            case 'QOBUZ':
-                if ('artistId' in artist) {
-                    return `/artists?qobuzArtistId=${
-                        (artist as { artistId: number }).artistId
-                    }`;
-                } else {
-                    return `/artists?qobuzArtistId=${
-                        (artist as Api.QobuzArtist).id
-                    }`;
-                }
-            case 'YT':
-                if ('artistId' in artist) {
-                    return `/artists?ytArtistId=${
-                        (artist as { artistId: number }).artistId
-                    }`;
-                } else {
-                    return `/artists?ytArtistId=${(artist as Api.YtArtist).id}`;
-                }
-            default:
-                artistType satisfies never;
-                throw new Error(`Invalid artistType: ${artistType}`);
-        }
+    switch (apiSource) {
+        case 'LIBRARY':
+            return `/artists?artistId=${
+                (artist as { artistId: number }).artistId
+            }`;
+        case 'TIDAL':
+            return `/artists?tidalArtistId=${
+                (artist as { artistId: number }).artistId
+            }`;
+        case 'QOBUZ':
+            return `/artists?qobuzArtistId=${
+                (artist as { artistId: number }).artistId
+            }`;
+        case 'YT':
+            return `/artists?ytArtistId=${
+                (artist as { artistId: number }).artistId
+            }`;
+        default:
+            apiSource satisfies never;
+            throw new Error(`Invalid apiSource: ${apiSource}`);
     }
 }
 
-function artistDetails(artist: Artist, showTitle = true) {
+function artistDetails(artist: Api.Artist, showTitle = true) {
     return (
         <div class="artist-details">
             {showTitle && (
@@ -142,7 +76,7 @@ function artistImage(props: ArtistProps, blur: boolean) {
 type PartialBy<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
 
 type ArtistProps = {
-    artist: Artist;
+    artist: Api.Artist;
     size: number;
     imageRequestSize: number;
     title: boolean;
@@ -167,9 +101,7 @@ export default function artist(
     const [blur, setBlur] = createSignal(false);
 
     createComputed(() => {
-        setBlur(
-            typeof props.blur === 'boolean' ? props.blur : props.artist.blur,
-        );
+        setBlur(typeof props.blur === 'boolean' ? props.blur : false);
     });
 
     return (
