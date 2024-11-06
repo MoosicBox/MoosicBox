@@ -1409,9 +1409,17 @@ impl AppState {
 
         {
             let mut connection_id = self.connection_id.write().await;
+            let is_empty = state.connection_id.as_ref().is_some_and(String::is_empty);
 
-            if connection_id.as_ref() == state.connection_id.as_ref() {
+            if connection_id.as_ref() == state.connection_id.as_ref()
+                || is_empty && connection_id.is_none()
+            {
                 log::debug!("set_state: no update to CONNECTION_ID");
+            } else if is_empty {
+                log::debug!("set_state: empty CONNECTION_ID, removing value");
+                connection_id.take();
+                drop(connection_id);
+                updated_connection_details = true;
             } else {
                 log::debug!(
                     "set_state: updating CONNECTION_ID from '{:?}' -> '{:?}'",
@@ -1426,9 +1434,17 @@ impl AppState {
 
         {
             let mut connection_name = self.connection_name.write().await;
+            let is_empty = state.connection_name.as_ref().is_some_and(String::is_empty);
 
-            if connection_name.as_ref() == state.connection_name.as_ref() {
+            if connection_name.as_ref() == state.connection_name.as_ref()
+                || is_empty && connection_name.is_none()
+            {
                 log::debug!("set_state: no update to CONNECTION_NAME");
+            } else if is_empty {
+                log::debug!("set_state: empty CONNECTION_NAME, removing value");
+                connection_name.take();
+                drop(connection_name);
+                updated_connection_details = true;
             } else {
                 log::debug!(
                     "set_state: updating CONNECTION_NAME from '{:?}' -> '{:?}'",
@@ -1443,9 +1459,15 @@ impl AppState {
 
         {
             let mut client_id = self.client_id.write().await;
+            let is_empty = state.client_id.as_ref().is_some_and(String::is_empty);
 
-            if client_id.as_ref() == state.client_id.as_ref() {
+            if client_id.as_ref() == state.client_id.as_ref() || is_empty && client_id.is_none() {
                 log::debug!("set_state: no update to CLIENT_ID");
+            } else if is_empty {
+                log::debug!("set_state: empty CLIENT_ID, removing value");
+                client_id.take();
+                drop(client_id);
+                updated_connection_details = true;
             } else {
                 log::debug!(
                     "set_state: updating CLIENT_ID from '{:?}' -> '{:?}'",
@@ -1460,9 +1482,17 @@ impl AppState {
 
         {
             let mut signature_token = self.signature_token.write().await;
+            let is_empty = state.signature_token.as_ref().is_some_and(String::is_empty);
 
-            if signature_token.as_ref() == state.signature_token.as_ref() {
+            if signature_token.as_ref() == state.signature_token.as_ref()
+                || is_empty && signature_token.is_none()
+            {
                 log::debug!("set_state: no update to SIGNATURE_TOKEN");
+            } else if is_empty {
+                log::debug!("set_state: empty SIGNATURE_TOKEN, removing value");
+                signature_token.take();
+                drop(signature_token);
+                updated_connection_details = true;
             } else {
                 log::debug!(
                     "set_state: updating SIGNATURE_TOKEN from '{:?}' -> '{:?}'",
@@ -1477,9 +1507,15 @@ impl AppState {
 
         {
             let mut api_token = self.api_token.write().await;
+            let is_empty = state.api_token.as_ref().is_some_and(String::is_empty);
 
-            if api_token.as_ref() == state.api_token.as_ref() {
+            if api_token.as_ref() == state.api_token.as_ref() || is_empty && api_token.is_none() {
                 log::debug!("set_state: no update to API_TOKEN");
+            } else if is_empty {
+                log::debug!("set_state: empty API_TOKEN, removing value");
+                api_token.take();
+                drop(api_token);
+                updated_connection_details = true;
             } else {
                 log::debug!(
                     "set_state: updating API_TOKEN from '{:?}' -> '{:?}'",
@@ -1494,9 +1530,15 @@ impl AppState {
 
         {
             let mut api_url = self.api_url.write().await;
+            let is_empty = state.api_url.as_ref().is_some_and(String::is_empty);
 
-            if api_url.as_ref() == state.api_url.as_ref() {
+            if api_url.as_ref() == state.api_url.as_ref() || is_empty && api_url.is_none() {
                 log::debug!("set_state: no update to API_URL");
+            } else if is_empty {
+                log::debug!("set_state: empty API_URL, removing value");
+                api_url.take();
+                drop(api_url);
+                updated_connection_details = true;
             } else {
                 log::debug!(
                     "set_state: updating API_URL from '{:?}' -> '{:?}'",
@@ -1511,9 +1553,15 @@ impl AppState {
 
         {
             let mut profile = self.profile.write().await;
+            let is_empty = state.profile.as_ref().is_some_and(String::is_empty);
 
-            if profile.as_ref() == state.profile.as_ref() {
+            if profile.as_ref() == state.profile.as_ref() || is_empty && profile.is_none() {
                 log::debug!("set_state: no update to PROFILE");
+            } else if is_empty {
+                log::debug!("set_state: empty PROFILE, removing value");
+                profile.take();
+                drop(profile);
+                updated_connection_details = true;
             } else {
                 log::debug!(
                     "set_state: updating PROFILE from '{:?}' -> '{:?}'",
