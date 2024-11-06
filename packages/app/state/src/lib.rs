@@ -19,7 +19,7 @@ use moosicbox_player::{
 pub use moosicbox_session::models::PlaybackTarget;
 use moosicbox_session::models::{
     ApiConnection, ApiPlaybackTarget, ApiSession, ApiUpdateSession, ApiUpdateSessionPlaylist,
-    RegisterPlayer,
+    RegisterConnection, RegisterPlayer,
 };
 use moosicbox_ws::models::{InboundPayload, OutboundPayload};
 use reqwest::RequestBuilder;
@@ -54,6 +54,16 @@ impl moosicbox_music_api::SourceToMusicApi for SourceToRemoteLibrary {
             moosicbox_remote_library::RemoteLibraryMusicApi::new(self.host.clone(), source),
         )))
     }
+}
+
+#[derive(Debug, Error)]
+pub enum ProxyRequestError {
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+    #[error("Failure response ({status}): {text}")]
+    FailureResponse { status: u16, text: String },
 }
 
 #[derive(Debug, Error)]
@@ -112,6 +122,8 @@ pub enum AppStateError {
     SendWsMessage(#[from] ws::SendWsMessageError),
     #[error(transparent)]
     FetchAudioZones(#[from] FetchAudioZonesError),
+    #[error(transparent)]
+    ProxyRequest(#[from] ProxyRequestError),
 }
 
 impl AppStateError {
@@ -183,6 +195,7 @@ pub struct AppState {
     pub ws_url: Arc<RwLock<Option<String>>>,
     pub ws_connection_id: Arc<RwLock<Option<String>>>,
     pub connection_id: Arc<RwLock<Option<String>>>,
+    pub connection_name: Arc<RwLock<Option<String>>>,
     pub signature_token: Arc<RwLock<Option<String>>>,
     pub client_id: Arc<RwLock<Option<String>>>,
     pub api_token: Arc<RwLock<Option<String>>>,
@@ -984,15 +997,61 @@ impl AppState {
             );
         }
 
-        let response = self
-            .api_proxy_post(
-                format!("session/register-players?connectionId={connection_id}{client_id}",),
-                Some(serde_json::to_value(players).map_err(RegisterPlayersError::Serde)?),
-                Some(serde_json::Value::Object(headers)),
-            )
-            .await?;
+        let url = format!("session/register-players?connectionId={connection_id}{client_id}");
+        let body = Some(serde_json::to_value(players).map_err(RegisterPlayersError::Serde)?);
+        let headers = Some(serde_json::Value::Object(headers));
 
-        Ok(serde_json::from_value(response).unwrap())
+        let response = match self
+            .api_proxy_post(url.clone(), body.clone(), headers.clone())
+            .await
+        {
+            Ok(value) => serde_json::from_value(value).unwrap(),
+            Err(e) => {
+                let AppStateError::ProxyRequest(ProxyRequestError::FailureResponse {
+                    status, ..
+                }) = e
+                else {
+                    return Err(e);
+                };
+                if status != 404 {
+                    return Err(e);
+                }
+
+                let Some(name) = self.connection_name.read().await.clone() else {
+                    return Err(AppStateError::unknown(
+                        "Connection name required to create a connection",
+                    ));
+                };
+                let client_id = self
+                    .client_id
+                    .read()
+                    .await
+                    .clone()
+                    .map(|x| format!("?clientId={x}"))
+                    .unwrap_or_default();
+
+                let response = self
+                    .api_proxy_post(
+                        format!("session/register-connection{client_id}"),
+                        Some(
+                            serde_json::to_value(RegisterConnection {
+                                connection_id,
+                                name,
+                                players: players.to_vec(),
+                            })
+                            .map_err(RegisterPlayersError::Serde)?,
+                        ),
+                        headers.clone(),
+                    )
+                    .await?;
+
+                let connection: ApiConnection = serde_json::from_value(response).unwrap();
+
+                connection.players
+            }
+        };
+
+        Ok(response)
     }
 
     /// # Errors
@@ -1031,7 +1090,7 @@ impl AppState {
             builder = builder.json(&body);
         }
 
-        self.send_request_builder(builder).await
+        Ok(self.send_request_builder(builder).await?)
     }
 
     /// # Errors
@@ -1065,7 +1124,7 @@ impl AppState {
             }
         }
 
-        self.send_request_builder(builder).await
+        Ok(self.send_request_builder(builder).await?)
     }
 
     /// # Errors
@@ -1075,42 +1134,21 @@ impl AppState {
     pub async fn send_request_builder(
         &self,
         builder: RequestBuilder,
-    ) -> Result<serde_json::Value, AppStateError> {
+    ) -> Result<serde_json::Value, ProxyRequestError> {
         log::debug!("send_request_builder: Sending request");
-        match builder.send().await {
-            Ok(resp) => {
-                log::debug!("send_request_builder: status_code={}", resp.status());
-                let success = resp.status().is_success();
-                match resp.text().await {
-                    Ok(text) => {
-                        if success {
-                            match serde_json::from_str(&text) {
-                                Ok(resp) => {
-                                    log::debug!("Got post response: {resp:?}");
-                                    Ok(resp)
-                                }
-                                Err(e) => {
-                                    log::error!(
-                                        "Failed to parse request response: {e:?} ({text:?})"
-                                    );
-                                    Err(AppStateError::unknown(format!("Json failed: {e:?}")))
-                                }
-                            }
-                        } else {
-                            log::error!("Failure response: ({text:?})");
-                            Err(AppStateError::unknown(format!("Request failed: {text:?}")))
-                        }
-                    }
-                    Err(e) => {
-                        log::error!("Failed to parse request response: {e:?}");
-                        Err(AppStateError::unknown(format!("Json failed: {e:?}")))
-                    }
-                }
-            }
-            Err(e) => {
-                log::error!("Failed to send request: {e:?}");
-                Err(AppStateError::unknown(format!("Json failed: {e:?}")))
-            }
+        let resp = builder.send().await?;
+        log::debug!("send_request_builder: status_code={}", resp.status());
+        let status = resp.status();
+        let success = status.is_success();
+        let text = resp.text().await?;
+        if success {
+            Ok(serde_json::from_str(&text)?)
+        } else {
+            log::error!("Failure response: ({text:?})");
+            Err(ProxyRequestError::FailureResponse {
+                status: status.into(),
+                text,
+            })
         }
     }
 
@@ -1361,6 +1399,23 @@ impl AppState {
                 );
                 (*connection_id).clone_from(&state.connection_id);
                 drop(connection_id);
+                updated_connection_details = true;
+            }
+        }
+
+        {
+            let mut connection_name = self.connection_name.write().await;
+
+            if connection_name.as_ref() == state.connection_name.as_ref() {
+                log::debug!("set_state: no update to CONNECTION_NAME");
+            } else {
+                log::debug!(
+                    "set_state: updating CONNECTION_NAME from '{:?}' -> '{:?}'",
+                    connection_name.as_ref(),
+                    state.connection_name.as_ref()
+                );
+                (*connection_name).clone_from(&state.connection_name);
+                drop(connection_name);
                 updated_connection_details = true;
             }
         }
