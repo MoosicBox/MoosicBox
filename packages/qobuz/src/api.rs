@@ -5,7 +5,7 @@ use actix_web::{
     web::{self, Json},
     HttpRequest, Result, Scope,
 };
-use moosicbox_core::sqlite::models::{ApiSource, ApiSources, ToApi, TrackApiSource};
+use moosicbox_core::sqlite::models::{ApiAlbum, ApiSource, ApiSources, ToApi, TrackApiSource};
 #[cfg(feature = "db")]
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_paging::Page;
@@ -16,8 +16,8 @@ use strum_macros::{AsRefStr, EnumString};
 
 use crate::{
     album, album_tracks, artist, artist_albums, favorite_albums, favorite_artists, favorite_tracks,
-    format_title, search, track, track_file_url, user_login, QobuzAlbum, QobuzAlbumError,
-    QobuzAlbumOrder, QobuzAlbumReleaseType, QobuzAlbumSort, QobuzAlbumTracksError, QobuzArtist,
+    format_title, search, track, track_file_url, user_login, QobuzAlbumError, QobuzAlbumOrder,
+    QobuzAlbumReleaseType, QobuzAlbumSort, QobuzAlbumTracksError, QobuzArtist,
     QobuzArtistAlbumsError, QobuzArtistError, QobuzAudioQuality, QobuzFavoriteAlbumsError,
     QobuzFavoriteArtistsError, QobuzFavoriteTracksError, QobuzRelease, QobuzSearchError,
     QobuzTrack, QobuzTrackError, QobuzTrackFileUrlError, QobuzUserLoginError,
@@ -67,32 +67,6 @@ pub fn bind_services<
     ))
 )]
 pub struct Api;
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[serde(tag = "type")]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub enum ApiAlbum {
-    Qobuz(ApiQobuzAlbum),
-}
-
-impl ToApi<ApiAlbum> for QobuzAlbum {
-    fn to_api(self) -> ApiAlbum {
-        ApiAlbum::Qobuz(ApiQobuzAlbum {
-            id: self.id.clone(),
-            artist: self.artist.clone(),
-            artist_id: self.artist_id,
-            album_type: self.album_type,
-            contains_cover: self.cover_url().is_some(),
-            duration: self.duration,
-            title: format_title(&self.title, self.version.as_deref()),
-            parental_warning: self.parental_warning,
-            number_of_tracks: self.tracks_count,
-            date_released: self.release_date_original.clone(),
-            api_source: ApiSource::Qobuz,
-        })
-    }
-}
 
 impl From<QobuzUserLoginError> for actix_web::Error {
     fn from(err: QobuzUserLoginError) -> Self {
@@ -489,7 +463,7 @@ pub async fn album_endpoint(
     )
     .await?;
 
-    Ok(Json(album.to_api()))
+    Ok(Json(album.into()))
 }
 
 impl From<QobuzArtistAlbumsError> for actix_web::Error {
@@ -686,7 +660,7 @@ pub async fn favorite_albums_endpoint(
                 .map(|x| x.to_str().unwrap().to_string()),
         )
         .await?
-        .to_api()
+        .map(Into::into)
         .into(),
     ))
 }

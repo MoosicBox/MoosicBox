@@ -2276,8 +2276,8 @@ impl MusicApi for YtMusicApi {
             &self.db,
             offset,
             limit,
-            order.map(|x| x.into()),
-            order_direction.map(|x| x.into()),
+            order.map(Into::into),
+            order_direction.map(Into::into),
             None,
             None,
             None,
@@ -2285,7 +2285,8 @@ impl MusicApi for YtMusicApi {
             None,
         )
         .await?
-        .map(|x| x.into()))
+        .map(Into::into)
+        .map_err(Into::into))
     }
 
     async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, ArtistError> {
@@ -2347,7 +2348,8 @@ impl MusicApi for YtMusicApi {
             None,
         )
         .await?
-        .map(|x| x.into()))
+        .map(Into::into)
+        .map_err(Into::into))
     }
 
     async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError> {
@@ -2392,7 +2394,8 @@ impl MusicApi for YtMusicApi {
                 None,
             )
             .await?
-            .map(|x| x.into())
+            .map(Into::into)
+            .map_err(Into::into)
         } else {
             let pages = futures::future::join_all(
                 vec![
@@ -2458,7 +2461,8 @@ impl MusicApi for YtMusicApi {
                     })
                 }))),
             }
-            .map(|item| item.into())
+            .map(Into::into)
+            .map_err(Into::into)
         })
     }
 
@@ -2508,8 +2512,8 @@ impl MusicApi for YtMusicApi {
             &self.db,
             offset,
             limit,
-            order.map(|x| x.into()),
-            order_direction.map(|x| x.into()),
+            order.map(Into::into),
+            order_direction.map(Into::into),
             None,
             None,
             None,
@@ -2517,7 +2521,8 @@ impl MusicApi for YtMusicApi {
             None,
         )
         .await?
-        .map(|x| x.into()))
+        .map(Into::into)
+        .map_err(Into::into))
     }
 
     async fn album_tracks(
@@ -2540,7 +2545,8 @@ impl MusicApi for YtMusicApi {
             None,
         )
         .await?
-        .map(|x| x.into()))
+        .map(Into::into)
+        .map_err(Into::into))
     }
 
     async fn track(&self, track_id: &Id) -> Result<Option<Track>, TrackError> {

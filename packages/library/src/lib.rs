@@ -989,15 +989,16 @@ impl MusicApi for LibraryMusicApi {
             &self.db,
             offset,
             limit,
-            order.map(|x| x.into()),
-            order_direction.map(|x| x.into()),
+            order.map(Into::into),
+            order_direction.map(Into::into),
         )
         .await?
-        .map(|x| x.into()))
+        .map(Into::into)
+        .map_err(Into::into))
     }
 
     async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, ArtistError> {
-        Ok(self.library_artist(artist_id).await?.map(|x| x.into()))
+        Ok(self.library_artist(artist_id).await?.map(Into::into))
     }
 
     async fn add_artist(&self, artist_id: &Id) -> Result<(), AddArtistError> {
@@ -1009,7 +1010,7 @@ impl MusicApi for LibraryMusicApi {
     }
 
     async fn album_artist(&self, album_id: &Id) -> Result<Option<Artist>, ArtistError> {
-        Ok(self.library_album_artist(album_id).await?.map(|x| x.into()))
+        Ok(self.library_album_artist(album_id).await?.map(Into::into))
     }
 
     async fn artist_cover_source(
@@ -1025,11 +1026,15 @@ impl MusicApi for LibraryMusicApi {
     }
 
     async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
-        Ok(self.library_albums(request).await?.map(|x| x.into()))
+        Ok(self
+            .library_albums(request)
+            .await?
+            .map(Into::into)
+            .map_err(Into::into))
     }
 
     async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError> {
-        Ok(self.library_album(album_id).await?.map(|x| x.into()))
+        Ok(self.library_album(album_id).await?.map(Into::into))
     }
 
     async fn artist_albums(
@@ -1053,7 +1058,8 @@ impl MusicApi for LibraryMusicApi {
                 Some(album_type.into()),
             )
             .await?
-            .map(|x| x.into())
+            .map(Into::into)
+            .map_err(Into::into)
         } else {
             let pages = futures::future::join_all(
                 vec![
@@ -1101,6 +1107,7 @@ impl MusicApi for LibraryMusicApi {
                 }))),
             }
             .map(|item| item.into())
+            .map_err(Into::into)
         })
     }
 
@@ -1137,11 +1144,12 @@ impl MusicApi for LibraryMusicApi {
             track_ids,
             offset,
             limit,
-            order.map(|x| x.into()),
-            order_direction.map(|x| x.into()),
+            order.map(Into::into),
+            order_direction.map(Into::into),
         )
         .await?
-        .map(|x| x.into()))
+        .map(Into::into)
+        .map_err(Into::into))
     }
 
     async fn album_tracks(
@@ -1155,11 +1163,12 @@ impl MusicApi for LibraryMusicApi {
         Ok(self
             .library_album_tracks(album_id, offset, limit, order, order_direction)
             .await?
-            .map(|x| x.into()))
+            .map(Into::into)
+            .map_err(Into::into))
     }
 
     async fn track(&self, track_id: &Id) -> Result<Option<Track>, TrackError> {
-        Ok(self.library_track(track_id).await?.map(|x| x.into()))
+        Ok(self.library_track(track_id).await?.map(Into::into))
     }
 
     async fn add_track(&self, track_id: &Id) -> Result<(), AddTrackError> {
@@ -1317,7 +1326,7 @@ pub async fn reindex_global_search_index(db: &LibraryDatabase) -> Result<(), Rei
     let artists = db::get_artists(db)
         .await?
         .into_iter()
-        .map(|x| x.into())
+        .map(Into::into)
         .map(|artist: Artist| artist.as_data_values())
         .collect::<Vec<_>>();
 
@@ -1326,7 +1335,7 @@ pub async fn reindex_global_search_index(db: &LibraryDatabase) -> Result<(), Rei
     let albums = db::get_albums(db)
         .await?
         .into_iter()
-        .map(|x| x.into())
+        .map(Into::into)
         .map(|album: Album| album.as_data_values())
         .collect::<Vec<_>>();
 
@@ -1335,7 +1344,7 @@ pub async fn reindex_global_search_index(db: &LibraryDatabase) -> Result<(), Rei
     let tracks = db::get_tracks(db, None)
         .await?
         .into_iter()
-        .map(|x| x.into())
+        .map(Into::into)
         .map(|track: Track| track.as_data_values())
         .collect::<Vec<_>>();
 

@@ -1,7 +1,8 @@
 use std::fmt::Display;
 
 use moosicbox_core::sqlite::models::{
-    Album, AlbumSource, ApiSource, ApiSources, Artist, AsModelResult, Track, TrackApiSource,
+    Album, AlbumSource, ApiAlbum, ApiSource, ApiSources, Artist, AsModelResult, Track,
+    TrackApiSource,
 };
 use moosicbox_json_utils::{
     serde_json::{ToNestedValue, ToValue},
@@ -232,6 +233,13 @@ impl From<QobuzAlbum> for Album {
                 .with_source(ApiSource::Qobuz, value.artist_id.into()),
             album_sources: ApiSources::default().with_source(ApiSource::Qobuz, value.id.into()),
         }
+    }
+}
+
+impl From<QobuzAlbum> for ApiAlbum {
+    fn from(value: QobuzAlbum) -> Self {
+        let album: Album = value.into();
+        album.into()
     }
 }
 
@@ -629,6 +637,20 @@ impl From<QobuzRelease> for QobuzAlbum {
             maximum_sampling_rate: value.maximum_sampling_rate,
             ..Default::default()
         }
+    }
+}
+
+impl From<QobuzRelease> for Album {
+    fn from(value: QobuzRelease) -> Self {
+        let album: QobuzAlbum = value.into();
+        album.into()
+    }
+}
+
+impl From<QobuzRelease> for ApiAlbum {
+    fn from(value: QobuzRelease) -> Self {
+        let album: Album = value.into();
+        album.into()
     }
 }
 

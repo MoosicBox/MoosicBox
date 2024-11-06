@@ -1979,7 +1979,8 @@ impl MusicApi for QobuzMusicApi {
             None,
         )
         .await?
-        .map(|x| x.into()))
+        .map(Into::into)
+        .map_err(Into::into))
     }
 
     async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, ArtistError> {
@@ -2053,7 +2054,8 @@ impl MusicApi for QobuzMusicApi {
             None,
         )
         .await?
-        .map(|x| x.into()))
+        .map(Into::into)
+        .map_err(Into::into))
     }
 
     async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError> {
@@ -2093,10 +2095,8 @@ impl MusicApi for QobuzMusicApi {
             None,
         )
         .await?
-        .map(|x: QobuzRelease| {
-            let album: QobuzAlbum = x.into();
-            album.into()
-        }))
+        .map(Into::into)
+        .map_err(Into::into))
     }
 
     async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {
@@ -2164,7 +2164,8 @@ impl MusicApi for QobuzMusicApi {
             None,
         )
         .await?
-        .map(|x| x.into()))
+        .map(Into::into)
+        .map_err(Into::into))
     }
 
     async fn album_tracks(
@@ -2185,7 +2186,8 @@ impl MusicApi for QobuzMusicApi {
             None,
         )
         .await?
-        .map(|x| x.into()))
+        .map(Into::into)
+        .map_err(Into::into))
     }
 
     async fn track(&self, track_id: &Id) -> Result<Option<Track>, TrackError> {

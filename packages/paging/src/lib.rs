@@ -375,12 +375,11 @@ impl<T, E> PagingResponse<T, E> {
         self.page.items()
     }
 
-    pub fn map<U, F, OE>(self, f: F) -> PagingResponse<U, OE>
+    pub fn map<U, F>(self, f: F) -> PagingResponse<U, E>
     where
         F: FnMut(T) -> U + Send + Clone + 'static,
         T: 'static,
-        OE: 'static,
-        E: Into<OE> + 'static,
+        E: 'static,
     {
         let page = self.page.map(f.clone());
 
@@ -394,10 +393,39 @@ impl<T, E> PagingResponse<T, E> {
 
                 let closure = async move {
                     let mut fetch = fetch.lock().await;
+                    fetch(offset, count).await.map(|results| results.map(f))
+                };
+
+                Box::pin(closure)
+            }))),
+        }
+    }
+
+    pub fn map_err<U, F>(self, f: F) -> PagingResponse<T, U>
+    where
+        F: FnMut(E) -> U + Send + Clone + 'static,
+        E: 'static,
+        T: 'static,
+    {
+        let page = self.page;
+
+        let fetch = self.fetch;
+
+        PagingResponse {
+            page,
+            fetch: Arc::new(Mutex::new(Box::new(move |offset, count| {
+                let fetch = fetch.clone();
+                let f = f.clone();
+
+                let closure = async move {
+                    let mut fetch = fetch.lock().await;
                     fetch(offset, count)
                         .await
-                        .map_err(|e| e.into())
-                        .map(|results| results.map(f))
+                        .map({
+                            let f = f.clone();
+                            |x| x.map_err(f)
+                        })
+                        .map_err(f)
                 };
 
                 Box::pin(closure)

@@ -5,7 +5,7 @@ use actix_web::{
     web::{self, Json},
     HttpRequest, Result, Scope,
 };
-use moosicbox_core::sqlite::models::{ApiSource, ApiSources, ToApi, TrackApiSource};
+use moosicbox_core::sqlite::models::{ApiAlbum, ApiSource, ApiSources, ToApi, TrackApiSource};
 #[cfg(feature = "db")]
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_paging::Page;
@@ -20,8 +20,8 @@ use crate::{
     favorite_artists, favorite_tracks, remove_favorite_album, remove_favorite_artist,
     remove_favorite_track, search, track, track_file_url, track_playback_info,
     AuthenticatedRequestError, YtAddFavoriteAlbumError, YtAddFavoriteArtistError,
-    YtAddFavoriteTrackError, YtAlbum, YtAlbumError, YtAlbumOrder, YtAlbumOrderDirection,
-    YtAlbumTracksError, YtAlbumType, YtArtist, YtArtistAlbumsError, YtArtistError, YtArtistOrder,
+    YtAddFavoriteTrackError, YtAlbumError, YtAlbumOrder, YtAlbumOrderDirection, YtAlbumTracksError,
+    YtAlbumType, YtArtist, YtArtistAlbumsError, YtArtistError, YtArtistOrder,
     YtArtistOrderDirection, YtAudioQuality, YtDeviceAuthorizationError,
     YtDeviceAuthorizationTokenError, YtDeviceType, YtFavoriteAlbumsError, YtFavoriteArtistsError,
     YtFavoriteTracksError, YtRemoveFavoriteAlbumError, YtRemoveFavoriteArtistError,
@@ -94,34 +94,6 @@ pub fn bind_services<
     ))
 )]
 pub struct Api;
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[serde(tag = "type")]
-pub enum ApiAlbum {
-    Yt(ApiYtAlbum),
-}
-
-impl ToApi<ApiAlbum> for YtAlbum {
-    fn to_api(self) -> ApiAlbum {
-        ApiAlbum::Yt(ApiYtAlbum {
-            id: self.id,
-            artist: self.artist.clone(),
-            artist_id: self.artist_id,
-            contains_cover: self.contains_cover,
-            audio_quality: self.audio_quality.clone(),
-            copyright: self.copyright.clone(),
-            duration: self.duration,
-            explicit: self.explicit,
-            number_of_tracks: self.number_of_tracks,
-            popularity: self.popularity,
-            date_released: self.release_date.clone(),
-            title: self.title.clone(),
-            media_metadata_tags: self.media_metadata_tags.clone(),
-            api_source: ApiSource::Yt,
-        })
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -737,7 +709,7 @@ pub async fn favorite_albums_endpoint(
             query.user_id,
         )
         .await?
-        .to_api()
+        .map(Into::into)
         .into(),
     ))
 }
@@ -1156,7 +1128,7 @@ pub async fn artist_albums_endpoint(
                 .map(|x| x.to_str().unwrap().to_string()),
         )
         .await?
-        .to_api()
+        .map(Into::into)
         .into(),
     ))
 }
@@ -1294,7 +1266,7 @@ pub async fn album_endpoint(
     )
     .await?;
 
-    Ok(Json(album.to_api()))
+    Ok(Json(album.into()))
 }
 
 impl From<YtArtistError> for actix_web::Error {

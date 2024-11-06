@@ -7,7 +7,7 @@ use actix_web::{
 };
 use moosicbox_core::{
     integer_range::parse_integer_ranges_to_ids,
-    sqlite::models::{AlbumSort, ToApi},
+    sqlite::models::{AlbumSort, ApiAlbum, ToApi},
 };
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_music_api::models::AlbumsRequest;
@@ -22,11 +22,11 @@ use crate::{
     artist_albums, favorite_albums, favorite_artists, favorite_tracks, reindex_global_search_index,
     remove_favorite_album, remove_favorite_artist, remove_favorite_track, search, track,
     track_file_url, LibraryAddFavoriteAlbumError, LibraryAddFavoriteArtistError,
-    LibraryAddFavoriteTrackError, LibraryAlbum, LibraryAlbumError, LibraryAlbumOrder,
-    LibraryAlbumOrderDirection, LibraryAlbumTracksError, LibraryAlbumType, LibraryArtist,
-    LibraryArtistAlbumsError, LibraryArtistError, LibraryArtistOrder, LibraryArtistOrderDirection,
-    LibraryAudioQuality, LibraryFavoriteAlbumsError, LibraryFavoriteArtistsError,
-    LibraryFavoriteTracksError, LibraryRemoveFavoriteAlbumError, LibraryRemoveFavoriteArtistError,
+    LibraryAddFavoriteTrackError, LibraryAlbumError, LibraryAlbumOrder, LibraryAlbumOrderDirection,
+    LibraryAlbumTracksError, LibraryAlbumType, LibraryArtist, LibraryArtistAlbumsError,
+    LibraryArtistError, LibraryArtistOrder, LibraryArtistOrderDirection, LibraryAudioQuality,
+    LibraryFavoriteAlbumsError, LibraryFavoriteArtistsError, LibraryFavoriteTracksError,
+    LibraryRemoveFavoriteAlbumError, LibraryRemoveFavoriteArtistError,
     LibraryRemoveFavoriteTrackError, LibrarySearchError, LibraryTrack, LibraryTrackError,
     LibraryTrackFileUrlError, LibraryTrackOrder, LibraryTrackOrderDirection, ReindexError,
     SearchType,
@@ -105,28 +105,6 @@ pub fn bind_services<
     ))
 )]
 pub struct Api;
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[serde(tag = "type")]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub enum ApiAlbum {
-    Library(ApiLibraryAlbum),
-}
-
-impl ToApi<ApiAlbum> for LibraryAlbum {
-    fn to_api(self) -> ApiAlbum {
-        ApiAlbum::Library(ApiLibraryAlbum {
-            id: self.id,
-            artist: self.artist,
-            artist_id: self.artist_id,
-            contains_cover: self.artwork.is_some(),
-            explicit: false,
-            date_released: self.date_released,
-            title: self.title,
-        })
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -336,7 +314,7 @@ pub async fn favorite_albums_endpoint(
             },
         )
         .await?
-        .to_api()
+        .map(Into::into)
         .into(),
     ))
 }
@@ -792,7 +770,7 @@ pub async fn artist_albums_endpoint(
             query.album_type.map(|t| t.into()),
         )
         .await?
-        .to_api()
+        .map(Into::into)
         .into(),
     ))
 }
@@ -887,7 +865,7 @@ pub async fn album_endpoint(
         .await?
         .ok_or_else(|| ErrorNotFound("Album not found"))?;
 
-    Ok(Json(album.to_api()))
+    Ok(Json(album.into()))
 }
 
 impl From<LibraryArtistError> for actix_web::Error {
