@@ -656,6 +656,7 @@ impl AsId for Connection {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiConnection {
     pub connection_id: String,
     pub name: String,

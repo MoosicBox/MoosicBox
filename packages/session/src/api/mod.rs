@@ -9,9 +9,13 @@ use moosicbox_audio_zone::models::{ApiAudioZone, ApiPlayer};
 use moosicbox_core::sqlite::models::ToApi as _;
 use moosicbox_database::{config::ConfigDatabase, profiles::LibraryDatabase};
 use moosicbox_paging::Page;
+use moosicbox_session_models::{ApiConnection, RegisterConnection};
 use serde::Deserialize;
 
-use crate::models::{ApiSession, ApiSessionPlaylist, ApiSessionPlaylistTrack, RegisterPlayer};
+use crate::{
+    models::{ApiSession, ApiSessionPlaylist, ApiSessionPlaylistTrack, RegisterPlayer},
+    CreatePlayersError,
+};
 
 pub mod models;
 
@@ -28,6 +32,7 @@ pub fn bind_services<
         .service(session_endpoint)
         .service(sessions_endpoint)
         .service(register_players_endpoint)
+        .service(register_connection_endpoint)
 }
 
 #[cfg(feature = "openapi")]
@@ -351,6 +356,38 @@ pub async fn register_players_endpoint(
         .into_iter()
         .map(|x| x.to_api())
         .collect::<Vec<_>>();
+
+    Ok(Json(registered))
+}
+
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Session"],
+        post,
+        path = "/register-connection",
+        description = "Register the connection to a connection",
+        request_body = Vec<RegisterPlayer>,
+        params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The successfully registered connection",
+                body = Vec<ApiConnection>,
+            )
+        )
+    )
+)]
+#[route("/register-connection", method = "POST")]
+pub async fn register_connection_endpoint(
+    connection: web::Json<RegisterConnection>,
+    db: ConfigDatabase,
+) -> Result<Json<ApiConnection>> {
+    let registered = crate::register_connection(&db, &connection)
+        .await
+        .map_err(ErrorInternalServerError)?
+        .to_api();
 
     Ok(Json(registered))
 }
