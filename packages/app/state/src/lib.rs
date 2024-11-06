@@ -914,6 +914,11 @@ impl AppState {
             outputs.push((output, player_type));
         }
 
+        if outputs.is_empty() {
+            log::debug!("No players to register");
+            return Ok(());
+        };
+
         let register_players_payload = outputs
             .iter()
             .map(|(x, _)| RegisterPlayer {
@@ -1287,6 +1292,11 @@ impl AppState {
                 name: x.name.clone(),
             })
             .collect::<Vec<_>>();
+
+        if players.is_empty() {
+            log::debug!("No players to register");
+            return Ok(());
+        };
 
         let players = self.register_players(&players).await?;
 
