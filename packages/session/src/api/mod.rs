@@ -351,6 +351,7 @@ pub async fn register_players_endpoint(
     query: web::Query<RegisterPlayers>,
     db: ConfigDatabase,
 ) -> Result<Json<Vec<ApiPlayer>>> {
+    log::debug!("/register-players: {players:?}");
     let registered = crate::create_players(&db, &query.connection_id, &players)
         .await?
         .into_iter()
@@ -384,6 +385,7 @@ pub async fn register_connection_endpoint(
     connection: web::Json<RegisterConnection>,
     db: ConfigDatabase,
 ) -> Result<Json<ApiConnection>> {
+    log::debug!("/register-connection: {connection:?}");
     let registered = crate::register_connection(&db, &connection)
         .await
         .map_err(ErrorInternalServerError)?
