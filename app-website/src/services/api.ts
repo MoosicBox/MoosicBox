@@ -43,16 +43,16 @@ export function trackId(
 export function toSessionPlaylistTrack(
     track: Track,
 ): Api.UpdateSessionPlaylistTrack {
-    if (track.type === 'LIBRARY') {
+    if ('trackId' in track) {
         return {
             id: `${track.trackId}`,
-            type: track.type,
+            type: track.apiSource,
             data: JSON.stringify(track),
         };
     } else {
         return {
             id: `${track.id}`,
-            type: track.type,
+            type: track.apiSource,
             data: JSON.stringify(track),
         };
     }
