@@ -623,14 +623,25 @@ impl AppState {
 
         for player in active_players {
             let target = &player.playback_target;
-            log::trace!(
-                "get_players: Checking if player is in session: target={target:?} session_id={session_id} player_zone_id={playback_target:?} player={player:?}",
+            moosicbox_logging::debug_or_trace!(
+                ("get_players: Checking if player is in session: target={target:?} session_id={session_id} player_zone_id={playback_target:?}"),
+                ("get_players: Checking if player is in session: target={target:?} session_id={session_id} player_zone_id={playback_target:?} player={player:?}")
             );
             let same_session = player.player.playback
                 .read()
                 .unwrap()
                 .as_ref()
                 .is_some_and(|p| {
+                    moosicbox_logging::debug_or_trace!(
+                        (
+                            "get_players: player playback.session_id={} target session_id={session_id}",
+                            p.session_id
+                        ),
+                        (
+                            "get_players: player playback.session_id={} target session_id={session_id} player={player:?}",
+                            p.session_id
+                        )
+                    );
                     log::trace!(
                         "get_players: player playback.session_id={} target session_id={session_id} player={player:?}",
                         p.session_id
@@ -640,8 +651,9 @@ impl AppState {
             if !same_session {
                 continue;
             }
-            log::trace!(
-                "get_players: Checking if player is in zone: target={target:?} session_id={session_id} player_zone_id={playback_target:?} player={player:?}",
+            moosicbox_logging::debug_or_trace!(
+                ("get_players: Checking if player is in zone: target={target:?} session_id={session_id} player_zone_id={playback_target:?}"),
+                ("get_players: Checking if player is in zone: target={target:?} session_id={session_id} player_zone_id={playback_target:?} player={player:?}")
             );
             if playback_target.is_some_and(|x| x != target) {
                 continue;
