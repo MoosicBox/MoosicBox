@@ -14,18 +14,22 @@ use async_trait::async_trait;
 use moosicbox_core::{
     sqlite::{
         db::DbError,
-        models::{Album, AlbumSort, ApiSource, Artist, Id, Track},
+        models::{Album, AlbumSort, AlbumType, ApiSource, Artist, Id, Track},
     },
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_files::get_content_length;
+use moosicbox_library_models::LibraryAlbumType;
 use moosicbox_music_api::{
-    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumOrder, AlbumOrderDirection,
-    AlbumType, AlbumsError, AlbumsRequest, ArtistAlbumsError, ArtistError, ArtistOrder,
-    ArtistOrderDirection, ArtistsError, ImageCoverSize, ImageCoverSource, MusicApi,
-    RemoveAlbumError, RemoveArtistError, RemoveTrackError, TrackAudioQuality, TrackError,
-    TrackOrId, TrackOrder, TrackOrderDirection, TrackSource, TracksError,
+    models::{
+        AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
+        ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
+        TrackSource,
+    },
+    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
+    ArtistError, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError, RemoveTrackError,
+    TrackError, TrackOrId, TracksError,
 };
 use moosicbox_paging::{Page, PagingRequest, PagingResponse, PagingResult};
 use moosicbox_search::{
@@ -200,6 +204,16 @@ pub fn filter_albums<'a>(
         })
         .filter(|album| {
             !request.filters.as_ref().is_some_and(|x| {
+                x.album_type
+                    .map(Into::into)
+                    .is_some_and(|t: LibraryAlbumType| {
+                        // log::warn!("{} == {}", album.album_type.as_ref(), t.as_ref());
+                        album.album_type == t
+                    })
+            })
+        })
+        .filter(|album| {
+            !request.filters.as_ref().is_some_and(|x| {
                 x.name
                     .as_ref()
                     .is_some_and(|s| !album.title.to_lowercase().contains(s))
@@ -290,7 +304,7 @@ pub async fn favorite_albums(
     db: &LibraryDatabase,
     request: &AlbumsRequest,
 ) -> PagingResult<LibraryAlbum, LibraryFavoriteAlbumsError> {
-    let albums = db::get_albums(db).await?;
+    let albums = db::get_albums(db).await?; // TODO: should this be cached?
     let items = sort_albums(filter_albums(&albums, request).collect::<Vec<_>>(), request);
 
     let total = items.len() as u32;
@@ -487,16 +501,6 @@ pub enum LibraryArtistAlbumsError {
     Db(#[from] DbError),
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, Copy, Clone)]
-#[serde(rename_all = "UPPERCASE")]
-#[strum(serialize_all = "UPPERCASE")]
-pub enum LibraryAlbumType {
-    All,
-    Lp,
-    EpsAndSingles,
-    Compilations,
-}
-
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn artist_albums(
@@ -504,12 +508,20 @@ pub async fn artist_albums(
     artist_id: &Id,
     offset: Option<u32>,
     limit: Option<u32>,
-    _album_type: Option<LibraryAlbumType>,
+    album_type: Option<LibraryAlbumType>,
 ) -> PagingResult<LibraryAlbum, LibraryArtistAlbumsError> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
     let items = db::get_artist_albums(db, artist_id).await?;
+    let items = if let Some(album_type) = album_type {
+        items
+            .into_iter()
+            .filter(|x| x.album_type == album_type)
+            .collect()
+    } else {
+        items
+    };
     log::trace!("Received artist albums response: {items:?}");
 
     let total = items.len() as u32;
@@ -529,7 +541,7 @@ pub async fn artist_albums(
             let artist_id = artist_id.clone();
 
             Box::pin(async move {
-                artist_albums(&db, &artist_id, Some(offset), Some(limit), _album_type).await
+                artist_albums(&db, &artist_id, Some(offset), Some(limit), album_type).await
             })
         }))),
     })
@@ -783,20 +795,6 @@ pub enum TryFromAlbumTypeError {
     UnsupportedAlbumType,
 }
 
-impl TryFrom<AlbumType> for LibraryAlbumType {
-    type Error = TryFromAlbumTypeError;
-
-    fn try_from(value: AlbumType) -> Result<Self, Self::Error> {
-        match value {
-            AlbumType::All => Ok(LibraryAlbumType::All),
-            AlbumType::Lp => Ok(LibraryAlbumType::Lp),
-            AlbumType::Compilations => Ok(LibraryAlbumType::Compilations),
-            AlbumType::EpsAndSingles => Ok(LibraryAlbumType::EpsAndSingles),
-            _ => Err(TryFromAlbumTypeError::UnsupportedAlbumType),
-        }
-    }
-}
-
 impl From<LibraryFavoriteArtistsError> for ArtistsError {
     fn from(err: LibraryFavoriteArtistsError) -> Self {
         ArtistsError::Other(Box::new(err))
@@ -1037,7 +1035,7 @@ impl MusicApi for LibraryMusicApi {
     async fn artist_albums(
         &self,
         artist_id: &Id,
-        album_type: AlbumType,
+        album_type: Option<AlbumType>,
         offset: Option<u32>,
         limit: Option<u32>,
         _order: Option<AlbumOrder>,
@@ -1046,7 +1044,17 @@ impl MusicApi for LibraryMusicApi {
         let offset = offset.unwrap_or(0);
         let limit = limit.unwrap_or(100);
 
-        if album_type == AlbumType::All {
+        Ok(if let Some(album_type) = album_type {
+            artist_albums(
+                &self.db,
+                artist_id,
+                Some(offset),
+                Some(limit),
+                Some(album_type.into()),
+            )
+            .await?
+            .map(|x| x.into())
+        } else {
             let pages = futures::future::join_all(
                 vec![
                     LibraryAlbumType::Lp,
@@ -1072,9 +1080,8 @@ impl MusicApi for LibraryMusicApi {
 
             let db = self.db.to_owned();
             let artist_id = artist_id.clone();
-            let album_type = album_type.try_into()?;
 
-            return Ok(PagingResponse {
+            PagingResponse {
                 page: Page::WithTotal {
                     items: pages
                         .into_iter()
@@ -1089,23 +1096,12 @@ impl MusicApi for LibraryMusicApi {
                     let artist_id = artist_id.clone();
 
                     Box::pin(async move {
-                        artist_albums(&db, &artist_id, Some(offset), Some(limit), Some(album_type))
-                            .await
+                        artist_albums(&db, &artist_id, Some(offset), Some(limit), None).await
                     })
                 }))),
             }
-            .map(|item| item.into()));
-        }
-
-        Ok(artist_albums(
-            &self.db,
-            artist_id,
-            Some(offset),
-            Some(limit),
-            Some(album_type.try_into()?),
-        )
-        .await?
-        .map(|x| x.into()))
+            .map(|item| item.into())
+        })
     }
 
     async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {
@@ -1183,7 +1179,7 @@ impl MusicApi for LibraryMusicApi {
             return Ok(None);
         };
         let mut path = if let Some(file) = &track.file {
-            file.to_owned()
+            file.to_string()
         } else {
             return Ok(None);
         };
@@ -1202,7 +1198,7 @@ impl MusicApi for LibraryMusicApi {
             path,
             format: track.format.unwrap_or(AudioFormat::Source),
             track_id: Some(track.id.to_owned()),
-            source: track.source,
+            source: track.track_source,
         }))
     }
 
@@ -1360,7 +1356,7 @@ pub async fn reindex_global_search_index(db: &LibraryDatabase) -> Result<(), Rei
 #[cfg(test)]
 mod test {
     use moosicbox_core::sqlite::models::AlbumSource;
-    use moosicbox_music_api::AlbumFilters;
+    use moosicbox_music_api::models::AlbumFilters;
 
     use super::*;
 
@@ -1474,11 +1470,7 @@ mod test {
                 sort: None,
                 filters: Some(AlbumFilters {
                     name: Some("test".to_string()),
-                    artist: None,
-                    search: None,
-                    artist_id: None,
-                    tidal_artist_id: None,
-                    qobuz_artist_id: None,
+                    ..Default::default()
                 }),
                 page: Some(PagingRequest {
                     offset: 0,
@@ -1525,11 +1517,7 @@ mod test {
                 sort: None,
                 filters: Some(AlbumFilters {
                     name: Some("test".to_string()),
-                    artist: None,
-                    search: None,
-                    artist_id: None,
-                    tidal_artist_id: None,
-                    qobuz_artist_id: None,
+                    ..Default::default()
                 }),
                 page: Some(PagingRequest {
                     offset: 0,
@@ -1575,12 +1563,8 @@ mod test {
                 sources: None,
                 sort: None,
                 filters: Some(AlbumFilters {
-                    name: None,
                     artist: Some("test".to_string()),
-                    search: None,
-                    artist_id: None,
-                    tidal_artist_id: None,
-                    qobuz_artist_id: None,
+                    ..Default::default()
                 }),
                 page: Some(PagingRequest {
                     offset: 0,
@@ -1626,12 +1610,8 @@ mod test {
                 sources: None,
                 sort: None,
                 filters: Some(AlbumFilters {
-                    name: None,
                     artist: Some("test".to_string()),
-                    search: None,
-                    artist_id: None,
-                    tidal_artist_id: None,
-                    qobuz_artist_id: None,
+                    ..Default::default()
                 }),
                 page: Some(PagingRequest {
                     offset: 0,
@@ -1677,12 +1657,8 @@ mod test {
                 sources: None,
                 sort: None,
                 filters: Some(AlbumFilters {
-                    name: None,
-                    artist: None,
                     search: Some("test".to_string()),
-                    artist_id: None,
-                    tidal_artist_id: None,
-                    qobuz_artist_id: None,
+                    ..Default::default()
                 }),
                 page: Some(PagingRequest {
                     offset: 0,
@@ -1728,12 +1704,8 @@ mod test {
                 sources: None,
                 sort: None,
                 filters: Some(AlbumFilters {
-                    name: None,
-                    artist: None,
                     search: Some("test".to_string()),
-                    artist_id: None,
-                    tidal_artist_id: None,
-                    qobuz_artist_id: None,
+                    ..Default::default()
                 }),
                 page: Some(PagingRequest {
                     offset: 0,
@@ -1779,12 +1751,8 @@ mod test {
                 sources: None,
                 sort: None,
                 filters: Some(AlbumFilters {
-                    name: None,
-                    artist: None,
                     search: Some("test".to_string()),
-                    artist_id: None,
-                    tidal_artist_id: None,
-                    qobuz_artist_id: None,
+                    ..Default::default()
                 }),
                 page: Some(PagingRequest {
                     offset: 0,
@@ -1830,12 +1798,8 @@ mod test {
                 sources: None,
                 sort: None,
                 filters: Some(AlbumFilters {
-                    name: None,
-                    artist: None,
                     search: Some("test".to_string()),
-                    artist_id: None,
-                    tidal_artist_id: None,
-                    qobuz_artist_id: None,
+                    ..Default::default()
                 }),
                 page: Some(PagingRequest {
                     offset: 0,
@@ -1881,12 +1845,8 @@ mod test {
                 sources: None,
                 sort: None,
                 filters: Some(AlbumFilters {
-                    name: None,
-                    artist: None,
                     search: Some("test".to_string()),
-                    artist_id: None,
-                    tidal_artist_id: None,
-                    qobuz_artist_id: None,
+                    ..Default::default()
                 }),
                 page: Some(PagingRequest {
                     offset: 0,

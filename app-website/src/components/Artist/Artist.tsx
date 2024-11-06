@@ -1,58 +1,104 @@
 import './artist.css';
 import { Api, api } from '~/services/api';
-import type { Album, Artist, ArtistType, Track } from '~/services/api';
+import type { Artist, ArtistType, Track } from '~/services/api';
 import { createComputed, createSignal } from 'solid-js';
 
 export function artistRoute(
     artist:
         | Artist
-        | Album
+        | Api.Album
         | Track
         | { id: string | number; type: ArtistType }
         | { artistId: string | number; type: ArtistType },
 ): string {
-    const artistType = artist.type;
+    if ('apiSource' in artist) {
+        const apiSource = artist.apiSource;
 
-    switch (artistType) {
-        case 'LIBRARY':
-            if ('artistId' in artist) {
-                return `/artists?artistId=${
-                    (artist as { artistId: number }).artistId
-                }`;
-            } else {
-                return `/artists?artistId=${(artist as { id: number }).id}`;
-            }
-        case 'TIDAL':
-            if ('artistId' in artist) {
-                return `/artists?tidalArtistId=${
-                    (artist as { artistId: number }).artistId
-                }`;
-            } else {
-                return `/artists?tidalArtistId=${
-                    (artist as Api.TidalArtist).id
-                }`;
-            }
-        case 'QOBUZ':
-            if ('artistId' in artist) {
-                return `/artists?qobuzArtistId=${
-                    (artist as { artistId: number }).artistId
-                }`;
-            } else {
-                return `/artists?qobuzArtistId=${
-                    (artist as Api.QobuzArtist).id
-                }`;
-            }
-        case 'YT':
-            if ('artistId' in artist) {
-                return `/artists?ytArtistId=${
-                    (artist as { artistId: number }).artistId
-                }`;
-            } else {
-                return `/artists?ytArtistId=${(artist as Api.YtArtist).id}`;
-            }
-        default:
-            artistType satisfies never;
-            throw new Error(`Invalid artistType: ${artistType}`);
+        switch (apiSource) {
+            case 'LIBRARY':
+                if ('artistId' in artist) {
+                    return `/artists?artistId=${
+                        (artist as { artistId: number }).artistId
+                    }`;
+                } else {
+                    return `/artists?artistId=${(artist as { id: number }).id}`;
+                }
+            case 'TIDAL':
+                if ('artistId' in artist) {
+                    return `/artists?tidalArtistId=${
+                        (artist as { artistId: number }).artistId
+                    }`;
+                } else {
+                    return `/artists?tidalArtistId=${
+                        (artist as Api.TidalArtist).id
+                    }`;
+                }
+            case 'QOBUZ':
+                if ('artistId' in artist) {
+                    return `/artists?qobuzArtistId=${
+                        (artist as { artistId: number }).artistId
+                    }`;
+                } else {
+                    return `/artists?qobuzArtistId=${
+                        (artist as Api.QobuzArtist).id
+                    }`;
+                }
+            case 'YT':
+                if ('artistId' in artist) {
+                    return `/artists?ytArtistId=${
+                        (artist as { artistId: number }).artistId
+                    }`;
+                } else {
+                    return `/artists?ytArtistId=${(artist as Api.YtArtist).id}`;
+                }
+            default:
+                apiSource satisfies never;
+                throw new Error(`Invalid apiSource: ${apiSource}`);
+        }
+    } else {
+        const artistType = artist.type;
+
+        switch (artistType) {
+            case 'LIBRARY':
+                if ('artistId' in artist) {
+                    return `/artists?artistId=${
+                        (artist as { artistId: number }).artistId
+                    }`;
+                } else {
+                    return `/artists?artistId=${(artist as { id: number }).id}`;
+                }
+            case 'TIDAL':
+                if ('artistId' in artist) {
+                    return `/artists?tidalArtistId=${
+                        (artist as { artistId: number }).artistId
+                    }`;
+                } else {
+                    return `/artists?tidalArtistId=${
+                        (artist as Api.TidalArtist).id
+                    }`;
+                }
+            case 'QOBUZ':
+                if ('artistId' in artist) {
+                    return `/artists?qobuzArtistId=${
+                        (artist as { artistId: number }).artistId
+                    }`;
+                } else {
+                    return `/artists?qobuzArtistId=${
+                        (artist as Api.QobuzArtist).id
+                    }`;
+                }
+            case 'YT':
+                if ('artistId' in artist) {
+                    return `/artists?ytArtistId=${
+                        (artist as { artistId: number }).artistId
+                    }`;
+                } else {
+                    return `/artists?ytArtistId=${(artist as Api.YtArtist).id}`;
+                }
+            default:
+                artistType satisfies never;
+                throw new Error(`Invalid artistType: ${artistType}`);
+        }
     }
 }
 

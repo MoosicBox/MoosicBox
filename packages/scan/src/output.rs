@@ -21,7 +21,7 @@ use moosicbox_library::{
     },
     models::{LibraryAlbum, LibraryArtist, LibraryTrack},
 };
-use moosicbox_music_api::ImageCoverSize;
+use moosicbox_music_api::models::ImageCoverSize;
 use moosicbox_search::{
     data::AsDataValues as _, populate_global_search_index, PopulateIndexError, RecreateIndexError,
 };

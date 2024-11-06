@@ -7,7 +7,7 @@ use moosicbox_json_utils::{
     serde_json::{ToNestedValue, ToValue},
     ParseError, ToValueType,
 };
-use moosicbox_music_api::ImageCoverSize;
+use moosicbox_music_api::models::ImageCoverSize;
 use moosicbox_search::models::{
     ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
     ApiGlobalTrackSearchResult, ApiSearchResultsResponse,
@@ -15,7 +15,7 @@ use moosicbox_search::models::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::format_title;
+use crate::{format_title, QobuzAlbumReleaseType};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -194,6 +194,7 @@ pub struct QobuzAlbum {
     pub id: String,
     pub artist: String,
     pub artist_id: u64,
+    pub album_type: QobuzAlbumReleaseType,
     pub maximum_bit_depth: u16,
     pub image: Option<QobuzImage>,
     pub title: String,
@@ -218,13 +219,15 @@ impl From<QobuzAlbum> for Album {
             title: format_title(value.title.as_str(), value.version.as_deref()),
             artist: value.artist,
             artist_id: value.artist_id.into(),
+            album_type: value.album_type.into(),
             date_released: Some(value.release_date_original),
             date_added: None,
             artwork,
             directory: None,
             blur: false,
             versions: vec![],
-            source: AlbumSource::Qobuz,
+            album_source: AlbumSource::Qobuz,
+            api_source: ApiSource::Qobuz,
             artist_sources: ApiSources::default()
                 .with_source(ApiSource::Qobuz, value.artist_id.into()),
             album_sources: ApiSources::default().with_source(ApiSource::Qobuz, value.id.into()),
@@ -255,6 +258,7 @@ impl From<Album> for QobuzAlbum {
             title: value.title,
             artist: value.artist,
             artist_id: value.artist_id.into(),
+            album_type: value.album_type.into(),
             maximum_bit_depth: 0,
             image: value.artwork.map(|x| QobuzImage {
                 thumbnail: None,
@@ -295,8 +299,28 @@ impl ToValueType<QobuzAlbum> for &Value {
     }
 }
 
+pub fn magic_qobuz_album_release_type_determinizer(
+    duration: u32,
+    tracks_count: u32,
+) -> QobuzAlbumReleaseType {
+    match tracks_count {
+        1 => QobuzAlbumReleaseType::Single,
+        2..=6 => {
+            if duration > 60 * 4 * 5 {
+                QobuzAlbumReleaseType::Album
+            } else {
+                QobuzAlbumReleaseType::EpSingle
+            }
+        }
+        _ => QobuzAlbumReleaseType::Album,
+    }
+}
+
 impl AsModelResult<QobuzAlbum, ParseError> for Value {
     fn as_model(&self) -> Result<QobuzAlbum, ParseError> {
+        let album_type: Option<QobuzAlbumReleaseType> = self.to_value("release_type")?;
+        let duration = self.to_value("duration")?;
+        let tracks_count = self.to_value("tracks_count")?;
         Ok(QobuzAlbum {
             id: self.to_value("id")?,
             artist: self
@@ -310,12 +334,15 @@ impl AsModelResult<QobuzAlbum, ParseError> for Value {
             title: self.to_value("title")?,
             version: self.to_value("version")?,
             qobuz_id: self.to_value("qobuz_id")?,
+            album_type: album_type.unwrap_or_else(|| {
+                magic_qobuz_album_release_type_determinizer(duration, tracks_count)
+            }),
             released_at: self.to_value("released_at")?,
             release_date_original: self.to_value("release_date_original")?,
-            duration: self.to_value("duration")?,
+            duration,
             parental_warning: self.to_value("parental_warning")?,
             popularity: self.to_value("popularity")?,
-            tracks_count: self.to_value("tracks_count")?,
+            tracks_count,
             genre: self.to_value("genre")?,
             maximum_channel_count: self
                 .to_value("maximum_channel_count")
@@ -333,6 +360,7 @@ pub struct QobuzRelease {
     pub id: String,
     pub artist: String,
     pub artist_id: u64,
+    pub album_type: QobuzAlbumReleaseType,
     pub maximum_bit_depth: u16,
     pub image: Option<QobuzImage>,
     pub title: String,
@@ -360,18 +388,24 @@ impl ToValueType<QobuzRelease> for &Value {
 
 impl AsModelResult<QobuzRelease, ParseError> for Value {
     fn as_model(&self) -> Result<QobuzRelease, ParseError> {
+        let album_type: Option<QobuzAlbumReleaseType> = self.to_value("release_type")?;
+        let duration = self.to_value("duration")?;
+        let tracks_count = self.to_value("tracks_count")?;
         Ok(QobuzRelease {
             id: self.to_value("id")?,
             artist: self.to_nested_value(&["artist", "name", "display"])?,
             artist_id: self.to_nested_value(&["artist", "id"])?,
+            album_type: album_type.unwrap_or_else(|| {
+                magic_qobuz_album_release_type_determinizer(duration, tracks_count)
+            }),
             maximum_bit_depth: self.to_nested_value(&["audio_info", "maximum_bit_depth"])?,
             image: self.to_value("image")?,
             title: self.to_value("title")?,
             version: self.to_value("version")?,
             release_date_original: self.to_nested_value(&["dates", "original"])?,
-            duration: self.to_value("duration")?,
+            duration,
             parental_warning: self.to_value("parental_warning")?,
-            tracks_count: self.to_value("tracks_count")?,
+            tracks_count,
             genre: self.to_nested_value(&["genre", "name"])?,
             maximum_channel_count: self
                 .to_nested_value(&["audio_info", "maximum_channel_count"])?,
@@ -390,6 +424,7 @@ pub struct QobuzTrack {
     pub artist_id: u64,
     pub album: String,
     pub album_id: String,
+    pub album_type: QobuzAlbumReleaseType,
     pub image: Option<QobuzImage>,
     pub copyright: Option<String>,
     pub duration: u32,
@@ -409,6 +444,7 @@ impl From<QobuzTrack> for Track {
             duration: value.duration as f64,
             album: value.album,
             album_id: value.album_id.into(),
+            album_type: value.album_type.into(),
             date_released: None,
             date_added: None,
             artist: value.artist,
@@ -423,7 +459,7 @@ impl From<QobuzTrack> for Track {
             overall_bitrate: None,
             sample_rate: None,
             channels: None,
-            source: TrackApiSource::Qobuz,
+            track_source: TrackApiSource::Qobuz,
             api_source: ApiSource::Qobuz,
             sources: ApiSources::default().with_source(ApiSource::Qobuz, value.id.into()),
         }
@@ -465,12 +501,14 @@ impl ToValueType<QobuzTrack> for &Value {
 }
 
 impl QobuzTrack {
+    #[allow(clippy::too_many_arguments)]
     pub fn from_value(
         value: &Value,
         artist: &str,
         artist_id: u64,
         album: &str,
         album_id: &str,
+        album_type: QobuzAlbumReleaseType,
         album_version: Option<&str>,
         image: Option<QobuzImage>,
     ) -> Result<QobuzTrack, ParseError> {
@@ -479,6 +517,7 @@ impl QobuzTrack {
             track_number: value.to_value("track_number")?,
             artist: artist.to_string(),
             artist_id,
+            album_type,
             album: format_title(album, album_version),
             album_id: album_id.to_string(),
             image,
@@ -494,6 +533,10 @@ impl QobuzTrack {
 
 impl AsModelResult<QobuzTrack, ParseError> for Value {
     fn as_model(&self) -> Result<QobuzTrack, ParseError> {
+        let album_type: Option<QobuzAlbumReleaseType> =
+            self.to_nested_value(&["album", "release_type"])?;
+        let duration = self.to_nested_value(&["album", "duration"])?;
+        let tracks_count = self.to_nested_value(&["album", "tracks_count"])?;
         Ok(QobuzTrack {
             id: self.to_value("id")?,
             track_number: self.to_value("track_number")?,
@@ -501,9 +544,12 @@ impl AsModelResult<QobuzTrack, ParseError> for Value {
             album_id: self.to_nested_value(&["album", "id"])?,
             artist: self.to_nested_value(&["album", "artist", "name"])?,
             artist_id: self.to_nested_value(&["album", "artist", "id"])?,
+            album_type: album_type.unwrap_or_else(|| {
+                magic_qobuz_album_release_type_determinizer(duration, tracks_count)
+            }),
             image: self.to_value("image")?,
             copyright: self.to_value("copyright")?,
-            duration: self.to_value("duration")?,
+            duration,
             parental_warning: self.to_value("parental_warning")?,
             isrc: self.to_value("isrc")?,
             title: self.to_value("title")?,

@@ -4,6 +4,7 @@
 
 pub mod albums;
 pub mod artists;
+pub mod formatting;
 pub mod settings;
 pub mod state;
 
@@ -245,11 +246,17 @@ pub fn session_updated(update: &UpdateSession, session: &ApiSession) -> Vec<(Str
             .map(TryInto::try_into)
             .transpose();
 
-        if let Ok(Some(track)) = track {
-            partials.push((
-                "player-current-playing".to_string(),
-                player_current_album(&track),
-            ));
+        match track {
+            Ok(Some(track)) => {
+                partials.push((
+                    "player-current-playing".to_string(),
+                    player_current_album(&track),
+                ));
+            }
+            Ok(None) => {}
+            Err(e) => {
+                log::error!("session_updated: {e:?}");
+            }
         }
     }
     if let Some(playing) = update.playing {
@@ -298,38 +305,6 @@ pub fn downloads(state: &State) -> Markup {
             ("downloads")
         },
     )
-}
-
-trait TimeFormat {
-    fn into_formatted(self) -> String;
-}
-
-impl TimeFormat for f32 {
-    fn into_formatted(self) -> String {
-        f64::from(self).into_formatted()
-    }
-}
-
-impl TimeFormat for f64 {
-    fn into_formatted(self) -> String {
-        #[allow(clippy::cast_sign_loss)]
-        #[allow(clippy::cast_possible_truncation)]
-        (self.round() as u64).into_formatted()
-    }
-}
-
-impl TimeFormat for u64 {
-    fn into_formatted(self) -> String {
-        let hours = self / 60 / 60;
-        let minutes = self / 60;
-        let seconds = self % 60;
-
-        if hours > 0 {
-            format!("{hours}:{minutes}:{seconds:0>2}")
-        } else {
-            format!("{minutes}:{seconds:0>2}")
-        }
-    }
 }
 
 #[must_use]

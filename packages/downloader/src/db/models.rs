@@ -5,7 +5,7 @@ use moosicbox_database::{AsId, DatabaseValue};
 use moosicbox_json_utils::{
     database::ToValue as _, serde_json::ToValue, MissingValue, ParseError, ToValueType,
 };
-use moosicbox_music_api::TrackAudioQuality;
+use moosicbox_music_api::models::TrackAudioQuality;
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 

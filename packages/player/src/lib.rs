@@ -1281,13 +1281,13 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
         .tracks
         .iter()
         .cloned()
-        .map(|t| t.into())
+        .map(Into::into)
         .collect::<Vec<_>>();
     let prev_tracks = previous
         .tracks
         .iter()
         .cloned()
-        .map(|t| t.into())
+        .map(Into::into)
         .collect::<Vec<_>>();
     let playlist = if tracks != prev_tracks {
         has_change = true;

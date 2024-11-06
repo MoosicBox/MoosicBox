@@ -53,6 +53,7 @@ members = [
     "packages/middleware",
     "packages/moosicbox",
     "packages/music_api",
+    "packages/music_api/models",
     "packages/openport",
     "packages/paging",
     "packages/player",

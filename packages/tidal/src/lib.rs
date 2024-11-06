@@ -21,17 +21,20 @@ use moosicbox_database::DatabaseError;
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use moosicbox_core::{
-    sqlite::models::{Album, AlbumSort, ApiSource, Artist, AsModelResult, Id, Track},
+    sqlite::models::{Album, AlbumSort, AlbumType, ApiSource, Artist, AsModelResult, Id, Track},
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_files::get_content_length;
-use moosicbox_json_utils::{serde_json::ToValue, ParseError};
+use moosicbox_json_utils::{serde_json::ToValue, MissingValue, ParseError, ToValueType};
 use moosicbox_music_api::{
-    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumOrder, AlbumOrderDirection,
-    AlbumType, AlbumsError, AlbumsRequest, ArtistAlbumsError, ArtistError, ArtistOrder,
-    ArtistOrderDirection, ArtistsError, ImageCoverSize, ImageCoverSource, MusicApi,
-    RemoveAlbumError, RemoveArtistError, RemoveTrackError, TrackAudioQuality, TrackError,
-    TrackOrId, TrackOrder, TrackOrderDirection, TrackSource, TracksError,
+    models::{
+        AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
+        ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
+        TrackSource,
+    },
+    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
+    ArtistError, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError, RemoveTrackError,
+    TrackError, TrackOrId, TracksError,
 };
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use serde::{Deserialize, Serialize};
@@ -1440,14 +1443,53 @@ pub enum TidalArtistAlbumsError {
     Parse(#[from] ParseError),
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, Copy, Clone)]
+#[derive(Default, Debug, Serialize, Deserialize, AsRefStr, PartialEq, Eq, Copy, Clone)]
 #[serde(rename_all = "UPPERCASE")]
 #[strum(serialize_all = "UPPERCASE")]
 pub enum TidalAlbumType {
-    All,
+    #[default]
     Lp,
     EpsAndSingles,
     Compilations,
+}
+
+impl From<&str> for TidalAlbumType {
+    fn from(value: &str) -> Self {
+        match value {
+            "LP" => TidalAlbumType::Lp,
+            "EPSANDSINGLES" => TidalAlbumType::EpsAndSingles,
+            "COMPILATIONS" => TidalAlbumType::Compilations,
+            "ALBUM" => TidalAlbumType::Lp,
+            "EP" => TidalAlbumType::EpsAndSingles,
+            "SINGLE" => TidalAlbumType::EpsAndSingles,
+            _ => TidalAlbumType::Lp,
+        }
+    }
+}
+
+impl From<TidalAlbumType> for AlbumType {
+    fn from(value: TidalAlbumType) -> Self {
+        match value {
+            TidalAlbumType::Lp => Self::Lp,
+            TidalAlbumType::Compilations => Self::Compilations,
+            TidalAlbumType::EpsAndSingles => Self::EpsAndSingles,
+        }
+    }
+}
+
+impl MissingValue<TidalAlbumType> for &Value {}
+impl ToValueType<TidalAlbumType> for &Value {
+    fn to_value_type(self) -> Result<TidalAlbumType, ParseError> {
+        Ok(self
+            .as_str()
+            .ok_or_else(|| {
+                ParseError::MissingValue(format!(
+                    "TidalAlbumType: ({})",
+                    serde_json::to_string(self).unwrap_or_default()
+                ))
+            })?
+            .into())
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2079,7 +2121,6 @@ impl TryFrom<AlbumType> for TidalAlbumType {
 
     fn try_from(value: AlbumType) -> Result<Self, Self::Error> {
         match value {
-            AlbumType::All => Ok(TidalAlbumType::All),
             AlbumType::Lp => Ok(TidalAlbumType::Lp),
             AlbumType::Compilations => Ok(TidalAlbumType::Compilations),
             AlbumType::EpsAndSingles => Ok(TidalAlbumType::EpsAndSingles),
@@ -2340,7 +2381,7 @@ impl MusicApi for TidalMusicApi {
     async fn artist_albums(
         &self,
         artist_id: &Id,
-        album_type: AlbumType,
+        album_type: Option<AlbumType>,
         offset: Option<u32>,
         limit: Option<u32>,
         _order: Option<AlbumOrder>,
@@ -2349,7 +2390,22 @@ impl MusicApi for TidalMusicApi {
         let offset = offset.unwrap_or(0);
         let limit = limit.unwrap_or(100);
 
-        if album_type == AlbumType::All {
+        Ok(if let Some(album_type) = album_type {
+            artist_albums(
+                #[cfg(feature = "db")]
+                &self.db,
+                artist_id,
+                Some(offset),
+                Some(limit),
+                Some(album_type.try_into()?),
+                None,
+                None,
+                None,
+                None,
+            )
+            .await?
+            .map(|x| x.into())
+        } else {
             let pages = futures::future::join_all(
                 vec![
                     TidalAlbumType::Lp,
@@ -2381,9 +2437,8 @@ impl MusicApi for TidalMusicApi {
             #[cfg(feature = "db")]
             let db = self.db.to_owned();
             let artist_id = artist_id.clone();
-            let album_type = album_type.try_into()?;
 
-            return Ok(PagingResponse {
+            PagingResponse {
                 page: Page::WithTotal {
                     items: pages
                         .into_iter()
@@ -2405,7 +2460,7 @@ impl MusicApi for TidalMusicApi {
                             &artist_id,
                             Some(offset),
                             Some(limit),
-                            Some(album_type),
+                            None,
                             None,
                             None,
                             None,
@@ -2415,23 +2470,8 @@ impl MusicApi for TidalMusicApi {
                     })
                 }))),
             }
-            .map(|item| item.into()));
-        }
-
-        Ok(artist_albums(
-            #[cfg(feature = "db")]
-            &self.db,
-            artist_id,
-            Some(offset),
-            Some(limit),
-            Some(album_type.try_into()?),
-            None,
-            None,
-            None,
-            None,
-        )
-        .await?
-        .map(|x| x.into()))
+            .map(|item| item.into())
+        })
     }
 
     async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {
@@ -2607,7 +2647,7 @@ impl MusicApi for TidalMusicApi {
                 url,
                 format: track.format.unwrap_or(AudioFormat::Source),
                 track_id: Some(track.id.to_owned()),
-                source: track.source,
+                source: track.track_source,
             }))
     }
 

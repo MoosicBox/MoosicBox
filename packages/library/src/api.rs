@@ -10,7 +10,7 @@ use moosicbox_core::{
     sqlite::models::{AlbumSort, ToApi},
 };
 use moosicbox_database::profiles::LibraryDatabase;
-use moosicbox_music_api::AlbumsRequest;
+use moosicbox_music_api::models::AlbumsRequest;
 use moosicbox_paging::{Page, PagingRequest};
 use moosicbox_search::models::ApiSearchResultsResponse;
 use serde::{Deserialize, Serialize};
@@ -306,7 +306,6 @@ pub async fn favorite_albums_endpoint(
         favorite_albums(
             &db,
             &AlbumsRequest {
-                sources: None,
                 sort: match (query.order, query.order_direction) {
                     (None, None) => None,
                     (None, Some(direction)) => Some(match direction {
@@ -325,7 +324,6 @@ pub async fn favorite_albums_endpoint(
                         }
                     }),
                 },
-                filters: None,
                 page: if query.offset.is_some() || query.limit.is_some() {
                     Some(PagingRequest {
                         offset: query.offset.unwrap_or(0),
@@ -334,6 +332,7 @@ pub async fn favorite_albums_endpoint(
                 } else {
                     None
                 },
+                ..Default::default()
             },
         )
         .await?

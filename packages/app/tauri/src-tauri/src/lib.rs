@@ -12,7 +12,7 @@ use moosicbox_core::{
     types::PlaybackQuality,
 };
 use moosicbox_mdns::scanner::service::Commander;
-use moosicbox_music_api::FromId;
+use moosicbox_music_api::models::FromId as _;
 use moosicbox_player::{Playback, PlayerError};
 use moosicbox_session::models::{
     ApiSession, ApiUpdateSession, UpdateSession, UpdateSessionPlaylistTrack,

@@ -1,0 +1,47 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools", "multimedia", "network-programming"]
+description = "MoosicBox music API models package"
+edition     = "2021"
+keywords    = ["album", "api", "artist", "models", "music"]
+license     = "MPL-2.0"
+name        = "moosicbox_music_api_models"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[package.metadata.cargo-machete]
+ignored = ["strum"]
+
+[dependencies]
+moosicbox_core = { version = "0.1.0", path = "../../core", default-features = false }
+moosicbox_database = { version = "0.1.0", path = "../../database", default-features = false }
+moosicbox_json_utils = { version = "0.1.0", path = "../../json_utils", default-features = false, features = [
+    "serde_json",
+] }
+moosicbox_paging = { version = "0.1.0", path = "../../paging", default-features = false }
+
+# API Dependencies
+utoipa = { workspace = true, optional = true }
+
+log          = { workspace = true }
+serde        = { workspace = true, features = ["derive"] }
+serde_json   = { workspace = true }
+strum        = { workspace = true }
+strum_macros = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+test-log          = { workspace = true }
+tokio             = { workspace = true, features = ["macros", "rt"] }
+
+[features]
+default = ["api", "db", "openapi"]
+
+fail-on-warnings = []
+
+openapi = ["dep:utoipa"]
+
+db = ["moosicbox_database/api"]
+
+api = ["moosicbox_database/api"]

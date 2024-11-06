@@ -7,8 +7,8 @@ use std::{path::PathBuf, str::FromStr as _};
 use moosicbox_core::sqlite::db::{get_album_version_qualities, DbError};
 use moosicbox_core::{
     sqlite::models::{
-        Album, AlbumSource, AlbumVersionQuality, ApiAlbumVersionQuality, ApiSource, ApiSources,
-        Artist, Id, ToApi, Track, TrackApiSource,
+        Album, AlbumSource, AlbumVersionQuality, ApiAlbum, ApiAlbumVersionQuality, ApiSource,
+        ApiSources, Artist, Id, ToApi, Track, TrackApiSource,
     },
     types::AudioFormat,
 };
@@ -17,8 +17,10 @@ use moosicbox_database::{AsId, Database, DatabaseValue};
 #[cfg(feature = "db")]
 use moosicbox_json_utils::database::ToValue as _;
 #[cfg(feature = "db")]
-use moosicbox_json_utils::{MissingValue, ParseError, ToValueType};
+use moosicbox_json_utils::MissingValue;
+use moosicbox_json_utils::{ParseError, ToValueType};
 use serde::{Deserialize, Serialize};
+use strum::{AsRefStr, EnumString};
 use thiserror::Error;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
@@ -138,12 +140,84 @@ impl ToApi<ApiArtist> for LibraryArtist {
     }
 }
 
+#[derive(
+    Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy,
+)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub enum LibraryAlbumType {
+    #[default]
+    Lp,
+    Live,
+    Compilations,
+    EpsAndSingles,
+    Other,
+}
+
+impl From<moosicbox_core::sqlite::models::AlbumType> for LibraryAlbumType {
+    fn from(value: moosicbox_core::sqlite::models::AlbumType) -> Self {
+        match value {
+            moosicbox_core::sqlite::models::AlbumType::Lp => Self::Lp,
+            moosicbox_core::sqlite::models::AlbumType::Live => Self::Live,
+            moosicbox_core::sqlite::models::AlbumType::Compilations => Self::Compilations,
+            moosicbox_core::sqlite::models::AlbumType::EpsAndSingles => Self::EpsAndSingles,
+            moosicbox_core::sqlite::models::AlbumType::Other
+            | moosicbox_core::sqlite::models::AlbumType::Download => Self::Other,
+        }
+    }
+}
+
+impl From<LibraryAlbumType> for moosicbox_core::sqlite::models::AlbumType {
+    fn from(value: LibraryAlbumType) -> Self {
+        match value {
+            LibraryAlbumType::Lp => Self::Lp,
+            LibraryAlbumType::Live => Self::Live,
+            LibraryAlbumType::Compilations => Self::Compilations,
+            LibraryAlbumType::EpsAndSingles => Self::EpsAndSingles,
+            LibraryAlbumType::Other => Self::Other,
+        }
+    }
+}
+
+#[cfg(feature = "db")]
+impl MissingValue<LibraryAlbumType> for &moosicbox_database::Row {}
+#[cfg(feature = "db")]
+impl ToValueType<LibraryAlbumType> for &moosicbox_database::Row {
+    fn to_value_type(self) -> Result<LibraryAlbumType, ParseError> {
+        self.get("album_type")
+            .ok_or_else(|| ParseError::MissingValue("album_type".into()))?
+            .to_value_type()
+    }
+}
+#[cfg(feature = "db")]
+impl ToValueType<LibraryAlbumType> for DatabaseValue {
+    fn to_value_type(self) -> Result<LibraryAlbumType, ParseError> {
+        LibraryAlbumType::from_str(
+            self.as_str()
+                .ok_or_else(|| ParseError::ConvertType("AlbumType".into()))?,
+        )
+        .map_err(|_| ParseError::ConvertType("AlbumType".into()))
+    }
+}
+
+impl ToValueType<LibraryAlbumType> for &serde_json::Value {
+    fn to_value_type(self) -> Result<LibraryAlbumType, ParseError> {
+        LibraryAlbumType::from_str(
+            self.as_str()
+                .ok_or_else(|| ParseError::ConvertType("AlbumType".into()))?,
+        )
+        .map_err(|_| ParseError::ConvertType("AlbumType".into()))
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 pub struct LibraryAlbum {
     pub id: u64,
     pub title: String,
     pub artist: String,
     pub artist_id: u64,
+    pub album_type: LibraryAlbumType,
     pub date_released: Option<String>,
     pub date_added: Option<String>,
     pub artwork: Option<String>,
@@ -159,6 +233,20 @@ pub struct LibraryAlbum {
     pub yt_artist_id: Option<u64>,
 }
 
+impl From<&LibraryAlbum> for ApiAlbum {
+    fn from(value: &LibraryAlbum) -> Self {
+        let album: Album = value.clone().into();
+        album.into()
+    }
+}
+
+impl From<LibraryAlbum> for ApiAlbum {
+    fn from(value: LibraryAlbum) -> Self {
+        let album: Album = value.into();
+        album.into()
+    }
+}
+
 impl From<LibraryAlbum> for Album {
     fn from(value: LibraryAlbum) -> Self {
         Self {
@@ -166,13 +254,15 @@ impl From<LibraryAlbum> for Album {
             title: value.title,
             artist: value.artist,
             artist_id: value.artist_id.into(),
+            album_type: value.album_type.into(),
             date_released: value.date_released,
             date_added: value.date_added,
             artwork: value.artwork,
             directory: value.directory,
             blur: value.blur,
             versions: value.versions,
-            source: value.source,
+            album_source: value.source,
+            api_source: ApiSource::Library,
             artist_sources: {
                 #[allow(unused_mut)]
                 let mut sources = ApiSources::default();
@@ -223,6 +313,7 @@ impl From<Album> for LibraryAlbum {
             title: value.title,
             artist: value.artist,
             artist_id: value.artist_id.into(),
+            album_type: value.album_type.into(),
             date_released: value.date_released,
             date_added: value.date_added,
             artwork: value.artwork,
@@ -294,11 +385,13 @@ impl MissingValue<LibraryAlbum> for &moosicbox_database::Row {}
 #[cfg(feature = "db")]
 impl ToValueType<LibraryAlbum> for &moosicbox_database::Row {
     fn to_value_type(self) -> Result<LibraryAlbum, ParseError> {
+        let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
         Ok(LibraryAlbum {
             id: self.to_value("id")?,
             artist: self.to_value("artist").unwrap_or_default(),
             artist_id: self.to_value("artist_id")?,
             title: self.to_value("title")?,
+            album_type: album_type.unwrap_or_default(),
             date_released: self.to_value("date_released")?,
             date_added: self.to_value("date_added")?,
             artwork: self.to_value("artwork")?,
@@ -321,11 +414,13 @@ impl moosicbox_core::sqlite::models::AsModelResult<LibraryAlbum, ParseError>
     for &moosicbox_database::Row
 {
     fn as_model(&self) -> Result<LibraryAlbum, ParseError> {
+        let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
         Ok(LibraryAlbum {
             id: self.to_value("id")?,
             artist: self.to_value("artist").unwrap_or_default(),
             artist_id: self.to_value("artist_id")?,
             title: self.to_value("title")?,
+            album_type: album_type.unwrap_or_default(),
             date_released: self.to_value("date_released")?,
             date_added: self.to_value("date_added")?,
             artwork: self.to_value("artwork")?,
@@ -496,6 +591,7 @@ impl moosicbox_core::sqlite::models::AsModelQuery<LibraryAlbum> for &moosicbox_d
         db: std::sync::Arc<Box<dyn Database>>,
     ) -> Result<LibraryAlbum, DbError> {
         let id = self.to_value("id")?;
+        let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
 
         Ok(LibraryAlbum {
             id,
@@ -504,6 +600,7 @@ impl moosicbox_core::sqlite::models::AsModelQuery<LibraryAlbum> for &moosicbox_d
                 .unwrap_or_default(),
             artist_id: self.to_value("artist_id")?,
             title: self.to_value("title")?,
+            album_type: album_type.unwrap_or_default(),
             date_released: self.to_value("date_released")?,
             date_added: self.to_value("date_added")?,
             artwork: self.to_value("artwork")?,
@@ -528,28 +625,6 @@ impl AsId for LibraryAlbum {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[serde(tag = "type")]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub enum ApiAlbum {
-    Library(ApiLibraryAlbum),
-}
-
-impl From<ApiAlbum> for moosicbox_core::sqlite::models::ApiAlbum {
-    fn from(value: ApiAlbum) -> Self {
-        let ApiAlbum::Library(album) = value;
-        album.into()
-    }
-}
-
-impl From<ApiAlbum> for Album {
-    fn from(value: ApiAlbum) -> Self {
-        let ApiAlbum::Library(album) = value;
-        album.into()
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -558,6 +633,7 @@ pub struct ApiLibraryAlbum {
     pub title: String,
     pub artist: String,
     pub artist_id: u64,
+    pub album_type: LibraryAlbumType,
     pub contains_cover: bool,
     pub date_released: Option<String>,
     pub date_added: Option<String>,
@@ -576,21 +652,18 @@ impl From<ApiLibraryAlbum> for moosicbox_core::sqlite::models::ApiAlbum {
             title: value.title,
             artist: value.artist,
             artist_id: value.artist_id.into(),
+            album_type: value.album_type.into(),
             date_released: value.date_released,
             date_added: value.date_added,
-            artwork: if value.contains_cover {
-                Some(value.album_id.to_string())
-            } else {
-                None
-            },
-            directory: None,
+            contains_cover: value.contains_cover,
             blur: value.blur,
             versions: value
                 .versions
                 .into_iter()
                 .map(Into::into)
                 .collect::<Vec<_>>(),
-            source: value.source,
+            album_source: value.source,
+            api_source: ApiSource::Library,
             artist_sources: ApiSources::default(),
             album_sources: ApiSources::default(),
         }
@@ -604,6 +677,7 @@ impl From<ApiLibraryAlbum> for Album {
             title: value.title,
             artist: value.artist,
             artist_id: value.artist_id.into(),
+            album_type: value.album_type.into(),
             date_released: value.date_released,
             date_added: value.date_added,
             artwork: if value.contains_cover {
@@ -614,7 +688,8 @@ impl From<ApiLibraryAlbum> for Album {
             directory: None,
             blur: value.blur,
             versions: vec![],
-            source: value.source,
+            album_source: value.source,
+            api_source: ApiSource::Library,
             artist_sources: ApiSources::default(),
             album_sources: ApiSources::default(),
         }
@@ -628,6 +703,7 @@ impl ToApi<ApiLibraryAlbum> for LibraryAlbum {
             title: self.title,
             artist: self.artist,
             artist_id: self.artist_id,
+            album_type: self.album_type,
             contains_cover: self.artwork.is_some(),
             date_released: self.date_released,
             date_added: self.date_added,
@@ -645,12 +721,6 @@ impl ToApi<ApiLibraryAlbum> for LibraryAlbum {
     }
 }
 
-impl ToApi<ApiAlbum> for LibraryAlbum {
-    fn to_api(self) -> ApiAlbum {
-        ApiAlbum::Library(self.to_api())
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryTrack {
@@ -660,6 +730,7 @@ pub struct LibraryTrack {
     pub duration: f64,
     pub album: String,
     pub album_id: u64,
+    pub album_type: LibraryAlbumType,
     pub date_released: Option<String>,
     pub date_added: Option<String>,
     pub artist: String,
@@ -675,6 +746,7 @@ pub struct LibraryTrack {
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
     pub source: TrackApiSource,
+    pub api_source: ApiSource,
     pub qobuz_id: Option<u64>,
     pub tidal_id: Option<u64>,
     pub yt_id: Option<u64>,
@@ -702,6 +774,7 @@ impl From<LibraryTrack> for Track {
             duration: value.duration,
             album: value.album,
             album_id: value.album_id.into(),
+            album_type: value.album_type.into(),
             date_released: value.date_released,
             date_added: value.date_added,
             artist: value.artist,
@@ -716,7 +789,7 @@ impl From<LibraryTrack> for Track {
             overall_bitrate: value.overall_bitrate,
             sample_rate: value.sample_rate,
             channels: value.channels,
-            source: value.source,
+            track_source: value.source,
             api_source: ApiSource::Library,
             sources: {
                 #[allow(unused_mut)]
@@ -751,6 +824,7 @@ impl moosicbox_core::sqlite::models::AsModel<LibraryTrack> for &moosicbox_databa
 #[cfg(feature = "db")]
 impl ToValueType<LibraryTrack> for &moosicbox_database::Row {
     fn to_value_type(self) -> Result<LibraryTrack, ParseError> {
+        let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
         Ok(LibraryTrack {
             id: self.to_value("id")?,
             number: self.to_value("number")?,
@@ -758,6 +832,7 @@ impl ToValueType<LibraryTrack> for &moosicbox_database::Row {
             duration: self.to_value("duration")?,
             album: self.to_value("album").unwrap_or_default(),
             album_id: self.to_value("album_id")?,
+            album_type: album_type.unwrap_or_default(),
             date_released: self.to_value("date_released").unwrap_or_default(),
             date_added: self.to_value("date_added").unwrap_or_default(),
             artist: self.to_value("artist").unwrap_or_default(),
@@ -781,6 +856,7 @@ impl ToValueType<LibraryTrack> for &moosicbox_database::Row {
             channels: self.to_value("channels").unwrap_or_default(),
             source: TrackApiSource::from_str(&self.to_value::<String>("source")?)
                 .expect("Missing source"),
+            api_source: ApiSource::Library,
             qobuz_id: self.to_value("qobuz_id")?,
             tidal_id: self.to_value("tidal_id")?,
             yt_id: self.to_value("yt_id")?,
@@ -793,6 +869,7 @@ impl moosicbox_core::sqlite::models::AsModelResult<LibraryTrack, ParseError>
     for &moosicbox_database::Row
 {
     fn as_model(&self) -> Result<LibraryTrack, ParseError> {
+        let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
         Ok(LibraryTrack {
             id: self.to_value("id")?,
             number: self.to_value("number")?,
@@ -800,6 +877,7 @@ impl moosicbox_core::sqlite::models::AsModelResult<LibraryTrack, ParseError>
             duration: self.to_value("duration")?,
             album: self.to_value("album").unwrap_or_default(),
             album_id: self.to_value("album_id")?,
+            album_type: album_type.unwrap_or_default(),
             date_released: self.to_value("date_released").unwrap_or_default(),
             date_added: self.to_value("date_added").unwrap_or_default(),
             artist: self.to_value("artist").unwrap_or_default(),
@@ -823,6 +901,7 @@ impl moosicbox_core::sqlite::models::AsModelResult<LibraryTrack, ParseError>
             channels: self.to_value("channels").unwrap_or_default(),
             source: TrackApiSource::from_str(&self.to_value::<String>("source")?)
                 .expect("Missing source"),
+            api_source: ApiSource::Library,
             qobuz_id: self.to_value("qobuz_id")?,
             tidal_id: self.to_value("tidal_id")?,
             yt_id: self.to_value("yt_id")?,
@@ -880,6 +959,8 @@ pub enum TryFromApiTrackError {
     MissingField,
     #[error(transparent)]
     TryFromInt(#[from] std::num::TryFromIntError),
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
 }
 
 impl TryFrom<&ApiTrack> for Track {
@@ -903,6 +984,7 @@ impl TryFrom<ApiTrack> for Track {
                 duration: data.duration,
                 album: data.album,
                 album_id: data.album_id.into(),
+                album_type: data.album_type.into(),
                 date_released: data.date_released,
                 date_added: data.date_added,
                 artist: data.artist,
@@ -921,234 +1003,27 @@ impl TryFrom<ApiTrack> for Track {
                 overall_bitrate: data.overall_bitrate,
                 sample_rate: data.sample_rate,
                 channels: data.channels,
-                source: data.source,
+                track_source: data.source,
                 api_source: ApiSource::Library,
                 sources: ApiSources::default(),
             },
             #[cfg(feature = "tidal")]
-            ApiTrack::Tidal { track_id, data } => {
-                let album_id = data
-                    .get("albumId")
-                    .ok_or(TryFromApiTrackError::MissingField)?
-                    .as_u64()
-                    .ok_or(TryFromApiTrackError::MissingField)?;
-                Self {
-                    id: track_id.into(),
-                    number: u32::try_from(
-                        data.get("number")
-                            .ok_or(TryFromApiTrackError::MissingField)?
-                            .as_u64()
-                            .ok_or(TryFromApiTrackError::MissingField)?,
-                    )?,
-                    title: data
-                        .get("title")
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .as_str()
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .to_string(),
-                    #[allow(clippy::cast_precision_loss)]
-                    duration: data
-                        .get("duration")
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .as_u64()
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        as f64,
-                    album: data
-                        .get("album")
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .as_str()
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .to_string(),
-                    album_id: album_id.into(),
-                    date_released: data
-                        .get("dateReleased")
-                        .and_then(|x| x.as_str().map(str::to_string)),
-                    date_added: data
-                        .get("dateAdded")
-                        .and_then(|x| x.as_str().map(str::to_string)),
-                    artist: data
-                        .get("artist")
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .as_str()
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .to_string(),
-                    artist_id: data
-                        .get("artistId")
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .as_u64()
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .into(),
-                    file: None,
-                    artwork: if data
-                        .get("containsCover")
-                        .is_some_and(|x| x.as_bool().is_some_and(|x| x))
-                    {
-                        Some(album_id.to_string())
-                    } else {
-                        None
-                    },
-                    blur: false,
-                    bytes: 0,
-                    format: None,
-                    bit_depth: None,
-                    audio_bitrate: None,
-                    overall_bitrate: None,
-                    sample_rate: None,
-                    channels: None,
-                    source: TrackApiSource::Tidal,
-                    api_source: ApiSource::Tidal,
-                    sources: ApiSources::default().with_source(ApiSource::Tidal, track_id.into()),
-                }
+            ApiTrack::Tidal { data, .. } => {
+                let track: moosicbox_tidal::api::ApiTidalTrack = serde_json::from_value(data)?;
+                let track: moosicbox_core::sqlite::models::ApiTrack = track.into();
+                track.into()
             }
             #[cfg(feature = "qobuz")]
-            ApiTrack::Qobuz { track_id, data } => {
-                let album_id = data
-                    .get("albumId")
-                    .ok_or(TryFromApiTrackError::MissingField)?
-                    .as_str()
-                    .ok_or(TryFromApiTrackError::MissingField)?;
-                Self {
-                    id: track_id.into(),
-                    number: u32::try_from(
-                        data.get("number")
-                            .ok_or(TryFromApiTrackError::MissingField)?
-                            .as_u64()
-                            .ok_or(TryFromApiTrackError::MissingField)?,
-                    )?,
-                    title: data
-                        .get("title")
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .as_str()
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .to_string(),
-                    #[allow(clippy::cast_precision_loss)]
-                    duration: data
-                        .get("duration")
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .as_u64()
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        as f64,
-                    album: data
-                        .get("album")
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .as_str()
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .to_string(),
-                    album_id: album_id.into(),
-                    date_released: data
-                        .get("dateReleased")
-                        .and_then(|x| x.as_str().map(str::to_string)),
-                    date_added: data
-                        .get("dateAdded")
-                        .and_then(|x| x.as_str().map(str::to_string)),
-                    artist: data
-                        .get("artist")
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .as_str()
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .to_string(),
-                    artist_id: data
-                        .get("artistId")
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .as_u64()
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .into(),
-                    file: None,
-                    artwork: if data
-                        .get("containsCover")
-                        .is_some_and(|x| x.as_bool().is_some_and(|x| x))
-                    {
-                        Some(album_id.to_string())
-                    } else {
-                        None
-                    },
-                    blur: false,
-                    bytes: 0,
-                    format: None,
-                    bit_depth: None,
-                    audio_bitrate: None,
-                    overall_bitrate: None,
-                    sample_rate: None,
-                    channels: None,
-                    source: TrackApiSource::Qobuz,
-                    api_source: ApiSource::Qobuz,
-                    sources: ApiSources::default().with_source(ApiSource::Qobuz, track_id.into()),
-                }
+            ApiTrack::Qobuz { data, .. } => {
+                let track: moosicbox_qobuz::api::ApiQobuzTrack = serde_json::from_value(data)?;
+                let track: moosicbox_core::sqlite::models::ApiTrack = track.into();
+                track.into()
             }
             #[cfg(feature = "yt")]
-            ApiTrack::Yt { track_id, data } => {
-                let album_id = data
-                    .get("albumId")
-                    .ok_or(TryFromApiTrackError::MissingField)?
-                    .as_u64()
-                    .ok_or(TryFromApiTrackError::MissingField)?;
-                Self {
-                    id: track_id.clone().into(),
-                    number: u32::try_from(
-                        data.get("number")
-                            .ok_or(TryFromApiTrackError::MissingField)?
-                            .as_u64()
-                            .ok_or(TryFromApiTrackError::MissingField)?,
-                    )?,
-                    title: data
-                        .get("title")
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .as_str()
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .to_string(),
-                    #[allow(clippy::cast_precision_loss)]
-                    duration: data
-                        .get("duration")
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .as_u64()
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        as f64,
-                    album: data
-                        .get("album")
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .as_str()
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .to_string(),
-                    album_id: album_id.into(),
-                    date_released: data
-                        .get("dateReleased")
-                        .and_then(|x| x.as_str().map(str::to_string)),
-                    date_added: data
-                        .get("dateAdded")
-                        .and_then(|x| x.as_str().map(str::to_string)),
-                    artist: data
-                        .get("artist")
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .as_str()
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .to_string(),
-                    artist_id: data
-                        .get("artistId")
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .as_u64()
-                        .ok_or(TryFromApiTrackError::MissingField)?
-                        .into(),
-                    file: None,
-                    artwork: if data
-                        .get("containsCover")
-                        .is_some_and(|x| x.as_bool().is_some_and(|x| x))
-                    {
-                        Some(album_id.to_string())
-                    } else {
-                        None
-                    },
-                    blur: false,
-                    bytes: 0,
-                    format: None,
-                    bit_depth: None,
-                    audio_bitrate: None,
-                    overall_bitrate: None,
-                    sample_rate: None,
-                    channels: None,
-                    source: TrackApiSource::Yt,
-                    api_source: ApiSource::Yt,
-                    sources: ApiSources::default().with_source(ApiSource::Yt, track_id.into()),
-                }
+            ApiTrack::Yt { data, .. } => {
+                let track: moosicbox_yt::api::ApiYtTrack = serde_json::from_value(data)?;
+                let track: moosicbox_core::sqlite::models::ApiTrack = track.into();
+                track.into()
             }
         })
     }
@@ -1267,6 +1142,7 @@ pub struct ApiLibraryTrack {
     pub duration: f64,
     pub artist: String,
     pub artist_id: u64,
+    pub album_type: LibraryAlbumType,
     pub date_released: Option<String>,
     pub date_added: Option<String>,
     pub album: String,
@@ -1281,6 +1157,7 @@ pub struct ApiLibraryTrack {
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
     pub source: TrackApiSource,
+    pub api_source: ApiSource,
 }
 
 impl From<&ApiLibraryTrack> for LibraryTrack {
@@ -1298,6 +1175,7 @@ impl From<ApiLibraryTrack> for LibraryTrack {
             duration: value.duration,
             album: value.album,
             album_id: value.album_id,
+            album_type: value.album_type,
             date_released: value.date_released,
             date_added: value.date_added,
             artist: value.artist,
@@ -1313,6 +1191,7 @@ impl From<ApiLibraryTrack> for LibraryTrack {
             sample_rate: value.sample_rate,
             channels: value.channels,
             source: value.source,
+            api_source: value.api_source,
             qobuz_id: None,
             tidal_id: None,
             yt_id: None,
@@ -1329,6 +1208,7 @@ impl From<ApiLibraryTrack> for Track {
             duration: value.duration,
             album: value.album,
             album_id: value.album_id.into(),
+            album_type: value.album_type.into(),
             date_released: value.date_released,
             date_added: value.date_added,
             artist: value.artist,
@@ -1343,7 +1223,7 @@ impl From<ApiLibraryTrack> for Track {
             overall_bitrate: value.overall_bitrate,
             sample_rate: value.sample_rate,
             channels: value.channels,
-            source: value.source,
+            track_source: value.source,
             api_source: ApiSource::Library,
             sources: ApiSources::default().with_source(ApiSource::Library, value.track_id.into()),
         }
@@ -1365,6 +1245,7 @@ impl ToApi<ApiTrack> for LibraryTrack {
                 date_added: self.date_added.clone(),
                 album: self.album.clone(),
                 album_id: self.album_id,
+                album_type: self.album_type,
                 contains_cover: self.artwork.is_some(),
                 blur: self.blur,
                 bytes: self.bytes,
@@ -1375,6 +1256,7 @@ impl ToApi<ApiTrack> for LibraryTrack {
                 sample_rate: self.sample_rate,
                 channels: self.channels,
                 source: self.source,
+                api_source: self.api_source,
             },
         }
     }

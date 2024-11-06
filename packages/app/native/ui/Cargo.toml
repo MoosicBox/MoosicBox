@@ -26,6 +26,24 @@ serde      = { workspace = true }
 serde_json = { workspace = true }
 
 [features]
-default = []
+default = ["all-sources"]
 
 fail-on-warnings = []
+
+all-sources = ["qobuz", "tidal", "yt"]
+
+qobuz = [
+    "moosicbox_core/qobuz",
+    "moosicbox_menu_models/qobuz",
+    "moosicbox_session_models/qobuz",
+]
+tidal = [
+    "moosicbox_core/tidal",
+    "moosicbox_menu_models/tidal",
+    "moosicbox_session_models/tidal",
+]
+yt = [
+    "moosicbox_core/yt",
+    "moosicbox_menu_models/yt",
+    "moosicbox_session_models/yt",
+]

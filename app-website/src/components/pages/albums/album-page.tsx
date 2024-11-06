@@ -16,13 +16,7 @@ import {
     toTime,
 } from '~/services/formatting';
 import { addTracksToQueue, playerState, playPlaylist } from '~/services/player';
-import {
-    Api,
-    type Album as ApiAlbum,
-    type Track as ApiTrack,
-    api,
-    trackId,
-} from '~/services/api';
+import { Api, type Track as ApiTrack, api, trackId } from '~/services/api';
 import { artistRoute } from '~/components/Artist/Artist';
 import { areEqualShallow, historyBack } from '~/services/util';
 
@@ -37,8 +31,7 @@ export default function albumPage(props: {
     const [sourceImage, setSourceImage] = createSignal<HTMLImageElement>();
     const [activeVersion, setActiveVersion] = createSignal<Api.AlbumVersion>();
 
-    const [libraryAlbum, setLibraryAlbum] =
-        createSignal<Api.LibraryAlbum | null>();
+    const [libraryAlbum, setLibraryAlbum] = createSignal<Api.Album | null>();
 
     const [tidalAlbum, setTidalAlbum] = createSignal<Api.TidalAlbum>();
     const [tidalTracks, setTidalTracks] = createSignal<Api.TidalTrack[]>();
@@ -48,8 +41,10 @@ export default function albumPage(props: {
 
     let sourceImageRef: HTMLImageElement | undefined;
 
-    function getAlbum(): ApiAlbum | undefined {
-        return libraryAlbum() ?? tidalAlbum() ?? qobuzAlbum();
+    function getAlbum(): Api.Album | undefined {
+        return (libraryAlbum() ??
+            tidalAlbum() ??
+            qobuzAlbum()) as unknown as Api.Album;
     }
 
     function getTracks(): ApiTrack[] | undefined {
@@ -229,8 +224,8 @@ export default function albumPage(props: {
     }
 
     async function refavoriteAlbum(albumId: {
-        tidalAlbumId?: number;
-        qobuzAlbumId?: string;
+        tidalAlbumId?: string | number;
+        qobuzAlbumId?: string | number;
     }) {
         const album = await api.refavoriteAlbum(albumId);
 
@@ -250,18 +245,33 @@ export default function albumPage(props: {
         switch (source) {
             case 'QOBUZ':
                 await api.download(
-                    { albumId: libraryAlbum()!.qobuzId! },
+                    {
+                        albumId: libraryAlbum()!.albumSources.find(
+                            (x) => x.source === 'QOBUZ',
+                        )?.id!,
+                    },
                     source,
                 );
                 break;
             case 'TIDAL':
                 await api.download(
-                    { albumId: libraryAlbum()!.tidalId! },
+                    {
+                        albumId: libraryAlbum()!.albumSources.find(
+                            (x) => x.source === 'TIDAL',
+                        )?.id!,
+                    },
                     source,
                 );
                 break;
             case 'YT':
-                await api.download({ albumId: libraryAlbum()!.ytId! }, source);
+                await api.download(
+                    {
+                        albumId: libraryAlbum()!.albumSources.find(
+                            (x) => x.source === 'YT',
+                        )?.id!,
+                    },
+                    source,
+                );
                 break;
         }
     }
@@ -269,8 +279,8 @@ export default function albumPage(props: {
     let shouldNavigate = true;
 
     async function removeAlbumFromLibrary(albumId: {
-        tidalAlbumId?: number;
-        qobuzAlbumId?: string;
+        tidalAlbumId?: string | number;
+        qobuzAlbumId?: string | number;
     }) {
         const source = albumId.tidalAlbumId
             ? Api.TrackSource.TIDAL
@@ -366,27 +376,10 @@ export default function albumPage(props: {
             return false;
         }
 
-        switch (source) {
-            case Api.TrackSource.TIDAL:
-                if (!libraryAlbum()!.tidalId) {
-                    return false;
-                }
-                break;
-            case Api.TrackSource.QOBUZ:
-                if (!libraryAlbum()!.qobuzId) {
-                    return false;
-                }
-                break;
-            case Api.TrackSource.YT:
-                if (!libraryAlbum()!.ytId) {
-                    return false;
-                }
-                break;
-            case Api.TrackSource.LOCAL:
-                break;
-            default:
-                source satisfies never;
-                throw new Error(`Invalid TrackSource: '${source}'`);
+        if (
+            !libraryAlbum()!.albumSources.find((x) => x.source === source)?.id
+        ) {
+            return false;
         }
 
         const version = versions()!.find(
@@ -516,39 +509,11 @@ export default function albumPage(props: {
     }
 
     function getTrackTitleDisplay(track: ApiTrack): string {
-        const trackType = track.type;
-
-        switch (trackType) {
-            case 'LIBRARY':
-                return track.title;
-            case 'TIDAL':
-                return track.title;
-            case 'QOBUZ':
-                return track.title;
-            case 'YT':
-                return track.title;
-            default:
-                trackType satisfies never;
-                throw new Error(`Invalid trackType: ${trackType}`);
-        }
+        return track.title;
     }
 
-    function isExplicit(track: ApiTrack): boolean {
-        const trackType = track.type;
-
-        switch (trackType) {
-            case 'LIBRARY':
-                return false;
-            case 'TIDAL':
-                return track.explicit;
-            case 'QOBUZ':
-                return track.parentalWarning;
-            case 'YT':
-                return false;
-            default:
-                trackType satisfies never;
-                throw new Error(`Invalid trackType: ${trackType}`);
-        }
+    function isExplicit(_track: ApiTrack): boolean {
+        return false;
     }
 
     function track(track: ApiTrack) {
@@ -774,7 +739,9 @@ export default function albumPage(props: {
                                 </Show>
                                 <Show
                                     when={
-                                        libraryAlbum()?.tidalId &&
+                                        libraryAlbum()?.albumSources.some(
+                                            (x) => x.source === 'TIDAL',
+                                        ) &&
                                         (tidalAlbum() ||
                                             activeVersion()?.source ===
                                                 Api.TrackSource.TIDAL)
@@ -787,7 +754,11 @@ export default function albumPage(props: {
                                             e.preventDefault();
                                             removeAlbumFromLibrary({
                                                 tidalAlbumId:
-                                                    libraryAlbum()!.tidalId!,
+                                                    libraryAlbum()!.albumSources.find(
+                                                        (x) =>
+                                                            x.source ===
+                                                            'TIDAL',
+                                                    )?.id,
                                             });
                                             return false;
                                         }}
@@ -797,7 +768,9 @@ export default function albumPage(props: {
                                 </Show>
                                 <Show
                                     when={
-                                        libraryAlbum()?.qobuzId &&
+                                        libraryAlbum()?.albumSources.some(
+                                            (x) => x.source === 'QOBUZ',
+                                        ) &&
                                         (qobuzAlbum() ||
                                             activeVersion()?.source ===
                                                 Api.TrackSource.QOBUZ)
@@ -810,7 +783,11 @@ export default function albumPage(props: {
                                             e.preventDefault();
                                             removeAlbumFromLibrary({
                                                 qobuzAlbumId:
-                                                    libraryAlbum()!.qobuzId!,
+                                                    libraryAlbum()!.albumSources.find(
+                                                        (x) =>
+                                                            x.source ===
+                                                            'QOBUZ',
+                                                    )?.id,
                                             });
                                             return false;
                                         }}
@@ -830,7 +807,11 @@ export default function albumPage(props: {
                                             e.preventDefault();
                                             refavoriteAlbum({
                                                 tidalAlbumId:
-                                                    libraryAlbum()!.tidalId!,
+                                                    libraryAlbum()!.albumSources.find(
+                                                        (x) =>
+                                                            x.source ===
+                                                            'TIDAL',
+                                                    )?.id,
                                             });
                                             return false;
                                         }}
@@ -850,7 +831,11 @@ export default function albumPage(props: {
                                             e.preventDefault();
                                             refavoriteAlbum({
                                                 qobuzAlbumId:
-                                                    libraryAlbum()!.qobuzId!,
+                                                    libraryAlbum()!.albumSources.find(
+                                                        (x) =>
+                                                            x.source ===
+                                                            'QOBUZ',
+                                                    )?.id,
                                             });
                                             return false;
                                         }}

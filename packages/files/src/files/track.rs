@@ -20,8 +20,8 @@ use moosicbox_core::{
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_music_api::{
-    MusicApi, MusicApis, MusicApisError, SourceToMusicApi as _, TrackAudioQuality, TrackError,
-    TrackSource, TracksError,
+    models::{TrackAudioQuality, TrackSource},
+    MusicApi, MusicApis, MusicApisError, SourceToMusicApi as _, TrackError, TracksError,
 };
 use moosicbox_stream_utils::{
     new_byte_writer_id, remote_bytestream::RemoteByteStream, stalled_monitor::StalledReadMonitor,
@@ -100,7 +100,7 @@ pub async fn get_track_id_source(
         .await?
         .ok_or_else(|| TrackSourceError::NotFound(track_id.to_owned()))?;
 
-    let track_source = track.source.into();
+    let track_source = track.track_source.into();
 
     let (api, track) = if track_source != source {
         let api = apis.get(track_source)?;

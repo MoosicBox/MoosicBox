@@ -39,8 +39,9 @@ use moosicbox_files::{
     GetContentLengthError, SaveBytesStreamToFileError,
 };
 use moosicbox_music_api::{
-    AlbumError, ArtistError, ImageCoverSize, MusicApi, MusicApis, MusicApisError,
-    SourceToMusicApi as _, TrackAudioQuality, TrackError, TrackSource, TracksError,
+    models::{ImageCoverSize, TrackAudioQuality, TrackSource},
+    AlbumError, ArtistError, MusicApi, MusicApis, MusicApisError, SourceToMusicApi as _,
+    TrackError, TracksError,
 };
 use queue::ProgressListener;
 use regex::{Captures, Regex};
@@ -210,7 +211,7 @@ pub async fn get_create_download_tasks_for_tracks(
         let source = if let Some(source) = source {
             source
         } else {
-            match track.source {
+            match track.track_source {
                 TrackApiSource::Local => return Err(GetCreateDownloadTasksError::InvalidSource),
                 #[cfg(feature = "tidal")]
                 TrackApiSource::Tidal => DownloadApiSource::Tidal,
@@ -368,9 +369,9 @@ pub async fn get_create_download_tasks_for_album_ids(
             .filter(|track| {
                 if let Some(source) = source {
                     let track_source = source.into();
-                    track.source == track_source
+                    track.track_source == track_source
                 } else {
-                    track.source != TrackApiSource::Local
+                    track.track_source != TrackApiSource::Local
                 }
             })
             .collect::<Vec<_>>();
@@ -817,7 +818,7 @@ pub async fn download_album_id(
         .with_rest_of_items_in_batches()
         .await?
         .into_iter()
-        .filter(|track| track.source == track_source)
+        .filter(|track| track.track_source == track_source)
         .collect::<Vec<_>>();
 
     for track in tracks.iter() {

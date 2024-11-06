@@ -2,7 +2,7 @@
 
 use bytes::Bytes;
 use moosicbox_core::{sqlite::models::ApiSource, types::AudioFormat};
-use moosicbox_music_api::{MusicApisError, TrackAudioQuality};
+use moosicbox_music_api::{models::TrackAudioQuality, MusicApisError};
 use moosicbox_ws::WebsocketMessageError;
 use serde::Deserialize;
 use serde_aux::prelude::*;

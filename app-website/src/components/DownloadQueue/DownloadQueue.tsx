@@ -12,7 +12,6 @@ import { api, Api } from '~/services/api';
 import type {
     ApiSource,
     Track as ApiTrack,
-    Album as ApiAlbum,
     Artist as ApiArtist,
 } from '~/services/api';
 import { downloadsState } from '~/services/downloads';
@@ -103,7 +102,7 @@ function downloadTask(task: Api.DownloadTask): JSXElement {
                                 {
                                     ...task.item,
                                     type: item.source,
-                                } as unknown as ApiAlbum
+                                } as unknown as Api.Album
                             }
                             size={80}
                         />

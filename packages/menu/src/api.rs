@@ -10,7 +10,7 @@ use actix_web::{
 };
 use moosicbox_core::{
     integer_range::parse_integer_ranges_to_ids,
-    sqlite::models::{ApiSource, Id, IdType},
+    sqlite::models::{AlbumType, ApiAlbum, ApiSource, Id, IdType},
 };
 use moosicbox_core::{
     integer_range::ParseIntegersError,
@@ -19,11 +19,14 @@ use moosicbox_core::{
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_library::{
     db::{get_album_tracks, get_tracks},
-    models::{ApiAlbum, ApiArtist, ApiTrack},
+    models::{ApiArtist, ApiTrack},
     LibraryMusicApi,
 };
 use moosicbox_menu_models::api::ApiAlbumVersion;
-use moosicbox_music_api::{AlbumFilters, AlbumsRequest, MusicApis, SourceToMusicApi as _};
+use moosicbox_music_api::{
+    models::{AlbumFilters, AlbumsRequest},
+    MusicApis, SourceToMusicApi as _,
+};
 use moosicbox_paging::{Page, PagingRequest};
 use serde::Deserialize;
 use serde_json::Value;
@@ -186,12 +189,14 @@ pub async fn get_artists_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetAlbumsQuery {
+    source: Option<ApiSource>,
+    album_type: Option<AlbumType>,
     sources: Option<String>,
     sort: Option<String>,
     name: Option<String>,
     artist: Option<String>,
     search: Option<String>,
-    artist_id: Option<i32>,
+    artist_id: Option<String>,
     tidal_artist_id: Option<u64>,
     qobuz_artist_id: Option<u64>,
     offset: Option<u32>,
@@ -205,12 +210,14 @@ pub struct GetAlbumsQuery {
         path = "/albums",
         description = "Get the albums for the specified criteria",
         params(
+            ("source" = Option<ApiSource>, Query, description = "API Source to fetch the albums from"),
+            ("albumType" = Option<AlbumType>, Query, description = "Album type to filter by"),
             ("sources" = Option<String>, Query, description = "List of API sources to filter by"),
             ("sort" = Option<String>, Query, description = "Order to sort by"),
             ("name" = Option<String>, Query, description = "Name to filter by"),
             ("artist" = Option<String>, Query, description = "Artist name to filter by"),
             ("search" = Option<String>, Query, description = "Query to generically search by"),
-            ("artistId" = Option<i32>, Query, description = "Artist ID to filter by"),
+            ("artistId" = Option<String>, Query, description = "Artist ID to filter by"),
             ("tidalArtistId" = Option<i32>, Query, description = "Tidal artist ID to filter by"),
             ("qobuzArtistId" = Option<i32>, Query, description = "Qobuz artist ID to filter by"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
@@ -228,8 +235,10 @@ pub struct GetAlbumsQuery {
 #[get("/albums")]
 pub async fn get_albums_endpoint(
     query: web::Query<GetAlbumsQuery>,
-    library_api: LibraryMusicApi,
+    music_apis: MusicApis,
 ) -> Result<Json<Page<ApiAlbum>>> {
+    let source = query.source.unwrap_or(ApiSource::Library);
+
     let request = AlbumsRequest {
         page: if query.offset.is_some() || query.limit.is_some() {
             Some(PagingRequest {
@@ -265,19 +274,39 @@ pub async fn get_albums_endpoint(
             name: query.name.clone().map(|s| s.to_lowercase()),
             artist: query.artist.clone().map(|s| s.to_lowercase()),
             search: query.search.clone().map(|s| s.to_lowercase()),
-            artist_id: query.artist_id.map(|x| x.into()),
+            album_type: query.album_type,
+            artist_id: query
+                .artist_id
+                .as_ref()
+                .and_then(|x| Id::try_from_str(x.as_str(), source, IdType::Artist).ok()),
             tidal_artist_id: query.tidal_artist_id.map(|x| x.into()),
             qobuz_artist_id: query.qobuz_artist_id.map(|x| x.into()),
         }),
     };
 
+    let api = music_apis.get(source).map_err(ErrorBadRequest)?;
+
     Ok(Json(
-        library_api
-            .library_albums(&request)
+        if let Some(artist_id) = request.filters.as_ref().and_then(|x| x.artist_id.as_ref()) {
+            api.artist_albums(
+                artist_id,
+                query.album_type,
+                query.offset,
+                query.limit,
+                None,
+                None,
+            )
             .await
             .map_err(|e| ErrorInternalServerError(format!("Failed to fetch albums: {e}")))?
-            .to_api()
-            .into(),
+            .page
+            .map(Into::into)
+        } else {
+            api.albums(&request)
+                .await
+                .map_err(|e| ErrorInternalServerError(format!("Failed to fetch albums: {e}")))?
+                .page
+                .map(Into::into)
+        },
     ))
 }
 
@@ -449,7 +478,7 @@ pub async fn get_artist_albums_endpoint(
             .await
             .map_err(|_e| ErrorInternalServerError("Failed to fetch albums"))?
             .iter()
-            .map(|t| t.to_api())
+            .map(Into::into)
             .collect(),
     ))
 }
@@ -608,7 +637,7 @@ pub async fn get_album_endpoint(
                 .await
                 .map_err(ErrorInternalServerError)?
                 .ok_or(ErrorNotFound("Album not found"))?
-                .to_api();
+                .into();
             Json(serde_json::to_value(album).map_err(ErrorInternalServerError)?)
         }
     })
@@ -658,7 +687,7 @@ pub async fn add_album_endpoint(
         )
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to add album: {e:?}")))?
-        .to_api(),
+        .into(),
     ))
 }
 
@@ -706,7 +735,7 @@ pub async fn remove_album_endpoint(
         )
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to remove album: {e:?}")))?
-        .to_api(),
+        .into(),
     ))
 }
 
@@ -754,6 +783,6 @@ pub async fn refavorite_album_endpoint(
         )
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to re-favorite album: {e:?}")))?
-        .to_api(),
+        .into(),
     ))
 }

@@ -7,7 +7,10 @@ use moosicbox_core::sqlite::{
     models::{Album, Id},
 };
 use moosicbox_database::{profiles::LibraryDatabase, query::*, DatabaseError};
-use moosicbox_music_api::{AlbumError, ImageCoverSize, ImageCoverSource, MusicApi};
+use moosicbox_music_api::{
+    models::{ImageCoverSize, ImageCoverSource},
+    AlbumError, MusicApi,
+};
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
 use thiserror::Error;
 use tokio_util::codec::{BytesCodec, FramedRead};
@@ -275,7 +278,7 @@ async fn get_remote_album_cover_request(
         ImageCoverSource::RemoteUrl(url) => {
             let file_path = get_album_cover_path(
                 &size.to_string(),
-                album.source.as_ref(),
+                album.album_source.as_ref(),
                 &album.id.to_string(),
                 &album.artist,
                 &album.title,

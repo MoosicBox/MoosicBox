@@ -14,6 +14,8 @@ use moosicbox_search::models::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::YtAlbumType;
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct YtArtist {
@@ -148,6 +150,7 @@ pub struct YtAlbum {
     pub id: String,
     pub artist: String,
     pub artist_id: String,
+    pub album_type: YtAlbumType,
     pub contains_cover: bool,
     pub audio_quality: String,
     pub copyright: Option<String>,
@@ -168,13 +171,15 @@ impl From<YtAlbum> for Album {
             title: value.title,
             artist: value.artist,
             artist_id: value.artist_id.as_str().into(),
+            album_type: value.album_type.into(),
             date_released: value.release_date,
             date_added: None,
             artwork: value.cover,
             directory: None,
             blur: false,
             versions: vec![],
-            source: AlbumSource::Yt,
+            album_source: AlbumSource::Yt,
+            api_source: ApiSource::Yt,
             artist_sources: ApiSources::default()
                 .with_source(ApiSource::Yt, value.artist_id.into()),
             album_sources: ApiSources::default().with_source(ApiSource::Yt, value.id.into()),
@@ -311,6 +316,7 @@ impl AsModelResult<YtAlbum, ParseError> for serde_json::Value {
             id: self.to_value("id")?,
             artist: self.to_nested_value(&["artist", "name"])?,
             artist_id: self.to_nested_value(&["artist", "id"])?,
+            album_type: self.to_value("type")?,
             contains_cover: true,
             audio_quality: self.to_value("audioQuality")?,
             copyright: self.to_value("copyright")?,
@@ -336,6 +342,7 @@ pub struct YtTrack {
     pub artist_cover: Option<String>,
     pub album_id: String,
     pub album: String,
+    pub album_type: YtAlbumType,
     pub album_cover: Option<String>,
     pub audio_quality: String,
     pub copyright: Option<String>,
@@ -356,6 +363,7 @@ impl From<YtTrack> for Track {
             duration: value.duration as f64,
             album: value.album,
             album_id: value.album_id.into(),
+            album_type: value.album_type.into(),
             date_released: None,
             date_added: None,
             artist: value.artist,
@@ -370,7 +378,7 @@ impl From<YtTrack> for Track {
             overall_bitrate: None,
             sample_rate: None,
             channels: None,
-            source: TrackApiSource::Yt,
+            track_source: TrackApiSource::Yt,
             api_source: ApiSource::Yt,
             sources: ApiSources::default().with_source(ApiSource::Yt, value.id.into()),
         }
@@ -416,6 +424,7 @@ impl AsModelResult<YtTrack, ParseError> for serde_json::Value {
             album_id: self.to_nested_value(&["album", "id"])?,
             album: self.to_nested_value(&["album", "title"])?,
             album_cover: self.to_nested_value(&["album", "cover"])?,
+            album_type: self.to_nested_value(&["album", "type"])?,
             audio_quality: self.to_value("audioQuality")?,
             copyright: self.to_value("copyright")?,
             duration: self.to_value("duration")?,

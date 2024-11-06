@@ -11,7 +11,7 @@ use moosicbox_library::{
     LibraryAlbumTracksError, LibraryFavoriteAlbumsError, LibraryMusicApi,
 };
 use moosicbox_menu_models::AlbumVersion;
-use moosicbox_music_api::{AlbumType, AlbumsRequest, LibraryAlbumError, MusicApi, TracksError};
+use moosicbox_music_api::{models::AlbumsRequest, LibraryAlbumError, MusicApi, TracksError};
 use moosicbox_scan::{music_api::ScanError, output::ScanOutput};
 use moosicbox_search::{
     data::{AsDataValues, AsDeleteTerm},
@@ -374,11 +374,11 @@ pub async fn remove_album(
 
     let has_local_tracks = tracks
         .iter()
-        .any(|track| track.source == TrackApiSource::Local);
+        .any(|track| track.track_source == TrackApiSource::Local);
 
     let target_tracks = tracks
         .into_iter()
-        .filter(|track| match track.source {
+        .filter(|track| match track.track_source {
             #[cfg(feature = "tidal")]
             TrackApiSource::Tidal => album.tidal_id.is_some(),
             #[cfg(feature = "qobuz")]
@@ -547,7 +547,7 @@ pub async fn refavorite_album(
     };
 
     let new_album_id = api
-        .artist_albums(&artist.id, AlbumType::All, None, None, None, None)
+        .artist_albums(&artist.id, None, None, None, None, None)
         .await?
         .with_rest_of_items()
         .await?

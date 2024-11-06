@@ -15,7 +15,8 @@ use moosicbox_core::{
 };
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_music_api::{
-    ImageCoverSize, MusicApis, SourceToMusicApi as _, TrackAudioQuality, TrackSource,
+    models::{ImageCoverSize, TrackAudioQuality, TrackSource},
+    MusicApis, SourceToMusicApi as _,
 };
 use serde::Deserialize;
 use thiserror::Error;

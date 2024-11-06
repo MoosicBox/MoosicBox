@@ -3,7 +3,6 @@ import { Howl } from 'howler';
 import { makePersisted } from '@solid-primitives/storage';
 import { isServer } from 'solid-js/web';
 import {
-    type Album,
     Api,
     type Track,
     api,
@@ -201,7 +200,14 @@ export const setCurrentTrackLength = (
 };
 
 export const [currentAlbum, setCurrentAlbum] = makePersisted(
-    createSignal<Album | Track | undefined>(undefined, {
+    createSignal<
+        | Api.Album
+        | Api.TidalAlbum
+        | Api.QobuzAlbum
+        | Api.YtAlbum
+        | Track
+        | undefined
+    >(undefined, {
         equals: false,
     }),
     {
@@ -456,7 +462,9 @@ const playAlbumListener = createListener<() => void>();
 export const onPlayAlbum = playAlbumListener.on;
 export const offPlayAlbum = playAlbumListener.off;
 
-export async function playAlbum(album: Album | Track) {
+export async function playAlbum(
+    album: Api.Album | Api.TidalAlbum | Api.QobuzAlbum | Api.YtAlbum | Track,
+) {
     console.debug('playAlbum', album);
     setCurrentAlbum(album);
 
@@ -464,8 +472,15 @@ export async function playAlbum(album: Album | Track) {
 
     switch (albumType) {
         case 'LIBRARY': {
-            album = album as Api.LibraryAlbum;
-            const versions = await api.getAlbumVersions(album.albumId);
+            let id: string | number;
+            if ('albumId' in album) {
+                id = album.albumId;
+            } else if ('id' in album) {
+                id = album.id;
+            } else {
+                throw new Error(`Invalid album: ${JSON.stringify(album)}`);
+            }
+            const versions = await api.getAlbumVersions(id);
             const tracks = versions[0]!.tracks;
             await playPlaylist(tracks);
             break;
@@ -526,15 +541,24 @@ const addAlbumToQueueListener = createListener<() => void>();
 export const onAddAlbumToQueue = addAlbumToQueueListener.on;
 export const offAddAlbumToQueue = addAlbumToQueueListener.off;
 
-export async function addAlbumToQueue(album: Album | Track) {
+export async function addAlbumToQueue(
+    album: Api.Album | Api.TidalAlbum | Api.QobuzAlbum | Api.YtAlbum | Track,
+) {
     console.debug('addAlbumToQueue', album);
 
     const albumType = 'type' in album ? album.type : 'TRACK';
 
     switch (albumType) {
         case 'LIBRARY': {
-            album = album as Api.LibraryAlbum;
-            const versions = await api.getAlbumVersions(album.albumId);
+            let id: string | number;
+            if ('albumId' in album) {
+                id = album.albumId;
+            } else if ('id' in album) {
+                id = album.id;
+            } else {
+                throw new Error(`Invalid album: ${JSON.stringify(album)}`);
+            }
+            const versions = await api.getAlbumVersions(id);
             const tracks = versions[0]!.tracks;
             return addTracksToQueue(tracks);
         }

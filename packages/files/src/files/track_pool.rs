@@ -12,7 +12,7 @@ use futures::StreamExt;
 use futures_core::Future;
 use lazy_static::lazy_static;
 use moosicbox_core::types::AudioFormat;
-use moosicbox_music_api::TrackSource;
+use moosicbox_music_api::models::TrackSource;
 use moosicbox_stream_utils::{stalled_monitor::StalledReadMonitor, ByteWriter};
 use strum_macros::AsRefStr;
 use thiserror::Error;
