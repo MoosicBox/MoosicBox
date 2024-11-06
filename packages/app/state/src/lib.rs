@@ -975,6 +975,9 @@ impl AppState {
             .read()
             .await
             .clone()
+            .filter(|x| !x.is_empty());
+        let client_id = client_id.as_deref();
+        let client_id_param = client_id
             .map(|x| format!("&clientId={x}"))
             .unwrap_or_default();
 
@@ -997,7 +1000,7 @@ impl AppState {
             );
         }
 
-        let url = format!("session/register-players?connectionId={connection_id}{client_id}");
+        let url = format!("session/register-players?connectionId={connection_id}{client_id_param}");
         let body = Some(serde_json::to_value(players).map_err(RegisterPlayersError::Serde)?);
         let headers = Some(serde_json::Value::Object(headers));
 
@@ -1022,17 +1025,13 @@ impl AppState {
                         "Connection name required to create a connection",
                     ));
                 };
-                let client_id = self
-                    .client_id
-                    .read()
-                    .await
-                    .clone()
+                let client_id_param = client_id
                     .map(|x| format!("?clientId={x}"))
                     .unwrap_or_default();
 
                 let response = self
                     .api_proxy_post(
-                        format!("session/register-connection{client_id}"),
+                        format!("session/register-connection{client_id_param}"),
                         Some(
                             serde_json::to_value(RegisterConnection {
                                 connection_id,
