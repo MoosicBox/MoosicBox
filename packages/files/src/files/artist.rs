@@ -10,7 +10,10 @@ use moosicbox_core::sqlite::{
     models::{Artist, Id},
 };
 use moosicbox_database::{profiles::LibraryDatabase, query::*, DatabaseError};
-use moosicbox_music_api::{ArtistError, ImageCoverSize, ImageCoverSource, MusicApi};
+use moosicbox_music_api::{
+    models::{ImageCoverSize, ImageCoverSource},
+    ArtistError, MusicApi,
+};
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
 use thiserror::Error;
 use tokio_util::codec::{BytesCodec, FramedRead};

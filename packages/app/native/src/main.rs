@@ -11,7 +11,7 @@ use moosicbox_app_native_lib::{
     router::{ContainerElement, RouteRequest, Router},
 };
 use moosicbox_app_native_ui::{state, Action};
-use moosicbox_core::sqlite::models::{ApiAlbum, ApiSource};
+use moosicbox_core::sqlite::models::{AlbumType, ApiAlbum, ApiSource};
 use moosicbox_env_utils::{default_env_usize, option_env_i32, option_env_u16};
 use moosicbox_library_models::ApiArtist;
 use moosicbox_menu_models::api::ApiAlbumVersion;
@@ -324,6 +324,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .try_into()?
                 },
             )
+        })
+        .with_route_result("/artists/albums-list", |req| async move {
+            artist_albums_list_route(req).await
         });
 
     moosicbox_assert::assert_or_panic!(ROUTER.set(router.clone()).is_ok(), "Already set ROUTER");
@@ -473,6 +476,8 @@ pub enum RouteError {
     #[error("Failed to parse markup")]
     ParseMarkup,
     #[error(transparent)]
+    StrumParse(#[from] strum::ParseError),
+    #[error(transparent)]
     ParseInt(#[from] ParseIntError),
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
@@ -507,8 +512,7 @@ async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteError> 
         return Err(RouteError::RouteFailed);
     }
 
-    let albums: Page<moosicbox_library_models::ApiAlbum> = response.json().await?;
-    let albums = albums.map(Into::into);
+    let albums: Page<ApiAlbum> = response.json().await?;
 
     log::trace!("albums_list_start_route: albums={albums:?}");
 
@@ -547,12 +551,60 @@ async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
         return Err(RouteError::RouteFailed);
     }
 
-    let albums: Page<moosicbox_library_models::ApiAlbum> = response.json().await?;
-    let albums = albums.map(Into::into);
+    let albums: Page<ApiAlbum> = response.json().await?;
 
     log::trace!("albums_list_route: albums={albums:?}");
 
     moosicbox_app_native_ui::albums::albums_list(&albums, size)
+        .into_string()
+        .try_into()
+        .map_err(|e| {
+            moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
+            RouteError::ParseMarkup
+        })
+}
+
+async fn artist_albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
+    let Some(artist_id) = req.query.get("artistId") else {
+        return Err(RouteError::MissingQueryParam("artistId"));
+    };
+    let source: ApiSource = req
+        .query
+        .get("source")
+        .map(TryFrom::try_from)
+        .transpose()?
+        .ok_or(RouteError::MissingQueryParam("Missing source query param"))?;
+    let album_type: AlbumType = req
+        .query
+        .get("albumType")
+        .map(String::as_str)
+        .map(TryFrom::try_from)
+        .transpose()?
+        .ok_or(RouteError::MissingQueryParam(
+            "Missing albumType query param",
+        ))?;
+    let Some(size) = req.query.get("size") else {
+        return Err(RouteError::MissingQueryParam("size"));
+    };
+    let size = size.parse::<u16>()?;
+    let url = format!(
+        "{}/menu/albums?moosicboxProfile=master&artistId={artist_id}&source={source}&albumType={album_type}",
+        std::env::var("MOOSICBOX_HOST")
+            .as_deref()
+            .unwrap_or("http://localhost:8500")
+    );
+    let response = reqwest::get(url).await?;
+
+    if !response.status().is_success() {
+        log::debug!("Error: {} {}", response.status(), response.text().await?);
+        return Err(RouteError::RouteFailed);
+    }
+
+    let albums: Page<ApiAlbum> = response.json().await?;
+
+    log::trace!("albums_list_route: albums={albums:?}");
+
+    moosicbox_app_native_ui::artists::albums_list(&albums, source, album_type, size)
         .into_string()
         .try_into()
         .map_err(|e| {

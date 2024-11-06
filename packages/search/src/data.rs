@@ -137,7 +137,7 @@ impl AsDataValues for Track {
             ),
             (
                 "version_sources",
-                DataValue::String(self.source.as_ref().to_string()),
+                DataValue::String(self.track_source.as_ref().to_string()),
             ),
         ]
     }

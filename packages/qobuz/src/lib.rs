@@ -28,19 +28,22 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
 use moosicbox_core::{
-    sqlite::models::{Album, ApiSource, Artist, Id, Track},
+    sqlite::models::{Album, AlbumType, ApiSource, Artist, Id, Track},
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_json_utils::{
     serde_json::{ToNestedValue, ToValue},
-    ParseError, ToValueType,
+    MissingValue, ParseError, ToValueType,
 };
 use moosicbox_music_api::{
-    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumOrder, AlbumOrderDirection,
-    AlbumType, AlbumsError, AlbumsRequest, ArtistAlbumsError, ArtistError, ArtistOrder,
-    ArtistOrderDirection, ArtistsError, ImageCoverSize, ImageCoverSource, MusicApi,
-    RemoveAlbumError, RemoveArtistError, RemoveTrackError, TrackAudioQuality, TrackError,
-    TrackOrId, TrackOrder, TrackOrderDirection, TrackSource, TracksError,
+    models::{
+        AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
+        ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
+        TrackSource,
+    },
+    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
+    ArtistError, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError, RemoveTrackError,
+    TrackError, TrackOrId, TracksError,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -488,18 +491,80 @@ macro_rules! qobuz_api_endpoint {
     };
 }
 
-#[derive(Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Default, Debug, Serialize, Deserialize, AsRefStr, PartialEq, Clone, Copy)]
 #[serde(rename_all = "camelCase")]
 #[strum(serialize_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum QobuzAlbumReleaseType {
     #[default]
-    All,
     Album,
     Live,
     Compilation,
+    Ep,
+    Single,
     EpSingle,
     Other,
     Download,
+}
+
+impl TryFrom<&str> for QobuzAlbumReleaseType {
+    type Error = strum::ParseError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(match value {
+            "album" => QobuzAlbumReleaseType::Album,
+            "live" => QobuzAlbumReleaseType::Live,
+            "compilation" => QobuzAlbumReleaseType::Compilation,
+            "ep" => QobuzAlbumReleaseType::Ep,
+            "single" => QobuzAlbumReleaseType::Single,
+            "epmini" => QobuzAlbumReleaseType::EpSingle,
+            "epSingle" => QobuzAlbumReleaseType::EpSingle,
+            "other" => QobuzAlbumReleaseType::Other,
+            "download" => QobuzAlbumReleaseType::Download,
+            _ => return Err(Self::Error::VariantNotFound),
+        })
+    }
+}
+
+impl From<AlbumType> for QobuzAlbumReleaseType {
+    fn from(value: AlbumType) -> Self {
+        match value {
+            AlbumType::Lp => Self::Album,
+            AlbumType::Live => Self::Live,
+            AlbumType::Compilations => Self::Compilation,
+            AlbumType::EpsAndSingles => Self::EpSingle,
+            AlbumType::Other => Self::Other,
+            AlbumType::Download => Self::Download,
+        }
+    }
+}
+
+impl From<QobuzAlbumReleaseType> for AlbumType {
+    fn from(value: QobuzAlbumReleaseType) -> Self {
+        match value {
+            QobuzAlbumReleaseType::Album => Self::Lp,
+            QobuzAlbumReleaseType::Live => Self::Live,
+            QobuzAlbumReleaseType::Compilation => Self::Compilations,
+            QobuzAlbumReleaseType::Ep
+            | QobuzAlbumReleaseType::Single
+            | QobuzAlbumReleaseType::EpSingle => Self::EpsAndSingles,
+            QobuzAlbumReleaseType::Other => Self::Other,
+            QobuzAlbumReleaseType::Download => Self::Download,
+        }
+    }
+}
+
+impl MissingValue<QobuzAlbumReleaseType> for &Value {}
+impl ToValueType<QobuzAlbumReleaseType> for &Value {
+    fn to_value_type(self) -> Result<QobuzAlbumReleaseType, ParseError> {
+        QobuzAlbumReleaseType::try_from(self.as_str().ok_or_else(|| {
+            ParseError::MissingValue(format!(
+                "QobuzAlbumReleaseType: ({})",
+                serde_json::to_string(self).unwrap_or_default()
+            ))
+        })?)
+        .map_err(|e| ParseError::ConvertType(format!("QobuzAlbumReleaseType: {e:?}")))
+    }
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
@@ -961,24 +1026,21 @@ pub enum QobuzFavoriteAlbumsError {
     Parse(#[from] ParseError),
 }
 
-#[async_recursion]
-pub async fn favorite_albums(
+async fn request_favorite_albums(
     #[cfg(feature = "db")] db: &LibraryDatabase,
-    offset: Option<u32>,
-    limit: Option<u32>,
+    offset: u32,
+    mut limit: u32,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> PagingResult<QobuzAlbum, QobuzFavoriteAlbumsError> {
-    let offset = offset.unwrap_or(0);
-    let original_limit = limit.unwrap_or(100);
-    let mut limit = original_limit;
+) -> Result<Value, QobuzFavoriteAlbumsError> {
+    let offset = offset.to_string();
 
-    let value = loop {
+    loop {
         let url = qobuz_api_endpoint!(
             Favorites,
             &[],
             &[
-                ("offset", &offset.to_string()),
+                ("offset", &offset),
                 ("limit", &limit.to_string()),
                 ("type", "albums"),
             ]
@@ -993,7 +1055,7 @@ pub async fn favorite_albums(
         )
         .await
         {
-            Ok(value) => break value,
+            Ok(value) => return Ok(value),
             Err(err) => match err {
                 AuthenticatedRequestError::NoResponseBody => {
                     log::debug!("Received empty response for favorite albums... retrying");
@@ -1002,12 +1064,35 @@ pub async fn favorite_albums(
                 _ => return Err(QobuzFavoriteAlbumsError::AuthenticatedRequest(err)),
             },
         }
-    };
+    }
+}
+
+#[async_recursion]
+pub async fn favorite_albums(
+    #[cfg(feature = "db")] db: &LibraryDatabase,
+    offset: Option<u32>,
+    limit: Option<u32>,
+    _album_type: Option<QobuzAlbumReleaseType>,
+    access_token: Option<String>,
+    app_id: Option<String>,
+) -> PagingResult<QobuzAlbum, QobuzFavoriteAlbumsError> {
+    let offset = offset.unwrap_or(0);
+    let limit = limit.unwrap_or(100);
+
+    let value = request_favorite_albums(
+        #[cfg(feature = "db")]
+        db,
+        offset,
+        limit,
+        access_token.clone(),
+        app_id.clone(),
+    )
+    .await?;
 
     let items: Vec<QobuzAlbum> = value
         .to_nested_value::<Vec<_>>(&["albums", "items"])?
         .into_iter()
-        .take(original_limit as usize)
+        .take(limit as usize)
         .collect();
 
     let total = value.to_nested_value(&["albums", "total"])?;
@@ -1034,6 +1119,7 @@ pub async fn favorite_albums(
                     &db,
                     Some(offset),
                     Some(limit),
+                    _album_type,
                     access_token,
                     app_id,
                 )
@@ -1059,6 +1145,7 @@ pub async fn all_favorite_albums(
             db,
             Some(offset),
             Some(limit),
+            None,
             access_token.clone(),
             app_id.clone(),
         )
@@ -1181,6 +1268,7 @@ pub async fn album_tracks(
     let artist = value.to_nested_value(&["artist", "name"])?;
     let artist_id = value.to_nested_value(&["artist", "id"])?;
     let album = value.to_value("title")?;
+    let album_type = value.to_value("release_type")?;
     let version = value.to_value("version")?;
     let image: Option<QobuzImage> = value.to_value("image")?;
     let items: Vec<QobuzTrack> = value
@@ -1193,6 +1281,7 @@ pub async fn album_tracks(
                 artist_id,
                 album,
                 &Into::<String>::into(album_id.clone()),
+                album_type,
                 version,
                 image.clone(),
             )
@@ -1754,20 +1843,6 @@ pub(crate) async fn search_app_config(
     Ok(AppConfig { app_id, secrets })
 }
 
-impl From<AlbumType> for QobuzAlbumReleaseType {
-    fn from(value: AlbumType) -> Self {
-        match value {
-            AlbumType::All => QobuzAlbumReleaseType::All,
-            AlbumType::Lp => QobuzAlbumReleaseType::Album,
-            AlbumType::Live => QobuzAlbumReleaseType::Live,
-            AlbumType::Compilations => QobuzAlbumReleaseType::Compilation,
-            AlbumType::EpsAndSingles => QobuzAlbumReleaseType::EpSingle,
-            AlbumType::Other => QobuzAlbumReleaseType::Other,
-            AlbumType::Download => QobuzAlbumReleaseType::Download,
-        }
-    }
-}
-
 impl From<QobuzFavoriteArtistsError> for ArtistsError {
     fn from(err: QobuzFavoriteArtistsError) -> Self {
         ArtistsError::Other(Box::new(err))
@@ -1970,6 +2045,10 @@ impl MusicApi for QobuzMusicApi {
             &self.db,
             request.page.as_ref().map(|x| x.offset),
             request.page.as_ref().map(|x| x.limit),
+            request
+                .filters
+                .as_ref()
+                .and_then(|x| x.album_type.map(Into::into)),
             None,
             None,
         )
@@ -1994,7 +2073,7 @@ impl MusicApi for QobuzMusicApi {
     async fn artist_albums(
         &self,
         artist_id: &Id,
-        album_type: AlbumType,
+        album_type: Option<AlbumType>,
         offset: Option<u32>,
         limit: Option<u32>,
         _order: Option<AlbumOrder>,
@@ -2006,7 +2085,7 @@ impl MusicApi for QobuzMusicApi {
             artist_id,
             offset,
             limit,
-            Some(album_type.into()),
+            album_type.map(Into::into),
             None,
             None,
             None,
@@ -2168,7 +2247,7 @@ impl MusicApi for QobuzMusicApi {
                 url,
                 format: track.format.unwrap_or(AudioFormat::Source),
                 track_id: Some(track.id.to_owned()),
-                source: track.source,
+                source: track.track_source,
             }))
     }
 

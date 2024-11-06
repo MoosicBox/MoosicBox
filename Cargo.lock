@@ -5984,6 +5984,7 @@ dependencies = [
  "moosicbox_task",
  "moosicbox_ws",
  "reqwest",
+ "strum",
  "thiserror",
  "tokio",
 ]
@@ -6501,11 +6502,17 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "log",
+ "moosicbox_assert",
  "moosicbox_core",
  "moosicbox_database",
  "moosicbox_json_utils",
+ "moosicbox_qobuz",
+ "moosicbox_tidal",
+ "moosicbox_yt",
  "serde",
  "serde_json",
+ "strum",
+ "strum_macros",
  "thiserror",
  "utoipa",
 ]
@@ -6646,16 +6653,27 @@ dependencies = [
  "log",
  "moosicbox_core",
  "moosicbox_database",
- "moosicbox_json_utils",
+ "moosicbox_music_api_models",
  "moosicbox_paging",
  "pretty_assertions",
+ "test-log",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "moosicbox_music_api_models"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "moosicbox_core",
+ "moosicbox_database",
+ "moosicbox_json_utils",
+ "moosicbox_paging",
  "serde",
  "serde_json",
  "strum",
  "strum_macros",
- "test-log",
- "thiserror",
- "tokio",
  "utoipa",
 ]
 

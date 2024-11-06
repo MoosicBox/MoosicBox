@@ -73,6 +73,7 @@ all-sources = ["qobuz", "tidal", "yt"]
 
 qobuz = [
     "dep:moosicbox_qobuz",
+    "moosicbox_app_native_ui/qobuz",
     "moosicbox_core/qobuz",
     "moosicbox_downloader/qobuz",
     "moosicbox_files/qobuz",
@@ -85,6 +86,7 @@ qobuz = [
 ]
 tidal = [
     "dep:moosicbox_tidal",
+    "moosicbox_app_native_ui/tidal",
     "moosicbox_core/tidal",
     "moosicbox_downloader/tidal",
     "moosicbox_files/tidal",
@@ -97,6 +99,7 @@ tidal = [
 ]
 yt = [
     "dep:moosicbox_yt",
+    "moosicbox_app_native_ui/yt",
     "moosicbox_core/yt",
     "moosicbox_downloader/yt",
     "moosicbox_files/yt",

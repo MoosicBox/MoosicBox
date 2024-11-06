@@ -22,7 +22,7 @@ pub fn get_nested_value<'a>(mut value: &'a Value, path: &[&str]) -> Result<&'a V
         let message = if i > 0 {
             format!("Path '{}' missing value: '{}'", path[..i].join(" -> "), x)
         } else {
-            format!("Missing value: '{}'", x)
+            format!("Missing value: '{}' ({value})", x)
         };
 
         return Err(ParseError::Parse(message));
@@ -242,7 +242,7 @@ where
         let message = if i > 0 {
             format!("Path '{}' missing value: '{}'", path[..i].join(" -> "), x)
         } else {
-            format!("Missing value: '{}'", x)
+            format!("Missing value: '{}' ({value})", x)
         };
 
         return inner_value.missing_value(ParseError::Parse(message));
@@ -261,7 +261,8 @@ where
             ParseError::ConvertType(_) => Err(ParseError::ConvertType(
                 if log::log_enabled!(log::Level::Debug) {
                     format!(
-                        "Path '{}' failed to convert value to type: '{err:?}' ({value:?})",
+                        "Path '{}' failed to convert value to type: '{err:?}' ({})",
+                        serde_json::to_string(value).unwrap_or_default(),
                         path.join(" -> "),
                     )
                 } else {

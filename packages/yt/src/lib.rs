@@ -9,6 +9,7 @@ pub mod models;
 
 use std::{
     fmt::Display,
+    str::FromStr as _,
     sync::{Arc, LazyLock},
 };
 
@@ -21,17 +22,19 @@ use moosicbox_database::DatabaseError;
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use moosicbox_core::{
-    sqlite::models::{Album, AlbumSort, ApiSource, Artist, AsModelResult, Id, Track},
+    sqlite::models::{Album, AlbumSort, AlbumType, ApiSource, Artist, AsModelResult, Id, Track},
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_files::get_content_length;
-use moosicbox_json_utils::{serde_json::ToValue, ParseError};
+use moosicbox_json_utils::{serde_json::ToValue, MissingValue, ParseError, ToValueType};
 use moosicbox_music_api::{
-    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumOrder, AlbumOrderDirection,
-    AlbumType, AlbumsError, AlbumsRequest, ArtistAlbumsError, ArtistError, ArtistOrder,
-    ArtistOrderDirection, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError,
-    RemoveTrackError, TrackAudioQuality, TrackError, TrackOrId, TrackOrder, TrackOrderDirection,
-    TrackSource, TracksError,
+    models::{
+        AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
+        TrackAudioQuality, TrackOrder, TrackOrderDirection, TrackSource,
+    },
+    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
+    ArtistError, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError, RemoveTrackError,
+    TrackError, TrackOrId, TracksError,
 };
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use serde::{Deserialize, Serialize};
@@ -1548,14 +1551,39 @@ pub enum YtArtistAlbumsError {
     Parse(#[from] ParseError),
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, Copy, Clone)]
+#[derive(
+    Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, Copy, Clone, PartialEq, Eq,
+)]
 #[serde(rename_all = "UPPERCASE")]
 #[strum(serialize_all = "UPPERCASE")]
 pub enum YtAlbumType {
-    All,
+    #[default]
     Lp,
     EpsAndSingles,
     Compilations,
+}
+
+impl From<YtAlbumType> for AlbumType {
+    fn from(value: YtAlbumType) -> Self {
+        match value {
+            YtAlbumType::Lp => Self::Lp,
+            YtAlbumType::Compilations => Self::Compilations,
+            YtAlbumType::EpsAndSingles => Self::EpsAndSingles,
+        }
+    }
+}
+
+impl MissingValue<YtAlbumType> for &Value {}
+impl ToValueType<YtAlbumType> for &Value {
+    fn to_value_type(self) -> Result<YtAlbumType, ParseError> {
+        YtAlbumType::from_str(self.as_str().ok_or_else(|| {
+            ParseError::MissingValue(format!(
+                "YtAlbumType: ({})",
+                serde_json::to_string(self).unwrap_or_default()
+            ))
+        })?)
+        .map_err(|e| ParseError::ConvertType(format!("YtAlbumType: {e:?}")))
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2102,7 +2130,6 @@ impl TryFrom<AlbumType> for YtAlbumType {
 
     fn try_from(value: AlbumType) -> Result<Self, Self::Error> {
         match value {
-            AlbumType::All => Ok(YtAlbumType::All),
             AlbumType::Lp => Ok(YtAlbumType::Lp),
             AlbumType::Compilations => Ok(YtAlbumType::Compilations),
             AlbumType::EpsAndSingles => Ok(YtAlbumType::EpsAndSingles),
@@ -2342,7 +2369,7 @@ impl MusicApi for YtMusicApi {
     async fn artist_albums(
         &self,
         artist_id: &Id,
-        album_type: AlbumType,
+        album_type: Option<AlbumType>,
         offset: Option<u32>,
         limit: Option<u32>,
         _order: Option<AlbumOrder>,
@@ -2351,7 +2378,22 @@ impl MusicApi for YtMusicApi {
         let offset = offset.unwrap_or(0);
         let limit = limit.unwrap_or(100);
 
-        if album_type == AlbumType::All {
+        Ok(if let Some(album_type) = album_type {
+            artist_albums(
+                #[cfg(feature = "db")]
+                &self.db,
+                artist_id,
+                Some(offset),
+                Some(limit),
+                Some(album_type.try_into()?),
+                None,
+                None,
+                None,
+                None,
+            )
+            .await?
+            .map(|x| x.into())
+        } else {
             let pages = futures::future::join_all(
                 vec![
                     YtAlbumType::Lp,
@@ -2383,9 +2425,8 @@ impl MusicApi for YtMusicApi {
             #[cfg(feature = "db")]
             let db = self.db.clone();
             let artist_id = artist_id.clone();
-            let album_type = album_type.try_into()?;
 
-            return Ok(PagingResponse {
+            PagingResponse {
                 page: Page::WithTotal {
                     items: pages
                         .into_iter()
@@ -2407,7 +2448,7 @@ impl MusicApi for YtMusicApi {
                             &artist_id,
                             Some(offset),
                             Some(limit),
-                            Some(album_type),
+                            None,
                             None,
                             None,
                             None,
@@ -2417,23 +2458,8 @@ impl MusicApi for YtMusicApi {
                     })
                 }))),
             }
-            .map(|item| item.into()));
-        }
-
-        Ok(artist_albums(
-            #[cfg(feature = "db")]
-            &self.db,
-            artist_id,
-            Some(offset),
-            Some(limit),
-            Some(album_type.try_into()?),
-            None,
-            None,
-            None,
-            None,
-        )
-        .await?
-        .map(|x| x.into()))
+            .map(|item| item.into())
+        })
     }
 
     async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {
@@ -2588,7 +2614,7 @@ impl MusicApi for YtMusicApi {
                 url,
                 format: track.format.unwrap_or(AudioFormat::Source),
                 track_id: Some(track.id.to_owned()),
-                source: track.source,
+                source: track.track_source,
             }))
     }
 

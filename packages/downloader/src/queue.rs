@@ -526,7 +526,7 @@ mod tests {
     use async_trait::async_trait;
     use moosicbox_core::sqlite::models::{Album, Artist, Id, Track};
     use moosicbox_database::{query::*, Database, Row};
-    use moosicbox_music_api::TrackAudioQuality;
+    use moosicbox_music_api::models::TrackAudioQuality;
     use pretty_assertions::assert_eq;
 
     use crate::db::models::{DownloadApiSource, DownloadItem, DownloadTaskState};

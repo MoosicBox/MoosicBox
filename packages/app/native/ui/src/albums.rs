@@ -5,11 +5,11 @@ use moosicbox_core::sqlite::models::{ApiAlbum, ApiSource};
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_paging::Page;
 
-use crate::{page, pre_escaped, public_img, state::State, TimeFormat as _};
+use crate::{formatting::TimeFormat as _, page, pre_escaped, public_img, state::State};
 
 pub fn album_cover_url(album: &ApiAlbum, width: u16, height: u16) -> String {
-    if album.artwork.is_some() {
-        let api_source: ApiSource = album.source.into();
+    if album.contains_cover {
+        let api_source: ApiSource = album.album_source.into();
         format!(
             "{}/files/albums/{}/{width}x{height}?moosicboxProfile=master&source={}",
             std::env::var("MOOSICBOX_HOST")
@@ -187,7 +187,7 @@ pub fn albums_list(albums: &Page<ApiAlbum>, size: u16) -> Markup {
     show_albums(albums.iter(), size)
 }
 
-fn show_albums<'a>(albums: impl Iterator<Item = &'a ApiAlbum>, size: u16) -> Markup {
+pub fn show_albums<'a>(albums: impl Iterator<Item = &'a ApiAlbum>, size: u16) -> Markup {
     html! {
         @for album in albums {
             a href={"/albums?albumId="(album.album_id)} sx-width=(size) sx-height=(size + 30) {

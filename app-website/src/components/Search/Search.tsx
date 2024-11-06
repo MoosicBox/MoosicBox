@@ -6,7 +6,6 @@ import {
     Api,
     api,
     type ApiSource,
-    type Album as ApiAlbum,
     type Artist as ApiArtist,
     once,
 } from '~/services/api';
@@ -75,19 +74,19 @@ export default function searchInput() {
                     ...result,
                     type: 'TIDAL',
                     id: result.artistId as number,
-                };
+                } as unknown as Api.TidalArtist;
             case 'QOBUZ':
                 return {
                     ...result,
                     type: 'QOBUZ',
                     id: result.artistId as number,
-                };
+                } as unknown as Api.QobuzArtist;
             case 'YT':
                 return {
                     ...result,
                     type: 'YT',
                     id: result.artistId as string,
-                };
+                } as unknown as Api.YtArtist;
             default:
                 source satisfies never;
                 throw new Error(`Invalid ApiSource: "${source}"`);
@@ -97,48 +96,14 @@ export default function searchInput() {
     function searchResultToApiAlbum(
         source: ApiSource,
         result: Api.GlobalAlbumSearchResult | Api.GlobalTrackSearchResult,
-    ): ApiAlbum {
-        switch (source) {
-            case 'LIBRARY':
-                return {
-                    ...result,
-                    type: 'LIBRARY',
-                    artistId: result.artistId as number,
-                    albumId: result.albumId as number,
-                    versions: [],
-                };
-            case 'TIDAL':
-                return {
-                    ...result,
-                    type: 'TIDAL',
-                    artistId: result.artistId as number,
-                    id: result.albumId as number,
-                    explicit: false,
-                    numberOfTracks: 0,
-                    audioQuality: 'LOSSLESS',
-                    mediaMetadataTags: [],
-                };
-            case 'QOBUZ':
-                return {
-                    ...result,
-                    type: 'QOBUZ',
-                    artistId: result.artistId as number,
-                    id: result.albumId as string,
-                    parentalWarning: false,
-                    numberOfTracks: 0,
-                };
-            case 'YT':
-                return {
-                    ...result,
-                    type: 'YT',
-                    artistId: result.artistId as string,
-                    id: result.albumId as string,
-                    numberOfTracks: 0,
-                };
-            default:
-                source satisfies never;
-                throw new Error(`Invalid ApiSource: "${source}"`);
-        }
+    ): Api.Album {
+        return {
+            ...result,
+            apiSource: source,
+            artistId: result.artistId as number,
+            albumId: result.albumId as number,
+            versions: [],
+        } as unknown as Api.Album;
     }
 
     async function search(searchString: string) {

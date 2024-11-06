@@ -2,15 +2,18 @@
 
 use async_trait::async_trait;
 use moosicbox_core::{
-    sqlite::models::{Album, ApiSource, Artist, Id, Track},
+    sqlite::models::{Album, AlbumType, ApiSource, Artist, Id, Track},
     types::PlaybackQuality,
 };
 use moosicbox_music_api::{
-    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumOrder, AlbumOrderDirection,
-    AlbumType, AlbumsError, AlbumsRequest, ArtistAlbumsError, ArtistError, ArtistOrder,
-    ArtistOrderDirection, ArtistsError, ImageCoverSize, ImageCoverSource, MusicApi,
-    RemoveAlbumError, RemoveArtistError, RemoveTrackError, TrackAudioQuality, TrackError,
-    TrackOrId, TrackOrder, TrackOrderDirection, TrackSource, TracksError,
+    models::{
+        AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
+        ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
+        TrackSource,
+    },
+    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
+    ArtistError, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError, RemoveTrackError,
+    TrackError, TrackOrId, TracksError,
 };
 use moosicbox_paging::PagingResult;
 use reqwest::Client;
@@ -94,7 +97,7 @@ impl MusicApi for RemoteLibraryMusicApi {
     async fn artist_albums(
         &self,
         _artist_id: &Id,
-        _album_type: AlbumType,
+        _album_type: Option<AlbumType>,
         _offset: Option<u32>,
         _limit: Option<u32>,
         _order: Option<AlbumOrder>,

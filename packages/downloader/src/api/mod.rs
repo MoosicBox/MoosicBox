@@ -32,7 +32,7 @@ use actix_web::{
 };
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_music_api::MusicApis;
-use moosicbox_music_api::{SourceToMusicApi as _, TrackAudioQuality};
+use moosicbox_music_api::{models::TrackAudioQuality, SourceToMusicApi as _};
 use moosicbox_paging::Page;
 use regex::Captures;
 use regex::Regex;

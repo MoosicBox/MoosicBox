@@ -112,7 +112,7 @@ export const [currentArtistSearch, setCurrentArtistSearch] = createSignal<{
 
 export const [currentAlbumSearch, setCurrentAlbumSearch] = createSignal<{
     query: string;
-    results: Api.LibraryAlbum[];
+    results: Api.Album[];
 }>();
 
 connection.listen((con, prev) => {

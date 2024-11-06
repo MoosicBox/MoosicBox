@@ -5,7 +5,7 @@ use actix_web::{
     web::{self, Json},
     HttpRequest, Result, Scope,
 };
-use moosicbox_core::sqlite::models::ToApi;
+use moosicbox_core::sqlite::models::{ApiSource, ApiSources, ToApi, TrackApiSource};
 #[cfg(feature = "db")]
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_paging::Page;
@@ -109,6 +109,7 @@ impl ToApi<ApiAlbum> for TidalAlbum {
             id: self.id,
             artist: self.artist.clone(),
             artist_id: self.artist_id,
+            album_type: self.album_type,
             contains_cover: self.contains_cover,
             audio_quality: self.audio_quality.clone(),
             copyright: self.copyright.clone(),
@@ -119,6 +120,7 @@ impl ToApi<ApiAlbum> for TidalAlbum {
             date_released: self.release_date.clone(),
             title: self.title.clone(),
             media_metadata_tags: self.media_metadata_tags.clone(),
+            api_source: ApiSource::Tidal,
         })
     }
 }
@@ -129,6 +131,7 @@ pub struct ApiTidalAlbum {
     pub id: u64,
     pub artist: String,
     pub artist_id: u64,
+    pub album_type: TidalAlbumType,
     pub contains_cover: bool,
     pub audio_quality: String,
     pub copyright: Option<String>,
@@ -139,6 +142,7 @@ pub struct ApiTidalAlbum {
     pub date_released: Option<String>,
     pub title: String,
     pub media_metadata_tags: Vec<String>,
+    pub api_source: ApiSource,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -155,6 +159,7 @@ impl ToApi<ApiTrack> for TidalTrack {
             number: self.track_number,
             album: self.album.clone(),
             album_id: self.album_id,
+            album_type: self.album_type,
             artist: self.artist.clone(),
             artist_id: self.artist_id,
             contains_cover: self.album_cover.is_some(),
@@ -166,6 +171,7 @@ impl ToApi<ApiTrack> for TidalTrack {
             popularity: self.popularity,
             title: self.title.clone(),
             media_metadata_tags: self.media_metadata_tags.clone(),
+            api_source: ApiSource::Tidal,
         })
     }
 }
@@ -177,6 +183,7 @@ pub struct ApiTidalTrack {
     pub number: u32,
     pub album: String,
     pub album_id: u64,
+    pub album_type: TidalAlbumType,
     pub artist: String,
     pub artist_id: u64,
     pub contains_cover: bool,
@@ -188,6 +195,36 @@ pub struct ApiTidalTrack {
     pub popularity: u32,
     pub title: String,
     pub media_metadata_tags: Vec<String>,
+    pub api_source: ApiSource,
+}
+
+impl From<ApiTidalTrack> for moosicbox_core::sqlite::models::ApiTrack {
+    fn from(value: ApiTidalTrack) -> Self {
+        Self {
+            track_id: value.id.into(),
+            number: value.number,
+            title: value.title,
+            duration: value.duration as f64,
+            album: value.album,
+            album_id: value.album_id.into(),
+            album_type: value.album_type.into(),
+            date_released: None,
+            date_added: None,
+            artist: value.artist,
+            artist_id: value.artist_id.into(),
+            contains_cover: value.contains_cover,
+            blur: false,
+            format: None,
+            bit_depth: None,
+            audio_bitrate: None,
+            overall_bitrate: None,
+            sample_rate: None,
+            channels: None,
+            track_source: TrackApiSource::Tidal,
+            api_source: ApiSource::Tidal,
+            sources: ApiSources::default().with_source(ApiSource::Tidal, value.id.into()),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -204,6 +241,7 @@ impl ToApi<ApiArtist> for TidalArtist {
             contains_cover: self.contains_cover,
             popularity: self.popularity,
             title: self.name.clone(),
+            api_source: ApiSource::Tidal,
         })
     }
 }
@@ -215,6 +253,7 @@ pub struct ApiTidalArtist {
     pub contains_cover: bool,
     pub popularity: u32,
     pub title: String,
+    pub api_source: ApiSource,
 }
 
 static TIDAL_ACCESS_TOKEN_HEADER: &str = "x-tidal-access-token";
@@ -1074,6 +1113,7 @@ impl From<AlbumType> for TidalAlbumType {
         path = "/artists/albums",
         description = "Get Tidal albums for the specified artist",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("artistId" = u64, Query, description = "Tidal artist ID to search for albums for"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
@@ -1143,6 +1183,7 @@ pub struct TidalAlbumTracksQuery {
         path = "/albums/tracks",
         description = "Get Tidal tracks for the specified album",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = u64, Query, description = "Tidal album ID to search for tracks for"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
@@ -1401,6 +1442,7 @@ pub struct TidalSearchQuery {
         path = "/search",
         description = "Search the Tidal library for artists/albums/tracks that fuzzy match the query",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("query" = String, Query, description = "The search query"),
             ("offset" = Option<usize>, Query, description = "Page offset"),
             ("limit" = Option<usize>, Query, description = "Page limit"),

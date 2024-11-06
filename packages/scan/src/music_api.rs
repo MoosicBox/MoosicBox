@@ -9,7 +9,7 @@ use moosicbox_core::{
 };
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
-use moosicbox_music_api::{AlbumsError, AlbumsRequest, MusicApi};
+use moosicbox_music_api::{models::AlbumsRequest, AlbumsError, MusicApi};
 use moosicbox_paging::PagingRequest;
 use thiserror::Error;
 use tokio::{select, sync::RwLock};
@@ -49,10 +49,8 @@ pub async fn scan(
         log::debug!("Fetching music api albums offset={offset} limit={limit}");
 
         let request = AlbumsRequest {
-            sources: None,
-            sort: None,
-            filters: None,
             page: Some(PagingRequest { offset, limit }),
+            ..Default::default()
         };
 
         let albums_resp = api.albums(&request);

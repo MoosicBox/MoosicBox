@@ -5,7 +5,7 @@ use actix_web::{
     web::{self, Json},
     HttpRequest, Result, Scope,
 };
-use moosicbox_core::sqlite::models::ToApi;
+use moosicbox_core::sqlite::models::{ApiSource, ApiSources, ToApi, TrackApiSource};
 #[cfg(feature = "db")]
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_paging::Page;
@@ -82,12 +82,14 @@ impl ToApi<ApiAlbum> for QobuzAlbum {
             id: self.id.clone(),
             artist: self.artist.clone(),
             artist_id: self.artist_id,
+            album_type: self.album_type,
             contains_cover: self.cover_url().is_some(),
             duration: self.duration,
             title: format_title(&self.title, self.version.as_deref()),
             parental_warning: self.parental_warning,
             number_of_tracks: self.tracks_count,
             date_released: self.release_date_original.clone(),
+            api_source: ApiSource::Qobuz,
         })
     }
 }
@@ -169,12 +171,14 @@ pub struct ApiQobuzAlbum {
     pub id: String,
     pub artist: String,
     pub artist_id: u64,
+    pub album_type: QobuzAlbumReleaseType,
     pub contains_cover: bool,
     pub duration: u32,
     pub parental_warning: bool,
     pub number_of_tracks: u32,
     pub date_released: String,
     pub title: String,
+    pub api_source: ApiSource,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
@@ -184,12 +188,14 @@ pub struct ApiQobuzRelease {
     pub id: String,
     pub artist: String,
     pub artist_id: u64,
+    pub album_type: QobuzAlbumReleaseType,
     pub contains_cover: bool,
     pub duration: u32,
     pub parental_warning: bool,
     pub number_of_tracks: u32,
     pub date_released: String,
     pub title: String,
+    pub api_source: ApiSource,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -206,12 +212,14 @@ impl ToApi<ApiRelease> for QobuzRelease {
             id: self.id.clone(),
             artist: self.artist.clone(),
             artist_id: self.artist_id,
+            album_type: self.album_type,
             contains_cover: self.cover_url().is_some(),
             duration: self.duration,
             title: format_title(&self.title, self.version.as_deref()),
             parental_warning: self.parental_warning,
             number_of_tracks: self.tracks_count,
             date_released: self.release_date_original.clone(),
+            api_source: ApiSource::Qobuz,
         })
     }
 }
@@ -232,11 +240,13 @@ impl ToApi<ApiTrack> for QobuzTrack {
             artist_id: self.artist_id,
             album: self.album.clone(),
             album_id: self.album_id.clone(),
+            album_type: self.album_type,
             contains_cover: self.cover_url().is_some(),
             duration: self.duration,
             parental_warning: self.parental_warning,
             isrc: self.isrc.clone(),
             title: format_title(&self.title, self.version.as_deref()),
+            api_source: ApiSource::Qobuz,
         })
     }
 }
@@ -248,6 +258,7 @@ pub struct ApiQobuzTrack {
     pub number: u32,
     pub artist: String,
     pub artist_id: u64,
+    pub album_type: QobuzAlbumReleaseType,
     pub album: String,
     pub album_id: String,
     pub contains_cover: bool,
@@ -255,6 +266,36 @@ pub struct ApiQobuzTrack {
     pub parental_warning: bool,
     pub isrc: String,
     pub title: String,
+    pub api_source: ApiSource,
+}
+
+impl From<ApiQobuzTrack> for moosicbox_core::sqlite::models::ApiTrack {
+    fn from(value: ApiQobuzTrack) -> Self {
+        Self {
+            track_id: value.id.into(),
+            number: value.number,
+            title: value.title,
+            duration: value.duration as f64,
+            album: value.album,
+            album_id: value.album_id.into(),
+            album_type: value.album_type.into(),
+            date_released: None,
+            date_added: None,
+            artist: value.artist,
+            artist_id: value.artist_id.into(),
+            contains_cover: value.contains_cover,
+            blur: false,
+            format: None,
+            bit_depth: None,
+            audio_bitrate: None,
+            overall_bitrate: None,
+            sample_rate: None,
+            channels: None,
+            track_source: TrackApiSource::Qobuz,
+            api_source: ApiSource::Qobuz,
+            sources: ApiSources::default().with_source(ApiSource::Qobuz, value.id.into()),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -271,6 +312,7 @@ impl ToApi<ApiArtist> for QobuzArtist {
             id: self.id,
             contains_cover: self.cover_url().is_some(),
             title: self.name.clone(),
+            api_source: ApiSource::Qobuz,
         })
     }
 }
@@ -282,6 +324,7 @@ pub struct ApiQobuzArtist {
     pub id: u64,
     pub contains_cover: bool,
     pub title: String,
+    pub api_source: ApiSource,
 }
 
 static QOBUZ_ACCESS_TOKEN_HEADER: &str = "x-qobuz-access-token";
@@ -460,7 +503,6 @@ impl From<QobuzArtistAlbumsError> for actix_web::Error {
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum AlbumReleaseType {
-    All,
     Lp,
     Live,
     Compilations,
@@ -472,7 +514,6 @@ pub enum AlbumReleaseType {
 impl From<AlbumReleaseType> for QobuzAlbumReleaseType {
     fn from(value: AlbumReleaseType) -> Self {
         match value {
-            AlbumReleaseType::All => QobuzAlbumReleaseType::All,
             AlbumReleaseType::Lp => QobuzAlbumReleaseType::Album,
             AlbumReleaseType::Live => QobuzAlbumReleaseType::Live,
             AlbumReleaseType::Compilations => QobuzAlbumReleaseType::Compilation,
@@ -541,6 +582,7 @@ pub struct QobuzArtistAlbumsQuery {
         path = "/artists/albums",
         description = "Get Qobuz albums for the specified artist ID",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("artistId" = u64, Query, description = "Qobuz artist ID to fetch albums for"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
@@ -599,6 +641,7 @@ impl From<QobuzFavoriteAlbumsError> for actix_web::Error {
 pub struct QobuzFavoriteAlbumsQuery {
     offset: Option<u32>,
     limit: Option<u32>,
+    album_type: Option<QobuzAlbumReleaseType>,
 }
 
 #[cfg_attr(
@@ -608,8 +651,10 @@ pub struct QobuzFavoriteAlbumsQuery {
         path = "/favorites/albums",
         description = "Get Qobuz favorited albums",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
+            ("albumType" = Option<QobuzAlbumReleaseType>, Query, description = "Album type to filter with"),
         ),
         responses(
             (
@@ -632,6 +677,7 @@ pub async fn favorite_albums_endpoint(
             &db,
             query.offset,
             query.limit,
+            query.album_type,
             req.headers()
                 .get(QOBUZ_ACCESS_TOKEN_HEADER)
                 .map(|x| x.to_str().unwrap().to_string()),
@@ -724,6 +770,7 @@ pub struct QobuzTrackQuery {
         path = "/tracks",
         description = "Get Qobuz track by ID",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("trackId" = u64, Query, description = "Qobuz track ID to fetch"),
         ),
         responses(
@@ -893,6 +940,7 @@ pub struct QobuzSearchQuery {
         path = "/search",
         description = "Search the Qobuz library for artists/albums/tracks that fuzzy match the query",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("query" = String, Query, description = "The search query"),
             ("offset" = Option<usize>, Query, description = "Page offset"),
             ("limit" = Option<usize>, Query, description = "Page limit"),

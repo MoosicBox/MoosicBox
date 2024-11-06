@@ -5,7 +5,7 @@ use actix_web::{
     web::{self, Json},
     HttpRequest, Result, Scope,
 };
-use moosicbox_core::sqlite::models::ToApi;
+use moosicbox_core::sqlite::models::{ApiSource, ApiSources, ToApi, TrackApiSource};
 #[cfg(feature = "db")]
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_paging::Page;
@@ -118,6 +118,7 @@ impl ToApi<ApiAlbum> for YtAlbum {
             date_released: self.release_date.clone(),
             title: self.title.clone(),
             media_metadata_tags: self.media_metadata_tags.clone(),
+            api_source: ApiSource::Yt,
         })
     }
 }
@@ -138,6 +139,7 @@ pub struct ApiYtAlbum {
     pub date_released: Option<String>,
     pub title: String,
     pub media_metadata_tags: Vec<String>,
+    pub api_source: ApiSource,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -154,6 +156,7 @@ impl ToApi<ApiTrack> for YtTrack {
             number: self.track_number,
             album: self.album.clone(),
             album_id: self.album_id,
+            album_type: self.album_type,
             artist: self.artist.clone(),
             artist_id: self.artist_id,
             contains_cover: self.album_cover.is_some(),
@@ -165,7 +168,15 @@ impl ToApi<ApiTrack> for YtTrack {
             popularity: self.popularity,
             title: self.title.clone(),
             media_metadata_tags: self.media_metadata_tags.clone(),
+            api_source: ApiSource::Yt,
         })
+    }
+}
+
+impl From<ApiTrack> for moosicbox_core::sqlite::models::ApiTrack {
+    fn from(value: ApiTrack) -> Self {
+        let ApiTrack::Yt(track) = value;
+        track.into()
     }
 }
 
@@ -176,6 +187,7 @@ pub struct ApiYtTrack {
     pub number: u32,
     pub album: String,
     pub album_id: String,
+    pub album_type: YtAlbumType,
     pub artist: String,
     pub artist_id: String,
     pub contains_cover: bool,
@@ -187,6 +199,36 @@ pub struct ApiYtTrack {
     pub popularity: u32,
     pub title: String,
     pub media_metadata_tags: Vec<String>,
+    pub api_source: ApiSource,
+}
+
+impl From<ApiYtTrack> for moosicbox_core::sqlite::models::ApiTrack {
+    fn from(value: ApiYtTrack) -> Self {
+        Self {
+            track_id: value.id.clone().into(),
+            number: value.number,
+            title: value.title,
+            duration: value.duration as f64,
+            album: value.album,
+            album_id: value.album_id.into(),
+            album_type: value.album_type.into(),
+            date_released: None,
+            date_added: None,
+            artist: value.artist,
+            artist_id: value.artist_id.into(),
+            contains_cover: value.contains_cover,
+            blur: false,
+            format: None,
+            bit_depth: None,
+            audio_bitrate: None,
+            overall_bitrate: None,
+            sample_rate: None,
+            channels: None,
+            track_source: TrackApiSource::Yt,
+            api_source: ApiSource::Yt,
+            sources: ApiSources::default().with_source(ApiSource::Yt, value.id.into()),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -203,6 +245,7 @@ impl ToApi<ApiArtist> for YtArtist {
             contains_cover: self.contains_cover,
             popularity: self.popularity,
             title: self.name.clone(),
+            api_source: ApiSource::Yt,
         })
     }
 }
@@ -214,6 +257,7 @@ pub struct ApiYtArtist {
     pub contains_cover: bool,
     pub popularity: u32,
     pub title: String,
+    pub api_source: ApiSource,
 }
 
 static TIDAL_ACCESS_TOKEN_HEADER: &str = "x-yt-access-token";

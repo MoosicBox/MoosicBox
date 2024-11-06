@@ -13,7 +13,7 @@ export default function artistPage(props: {
     const [libraryArtist, setLibraryArtist] =
         createSignal<Api.LibraryArtist | null>();
     const [libraryAlbums, setLibraryAlbums] = createSignal<
-        Api.LibraryAlbum[] | null
+        Api.Album[] | null
     >();
 
     const [tidalArtist, setTidalArtist] = createSignal<Api.TidalArtist>();
@@ -251,7 +251,7 @@ export default function artistPage(props: {
                             <For each={libraryAlbums()}>
                                 {(album) => (
                                     <Album
-                                        album={album}
+                                        album={album as unknown as Api.Album}
                                         artist={true}
                                         title={true}
                                         year={true}
@@ -271,7 +271,7 @@ export default function artistPage(props: {
                             <For each={tidalAlbums()}>
                                 {(album) => (
                                     <Album
-                                        album={album}
+                                        album={album as unknown as Api.Album}
                                         artist={true}
                                         title={true}
                                         year={true}
@@ -291,7 +291,7 @@ export default function artistPage(props: {
                             <For each={tidalEpsAndSingles()}>
                                 {(album) => (
                                     <Album
-                                        album={album}
+                                        album={album as unknown as Api.Album}
                                         artist={true}
                                         title={true}
                                         year={true}
@@ -311,7 +311,7 @@ export default function artistPage(props: {
                             <For each={tidalCompilations()}>
                                 {(album) => (
                                     <Album
-                                        album={album}
+                                        album={album as unknown as Api.Album}
                                         artist={true}
                                         title={true}
                                         year={true}
@@ -331,7 +331,7 @@ export default function artistPage(props: {
                             <For each={qobuzAlbums()}>
                                 {(album) => (
                                     <Album
-                                        album={album}
+                                        album={album as unknown as Api.Album}
                                         artist={true}
                                         title={true}
                                         year={true}
@@ -351,7 +351,7 @@ export default function artistPage(props: {
                             <For each={qobuzEpsAndSingles()}>
                                 {(album) => (
                                     <Album
-                                        album={album}
+                                        album={album as unknown as Api.Album}
                                         artist={true}
                                         title={true}
                                         year={true}
@@ -371,7 +371,7 @@ export default function artistPage(props: {
                             <For each={qobuzCompilations()}>
                                 {(album) => (
                                     <Album
-                                        album={album}
+                                        album={album as unknown as Api.Album}
                                         artist={true}
                                         title={true}
                                         year={true}

@@ -5,13 +5,15 @@ use moosicbox_json_utils::{
     serde_json::{ToNestedValue, ToValue},
     ParseError, ToValueType,
 };
-use moosicbox_music_api::ImageCoverSize;
+use moosicbox_music_api::models::ImageCoverSize;
 use moosicbox_search::models::{
     ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
     ApiGlobalTrackSearchResult, ApiSearchResultsResponse,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+use crate::TidalAlbumType;
 
 use super::{Album, Artist, AsModelResult, Track};
 
@@ -185,6 +187,7 @@ pub struct TidalAlbum {
     pub id: u64,
     pub artist: String,
     pub artist_id: u64,
+    pub album_type: TidalAlbumType,
     pub contains_cover: bool,
     pub audio_quality: String,
     pub copyright: Option<String>,
@@ -207,13 +210,15 @@ impl From<TidalAlbum> for Album {
             title: value.title,
             artist: value.artist,
             artist_id: value.artist_id.into(),
+            album_type: value.album_type.into(),
             date_released: value.release_date,
             date_added: None,
             artwork,
             directory: None,
             blur: false,
             versions: vec![],
-            source: AlbumSource::Tidal,
+            album_source: AlbumSource::Tidal,
+            api_source: ApiSource::Tidal,
             artist_sources: ApiSources::default()
                 .with_source(ApiSource::Tidal, value.artist_id.into()),
             album_sources: ApiSources::default().with_source(ApiSource::Tidal, value.id.into()),
@@ -228,6 +233,7 @@ impl From<Album> for TidalAlbum {
             title: value.title,
             artist: value.artist,
             artist_id: value.artist_id.into(),
+            album_type: value.album_type.try_into().unwrap_or(TidalAlbumType::Lp),
             contains_cover: value.artwork.is_some(),
             audio_quality: "N/A".to_string(),
             copyright: None,
@@ -384,6 +390,7 @@ impl AsModelResult<TidalAlbum, ParseError> for serde_json::Value {
             id: self.to_value("id")?,
             artist: self.to_nested_value(&["artist", "name"])?,
             artist_id: self.to_nested_value(&["artist", "id"])?,
+            album_type: self.to_value("type")?,
             contains_cover: true,
             audio_quality: self.to_value("audioQuality")?,
             copyright: self.to_value("copyright")?,
@@ -408,6 +415,7 @@ pub struct TidalTrack {
     pub artist: String,
     pub artist_cover: Option<String>,
     pub album_id: u64,
+    pub album_type: TidalAlbumType,
     pub album: String,
     pub album_cover: Option<String>,
     pub audio_quality: String,
@@ -429,6 +437,7 @@ impl From<TidalTrack> for Track {
             duration: value.duration as f64,
             album: value.album,
             album_id: value.album_id.into(),
+            album_type: value.album_type.into(),
             date_released: None,
             date_added: None,
             artist: value.artist,
@@ -443,7 +452,7 @@ impl From<TidalTrack> for Track {
             overall_bitrate: None,
             sample_rate: None,
             channels: None,
-            source: TrackApiSource::Tidal,
+            track_source: TrackApiSource::Tidal,
             api_source: ApiSource::Tidal,
             sources: ApiSources::default().with_source(ApiSource::Tidal, value.id.into()),
         }
@@ -458,6 +467,7 @@ impl ToValueType<TidalTrack> for &serde_json::Value {
 
 impl AsModelResult<TidalTrack, ParseError> for serde_json::Value {
     fn as_model(&self) -> Result<TidalTrack, ParseError> {
+        let album_type: Option<TidalAlbumType> = self.to_nested_value(&["album", "type"])?;
         Ok(TidalTrack {
             id: self.to_value("id")?,
             track_number: self.to_value("trackNumber")?,
@@ -465,6 +475,7 @@ impl AsModelResult<TidalTrack, ParseError> for serde_json::Value {
             artist: self.to_nested_value(&["artist", "name"])?,
             artist_cover: self.to_nested_value(&["artist", "picture"])?,
             album_id: self.to_nested_value(&["album", "id"])?,
+            album_type: album_type.unwrap_or_default(),
             album: self.to_nested_value(&["album", "title"])?,
             album_cover: self.to_nested_value(&["album", "cover"])?,
             audio_quality: self.to_value("audioQuality")?,
