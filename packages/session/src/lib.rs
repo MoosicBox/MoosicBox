@@ -14,6 +14,7 @@ use moosicbox_session_models::{
 
 mod db;
 pub use moosicbox_session_models as models;
+use thiserror::Error;
 
 #[cfg(feature = "api")]
 pub mod api;
@@ -134,11 +135,24 @@ pub async fn create_player(
     Ok(result)
 }
 
+#[derive(Debug, Error)]
+pub enum CreatePlayersError {
+    #[error(transparent)]
+    Db(#[from] DbError),
+    #[error("Invalid connection")]
+    InvalidConnection,
+}
+
 pub async fn create_players(
     db: &ConfigDatabase,
     connection_id: &str,
     players: &[models::RegisterPlayer],
-) -> Result<Vec<Player>, DbError> {
+) -> Result<Vec<Player>, CreatePlayersError> {
+    let connections = crate::db::get_connections(db).await?;
+    if !connections.iter().any(|x| x.id == connection_id) {
+        return Err(CreatePlayersError::InvalidConnection);
+    }
+
     let mut results = vec![];
 
     for player in players {

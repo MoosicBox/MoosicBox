@@ -1,6 +1,6 @@
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
-    error::ErrorInternalServerError,
+    error::{ErrorInternalServerError, ErrorNotFound},
     route,
     web::{self, Json},
     Result, Scope,
@@ -312,6 +312,15 @@ pub struct RegisterPlayers {
     connection_id: String,
 }
 
+impl From<CreatePlayersError> for actix_web::Error {
+    fn from(e: CreatePlayersError) -> Self {
+        match e {
+            CreatePlayersError::Db(e) => ErrorInternalServerError(e),
+            CreatePlayersError::InvalidConnection => ErrorNotFound(e),
+        }
+    }
+}
+
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Session"],
@@ -338,8 +347,7 @@ pub async fn register_players_endpoint(
     db: ConfigDatabase,
 ) -> Result<Json<Vec<ApiPlayer>>> {
     let registered = crate::create_players(&db, &query.connection_id, &players)
-        .await
-        .map_err(ErrorInternalServerError)?
+        .await?
         .into_iter()
         .map(|x| x.to_api())
         .collect::<Vec<_>>();

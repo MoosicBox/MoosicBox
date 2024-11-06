@@ -6939,6 +6939,7 @@ dependencies = [
  "moosicbox_session_models",
  "moosicbox_task",
  "serde",
+ "thiserror",
  "tokio",
  "utoipa",
 ]
