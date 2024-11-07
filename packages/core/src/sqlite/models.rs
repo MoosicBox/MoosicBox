@@ -751,6 +751,34 @@ impl From<Album> for ApiAlbum {
         }
     }
 }
+
+impl From<&ApiTrack> for ApiAlbum {
+    fn from(value: &ApiTrack) -> Self {
+        value.clone().into()
+    }
+}
+
+impl From<ApiTrack> for ApiAlbum {
+    fn from(value: ApiTrack) -> Self {
+        Self {
+            album_id: value.album_id,
+            title: value.album,
+            artist: value.artist,
+            artist_id: value.artist_id,
+            album_type: value.album_type,
+            date_released: value.date_released,
+            date_added: value.date_added,
+            contains_cover: value.contains_cover,
+            blur: value.blur,
+            versions: vec![],
+            album_source: value.track_source.into(),
+            api_source: value.api_source,
+            artist_sources: value.sources.clone(),
+            album_sources: value.sources,
+        }
+    }
+}
+
 impl From<&Track> for ApiAlbum {
     fn from(value: &Track) -> Self {
         value.clone().into()
@@ -1162,10 +1190,31 @@ impl Id {
         }
     }
 
+    pub fn as_u64(&self) -> Option<u64> {
+        match self {
+            Id::String(_) => None,
+            Id::Number(x) => Some(*x),
+        }
+    }
+
+    pub fn as_number(&self) -> Option<u64> {
+        match self {
+            Id::String(_) => None,
+            Id::Number(x) => Some(*x),
+        }
+    }
+
     pub fn is_string(&self) -> bool {
         match self {
             Id::String(_) => true,
             Id::Number(_) => false,
+        }
+    }
+
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Id::String(x) => Some(x.as_str()),
+            Id::Number(_) => None,
         }
     }
 }

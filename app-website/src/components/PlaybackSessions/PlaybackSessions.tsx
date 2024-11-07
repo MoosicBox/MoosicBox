@@ -1,14 +1,13 @@
 import './playback-sessions.css';
 import { For, Index, createComputed, createSignal } from 'solid-js';
 import { Api } from '~/services/api';
-import type { Track } from '~/services/api';
 import { playerState, setPlayerState, updateSession } from '~/services/player';
 import Album from '../Album';
 import { produce } from 'solid-js/store';
 import { wsService } from '~/services/ws';
 
 const queuedTracksCache: {
-    [id: number]: { position?: number; tracks: Track[] };
+    [id: number]: { position?: number; tracks: Api.Track[] };
 } = {};
 
 export default function playbackSessionsFunc() {

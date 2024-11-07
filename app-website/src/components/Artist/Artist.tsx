@@ -1,14 +1,13 @@
 import './artist.css';
 import { Api, api } from '~/services/api';
-import type { ApiSource, Track } from '~/services/api';
+import type { ApiSource } from '~/services/api';
 import { createComputed, createSignal } from 'solid-js';
 
 export function artistRoute(
     artist:
         | Api.Artist
         | Api.Album
-        | Track
-        | { id: string | number; apiSource: ApiSource }
+        | Api.Track
         | { artistId: string | number; apiSource: ApiSource },
 ): string {
     const apiSource = artist.apiSource;

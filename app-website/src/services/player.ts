@@ -2,13 +2,7 @@ import { createSignal } from 'solid-js';
 import { Howl } from 'howler';
 import { makePersisted } from '@solid-primitives/storage';
 import { isServer } from 'solid-js/web';
-import {
-    Api,
-    type Track,
-    api,
-    connection,
-    toSessionPlaylistTrack,
-} from './api';
+import { Api, api, connection } from './api';
 import { createStore, produce } from 'solid-js/store';
 import { createListener, deepEqual, orderedEntries } from './util';
 import { type PartialBy, type PartialUpdateSession } from './types';
@@ -17,7 +11,10 @@ import { appState, showChangePlaybackTargetModal } from './app';
 import { responsePromise } from '~/components/ChangePlaybackTargetModal/ChangePlaybackTargetModal';
 import { isSilencePlaying, startSilence, stopSilence } from './silence-player';
 
-export type TrackListenerCallback = (track: Track, position: number) => void;
+export type TrackListenerCallback = (
+    track: Api.Track,
+    position: number,
+) => void;
 
 interface PlayerState {
     playing: boolean;
@@ -25,7 +22,7 @@ interface PlayerState {
     playbackSessions: Api.PlaybackSession[];
     currentAudioZone?: Api.AudioZone | undefined;
     audioZones: Api.AudioZone[];
-    currentTrack?: Track | undefined;
+    currentTrack?: Api.Track | undefined;
 }
 
 export const [playerState, setPlayerState] = createStore<PlayerState>({
@@ -200,7 +197,7 @@ export const setCurrentTrackLength = (
 };
 
 export const [currentAlbum, setCurrentAlbum] = makePersisted(
-    createSignal<Api.Album | Track | undefined>(undefined, {
+    createSignal<Api.Album | Api.Track | undefined>(undefined, {
         equals: false,
     }),
     {
@@ -240,7 +237,7 @@ export const setPlaylistPosition = (
 };
 
 const [_playlist, _setPlaylist] = makePersisted(
-    createSignal<Track[]>([], { equals: false }),
+    createSignal<Api.Track[]>([], { equals: false }),
     { name: `player.v1.playlist` },
 );
 const onPlaylistChangedListener =
@@ -455,64 +452,20 @@ const playAlbumListener = createListener<() => void>();
 export const onPlayAlbum = playAlbumListener.on;
 export const offPlayAlbum = playAlbumListener.off;
 
-export async function playAlbum(album: Api.Album | Track) {
+export async function playAlbum(album: Api.Album | Api.Track) {
     console.debug('playAlbum', album);
     setCurrentAlbum(album);
 
-    const albumType = 'apiSource' in album ? album.apiSource : 'TRACK';
-
-    switch (albumType) {
-        case 'LIBRARY': {
-            let id: string | number;
-            if ('albumId' in album) {
-                id = album.albumId;
-            } else {
-                throw new Error(`Invalid album: ${JSON.stringify(album)}`);
-            }
-            const versions = await api.getAlbumVersions(id);
-            const tracks = versions[0]!.tracks;
-            await playPlaylist(tracks);
-            break;
-        }
-        case 'TRACK': {
-            album = album as Api.LibraryTrack;
-            const versions = await api.getAlbumVersions(album.albumId);
-            const tracks = versions[0]!.tracks;
-            await playPlaylist(tracks);
-            break;
-        }
-        case 'TIDAL': {
-            album = album as Api.Album;
-            const page = await api.getTidalAlbumTracks(album.albumId as string);
-            const tracks = page.items;
-            await playPlaylist(tracks);
-            break;
-        }
-        case 'QOBUZ': {
-            album = album as Api.Album;
-            const page = await api.getQobuzAlbumTracks(album.albumId as string);
-            const tracks = page.items;
-            await playPlaylist(tracks);
-            break;
-        }
-        case 'YT': {
-            album = album as Api.Album;
-            const page = await api.getYtAlbumTracks(album.albumId as string);
-            const tracks = page.items;
-            await playPlaylist(tracks);
-            break;
-        }
-        default:
-            albumType satisfies never;
-            throw new Error(`Invalid album type '${albumType}'`);
-    }
+    const versions = await api.getAlbumVersions(album.albumId);
+    const tracks = versions[0]!.tracks;
+    await playPlaylist(tracks);
 }
 
 const playPlaylistListener = createListener<() => void>();
 export const onPlayPlaylist = playPlaylistListener.on;
 export const offPlayPlaylist = playPlaylistListener.off;
 
-export async function playPlaylist(tracks: Track[]) {
+export async function playPlaylist(tracks: Api.Track[]) {
     console.debug('playPlaylist', tracks);
     const firstTrack = tracks[0];
     setCurrentAlbum(firstTrack);
@@ -530,7 +483,7 @@ const addAlbumToQueueListener = createListener<() => void>();
 export const onAddAlbumToQueue = addAlbumToQueueListener.on;
 export const offAddAlbumToQueue = addAlbumToQueueListener.off;
 
-export async function addAlbumToQueue(album: Api.Album | Track) {
+export async function addAlbumToQueue(album: Api.Album | Api.Track) {
     console.debug('addAlbumToQueue', album);
 
     const albumType = 'apiSource' in album ? album.apiSource : 'TRACK';
@@ -548,7 +501,7 @@ export async function addAlbumToQueue(album: Api.Album | Track) {
             return addTracksToQueue(tracks);
         }
         case 'TRACK': {
-            album = album as Api.LibraryTrack;
+            album = album as Api.Track;
             const versions = await api.getAlbumVersions(album.albumId);
             const tracks = versions[0]!.tracks;
             return addTracksToQueue(tracks);
@@ -577,7 +530,7 @@ export async function addAlbumToQueue(album: Api.Album | Track) {
     }
 }
 
-export async function addTracksToQueue(tracks: Track[]) {
+export async function addTracksToQueue(tracks: Api.Track[]) {
     console.debug('addTracksToQueue', tracks);
     updatePlayback({
         tracks: [...playlist(), ...tracks],
@@ -737,7 +690,7 @@ export type PlaybackUpdate = {
     position?: number;
     seek?: number;
     volume?: number;
-    tracks?: Track[];
+    tracks?: Api.Track[];
 };
 
 async function updatePlayback(
@@ -980,7 +933,7 @@ function updatePlaybackSession(
         playlist?: PartialBy<
             Omit<Api.UpdatePlaybackSessionPlaylist, 'tracks'>,
             'sessionPlaylistId'
-        > & { tracks: Track[] };
+        > & { tracks: Api.Track[] };
     },
 ) {
     console.debug('updatePlaybackSession:', id, request);
@@ -1008,9 +961,7 @@ function updatePlaybackSession(
                     updatePlaybackSession.playlist = {
                         ...request.playlist,
                         sessionPlaylistId: request.playlist.sessionPlaylistId!,
-                        tracks: request.playlist.tracks.map(
-                            toSessionPlaylistTrack,
-                        ),
+                        tracks: request.playlist.tracks,
                     };
 
                     console.debug(

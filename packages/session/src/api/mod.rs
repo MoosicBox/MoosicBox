@@ -6,14 +6,14 @@ use actix_web::{
     Result, Scope,
 };
 use moosicbox_audio_zone::models::{ApiAudioZone, ApiPlayer};
-use moosicbox_core::sqlite::models::ToApi as _;
+use moosicbox_core::sqlite::models::{ApiTrack, ToApi as _};
 use moosicbox_database::{config::ConfigDatabase, profiles::LibraryDatabase};
 use moosicbox_paging::Page;
 use moosicbox_session_models::{ApiConnection, RegisterConnection};
 use serde::Deserialize;
 
 use crate::{
-    models::{ApiSession, ApiSessionPlaylist, ApiSessionPlaylistTrack, RegisterPlayer},
+    models::{ApiSession, ApiSessionPlaylist, RegisterPlayer},
     CreatePlayersError,
 };
 
@@ -50,7 +50,6 @@ pub fn bind_services<
     ),
     components(schemas(
         ApiSessionPlaylist,
-        ApiSessionPlaylistTrack,
         ApiPlayer,
         ApiSession,
         RegisterPlayer,
@@ -90,7 +89,7 @@ pub struct GetSessionPlaylistTracks {
 pub async fn session_playlist_tracks_endpoint(
     query: web::Query<GetSessionPlaylistTracks>,
     db: LibraryDatabase,
-) -> Result<Json<Page<ApiSessionPlaylistTrack>>> {
+) -> Result<Json<Page<ApiTrack>>> {
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(30);
     let outputs = crate::get_session_playlist_tracks(&db, query.session_playlist_id)
@@ -101,7 +100,6 @@ pub async fn session_playlist_tracks_endpoint(
         .into_iter()
         .skip(offset as usize)
         .take(limit as usize)
-        .map(|x| x.to_api())
         .collect::<Vec<_>>();
 
     Ok(Json(Page::WithTotal {
@@ -181,7 +179,7 @@ pub async fn session_audio_zone_endpoint(
     let zone = crate::get_session_audio_zone(&db, query.session_id)
         .await
         .map_err(ErrorInternalServerError)?
-        .map(|x| x.into());
+        .map(Into::into);
 
     Ok(Json(zone))
 }

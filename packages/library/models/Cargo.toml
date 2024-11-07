@@ -20,15 +20,6 @@ moosicbox_database = { version = "0.1.0", path = "../../database", optional = tr
 moosicbox_json_utils = { version = "0.1.0", path = "../../json_utils", default-features = false, features = [
     "serde_json",
 ] }
-moosicbox_qobuz = { version = "0.1.0", path = "../../qobuz", optional = true, default-features = false, features = [
-    "api",
-] }
-moosicbox_tidal = { version = "0.1.0", path = "../../tidal", optional = true, default-features = false, features = [
-    "api",
-] }
-moosicbox_yt = { version = "0.1.0", path = "../../yt", optional = true, default-features = false, features = [
-    "api",
-] }
 
 # API Dependencies
 utoipa = { workspace = true, optional = true }
@@ -39,7 +30,6 @@ serde        = { workspace = true, features = ["derive"] }
 serde_json   = { workspace = true }
 strum        = { workspace = true, features = ["derive"] }
 strum_macros = { workspace = true }
-thiserror    = { workspace = true }
 
 [features]
 default = ["all-formats", "all-sources", "api", "db", "openapi"]
@@ -64,6 +54,6 @@ opus = ["moosicbox_core/opus"]
 
 all-sources = ["qobuz", "tidal", "yt"]
 
-qobuz = ["dep:moosicbox_qobuz", "moosicbox_core/qobuz"]
-tidal = ["dep:moosicbox_tidal", "moosicbox_core/tidal"]
-yt    = ["dep:moosicbox_yt", "moosicbox_core/yt"]
+qobuz = ["moosicbox_core/qobuz"]
+tidal = ["moosicbox_core/tidal"]
+yt    = ["moosicbox_core/yt"]

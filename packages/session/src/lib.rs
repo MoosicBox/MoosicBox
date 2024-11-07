@@ -4,12 +4,11 @@ use moosicbox_audio_zone::{
     db::audio_zone_try_from_db,
     models::{AudioZone, Player},
 };
-use moosicbox_core::sqlite::db::DbError;
+use moosicbox_core::sqlite::{db::DbError, models::ApiTrack};
 use moosicbox_database::{config::ConfigDatabase, profiles::LibraryDatabase};
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_session_models::{
-    CreateSession, PlaybackTarget, Session, SessionPlaylist, SessionPlaylistTrack,
-    SetSessionAudioZone, UpdateSession,
+    CreateSession, PlaybackTarget, Session, SessionPlaylist, SetSessionAudioZone, UpdateSession,
 };
 
 mod db;
@@ -25,7 +24,7 @@ pub mod events;
 pub async fn get_session_playlist_tracks(
     db: &LibraryDatabase,
     session_playlist_id: u64,
-) -> Result<Vec<SessionPlaylistTrack>, DbError> {
+) -> Result<Vec<ApiTrack>, DbError> {
     crate::db::get_session_playlist_tracks(db, session_playlist_id).await
 }
 
@@ -189,14 +188,14 @@ pub async fn delete_player(db: &ConfigDatabase, player_id: u64) -> Result<(), Db
 pub async fn delete_session_playlist_track_by_track_id(
     db: &LibraryDatabase,
     id: u64,
-) -> Result<Option<SessionPlaylistTrack>, DbError> {
+) -> Result<Option<ApiTrack>, DbError> {
     crate::db::delete_session_playlist_track_by_track_id(db, id).await
 }
 
 pub async fn delete_session_playlist_tracks_by_track_id(
     db: &LibraryDatabase,
     ids: Option<&Vec<u64>>,
-) -> Result<Vec<SessionPlaylistTrack>, DbError> {
+) -> Result<Vec<ApiTrack>, DbError> {
     crate::db::delete_session_playlist_tracks_by_track_id(db, ids).await
 }
 

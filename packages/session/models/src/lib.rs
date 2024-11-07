@@ -5,12 +5,11 @@ use std::sync::LazyLock;
 
 use moosicbox_audio_zone_models::{ApiPlayer, Player};
 use moosicbox_core::{
-    sqlite::models::{ApiSource, AsModelResult, ToApi},
+    sqlite::models::{ApiTrack, ToApi},
     types::PlaybackQuality,
 };
 use moosicbox_database::{AsId, DatabaseValue};
 use moosicbox_json_utils::{database::ToValue as _, ParseError, ToValueType};
-use moosicbox_library_models::{ApiLibraryTrack, ApiTrack};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 
@@ -166,21 +165,21 @@ impl From<UpdateSession> for ApiUpdateSession {
             position: value.position,
             seek: value.seek,
             volume: value.volume,
-            playlist: value.playlist.as_ref().map(ToApi::to_api),
+            playlist: value.playlist.map(Into::into),
             quality: value.quality,
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSessionPlaylist {
     pub session_playlist_id: u64,
-    pub tracks: Vec<UpdateSessionPlaylistTrack>,
+    pub tracks: Vec<ApiTrack>,
 }
 
-impl From<ApiUpdateSessionPlaylist> for UpdateSessionPlaylist {
-    fn from(value: ApiUpdateSessionPlaylist) -> Self {
+impl From<UpdateSessionPlaylist> for ApiUpdateSessionPlaylist {
+    fn from(value: UpdateSessionPlaylist) -> Self {
         Self {
             session_playlist_id: value.session_playlist_id,
             tracks: value.tracks.into_iter().map(Into::into).collect::<Vec<_>>(),
@@ -188,74 +187,11 @@ impl From<ApiUpdateSessionPlaylist> for UpdateSessionPlaylist {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdateSessionPlaylistTrack {
-    pub id: String,
-    pub r#type: ApiSource,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<String>,
-}
-
-impl From<ApiTrack> for UpdateSessionPlaylistTrack {
-    fn from(value: ApiTrack) -> Self {
+impl From<ApiUpdateSessionPlaylist> for UpdateSessionPlaylist {
+    fn from(value: ApiUpdateSessionPlaylist) -> Self {
         Self {
-            id: value.track_id().to_string(),
-            r#type: value.api_source(),
-            data: value.data().map(|x| x.to_string()),
-        }
-    }
-}
-
-impl From<ApiUpdateSessionPlaylistTrack> for UpdateSessionPlaylistTrack {
-    fn from(value: ApiUpdateSessionPlaylistTrack) -> Self {
-        Self {
-            id: value.id,
-            r#type: value.r#type,
-            data: value.data,
-        }
-    }
-}
-
-impl From<UpdateSessionPlaylistTrack> for SessionPlaylistTrack {
-    fn from(value: UpdateSessionPlaylistTrack) -> Self {
-        Self {
-            id: value.id,
-            r#type: value.r#type,
-            data: value.data,
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct ApiUpdateSessionPlaylistTrack {
-    pub id: String,
-    pub r#type: ApiSource,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<String>,
-}
-
-impl ToApi<ApiUpdateSessionPlaylistTrack> for UpdateSessionPlaylistTrack {
-    fn to_api(self) -> ApiUpdateSessionPlaylistTrack {
-        ApiUpdateSessionPlaylistTrack {
-            id: self.id,
-            r#type: self.r#type,
-            data: self.data,
-        }
-    }
-}
-
-impl ToApi<ApiUpdateSessionPlaylist> for UpdateSessionPlaylist {
-    fn to_api(self) -> ApiUpdateSessionPlaylist {
-        ApiUpdateSessionPlaylist {
-            session_playlist_id: self.session_playlist_id,
-            tracks: self
-                .tracks
-                .into_iter()
-                .map(From::<UpdateSessionPlaylistTrack>::from)
-                .map(|track: SessionPlaylistTrack| track.to_api())
-                .collect(),
+            session_playlist_id: value.session_playlist_id,
+            tracks: value.tracks.into_iter().map(Into::into).collect::<Vec<_>>(),
         }
     }
 }
@@ -436,168 +372,12 @@ impl ToValueType<SessionPlaylist> for &moosicbox_database::Row {
 }
 
 #[derive(Debug)]
-pub struct SessionPlaylistTracks(pub Vec<SessionPlaylistTrack>);
+pub struct SessionPlaylistTracks(pub Vec<ApiTrack>);
 
 impl AsId for SessionPlaylist {
     fn as_id(&self) -> DatabaseValue {
         #[allow(clippy::cast_possible_wrap)]
         DatabaseValue::Number(self.id as i64)
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionPlaylistTrack {
-    pub id: String,
-    pub r#type: ApiSource,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<String>,
-}
-
-impl ToApi<ApiTrack> for SessionPlaylistTrack {
-    #[allow(clippy::too_many_lines)]
-    fn to_api(self) -> ApiTrack {
-        match self.r#type {
-            ApiSource::Library => {
-                let id = self.id.parse::<u64>().expect("Invalid Library Track ID");
-                ApiTrack::Library {
-                    track_id: id,
-                    data: self
-                        .data
-                        .and_then(|x| {
-                            log::debug!("Mapping track data string: {x}");
-                            serde_json::from_str(&x)
-                                .map_err(|e| log::warn!("Failed to parse track json: {e:?}"))
-                                .ok()
-                        })
-                        .unwrap_or_else(|| ApiLibraryTrack {
-                            track_id: id,
-                            ..Default::default()
-                        }),
-                }
-            }
-            #[cfg(feature = "tidal")]
-            ApiSource::Tidal => {
-                let id = self.id.parse::<u64>().expect("Invalid Tidal Track ID");
-                match &self.data {
-                    Some(data) => ApiTrack::Tidal {
-                        track_id: id,
-                        data: serde_json::from_str(data)
-                            .expect("Failed to parse UpdateSessionPlaylistTrack data"),
-                    },
-                    None => ApiTrack::Tidal {
-                        track_id: id,
-                        data: self
-                            .data
-                            .and_then(|x| {
-                                log::debug!("Mapping track data string: {x}");
-                                serde_json::from_str(&x)
-                                    .map_err(|e| log::warn!("Failed to parse track json: {e:?}"))
-                                    .ok()
-                            })
-                            .unwrap_or_else(|| {
-                                serde_json::json!({
-                                    "id": id,
-                                    "type": self.r#type,
-                                })
-                            }),
-                    },
-                }
-            }
-            #[cfg(feature = "qobuz")]
-            ApiSource::Qobuz => {
-                let id = self.id.parse::<u64>().expect("Invalid Qobuz Track ID");
-                match &self.data {
-                    Some(data) => ApiTrack::Qobuz {
-                        track_id: id,
-                        data: serde_json::from_str(data)
-                            .expect("Failed to parse UpdateSessionPlaylistTrack data"),
-                    },
-                    None => ApiTrack::Qobuz {
-                        track_id: id,
-                        data: self
-                            .data
-                            .and_then(|x| {
-                                log::debug!("Mapping track data string: {x}");
-                                serde_json::from_str(&x)
-                                    .map_err(|e| log::warn!("Failed to parse track json: {e:?}"))
-                                    .ok()
-                            })
-                            .unwrap_or_else(|| {
-                                serde_json::json!({
-                                    "id": id,
-                                    "type": self.r#type,
-                                })
-                            }),
-                    },
-                }
-            }
-            #[cfg(feature = "yt")]
-            ApiSource::Yt => match &self.data {
-                Some(data) => ApiTrack::Yt {
-                    track_id: self.id,
-                    data: serde_json::from_str(data)
-                        .expect("Failed to parse UpdateSessionPlaylistTrack data"),
-                },
-                None => ApiTrack::Yt {
-                    track_id: self.id.clone(),
-                    data: self
-                        .data
-                        .and_then(|x| {
-                            log::debug!("Mapping track data string: {x}");
-                            serde_json::from_str(&x)
-                                .map_err(|e| log::warn!("Failed to parse track json: {e:?}"))
-                                .ok()
-                        })
-                        .unwrap_or_else(|| {
-                            serde_json::json!({
-                                "id": self.id,
-                                "type": self.r#type,
-                            })
-                        }),
-                },
-            },
-        }
-    }
-}
-
-impl ToValueType<SessionPlaylistTrack> for &moosicbox_database::Row {
-    fn to_value_type(self) -> Result<SessionPlaylistTrack, ParseError> {
-        Ok(SessionPlaylistTrack {
-            id: self.to_value("track_id")?,
-            r#type: self.to_value("type")?,
-            data: self.to_value("data")?,
-        })
-    }
-}
-
-impl AsModelResult<SessionPlaylistTrack, ParseError> for &moosicbox_database::Row {
-    fn as_model(&self) -> Result<SessionPlaylistTrack, ParseError> {
-        Ok(SessionPlaylistTrack {
-            id: self.to_value("track_id")?,
-            r#type: self.to_value("type")?,
-            data: self.to_value("data")?,
-        })
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub struct ApiSessionPlaylistTrack {
-    pub id: String,
-    pub r#type: ApiSource,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<String>,
-}
-
-impl ToApi<ApiSessionPlaylistTrack> for SessionPlaylistTrack {
-    fn to_api(self) -> ApiSessionPlaylistTrack {
-        ApiSessionPlaylistTrack {
-            id: self.id,
-            r#type: self.r#type,
-            data: self.data,
-        }
     }
 }
 

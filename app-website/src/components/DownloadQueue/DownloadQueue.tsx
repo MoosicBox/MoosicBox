@@ -9,7 +9,7 @@ import {
 } from 'solid-js';
 import type { JSXElement } from 'solid-js';
 import { api, Api } from '~/services/api';
-import type { ApiSource, Track as ApiTrack } from '~/services/api';
+import type { ApiSource } from '~/services/api';
 import { downloadsState } from '~/services/downloads';
 import {
     displayApiSource,
@@ -61,7 +61,7 @@ function downloadTask(task: Api.DownloadTask): JSXElement {
                                 {
                                     ...task.item,
                                     type: item.source,
-                                } as unknown as ApiTrack
+                                } as unknown as Api.Track
                             }
                             size={80}
                         />

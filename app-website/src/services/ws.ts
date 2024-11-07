@@ -1,7 +1,6 @@
 import * as player from './player';
 import { produce } from 'solid-js/store';
-import { Api, connection, toSessionPlaylistTrack } from './api';
-import type { Track } from './api';
+import { Api, connection } from './api';
 import { setAppState } from './app';
 import type { PartialUpdateSession } from './types';
 import { ClientAtom, clientAtom, createListener, objToStr } from './util';
@@ -247,7 +246,7 @@ export interface CreateSessionRequest {
 }
 
 export interface CreateSessionPlaylistRequest {
-    tracks: Track[];
+    tracks: Api.Track[];
 }
 
 export interface CreateSession {
@@ -256,7 +255,7 @@ export interface CreateSession {
 }
 
 export interface CreateSessionPlaylist {
-    tracks: Api.UpdateSessionPlaylistTrack[];
+    tracks: Api.Track[];
 }
 
 export interface CreateSessionMessage extends OutboundMessage {
@@ -451,7 +450,7 @@ export const wsService = {
                 ...session,
                 playlist: {
                     ...session.playlist,
-                    tracks: session.playlist.tracks.map(toSessionPlaylistTrack),
+                    tracks: session.playlist.tracks,
                 },
             },
         });

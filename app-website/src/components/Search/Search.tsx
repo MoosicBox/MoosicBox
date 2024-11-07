@@ -135,11 +135,20 @@ export default function searchInput() {
 
         switch (resultType) {
             case 'ARTIST':
-                return artistRoute({ id: result.artistId, apiSource: source });
+                return artistRoute({
+                    artistId: result.artistId,
+                    apiSource: source,
+                });
             case 'ALBUM':
-                return albumRoute({ id: result.albumId, type: source });
+                return albumRoute({
+                    albumId: result.albumId,
+                    apiSource: source,
+                });
             case 'TRACK':
-                return albumRoute({ id: result.albumId, type: source });
+                return albumRoute({
+                    albumId: result.albumId,
+                    apiSource: source,
+                });
             default:
                 resultType satisfies never;
                 throw new Error(`Invalid result type: ${resultType}`);
@@ -172,7 +181,7 @@ export default function searchInput() {
                             </span>{' '}
                             <a
                                 href={artistRoute({
-                                    id: artist.artistId,
+                                    artistId: artist.artistId,
                                     apiSource: source,
                                 })}
                                 class="search-results-result-details-artist"
@@ -207,8 +216,8 @@ export default function searchInput() {
                             </span>{' '}
                             <a
                                 href={albumRoute({
-                                    id: album.albumId,
-                                    type: source,
+                                    albumId: album.albumId,
+                                    apiSource: source,
                                 })}
                                 class="search-results-result-details-album"
                                 tabindex="-1"
@@ -220,7 +229,7 @@ export default function searchInput() {
                             </span>{' '}
                             <a
                                 href={artistRoute({
-                                    id: album.artistId,
+                                    artistId: album.artistId,
                                     apiSource: source,
                                 })}
                                 class="search-results-result-details-artist"
@@ -255,8 +264,8 @@ export default function searchInput() {
                             </span>{' '}
                             <a
                                 href={albumRoute({
-                                    id: track.albumId,
-                                    type: source,
+                                    albumId: track.albumId,
+                                    apiSource: source,
                                 })}
                                 class="search-results-result-details-track"
                                 tabindex="-1"
@@ -268,8 +277,8 @@ export default function searchInput() {
                             </span>{' '}
                             <a
                                 href={albumRoute({
-                                    id: track.albumId,
-                                    type: source,
+                                    albumId: track.albumId,
+                                    apiSource: source,
                                 })}
                                 class="search-results-result-details-album"
                                 tabindex="-1"
@@ -281,7 +290,7 @@ export default function searchInput() {
                             </span>{' '}
                             <a
                                 href={artistRoute({
-                                    id: track.artistId,
+                                    artistId: track.artistId,
                                     apiSource: source,
                                 })}
                                 class="search-results-result-details-artist"

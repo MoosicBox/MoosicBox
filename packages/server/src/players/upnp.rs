@@ -130,7 +130,7 @@ pub async fn load_upnp_players() -> Result<(), moosicbox_upnp::UpnpDeviceScanner
 fn handle_upnp_playback_update(
     update: &moosicbox_session::models::UpdateSession,
 ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = ()> + Send>> {
-    use moosicbox_player::{Track, DEFAULT_PLAYBACK_RETRY_OPTIONS};
+    use moosicbox_player::DEFAULT_PLAYBACK_RETRY_OPTIONS;
     use moosicbox_session::get_session;
 
     let update = update.clone();
@@ -220,11 +220,8 @@ fn handle_upnp_playback_update(
                 update.playlist.as_ref().map(|x| {
                     x.tracks
                         .iter()
-                        .map(|t| Track {
-                            id: t.id.clone().into(),
-                            source: t.r#type,
-                            data: t.data.clone().and_then(|x| serde_json::to_value(x).ok()),
-                        })
+                        .map(ToOwned::to_owned)
+                        .map(Into::into)
                         .collect::<Vec<_>>()
                 }),
                 None,

@@ -65,15 +65,15 @@ impl Player for LocalPlayer {
             return Err(PlayerError::NoPlayersPlaying);
         };
 
-        let track_or_id = &playback.tracks[playback.position as usize];
-        let track_id = &track_or_id.id;
+        let track = &playback.tracks[playback.position as usize];
+        let track_id = &track.id;
         log::info!(
-            "Playing track with Symphonia: {} {:?} {track_or_id:?}",
+            "Playing track with Symphonia: {} {:?} {track:?}",
             track_id,
             playback.abort,
         );
 
-        let playback_type = match track_or_id.track_source() {
+        let playback_type = match track.track_source {
             TrackApiSource::Local => self.playback_type,
             #[allow(unreachable_patterns)]
             _ => PlaybackType::Stream,
@@ -81,7 +81,7 @@ impl Player for LocalPlayer {
 
         let playable_track = track_or_id_to_playable(
             playback_type,
-            track_or_id,
+            track,
             playback.quality,
             &self.source,
             playback.abort.clone(),

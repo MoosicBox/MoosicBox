@@ -28,9 +28,10 @@ utoipa           = { workspace = true, optional = true }
 moosicbox_task = { version = "0.1.0", path = "../task", default-features = false, optional = true }
 tokio          = { workspace = true, optional = true }
 
-log       = { workspace = true }
-serde     = { workspace = true, features = ["derive"] }
-thiserror = { workspace = true }
+log        = { workspace = true }
+serde      = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror  = { workspace = true }
 
 [features]
 default = [

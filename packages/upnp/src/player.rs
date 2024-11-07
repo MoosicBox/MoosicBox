@@ -12,7 +12,7 @@ use moosicbox_async_service::CancellationToken;
 use moosicbox_audio_output::{
     AudioOutputError, AudioOutputFactory, AudioWrite, Channels, SignalSpec,
 };
-use moosicbox_core::sqlite::{db::DbError, models::ToApi};
+use moosicbox_core::sqlite::models::ToApi;
 use moosicbox_music_api::SourceToMusicApi;
 use moosicbox_session::models::UpdateSession;
 use rand::{thread_rng, Rng as _};
@@ -340,17 +340,17 @@ impl UpnpPlayer {
             return Err(PlayerError::NoPlayersPlaying);
         };
 
-        let track_or_id = &playback.tracks[playback.position as usize];
-        let track_id = &track_or_id.id;
+        let track = &playback.tracks[playback.position as usize];
+        let track_id = &track.id;
         log::info!(
-            "update_av_transport: Updating UPnP AV Transport URI: {} {:?} {track_or_id:?}",
+            "update_av_transport: Updating UPnP AV Transport URI: {} {:?} {track:?}",
             track_id,
             playback.abort,
         );
 
         let (transport_uri, _) = get_track_url(
             track_id,
-            track_or_id.source,
+            track.api_source,
             &self.source,
             playback.quality,
             true,
@@ -367,7 +367,7 @@ impl UpnpPlayer {
 
         let (local_transport_uri, headers) = get_track_url(
             track_id,
-            track_or_id.source,
+            track.api_source,
             &self.source,
             playback.quality,
             false,
@@ -393,19 +393,11 @@ impl UpnpPlayer {
         } else {
             None
         };
-        let api = self
-            .source_to_music_api
-            .get(track_or_id.source)
-            .map_err(|_e| PlayerError::InvalidSource)?;
-        let track = api
-            .track(track_id)
-            .await
-            .map_err(|_e| PlayerError::Db(DbError::Unknown))?;
-        let duration = track.as_ref().map(|x| x.duration.ceil() as u32);
-        let title = track.as_ref().map(|x| x.title.to_owned());
-        let artist = track.as_ref().map(|x| x.artist.to_owned());
-        let album = track.as_ref().map(|x| x.album.to_owned());
-        let track_number = track.map(|x| x.number);
+        let duration = track.duration.ceil() as u32;
+        let title = track.title.to_owned();
+        let artist = track.artist.to_owned();
+        let album = track.album.to_owned();
+        let track_number = track.number;
 
         crate::set_av_transport_uri(
             &self.service,
@@ -413,12 +405,12 @@ impl UpnpPlayer {
             self.instance_id,
             &transport_uri,
             format,
-            title.as_deref(),
-            artist.as_deref(),
-            artist.as_deref(),
-            album.as_deref(),
-            track_number,
-            duration,
+            Some(title.as_str()),
+            Some(artist.as_str()),
+            Some(artist.as_str()),
+            Some(album.as_str()),
+            Some(track_number),
+            Some(duration),
             size,
         )
         .await

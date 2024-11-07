@@ -428,17 +428,17 @@ fn parse_track_metadata(track_metadata: &str) -> Result<TrackMetadata, ActionErr
                 })
                 .ok_or_else(|| ActionError::MissingProperty("Missing res".into()))?;
             Ok(TrackMetadataItem {
-                upnp_class: upnp_class.and_then(|x| x.text()).map(|x| x.to_owned()),
-                upnp_artist: upnp_artist.and_then(|x| x.text()).map(|x| x.to_owned()),
-                upnp_album: upnp_album.and_then(|x| x.text()).map(|x| x.to_owned()),
+                upnp_class: upnp_class.and_then(|x| x.text()).map(ToOwned::to_owned),
+                upnp_artist: upnp_artist.and_then(|x| x.text()).map(ToOwned::to_owned),
+                upnp_album: upnp_album.and_then(|x| x.text()).map(ToOwned::to_owned),
                 upnp_original_track_number: upnp_original_track_number
                     .and_then(|x| x.text())
-                    .map(|x| x.to_owned()),
-                dc_title: dc_title.and_then(|x| x.text()).map(|x| x.to_owned()),
-                dc_creator: dc_creator.and_then(|x| x.text()).map(|x| x.to_owned()),
+                    .map(ToOwned::to_owned),
+                dc_title: dc_title.and_then(|x| x.text()).map(ToOwned::to_owned),
+                dc_creator: dc_creator.and_then(|x| x.text()).map(ToOwned::to_owned),
                 res: TrackMetadataItemResource {
                     duration: res.attribute("duration").map(str_to_duration),
-                    protocol_info: res.attribute("protocolInfo").map(|x| x.to_owned()),
+                    protocol_info: res.attribute("protocolInfo").map(ToOwned::to_owned),
                     source: res
                         .text()
                         .ok_or_else(|| ActionError::MissingProperty("Missing res value".into()))?

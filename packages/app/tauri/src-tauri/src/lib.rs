@@ -8,15 +8,12 @@ use moosicbox_app_state::{
     ws::WsConnectMessage, AppStateError, UpdateAppState, UPNP_LISTENER_HANDLE,
 };
 use moosicbox_core::{
-    sqlite::models::{ApiSource, Id},
+    sqlite::models::{ApiSource, ApiTrack, Id},
     types::PlaybackQuality,
 };
 use moosicbox_mdns::scanner::service::Commander;
-use moosicbox_music_api::models::FromId as _;
 use moosicbox_player::{Playback, PlayerError};
-use moosicbox_session::models::{
-    ApiSession, ApiUpdateSession, UpdateSession, UpdateSessionPlaylistTrack,
-};
+use moosicbox_session::models::{ApiSession, ApiUpdateSession, UpdateSession};
 use moosicbox_ws::models::{
     InboundPayload, OutboundPayload, SessionUpdatedPayload, UpdateSessionPayload,
 };
@@ -252,23 +249,6 @@ impl From<TrackId> for Id {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct TrackIdWithApiSource {
-    id: TrackId,
-    source: ApiSource,
-}
-
-impl From<TrackIdWithApiSource> for UpdateSessionPlaylistTrack {
-    fn from(value: TrackIdWithApiSource) -> Self {
-        Self {
-            id: value.id.as_ref().to_string(),
-            r#type: value.source,
-            data: None,
-        }
-    }
-}
-
 #[tauri::command]
 async fn set_playback_quality(quality: PlaybackQuality) -> Result<(), TauriPlayerError> {
     log::debug!("Setting playback quality: {quality:?}");
@@ -425,89 +405,32 @@ fn album_cover_url(album_id: &str, source: ApiSource, url: &str, query: &str) ->
 }
 
 fn convert_track(
-    value: moosicbox_library::models::ApiTrack,
+    track: ApiTrack,
     url: &str,
     query: &str,
 ) -> Option<app_tauri_plugin_player::Track> {
-    let api_source = value.api_source();
+    let api_source = track.api_source;
 
-    match value {
-        moosicbox_library::models::ApiTrack::Library { track_id, data } => {
-            let album_cover = if data.contains_cover {
-                Some(album_cover_url(&data.album_id.as_string(), api_source, url, query))
-            } else {
-                None
-            };
-            Some(app_tauri_plugin_player::Track {
-                id: track_id.to_string(),
-                number: data.number,
-                title: data.title,
-                album: data.album,
-                album_cover,
-                artist: data.artist,
-                artist_cover: None,
-                duration: data.duration
-            })
-        }
-        _ => {
-            value.data().map(|x| {
-                let album_id = x
-                    .get("albumId")
-                    .and_then(|x| {
-                        if x.is_string() {
-                            x.as_str().map(|x| x.to_string())
-                        } else if x.is_number() {
-                            x.as_u64().map(|x| x.to_string())
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap_or_default();
-
-                let contains_cover = x
-                    .get("containsCover")
-                    .and_then(|x| x.as_bool())
-                    .unwrap_or_default();
-
-                let album_cover = if contains_cover {
-                    Some(album_cover_url(&album_id, api_source, url, query))
-                } else {
-                    None
-                };
-
-                log::trace!("handle_ws_message: Converting track data={x} contains_cover={contains_cover} album_cover={album_cover:?}");
-
-                app_tauri_plugin_player::Track {
-                    id: value.track_id().to_string(),
-                    number: x.get("number")
-                        .and_then(|x| x.as_u64())
-                        .unwrap_or_default() as u32,
-                    title: x
-                        .get("title")
-                        .and_then(|x| x.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    album: x
-                        .get("album")
-                        .and_then(|x| x.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    album_cover,
-                    artist: x
-                        .get("artist")
-                        .and_then(|x| x.as_str().map(|x| x.to_string()))
-                        .unwrap_or_default(),
-                    artist_cover: x
-                        .get("artistCover")
-                        .and_then(|x| x.as_str().map(|x| x.to_string())),
-                    duration: x
-                        .get("duration")
-                        .and_then(|x| x.as_f64())
-                        .unwrap_or_default(),
-                }
-            })
-        }
-    }
+    let album_cover = if track.contains_cover {
+        Some(album_cover_url(
+            &track.album_id.to_string(),
+            api_source,
+            url,
+            query,
+        ))
+    } else {
+        None
+    };
+    Some(app_tauri_plugin_player::Track {
+        id: track.track_id.to_string(),
+        number: track.number,
+        title: track.title,
+        album: track.album,
+        album_cover,
+        artist: track.artist,
+        artist_cover: None,
+        duration: track.duration,
+    })
 }
 
 #[cfg(target_os = "android")]

@@ -4,7 +4,7 @@ use moosicbox_app_ws::{
     CloseError, WebsocketSendError, WebsocketSender as _, WsClient, WsHandle, WsMessage,
 };
 use moosicbox_audio_output::AudioOutputScannerError;
-use moosicbox_player::{PlayerError, Track, DEFAULT_PLAYBACK_RETRY_OPTIONS};
+use moosicbox_player::{PlayerError, DEFAULT_PLAYBACK_RETRY_OPTIONS};
 use moosicbox_session::models::{ApiSession, ApiUpdateSession};
 use moosicbox_ws::models::{EmptyPayload, InboundPayload, OutboundPayload};
 use serde::Serialize;
@@ -577,16 +577,9 @@ impl AppState {
                     update.position,
                     update.seek,
                     update.volume,
-                    update.playlist.map(|x| {
-                        x.tracks
-                            .iter()
-                            .map(|track| Track {
-                                id: track.track_id(),
-                                source: track.api_source(),
-                                data: track.data(),
-                            })
-                            .collect()
-                    }),
+                    update
+                        .playlist
+                        .map(|x| x.tracks.into_iter().map(Into::into).collect()),
                     update.quality,
                     Some(update.session_id),
                     Some(update.profile.clone()),

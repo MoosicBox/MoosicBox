@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 
 use moosicbox_audio_output::AudioOutputScannerError;
-use moosicbox_core::sqlite::models::ApiSource;
 use moosicbox_database::config::ConfigDatabase;
 use moosicbox_database::profiles::PROFILES;
 use moosicbox_ws::WebsocketSendError;
@@ -70,7 +69,6 @@ pub async fn init(
 fn handle_server_playback_update(
     update: &moosicbox_session::models::UpdateSession,
 ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = ()> + Send>> {
-    use moosicbox_core::sqlite::models::Id;
     use moosicbox_player::PlaybackHandler;
     use moosicbox_session::get_session;
 
@@ -178,46 +176,9 @@ fn handle_server_playback_update(
                 update.position,
                 update.seek,
                 update.volume,
-                if let Some(playlist) = update.playlist {
-                    let track_ids = playlist
-                        .tracks
-                        .iter()
-                        .filter_map(|x| x.id.parse::<u64>().ok())
-                        .map(std::convert::Into::into)
-                        .collect::<Vec<Id>>();
-
-                    let tracks = match moosicbox_library::db::get_tracks(&db, Some(&track_ids))
-                        .await
-                    {
-                        Ok(tracks) => tracks,
-                        Err(e) => moosicbox_assert::die_or_panic!("Failed to get tracks: {e:?}"),
-                    };
-
-                    Some(
-                        playlist
-                            .tracks
-                            .iter()
-                            .map(|x| {
-                                let data = if x.r#type == ApiSource::Library {
-                                    tracks
-                                        .iter()
-                                        .find(|track| x.id == track.id.to_string())
-                                        .and_then(|x| serde_json::to_value(x).ok())
-                                } else {
-                                    x.data.clone().and_then(|x| serde_json::to_value(x).ok())
-                                };
-
-                                moosicbox_player::Track {
-                                    id: x.id.clone().into(),
-                                    source: x.r#type,
-                                    data,
-                                }
-                            })
-                            .collect::<Vec<_>>(),
-                    )
-                } else {
-                    None
-                },
+                update
+                    .playlist
+                    .map(|x| x.tracks.into_iter().map(Into::into).collect()),
                 None,
                 Some(update.session_id),
                 Some(update.profile),

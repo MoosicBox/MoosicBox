@@ -1,11 +1,11 @@
 import './album.css';
-import { Api, type Track, api } from '~/services/api';
+import { Api, api } from '~/services/api';
 import { addAlbumToQueue, playAlbum } from '~/services/player';
 import { createComputed, createSignal } from 'solid-js';
 import { displayAlbumVersionQualities } from '~/services/formatting';
 import { artistRoute } from '../Artist/Artist';
 
-function albumControls(album: Api.Album | Track) {
+function albumControls(album: Api.Album | Api.Track) {
     return (
         <div class="album-controls">
             <button
@@ -35,20 +35,10 @@ function albumControls(album: Api.Album | Track) {
 }
 
 function getAlbumTitleDisplay(props: AlbumProps): string {
-    const apiSource = props.album.apiSource;
-
-    switch (apiSource) {
-        case 'LIBRARY':
-            return props.album.title;
-        case 'TIDAL':
-            return props.album.title;
-        case 'QOBUZ':
-            return props.album.title;
-        case 'YT':
-            return props.album.title;
-        default:
-            apiSource satisfies never;
-            throw new Error(`Invalid apiSource: ${apiSource}`);
+    if ('album' in props.album) {
+        return props.album.album;
+    } else {
+        return props.album.title;
     }
 }
 
@@ -168,77 +158,26 @@ function albumDetails(props: AlbumProps) {
 export function albumRoute(
     album:
         | Api.Album
-        | Track
-        | { id: number | string; type: 'LIBRARY' | 'TIDAL' | 'QOBUZ' | 'YT' }
+        | Api.Track
         | {
               albumId: number | string;
-              type: 'LIBRARY' | 'TIDAL' | 'QOBUZ' | 'YT';
+              apiSource: 'LIBRARY' | 'TIDAL' | 'QOBUZ' | 'YT';
           },
 ): string {
-    if ('apiSource' in album) {
-        const apiSource = album.apiSource;
+    const apiSource = album.apiSource;
 
-        switch (apiSource) {
-            case 'LIBRARY':
-                return `/albums?albumId=${album.albumId}`;
-            case 'TIDAL':
-                return `/albums?tidalAlbumId=${album.albumId}`;
-            case 'QOBUZ':
-                return `/albums?qobuzAlbumId=${album.albumId}`;
-            case 'YT':
-                return `/albums?ytAlbumId=${album.albumId}`;
-            default:
-                apiSource satisfies never;
-                throw new Error(`Invalid apiSource: ${apiSource}`);
-        }
-    } else {
-        const albumType = album.type;
-
-        switch (albumType) {
-            case 'LIBRARY':
-                if ('albumId' in album) {
-                    return `/albums?albumId=${
-                        (album as { albumId: number | string }).albumId
-                    }`;
-                } else if ('id' in album) {
-                    return `/albums?albumId=${
-                        (album as { id: number | string }).id
-                    }`;
-                } else {
-                    throw new Error(`Invalid album: ${album}`);
-                }
-            case 'TIDAL':
-                if ('number' in album) {
-                    return `/albums?tidalAlbumId=${
-                        (album as Api.TidalTrack).albumId
-                    }`;
-                } else {
-                    return `/albums?tidalAlbumId=${
-                        (album as { id: number | string }).id
-                    }`;
-                }
-            case 'QOBUZ':
-                if ('number' in album) {
-                    return `/albums?qobuzAlbumId=${
-                        (album as Api.QobuzTrack).albumId
-                    }`;
-                } else {
-                    return `/albums?qobuzAlbumId=${
-                        (album as { id: number | string }).id
-                    }`;
-                }
-            case 'YT':
-                if ('number' in album) {
-                    return `/albums?ytAlbumId=${(album as Api.YtTrack).albumId}`;
-                } else {
-                    return `/albums?ytAlbumId=${
-                        (album as { id: number | string }).id
-                    }`;
-                }
-            default:
-                albumType satisfies never;
-                throw new Error(`Invalid albumType: ${albumType}`);
-        }
+    switch (apiSource) {
+        case 'LIBRARY':
+            return `/albums?albumId=${album.albumId}`;
+        case 'TIDAL':
+            return `/albums?tidalAlbumId=${album.albumId}`;
+        case 'QOBUZ':
+            return `/albums?qobuzAlbumId=${album.albumId}`;
+        case 'YT':
+            return `/albums?ytAlbumId=${album.albumId}`;
+        default:
+            apiSource satisfies never;
+            throw new Error(`Invalid apiSource: ${apiSource}`);
     }
 }
 
@@ -268,7 +207,7 @@ function albumImage(props: AlbumProps, blur: boolean) {
 type PartialBy<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
 
 type AlbumProps = {
-    album: Api.Album | Track;
+    album: Api.Album | Api.Track;
     controls?: boolean;
     size: number;
     imageRequestSize: number;

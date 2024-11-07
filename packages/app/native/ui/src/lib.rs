@@ -10,7 +10,7 @@ pub mod state;
 
 use albums::album_cover_img;
 use maud::{html, Markup};
-use moosicbox_core::sqlite::models::Track;
+use moosicbox_core::sqlite::models::ApiTrack;
 use moosicbox_session_models::{ApiSession, UpdateSession};
 use serde::{Deserialize, Serialize};
 use state::State;
@@ -192,7 +192,7 @@ fn player_play_button_from_state(state: &State) -> Markup {
     )
 }
 
-fn player_current_album(track: &Track) -> Markup {
+fn player_current_album(track: &ApiTrack) -> Markup {
     html! {
         div id="player-current-playing" sx-dir="row" {
             @let size = 70;
@@ -218,14 +218,10 @@ fn player_current_album(track: &Track) -> Markup {
 
 fn player_current_album_from_state(state: &State) -> Markup {
     if let Some(playback) = &state.player.playback {
-        let track: Result<Option<Track>, _> = playback
-            .tracks
-            .get(playback.position as usize)
-            .map(TryInto::try_into)
-            .transpose();
+        let track: Option<&ApiTrack> = playback.tracks.get(playback.position as usize);
 
-        if let Ok(Some(track)) = track {
-            return player_current_album(&track);
+        if let Some(track) = track {
+            return player_current_album(track);
         }
     }
 
@@ -239,24 +235,16 @@ pub fn session_updated(update: &UpdateSession, session: &ApiSession) -> Vec<(Str
     let mut partials = vec![];
 
     if update.position.is_some() || update.playlist.is_some() {
-        let track: Result<Option<Track>, _> = session
+        let track: Option<&ApiTrack> = session
             .playlist
             .tracks
-            .get(session.position.unwrap_or(0) as usize)
-            .map(TryInto::try_into)
-            .transpose();
+            .get(session.position.unwrap_or(0) as usize);
 
-        match track {
-            Ok(Some(track)) => {
-                partials.push((
-                    "player-current-playing".to_string(),
-                    player_current_album(&track),
-                ));
-            }
-            Ok(None) => {}
-            Err(e) => {
-                log::error!("session_updated: {e:?}");
-            }
+        if let Some(track) = track {
+            partials.push((
+                "player-current-playing".to_string(),
+                player_current_album(track),
+            ));
         }
     }
     if let Some(playing) = update.playing {

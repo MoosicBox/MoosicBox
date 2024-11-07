@@ -1,6 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use moosicbox_library_models::ApiTrack;
+use moosicbox_core::sqlite::models::ApiTrack;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

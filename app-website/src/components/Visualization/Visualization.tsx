@@ -20,7 +20,7 @@ import {
 } from '~/services/player';
 import { toTime } from '~/services/formatting';
 import { isServer } from 'solid-js/web';
-import { api, trackId, type Track } from '~/services/api';
+import { Api, api, trackId } from '~/services/api';
 
 const VIZ_HEIGHT = 30;
 const BAR_WIDTH = 2;
@@ -339,11 +339,11 @@ export default function player() {
         }
     }
 
-    async function loadVisualizationData(track: Track): Promise<void> {
+    async function loadVisualizationData(track: Api.Track): Promise<void> {
         const max = window.innerWidth / (BAR_GAP + BAR_WIDTH);
         const data: number[] = await api.getTrackVisualization(
             track,
-            track.type,
+            track.apiSource,
             max,
         );
         data.forEach((x, i) => {

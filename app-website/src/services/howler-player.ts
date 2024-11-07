@@ -2,7 +2,6 @@ import { createSignal } from 'solid-js';
 import { Howl } from 'howler';
 import type { HowlCallback } from 'howler';
 import { Api, api, getConnection } from './api';
-import type { Track } from './api';
 import {
     currentSeek,
     playing,
@@ -18,7 +17,7 @@ import * as player from './player';
 import { QueryParams, orderedEntries } from './util';
 
 export type TrackListenerCallback = (
-    track: Api.LibraryTrack,
+    track: Api.Track,
     position: number,
 ) => void;
 
@@ -31,8 +30,8 @@ export function createPlayer(id: number): PlayerType {
     let endHandle: HowlCallback;
     let loadHandle: HowlCallback;
 
-    async function getTrackUrl(track: Track): Promise<string> {
-        const trackType = track.type;
+    async function getTrackUrl(track: Api.Track): Promise<string> {
+        const trackType = track.apiSource;
 
         switch (trackType) {
             case 'LIBRARY': {
@@ -63,7 +62,7 @@ export function createPlayer(id: number): PlayerType {
             }
             default:
                 return await api.getTrackUrlForSource(
-                    track.id,
+                    track.trackId,
                     trackType,
                     Api.TrackAudioQuality.Low,
                 );
@@ -100,7 +99,7 @@ export function createPlayer(id: number): PlayerType {
 
             let format: string | undefined;
 
-            const trackType = track.type;
+            const trackType = track.apiSource;
 
             switch (trackType) {
                 case 'LIBRARY': {

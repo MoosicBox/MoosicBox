@@ -16,7 +16,7 @@ import {
     toTime,
 } from '~/services/formatting';
 import { addTracksToQueue, playerState, playPlaylist } from '~/services/player';
-import { Api, type Track as ApiTrack, api, trackId } from '~/services/api';
+import { Api, api, trackId } from '~/services/api';
 import { artistRoute } from '~/components/Artist/Artist';
 import { areEqualShallow, historyBack } from '~/services/util';
 
@@ -34,10 +34,10 @@ export default function albumPage(props: {
     const [libraryAlbum, setLibraryAlbum] = createSignal<Api.Album | null>();
 
     const [tidalAlbum, setTidalAlbum] = createSignal<Api.Album>();
-    const [tidalTracks, setTidalTracks] = createSignal<Api.TidalTrack[]>();
+    const [tidalTracks, setTidalTracks] = createSignal<Api.Track[]>();
 
     const [qobuzAlbum, setQobuzAlbum] = createSignal<Api.Album>();
-    const [qobuzTracks, setQobuzTracks] = createSignal<Api.QobuzTrack[]>();
+    const [qobuzTracks, setQobuzTracks] = createSignal<Api.Track[]>();
 
     let sourceImageRef: HTMLImageElement | undefined;
 
@@ -47,7 +47,7 @@ export default function albumPage(props: {
             qobuzAlbum()) as unknown as Api.Album;
     }
 
-    function getTracks(): ApiTrack[] | undefined {
+    function getTracks(): Api.Track[] | undefined {
         return activeVersion()?.tracks ?? tidalTracks() ?? qobuzTracks();
     }
 
@@ -389,7 +389,7 @@ export default function albumPage(props: {
         return !version || version.tracks.length === 0;
     }
 
-    async function playAlbumFrom(track: ApiTrack) {
+    async function playAlbumFrom(track: Api.Track) {
         const tracks = getTracks()!;
         const playlist = tracks.slice(tracks.indexOf(track));
 
@@ -508,15 +508,15 @@ export default function albumPage(props: {
         );
     }
 
-    function getTrackTitleDisplay(track: ApiTrack): string {
+    function getTrackTitleDisplay(track: Api.Track): string {
         return track.title;
     }
 
-    function isExplicit(_track: ApiTrack): boolean {
+    function isExplicit(_track: Api.Track): boolean {
         return false;
     }
 
-    function track(track: ApiTrack) {
+    function track(track: Api.Track) {
         return (
             <tr
                 class={`album-page-tracks-track${

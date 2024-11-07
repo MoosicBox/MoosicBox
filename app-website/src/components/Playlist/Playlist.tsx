@@ -8,10 +8,10 @@ import {
     removeTrackFromPlaylist,
 } from '~/services/player';
 import Album from '../Album';
-import { type Track, trackId } from '~/services/api';
+import { Api, trackId } from '~/services/api';
 
 export default function playlist() {
-    const [playlist, setPlaylist] = createSignal<Track[]>([]);
+    const [playlist, setPlaylist] = createSignal<Api.Track[]>([]);
     const [currentlyPlayingIndex, setCurrentlyPlayingIndex] =
         createSignal<number>();
 

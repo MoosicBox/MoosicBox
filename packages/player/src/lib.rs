@@ -17,11 +17,11 @@ use moosicbox_audio_decoder::media_sources::{
     bytestream_source::ByteStreamSource, remote_bytestream::RemoteByteStreamMediaSource,
 };
 use moosicbox_audio_output::AudioOutputFactory;
-use moosicbox_core::sqlite::models::ApiSource;
+use moosicbox_core::sqlite::models::{ApiSource, Track};
 use moosicbox_core::{
     sqlite::{
         db::DbError,
-        models::{Id, ToApi, TrackApiSource},
+        models::{Id, ToApi},
     },
     types::{AudioFormat, PlaybackQuality},
 };
@@ -30,10 +30,7 @@ use moosicbox_json_utils::ParseError;
 use moosicbox_music_api::MusicApi;
 use moosicbox_session::{
     get_session_playlist,
-    models::{
-        ApiSession, PlaybackTarget, Session, UpdateSession, UpdateSessionPlaylist,
-        UpdateSessionPlaylistTrack,
-    },
+    models::{ApiSession, PlaybackTarget, Session, UpdateSession, UpdateSessionPlaylist},
 };
 use moosicbox_stream_utils::{
     remote_bytestream::RemoteByteStream, stalled_monitor::StalledReadMonitor,
@@ -41,7 +38,6 @@ use moosicbox_stream_utils::{
 use rand::{thread_rng, Rng as _};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use thiserror::Error;
 use tokio_util::{
     codec::{BytesCodec, FramedRead},
@@ -219,34 +215,6 @@ pub struct PlaybackStatus {
     pub success: bool,
 }
 
-#[derive(Debug, Clone)]
-pub struct Track {
-    pub id: Id,
-    pub source: ApiSource,
-    pub data: Option<Value>,
-}
-
-impl Track {
-    pub fn track_source(&self) -> TrackApiSource {
-        match self.source {
-            ApiSource::Library => self
-                .data
-                .as_ref()
-                .and_then(|x| x.get("source"))
-                .map(|x| serde_json::from_value(x.clone()))
-                .transpose()
-                .expect("Missing source")
-                .unwrap_or(TrackApiSource::Local),
-            #[cfg(feature = "tidal")]
-            ApiSource::Tidal => TrackApiSource::Tidal,
-            #[cfg(feature = "qobuz")]
-            ApiSource::Qobuz => TrackApiSource::Qobuz,
-            #[cfg(feature = "yt")]
-            ApiSource::Yt => TrackApiSource::Yt,
-        }
-    }
-}
-
 pub async fn get_track_url(
     track_id: &Id,
     api_source: ApiSource,
@@ -362,7 +330,7 @@ pub async fn get_track_url(
                 .get(url)
                 .send()
                 .await?
-                .json::<Value>()
+                .json::<serde_json::Value>()
                 .await?
                 .to_value::<Vec<String>>("urls")?
                 .first()
@@ -379,7 +347,7 @@ pub async fn get_track_url(
                 .get(url)
                 .send()
                 .await?
-                .json::<Value>()
+                .json::<serde_json::Value>()
                 .await?
                 .to_value::<String>("url")?)
         }
@@ -393,26 +361,13 @@ pub async fn get_track_url(
                 .get(url)
                 .send()
                 .await?
-                .json::<Value>()
+                .json::<serde_json::Value>()
                 .await?
                 .to_value::<String>("url")?)
         }
     }?;
 
     Ok((url, headers))
-}
-
-impl From<Track> for UpdateSessionPlaylistTrack {
-    fn from(value: Track) -> Self {
-        UpdateSessionPlaylistTrack {
-            id: value.id.to_string(),
-            r#type: value.source,
-            data: value
-                .data
-                .as_ref()
-                .map(|t| serde_json::to_string(t).expect("Failed to stringify track")),
-        }
-    }
 }
 
 pub async fn get_session_playlist_id_from_session_id(
@@ -532,12 +487,8 @@ impl PlaybackHandler {
                     session
                         .playlist
                         .tracks
-                        .iter()
-                        .map(|x| Track {
-                            id: x.track_id(),
-                            source: x.api_source(),
-                            data: x.data(),
-                        })
+                        .into_iter()
+                        .map(Into::into)
                         .collect::<Vec<_>>(),
                 ),
                 None,
@@ -588,12 +539,8 @@ impl PlaybackHandler {
                     session
                         .playlist
                         .tracks
-                        .iter()
-                        .map(|x| Track {
-                            id: x.track_id(),
-                            source: x.api_source(),
-                            data: x.data(),
-                        })
+                        .into_iter()
+                        .map(Into::into)
                         .collect::<Vec<_>>(),
                 ),
                 None,
@@ -641,13 +588,6 @@ impl PlaybackHandler {
                     log::error!("Failed to fetch album tracks: {e:?}");
                     PlayerError::AlbumFetchFailed(album_id.to_owned())
                 })?
-                .into_iter()
-                .map(|x| Track {
-                    id: x.id.to_owned(),
-                    source: ApiSource::Library,
-                    data: Some(serde_json::to_value(x).unwrap()),
-                })
-                .collect()
         };
 
         self.play_tracks(
@@ -1337,7 +1277,7 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
 
 #[allow(unused)]
 async fn track_to_playable_file(
-    track: &moosicbox_core::sqlite::models::Track,
+    track: &Track,
     quality: PlaybackQuality,
 ) -> Result<PlayableTrack, PlayerError> {
     log::trace!("track_to_playable_file track={track:?} quality={quality:?}");
@@ -1464,7 +1404,7 @@ async fn track_to_playable_stream(
     player_source: &PlayerSource,
     abort: CancellationToken,
 ) -> Result<PlayableTrack, PlayerError> {
-    track_id_to_playable_stream(&track.id, track.source, quality, player_source, abort).await
+    track_id_to_playable_stream(&track.id, track.api_source, quality, player_source, abort).await
 }
 
 #[allow(unused)]
@@ -1534,25 +1474,9 @@ async fn track_or_id_to_playable(
     abort: CancellationToken,
 ) -> Result<PlayableTrack, PlayerError> {
     log::trace!("track_or_id_to_playable playback_type={playback_type:?} track={track:?} quality={quality:?}");
-    Ok(match (playback_type, track.source) {
+    Ok(match (playback_type, track.api_source) {
         (PlaybackType::File, ApiSource::Library) | (PlaybackType::Default, ApiSource::Library) => {
-            track_to_playable_file(
-                &serde_json::from_value(
-                    track
-                        .data
-                        .clone()
-                        .ok_or(PlayerError::TrackNotFound(track.id.to_owned()))?,
-                )
-                .map_err(|e| {
-                    moosicbox_assert::die_or_error!(
-                        "Failed to parse track: {e:?} ({:?})",
-                        track.data
-                    );
-                    PlayerError::TrackNotFound(track.id.to_owned())
-                })?,
-                quality,
-            )
-            .await?
+            track_to_playable_file(track, quality).await?
         }
         _ => track_to_playable_stream(track, quality, player_source, abort).await?,
     })

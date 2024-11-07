@@ -8,7 +8,7 @@ use moosicbox_core::sqlite::db::{get_album_version_qualities, DbError};
 use moosicbox_core::{
     sqlite::models::{
         Album, AlbumSource, AlbumVersionQuality, ApiAlbum, ApiAlbumVersionQuality, ApiSource,
-        ApiSources, Artist, Id, ToApi, Track, TrackApiSource,
+        ApiSources, ApiTrack, Artist, ToApi, Track, TrackApiSource,
     },
     types::AudioFormat,
 };
@@ -21,7 +21,6 @@ use moosicbox_json_utils::MissingValue;
 use moosicbox_json_utils::{ParseError, ToValueType};
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, EnumString};
-use thiserror::Error;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 pub struct LibraryArtist {
@@ -751,6 +750,13 @@ impl LibraryTrack {
     }
 }
 
+impl From<LibraryTrack> for ApiTrack {
+    fn from(value: LibraryTrack) -> Self {
+        let track: Track = value.into();
+        track.into()
+    }
+}
+
 impl From<LibraryTrack> for Track {
     fn from(value: LibraryTrack) -> Self {
         Self {
@@ -902,222 +908,6 @@ impl AsId for LibraryTrack {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[serde(tag = "type")]
-enum ApiTrackInner {
-    Library(ApiLibraryTrack),
-    #[cfg(feature = "tidal")]
-    Tidal(serde_json::Value),
-    #[cfg(feature = "qobuz")]
-    Qobuz(serde_json::Value),
-    #[cfg(feature = "yt")]
-    Yt(serde_json::Value),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub enum ApiTrack {
-    Library {
-        track_id: u64,
-        data: ApiLibraryTrack,
-    },
-    #[cfg(feature = "tidal")]
-    Tidal {
-        track_id: u64,
-        data: serde_json::Value,
-    },
-    #[cfg(feature = "qobuz")]
-    Qobuz {
-        track_id: u64,
-        data: serde_json::Value,
-    },
-    #[cfg(feature = "yt")]
-    Yt {
-        track_id: String,
-        data: serde_json::Value,
-    },
-}
-
-#[derive(Debug, Error)]
-pub enum TryFromApiTrackError {
-    #[error("Missing field")]
-    MissingField,
-    #[error(transparent)]
-    TryFromInt(#[from] std::num::TryFromIntError),
-    #[error(transparent)]
-    Serde(#[from] serde_json::Error),
-}
-
-impl TryFrom<&ApiTrack> for Track {
-    type Error = TryFromApiTrackError;
-
-    fn try_from(value: &ApiTrack) -> Result<Self, Self::Error> {
-        value.clone().try_into()
-    }
-}
-
-impl TryFrom<ApiTrack> for Track {
-    type Error = TryFromApiTrackError;
-
-    #[allow(clippy::too_many_lines)]
-    fn try_from(value: ApiTrack) -> Result<Self, Self::Error> {
-        Ok(match value {
-            ApiTrack::Library { track_id, data } => Self {
-                id: track_id.into(),
-                number: data.number,
-                title: data.title,
-                duration: data.duration,
-                album: data.album,
-                album_id: data.album_id.into(),
-                album_type: data.album_type.into(),
-                date_released: data.date_released,
-                date_added: data.date_added,
-                artist: data.artist,
-                artist_id: data.artist_id.into(),
-                file: None,
-                artwork: if data.contains_cover {
-                    Some(data.album_id.to_string())
-                } else {
-                    None
-                },
-                blur: data.blur,
-                bytes: data.bytes,
-                format: data.format,
-                bit_depth: data.bit_depth,
-                audio_bitrate: data.audio_bitrate,
-                overall_bitrate: data.overall_bitrate,
-                sample_rate: data.sample_rate,
-                channels: data.channels,
-                track_source: data.source,
-                api_source: ApiSource::Library,
-                sources: ApiSources::default(),
-            },
-            #[cfg(feature = "tidal")]
-            ApiTrack::Tidal { data, .. } => {
-                let track: moosicbox_tidal::api::ApiTidalTrack = serde_json::from_value(data)?;
-                let track: moosicbox_core::sqlite::models::ApiTrack = track.into();
-                track.into()
-            }
-            #[cfg(feature = "qobuz")]
-            ApiTrack::Qobuz { data, .. } => {
-                let track: moosicbox_qobuz::api::ApiQobuzTrack = serde_json::from_value(data)?;
-                let track: moosicbox_core::sqlite::models::ApiTrack = track.into();
-                track.into()
-            }
-            #[cfg(feature = "yt")]
-            ApiTrack::Yt { data, .. } => {
-                let track: moosicbox_yt::api::ApiYtTrack = serde_json::from_value(data)?;
-                let track: moosicbox_core::sqlite::models::ApiTrack = track.into();
-                track.into()
-            }
-        })
-    }
-}
-
-impl Serialize for ApiTrack {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        match self {
-            Self::Library { data, .. } => {
-                ApiTrackInner::Library(data.clone()).serialize(serializer)
-            }
-            #[cfg(feature = "tidal")]
-            Self::Tidal { data, .. } => ApiTrackInner::Tidal(data.clone()).serialize(serializer),
-            #[cfg(feature = "qobuz")]
-            Self::Qobuz { data, .. } => ApiTrackInner::Qobuz(data.clone()).serialize(serializer),
-            #[cfg(feature = "yt")]
-            Self::Yt { data, .. } => ApiTrackInner::Yt(data.clone()).serialize(serializer),
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for ApiTrack {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Ok(match ApiTrackInner::deserialize(deserializer)? {
-            ApiTrackInner::Library(track) => Self::Library {
-                track_id: track.track_id,
-                data: track,
-            },
-            #[cfg(feature = "tidal")]
-            ApiTrackInner::Tidal(data) => Self::Tidal {
-                track_id: data
-                    .get("id")
-                    .expect("Failed to get tidal track id")
-                    .as_u64()
-                    .unwrap(),
-                data,
-            },
-            #[cfg(feature = "qobuz")]
-            ApiTrackInner::Qobuz(data) => Self::Qobuz {
-                track_id: data
-                    .get("id")
-                    .expect("Failed to get qobuz track id")
-                    .as_u64()
-                    .unwrap(),
-                data,
-            },
-            #[cfg(feature = "yt")]
-            ApiTrackInner::Yt(data) => Self::Yt {
-                track_id: data
-                    .get("id")
-                    .expect("Failed to get yt track id")
-                    .as_str()
-                    .unwrap()
-                    .to_string(),
-                data,
-            },
-        })
-    }
-}
-
-impl ApiTrack {
-    #[must_use]
-    pub const fn api_source(&self) -> ApiSource {
-        match self {
-            Self::Library { .. } => ApiSource::Library,
-            #[cfg(feature = "tidal")]
-            Self::Tidal { .. } => ApiSource::Tidal,
-            #[cfg(feature = "qobuz")]
-            Self::Qobuz { .. } => ApiSource::Qobuz,
-            #[cfg(feature = "yt")]
-            Self::Yt { .. } => ApiSource::Yt,
-        }
-    }
-
-    #[must_use]
-    pub fn track_id(&self) -> Id {
-        match self {
-            Self::Library { track_id, .. } => track_id.into(),
-            #[cfg(feature = "tidal")]
-            Self::Tidal { track_id, .. } => track_id.into(),
-            #[cfg(feature = "qobuz")]
-            Self::Qobuz { track_id, .. } => track_id.into(),
-            #[cfg(feature = "yt")]
-            Self::Yt { track_id, .. } => track_id.into(),
-        }
-    }
-
-    #[allow(clippy::missing_const_for_fn)]
-    #[must_use]
-    pub fn data(&self) -> Option<serde_json::Value> {
-        match self {
-            Self::Library { .. } => None,
-            #[cfg(feature = "tidal")]
-            Self::Tidal { data, .. } => Some(data.clone()),
-            #[cfg(feature = "qobuz")]
-            Self::Qobuz { data, .. } => Some(data.clone()),
-            #[cfg(feature = "yt")]
-            Self::Yt { data, .. } => Some(data.clone()),
-        }
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -1212,38 +1002,6 @@ impl From<ApiLibraryTrack> for Track {
             track_source: value.source,
             api_source: ApiSource::Library,
             sources: ApiSources::default().with_source(ApiSource::Library, value.track_id.into()),
-        }
-    }
-}
-
-impl ToApi<ApiTrack> for LibraryTrack {
-    fn to_api(self) -> ApiTrack {
-        ApiTrack::Library {
-            track_id: self.id,
-            data: ApiLibraryTrack {
-                track_id: self.id,
-                number: self.number,
-                title: self.title.clone(),
-                duration: self.duration,
-                artist: self.artist.clone(),
-                artist_id: self.artist_id,
-                date_released: self.date_released.clone(),
-                date_added: self.date_added.clone(),
-                album: self.album.clone(),
-                album_id: self.album_id,
-                album_type: self.album_type,
-                contains_cover: self.artwork.is_some(),
-                blur: self.blur,
-                bytes: self.bytes,
-                format: self.format,
-                bit_depth: self.bit_depth,
-                audio_bitrate: self.audio_bitrate,
-                overall_bitrate: self.overall_bitrate,
-                sample_rate: self.sample_rate,
-                channels: self.channels,
-                source: self.source,
-                api_source: self.api_source,
-            },
         }
     }
 }

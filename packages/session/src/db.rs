@@ -3,7 +3,7 @@ use std::sync::Arc;
 use moosicbox_audio_zone::{db::models::AudioZoneModel, models::Player};
 use moosicbox_core::sqlite::{
     db::DbError,
-    models::{ApiSource, Id, ToApi as _},
+    models::{ApiTrack, Id},
 };
 use moosicbox_database::{
     config::ConfigDatabase,
@@ -12,25 +12,28 @@ use moosicbox_database::{
     Database, DatabaseValue,
 };
 use moosicbox_json_utils::{database::ToValue as _, ToValueType};
-use moosicbox_library::{db::get_tracks, models::ApiTrack};
-use moosicbox_session_models::{Connection, SessionPlaylistTracks};
+use moosicbox_library::db::get_tracks;
+use moosicbox_session_models::Connection;
 
 use crate::models::{
-    self, CreateSession, PlaybackTarget, Session, SessionPlaylist, SessionPlaylistTrack,
-    SetSessionAudioZone, UpdateSession,
+    self, CreateSession, PlaybackTarget, Session, SessionPlaylist, SetSessionAudioZone,
+    UpdateSession,
 };
 
 pub async fn get_session_playlist_tracks(
     db: &LibraryDatabase,
     session_playlist_id: u64,
-) -> Result<Vec<SessionPlaylistTrack>, DbError> {
-    Ok(db
-        .select("session_playlist_tracks")
+) -> Result<Vec<ApiTrack>, DbError> {
+    db.select("session_playlist_tracks")
         .where_eq("session_playlist_id", session_playlist_id)
         .sort("id", SortDirection::Asc)
         .execute(db)
         .await?
-        .to_value_type()?)
+        .into_iter()
+        .filter_map(|x| x.get("data"))
+        .filter_map(|x| x.as_str().map(serde_json::from_str))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| DbError::Unknown)
 }
 
 pub async fn get_session_playlist(
@@ -204,9 +207,12 @@ pub async fn update_session(db: &LibraryDatabase, session: &UpdateSession) -> Re
             log::trace!("update_session: Inserting track {track:?}");
             db.insert("session_playlist_tracks")
                 .value("session_playlist_id", playlist_id)
-                .value("track_id", &track.id)
-                .value("type", track.r#type.as_ref())
-                .value("data", track.data.clone())
+                .value("track_id", &track.track_id)
+                .value("type", track.api_source.to_string())
+                .value(
+                    "data",
+                    serde_json::to_string(track).map_err(|_| DbError::Unknown)?,
+                )
                 .execute(db)
                 .await?;
         }
@@ -428,7 +434,7 @@ pub async fn delete_player(db: &ConfigDatabase, player_id: u64) -> Result<(), Db
 pub async fn delete_session_playlist_track_by_track_id(
     db: &LibraryDatabase,
     id: u64,
-) -> Result<Option<SessionPlaylistTrack>, DbError> {
+) -> Result<Option<ApiTrack>, DbError> {
     Ok(
         delete_session_playlist_tracks_by_track_id(db, Some(&vec![id]))
             .await?
@@ -440,18 +446,21 @@ pub async fn delete_session_playlist_track_by_track_id(
 pub async fn delete_session_playlist_tracks_by_track_id(
     db: &LibraryDatabase,
     ids: Option<&Vec<u64>>,
-) -> Result<Vec<SessionPlaylistTrack>, DbError> {
+) -> Result<Vec<ApiTrack>, DbError> {
     if ids.is_some_and(|ids| ids.is_empty()) {
         return Ok(vec![]);
     }
 
-    Ok(db
-        .delete("session_playlist_tracks")
+    db.delete("session_playlist_tracks")
         .where_eq("type", "'LIBRARY'")
         .filter_if_some(ids.map(|ids| where_in("track_id", ids.to_vec())))
         .execute(db)
         .await?
-        .to_value_type()?)
+        .into_iter()
+        .filter_map(|x| x.get("data"))
+        .filter_map(|x| x.as_str().map(serde_json::from_str))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| DbError::Unknown)
 }
 
 async fn connection_as_model_query(
@@ -510,50 +519,8 @@ async fn session_playlist_as_model_query(
     db: Arc<Box<dyn Database>>,
 ) -> Result<SessionPlaylist, DbError> {
     let id = row.to_value("id")?;
-    let tracks = session_playlist_tracks_as_model_mapped_query(
-        &SessionPlaylistTracks(get_session_playlist_tracks(&db.clone().into(), id).await?),
-        db,
-    )
-    .await?;
+    let tracks = get_session_playlist_tracks(&db.clone().into(), id).await?;
     log::trace!("Got SessionPlaylistTracks for session_playlist {id}: {tracks:?}");
 
     Ok(SessionPlaylist { id, tracks })
-}
-
-async fn session_playlist_tracks_as_model_mapped_query(
-    tracks: &SessionPlaylistTracks,
-    db: Arc<Box<dyn Database>>,
-) -> Result<Vec<ApiTrack>, DbError> {
-    log::trace!("Mapping tracks to ApiTracks: {tracks:?}");
-
-    let library_track_ids = tracks
-        .0
-        .iter()
-        .filter(|t| t.r#type == ApiSource::Library)
-        .filter_map(|t| t.id.parse::<u64>().ok())
-        .map(Id::Number)
-        .collect::<Vec<_>>();
-
-    log::trace!("Fetching tracks by ids: {library_track_ids:?}");
-    let library_tracks = get_tracks(&db.into(), Some(&library_track_ids)).await?;
-
-    tracks
-        .0
-        .iter()
-        .map(|t| {
-            Ok(match t.r#type {
-                ApiSource::Library => library_tracks
-                    .iter()
-                    .find(|lib| lib.id.to_string() == t.id)
-                    .ok_or(DbError::Unknown)?
-                    .to_api(),
-                #[cfg(feature = "tidal")]
-                ApiSource::Tidal => t.to_api(),
-                #[cfg(feature = "qobuz")]
-                ApiSource::Qobuz => t.to_api(),
-                #[cfg(feature = "yt")]
-                ApiSource::Yt => t.to_api(),
-            })
-        })
-        .collect::<Result<Vec<_>, DbError>>()
 }

@@ -10,7 +10,7 @@ use actix_web::{
 };
 use moosicbox_core::{
     integer_range::parse_integer_ranges_to_ids,
-    sqlite::models::{AlbumType, ApiAlbum, ApiArtist, ApiSource, Id, IdType},
+    sqlite::models::{AlbumType, ApiAlbum, ApiArtist, ApiSource, ApiTrack, Id, IdType},
 };
 use moosicbox_core::{
     integer_range::ParseIntegersError,
@@ -19,7 +19,6 @@ use moosicbox_core::{
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_library::{
     db::{get_album_tracks, get_tracks},
-    models::ApiTrack,
     LibraryMusicApi,
 };
 use moosicbox_menu_models::api::ApiAlbumVersion;
@@ -355,7 +354,7 @@ pub async fn get_tracks_endpoint(
             .await
             .map_err(|_e| ErrorInternalServerError("Failed to fetch tracks"))?
             .into_iter()
-            .map(|t| t.to_api())
+            .map(Into::into)
             .collect(),
     ))
 }
@@ -394,7 +393,7 @@ pub async fn get_album_tracks_endpoint(
             .await
             .map_err(|_e| ErrorInternalServerError("Failed to fetch tracks"))?
             .into_iter()
-            .map(|t| t.to_api())
+            .map(Into::into)
             .collect(),
     ))
 }
