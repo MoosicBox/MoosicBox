@@ -123,7 +123,7 @@ pub fn player(state: &State) -> Markup {
     html! {
         div sx-height=(FOOTER_HEIGHT) sx-border-top="3, #222" {
             div sx-height=(40) sx-dir="row" {
-                h1{"visualization"}
+                canvas {}
             }
             div sx-height=(100) sx-dir="row" {
                 (player_current_album_from_state(state, 70))
