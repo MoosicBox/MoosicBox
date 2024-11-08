@@ -1,6 +1,7 @@
 pub mod albums;
 pub mod artists;
 
+use albums::propagate_api_sources_from_library_album;
 use moosicbox_core::sqlite::{
     db::DbError,
     models::{Album, ApiSource, Artist, Id},
@@ -68,7 +69,7 @@ pub async fn get_album_from_source(
     album_id: &Id,
     source: ApiSource,
 ) -> Result<Option<Album>, GetAlbumError> {
-    Ok(match source {
+    let mut album = match source {
         ApiSource::Library => {
             let albums = get_albums(db).await?;
             albums
@@ -92,7 +93,15 @@ pub async fn get_album_from_source(
             .await
             .ok()
             .map(Into::into),
-    })
+    };
+
+    if let Some(album) = &mut album {
+        let library_albums = get_albums(db).await?;
+
+        propagate_api_sources_from_library_album(source, album, &library_albums);
+    }
+
+    Ok(album)
 }
 
 pub async fn get_library_album(
@@ -112,8 +121,9 @@ pub async fn get_library_album(
             .iter()
             .find(|album| {
                 album
-                    .tidal_id
-                    .is_some_and(|id| &Into::<Id>::into(id) == album_id)
+                    .album_sources
+                    .iter()
+                    .any(|x| x.source == ApiSource::Tidal && &x.id == album_id)
             })
             .cloned(),
         #[cfg(feature = "qobuz")]
@@ -121,9 +131,9 @@ pub async fn get_library_album(
             .iter()
             .find(|album| {
                 album
-                    .qobuz_id
-                    .as_ref()
-                    .is_some_and(|id| &Into::<Id>::into(id) == album_id)
+                    .album_sources
+                    .iter()
+                    .any(|x| x.source == ApiSource::Qobuz && &x.id == album_id)
             })
             .cloned(),
         #[cfg(feature = "yt")]
@@ -131,9 +141,9 @@ pub async fn get_library_album(
             .iter()
             .find(|album| {
                 album
-                    .yt_id
-                    .as_ref()
-                    .is_some_and(|id| &Into::<Id>::into(id) == album_id)
+                    .album_sources
+                    .iter()
+                    .any(|x| x.source == ApiSource::Yt && &x.id == album_id)
             })
             .cloned(),
     })

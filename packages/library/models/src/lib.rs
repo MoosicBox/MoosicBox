@@ -210,12 +210,8 @@ pub struct LibraryAlbum {
     pub source: AlbumSource,
     pub blur: bool,
     pub versions: Vec<AlbumVersionQuality>,
-    pub tidal_id: Option<u64>,
-    pub qobuz_id: Option<String>,
-    pub yt_id: Option<u64>,
-    pub tidal_artist_id: Option<u64>,
-    pub qobuz_artist_id: Option<u64>,
-    pub yt_artist_id: Option<u64>,
+    pub album_sources: ApiSources,
+    pub artist_sources: ApiSources,
 }
 
 impl From<&LibraryAlbum> for ApiAlbum {
@@ -248,45 +244,8 @@ impl From<LibraryAlbum> for Album {
             versions: value.versions,
             album_source: value.source,
             api_source: ApiSource::Library,
-            artist_sources: {
-                #[allow(unused_mut)]
-                let mut sources = ApiSources::default();
-                #[cfg(feature = "tidal")]
-                {
-                    sources = sources
-                        .with_source_opt(ApiSource::Tidal, value.tidal_artist_id.map(Into::into));
-                }
-                #[cfg(feature = "qobuz")]
-                {
-                    sources = sources
-                        .with_source_opt(ApiSource::Qobuz, value.qobuz_artist_id.map(Into::into));
-                }
-                #[cfg(feature = "yt")]
-                {
-                    sources =
-                        sources.with_source_opt(ApiSource::Yt, value.yt_artist_id.map(Into::into));
-                }
-                sources
-            },
-            album_sources: {
-                #[allow(unused_mut)]
-                let mut sources = ApiSources::default();
-                #[cfg(feature = "tidal")]
-                {
-                    sources =
-                        sources.with_source_opt(ApiSource::Tidal, value.tidal_id.map(Into::into));
-                }
-                #[cfg(feature = "qobuz")]
-                {
-                    sources =
-                        sources.with_source_opt(ApiSource::Qobuz, value.qobuz_id.map(Into::into));
-                }
-                #[cfg(feature = "yt")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Yt, value.yt_id.map(Into::into));
-                }
-                sources
-            },
+            artist_sources: value.artist_sources,
+            album_sources: value.album_sources,
         }
     }
 }
@@ -306,54 +265,8 @@ impl From<Album> for LibraryAlbum {
             blur: value.blur,
             versions: value.versions,
             source: AlbumSource::Local,
-            tidal_id: {
-                #[cfg(feature = "tidal")]
-                {
-                    value.album_sources.get(ApiSource::Tidal).map(Into::into)
-                }
-                #[cfg(not(feature = "tidal"))]
-                None
-            },
-            qobuz_id: {
-                #[cfg(feature = "qobuz")]
-                {
-                    value.album_sources.get(ApiSource::Qobuz).map(Into::into)
-                }
-                #[cfg(not(feature = "qobuz"))]
-                None
-            },
-            yt_id: {
-                #[cfg(feature = "yt")]
-                {
-                    value.album_sources.get(ApiSource::Yt).map(Into::into)
-                }
-                #[cfg(not(feature = "yt"))]
-                None
-            },
-            tidal_artist_id: {
-                #[cfg(feature = "tidal")]
-                {
-                    value.artist_sources.get(ApiSource::Tidal).map(Into::into)
-                }
-                #[cfg(not(feature = "tidal"))]
-                None
-            },
-            qobuz_artist_id: {
-                #[cfg(feature = "qobuz")]
-                {
-                    value.artist_sources.get(ApiSource::Qobuz).map(Into::into)
-                }
-                #[cfg(not(feature = "qobuz"))]
-                None
-            },
-            yt_artist_id: {
-                #[cfg(feature = "yt")]
-                {
-                    value.artist_sources.get(ApiSource::Yt).map(Into::into)
-                }
-                #[cfg(not(feature = "yt"))]
-                None
-            },
+            album_sources: value.album_sources,
+            artist_sources: value.artist_sources,
         }
     }
 }
@@ -370,11 +283,31 @@ impl MissingValue<LibraryAlbum> for &moosicbox_database::Row {}
 #[cfg(feature = "db")]
 impl ToValueType<LibraryAlbum> for &moosicbox_database::Row {
     fn to_value_type(self) -> Result<LibraryAlbum, ParseError> {
+        #[cfg(any(feature = "tidal", feature = "qobuz", feature = "yt"))]
+        use moosicbox_core::sqlite::models::Id;
+
         let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
+
+        #[cfg(feature = "tidal")]
+        let tidal_id: Option<Id> = self.to_value("tidal_id")?;
+        #[cfg(feature = "tidal")]
+        let tidal_artist_id: Option<Id> = self.to_value("tidal_artist_id")?;
+        #[cfg(feature = "qobuz")]
+        let qobuz_id: Option<Id> = self.to_value("qobuz_id")?;
+        #[cfg(feature = "qobuz")]
+        let qobuz_artist_id: Option<Id> = self.to_value("qobuz_artist_id")?;
+        #[cfg(feature = "yt")]
+        let yt_id: Option<Id> = self.to_value("yt_id")?;
+        #[cfg(feature = "yt")]
+        let yt_artist_id: Option<Id> = self.to_value("yt_artist_id")?;
+
+        let id = self.to_value("id")?;
+        let artist_id = self.to_value("artist_id")?;
+
         Ok(LibraryAlbum {
-            id: self.to_value("id")?,
+            id,
             artist: self.to_value("artist").unwrap_or_default(),
-            artist_id: self.to_value("artist_id")?,
+            artist_id,
             title: self.to_value("title")?,
             album_type: album_type.unwrap_or_default(),
             date_released: self.to_value("date_released")?,
@@ -384,12 +317,45 @@ impl ToValueType<LibraryAlbum> for &moosicbox_database::Row {
             source: AlbumSource::Local,
             blur: self.to_value("blur")?,
             versions: vec![],
-            tidal_id: self.to_value("tidal_id")?,
-            qobuz_id: self.to_value("qobuz_id")?,
-            yt_id: self.to_value("yt_id")?,
-            tidal_artist_id: self.to_value("tidal_artist_id")?,
-            qobuz_artist_id: self.to_value("qobuz_artist_id")?,
-            yt_artist_id: self.to_value("yt_artist_id")?,
+            album_sources: {
+                #[allow(unused_mut)]
+                let mut sources = ApiSources::default().with_source(ApiSource::Library, id.into());
+
+                #[cfg(feature = "tidal")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Tidal, tidal_id);
+                }
+                #[cfg(feature = "qobuz")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Qobuz, qobuz_id);
+                }
+                #[cfg(feature = "yt")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Yt, yt_id);
+                }
+
+                sources
+            },
+            artist_sources: {
+                #[allow(unused_mut)]
+                let mut sources =
+                    ApiSources::default().with_source(ApiSource::Library, artist_id.into());
+
+                #[cfg(feature = "tidal")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Tidal, tidal_artist_id);
+                }
+                #[cfg(feature = "qobuz")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Qobuz, qobuz_artist_id);
+                }
+                #[cfg(feature = "yt")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Yt, yt_artist_id);
+                }
+
+                sources
+            },
         })
     }
 }
@@ -399,11 +365,31 @@ impl moosicbox_core::sqlite::models::AsModelResult<LibraryAlbum, ParseError>
     for &moosicbox_database::Row
 {
     fn as_model(&self) -> Result<LibraryAlbum, ParseError> {
+        #[cfg(any(feature = "tidal", feature = "qobuz", feature = "yt"))]
+        use moosicbox_core::sqlite::models::Id;
+
         let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
+
+        #[cfg(feature = "tidal")]
+        let tidal_id: Option<Id> = self.to_value("tidal_id")?;
+        #[cfg(feature = "tidal")]
+        let tidal_artist_id: Option<Id> = self.to_value("tidal_artist_id")?;
+        #[cfg(feature = "qobuz")]
+        let qobuz_id: Option<Id> = self.to_value("qobuz_id")?;
+        #[cfg(feature = "qobuz")]
+        let qobuz_artist_id: Option<Id> = self.to_value("qobuz_artist_id")?;
+        #[cfg(feature = "yt")]
+        let yt_id: Option<Id> = self.to_value("yt_id")?;
+        #[cfg(feature = "yt")]
+        let yt_artist_id: Option<Id> = self.to_value("yt_artist_id")?;
+
+        let id = self.to_value("id")?;
+        let artist_id = self.to_value("artist_id")?;
+
         Ok(LibraryAlbum {
-            id: self.to_value("id")?,
+            id,
             artist: self.to_value("artist").unwrap_or_default(),
-            artist_id: self.to_value("artist_id")?,
+            artist_id,
             title: self.to_value("title")?,
             album_type: album_type.unwrap_or_default(),
             date_released: self.to_value("date_released")?,
@@ -413,12 +399,45 @@ impl moosicbox_core::sqlite::models::AsModelResult<LibraryAlbum, ParseError>
             source: AlbumSource::Local,
             blur: self.to_value("blur")?,
             versions: vec![],
-            tidal_id: self.to_value("tidal_id")?,
-            qobuz_id: self.to_value("qobuz_id")?,
-            yt_id: self.to_value("yt_id")?,
-            tidal_artist_id: self.to_value("tidal_artist_id")?,
-            qobuz_artist_id: self.to_value("qobuz_artist_id")?,
-            yt_artist_id: self.to_value("yt_artist_id")?,
+            album_sources: {
+                #[allow(unused_mut)]
+                let mut sources = ApiSources::default().with_source(ApiSource::Library, id.into());
+
+                #[cfg(feature = "tidal")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Tidal, tidal_id);
+                }
+                #[cfg(feature = "qobuz")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Qobuz, qobuz_id);
+                }
+                #[cfg(feature = "yt")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Yt, yt_id);
+                }
+
+                sources
+            },
+            artist_sources: {
+                #[allow(unused_mut)]
+                let mut sources =
+                    ApiSources::default().with_source(ApiSource::Library, artist_id.into());
+
+                #[cfg(feature = "tidal")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Tidal, tidal_artist_id);
+                }
+                #[cfg(feature = "qobuz")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Qobuz, qobuz_artist_id);
+                }
+                #[cfg(feature = "yt")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Yt, yt_artist_id);
+                }
+
+                sources
+            },
         })
     }
 }
@@ -507,7 +526,11 @@ impl moosicbox_core::sqlite::models::AsModelResultMapped<LibraryAlbum, DbError>
                     }
                 } else {
                     #[cfg(feature = "tidal")]
-                    if album.tidal_id.is_some() {
+                    if album
+                        .album_sources
+                        .iter()
+                        .any(|x| x.source == ApiSource::Tidal)
+                    {
                         album.versions.push(AlbumVersionQuality {
                             format: None,
                             bit_depth: None,
@@ -522,7 +545,11 @@ impl moosicbox_core::sqlite::models::AsModelResultMapped<LibraryAlbum, DbError>
                         );
                     }
                     #[cfg(feature = "qobuz")]
-                    if album.qobuz_id.is_some() {
+                    if album
+                        .album_sources
+                        .iter()
+                        .any(|x| x.source == ApiSource::Qobuz)
+                    {
                         album.versions.push(AlbumVersionQuality {
                             format: None,
                             bit_depth: None,
@@ -537,7 +564,11 @@ impl moosicbox_core::sqlite::models::AsModelResultMapped<LibraryAlbum, DbError>
                         );
                     }
                     #[cfg(feature = "yt")]
-                    if album.yt_id.is_some() {
+                    if album
+                        .album_sources
+                        .iter()
+                        .any(|x| x.source == ApiSource::Yt)
+                    {
                         album.versions.push(AlbumVersionQuality {
                             format: None,
                             bit_depth: None,
@@ -575,7 +606,24 @@ impl moosicbox_core::sqlite::models::AsModelQuery<LibraryAlbum> for &moosicbox_d
         &self,
         db: std::sync::Arc<Box<dyn Database>>,
     ) -> Result<LibraryAlbum, DbError> {
+        #[cfg(any(feature = "tidal", feature = "qobuz", feature = "yt"))]
+        use moosicbox_core::sqlite::models::Id;
+
+        #[cfg(feature = "tidal")]
+        let tidal_id: Option<Id> = self.to_value("tidal_id")?;
+        #[cfg(feature = "tidal")]
+        let tidal_artist_id: Option<Id> = self.to_value("tidal_artist_id")?;
+        #[cfg(feature = "qobuz")]
+        let qobuz_id: Option<Id> = self.to_value("qobuz_id")?;
+        #[cfg(feature = "qobuz")]
+        let qobuz_artist_id: Option<Id> = self.to_value("qobuz_artist_id")?;
+        #[cfg(feature = "yt")]
+        let yt_id: Option<Id> = self.to_value("yt_id")?;
+        #[cfg(feature = "yt")]
+        let yt_artist_id: Option<Id> = self.to_value("yt_artist_id")?;
+
         let id = self.to_value("id")?;
+        let artist_id = self.to_value("artist_id")?;
         let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
 
         Ok(LibraryAlbum {
@@ -583,7 +631,7 @@ impl moosicbox_core::sqlite::models::AsModelQuery<LibraryAlbum> for &moosicbox_d
             artist: self
                 .to_value::<Option<String>>("artist")?
                 .unwrap_or_default(),
-            artist_id: self.to_value("artist_id")?,
+            artist_id,
             title: self.to_value("title")?,
             album_type: album_type.unwrap_or_default(),
             date_released: self.to_value("date_released")?,
@@ -593,12 +641,45 @@ impl moosicbox_core::sqlite::models::AsModelQuery<LibraryAlbum> for &moosicbox_d
             source: AlbumSource::Local,
             blur: self.to_value("blur")?,
             versions: get_album_version_qualities(&db.into(), id).await?,
-            tidal_id: self.to_value("tidal_id")?,
-            qobuz_id: self.to_value("qobuz_id")?,
-            yt_id: self.to_value("yt_id")?,
-            tidal_artist_id: self.to_value("tidal_artist_id")?,
-            qobuz_artist_id: self.to_value("qobuz_artist_id")?,
-            yt_artist_id: self.to_value("yt_artist_id")?,
+            album_sources: {
+                #[allow(unused_mut)]
+                let mut sources = ApiSources::default().with_source(ApiSource::Library, id.into());
+
+                #[cfg(feature = "tidal")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Tidal, tidal_id);
+                }
+                #[cfg(feature = "qobuz")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Qobuz, qobuz_id);
+                }
+                #[cfg(feature = "yt")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Yt, yt_id);
+                }
+
+                sources
+            },
+            artist_sources: {
+                #[allow(unused_mut)]
+                let mut sources =
+                    ApiSources::default().with_source(ApiSource::Library, artist_id.into());
+
+                #[cfg(feature = "tidal")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Tidal, tidal_artist_id);
+                }
+                #[cfg(feature = "qobuz")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Qobuz, qobuz_artist_id);
+                }
+                #[cfg(feature = "yt")]
+                {
+                    sources = sources.with_source_opt(ApiSource::Yt, yt_artist_id);
+                }
+
+                sources
+            },
         })
     }
 }
@@ -625,9 +706,8 @@ pub struct ApiLibraryAlbum {
     pub source: AlbumSource,
     pub blur: bool,
     pub versions: Vec<ApiAlbumVersionQuality>,
-    pub tidal_id: Option<u64>,
-    pub qobuz_id: Option<String>,
-    pub yt_id: Option<u64>,
+    pub album_sources: ApiSources,
+    pub artist_sources: ApiSources,
 }
 
 impl From<ApiLibraryAlbum> for moosicbox_core::sqlite::models::ApiAlbum {
@@ -649,8 +729,8 @@ impl From<ApiLibraryAlbum> for moosicbox_core::sqlite::models::ApiAlbum {
                 .collect::<Vec<_>>(),
             album_source: value.source,
             api_source: ApiSource::Library,
-            artist_sources: ApiSources::default(),
-            album_sources: ApiSources::default(),
+            album_sources: value.album_sources,
+            artist_sources: value.artist_sources,
         }
     }
 }
@@ -675,8 +755,8 @@ impl From<ApiLibraryAlbum> for Album {
             versions: vec![],
             album_source: value.source,
             api_source: ApiSource::Library,
-            artist_sources: ApiSources::default(),
-            album_sources: ApiSources::default(),
+            album_sources: value.album_sources,
+            artist_sources: value.artist_sources,
         }
     }
 }
@@ -699,9 +779,8 @@ impl ToApi<ApiLibraryAlbum> for LibraryAlbum {
                 .iter()
                 .map(moosicbox_core::sqlite::models::ToApi::to_api)
                 .collect(),
-            tidal_id: self.tidal_id,
-            qobuz_id: self.qobuz_id,
-            yt_id: self.yt_id,
+            album_sources: self.album_sources,
+            artist_sources: self.artist_sources,
         }
     }
 }

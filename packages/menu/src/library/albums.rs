@@ -8,10 +8,13 @@ use moosicbox_database::{profiles::LibraryDatabase, query::*, DatabaseError, Dat
 use moosicbox_library::{
     db::{delete_track_sizes_by_track_id, delete_tracks},
     models::{track_source_to_u8, LibraryAlbum},
-    LibraryAlbumTracksError, LibraryFavoriteAlbumsError, LibraryMusicApi,
+    LibraryAlbumTracksError, LibraryMusicApi,
 };
 use moosicbox_menu_models::AlbumVersion;
-use moosicbox_music_api::{models::AlbumsRequest, LibraryAlbumError, MusicApi, TracksError};
+use moosicbox_music_api::{
+    models::AlbumsRequest, AlbumsError, ArtistAlbumsError, LibraryAlbumError, MusicApi, TracksError,
+};
+use moosicbox_paging::Page;
 use moosicbox_scan::{music_api::ScanError, output::ScanOutput};
 use moosicbox_search::{
     data::{AsDataValues, AsDeleteTerm},
@@ -21,15 +24,7 @@ use moosicbox_session::delete_session_playlist_tracks_by_track_id;
 use thiserror::Error;
 use tokio::sync::RwLock;
 
-use super::GetAlbumError;
-
-#[derive(Debug, Error)]
-pub enum GetAlbumsError {
-    #[error(transparent)]
-    Db(#[from] DbError),
-    #[error(transparent)]
-    LibraryFavoriteAlbums(#[from] LibraryFavoriteAlbumsError),
-}
+use super::{get_albums, GetAlbumError};
 
 #[derive(Debug, Error)]
 pub enum GetAlbumTracksError {
@@ -57,6 +52,67 @@ pub fn sort_album_versions(versions: &mut [AlbumVersion]) {
             .cmp(&a.bit_depth.unwrap_or_default())
     });
     versions.sort_by(|a, b| track_source_to_u8(a.source).cmp(&track_source_to_u8(b.source)));
+}
+
+pub fn propagate_api_sources_from_library_album<'a>(
+    source: ApiSource,
+    album: &'a mut Album,
+    library_albums: &[LibraryAlbum],
+) -> &'a mut Album {
+    let library_album = library_albums.iter().find(|y| {
+        y.album_sources
+            .iter()
+            .any(|z| z.source == source && z.id == album.id)
+    });
+
+    if let Some(library_album) = library_album {
+        album.album_sources = library_album.album_sources.clone();
+        album.artist_sources = library_album.artist_sources.clone();
+    }
+
+    album
+}
+
+#[derive(Debug, Error)]
+pub enum GetAlbumsError {
+    #[error(transparent)]
+    GetAlbums(#[from] super::GetAlbumsError),
+    #[error(transparent)]
+    Albums(#[from] AlbumsError),
+    #[error(transparent)]
+    ArtistAlbums(#[from] ArtistAlbumsError),
+}
+
+pub async fn get_albums_from_source(
+    db: &LibraryDatabase,
+    api: &dyn MusicApi,
+    request: AlbumsRequest,
+) -> Result<Page<Album>, GetAlbumsError> {
+    let mut albums =
+        if let Some(artist_id) = request.filters.as_ref().and_then(|x| x.artist_id.as_ref()) {
+            let album_type = request.filters.as_ref().and_then(|x| x.album_type);
+            let offset = request.page.as_ref().map(|x| x.offset);
+            let limit = request.page.as_ref().map(|x| x.limit);
+            api.artist_albums(artist_id, album_type, offset, limit, None, None)
+                .await?
+                .page
+        } else {
+            api.albums(&request).await?.page
+        };
+
+    let source = api.source();
+
+    if source != ApiSource::Library {
+        let library_albums = get_albums(db).await?;
+
+        albums = albums.map(move |mut album| {
+            propagate_api_sources_from_library_album(source, &mut album, &library_albums);
+
+            album
+        });
+    }
+
+    Ok(albums)
 }
 
 #[derive(Debug, Error)]
@@ -380,9 +436,15 @@ pub async fn remove_album(
         .into_iter()
         .filter(|track| match track.track_source {
             #[cfg(feature = "tidal")]
-            TrackApiSource::Tidal => album.tidal_id.is_some(),
+            TrackApiSource::Tidal => album
+                .album_sources
+                .iter()
+                .any(|x| x.source == ApiSource::Tidal),
             #[cfg(feature = "qobuz")]
-            TrackApiSource::Qobuz => album.qobuz_id.is_some(),
+            TrackApiSource::Qobuz => album
+                .album_sources
+                .iter()
+                .any(|x| x.source == ApiSource::Qobuz),
             _ => false,
         })
         .collect::<Vec<_>>();
@@ -416,12 +478,12 @@ pub async fn remove_album(
         #[cfg(feature = "tidal")]
         ApiSource::Tidal => {
             album_field_updates.push(("tidal_id", DatabaseValue::Null));
-            album.tidal_id = None;
+            album.album_sources.remove_source(ApiSource::Tidal);
         }
         #[cfg(feature = "qobuz")]
         ApiSource::Qobuz => {
             album_field_updates.push(("qobuz_id", DatabaseValue::Null));
-            album.qobuz_id = None;
+            album.album_sources.remove_source(ApiSource::Qobuz);
         }
         _ => {}
     }
@@ -446,9 +508,15 @@ pub async fn remove_album(
     if has_local_tracks
         || match api.source() {
             #[cfg(feature = "tidal")]
-            ApiSource::Tidal => album.tidal_id.is_some(),
+            ApiSource::Tidal => album
+                .album_sources
+                .iter()
+                .any(|x| x.source == ApiSource::Tidal),
             #[cfg(feature = "qobuz")]
-            ApiSource::Qobuz => album.qobuz_id.is_some(),
+            ApiSource::Qobuz => album
+                .album_sources
+                .iter()
+                .any(|x| x.source == ApiSource::Qobuz),
             _ => false,
         }
     {

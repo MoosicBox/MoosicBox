@@ -173,29 +173,43 @@ pub fn filter_albums<'a>(
     albums: &'a [LibraryAlbum],
     request: &'a AlbumsRequest,
 ) -> impl Iterator<Item = &'a LibraryAlbum> {
-    albums
-        .iter()
-        .filter(|album| {
-            !request.filters.as_ref().is_some_and(|x| {
-                x.artist_id
-                    .as_ref()
-                    .is_some_and(|id| &Id::Number(album.artist_id) != id)
+    let albums = albums.iter().filter(|album| {
+        !request.filters.as_ref().is_some_and(|x| {
+            x.artist_id
+                .as_ref()
+                .is_some_and(|id| &Id::Number(album.artist_id) != id)
+        })
+    });
+
+    #[cfg(feature = "tidal")]
+    let albums = albums.filter(|#[allow(unused)] album| {
+        !request.filters.as_ref().is_some_and(|x| {
+            x.tidal_artist_id.as_ref().is_some_and(|id| {
+                !album
+                    .artist_sources
+                    .iter()
+                    .filter(|x| x.source == ApiSource::Tidal)
+                    .map(|x| &x.id)
+                    .any(|x| x == id)
             })
         })
-        .filter(|album| {
-            !request.filters.as_ref().is_some_and(|x| {
-                x.tidal_artist_id
-                    .as_ref()
-                    .is_some_and(|id| !album.tidal_artist_id.is_some_and(|x| &Id::Number(x) == id))
+    });
+
+    #[cfg(feature = "qobuz")]
+    let albums = albums.filter(|#[allow(unused)] album| {
+        !request.filters.as_ref().is_some_and(|x| {
+            x.qobuz_artist_id.as_ref().is_some_and(|id| {
+                !album
+                    .artist_sources
+                    .iter()
+                    .filter(|x| x.source == ApiSource::Qobuz)
+                    .map(|x| &x.id)
+                    .any(|x| x == id)
             })
         })
-        .filter(|album| {
-            !request.filters.as_ref().is_some_and(|x| {
-                x.qobuz_artist_id
-                    .as_ref()
-                    .is_some_and(|id| !album.qobuz_artist_id.is_some_and(|x| &Id::Number(x) == id))
-            })
-        })
+    });
+
+    let albums = albums
         .filter(|album| {
             !request.sources.as_ref().is_some_and(|s| {
                 !s.iter()
@@ -206,10 +220,7 @@ pub fn filter_albums<'a>(
             !request.filters.as_ref().is_some_and(|x| {
                 x.album_type
                     .map(Into::into)
-                    .is_some_and(|t: LibraryAlbumType| {
-                        // log::warn!("{} == {}", album.album_type.as_ref(), t.as_ref());
-                        album.album_type == t
-                    })
+                    .is_some_and(|t| album.album_type == t)
             })
         })
         .filter(|album| {
@@ -233,7 +244,9 @@ pub fn filter_albums<'a>(
                         || album.artist.to_lowercase().contains(s))
                 })
             })
-        })
+        });
+
+    albums
 }
 
 pub fn sort_albums<'a>(

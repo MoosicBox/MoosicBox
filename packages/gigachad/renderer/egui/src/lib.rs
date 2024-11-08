@@ -170,6 +170,7 @@ impl Renderer for EguiRenderer {
             .or(self.height.map(f32::from));
         elements.calc();
         *self.app.container.write().unwrap() = elements;
+        *self.app.images.write().unwrap() = HashMap::new();
         *self.app.viewport_listeners.write().unwrap() = HashMap::new();
         *self.app.route_requests.write().unwrap() = vec![];
 

@@ -635,7 +635,11 @@ export interface ApiType {
     getArtistSourceCover(
         artist: Api.Artist | Api.Album | Api.Track | undefined,
     ): string;
-    getAlbum(id: number, signal?: AbortSignal | null): Promise<Api.Album>;
+    getAlbum(
+        id: string | number,
+        source?: ApiSource,
+        signal?: AbortSignal | null,
+    ): Promise<Api.Album>;
     getAlbums(
         request?: Api.AlbumsRequest | undefined,
         signal?: AbortSignal | null,
@@ -665,6 +669,7 @@ export interface ApiType {
     ): Promise<Api.Track[]>;
     getAlbumVersions(
         albumId: string | number,
+        source?: ApiSource,
         signal?: AbortSignal | null,
     ): Promise<Api.AlbumVersion[]>;
     getTracks(
@@ -981,13 +986,15 @@ function getAlbumSourceArtwork(
 }
 
 async function getAlbum(
-    id: number,
+    id: string | number,
+    source: ApiSource = 'LIBRARY',
     signal?: AbortSignal | null,
 ): Promise<Api.Album> {
     const con = getConnection();
 
     const query = new QueryParams({
         albumId: `${id}`,
+        source,
     });
 
     return await requestJson(`${con.apiUrl}/menu/album?${query}`, {
@@ -1190,12 +1197,18 @@ async function getAlbumTracks(
 }
 
 async function getAlbumVersions(
-    albumId: number,
+    albumId: string | number,
+    source: ApiSource = 'LIBRARY',
     signal?: AbortSignal | null,
 ): Promise<Api.AlbumVersion[]> {
     const con = getConnection();
+    const queryParams = new QueryParams({
+        albumId: `${albumId}`,
+        source,
+    });
+
     return await requestJson(
-        `${con.apiUrl}/menu/album/versions?albumId=${albumId}`,
+        `${con.apiUrl}/menu/album/versions?${queryParams}`,
         {
             method: 'GET',
             signal: signal ?? null,

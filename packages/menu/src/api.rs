@@ -31,7 +31,10 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use crate::library::{
-    albums::{add_album, get_album_versions_from_source, refavorite_album, remove_album},
+    albums::{
+        add_album, get_album_versions_from_source, get_albums_from_source, refavorite_album,
+        remove_album,
+    },
     artists::{get_all_artists, ArtistFilters, ArtistsRequest},
     get_album_from_source, get_artist, get_artist_albums, get_library_album, GetArtistError,
 };
@@ -234,6 +237,7 @@ pub struct GetAlbumsQuery {
 pub async fn get_albums_endpoint(
     query: web::Query<GetAlbumsQuery>,
     music_apis: MusicApis,
+    db: LibraryDatabase,
 ) -> Result<Json<Page<ApiAlbum>>> {
     let source = query.source.unwrap_or(ApiSource::Library);
 
@@ -285,26 +289,10 @@ pub async fn get_albums_endpoint(
     let api = music_apis.get(source).map_err(ErrorBadRequest)?;
 
     Ok(Json(
-        if let Some(artist_id) = request.filters.as_ref().and_then(|x| x.artist_id.as_ref()) {
-            api.artist_albums(
-                artist_id,
-                query.album_type,
-                query.offset,
-                query.limit,
-                None,
-                None,
-            )
+        get_albums_from_source(&db, &**api, request)
             .await
             .map_err(|e| ErrorInternalServerError(format!("Failed to fetch albums: {e}")))?
-            .page
-            .map(Into::into)
-        } else {
-            api.albums(&request)
-                .await
-                .map_err(|e| ErrorInternalServerError(format!("Failed to fetch albums: {e}")))?
-                .page
-                .map(Into::into)
-        },
+            .map(Into::into),
     ))
 }
 

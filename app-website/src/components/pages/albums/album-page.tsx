@@ -16,7 +16,7 @@ import {
     toTime,
 } from '~/services/formatting';
 import { addTracksToQueue, playerState, playPlaylist } from '~/services/player';
-import { Api, api, trackId } from '~/services/api';
+import { Api, api, ApiSource, trackId } from '~/services/api';
 import { artistRoute } from '~/components/Artist/Artist';
 import { areEqualShallow, historyBack } from '~/services/util';
 
@@ -31,105 +31,53 @@ export default function albumPage(props: {
     const [sourceImage, setSourceImage] = createSignal<HTMLImageElement>();
     const [activeVersion, setActiveVersion] = createSignal<Api.AlbumVersion>();
 
-    const [libraryAlbum, setLibraryAlbum] = createSignal<Api.Album | null>();
-
-    const [tidalAlbum, setTidalAlbum] = createSignal<Api.Album>();
-    const [tidalTracks, setTidalTracks] = createSignal<Api.Track[]>();
-
-    const [qobuzAlbum, setQobuzAlbum] = createSignal<Api.Album>();
-    const [qobuzTracks, setQobuzTracks] = createSignal<Api.Track[]>();
+    const [album, setAlbum] = createSignal<Api.Album>();
 
     let sourceImageRef: HTMLImageElement | undefined;
 
-    function getAlbum(): Api.Album | undefined {
-        return (libraryAlbum() ??
-            tidalAlbum() ??
-            qobuzAlbum()) as unknown as Api.Album;
-    }
-
     function getTracks(): Api.Track[] | undefined {
-        return activeVersion()?.tracks ?? tidalTracks() ?? qobuzTracks();
-    }
-
-    async function loadLibraryAlbum() {
-        try {
-            if (props.albumId) {
-                const libraryAlbum = await api.getAlbum(props.albumId);
-                setLibraryAlbum(libraryAlbum);
-            } else if (props.tidalAlbumId) {
-                const libraryAlbum = await api.getAlbumFromTidalAlbumId(
-                    props.tidalAlbumId,
-                );
-                setLibraryAlbum(libraryAlbum);
-            } else if (props.qobuzAlbumId) {
-                const libraryAlbum = await api.getAlbumFromQobuzAlbumId(
-                    props.qobuzAlbumId,
-                );
-                setLibraryAlbum(libraryAlbum);
-            }
-        } catch {
-            setLibraryAlbum(null);
-        }
-    }
-
-    async function loadTidalAlbum() {
-        const tidalAlbum = await api.getTidalAlbum(props.tidalAlbumId!);
-        setTidalAlbum(tidalAlbum);
-    }
-
-    async function loadTidalAlbumTracks() {
-        const page = await api.getTidalAlbumTracks(props.tidalAlbumId!);
-        const tidalTracks = page.items;
-        setTidalTracks(tidalTracks);
-    }
-
-    async function loadQobuzAlbum() {
-        const qobuzAlbum = await api.getQobuzAlbum(props.qobuzAlbumId!);
-        setQobuzAlbum(qobuzAlbum);
-    }
-
-    async function loadQobuzAlbumTracks() {
-        const page = await api.getQobuzAlbumTracks(props.qobuzAlbumId!);
-        const qobuzTracks = page.items;
-        setQobuzTracks(qobuzTracks);
+        return activeVersion()?.tracks;
     }
 
     async function loadAlbum() {
-        if (props.albumId) {
-            loadLibraryAlbum();
-        } else if (props.tidalAlbumId) {
-            await Promise.all([
-                loadLibraryAlbum(),
-                loadTidalAlbum(),
-                loadTidalAlbumTracks(),
-            ]);
-        } else if (props.qobuzAlbumId) {
-            await Promise.all([
-                loadLibraryAlbum(),
-                loadQobuzAlbum(),
-                loadQobuzAlbumTracks(),
-            ]);
+        try {
+            if (props.albumId) {
+                setAlbum(await api.getAlbum(props.albumId));
+            } else if (props.tidalAlbumId) {
+                setAlbum(await api.getAlbum(props.tidalAlbumId, 'TIDAL'));
+            } else if (props.qobuzAlbumId) {
+                setAlbum(await api.getAlbum(props.qobuzAlbumId, 'QOBUZ'));
+            }
+        } catch {
+            setAlbum(undefined);
         }
     }
 
     async function loadVersions() {
         if (props.albumId) {
-            const versions = await api.getAlbumVersions(props.albumId);
-            setVersions(versions);
-
-            if (activeVersion()) {
-                const version = versions.find((v) =>
-                    areEqualShallow(v, activeVersion()!),
-                );
-                setActiveVersion(version ?? versions[0]);
-            } else {
-                setActiveVersion(versions[0]);
-            }
-
-            return versions;
+            setVersions(await api.getAlbumVersions(props.albumId));
+        } else if (props.tidalAlbumId) {
+            setVersions(
+                await api.getAlbumVersions(props.tidalAlbumId, 'TIDAL'),
+            );
+        } else if (props.qobuzAlbumId) {
+            setVersions(
+                await api.getAlbumVersions(props.qobuzAlbumId, 'QOBUZ'),
+            );
+        } else {
+            throw new Error('Invalid album type');
         }
 
-        return undefined;
+        if (activeVersion()) {
+            const version = versions()?.find((v) =>
+                areEqualShallow(v, activeVersion()!),
+            );
+            setActiveVersion(version ?? versions()?.[0]);
+        } else {
+            setActiveVersion(versions()?.[0]);
+        }
+
+        return versions;
     }
 
     function addEmptyVersion(source: Api.TrackSource) {
@@ -153,10 +101,10 @@ export default function albumPage(props: {
 
         await Promise.all([loadAlbum(), loadVersions()]);
 
-        if (isInvalidFavorite(Api.TrackSource.TIDAL)) {
+        if (props.tidalAlbumId && isInvalidFavorite()) {
             addEmptyVersion(Api.TrackSource.TIDAL);
         }
-        if (isInvalidFavorite(Api.TrackSource.QOBUZ)) {
+        if (props.qobuzAlbumId && isInvalidFavorite()) {
             addEmptyVersion(Api.TrackSource.QOBUZ);
         }
 
@@ -227,13 +175,13 @@ export default function albumPage(props: {
         tidalAlbumId?: string | number;
         qobuzAlbumId?: string | number;
     }) {
-        const album = await api.refavoriteAlbum(albumId);
+        const refavoritedAlbum = await api.refavoriteAlbum(albumId);
 
         if (!shouldNavigate) {
             return;
         }
 
-        if (album.albumId !== libraryAlbum()?.albumId) {
+        if (refavoritedAlbum.albumId !== album()?.albumId) {
             //navigate(albumRoute(album), { replace: true });
         } else {
             await loadDetails();
@@ -246,9 +194,9 @@ export default function albumPage(props: {
             case 'QOBUZ':
                 await api.download(
                     {
-                        albumId: libraryAlbum()!.albumSources.find(
+                        albumId: album()?.albumSources.find(
                             (x) => x.source === 'QOBUZ',
-                        )?.id!,
+                        )?.id,
                     },
                     source,
                 );
@@ -256,9 +204,9 @@ export default function albumPage(props: {
             case 'TIDAL':
                 await api.download(
                     {
-                        albumId: libraryAlbum()!.albumSources.find(
+                        albumId: album()?.albumSources.find(
                             (x) => x.source === 'TIDAL',
-                        )?.id!,
+                        )?.id,
                     },
                     source,
                 );
@@ -266,9 +214,9 @@ export default function albumPage(props: {
             case 'YT':
                 await api.download(
                     {
-                        albumId: libraryAlbum()!.albumSources.find(
+                        albumId: album()?.albumSources.find(
                             (x) => x.source === 'YT',
-                        )?.id!,
+                        )?.id,
                     },
                     source,
                 );
@@ -305,12 +253,12 @@ export default function albumPage(props: {
             versions()!.every((version) => version.source === source);
 
         if (removedEveryVersion) {
-            setLibraryAlbum(null);
+            setAlbum(undefined);
         } else {
             if (props.albumId) {
-                setLibraryAlbum(album);
+                setAlbum(album);
             } else {
-                setLibraryAlbum(null);
+                setAlbum(undefined);
             }
 
             if (versions()) {
@@ -359,7 +307,7 @@ export default function albumPage(props: {
         }
         loaded = true;
 
-        setLibraryAlbum(undefined);
+        setAlbum(undefined);
         setVersions(undefined);
         setShowingArtwork(false);
         setBlurringArtwork(undefined);
@@ -371,19 +319,26 @@ export default function albumPage(props: {
         await loadDetails();
     }
 
-    function isInvalidFavorite(source: Api.TrackSource) {
-        if (!versions() || !libraryAlbum()) {
+    function isInvalidFavorite() {
+        if (!versions() || !album()) {
             return false;
         }
 
-        if (
-            !libraryAlbum()!.albumSources.find((x) => x.source === source)?.id
-        ) {
+        let targetSource: ApiSource = 'LIBRARY';
+
+        if (props.tidalAlbumId) {
+            targetSource = 'TIDAL';
+        }
+        if (props.qobuzAlbumId) {
+            targetSource = 'QOBUZ';
+        }
+
+        if (!album()?.albumSources.find((x) => x.source === targetSource)?.id) {
             return false;
         }
 
         const version = versions()!.find(
-            (version) => version.source === source,
+            (version) => version.source === targetSource,
         );
 
         return !version || version.tracks.length === 0;
@@ -406,7 +361,7 @@ export default function albumPage(props: {
     }
 
     createComputed(() => {
-        setBlurringArtwork(getAlbum()?.blur);
+        setBlurringArtwork(album()?.blur);
     });
 
     createEffect(
@@ -414,7 +369,7 @@ export default function albumPage(props: {
             () => showingArtwork(),
             (showing) => {
                 if (!sourceImage() && showing && sourceImageRef) {
-                    sourceImageRef.src = api.getAlbumSourceArtwork(getAlbum());
+                    sourceImageRef.src = api.getAlbumSourceArtwork(album());
                     sourceImageRef.onload = ({ target }) => {
                         const image = target as HTMLImageElement;
                         setSourceImage(image);
@@ -429,7 +384,7 @@ export default function albumPage(props: {
     }
 
     function showArtwork(): void {
-        setBlurringArtwork(getAlbum()?.blur);
+        setBlurringArtwork(album()?.blur);
         setSourceImage(undefined);
         setShowingArtwork(true);
         setTimeout(() => {
@@ -470,21 +425,19 @@ export default function albumPage(props: {
                 <div class="album-page-artwork-previewer-content">
                     <img
                         ref={sourceImageRef!}
-                        alt={`${getAlbum()?.title} by ${getAlbum()?.artist}`}
+                        alt={`${album()?.title} by ${album()?.artist}`}
                         style={{
-                            cursor: getAlbum()?.blur ? 'pointer' : 'initial',
+                            cursor: album()?.blur ? 'pointer' : 'initial',
                             visibility: blurringArtwork()
                                 ? 'hidden'
                                 : undefined,
                         }}
-                        onClick={() =>
-                            getAlbum()?.blur && toggleBlurringArtwork()
-                        }
+                        onClick={() => album()?.blur && toggleBlurringArtwork()}
                     />
                     <Show when={blurringArtwork() && sourceImage()}>
                         <img
                             ref={albumArtworkPreviewerIcon!}
-                            src={api.getAlbumArtwork(getAlbum(), 16, 16)}
+                            src={api.getAlbumArtwork(album(), 16, 16)}
                             style={{
                                 'image-rendering': 'pixelated',
                                 cursor: 'pointer',
@@ -494,7 +447,7 @@ export default function albumPage(props: {
                                 top: '0',
                             }}
                             onClick={() =>
-                                getAlbum()?.blur && toggleBlurringArtwork()
+                                album()?.blur && toggleBlurringArtwork()
                             }
                         />
                     </Show>
@@ -588,7 +541,7 @@ export default function albumPage(props: {
                     </div>
                     <div class="album-page-header">
                         <div class="album-page-album-info">
-                            <Show when={getAlbum()}>
+                            <Show when={album()}>
                                 {(album) => (
                                     <>
                                         <div class="album-page-album-info-artwork">
@@ -720,10 +673,9 @@ export default function albumPage(props: {
                                     Options
                                 </button>
                                 <Show
-                                    when={
-                                        (tidalAlbum() || qobuzAlbum()) &&
-                                        libraryAlbum() === null
-                                    }
+                                    when={album()?.albumSources?.every(
+                                        (x) => x.source !== 'LIBRARY',
+                                    )}
                                 >
                                     <button
                                         class="album-page-album-controls-playback-add-to-library-button"
@@ -739,12 +691,15 @@ export default function albumPage(props: {
                                 </Show>
                                 <Show
                                     when={
-                                        libraryAlbum()?.albumSources.some(
+                                        album()?.albumSources.some(
                                             (x) => x.source === 'TIDAL',
                                         ) &&
-                                        (tidalAlbum() ||
-                                            activeVersion()?.source ===
-                                                Api.TrackSource.TIDAL)
+                                        activeVersion()?.source ===
+                                            Api.TrackSource.TIDAL &&
+                                        album()?.albumSources.some(
+                                            ({ source }) =>
+                                                source === 'LIBRARY',
+                                        )
                                     }
                                 >
                                     <button
@@ -754,7 +709,7 @@ export default function albumPage(props: {
                                             e.preventDefault();
                                             removeAlbumFromLibrary({
                                                 tidalAlbumId:
-                                                    libraryAlbum()!.albumSources.find(
+                                                    album()!.albumSources.find(
                                                         (x) =>
                                                             x.source ===
                                                             'TIDAL',
@@ -768,12 +723,15 @@ export default function albumPage(props: {
                                 </Show>
                                 <Show
                                     when={
-                                        libraryAlbum()?.albumSources.some(
+                                        album()?.albumSources.some(
                                             (x) => x.source === 'QOBUZ',
                                         ) &&
-                                        (qobuzAlbum() ||
-                                            activeVersion()?.source ===
-                                                Api.TrackSource.QOBUZ)
+                                        activeVersion()?.source ===
+                                            Api.TrackSource.QOBUZ &&
+                                        album()?.albumSources.some(
+                                            ({ source }) =>
+                                                source === 'LIBRARY',
+                                        )
                                     }
                                 >
                                     <button
@@ -783,7 +741,7 @@ export default function albumPage(props: {
                                             e.preventDefault();
                                             removeAlbumFromLibrary({
                                                 qobuzAlbumId:
-                                                    libraryAlbum()!.albumSources.find(
+                                                    album()!.albumSources.find(
                                                         (x) =>
                                                             x.source ===
                                                             'QOBUZ',
@@ -796,9 +754,10 @@ export default function albumPage(props: {
                                     </button>
                                 </Show>
                                 <Show
-                                    when={isInvalidFavorite(
-                                        Api.TrackSource.TIDAL,
-                                    )}
+                                    when={
+                                        props.tidalAlbumId &&
+                                        isInvalidFavorite()
+                                    }
                                 >
                                     <button
                                         class="album-page-album-controls-playback-refavorite-button"
@@ -807,7 +766,7 @@ export default function albumPage(props: {
                                             e.preventDefault();
                                             refavoriteAlbum({
                                                 tidalAlbumId:
-                                                    libraryAlbum()!.albumSources.find(
+                                                    album()!.albumSources.find(
                                                         (x) =>
                                                             x.source ===
                                                             'TIDAL',
@@ -820,9 +779,10 @@ export default function albumPage(props: {
                                     </button>
                                 </Show>
                                 <Show
-                                    when={isInvalidFavorite(
-                                        Api.TrackSource.QOBUZ,
-                                    )}
+                                    when={
+                                        props.qobuzAlbumId &&
+                                        isInvalidFavorite()
+                                    }
                                 >
                                     <button
                                         class="album-page-album-controls-playback-refavorite-button"
@@ -831,7 +791,7 @@ export default function albumPage(props: {
                                             e.preventDefault();
                                             refavoriteAlbum({
                                                 qobuzAlbumId:
-                                                    libraryAlbum()!.albumSources.find(
+                                                    album()!.albumSources.find(
                                                         (x) =>
                                                             x.source ===
                                                             'QOBUZ',
@@ -845,9 +805,12 @@ export default function albumPage(props: {
                                 </Show>
                                 <Show
                                     when={
-                                        libraryAlbum() &&
                                         activeVersion()?.source ===
-                                            Api.TrackSource.TIDAL
+                                            Api.TrackSource.TIDAL &&
+                                        album()?.albumSources.some(
+                                            ({ source }) =>
+                                                source === 'LIBRARY',
+                                        )
                                     }
                                 >
                                     <button
@@ -864,9 +827,12 @@ export default function albumPage(props: {
                                 </Show>
                                 <Show
                                     when={
-                                        libraryAlbum() &&
                                         activeVersion()?.source ===
-                                            Api.TrackSource.QOBUZ
+                                            Api.TrackSource.QOBUZ &&
+                                        album()?.albumSources.some(
+                                            ({ source }) =>
+                                                source === 'LIBRARY',
+                                        )
                                     }
                                 >
                                     <button
