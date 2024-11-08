@@ -633,6 +633,9 @@ pub enum Element {
     TD {
         element: ContainerElement,
     },
+    Canvas {
+        element: ContainerElement,
+    },
 }
 
 #[derive(Default)]
@@ -1033,6 +1036,14 @@ impl Element {
                 display_elements(&element.elements, f, with_debug_attrs)?;
                 f.write_fmt(format_args!("</td>"))?;
             }
+            Self::Canvas { element } => {
+                f.write_fmt(format_args!(
+                    "<canvas{attrs}>",
+                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&element.elements, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</canvas>"))?;
+            }
         }
 
         Ok(())
@@ -1064,6 +1075,7 @@ impl Element {
             Self::TBody { .. } => "TBody",
             Self::TR { .. } => "TR",
             Self::TD { .. } => "TD",
+            Self::Canvas { .. } => "Canvas",
         }
     }
 }
@@ -1092,6 +1104,7 @@ impl Element {
             | Self::TBody { element }
             | Self::TR { element }
             | Self::TD { element }
+            | Self::Canvas { element }
             | Self::ListItem { element } => Some(element),
             Self::Raw { .. } | Self::Input(_) => None,
         }
@@ -1119,6 +1132,7 @@ impl Element {
             | Self::TBody { element }
             | Self::TR { element }
             | Self::TD { element }
+            | Self::Canvas { element }
             | Self::ListItem { element } => Some(element),
             Self::Raw { .. } | Self::Input(_) => None,
         }
