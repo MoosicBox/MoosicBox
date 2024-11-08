@@ -1,4 +1,8 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+// hide console window on Windows in release
+#![cfg_attr(
+    all(not(debug_assertions), not(feature = "windows-console")),
+    windows_subsystem = "windows"
+)]
 
 use std::{
     num::ParseIntError,
