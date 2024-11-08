@@ -15,6 +15,9 @@ use moosicbox_session_models::{ApiSession, UpdateSession};
 use serde::{Deserialize, Serialize};
 use state::State;
 
+static FOOTER_HEIGHT: u16 = 140;
+static CURRENT_ALBUM_SIZE: u16 = 70;
+
 #[macro_export]
 macro_rules! public_img {
     ($path:expr $(,)?) => {
@@ -118,49 +121,54 @@ pub fn sidebar_navigation() -> Markup {
 #[must_use]
 pub fn player(state: &State) -> Markup {
     html! {
-        div sx-height=(100) sx-dir="row" sx-border-top="3, #222" {
-            (player_current_album_from_state(state))
-            div sx-dir="row" {
-                @let size = 36;
-                button sx-width=(size) sx-height=(size) fx-click=(Action::PreviousTrack) {
-                    img
-                        sx-width=(size)
-                        sx-height=(size)
-                        src=(public_img!("previous-button-white.svg"));
-                }
-                (player_play_button_from_state(state))
-                button sx-width=(size) sx-height=(size) fx-click=(Action::NextTrack) {
-                    img
-                        sx-width=(size)
-                        sx-height=(size)
-                        src=(public_img!("next-button-white.svg"));
-                }
+        div sx-height=(FOOTER_HEIGHT) sx-border-top="3, #222" {
+            div sx-height=(40) sx-dir="row" {
+                h1{"visualization"}
             }
-            div sx-dir="row" {
-                @let size = 25;
-                button sx-width=(size) sx-height=(size) {
-                    img
-                        sx-width=(size)
-                        sx-height=(size)
-                        src=(public_img!("audio-white.svg"));
+            div sx-height=(100) sx-dir="row" {
+                (player_current_album_from_state(state, 70))
+                div sx-dir="row" {
+                    @let size = 36;
+                    button sx-width=(size) sx-height=(size) fx-click=(Action::PreviousTrack) {
+                        img
+                            sx-width=(size)
+                            sx-height=(size)
+                            src=(public_img!("previous-button-white.svg"));
+                    }
+                    (player_play_button_from_state(state))
+                    button sx-width=(size) sx-height=(size) fx-click=(Action::NextTrack) {
+                        img
+                            sx-width=(size)
+                            sx-height=(size)
+                            src=(public_img!("next-button-white.svg"));
+                    }
                 }
-                button sx-width=(size) sx-height=(size) {
-                    img
-                        sx-width=(size)
-                        sx-height=(size)
-                        src=(public_img!("speaker-white.svg"));
-                }
-                button sx-width=(size) sx-height=(size) {
-                    img
-                        sx-width=(size)
-                        sx-height=(size)
-                        src=(public_img!("sessions-white.svg"));
-                }
-                button sx-width=(size) sx-height=(size) {
-                    img
-                        sx-width=(size)
-                        sx-height=(size)
-                        src=(public_img!("playlist-white.svg"));
+                div sx-dir="row" {
+                    @let size = 25;
+                    button sx-width=(size) sx-height=(size) {
+                        img
+                            sx-width=(size)
+                            sx-height=(size)
+                            src=(public_img!("audio-white.svg"));
+                    }
+                    button sx-width=(size) sx-height=(size) {
+                        img
+                            sx-width=(size)
+                            sx-height=(size)
+                            src=(public_img!("speaker-white.svg"));
+                    }
+                    button sx-width=(size) sx-height=(size) {
+                        img
+                            sx-width=(size)
+                            sx-height=(size)
+                            src=(public_img!("sessions-white.svg"));
+                    }
+                    button sx-width=(size) sx-height=(size) {
+                        img
+                            sx-width=(size)
+                            sx-height=(size)
+                            src=(public_img!("playlist-white.svg"));
+                    }
                 }
             }
         }
@@ -192,10 +200,9 @@ fn player_play_button_from_state(state: &State) -> Markup {
     )
 }
 
-fn player_current_album(track: &ApiTrack) -> Markup {
+fn player_current_album(track: &ApiTrack, size: u16) -> Markup {
     html! {
         div id="player-current-playing" sx-dir="row" {
-            @let size = 70;
             div sx-width=(size) sx-height=(size) {
                 a href=(pre_escaped!("/albums?albumId={}&source={}", track.album_id, track.api_source)) sx-width=(size) sx-height=(size) {
                     (album_cover_img(&track.into(), size))
@@ -216,12 +223,12 @@ fn player_current_album(track: &ApiTrack) -> Markup {
     }
 }
 
-fn player_current_album_from_state(state: &State) -> Markup {
+fn player_current_album_from_state(state: &State, size: u16) -> Markup {
     if let Some(playback) = &state.player.playback {
         let track: Option<&ApiTrack> = playback.tracks.get(playback.position as usize);
 
         if let Some(track) = track {
-            return player_current_album(track);
+            return player_current_album(track, size);
         }
     }
 
@@ -243,7 +250,7 @@ pub fn session_updated(update: &UpdateSession, session: &ApiSession) -> Vec<(Str
         if let Some(track) = track {
             partials.push((
                 "player-current-playing".to_string(),
-                player_current_album(track),
+                player_current_album(track, CURRENT_ALBUM_SIZE),
             ));
         }
     }
@@ -260,7 +267,7 @@ pub fn session_updated(update: &UpdateSession, session: &ApiSession) -> Vec<(Str
 #[must_use]
 pub fn footer(state: &State) -> Markup {
     html! {
-        footer sx-height=(100) sx-background="#080a0b" {
+        footer sx-height=(FOOTER_HEIGHT) sx-background="#080a0b" {
             (player(state))
         }
     }
@@ -299,7 +306,7 @@ pub fn downloads(state: &State) -> Markup {
 pub fn page(state: &State, slot: &Markup) -> Markup {
     html! {
         div state=(state) id="root" class="dark" sx-width="100%" sx-height="100%" {
-            section class="navigation-bar-and-main-content" sx-dir="row" sx-height="calc(100% - 100px)" {
+            section class="navigation-bar-and-main-content" sx-dir="row" sx-height=(pre_escaped!("calc(100% - {}px)", FOOTER_HEIGHT)) {
                 (sidebar_navigation())
                 (main(&slot))
             }
