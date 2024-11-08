@@ -35,25 +35,65 @@ export default function artistPage(props: {
 
     async function loadQobuzAlbums(qobuzId: string) {
         await Promise.all([
-            api.getAllQobuzArtistAlbums(qobuzId, setQobuzAlbums, ['LP']),
-            api.getAllQobuzArtistAlbums(qobuzId, setQobuzEpsAndSingles, [
-                'EPS_AND_SINGLES',
-            ]),
-            api.getAllQobuzArtistAlbums(qobuzId, setQobuzCompilations, [
-                'COMPILATIONS',
-            ]),
+            api.getAllAlbums(
+                {
+                    artistId: qobuzId,
+                    source: 'QOBUZ',
+                    albumType: 'LP',
+                    sort: 'Release-Date-Desc',
+                },
+                setQobuzAlbums,
+            ),
+            api.getAllAlbums(
+                {
+                    artistId: qobuzId,
+                    source: 'QOBUZ',
+                    albumType: 'EPS_AND_SINGLES',
+                    sort: 'Release-Date-Desc',
+                },
+                setQobuzEpsAndSingles,
+            ),
+            api.getAllAlbums(
+                {
+                    artistId: qobuzId,
+                    source: 'QOBUZ',
+                    albumType: 'COMPILATIONS',
+                    sort: 'Release-Date-Desc',
+                },
+                setQobuzCompilations,
+            ),
         ]);
     }
 
     async function loadTidalAlbums(tidalId: string) {
         await Promise.all([
-            api.getAllTidalArtistAlbums(tidalId, setTidalAlbums, ['LP']),
-            api.getAllTidalArtistAlbums(tidalId, setTidalEpsAndSingles, [
-                'EPS_AND_SINGLES',
-            ]),
-            api.getAllTidalArtistAlbums(tidalId, setTidalCompilations, [
-                'COMPILATIONS',
-            ]),
+            api.getAllAlbums(
+                {
+                    artistId: tidalId,
+                    source: 'TIDAL',
+                    albumType: 'LP',
+                    sort: 'Release-Date-Desc',
+                },
+                setTidalAlbums,
+            ),
+            api.getAllAlbums(
+                {
+                    artistId: tidalId,
+                    source: 'TIDAL',
+                    albumType: 'EPS_AND_SINGLES',
+                    sort: 'Release-Date-Desc',
+                },
+                setTidalEpsAndSingles,
+            ),
+            api.getAllAlbums(
+                {
+                    artistId: tidalId,
+                    source: 'TIDAL',
+                    albumType: 'COMPILATIONS',
+                    sort: 'Release-Date-Desc',
+                },
+                setTidalCompilations,
+            ),
         ]);
     }
 
