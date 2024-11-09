@@ -192,7 +192,7 @@ mysql = { version = "25.0.1", features = [
     "default-rustls",
     "rustls-tls",
 ], default-features = false }
-mysql_common = { version = "0.32.4", default-features = false }
+mysql_common = { version = "0.33.0", default-features = false }
 nanoid = "0.4.0"
 native-tls = "0.2.12"
 ndk-context = "0.1.1"
@@ -254,7 +254,7 @@ tauri-plugin = { version = "2.0.2", features = ["build"] }
 tauri-plugin-dialog = "2.0.3"
 tauri-plugin-notification = "2.0.1"
 test-log = "0.2.16"
-thiserror = "1.0.68"
+thiserror = "2.0.1"
 throttle = "0.1.0"
 tl = "0.7.8"
 tokio = { version = "1.41.1" }

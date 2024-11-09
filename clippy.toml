@@ -37,6 +37,8 @@ allowed-duplicate-crates = [
     "spin",
     "syn",
     "sync_wrapper",
+    "thiserror",
+    "thiserror-impl",
     "tokio-rustls",
     "toml_edit",
     "tower",
