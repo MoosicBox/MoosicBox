@@ -429,3 +429,35 @@ h6 {
     outline: none;
     cursor: pointer;
 }
+
+.more-options {
+    width: 17px;
+}
+
+.moosicbox-select {
+    display: flex;
+    flex-direction: column;
+    width: 200px;
+    position: absolute;
+    left: 100%;
+    top: calc(100% + 10px);
+    transform: translate(-50%, 0);
+    border-radius: 10px;
+    padding: 15px;
+    background: #080a0b;
+    z-index: 1;
+}
+
+.moosicbox-select-option {
+    cursor: pointer;
+    display: flex;
+    padding: 10px;
+}
+
+.moosicbox-select-option:not(:last-child) {
+    border-bottom: 1px solid #282a2b;
+}
+
+.moosicbox-select-option:hover {
+    background: #888a8b;
+}

@@ -6,6 +6,7 @@ import {
     For,
     on,
     onCleanup,
+    onMount,
     Show,
 } from 'solid-js';
 import { isServer } from 'solid-js/web';
@@ -32,6 +33,25 @@ export default function albumPage(props: {
     const [activeVersion, setActiveVersion] = createSignal<Api.AlbumVersion>();
 
     const [album, setAlbum] = createSignal<Api.Album>();
+
+    const [showTrackOptions, setShowTrackOptions] = createSignal<
+        string | number
+    >();
+
+    const handleShowTrackOptionsClick = (_event: MouseEvent) => {
+        if (!showTrackOptions()) return;
+        setShowTrackOptions(undefined);
+    };
+
+    onMount(() => {
+        if (isServer) return;
+        window.addEventListener('click', handleShowTrackOptionsClick);
+    });
+
+    onCleanup(() => {
+        if (isServer) return;
+        window.removeEventListener('click', handleShowTrackOptionsClick);
+    });
 
     let sourceImageRef: HTMLImageElement | undefined;
 
@@ -520,8 +540,53 @@ export default function albumPage(props: {
                     </a>
                 </td>
                 <td class="album-page-tracks-track-time">
-                    {toTime(Math.round(track.duration))}
+                    <div class="album-page-tracks-track-time-content">
+                        <div class="album-page-tracks-track-time-content-duration">
+                            {toTime(Math.round(track.duration))}
+                        </div>
+                        <div class="album-page-tracks-track-time-content-options">
+                            <button
+                                style="position: relative"
+                                class="remove-button-styles"
+                                onClick={(e) => {
+                                    if (showTrackOptions() === track.trackId) {
+                                        setShowTrackOptions(undefined);
+                                    } else {
+                                        setShowTrackOptions(track.trackId);
+                                    }
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                }}
+                                onDblClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                }}
+                            >
+                                <img
+                                    class="more-options more-options-button"
+                                    src="/img/more-options-white.svg"
+                                    alt="Options"
+                                />
+                                {showTrackOptions() == track.trackId && (
+                                    <div class="moosicbox-select">
+                                        <div class="moosicbox-select-option">
+                                            <div
+                                                onClick={async () => {
+                                                    await addTracksToQueue([
+                                                        track,
+                                                    ]);
+                                                }}
+                                            >
+                                                Add to queue
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </button>
+                        </div>
+                    </div>
                 </td>
+                <td></td>
             </tr>
         );
     }
@@ -861,7 +926,10 @@ export default function albumPage(props: {
                                 <th class="album-page-tracks-artist-header">
                                     Artist
                                 </th>
-                                <th>Time</th>
+                                <th class="album-page-tracks-track-time-header">
+                                    Time
+                                </th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody>

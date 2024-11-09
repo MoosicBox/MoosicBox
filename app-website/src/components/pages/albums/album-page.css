@@ -237,6 +237,19 @@
     pointer-events: none;
 }
 
+.album-page-tracks-track-time-header {
+    width: 1%;
+}
+
+.album-page-tracks-track-time-content {
+    display: flex;
+}
+
+.album-page-tracks-track-time-content-options {
+    padding-left: 12px;
+    margin-left: auto;
+}
+
 @media (max-width: 600px) {
     .album-page {
         padding: 0 10px;
