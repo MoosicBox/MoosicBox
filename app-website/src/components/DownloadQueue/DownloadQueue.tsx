@@ -60,7 +60,7 @@ function downloadTask(task: Api.DownloadTask): JSXElement {
                             album={
                                 {
                                     ...task.item,
-                                    type: item.source,
+                                    apiSource: item.source,
                                 } as unknown as Api.Track
                             }
                             size={80}
@@ -97,7 +97,7 @@ function downloadTask(task: Api.DownloadTask): JSXElement {
                             album={
                                 {
                                     ...task.item,
-                                    type: item.source,
+                                    apiSource: item.source,
                                 } as unknown as Api.Album
                             }
                             size={80}
