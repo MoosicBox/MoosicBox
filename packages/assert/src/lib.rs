@@ -218,21 +218,12 @@ macro_rules! die_or_warn {
 
 #[macro_export]
 macro_rules! die_or_err {
-    ($evaluate:expr, $err:expr, $(,)?) => {
+    ($err:expr, $($message:tt)+) => {
         if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1"
-            && !($evaluate)
         {
-            $crate::die!($evaluate)
-        } else if !($evaluate) {
-            return Err($err);
-        }
-    };
-    ($evaluate:expr, $err:expr, $($message:tt)+) => {
-        if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1"
-            && !($evaluate)
-        {
-            $crate::die!($evaluate, $($message)*)
-        } else if !($evaluate) {
+            $crate::die!($($message)*);
+            unreachable!();
+        } else {
             return Err($err);
         }
     };
