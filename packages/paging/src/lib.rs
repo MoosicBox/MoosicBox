@@ -178,7 +178,7 @@ impl<T> Page<T> {
         }
     }
 
-    pub fn items(self) -> Vec<T> {
+    pub fn into_items(self) -> Vec<T> {
         match self {
             Self::WithTotal { items, .. } => items,
             Self::WithHasMore { items, .. } => items,
@@ -284,7 +284,7 @@ impl<T, E> PagingResponse<T, E> {
             .rest_of_pages_in_batches()
             .await?
             .into_iter()
-            .flat_map(|response| response.items())
+            .flat_map(|response| response.into_items())
             .collect::<Vec<_>>())
     }
 
@@ -297,7 +297,7 @@ impl<T, E> PagingResponse<T, E> {
             .with_rest_of_pages_in_batches()
             .await?
             .into_iter()
-            .flat_map(|response| response.items())
+            .flat_map(|response| response.into_items())
             .collect::<Vec<_>>())
     }
 
@@ -338,7 +338,7 @@ impl<T, E> PagingResponse<T, E> {
             .rest_of_pages()
             .await?
             .into_iter()
-            .flat_map(|response| response.items())
+            .flat_map(|response| response.into_items())
             .collect::<Vec<_>>())
     }
 
@@ -351,7 +351,7 @@ impl<T, E> PagingResponse<T, E> {
             .with_rest_of_pages()
             .await?
             .into_iter()
-            .flat_map(|response| response.items())
+            .flat_map(|response| response.into_items())
             .collect::<Vec<_>>())
     }
 
@@ -371,8 +371,8 @@ impl<T, E> PagingResponse<T, E> {
         self.page.total()
     }
 
-    pub fn items(self) -> Vec<T> {
-        self.page.items()
+    pub fn into_items(self) -> Vec<T> {
+        self.page.into_items()
     }
 
     pub fn map<U, F>(self, f: F) -> PagingResponse<U, E>

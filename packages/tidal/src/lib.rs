@@ -2459,7 +2459,7 @@ impl MusicApi for TidalMusicApi {
                 page: Page::WithTotal {
                     items: pages
                         .into_iter()
-                        .flat_map(|page| page.items())
+                        .flat_map(|page| page.into_items())
                         .collect::<Vec<_>>(),
                     offset,
                     limit,

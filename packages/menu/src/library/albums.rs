@@ -150,7 +150,7 @@ pub async fn get_album_versions_from_source(
                 ApiSource::Tidal => {
                     moosicbox_tidal::album_tracks(db, album_id, None, None, None, None, None, None)
                         .await?
-                        .items()
+                        .into_items()
                         .into_iter()
                         .map(Into::into)
                         .collect::<Vec<_>>()
@@ -160,7 +160,7 @@ pub async fn get_album_versions_from_source(
                 ApiSource::Qobuz => {
                     moosicbox_qobuz::album_tracks(db, album_id, None, None, None, None)
                         .await?
-                        .items()
+                        .into_items()
                         .into_iter()
                         .map(Into::into)
                         .collect::<Vec<_>>()
@@ -169,7 +169,7 @@ pub async fn get_album_versions_from_source(
                 ApiSource::Yt => {
                     moosicbox_yt::album_tracks(db, album_id, None, None, None, None, None, None)
                         .await?
-                        .items()
+                        .into_items()
                         .into_iter()
                         .map(Into::into)
                         .collect::<Vec<_>>()

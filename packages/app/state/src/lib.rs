@@ -1704,7 +1704,7 @@ impl AppState {
         let zones: Page<ApiAudioZoneWithSession> =
             serde_json::from_value(response).map_err(FetchAudioZonesError::Serde)?;
 
-        *self.current_audio_zones.write().await = zones.items();
+        *self.current_audio_zones.write().await = zones.into_items();
 
         self.update_audio_zones().await?;
 
