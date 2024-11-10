@@ -178,6 +178,13 @@ impl<T> Page<T> {
         }
     }
 
+    pub fn items(&self) -> &[T] {
+        match self {
+            Self::WithTotal { items, .. } => items,
+            Self::WithHasMore { items, .. } => items,
+        }
+    }
+
     pub fn into_items(self) -> Vec<T> {
         match self {
             Self::WithTotal { items, .. } => items,
@@ -369,6 +376,10 @@ impl<T, E> PagingResponse<T, E> {
 
     pub fn total(&self) -> Option<u32> {
         self.page.total()
+    }
+
+    pub fn items(&self) -> &[T] {
+        self.page.items()
     }
 
     pub fn into_items(self) -> Vec<T> {
