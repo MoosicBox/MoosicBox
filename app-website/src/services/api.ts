@@ -2067,6 +2067,7 @@ async function requestJson<T>(
         headers,
     };
 
+    console.debug(`Fetching ${options.method || 'GET'} '${url}'`);
     const response = await fetch(url, options);
 
     if (!response.ok) {
