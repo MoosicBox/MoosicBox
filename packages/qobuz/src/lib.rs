@@ -2164,22 +2164,71 @@ impl MusicApi for QobuzMusicApi {
         _order: Option<TrackOrder>,
         _order_direction: Option<TrackOrderDirection>,
     ) -> PagingResult<Track, TracksError> {
-        moosicbox_assert::assert_or_unimplemented!(
-            track_ids.is_none(),
-            "Fetching specific tracks by id is not implemented yet"
-        );
+        let Some(track_ids) = track_ids else {
+            return Ok(favorite_tracks(
+                #[cfg(feature = "db")]
+                &self.db,
+                offset,
+                limit,
+                None,
+                None,
+            )
+            .await?
+            .map(Into::into)
+            .map_err(Into::into));
+        };
 
-        Ok(favorite_tracks(
-            #[cfg(feature = "db")]
-            &self.db,
-            offset,
-            limit,
-            None,
-            None,
-        )
-        .await?
-        .map(Into::into)
-        .map_err(Into::into))
+        let offset = offset.unwrap_or(0) as usize;
+        let offset = if offset > track_ids.len() {
+            track_ids.len()
+        } else {
+            offset
+        };
+        let limit = limit.unwrap_or(30) as usize;
+        let limit = if limit > track_ids.len() {
+            track_ids.len()
+        } else {
+            limit
+        };
+
+        let track_ids = &track_ids[offset..limit];
+
+        let mut tracks = vec![];
+
+        for track_id in track_ids {
+            tracks.push(track(
+                #[cfg(feature = "db")]
+                &self.db,
+                track_id,
+                None,
+                None,
+            ));
+        }
+
+        let tracks = futures::future::join_all(tracks).await;
+        let tracks = tracks.into_iter().collect::<Result<Vec<_>, _>>();
+
+        let tracks = match tracks {
+            Ok(tracks) => tracks,
+            Err(e) => {
+                moosicbox_assert::die_or_err!(
+                    TracksError::Other(Box::new(e)),
+                    "Failed to fetch track: {e:?}",
+                );
+            }
+        };
+
+        Ok(PagingResponse {
+            page: Page::WithTotal {
+                items: tracks.into_iter().map(Into::into).collect(),
+                offset: offset as u32,
+                limit: limit as u32,
+                total: track_ids.len() as u32,
+            },
+            fetch: Arc::new(Mutex::new(Box::new(move |_offset, _count| {
+                Box::pin(async move { unimplemented!("Fetching tracks is not implemented") })
+            }))),
+        })
     }
 
     async fn album_tracks(

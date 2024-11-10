@@ -6711,6 +6711,7 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "base64 0.22.1",
+ "futures",
  "log",
  "md5",
  "moosicbox_assert",
