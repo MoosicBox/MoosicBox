@@ -580,6 +580,23 @@ export default function albumPage(props: {
                                                 Add to queue
                                             </div>
                                         </div>
+                                        {track.apiSource !== 'LIBRARY' && (
+                                            <div class="moosicbox-select-option">
+                                                <div
+                                                    onClick={async () => {
+                                                        await api.download(
+                                                            {
+                                                                trackId:
+                                                                    track.trackId,
+                                                            },
+                                                            track.apiSource as Api.DownloadApiSource,
+                                                        );
+                                                    }}
+                                                >
+                                                    Download
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </button>
