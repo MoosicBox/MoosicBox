@@ -16,7 +16,7 @@ importers:
         version: 8.3.4(astro@4.16.10(@types/node@22.9.0)(rollup@4.25.0)(typescript@5.6.3))
       '@astrojs/solid-js':
         specifier: ^4.4.2
-        version: 4.4.2(@testing-library/jest-dom@5.17.0)(solid-js@1.9.3)(vite@5.4.10(@types/node@22.9.0))
+        version: 4.4.2(@testing-library/jest-dom@5.17.0)(solid-js@1.9.3)(vite@5.4.11(@types/node@22.9.0))
       '@aws-sdk/client-ssm':
         specifier: ^3.687.0
         version: 3.687.0(aws-crt@1.21.8)
@@ -121,14 +121,14 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.3.12
-        version: 3.3.12
+        specifier: ^3.3.18
+        version: 3.3.18
       typescript:
         specifier: ^5.6.3
         version: 5.6.3
       vite:
-        specifier: ^5.4.10
-        version: 5.4.10(@types/node@22.9.0)
+        specifier: ^5.4.11
+        version: 5.4.11(@types/node@22.9.0)
       vitest:
         specifier: ^1.6.0
         version: 1.6.0(@types/node@22.9.0)(@vitest/ui@1.6.0)(jsdom@24.1.3)
@@ -1556,8 +1556,8 @@ packages:
     resolution: {integrity: sha512-8WB3Jcas3swSvjIeA2yvCJ+Miyz5l1ZmB6HFb9R1317dt9LCQoswg/BGrmAmkWVEszSrrg4RwmO46qIm2OEnSA==}
     engines: {node: '>=16'}
 
-  caniuse-lite@1.0.30001679:
-    resolution: {integrity: sha512-j2YqID/YwpLnKzCmBOS4tlZdWprXm3ZmQLBH9ZBXFOhoxLA46fwyBvx6toCBWBmnuwUY/qB3kEU6gFx8qgCroA==}
+  caniuse-lite@1.0.30001680:
+    resolution: {integrity: sha512-rPQy70G6AGUMnbwS1z6Xg+RkHYPAi18ihs47GH0jcxIG7wArmPgY3XbS2sRdBbxJljp3thdT8BIqv9ccCypiPA==}
 
   ccount@2.0.1:
     resolution: {integrity: sha512-eyrF0jiFpY+3drT6383f1qhkbGsLSifNAjA61IUjZjmLCWjItY6LB9ft9YhoDgwfmclB2zhu51Lc7+95b8NRAg==}
@@ -3117,8 +3117,8 @@ packages:
     resolution: {integrity: sha512-9RbEr1Y7FFfptd/1eEdntyjMwLeghW1bHX9GWjXo19vx4ytPQhANltvVxDggzJl7mnWM+dX28kb6cyS/4iQjlQ==}
     engines: {node: '>=4'}
 
-  postcss@8.4.47:
-    resolution: {integrity: sha512-56rxCq7G/XfB4EkXq9Egn5GCqugWvDFjafDOThIdMBsI15iqPqR5r15TfSr1YPYeEI19YeaXMCbY6u88Y76GLQ==}
+  postcss@8.4.48:
+    resolution: {integrity: sha512-GCRK8F6+Dl7xYniR5a4FYbpBzU8XnZVeowqsQFYdcXuSbChgiks7qybSkbvnaeqv0G0B+dd9/jJgH8kkLDQeEA==}
     engines: {node: ^10 || ^12 || >=14}
 
   preferred-pm@4.0.0:
@@ -3454,33 +3454,33 @@ packages:
   sprintf-js@1.0.3:
     resolution: {integrity: sha512-D9cPgkvLlV3t3IzL0D0YLvGA9Ahk4PcvVwUbN0dSGr1aP0Nrt4AEnTUbuGvquEC0mA64Gqt1fzirlRs5ibXx8g==}
 
-  sst-darwin-arm64@3.3.12:
-    resolution: {integrity: sha512-rpYiYSMoUcET69SIhbPb7/Tbew4xsnpZnKnU1diGqNSrvk33Ly7cBEa//ym0WzaMx1Xwgn+Umf93GuRZ/ggqrQ==}
+  sst-darwin-arm64@3.3.18:
+    resolution: {integrity: sha512-H5K9eDFXSQrymTCCE8PtiCN6RKv80icmElGj2AwIINxnVUaBcswrIVt5m1BNOfWhWGPPBQNSIHof9pvCEfcKgQ==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.3.12:
-    resolution: {integrity: sha512-lnK7P3+RQcdAV2NcRj8Qi6/EMxxhbFmHaFHBNeCNAEO2ibaECynyHcx+grJynkMr6qYK12UG1GHwmnTUb2FBcA==}
+  sst-darwin-x64@3.3.18:
+    resolution: {integrity: sha512-1GFNaMqFGAhaGi6fc/aYWZfuIaQAGJQYUZO3ZHM7qCP3mDJ8Tdbf999FHLE15kkdlsLu95g97GI+Ssd8zyDqig==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.3.12:
-    resolution: {integrity: sha512-vbrqxHtOPafx5xN8dIYZ51MsrCzNKTipD4QJ29dVh0/KcWAmU2Od84ftcooXK7lS1GkmtUSYINBV3wTyuG26Sw==}
+  sst-linux-arm64@3.3.18:
+    resolution: {integrity: sha512-FBWN5rRnt4OOQfXmoM8EJ0OR9lnX/M2/S2GPOZT9tsOQd9aqVqTp5rYdmDHR++Xy8XZvXT2nrXr1ntnpYiSt4g==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.3.12:
-    resolution: {integrity: sha512-sQICFEVUM6wqs6tef6xeJYaAKajdGdnpybBV9uEdN/Sd2D95T0WLIhIxQv1mwtbznQvJl97mR8Gys93x0awg7g==}
+  sst-linux-x64@3.3.18:
+    resolution: {integrity: sha512-34T846eri+8qCbwgq0p54OkMonZR6GSDQmmtKJOgV1FirqqRxfIEiiJsmDsU6W1LOShaAYudsxxKYzXFdrwwqA==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.3.12:
-    resolution: {integrity: sha512-CVKjpSFw6kFYnD9bbHTnuxhJDPvuLjVRDxUmBsOlCVq26F/Yf69ze/sEgZuObOJRF7gQGONNCxQz2VPWYzI4FA==}
+  sst-linux-x86@3.3.18:
+    resolution: {integrity: sha512-tjFQa4cMHztHk47dvMNTEM9vmA0vzJU0O4Va2A/cUCx4lzUvBSxgAgwoH0lwQ4qkKvMuuMi/IxKxG1d6VReFGw==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.3.12:
-    resolution: {integrity: sha512-Jk21Lmj2lZpjaZm+ctKUUcm6fSpvvLLYJgxZfIfQEECu6KjZIT/dZDizp0NxtLsEvgFwYX0972JARe0Zn8o6mw==}
+  sst@3.3.18:
+    resolution: {integrity: sha512-wdKkoOrnfgUEp93QFvNmRfYfvX0FCeQv5r7R6hREO6WpTTdX85BJrShO3JKXd8MndnMfv5OeP+PvfLjE3PB1FQ==}
     hasBin: true
     peerDependencies:
       hono: 4.x
@@ -3804,8 +3804,8 @@ packages:
       '@testing-library/jest-dom':
         optional: true
 
-  vite@5.4.10:
-    resolution: {integrity: sha512-1hvaPshuPUtxeQ0hsVH3Mud0ZanOLwVTneA1EgbAM5LhaZEqyPWGRQ7BtaMvUrTDeEaC8pxtj6a6jku3x4z6SQ==}
+  vite@5.4.11:
+    resolution: {integrity: sha512-c7jFQRklXua0mTzneGW9QVyxFjUgwcihC4bXEtujIo2ouWCe1Ajt/amn2PCxYnhYfd5k09JX3SB7OYWFKYqj8Q==}
     engines: {node: ^18.0.0 || >=20.0.0}
     hasBin: true
     peerDependencies:
@@ -4234,10 +4234,10 @@ snapshots:
     dependencies:
       prismjs: 1.29.0
 
-  '@astrojs/solid-js@4.4.2(@testing-library/jest-dom@5.17.0)(solid-js@1.9.3)(vite@5.4.10(@types/node@22.9.0))':
+  '@astrojs/solid-js@4.4.2(@testing-library/jest-dom@5.17.0)(solid-js@1.9.3)(vite@5.4.11(@types/node@22.9.0))':
     dependencies:
       solid-js: 1.9.3
-      vite-plugin-solid: 2.10.2(@testing-library/jest-dom@5.17.0)(solid-js@1.9.3)(vite@5.4.10(@types/node@22.9.0))
+      vite-plugin-solid: 2.10.2(@testing-library/jest-dom@5.17.0)(solid-js@1.9.3)(vite@5.4.11(@types/node@22.9.0))
     transitivePeerDependencies:
       - '@testing-library/jest-dom'
       - supports-color
@@ -6001,8 +6001,8 @@ snapshots:
       tsconfck: 3.1.4(typescript@5.6.3)
       unist-util-visit: 5.0.0
       vfile: 6.0.3
-      vite: 5.4.10(@types/node@22.9.0)
-      vitefu: 1.0.3(vite@5.4.10(@types/node@22.9.0))
+      vite: 5.4.11(@types/node@22.9.0)
+      vitefu: 1.0.3(vite@5.4.11(@types/node@22.9.0))
       which-pm: 3.0.0
       xxhash-wasm: 1.0.2
       yargs-parser: 21.1.1
@@ -6127,7 +6127,7 @@ snapshots:
 
   browserslist@4.24.2:
     dependencies:
-      caniuse-lite: 1.0.30001679
+      caniuse-lite: 1.0.30001680
       electron-to-chromium: 1.5.55
       node-releases: 2.0.18
       update-browserslist-db: 1.1.1(browserslist@4.24.2)
@@ -6161,7 +6161,7 @@ snapshots:
 
   camelcase@8.0.0: {}
 
-  caniuse-lite@1.0.30001679: {}
+  caniuse-lite@1.0.30001680: {}
 
   ccount@2.0.1: {}
 
@@ -6594,7 +6594,7 @@ snapshots:
       eslint: 8.57.1
       eslint-compat-utils: 0.6.0(eslint@8.57.1)
       globals: 15.12.0
-      postcss: 8.4.47
+      postcss: 8.4.48
       postcss-selector-parser: 7.0.0
     transitivePeerDependencies:
       - supports-color
@@ -8089,7 +8089,7 @@ snapshots:
       cssesc: 3.0.0
       util-deprecate: 1.0.2
 
-  postcss@8.4.47:
+  postcss@8.4.48:
     dependencies:
       nanoid: 3.3.7
       picocolors: 1.1.1
@@ -8542,32 +8542,32 @@ snapshots:
 
   sprintf-js@1.0.3: {}
 
-  sst-darwin-arm64@3.3.12:
+  sst-darwin-arm64@3.3.18:
     optional: true
 
-  sst-darwin-x64@3.3.12:
+  sst-darwin-x64@3.3.18:
     optional: true
 
-  sst-linux-arm64@3.3.12:
+  sst-linux-arm64@3.3.18:
     optional: true
 
-  sst-linux-x64@3.3.12:
+  sst-linux-x64@3.3.18:
     optional: true
 
-  sst-linux-x86@3.3.12:
+  sst-linux-x86@3.3.18:
     optional: true
 
-  sst@3.3.12:
+  sst@3.3.18:
     dependencies:
       aws4fetch: 1.0.20
       jose: 5.2.3
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.3.12
-      sst-darwin-x64: 3.3.12
-      sst-linux-arm64: 3.3.12
-      sst-linux-x64: 3.3.12
-      sst-linux-x86: 3.3.12
+      sst-darwin-arm64: 3.3.18
+      sst-darwin-x64: 3.3.18
+      sst-linux-arm64: 3.3.18
+      sst-linux-x64: 3.3.18
+      sst-linux-x86: 3.3.18
 
   stack-utils@2.0.6:
     dependencies:
@@ -8899,7 +8899,7 @@ snapshots:
       debug: 4.3.7
       pathe: 1.1.2
       picocolors: 1.1.1
-      vite: 5.4.10(@types/node@22.9.0)
+      vite: 5.4.11(@types/node@22.9.0)
     transitivePeerDependencies:
       - '@types/node'
       - less
@@ -8911,7 +8911,7 @@ snapshots:
       - supports-color
       - terser
 
-  vite-plugin-solid@2.10.2(@testing-library/jest-dom@5.17.0)(solid-js@1.9.3)(vite@5.4.10(@types/node@22.9.0)):
+  vite-plugin-solid@2.10.2(@testing-library/jest-dom@5.17.0)(solid-js@1.9.3)(vite@5.4.11(@types/node@22.9.0)):
     dependencies:
       '@babel/core': 7.26.0
       '@types/babel__core': 7.20.5
@@ -8919,29 +8919,29 @@ snapshots:
       merge-anything: 5.1.7
       solid-js: 1.9.3
       solid-refresh: 0.6.3(solid-js@1.9.3)
-      vite: 5.4.10(@types/node@22.9.0)
-      vitefu: 0.2.5(vite@5.4.10(@types/node@22.9.0))
+      vite: 5.4.11(@types/node@22.9.0)
+      vitefu: 0.2.5(vite@5.4.11(@types/node@22.9.0))
     optionalDependencies:
       '@testing-library/jest-dom': 5.17.0
     transitivePeerDependencies:
       - supports-color
 
-  vite@5.4.10(@types/node@22.9.0):
+  vite@5.4.11(@types/node@22.9.0):
     dependencies:
       esbuild: 0.21.5
-      postcss: 8.4.47
+      postcss: 8.4.48
       rollup: 4.25.0
     optionalDependencies:
       '@types/node': 22.9.0
       fsevents: 2.3.3
 
-  vitefu@0.2.5(vite@5.4.10(@types/node@22.9.0)):
+  vitefu@0.2.5(vite@5.4.11(@types/node@22.9.0)):
     optionalDependencies:
-      vite: 5.4.10(@types/node@22.9.0)
+      vite: 5.4.11(@types/node@22.9.0)
 
-  vitefu@1.0.3(vite@5.4.10(@types/node@22.9.0)):
+  vitefu@1.0.3(vite@5.4.11(@types/node@22.9.0)):
     optionalDependencies:
-      vite: 5.4.10(@types/node@22.9.0)
+      vite: 5.4.11(@types/node@22.9.0)
 
   vitest@1.6.0(@types/node@22.9.0)(@vitest/ui@1.6.0)(jsdom@24.1.3):
     dependencies:
@@ -8962,7 +8962,7 @@ snapshots:
       strip-literal: 2.1.0
       tinybench: 2.9.0
       tinypool: 0.8.4
-      vite: 5.4.10(@types/node@22.9.0)
+      vite: 5.4.11(@types/node@22.9.0)
       vite-node: 1.6.0(@types/node@22.9.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
