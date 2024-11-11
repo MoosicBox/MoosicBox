@@ -795,7 +795,7 @@ impl EguiApp {
         vscroll: bool,
     ) {
         for element in &container.elements {
-            self.handle_element_side_effects(element);
+            self.handle_element_side_effects(ui, element, viewport, false);
         }
 
         if let Some(width) = container.calculated_width {
@@ -965,7 +965,69 @@ impl EguiApp {
         }
     }
 
-    fn handle_element_side_effects(&self, element: &Element) -> Option<Handler> {
+    #[allow(clippy::too_many_lines)]
+    fn handle_element_side_effects(
+        &self,
+        ui: &Ui,
+        element: &Element,
+        viewport: Option<&Viewport>,
+        recurse: bool,
+    ) -> Option<Handler> {
+        if let Element::Image {
+            source: Some(source),
+            element,
+        } = element
+        {
+            let listeners: &mut HashMap<_, _> = &mut self.viewport_listeners.write().unwrap();
+
+            let pos = ui.cursor();
+            let listener = listeners.entry(element.id).or_insert_with(|| {
+                ViewportListener::new(
+                    viewport.cloned(),
+                    0.0,
+                    0.0,
+                    element.calculated_width.unwrap(),
+                    element.calculated_height.unwrap(),
+                )
+            });
+            listener.viewport = viewport.cloned();
+            listener.pos.x = pos.left() + viewport.map_or(0.0, |x| x.viewport.x);
+            listener.pos.y = pos.top() + viewport.map_or(0.0, |x| x.viewport.y);
+
+            let (_, (dist, prev_dist)) = listener.check();
+
+            if !prev_dist.is_some_and(|x| x < 1000.0) && dist < 1000.0 {
+                let contains_image = {
+                    matches!(
+                        self.images.read().unwrap().get(source),
+                        Some(AppImage::Bytes(_))
+                    )
+                };
+                if !contains_image {
+                    let loading_image = {
+                        matches!(
+                            self.images.read().unwrap().get(source),
+                            Some(AppImage::Loading)
+                        )
+                    };
+
+                    if !loading_image {
+                        log::debug!("render_element: triggering LoadImage for source={source}");
+                        self.images
+                            .write()
+                            .unwrap()
+                            .insert(source.clone(), AppImage::Loading);
+
+                        if let Err(e) = self.event.send(AppEvent::LoadImage {
+                            source: source.to_string(),
+                        }) {
+                            log::error!("Failed to send LoadImage event: {e:?}");
+                        }
+                    }
+                }
+            }
+        }
+
         let mut handler: Option<Handler> = None;
         if let Some(container) = element.container_element() {
             if let Some(route) = &container.route {
@@ -1030,6 +1092,13 @@ impl EguiApp {
                 }
             }
         }
+        if recurse {
+            if let Some(container) = element.container_element() {
+                for element in &container.elements {
+                    self.handle_element_side_effects(ui, element, viewport, true);
+                }
+            }
+        }
         handler
     }
 
@@ -1047,7 +1116,7 @@ impl EguiApp {
     ) {
         log::trace!("render_element: rect={rect:?}");
 
-        let side_effect_handler = self.handle_element_side_effects(element);
+        let side_effect_handler = self.handle_element_side_effects(ui, element, viewport, false);
 
         if let Some(container) = element.container_element() {
             if container.is_hidden() {
@@ -1074,6 +1143,9 @@ impl EguiApp {
                         || pos_y - offset_y >= rect.height() + 1.0
                     {
                         ui.allocate_space(egui::vec2(width, height));
+                        for element in &container.elements {
+                            self.handle_element_side_effects(ui, element, viewport, true);
+                        }
                         return;
                     }
                 }
@@ -1106,78 +1178,34 @@ impl EguiApp {
             }
             Element::Raw { value } => Some(ui.label(value)),
             Element::Image { source, element } => source.clone().map(|source| {
-                let listeners: &mut HashMap<_, _> = &mut self.viewport_listeners.write().unwrap();
-
-                let pos = ui.cursor();
-                let listener = listeners.entry(element.id).or_insert_with(|| {
-                    ViewportListener::new(
-                        viewport.cloned(),
-                        0.0,
-                        0.0,
-                        element.calculated_width.unwrap(),
-                        element.calculated_height.unwrap(),
-                    )
-                });
-                listener.viewport = viewport.cloned();
-                listener.pos.x = pos.left() + viewport.map_or(0.0, |x| x.viewport.x);
-                listener.pos.y = pos.top() + viewport.map_or(0.0, |x| x.viewport.y);
-
-                let (_, (dist, prev_dist)) = listener.check();
-
                 egui::Frame::none()
                     .show(ui, |ui| {
                         ui.set_width(element.calculated_width.unwrap());
                         ui.set_height(element.calculated_height.unwrap());
 
-                        if !prev_dist.is_some_and(|x| x < 1000.0) && dist < 1000.0 {
-                            let contains_image = {
-                                matches!(
-                                    self.images.read().unwrap().get(&source),
-                                    Some(AppImage::Bytes(_))
-                                )
+                        let contains_image = {
+                            matches!(
+                                self.images.read().unwrap().get(&source),
+                                Some(AppImage::Bytes(_))
+                            )
+                        };
+                        if contains_image {
+                            log::trace!(
+                                "render_element: showing image for source={source} ({}, {})",
+                                element.calculated_width.unwrap(),
+                                element.calculated_height.unwrap(),
+                            );
+                            let Some(AppImage::Bytes(bytes)) =
+                                self.images.read().unwrap().get(&source).cloned()
+                            else {
+                                unreachable!()
                             };
-                            if contains_image {
-                                log::trace!(
-                                    "render_element: showing image for source={source} ({}, {})",
-                                    element.calculated_width.unwrap(),
-                                    element.calculated_height.unwrap(),
-                                );
-                                let Some(AppImage::Bytes(bytes)) =
-                                    self.images.read().unwrap().get(&source).cloned()
-                                else {
-                                    unreachable!()
-                                };
-                                let image = egui::Image::from_bytes(
-                                    source,
-                                    egui::load::Bytes::Shared(bytes),
-                                )
-                                .max_width(element.calculated_width.unwrap())
-                                .max_height(element.calculated_height.unwrap());
+                            let image =
+                                egui::Image::from_bytes(source, egui::load::Bytes::Shared(bytes))
+                                    .max_width(element.calculated_width.unwrap())
+                                    .max_height(element.calculated_height.unwrap());
 
-                                image.ui(ui);
-                            } else {
-                                let loading_image = {
-                                    matches!(
-                                        self.images.read().unwrap().get(&source),
-                                        Some(AppImage::Loading)
-                                    )
-                                };
-
-                                if !loading_image {
-                                    log::debug!(
-                                        "render_element: triggering LoadImage for source={source}"
-                                    );
-                                    self.images
-                                        .write()
-                                        .unwrap()
-                                        .insert(source.clone(), AppImage::Loading);
-
-                                    if let Err(e) = self.event.send(AppEvent::LoadImage { source })
-                                    {
-                                        log::error!("Failed to send LoadImage event: {e:?}");
-                                    }
-                                }
-                            }
+                            image.ui(ui);
                         }
                     })
                     .response
