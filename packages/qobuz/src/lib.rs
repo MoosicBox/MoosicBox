@@ -7,6 +7,7 @@ pub mod db;
 
 pub mod models;
 
+use itertools::Itertools;
 use models::{QobuzAlbum, QobuzArtist, QobuzRelease, QobuzSearchResults, QobuzTrack};
 #[cfg(feature = "db")]
 use moosicbox_core::sqlite::db::DbError;
@@ -2188,35 +2189,45 @@ impl MusicApi for QobuzMusicApi {
         };
 
         let track_ids = &track_ids[offset..limit];
+        let mut all_tracks = vec![];
 
-        let mut tracks = vec![];
+        let chunks = track_ids
+            .iter()
+            .chunks(10)
+            .into_iter()
+            .map(|x| x.into_iter().collect_vec())
+            .collect_vec();
 
-        for track_id in track_ids {
-            tracks.push(track(
-                #[cfg(feature = "db")]
-                &self.db,
-                track_id,
-                None,
-                None,
-            ));
-        }
+        for chunk in chunks {
+            let mut tracks = vec![];
 
-        let tracks = futures::future::join_all(tracks).await;
-        let tracks = tracks.into_iter().collect::<Result<Vec<_>, _>>();
-
-        let tracks = match tracks {
-            Ok(tracks) => tracks,
-            Err(e) => {
-                moosicbox_assert::die_or_err!(
-                    TracksError::Other(Box::new(e)),
-                    "Failed to fetch track: {e:?}",
-                );
+            for track_id in chunk {
+                tracks.push(track(
+                    #[cfg(feature = "db")]
+                    &self.db,
+                    track_id,
+                    None,
+                    None,
+                ));
             }
-        };
+
+            let tracks = futures::future::join_all(tracks).await;
+            let tracks = tracks.into_iter().collect::<Result<Vec<_>, _>>();
+            let tracks = match tracks {
+                Ok(tracks) => tracks,
+                Err(e) => {
+                    moosicbox_assert::die_or_err!(
+                        TracksError::Other(Box::new(e)),
+                        "Failed to fetch track: {e:?}",
+                    );
+                }
+            };
+            all_tracks.extend(tracks);
+        }
 
         Ok(PagingResponse {
             page: Page::WithTotal {
-                items: tracks.into_iter().map(Into::into).collect(),
+                items: all_tracks.into_iter().map(Into::into).collect(),
                 offset: offset as u32,
                 limit: limit as u32,
                 total: track_ids.len() as u32,

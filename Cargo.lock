@@ -6712,6 +6712,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "futures",
+ "itertools 0.13.0",
  "log",
  "md5",
  "moosicbox_assert",

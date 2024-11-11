@@ -38,6 +38,7 @@ async-recursion = { workspace = true }
 async-trait     = { workspace = true }
 base64          = { workspace = true }
 futures         = { workspace = true }
+itertools       = { workspace = true }
 log             = { workspace = true }
 md5             = { workspace = true }
 regex           = { workspace = true }
