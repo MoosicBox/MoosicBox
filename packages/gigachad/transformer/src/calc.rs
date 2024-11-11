@@ -1302,6 +1302,30 @@ impl ContainerElement {
     }
 
     #[must_use]
+    pub fn horizontal_margin(&self) -> Option<f32> {
+        let mut margin = None;
+        if let Some(margin_left) = self.margin_left {
+            margin = Some(margin_left);
+        }
+        if let Some(margin_right) = self.margin_right {
+            margin.replace(margin.map_or(margin_right, |x| x + margin_right));
+        }
+        margin
+    }
+
+    #[must_use]
+    pub fn vertical_margin(&self) -> Option<f32> {
+        let mut margin = None;
+        if let Some(margin_top) = self.margin_top {
+            margin = Some(margin_top);
+        }
+        if let Some(margin_bottom) = self.margin_bottom {
+            margin.replace(margin.map_or(margin_bottom, |x| x + margin_bottom));
+        }
+        margin
+    }
+
+    #[must_use]
     pub fn horizontal_padding(&self) -> Option<f32> {
         let mut padding = None;
         if let Some(padding_left) = self.padding_left {
@@ -1386,6 +1410,34 @@ impl ContainerElement {
 
             self.vertical_borders().map_or(x, |borders| {
                 let x = x - borders;
+                if x < 0.0 {
+                    0.0
+                } else {
+                    x
+                }
+            })
+        })
+    }
+
+    #[must_use]
+    pub fn calculated_width_plus_margin(&self) -> Option<f32> {
+        self.calculated_width.map(|x| {
+            self.horizontal_margin().map_or(x, |margin| {
+                let x = x + margin;
+                if x < 0.0 {
+                    0.0
+                } else {
+                    x
+                }
+            })
+        })
+    }
+
+    #[must_use]
+    pub fn calculated_height_plus_margin(&self) -> Option<f32> {
+        self.calculated_height.map(|x| {
+            self.vertical_margin().map_or(x, |margin| {
+                let x = x + margin;
                 if x < 0.0 {
                     0.0
                 } else {
