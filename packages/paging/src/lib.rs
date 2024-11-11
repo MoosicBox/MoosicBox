@@ -222,6 +222,37 @@ impl<T> Page<T> {
             },
         }
     }
+
+    pub fn into<TU>(self) -> Page<TU>
+    where
+        T: 'static,
+        T: Into<TU>,
+    {
+        match self {
+            Page::WithTotal {
+                items,
+                offset,
+                limit,
+                total,
+            } => Page::WithTotal {
+                items: items.into_iter().map(Into::into).collect::<Vec<_>>(),
+                offset,
+                limit,
+                total,
+            },
+            Page::WithHasMore {
+                items,
+                offset,
+                limit,
+                has_more,
+            } => Page::WithHasMore {
+                items: items.into_iter().map(Into::into).collect::<Vec<_>>(),
+                offset,
+                limit,
+                has_more,
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -437,6 +468,88 @@ impl<T, E> PagingResponse<T, E> {
                             |x| x.map_err(f)
                         })
                         .map_err(f)
+                };
+
+                Box::pin(closure)
+            }))),
+        }
+    }
+
+    pub fn inner_into<TU: 'static, EU: 'static>(self) -> PagingResponse<TU, EU>
+    where
+        T: 'static,
+        E: 'static,
+        T: Into<TU>,
+        E: Into<EU>,
+    {
+        let page = self.page.into();
+
+        let fetch = self.fetch;
+
+        PagingResponse {
+            page,
+            fetch: Arc::new(Mutex::new(Box::new(move |offset, count| {
+                let fetch = fetch.clone();
+
+                let closure = async move {
+                    let mut fetch = fetch.lock().await;
+                    fetch(offset, count)
+                        .await
+                        .map(|x| x.map(Into::into).map_err(Into::into))
+                        .map_err(Into::into)
+                };
+
+                Box::pin(closure)
+            }))),
+        }
+    }
+
+    pub fn ok_into<TU: 'static>(self) -> PagingResponse<TU, E>
+    where
+        T: 'static,
+        E: 'static,
+        T: Into<TU>,
+    {
+        let page = self.page.into();
+
+        let fetch = self.fetch;
+
+        PagingResponse {
+            page,
+            fetch: Arc::new(Mutex::new(Box::new(move |offset, count| {
+                let fetch = fetch.clone();
+
+                let closure = async move {
+                    let mut fetch = fetch.lock().await;
+                    fetch(offset, count).await.map(|x| x.map(Into::into))
+                };
+
+                Box::pin(closure)
+            }))),
+        }
+    }
+
+    pub fn err_into<EU: 'static>(self) -> PagingResponse<T, EU>
+    where
+        T: 'static,
+        E: 'static,
+        E: Into<EU>,
+    {
+        let page = self.page;
+
+        let fetch = self.fetch;
+
+        PagingResponse {
+            page,
+            fetch: Arc::new(Mutex::new(Box::new(move |offset, count| {
+                let fetch = fetch.clone();
+
+                let closure = async move {
+                    let mut fetch = fetch.lock().await;
+                    fetch(offset, count)
+                        .await
+                        .map(|x| x.map_err(Into::into))
+                        .map_err(Into::into)
                 };
 
                 Box::pin(closure)
