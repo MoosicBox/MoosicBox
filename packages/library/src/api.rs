@@ -314,7 +314,7 @@ pub async fn favorite_albums_endpoint(
             },
         )
         .await?
-        .map(Into::into)
+        .ok_into()
         .into(),
     ))
 }

@@ -1006,8 +1006,7 @@ impl MusicApi for LibraryMusicApi {
             order_direction.map(Into::into),
         )
         .await?
-        .map(Into::into)
-        .map_err(Into::into))
+        .inner_into())
     }
 
     async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, ArtistError> {
@@ -1039,11 +1038,7 @@ impl MusicApi for LibraryMusicApi {
     }
 
     async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
-        Ok(self
-            .library_albums(request)
-            .await?
-            .map(Into::into)
-            .map_err(Into::into))
+        Ok(self.library_albums(request).await?.inner_into())
     }
 
     async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError> {
@@ -1071,8 +1066,7 @@ impl MusicApi for LibraryMusicApi {
                 Some(album_type.into()),
             )
             .await?
-            .map(Into::into)
-            .map_err(Into::into)
+            .inner_into()
         } else {
             let pages = futures::future::join_all(
                 vec![
@@ -1119,8 +1113,7 @@ impl MusicApi for LibraryMusicApi {
                     })
                 }))),
             }
-            .map(|item| item.into())
-            .map_err(Into::into)
+            .inner_into()
         })
     }
 
@@ -1161,8 +1154,7 @@ impl MusicApi for LibraryMusicApi {
             order_direction.map(Into::into),
         )
         .await?
-        .map(Into::into)
-        .map_err(Into::into))
+        .inner_into())
     }
 
     async fn album_tracks(
@@ -1176,8 +1168,7 @@ impl MusicApi for LibraryMusicApi {
         Ok(self
             .library_album_tracks(album_id, offset, limit, order, order_direction)
             .await?
-            .map(Into::into)
-            .map_err(Into::into))
+            .inner_into())
     }
 
     async fn track(&self, track_id: &Id) -> Result<Option<Track>, TrackError> {

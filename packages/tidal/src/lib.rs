@@ -2276,8 +2276,7 @@ impl MusicApi for TidalMusicApi {
             None,
         )
         .await?
-        .map(Into::into)
-        .map_err(Into::into))
+        .inner_into())
     }
 
     async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, ArtistError> {
@@ -2374,8 +2373,7 @@ impl MusicApi for TidalMusicApi {
             None,
         )
         .await?
-        .map(Into::into)
-        .map_err(Into::into))
+        .inner_into())
     }
 
     async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError> {
@@ -2420,8 +2418,7 @@ impl MusicApi for TidalMusicApi {
                 None,
             )
             .await?
-            .map(Into::into)
-            .map_err(Into::into)
+            .inner_into()
         } else {
             let pages = futures::future::join_all(
                 vec![
@@ -2487,8 +2484,7 @@ impl MusicApi for TidalMusicApi {
                     })
                 }))),
             }
-            .map(Into::into)
-            .map_err(Into::into)
+            .inner_into()
         })
     }
 
@@ -2568,8 +2564,7 @@ impl MusicApi for TidalMusicApi {
             None,
         )
         .await?
-        .map(Into::into)
-        .map_err(Into::into))
+        .inner_into())
     }
 
     async fn album_tracks(
@@ -2592,8 +2587,7 @@ impl MusicApi for TidalMusicApi {
             None,
         )
         .await?
-        .map(Into::into)
-        .map_err(Into::into))
+        .inner_into())
     }
 
     async fn track(&self, track_id: &Id) -> Result<Option<Track>, TrackError> {
