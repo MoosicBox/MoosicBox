@@ -7,7 +7,9 @@ use moosicbox_core::sqlite::{
 use thiserror::Error;
 use tokio::task::JoinError;
 
-use crate::{DataValue, PopulateIndexError, RecreateIndexError, GLOBAL_SEARCH_INDEX_PATH};
+use crate::{
+    DataValue, PopulateIndexError, RecreateIndexError, GLOBAL_SEARCH_INDEX_PATH, SEMAPHORE,
+};
 
 pub trait AsDataValues {
     fn as_data_values<'a>(&self) -> Vec<(&'a str, DataValue)>;
@@ -178,10 +180,12 @@ pub enum ReindexFromDbError {
 }
 
 pub async fn recreate_global_search_index() -> Result<(), RecreateIndexError> {
+    let permit = SEMAPHORE.acquire().await;
     moosicbox_task::spawn_blocking("recreate_global_search_index", || {
         let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
-        crate::recreate_global_search_index(path)
+        crate::recreate_global_search_index_sync(path)
     })
     .await??;
+    drop(permit);
     Ok(())
 }

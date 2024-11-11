@@ -11,6 +11,7 @@ use tantivy::query_grammar::Occur;
 use tantivy::{schema::*, Directory, IndexWriter};
 use tantivy::{Index, IndexReader, ReloadPolicy};
 use thiserror::Error;
+use tokio::sync::Semaphore;
 use tokio::task::JoinError;
 
 #[cfg(feature = "api")]
@@ -19,6 +20,8 @@ pub mod api;
 pub mod data;
 
 pub mod models;
+
+static SEMAPHORE: LazyLock<Semaphore> = LazyLock::new(|| Semaphore::new(1));
 
 #[cfg(test)]
 static TESTS_DIR_PATH: LazyLock<PathBuf> = LazyLock::new(moosicbox_config::get_tests_dir_path);
@@ -221,7 +224,7 @@ pub enum RecreateIndexError {
     Join(#[from] JoinError),
 }
 
-fn recreate_global_search_index(path: &Path) -> Result<(), RecreateIndexError> {
+fn recreate_global_search_index_sync(path: &Path) -> Result<(), RecreateIndexError> {
     let index = create_global_search_index(path, true)?;
     let reader = get_index_reader(&index)?;
 
@@ -256,6 +259,8 @@ pub enum PopulateIndexError {
     GetGlobalSearchReader(#[from] GetGlobalSearchReaderError),
     #[error(transparent)]
     Tantivy(#[from] tantivy::error::TantivyError),
+    #[error(transparent)]
+    Join(#[from] JoinError),
 }
 
 #[derive(Debug, Clone)]
@@ -265,7 +270,40 @@ pub enum DataValue {
     Number(u64),
 }
 
-pub fn populate_global_search_index(
+pub async fn populate_global_search_index(
+    data: &[Vec<(&str, DataValue)>],
+    delete: bool,
+) -> Result<(), PopulateIndexError> {
+    let permit = SEMAPHORE.acquire().await;
+    moosicbox_task::spawn_blocking("populate_global_search_index", {
+        let data = data
+            .iter()
+            .map(|x| {
+                x.iter()
+                    .map(|x| (x.0.to_string(), x.1.clone()))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        move || {
+            populate_global_search_index_sync(
+                &data
+                    .iter()
+                    .map(|x| {
+                        x.iter()
+                            .map(|x| (x.0.as_str(), x.1.clone()))
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>(),
+                delete,
+            )
+        }
+    })
+    .await??;
+    drop(permit);
+    Ok(())
+}
+
+pub fn populate_global_search_index_sync(
     data: &[Vec<(&str, DataValue)>],
     delete: bool,
 ) -> Result<(), PopulateIndexError> {
@@ -483,12 +521,51 @@ pub enum ReindexError {
     RecreateIndex(#[from] RecreateIndexError),
     #[error(transparent)]
     PopulateIndex(#[from] PopulateIndexError),
+    #[error(transparent)]
+    Join(#[from] JoinError),
 }
 
-pub fn reindex_global_search_index(data: &[Vec<(&str, DataValue)>]) -> Result<(), ReindexError> {
+pub async fn reindex_global_search_index(
+    data: &[Vec<(&str, DataValue)>],
+) -> Result<(), ReindexError> {
+    let permit = SEMAPHORE.acquire().await;
+    moosicbox_task::spawn_blocking("reindex_global_search_index", {
+        let data = data
+            .iter()
+            .map(|x| {
+                x.iter()
+                    .map(|x| (x.0.to_string(), x.1.clone()))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        move || {
+            let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
+            recreate_global_search_index_sync(path)?;
+            populate_global_search_index_sync(
+                &data
+                    .iter()
+                    .map(|x| {
+                        x.iter()
+                            .map(|x| (x.0.as_str(), x.1.clone()))
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>(),
+                false,
+            )?;
+            Ok::<_, ReindexError>(())
+        }
+    })
+    .await??;
+    drop(permit);
+
+    Ok(())
+}
+
+#[cfg(test)]
+fn reindex_global_search_index_sync(data: &[Vec<(&str, DataValue)>]) -> Result<(), ReindexError> {
     let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
-    recreate_global_search_index(path)?;
-    populate_global_search_index(data, false)?;
+    recreate_global_search_index_sync(path)?;
+    populate_global_search_index_sync(data, false)?;
 
     Ok(())
 }
@@ -892,7 +969,7 @@ mod tests {
     }
 
     fn before_each() {
-        recreate_global_search_index(&temp_index_path())
+        recreate_global_search_index_sync(&temp_index_path())
             .expect("Failed to recreate_global_search_index");
     }
 
@@ -1064,7 +1141,7 @@ mod tests {
     fn test_global_search() {
         before_each();
 
-        crate::populate_global_search_index(&TEST_DATA, true).unwrap();
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
         let results = crate::search_global_search_index("in procession", 0, 10).unwrap();
 
         assert_eq!(results.len(), 4);
@@ -1084,7 +1161,7 @@ mod tests {
     fn test_global_search_with_offset() {
         before_each();
 
-        crate::populate_global_search_index(&TEST_DATA, true).unwrap();
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
         let results = crate::search_global_search_index("in procession", 1, 10).unwrap();
 
         assert_eq!(results.len(), 3);
@@ -1103,7 +1180,7 @@ mod tests {
     fn test_global_search_with_limit() {
         before_each();
 
-        crate::populate_global_search_index(&TEST_DATA, true).unwrap();
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
         let results = crate::search_global_search_index("in procession", 0, 2).unwrap();
 
         assert_eq!(results.len(), 2);
@@ -1118,7 +1195,7 @@ mod tests {
     fn test_global_search_with_limit_and_offset() {
         before_each();
 
-        crate::populate_global_search_index(&TEST_DATA, true).unwrap();
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
         let results = crate::search_global_search_index("in procession", 1, 1).unwrap();
 
         assert_eq!(results.len(), 1);
@@ -1133,7 +1210,7 @@ mod tests {
     fn test_global_search_reindex() {
         before_each();
 
-        crate::populate_global_search_index(&TEST_DATA, true).unwrap();
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
         assert_eq!(
             crate::search_global_search_index("in procession", 0, 10)
                 .unwrap()
@@ -1141,7 +1218,7 @@ mod tests {
             4
         );
 
-        crate::recreate_global_search_index(&temp_index_path())
+        crate::recreate_global_search_index_sync(&temp_index_path())
             .expect("Failed to recreate_global_search_index");
         assert_eq!(
             crate::search_global_search_index("in procession", 0, 10)
@@ -1150,7 +1227,7 @@ mod tests {
             0
         );
 
-        crate::populate_global_search_index(&TEST_DATA, true).unwrap();
+        crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
         assert_eq!(
             crate::search_global_search_index("in procession", 0, 10)
                 .unwrap()
@@ -1158,7 +1235,7 @@ mod tests {
             4
         );
 
-        crate::reindex_global_search_index(&TEST_DATA)
+        crate::reindex_global_search_index_sync(&TEST_DATA)
             .expect("Failed to reindex_global_search_index");
         assert_eq!(
             crate::search_global_search_index("in procession", 0, 10)

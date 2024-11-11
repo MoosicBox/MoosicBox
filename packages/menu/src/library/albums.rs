@@ -319,7 +319,8 @@ pub async fn add_album(
             .map(|artist: Artist| artist.as_data_values())
             .collect::<Vec<_>>(),
         false,
-    )?;
+    )
+    .await?;
 
     let mut albums = vec![];
 
@@ -339,7 +340,8 @@ pub async fn add_album(
             .map(|album: Album| album.as_data_values())
             .collect::<Vec<_>>(),
         false,
-    )?;
+    )
+    .await?;
 
     let tracks = library_api
         .tracks(
@@ -365,7 +367,8 @@ pub async fn add_album(
             .map(|track| track.as_data_values())
             .collect::<Vec<_>>(),
         false,
-    )?;
+    )
+    .await?;
 
     if let Some(album) = albums.into_iter().next() {
         return Ok(album);

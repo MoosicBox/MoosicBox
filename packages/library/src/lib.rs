@@ -1334,7 +1334,7 @@ pub async fn reindex_global_search_index(db: &LibraryDatabase) -> Result<(), Rei
         .map(|artist: Artist| artist.as_data_values())
         .collect::<Vec<_>>();
 
-    populate_global_search_index(&artists, false)?;
+    populate_global_search_index(&artists, false).await?;
 
     let albums = db::get_albums(db)
         .await?
@@ -1343,7 +1343,7 @@ pub async fn reindex_global_search_index(db: &LibraryDatabase) -> Result<(), Rei
         .map(|album: Album| album.as_data_values())
         .collect::<Vec<_>>();
 
-    populate_global_search_index(&albums, false)?;
+    populate_global_search_index(&albums, false).await?;
 
     let tracks = db::get_tracks(db, None)
         .await?
@@ -1352,7 +1352,7 @@ pub async fn reindex_global_search_index(db: &LibraryDatabase) -> Result<(), Rei
         .map(|track: Track| track.as_data_values())
         .collect::<Vec<_>>();
 
-    populate_global_search_index(&tracks, false)?;
+    populate_global_search_index(&tracks, false).await?;
 
     let reindex_end = std::time::SystemTime::now();
     log::info!(
