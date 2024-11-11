@@ -182,6 +182,7 @@ fn scan_track(
             bit_depth,
             channels,
         ) = moosicbox_task::spawn_blocking("scan: scan_track", move || {
+            log::debug!("scan_track: path={path:?}");
             let extension = path
                 .extension()
                 .and_then(std::ffi::OsStr::to_str)
