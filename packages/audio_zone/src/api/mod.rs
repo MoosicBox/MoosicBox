@@ -59,6 +59,7 @@ pub struct GetAudioZones {
         path = "",
         description = "Get a list of the enabled audio zones",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
         ),
@@ -109,6 +110,7 @@ pub struct GetAudioZoneWithSessions {
         path = "/with-session",
         description = "Get a list of the enabled audio zones with their corresponding session",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
         ),
@@ -161,6 +163,7 @@ pub struct CreateAudioZoneQuery {
         path = "",
         description = "Create a new audio zone",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("name" = String, Query, description = "Name of the audio zone to create"),
         ),
         responses(
@@ -201,6 +204,7 @@ pub struct DeleteAudioZoneQuery {
         path = "",
         description = "Delete a new audio zone",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("name" = String, Query, description = "Name of the audio zone to delete"),
         ),
         responses(
@@ -237,7 +241,9 @@ pub struct UpdateAudioZoneQuery {}
         path = "",
         request_body = UpdateAudioZone,
         description = "Update an existing audio zone",
-        params(),
+        params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
+        ),
         responses(
             (
                 status = 200,

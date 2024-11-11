@@ -106,6 +106,7 @@ pub struct QobuzUserLoginQuery {
         path = "/auth/login",
         description = "Login to Qobuz",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("username" = String, Query, description = "Qobuz login username"),
             ("password" = String, Query, description = "Qobuz login password"),
         ),
@@ -307,6 +308,7 @@ pub struct QobuzArtistQuery {
         path = "/artists",
         description = "Get Qobuz artist by ID",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("artistId" = u64, Query, description = "Qobuz artist ID to fetch"),
         ),
         responses(
@@ -360,6 +362,7 @@ pub struct QobuzFavoriteArtistsQuery {
         path = "/favorites/artists",
         description = "Get Qobuz favorited artists",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
         ),
@@ -416,6 +419,7 @@ pub struct QobuzAlbumQuery {
         path = "/albums",
         description = "Get Qobuz album by ID",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = String, Query, description = "Qobuz album ID to fetch"),
         ),
         responses(
@@ -669,6 +673,7 @@ pub struct QobuzAlbumTracksQuery {
         path = "/albums/tracks",
         description = "Get Qobuz tracks for the specified album ID",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = u64, Query, description = "Qobuz album ID to fetch tracks for"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
@@ -781,6 +786,7 @@ pub struct QobuzFavoriteTracksQuery {
         path = "/favorites/tracks",
         description = "Get Qobuz favorited tracks",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
         ),
@@ -838,6 +844,7 @@ pub struct QobuzTrackFileUrlQuery {
         path = "/track/url",
         description = "Get Qobuz track file stream URL",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("audioQuality" = QobuzAudioQuality, Query, description = "Audio quality to fetch the file stream for"),
             ("trackId" = u64, Query, description = "Qobuz track ID to fetch track stream URL for"),
         ),

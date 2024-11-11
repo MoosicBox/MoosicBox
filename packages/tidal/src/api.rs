@@ -233,6 +233,7 @@ pub struct TidalDeviceAuthorizationQuery {
         path = "/auth/device-authorization",
         description = "Begin the authorization process for Tidal",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("clientId" = String, Query, description = "Tidal client ID to use"),
             ("open" = Option<bool>, Query, description = "Open the authorization page in a browser"),
         ),
@@ -278,6 +279,7 @@ pub struct TidalDeviceAuthorizationTokenQuery {
         path = "/auth/device-authorization/token",
         description = "Finish the authorization process for Tidal",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("clientId" = String, Query, description = "Tidal client ID to use"),
             ("clientSecret" = String, Query, description = "Tidal client secret to use"),
             ("deviceCode" = String, Query, description = "Tidal device code to use"),
@@ -333,6 +335,7 @@ pub struct TidalTrackFileUrlQuery {
         path = "/track/url",
         description = "Get Tidal track file stream URL",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("audioQuality" = TidalAudioQuality, Query, description = "Audio quality to fetch the file stream for"),
             ("trackId" = u64, Query, description = "Tidal track ID to fetch track stream URL for"),
         ),
@@ -386,6 +389,7 @@ pub struct TidalTrackPlaybackInfoQuery {
         path = "/track/playback-info",
         description = "Get Tidal track metadata info",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("audioQuality" = TidalAudioQuality, Query, description = "Audio quality to fetch the track metadata for"),
             ("trackId" = u64, Query, description = "Tidal track ID to fetch track metadata for"),
         ),
@@ -445,6 +449,7 @@ pub struct TidalFavoriteArtistsQuery {
         path = "/favorites/artists",
         description = "Get Tidal favorited artists",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
             ("order" = Option<TidalArtistOrder>, Query, description = "Sort property to sort the artists by"),
@@ -515,6 +520,7 @@ pub struct TidalAddFavoriteArtistsQuery {
         path = "/favorites/artists",
         description = "Favorite a Tidal artist",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("artistId" = u64, Query, description = "Tidal artist ID to favorite"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
@@ -579,6 +585,7 @@ pub struct TidalRemoveFavoriteArtistsQuery {
         path = "/favorites/artists",
         description = "Remove Tidal artist from favorites",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("artistId" = u64, Query, description = "Tidal artist ID to remove from favorites"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
@@ -646,6 +653,7 @@ pub struct TidalFavoriteAlbumsQuery {
         path = "/favorites/albums",
         description = "Get Tidal favorited albums",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
             ("order" = Option<TidalAlbumOrder>, Query, description = "Sort property to sort the albums by"),
@@ -716,6 +724,7 @@ pub struct TidalAddFavoriteAlbumsQuery {
         path = "/favorites/albums",
         description = "Favorite a Tidal album",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = u64, Query, description = "Tidal album ID to favorite"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
@@ -780,6 +789,7 @@ pub struct TidalRemoveFavoriteAlbumsQuery {
         path = "/favorites/albums",
         description = "Remove Tidal album from favorites",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = u64, Query, description = "Tidal album ID to remove from favorites"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
@@ -844,6 +854,7 @@ pub struct TidalAddFavoriteTracksQuery {
         path = "/favorites/tracks",
         description = "Favorite a Tidal track",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("trackId" = u64, Query, description = "Tidal track ID to favorite"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
@@ -908,6 +919,7 @@ pub struct TidalRemoveFavoriteTracksQuery {
         path = "/favorites/tracks",
         description = "Remove Tidal track from favorites",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("trackId" = u64, Query, description = "Tidal track ID to remove from favorites"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
@@ -975,6 +987,7 @@ pub struct TidalFavoriteTracksQuery {
         path = "/favorites/tracks",
         description = "Get Tidal favorited tracks",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
             ("order" = Option<TidalTrackOrder>, Query, description = "Sort property to sort the tracks by"),
@@ -1213,6 +1226,7 @@ pub struct TidalAlbumQuery {
         path = "/albums",
         description = "Get Tidal album for the specified ID",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = u64, Query, description = "Tidal album ID to fetch"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
@@ -1272,6 +1286,7 @@ pub struct TidalArtistQuery {
         path = "/artists",
         description = "Get Tidal artist for the specified ID",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("artistId" = u64, Query, description = "Tidal artist ID to fetch"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
@@ -1331,6 +1346,7 @@ pub struct TidalTrackQuery {
         path = "/tracks",
         description = "Get Tidal track for the specified ID",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("trackId" = u64, Query, description = "Tidal track ID to fetch"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),

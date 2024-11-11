@@ -151,6 +151,7 @@ pub struct DownloadQuery {
         path = "/download",
         description = "Queue the specified tracks or albums to be downloaded",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("locationId" = Option<u64>, Query, description = "The download location to save the files to"),
             ("trackId" = Option<String>, Query, description = "A trackId to download"),
             ("trackIds" = Option<String>, Query, description = "A comma-separated list of trackIds to download"),
@@ -218,6 +219,7 @@ pub struct RetryDownloadQuery {
         path = "/retry-download",
         description = "Retry a specific download task",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("taskId" = u64, Query, description = "The task ID to retry"),
         ),
         responses(
@@ -266,6 +268,7 @@ pub struct GetDownloadTasks {
         path = "/download-tasks",
         description = "Get a list of the current and historical download tasks",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
         ),
@@ -339,6 +342,7 @@ pub struct GetDownloadLocations {
         path = "/download-locations",
         description = "Get a list of the download locations",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
         ),
@@ -390,6 +394,7 @@ pub struct AddDownloadLocation {
         path = "/download-locations",
         description = "Add a download location",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("path" = String, Query, description = "The download location path"),
         ),
         responses(

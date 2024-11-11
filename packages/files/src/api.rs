@@ -113,6 +113,7 @@ pub struct GetTrackVisualizationQuery {
         path = "/track/visualization",
         description = "Get the track visualization data points",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("trackId" = u64, Query,
                 description = "The track ID"),
             ("max" = Option<u16>, Query,
@@ -171,6 +172,7 @@ pub struct GetSilenceQuery {
         path = "/silence",
         description = "Get silent audio for the specified duration",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("duration" = Option<u64>, Query, description = "Duration in seconds to return silent audio for"),
             ("format" = Option<AudioFormat>, Query, description = "The audio format to return"),
         ),
@@ -263,6 +265,7 @@ pub struct GetTrackQuery {
         path = "/track",
         description = "Get the track file stream audio bytes with a chunked encoding",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("trackId" = u64, Query, description = "The track ID"),
             ("format" = Option<AudioFormat>, Query, description = "The track format to return"),
             ("quality" = Option<TrackAudioQuality>, Query, description = "The quality to return"),
@@ -456,6 +459,7 @@ pub struct GetTrackInfoQuery {
         path = "/track/info",
         description = "Get the track's metadata",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("trackId" = Id, Query, description = "The track ID"),
             ("source" = Option<ApiSource>, Query, description = "The track API source"),
         ),
@@ -499,6 +503,7 @@ pub struct GetTracksInfoQuery {
         path = "/tracks/info",
         description = "Get the track's info",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("trackIds" = String, Query, description = "The comma-separated list of track IDs"),
             ("source" = Option<ApiSource>, Query, description = "The tracks' API source"),
         ),
@@ -556,6 +561,7 @@ pub struct GetTrackUrlQuery {
         path = "/tracks/url",
         description = "Get the tracks' stream URLs",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("trackId" = Option<String>, Query, description = "Track ID"),
             ("trackIds" = Option<String>, Query, description = "Comma-separated list of track IDs"),
             ("source" = Option<ApiSource>, Query, description = "Track' API source"),
@@ -650,6 +656,7 @@ pub struct ArtistCoverQuery {
         path = "/artists/{artistId}/source",
         description = "Get source quality artist cover",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("artistId" = u64, Path, description = "The Artist ID"),
             ("source" = Option<ApiSource>, Query, description = "The artist source"),
         ),
@@ -715,6 +722,7 @@ pub async fn artist_source_artwork_endpoint(
         path = "/artists/{artistId}/{size}",
         description = "Get artist cover at the specified dimensions",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("artistId" = u64, Path, description = "The Artist ID"),
             ("size" = String, Path, description = "The {width}x{height} of the image"),
             ("source" = Option<ApiSource>, Query, description = "The artist source"),
@@ -810,6 +818,7 @@ pub struct AlbumCoverQuery {
         path = "/albums/{albumId}/source",
         description = "Get source quality album cover",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = u64, Path, description = "The Album ID"),
             ("source" = Option<ApiSource>, Query, description = "The album source"),
         ),
@@ -875,6 +884,7 @@ pub async fn album_source_artwork_endpoint(
         path = "/albums/{albumId}/{size}",
         description = "Get album cover at the specified dimensions",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = u64, Path, description = "The Album ID"),
             ("size" = String, Path, description = "The {width}x{height} of the image"),
             ("source" = Option<ApiSource>, Query, description = "The album source"),

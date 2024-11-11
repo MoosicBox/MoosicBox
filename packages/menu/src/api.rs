@@ -129,6 +129,7 @@ pub struct GetArtistsQuery {
         path = "/artists",
         description = "Get the artists for the specified criteria",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("sources" = Option<String>, Query, description = "List of API sources to filter by"),
             ("sort" = Option<String>, Query, description = "Order to sort by"),
             ("name" = Option<String>, Query, description = "Name to filter by"),
@@ -211,6 +212,7 @@ pub struct GetAlbumsQuery {
         path = "/albums",
         description = "Get the albums for the specified criteria",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("source" = Option<ApiSource>, Query, description = "API Source to fetch the albums from"),
             ("albumType" = Option<AlbumType>, Query, description = "Album type to filter by"),
             ("sources" = Option<String>, Query, description = "List of API sources to filter by"),
@@ -309,6 +311,7 @@ pub struct GetTracksQuery {
         path = "/tracks",
         description = "Get the tracks for the specified criteria",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("trackIds" = String, Query, description = "Comma-separated list of track IDs to fetch"),
         ),
         responses(
@@ -360,6 +363,7 @@ pub struct GetAlbumTracksQuery {
         path = "/album/tracks",
         description = "Get the tracks for the specified album",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = String, Query, description = "Album ID to fetch the tracks for"),
         ),
         responses(
@@ -400,6 +404,7 @@ pub struct GetAlbumVersionsQuery {
         path = "/album/versions",
         description = "Get the album versions for the specified album",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = String, Query, description = "Album ID to fetch the versions for"),
             ("source" = Option<ApiSource>, Query, description = "Album source to retrieve"),
         ),
@@ -443,6 +448,7 @@ pub struct GetArtistAlbumsQuery {
         path = "/artist/albums",
         description = "Get the albums for the specified artist",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("artistId" = String, Query, description = "Artist ID to fetch the albums for"),
         ),
         responses(
@@ -495,6 +501,7 @@ pub struct GetArtistQuery {
         path = "/artist",
         description = "Get the artist for the specified criteria",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("artistId" = Option<String>, Query, description = "Artist ID to filter by"),
             ("albumId" = Option<String>, Query, description = "Album ID to filter by"),
             ("source" = Option<ApiSource>, Query, description = "Artist source to retrieve"),
@@ -551,6 +558,7 @@ pub struct GetAlbumQuery {
         path = "/album",
         description = "Get the album for the specified criteria",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = Option<String>, Query, description = "Album ID to filter by"),
             ("tidalAlbumId" = Option<String>, Query, description = "Tidal album ID to filter by"),
             ("qobuzAlbumId" = Option<String>, Query, description = "Qobuz album ID to filter by"),
@@ -631,6 +639,7 @@ pub struct AddAlbumQuery {
         path = "/album",
         description = "Add the album to the library",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = String, Query, description = "Album ID to add"),
             ("source" = ApiSource, Query, description = "The API source to add the album from"),
         ),
@@ -679,6 +688,7 @@ pub struct RemoveAlbumQuery {
         path = "/album",
         description = "Add the album to the library",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = String, Query, description = "Album ID to remove"),
             ("source" = ApiSource, Query, description = "The API source the album existed in"),
         ),
@@ -727,6 +737,7 @@ pub struct ReFavoriteAlbumQuery {
         path = "/album/re-favorite",
         description = "Re-favorite the album on the given API source",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = String, Query, description = "Album ID to re-favorite"),
             ("source" = ApiSource, Query, description = "The API source the album exists in"),
         ),

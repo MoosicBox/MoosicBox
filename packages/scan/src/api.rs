@@ -72,6 +72,7 @@ pub struct ScanQuery {
         path = "/run-scan",
         description = "Run a scan for the specified origin(s)",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("origins" = Option<String>, Query, description = "Comma-separated list of ScanOrigins"),
         ),
         responses(
@@ -119,6 +120,7 @@ pub async fn run_scan_endpoint(
         path = "/start-scan",
         description = "Start a scan for the specified origin(s)",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("origins" = Option<String>, Query, description = "Comma-separated list of ScanOrigins"),
         ),
         responses(
@@ -179,6 +181,7 @@ pub struct ScanPathQuery {
         path = "/run-scan-path",
         description = "Run a local scan on the specific path",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("path" = String, Query, description = "Local file path to scan"),
         ),
         responses(
@@ -225,7 +228,9 @@ pub struct GetScanOriginsQuery {}
         get,
         path = "/scan-origins",
         description = "Get the enabled scan origins",
-        params(),
+        params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
+        ),
         responses(
             (
                 status = 200,
@@ -261,6 +266,7 @@ pub struct EnableScanOriginQuery {
         path = "/scan-origins",
         description = "Enable a scan origin",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("origin" = ScanOrigin, Query, description = "ScanOrigin to enable"),
         ),
         responses(
@@ -298,6 +304,7 @@ pub struct DisableScanOriginQuery {
         path = "/scan-origins",
         description = "Disable a scan origin",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("origin" = ScanOrigin, Query, description = "ScanOrigin to disable"),
         ),
         responses(
@@ -334,7 +341,9 @@ pub struct GetScanPathsQuery {}
         get,
         path = "/scan-paths",
         description = "Get the enabled local scan paths",
-        params(),
+        params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
+        ),
         responses(
             (
                 status = 200,
@@ -372,6 +381,7 @@ pub struct AddScanPathQuery {
         path = "/scan-paths",
         description = "Enable a local scan path",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("origin" = String, Query, description = "Local scan path to enable"),
         ),
         responses(
@@ -424,6 +434,7 @@ pub struct RemoveScanPathQuery {
         path = "/scan-paths",
         description = "Disable a local scan path",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("origin" = String, Query, description = "Local scan path to disable"),
         ),
         responses(

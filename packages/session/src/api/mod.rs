@@ -72,6 +72,7 @@ pub struct GetSessionPlaylistTracks {
         path = "/session-playlist-tracks",
         description = "Get a list of tracks associated with a session playlist",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("sessionPlaylistId" = u64, Query, description = "Session playlist ID to fetch tracks for"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
@@ -123,6 +124,7 @@ pub struct GetSessionPlaylist {
         path = "/session-playlist",
         description = "Get a session playlist by ID",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("sessionPlaylistId" = u64, Query, description = "Session playlist ID to fetch"),
         ),
         responses(
@@ -160,6 +162,7 @@ pub struct GetSessionActivePlayers {
         path = "/session-audio-zone",
         description = "Get a session audio zone by session ID",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("sessionId" = u64, Query, description = "Session ID to fetch the audio zone for"),
         ),
         responses(
@@ -197,6 +200,7 @@ pub struct GetSessionPlaying {
         path = "/session-playing",
         description = "Get if the session is currently playing",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("sessionId" = u64, Query, description = "Session ID to fetch active players for"),
         ),
         responses(
@@ -233,6 +237,7 @@ pub struct GetSession {
         path = "/session",
         description = "Get the session by ID",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("sessionId" = u64, Query, description = "Session ID to fetch"),
         ),
         responses(
@@ -271,6 +276,7 @@ pub struct GetSessions {
         path = "/sessions",
         description = "Get all sessions",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
         ),
@@ -332,6 +338,7 @@ impl From<CreatePlayersError> for actix_web::Error {
         description = "Register the players to a connection",
         request_body = Vec<RegisterPlayer>,
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("connectionId" = Option<u32>, Query, description = "The ID of the connection to register the players to"),
         ),
         responses(

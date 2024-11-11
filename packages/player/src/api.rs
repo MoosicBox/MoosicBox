@@ -251,6 +251,7 @@ pub struct PlayAlbumQuery {
         path = "/play/album",
         description = "Play the given album for the specified host or local player",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("sessionId" = u64, Query, description = "Session ID to play the album on"),
             ("albumId" = String, Query, description = "Album ID to play"),
             ("position" = Option<u16>, Query, description = "Position in the playlist to play from"),
@@ -326,6 +327,7 @@ pub struct PlayTrackQuery {
         path = "/play/track",
         description = "Play the given track for the specified host or local player",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("sessionId" = Option<u64>, Query, description = "Session ID to play the album on"),
             ("trackId" = i32, Query, description = "Track ID to play"),
             ("seek" = Option<f64>, Query, description = "Seek position to begin playback from"),
@@ -407,6 +409,7 @@ pub struct PlayTracksQuery {
         path = "/play/tracks",
         description = "Play the given tracks for the specified host or local player",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("sessionId" = Option<u64>, Query, description = "Session ID to play the album on"),
             ("trackIds" = String, Query, description = "Comma-separated list of track IDs to play"),
             ("position" = Option<u16>, Query, description = "Position in the list of tracks to play from"),
@@ -476,6 +479,7 @@ pub struct StopTrackQuery {
         path = "/stop",
         description = "Stop the current playback for the specified host",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("host" = Option<String>, Query, description = "Remote host to stop playback from"),
         ),
         responses(
@@ -514,6 +518,7 @@ pub struct SeekTrackQuery {
         path = "/seek",
         description = "Seek the current playback for the specified host",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("seek" = Option<f64>, Query, description = "Position to seek the playback to"),
         ),
         responses(
@@ -562,6 +567,7 @@ pub struct UpdatePlaybackQuery {
         path = "/update-playback",
         description = "Update a playback for the player",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("play" = Option<bool>, Query, description = "Trigger playback to begin on this update"),
             ("stop" = Option<bool>, Query, description = "Trigger playback to stop on this update"),
             ("playing" = Option<bool>, Query, description = "Update the 'playing' status on the playback"),
@@ -644,6 +650,7 @@ pub struct NextTrackQuery {
         path = "/next-track",
         description = "Skip to the next track for the playback for the specified host",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("seek" = Option<f64>, Query, description = "Position to seek the next track on the playback to"),
             ("host" = Option<String>, Query, description = "Remote host to skip to the next track on the playback for"),
         ),
@@ -682,6 +689,7 @@ pub struct PauseQuery {
         path = "/pause",
         description = "Pause the playback for the specified host",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("host" = Option<String>, Query, description = "Remote host to pause the playback for"),
         ),
         responses(
@@ -719,6 +727,7 @@ pub struct ResumeQuery {
         path = "/resume",
         description = "Resume the playback for the specified host",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("host" = Option<String>, Query, description = "Remote host to resume the playback for"),
         ),
         responses(
@@ -757,6 +766,7 @@ pub struct PreviousTrackQuery {
         path = "/previous-track",
         description = "Skip to the previous track for the playback for the specified host",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("seek" = Option<f64>, Query, description = "Position to seek the previous track on the playback to"),
             ("host" = Option<String>, Query, description = "Remote host to skip to the previous track on the playback for"),
         ),
@@ -795,6 +805,7 @@ pub struct PlayerStatusQuery {
         path = "/status",
         description = "Get the playback status for the specified host",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("host" = Option<String>, Query, description = "Remote host to get playback status for"),
         ),
         responses(

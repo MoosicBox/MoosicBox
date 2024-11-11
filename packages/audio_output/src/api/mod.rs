@@ -42,6 +42,7 @@ pub struct GetAudioOutputs {
         path = "/audio-outputs",
         description = "Get a list of the enabled audio outputs",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
         ),

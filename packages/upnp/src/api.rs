@@ -96,7 +96,9 @@ impl From<UpnpDeviceScannerError> for actix_web::Error {
         post,
         path = "/scan-devices",
         description = "Scan the network for UPnP devices",
-        params(),
+        params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
+        ),
         responses(
             (
                 status = 200,
@@ -127,6 +129,7 @@ pub struct GetTransportInfoQuery {
         path = "/transport-info",
         description = "Get the current UPnP transport info",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to get transport info from"),
             ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to get transport info from"),
             ("instanceId" = u32, Query, description = "UPnP instance ID to get transport info from"),
@@ -171,6 +174,7 @@ pub struct GetMediaInfoQuery {
         path = "/media-info",
         description = "Get the current UPnP media info",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to get media info from"),
             ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to get media info from"),
             ("instanceId" = u32, Query, description = "UPnP instance ID to get media info from"),
@@ -215,6 +219,7 @@ pub struct GetPositionInfoQuery {
         path = "/position-info",
         description = "Get the current UPnP position info",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to get position info from"),
             ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to get position info from"),
             ("instanceId" = u32, Query, description = "UPnP instance ID to get position info from"),
@@ -260,6 +265,7 @@ pub struct GetVolumeQuery {
         path = "/volume",
         description = "Get the current UPnP volume info for a device",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("channel" = Option<String>, Query, description = "UPnP device channel to get volume info from"),
             ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to get volume info from"),
             ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to get volume info from"),
@@ -313,6 +319,7 @@ pub struct SetVolumeQuery {
         path = "/volume",
         description = "Set the current UPnP volume for a device",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("channel" = Option<String>, Query, description = "UPnP device channel to get volume info from"),
             ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to get volume info from"),
             ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to get volume info from"),
@@ -366,6 +373,7 @@ pub struct SubscribeQuery {
         path = "/subscribe",
         description = "Subscribe to the specified device's service",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to subscribe to"),
             ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to subscribe to"),
             ("serviceId" = String, Query, description = "UPnP device service ID to subscribe to"),
@@ -418,6 +426,7 @@ pub struct PauseQuery {
         path = "/pause",
         description = "Pause the specified device's AVTransport",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to pause"),
             ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to pause"),
             ("instanceId" = u32, Query, description = "UPnP instance ID to pause"),
@@ -463,6 +472,7 @@ pub struct PlayQuery {
         path = "/play",
         description = "Play the specified device's AVTransport",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("speed" = Option<f64>, Query, description = "Speed to play the playback at"),
             ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to play"),
             ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to play"),
@@ -514,6 +524,7 @@ pub struct SeekQuery {
         path = "/seek",
         description = "Seek the specified device's AVTransport",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("position" = f64, Query, description = "Seek position to seek the playback to"),
             ("deviceUdn" = Option<String>, Query, description = "UPnP device UDN to seek"),
             ("deviceUrl" = Option<String>, Query, description = "UPnP device URL to seek"),

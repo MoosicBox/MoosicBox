@@ -210,6 +210,7 @@ pub struct LibraryTrackFileUrlQuery {
         path = "/track/url",
         description = "Get track stream URL for the audio",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("trackId" = u64, Query, description = "The track ID"),
             ("audioQuality" = LibraryAudioQuality, Query, description = "Page offset"),
         ),
@@ -261,6 +262,7 @@ pub struct LibraryFavoriteAlbumsQuery {
         path = "/favorites/albums",
         description = "List favorite albums",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
             ("order" = Option<LibraryAlbumOrder>, Query, description = "Sort order"),
@@ -342,6 +344,7 @@ pub struct LibraryFavoriteArtistsQuery {
         path = "/favorites/artists",
         description = "List favorite artists",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
             ("order" = Option<LibraryArtistOrder>, Query, description = "Sort order"),
@@ -395,6 +398,7 @@ pub struct LibraryAddFavoriteArtistsQuery {
         path = "/favorites/artists",
         description = "Add favorite artist",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("artistId" = u64, Query, description = "The artist ID"),
         ),
         responses(
@@ -438,6 +442,7 @@ pub struct LibraryRemoveFavoriteArtistsQuery {
         path = "/favorites/artists",
         description = "Delete favorite artist",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("artistId" = u64, Query, description = "The artist ID"),
         ),
         responses(
@@ -481,6 +486,7 @@ pub struct LibraryAddFavoriteAlbumsQuery {
         path = "/favorites/albums",
         description = "Add favorite album",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = u64, Query, description = "The album ID"),
         ),
         responses(
@@ -524,6 +530,7 @@ pub struct LibraryRemoveFavoriteAlbumsQuery {
         path = "/favorites/albums",
         description = "Delete favorite album",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = u64, Query, description = "The album ID"),
         ),
         responses(
@@ -567,6 +574,7 @@ pub struct LibraryAddFavoriteTracksQuery {
         path = "/favorites/tracks",
         description = "Add favorite track",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("trackId" = u64, Query, description = "The track ID"),
         ),
         responses(
@@ -610,6 +618,7 @@ pub struct LibraryRemoveFavoriteTracksQuery {
         path = "/favorites/tracks",
         description = "Delete favorite track",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("trackId" = u64, Query, description = "The track ID"),
         ),
         responses(
@@ -657,6 +666,7 @@ pub struct LibraryFavoriteTracksQuery {
         path = "/favorites/tracks",
         description = "List favorite tracks",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("trackIds" = Option<String>, Query, description = "A comma-separated list of track IDs"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
@@ -742,6 +752,7 @@ impl From<AlbumType> for LibraryAlbumType {
         path = "/artists/albums",
         description = "Get the list of artist album metadata for an artistId",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("artistId" = u64, Query, description = "The artist ID"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
@@ -797,6 +808,7 @@ pub struct LibraryAlbumTracksQuery {
         path = "/albums/tracks",
         description = "Get the list of album track metadata for an albumId",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = u64, Query, description = "The album ID"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
@@ -845,6 +857,7 @@ pub struct LibraryAlbumQuery {
         path = "/albums",
         description = "Get the album metadata for an albumId",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = u64, Query, description = "The album ID"),
         ),
         responses(
@@ -888,6 +901,7 @@ pub struct LibraryArtistQuery {
         path = "/artists",
         description = "Get the artist metadata for an artistId",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("artistId" = u64, Query, description = "The artist ID"),
         ),
         responses(
@@ -930,6 +944,7 @@ pub struct LibraryTrackQuery {
         path = "/tracks",
         description = "Get the track metadata for a trackId",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("trackId" = u64, Query, description = "The track ID"),
         ),
         responses(
@@ -975,6 +990,7 @@ pub struct LibrarySearchQuery {
         path = "/search",
         description = "Search the library for artists/albums/tracks that fuzzy match the query",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("query" = String, Query, description = "The search query"),
             ("offset" = Option<usize>, Query, description = "Page offset"),
             ("limit" = Option<usize>, Query, description = "Page limit"),
@@ -1030,7 +1046,9 @@ pub struct ReindexQuery {}
         post,
         path = "/reindex",
         description = "Reindex the search database with the complete library",
-        params(),
+        params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
+        ),
         responses(
             (
                 status = 200,

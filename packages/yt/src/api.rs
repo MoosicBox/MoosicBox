@@ -238,6 +238,7 @@ pub struct YtDeviceAuthorizationQuery {
         path = "/auth/device-authorization",
         description = "Begin the authorization process for YouTube Music",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("client_id" = String, Query, description = "YouTube Music client ID to use"),
             ("open" = Option<bool>, Query, description = "Open the authorization page in a browser"),
         ),
@@ -283,6 +284,7 @@ pub struct YtDeviceAuthorizationTokenQuery {
         path = "/auth/device-authorization/token",
         description = "Finish the authorization process for YouTube Music",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("client_id" = String, Query, description = "YouTube Music client ID to use"),
             ("client_secret" = String, Query, description = "YouTube Music client secret to use"),
             ("device_code" = String, Query, description = "YouTube Music device code to use"),
@@ -338,6 +340,7 @@ pub struct YtTrackFileUrlQuery {
         path = "/track/url",
         description = "Get YouTube Music track file stream URL",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("audioQuality" = YtAudioQuality, Query, description = "Audio quality to fetch the file stream for"),
             ("trackId" = u64, Query, description = "YouTube Music track ID to fetch track stream URL for"),
         ),
@@ -391,6 +394,7 @@ pub struct YtTrackPlaybackInfoQuery {
         path = "/track/playback-info",
         description = "Get YouTube Music track metadata info",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("audioQuality" = YtAudioQuality, Query, description = "Audio quality to fetch the track metadata for"),
             ("trackId" = u64, Query, description = "YouTube Music track ID to fetch track metadata for"),
         ),
@@ -450,6 +454,7 @@ pub struct YtFavoriteArtistsQuery {
         path = "/favorites/artists",
         description = "Get YouTube Music favorited artists",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
             ("order" = Option<YtArtistOrder>, Query, description = "Sort property to sort the artists by"),
@@ -520,6 +525,7 @@ pub struct YtAddFavoriteArtistsQuery {
         path = "/favorites/artists",
         description = "Favorite a YouTube Music artist",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("artistId" = u64, Query, description = "YouTube Music artist ID to favorite"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
@@ -584,6 +590,7 @@ pub struct YtRemoveFavoriteArtistsQuery {
         path = "/favorites/artists",
         description = "Remove YouTube Music artist from favorites",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("artistId" = u64, Query, description = "YouTube Music artist ID to remove from favorites"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
@@ -651,6 +658,7 @@ pub struct YtFavoriteAlbumsQuery {
         path = "/favorites/albums",
         description = "Get YouTube Music favorited albums",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
             ("order" = Option<YtAlbumOrder>, Query, description = "Sort property to sort the albums by"),
@@ -721,6 +729,7 @@ pub struct YtAddFavoriteAlbumsQuery {
         path = "/favorites/albums",
         description = "Favorite a YouTube Music album",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = u64, Query, description = "YouTube Music album ID to favorite"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
@@ -785,6 +794,7 @@ pub struct YtRemoveFavoriteAlbumsQuery {
         path = "/favorites/albums",
         description = "Remove YouTube Music album from favorites",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = u64, Query, description = "YouTube Music album ID to remove from favorites"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
@@ -849,6 +859,7 @@ pub struct YtAddFavoriteTracksQuery {
         path = "/favorites/tracks",
         description = "Favorite a YouTube Music track",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("trackId" = u64, Query, description = "YouTube Music track ID to favorite"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
@@ -913,6 +924,7 @@ pub struct YtRemoveFavoriteTracksQuery {
         path = "/favorites/tracks",
         description = "Remove YouTube Music track from favorites",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("trackId" = u64, Query, description = "YouTube Music track ID to remove from favorites"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
@@ -980,6 +992,7 @@ pub struct YtFavoriteTracksQuery {
         path = "/favorites/tracks",
         description = "Get YouTube Music favorited tracks",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
             ("order" = Option<YtTrackOrder>, Query, description = "Sort property to sort the tracks by"),
@@ -1072,6 +1085,7 @@ impl From<AlbumType> for YtAlbumType {
         path = "/artists/albums",
         description = "Get YouTube Music albums for the specified artist",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("artistId" = u64, Query, description = "YouTube Music artist ID to search for albums for"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
@@ -1141,6 +1155,7 @@ pub struct YtAlbumTracksQuery {
         path = "/albums/tracks",
         description = "Get YouTube Music tracks for the specified album",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = u64, Query, description = "YouTube Music album ID to search for tracks for"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
@@ -1216,6 +1231,7 @@ pub struct YtAlbumQuery {
         path = "/albums",
         description = "Get YouTube Music album for the specified ID",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("albumId" = u64, Query, description = "YouTube Music album ID to fetch"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
@@ -1275,6 +1291,7 @@ pub struct YtArtistQuery {
         path = "/artists",
         description = "Get YouTube Music artist for the specified ID",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("artistId" = u64, Query, description = "YouTube Music artist ID to fetch"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
@@ -1334,6 +1351,7 @@ pub struct YtTrackQuery {
         path = "/tracks",
         description = "Get YouTube Music track for the specified ID",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("trackId" = u64, Query, description = "YouTube Music track ID to fetch"),
             ("countryCode" = Option<String>, Query, description = "Country code to request from"),
             ("locale" = Option<String>, Query, description = "Locale to request with"),
@@ -1391,6 +1409,7 @@ pub struct YtSearchQuery {
         path = "/search",
         description = "Search the YouTube Music library for artists/albums/tracks that fuzzy match the query",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("query" = String, Query, description = "The search query"),
             ("offset" = Option<usize>, Query, description = "Page offset"),
             ("limit" = Option<usize>, Query, description = "Page limit"),

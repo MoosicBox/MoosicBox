@@ -46,6 +46,7 @@ pub struct MagicTokenQuery {
         path = "/magic-token",
         description = "Get the credentials associated with a magic token",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("magicToken" = String, Query,
                 description = "The magic token to fetch the credentials for"),
         ),
@@ -86,6 +87,7 @@ pub struct CreateMagicTokenQuery {
         path = "/magic-token",
         description = "Create a new magic token",
         params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("host" = Option<String>, Query,
                 description = "The host to generate a link with the magic token for"),
         ),
