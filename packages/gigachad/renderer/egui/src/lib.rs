@@ -783,6 +783,7 @@ impl EguiApp {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_lines)]
     fn render_container_contents(
         &self,
         ctx: &egui::Context,
@@ -793,6 +794,10 @@ impl EguiApp {
         rect: Option<egui::Rect>,
         vscroll: bool,
     ) {
+        for element in &container.elements {
+            self.handle_element_side_effects(element);
+        }
+
         if let Some(width) = container.calculated_width {
             ui.set_width(width);
         }
@@ -809,10 +814,6 @@ impl EguiApp {
                     ui.scroll_to_rect(rect, Some(egui::Align::TOP));
                 }
             }
-        }
-
-        for element in &container.elements {
-            self.handle_element_side_effects(element);
         }
 
         match container.direction {
@@ -838,7 +839,15 @@ impl EguiApp {
                         for row in rows {
                             let handler = handler.clone();
                             ui.horizontal(move |ui| {
-                                self.render_elements_ref(ctx, ui, &row, &handler, viewport, rect);
+                                self.render_elements_ref(
+                                    ctx,
+                                    ui,
+                                    &row,
+                                    &handler,
+                                    viewport,
+                                    rect,
+                                    !vscroll && rect.is_some(),
+                                );
                             });
                         }
                     });
@@ -851,6 +860,7 @@ impl EguiApp {
                             &handler,
                             viewport,
                             rect,
+                            !vscroll && rect.is_some(),
                         );
                     });
                 }
@@ -877,7 +887,15 @@ impl EguiApp {
                         for col in cols {
                             let handler = handler.clone();
                             ui.vertical(move |ui| {
-                                self.render_elements_ref(ctx, ui, &col, &handler, viewport, rect);
+                                self.render_elements_ref(
+                                    ctx,
+                                    ui,
+                                    &col,
+                                    &handler,
+                                    viewport,
+                                    rect,
+                                    !vscroll && rect.is_some(),
+                                );
                             });
                         }
                     });
@@ -890,6 +908,7 @@ impl EguiApp {
                             &handler,
                             viewport,
                             rect,
+                            !vscroll && rect.is_some(),
                         );
                     });
                 }
@@ -897,6 +916,7 @@ impl EguiApp {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_elements(
         &self,
         ctx: &egui::Context,
@@ -905,13 +925,23 @@ impl EguiApp {
         handler: &Option<Handler>,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
+        scroll_child: bool,
     ) {
         log::trace!("render_elements: {} elements", elements.len());
         for element in elements {
-            self.render_element(ctx, ui, element, handler.clone(), viewport, rect);
+            self.render_element(
+                ctx,
+                ui,
+                element,
+                handler.clone(),
+                viewport,
+                rect,
+                scroll_child,
+            );
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_elements_ref(
         &self,
         ctx: &egui::Context,
@@ -920,9 +950,18 @@ impl EguiApp {
         handler: &Option<Handler>,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
+        scroll_child: bool,
     ) {
         for element in elements {
-            self.render_element(ctx, ui, element, handler.clone(), viewport, rect);
+            self.render_element(
+                ctx,
+                ui,
+                element,
+                handler.clone(),
+                viewport,
+                rect,
+                scroll_child,
+            );
         }
     }
 
@@ -994,6 +1033,7 @@ impl EguiApp {
         handler
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[allow(clippy::too_many_lines)]
     fn render_element(
         &self,
@@ -1003,6 +1043,7 @@ impl EguiApp {
         handler: Option<Handler>,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
+        scroll_child: bool,
     ) {
         log::trace!("render_element: rect={rect:?}");
 
@@ -1012,6 +1053,30 @@ impl EguiApp {
             if container.is_hidden() {
                 log::debug!("render_element: container is hidden. skipping render");
                 return;
+            }
+
+            if scroll_child {
+                if let Some(rect) = rect {
+                    let width = container.calculated_width.unwrap();
+                    let height = container.calculated_height.unwrap();
+
+                    let pos = ui.cursor().min;
+
+                    let (offset_x, offset_y) =
+                        viewport.map_or((0.0, 0.0), |viewport| (viewport.pos.x, viewport.pos.y));
+
+                    let pos_x = pos.x;
+                    let pos_y = pos.y;
+
+                    if pos_x + width - offset_x < -1.0
+                        || pos_y + height - offset_y < -1.0
+                        || pos_x - offset_x >= rect.width() + 1.0
+                        || pos_y - offset_y >= rect.height() + 1.0
+                    {
+                        ui.allocate_space(egui::vec2(width, height));
+                        return;
+                    }
+                }
             }
         }
 
