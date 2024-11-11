@@ -37,6 +37,7 @@ utoipa    = { workspace = true, optional = true }
 async-recursion = { workspace = true }
 async-trait     = { workspace = true }
 futures         = { workspace = true }
+itertools       = { workspace = true }
 log             = { workspace = true }
 open            = { workspace = true }
 reqwest         = { workspace = true, features = ["json"] }

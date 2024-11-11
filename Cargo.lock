@@ -6963,6 +6963,7 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "futures",
+ "itertools 0.13.0",
  "log",
  "moosicbox_assert",
  "moosicbox_core",

@@ -12,6 +12,7 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
+use itertools::Itertools as _;
 use models::{TidalAlbum, TidalArtist, TidalSearchResults, TidalTrack};
 #[cfg(feature = "db")]
 use moosicbox_database::profiles::LibraryDatabase;
@@ -2545,26 +2546,87 @@ impl MusicApi for TidalMusicApi {
         order: Option<TrackOrder>,
         order_direction: Option<TrackOrderDirection>,
     ) -> PagingResult<Track, TracksError> {
-        moosicbox_assert::assert_or_unimplemented!(
-            track_ids.is_none(),
-            "Fetching specific tracks by id is not implemented yet"
-        );
+        let Some(track_ids) = track_ids else {
+            return Ok(favorite_tracks(
+                #[cfg(feature = "db")]
+                &self.db,
+                offset,
+                limit,
+                order.map(Into::into),
+                order_direction.map(Into::into),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .await?
+            .inner_into());
+        };
 
-        Ok(favorite_tracks(
-            #[cfg(feature = "db")]
-            &self.db,
-            offset,
-            limit,
-            order.map(Into::into),
-            order_direction.map(Into::into),
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .await?
-        .inner_into())
+        let offset = offset.unwrap_or(0) as usize;
+        let offset = if offset > track_ids.len() {
+            track_ids.len()
+        } else {
+            offset
+        };
+        let limit = limit.unwrap_or(30) as usize;
+        let limit = if limit > track_ids.len() {
+            track_ids.len()
+        } else {
+            limit
+        };
+
+        let track_ids = &track_ids[offset..limit];
+        let mut all_tracks = vec![];
+
+        let chunks = track_ids
+            .iter()
+            .chunks(10)
+            .into_iter()
+            .map(|x| x.into_iter().collect_vec())
+            .collect_vec();
+
+        for chunk in chunks {
+            let mut tracks = vec![];
+
+            for track_id in chunk {
+                tracks.push(track(
+                    #[cfg(feature = "db")]
+                    &self.db,
+                    track_id,
+                    None,
+                    None,
+                    None,
+                    None,
+                ));
+            }
+
+            let tracks = futures::future::join_all(tracks).await;
+            let tracks = tracks.into_iter().collect::<Result<Vec<_>, _>>();
+            let tracks = match tracks {
+                Ok(tracks) => tracks,
+                Err(e) => {
+                    moosicbox_assert::die_or_err!(
+                        TracksError::Other(Box::new(e)),
+                        "Failed to fetch track: {e:?}",
+                    );
+                }
+            };
+            all_tracks.extend(tracks);
+        }
+
+        Ok(PagingResponse {
+            page: Page::WithTotal {
+                items: all_tracks.into_iter().map(Into::into).collect(),
+                offset: offset as u32,
+                limit: limit as u32,
+                total: track_ids.len() as u32,
+            },
+            fetch: Arc::new(Mutex::new(Box::new(move |_offset, _count| {
+                Box::pin(async move { unimplemented!("Fetching tracks is not implemented") })
+            }))),
+        })
     }
 
     async fn album_tracks(
