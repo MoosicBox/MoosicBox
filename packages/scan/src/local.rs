@@ -46,6 +46,8 @@ pub enum ScanError {
     IO(#[from] tokio::io::Error),
     #[error(transparent)]
     UpdateDatabase(#[from] UpdateDatabaseError),
+    #[error(transparent)]
+    Lofty(#[from] moosicbox_lofty::LoftyError),
 }
 
 pub async fn scan(
@@ -199,7 +201,12 @@ fn scan_track(
                 .expect("ERROR: Bad path provided!")
                 .options(ParseOptions::new().read_picture(false))
                 .read()
-                .expect("ERROR: Failed to read file!");
+                .map_err(|e| {
+                    moosicbox_assert::die_or_error!(
+                        "Failed to read lofty tags: path={path:?} ({e:?})"
+                    );
+                    e
+                })?;
 
             let duration = if path.clone().to_str().unwrap().ends_with(".mp3") {
                 mp3_duration::from_path(path.as_path())
