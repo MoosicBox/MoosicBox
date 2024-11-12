@@ -20,7 +20,6 @@ pub enum InboundPayload {
     RegisterConnection(RegisterConnectionPayload),
     RegisterPlayers(RegisterPlayersPayload),
     CreateAudioZone(CreateAudioZonePayload),
-    PlaybackAction(PlaybackActionPayload),
     SetSeek(SetSeekPayload),
 }
 
@@ -144,7 +143,7 @@ pub struct SetSeekPayload {
     pub payload: SetSeek,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SetSeek {
     pub session_id: u64,

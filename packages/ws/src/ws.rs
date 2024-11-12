@@ -10,7 +10,7 @@ use std::{
 use async_trait::async_trait;
 use log::{debug, info, trace};
 use moosicbox_audio_zone::models::CreateAudioZone;
-use moosicbox_core::sqlite::{db::DbError, models::ToApi as _};
+use moosicbox_core::sqlite::{db::DbError, models::ToApi};
 use moosicbox_database::{
     config::ConfigDatabase,
     profiles::{LibraryDatabase, PROFILES},
@@ -30,7 +30,6 @@ use thiserror::Error;
 use crate::models::{
     AudioZoneWithSessionsPayload, ConnectionIdPayload, ConnectionsPayload, DownloadEventPayload,
     InboundPayload, OutboundPayload, ScanEventPayload, SessionUpdatedPayload, SessionsPayload,
-    SetSeekPayload,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -96,26 +95,34 @@ pub enum WebsocketConnectError {
     Unknown,
 }
 
-pub fn connect(
-    _sender: &impl WebsocketSender,
-    context: &WebsocketContext,
-) -> Result<Response, WebsocketConnectError> {
+pub fn connect(_sender: &impl WebsocketSender, context: &WebsocketContext) -> Response {
     info!("Connected {}", context.connection_id);
 
-    Ok(Response {
+    Response {
         status_code: 200,
         body: "Connected".into(),
-    })
+    }
 }
 
 #[derive(Debug, Error)]
 pub enum WebsocketDisconnectError {
     #[error(transparent)]
     Db(#[from] DbError),
-    #[error("Unknown")]
-    Unknown,
+    #[error(transparent)]
+    WebsocketSend(#[from] WebsocketSendError),
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
 }
 
+/// # Errors
+///
+/// * If the list of connections fails to serialize
+/// * If a database error occurs when trying to delete the connection
+/// * If a `WebsocketSendError` error occurs
+///
+/// # Panics
+///
+/// * If the connection data `RwLock` panics
 pub async fn disconnect(
     db: &ConfigDatabase,
     sender: &impl WebsocketSender,
@@ -126,24 +133,14 @@ pub async fn disconnect(
 
         connection_data.remove(&context.connection_id);
 
-        &serde_json::to_string(&connection_data.values().collect::<Vec<_>>()).unwrap()
+        &serde_json::to_string(&connection_data.values().collect::<Vec<_>>())?
     };
 
     moosicbox_session::delete_connection(db, &context.connection_id).await?;
 
-    sender
-        .send(&context.connection_id, connections)
-        .await
-        .map_err(|_e| WebsocketDisconnectError::Unknown)?;
+    sender.send(&context.connection_id, connections).await?;
 
-    sender
-        .send_all(
-            &get_connections(db)
-                .await
-                .map_err(|_e| WebsocketDisconnectError::Unknown)?,
-        )
-        .await
-        .map_err(|_e| WebsocketDisconnectError::Unknown)?;
+    sender.send_all(&get_connections(db).await?).await?;
 
     info!("Disconnected {}", context.connection_id);
 
@@ -153,6 +150,10 @@ pub async fn disconnect(
     })
 }
 
+/// # Errors
+///
+/// * If the message is an invalid type
+/// * If the message fails to process
 pub async fn process_message(
     config_db: &ConfigDatabase,
     body: Value,
@@ -193,6 +194,9 @@ pub enum WebsocketMessageError {
     Serde(#[from] serde_json::Error),
 }
 
+/// # Errors
+///
+/// * If the message fails to process
 pub async fn message(
     config_db: &ConfigDatabase,
     sender: &impl WebsocketSender,
@@ -268,18 +272,11 @@ pub async fn message(
             trace!("Ping");
             Ok(())
         }
-        InboundPayload::PlaybackAction(payload) => {
-            playback_action(sender, context, &payload.payload)?;
-            Ok(())
-        }
         InboundPayload::SetSeek(payload) => {
             sender
                 .send_all_except(
                     &context.connection_id,
-                    &serde_json::to_value(OutboundPayload::SetSeek(SetSeekPayload {
-                        payload: payload.payload,
-                    }))?
-                    .to_string(),
+                    &serde_json::to_value(OutboundPayload::SetSeek(payload))?.to_string(),
                 )
                 .await?;
 
@@ -297,6 +294,11 @@ pub async fn message(
     })
 }
 
+/// # Errors
+///
+/// * If the db fails to return the zones with sessions
+/// * If the json fails to serialize
+/// * If the ws message fails to broadcast
 pub async fn broadcast_audio_zones(
     config_db: &ConfigDatabase,
     library_db: &LibraryDatabase,
@@ -308,7 +310,7 @@ pub async fn broadcast_audio_zones(
         moosicbox_audio_zone::zones_with_sessions(config_db, library_db)
             .await?
             .into_iter()
-            .map(|zone| zone.into())
+            .map(Into::into)
             .collect::<Vec<_>>()
     };
 
@@ -326,6 +328,11 @@ pub async fn broadcast_audio_zones(
     }
 }
 
+/// # Errors
+///
+/// * If the db fails to return the sessions
+/// * If the json fails to serialize
+/// * If the ws message fails to broadcast
 pub async fn broadcast_sessions(
     db: &LibraryDatabase,
     sender: &impl WebsocketSender,
@@ -336,7 +343,7 @@ pub async fn broadcast_sessions(
         moosicbox_session::get_sessions(db)
             .await?
             .into_iter()
-            .map(|session| session.to_api())
+            .map(ToApi::to_api)
             .collect::<Vec<_>>()
     };
 
@@ -389,6 +396,13 @@ async fn get_connections(db: &ConfigDatabase) -> Result<String, WebsocketSendErr
     Ok(connections_json)
 }
 
+/// # Errors
+///
+/// * If the db fails to register the connection
+///
+/// # Panics
+///
+/// * If the connection data `RwLock` panics
 pub async fn register_connection(
     db: &ConfigDatabase,
     _sender: &impl WebsocketSender,
@@ -398,12 +412,15 @@ pub async fn register_connection(
     let connection = moosicbox_session::register_connection(db, payload).await?;
 
     let mut connection_data = CONNECTION_DATA.write().unwrap();
-
     connection_data.insert(context.connection_id.clone(), connection.clone());
+    drop(connection_data);
 
     Ok(connection)
 }
 
+/// # Errors
+///
+/// * If the db fails to create the players
 pub async fn register_players(
     db: &ConfigDatabase,
     _sender: &impl WebsocketSender,
@@ -418,6 +435,10 @@ pub async fn register_players(
     Ok(players)
 }
 
+/// # Errors
+///
+/// * If the db fails to get the connections
+/// * If the ws message fails to broadcast
 pub async fn broadcast_connections(
     db: &ConfigDatabase,
     sender: &impl WebsocketSender,
@@ -439,7 +460,11 @@ async fn create_audio_zone(
     Ok(())
 }
 
-pub async fn send_download_event<ProgressEvent: Serialize>(
+/// # Errors
+///
+/// * If the `OutboundPayload::DownloadEvent` fails to serialize
+/// * If the ws message fails to broadcast
+pub async fn send_download_event<ProgressEvent: Serialize + Send>(
     sender: &impl WebsocketSender,
     context: Option<&WebsocketContext>,
     payload: ProgressEvent,
@@ -461,7 +486,11 @@ pub async fn send_download_event<ProgressEvent: Serialize>(
     Ok(())
 }
 
-pub async fn send_scan_event<ProgressEvent: Serialize>(
+/// # Errors
+///
+/// * If the `OutboundPayload::ScanEvent` fails to serialize
+/// * If the ws message fails to broadcast
+pub async fn send_scan_event<ProgressEvent: Serialize + Send>(
     sender: &impl WebsocketSender,
     context: Option<&WebsocketContext>,
     payload: ProgressEvent,
@@ -496,6 +525,11 @@ pub enum UpdateSessionError {
     Serde(#[from] serde_json::Error),
 }
 
+/// # Errors
+///
+/// * If the db fails to update the session
+/// * If the db fails get the players that were updated
+/// * If the ws message fails to broadcast
 pub async fn update_session(
     config_db: &ConfigDatabase,
     db: &LibraryDatabase,
@@ -563,7 +597,7 @@ pub async fn update_session(
     let playlist = if payload.playlist.is_some() {
         get_session_playlist(db, payload.session_id)
             .await?
-            .map(|playlist| playlist.to_api())
+            .map(ToApi::to_api)
             .map(|playlist| ApiUpdateSessionPlaylist {
                 session_playlist_id: playlist.session_playlist_id,
                 tracks: playlist.tracks,
@@ -631,12 +665,4 @@ async fn get_connection_id(
             .to_string(),
         )
         .await
-}
-
-fn playback_action(
-    _sender: &impl WebsocketSender,
-    _context: &WebsocketContext,
-    _payload: &Value,
-) -> Result<(), WebsocketSendError> {
-    Ok(())
 }

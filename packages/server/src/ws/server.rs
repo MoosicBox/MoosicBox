@@ -11,8 +11,8 @@ use kanal::OneshotAsyncSender;
 use moosicbox_async_service::async_trait;
 use moosicbox_database::{config::ConfigDatabase, profiles::PROFILES};
 use moosicbox_ws::{
-    PlayerAction, WebsocketConnectError, WebsocketContext, WebsocketDisconnectError,
-    WebsocketMessageError, WebsocketSendError, WebsocketSender,
+    PlayerAction, WebsocketContext, WebsocketDisconnectError, WebsocketMessageError,
+    WebsocketSendError, WebsocketSender,
 };
 use rand::{thread_rng, Rng as _};
 use serde_json::Value;
@@ -259,11 +259,7 @@ impl WsServer {
     }
 
     /// Register new session and assign unique ID to this session
-    fn connect(
-        &mut self,
-        profile: String,
-        tx: mpsc::UnboundedSender<Msg>,
-    ) -> Result<ConnId, WebsocketConnectError> {
+    fn connect(&mut self, profile: String, tx: mpsc::UnboundedSender<Msg>) -> ConnId {
         log::info!("Someone joined");
 
         // register session with random connection ID
@@ -289,10 +285,10 @@ impl WsServer {
             player_actions: self.player_actions.clone(),
         };
 
-        moosicbox_ws::connect(self, &context)?;
+        moosicbox_ws::connect(self, &context);
 
         // send id back
-        Ok(id)
+        id
     }
 
     /// Unregister connection from room map and invoke ws api disconnect.
@@ -342,16 +338,10 @@ impl WsServer {
                 conn_tx,
                 res_tx,
             } => {
-                let result = ctx.write().await.connect(profile, conn_tx);
-                match result {
-                    Ok(conn_id) => res_tx.send(conn_id).await.map_err(|e| {
-                        std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("Failed to send: {e:?}"),
-                        )
-                    })?,
-                    Err(e) => moosicbox_assert::die_or_error!("Failed to connect: {e:?}"),
-                }
+                let conn_id = ctx.write().await.connect(profile, conn_tx);
+                res_tx.send(conn_id).await.map_err(|e| {
+                    std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send: {e:?}"))
+                })?;
             }
 
             Command::Disconnect { conn } => {
