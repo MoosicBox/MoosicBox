@@ -1123,40 +1123,52 @@ impl EguiApp {
                 log::debug!("render_element: container is hidden. skipping render");
                 return;
             }
+        }
 
-            if scroll_child {
-                if let Some(rect) = rect {
+        if let Element::Table { .. } = element {
+            self.render_table(ctx, ui, element, &handler, viewport, rect);
+            return;
+        }
+
+        if scroll_child && element.container_element().is_some() {
+            if let Some(rect) = rect {
+                let pos = ui.cursor().min;
+                let (offset_x, offset_y) =
+                    viewport.map_or((0.0, 0.0), |viewport| (viewport.pos.x, viewport.pos.y));
+
+                let (width, height) = element.container_element().map_or((0.0, 0.0), |container| {
                     let width = container.calculated_width.unwrap();
                     let height = container.calculated_height.unwrap();
+                    (width, height)
+                });
 
-                    let pos = ui.cursor().min;
-
-                    let (offset_x, offset_y) =
-                        viewport.map_or((0.0, 0.0), |viewport| (viewport.pos.x, viewport.pos.y));
-
-                    let pos_x = pos.x;
-                    let pos_y = pos.y;
-
-                    if pos_x + width - offset_x < -1.0
-                        || pos_y + height - offset_y < -1.0
-                        || pos_x - offset_x >= rect.width() + 1.0
-                        || pos_y - offset_y >= rect.height() + 1.0
-                    {
-                        ui.allocate_space(egui::vec2(width, height));
+                if pos.x + width - offset_x < -1.0
+                    || pos.y + height - offset_y < -1.0
+                    || pos.x - offset_x >= rect.width() + 1.0
+                    || pos.y - offset_y >= rect.height() + 1.0
+                {
+                    log::trace!(
+                        "render_element: skipping ({}, {}, {width}, {height}) {element}",
+                        pos.x,
+                        pos.y
+                    );
+                    ui.allocate_space(egui::vec2(width, height));
+                    if let Some(container) = element.container_element() {
                         for element in &container.elements {
                             self.handle_element_side_effects(ui, element, viewport, true);
                         }
-                        return;
                     }
+                    return;
                 }
+                log::trace!(
+                    "render_element: showing ({}, {}, {width}, {height}) {element}",
+                    pos.x,
+                    pos.y
+                );
             }
         }
 
         let response: Option<Response> = match element {
-            Element::Table { .. } => {
-                self.render_table(ctx, ui, element, &handler, viewport, rect);
-                return;
-            }
             Element::Input(input) => {
                 let value = match input {
                     Input::Text { value, .. } | Input::Password { value, .. } => value,
