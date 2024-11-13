@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::{
     path::{Path, PathBuf},
@@ -52,18 +53,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let source_encoding = from_extension_to_audio_format(source_extension)
         .ok_or_else(|| format!("Invalid source extension '{source_extension}'"))?;
 
-    let output_encoding = args
-        .encoding
-        .map(|x| {
-            AudioFormat::from_str(&x.to_uppercase())
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
-        })
-        .unwrap_or_else(|| {
+    let output_encoding = args.encoding.map_or_else(
+        || {
             let extension = output.extension().unwrap().to_str().unwrap();
             Ok(from_extension_to_audio_format(extension)
                 .or_else(|| AudioFormat::from_str(&extension.to_uppercase()).ok())
                 .ok_or_else(|| format!("Invalid output extension '{extension}'"))?)
-        })?;
+        },
+        |x| {
+            AudioFormat::from_str(&x.to_uppercase())
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+        },
+    )?;
 
     log::debug!(
         "Converting file ({:?}) => ({:?}) with {:?} encoding",
@@ -98,7 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await?;
 
-    tag_track_file(&source, &output).await?;
+    tag_track_file(&source, &output)?;
 
     Ok(())
 }
@@ -109,10 +110,15 @@ pub enum TagTrackFileError {
     Tag(#[from] moosicbox_audiotags::Error),
 }
 
-pub async fn tag_track_file(
-    input_path: &Path,
-    output_path: &Path,
-) -> Result<(), TagTrackFileError> {
+/// # Errors
+///
+/// * If the tags fail to read from the input file
+/// * If the tags fail to write to the output file
+///
+/// # Panics
+///
+/// * If the output file is not a valid string
+pub fn tag_track_file(input_path: &Path, output_path: &Path) -> Result<(), TagTrackFileError> {
     log::debug!("Reading source tags from input_path={input_path:?}");
 
     let input_tag = Tag::new().read_from_path(input_path)?;
