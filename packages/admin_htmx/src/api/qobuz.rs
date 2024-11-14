@@ -109,6 +109,7 @@ pub async fn run_scan_endpoint(
     Ok(html! {})
 }
 
+#[must_use]
 pub fn settings_logged_in(#[cfg(feature = "scan")] show_scan: bool) -> Markup {
     #[cfg(feature = "scan")]
     let scan = if show_scan {
@@ -133,6 +134,7 @@ pub fn settings_logged_in(#[cfg(feature = "scan")] show_scan: bool) -> Markup {
     }
 }
 
+#[must_use]
 pub fn settings_logged_out(message: Option<Markup>) -> Markup {
     html! {
         form hx-post="/admin/qobuz/auth/user-login" hx-swap="outerHTML" {
@@ -144,6 +146,9 @@ pub fn settings_logged_out(message: Option<Markup>) -> Markup {
     }
 }
 
+/// # Errors
+///
+/// * If fails to fetch the qobuz config from the database
 pub async fn settings(
     db: &LibraryDatabase,
     #[cfg(feature = "scan")] show_scan: bool,

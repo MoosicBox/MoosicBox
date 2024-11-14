@@ -1,3 +1,5 @@
+#![allow(clippy::future_not_send)]
+
 use actix_htmx::Htmx;
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
@@ -78,7 +80,7 @@ pub async fn index_endpoint(
             h1 { "MoosicBox Admin" }
             hr;
             (profiles::select_form(
-                &profiles.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+                &profiles.iter().map(String::as_str).collect::<Vec<_>>(),
                 profile.as_deref(),
                 Some("delete-moosicbox-profile-success from:body, create-moosicbox-profile-success from:body")
             ))
@@ -133,6 +135,9 @@ pub async fn index_endpoint(
     })
 }
 
+/// # Errors
+///
+/// * If any parts of the page fail to load
 pub async fn profile_info(
     #[allow(unused)] config_db: &ConfigDatabase,
     #[allow(unused)] library_db: &LibraryDatabase,

@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use actix_htmx::Htmx;
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
@@ -11,7 +13,7 @@ use moosicbox_music_api::MusicApis;
 use moosicbox_scan::ScanOrigin;
 use serde::Deserialize;
 
-use crate::api::util::*;
+use crate::api::util::clear_input;
 
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
@@ -88,6 +90,9 @@ pub async fn get_scans_endpoint(
         .map_err(|e| ErrorInternalServerError(format!("Failed to run scan: {e:?}")))
 }
 
+/// # Errors
+///
+/// * If fails to get the scan paths from the database
 pub async fn scan_paths(db: &LibraryDatabase) -> Result<Markup, DbError> {
     let paths = moosicbox_scan::get_scan_paths(db).await?;
 
@@ -110,6 +115,9 @@ pub async fn scan_paths(db: &LibraryDatabase) -> Result<Markup, DbError> {
     })
 }
 
+/// # Errors
+///
+/// * If the `scan_paths` fails to render
 pub async fn scan(db: &LibraryDatabase) -> Result<Markup, DbError> {
     Ok(html! {
         (scan_paths(db).await?)

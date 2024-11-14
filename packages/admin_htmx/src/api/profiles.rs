@@ -130,6 +130,7 @@ pub async fn create_new_profile_endpoint(
     })
 }
 
+#[must_use]
 pub fn new_profile_form(message: Option<String>, value: Option<String>, bundled: bool) -> Markup {
     html! {
         form hx-post={ "/admin/profiles/new?bundled="(bundled) } hx-swap="outerHTML" {
@@ -138,7 +139,7 @@ pub fn new_profile_form(message: Option<String>, value: Option<String>, bundled:
                 type="text"
                 name="profile"
                 placeholder="profile..."
-                value={ (value.unwrap_or_else(|| if bundled { whoami::realname() } else { "".to_string() })) }
+                value={ (value.unwrap_or_else(|| if bundled { whoami::realname() } else { String::new() })) }
             ;
             button type="submit" { "Create" }
         }
@@ -221,7 +222,7 @@ pub async fn post_select_endpoint(
 
     let profiles = PROFILES.names();
     Ok(select(
-        &profiles.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+        &profiles.iter().map(String::as_str).collect::<Vec<_>>(),
         Some(form.profile.as_str()),
     ))
 }
@@ -234,12 +235,13 @@ pub async fn select_endpoint(
     let profiles = PROFILES.names();
     let profile = profile.map(|x| x.0).or_else(|| profiles.first().cloned());
     Ok(select_form(
-        &profiles.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+        &profiles.iter().map(String::as_str).collect::<Vec<_>>(),
         profile.as_deref(),
         None,
     ))
 }
 
+#[must_use]
 pub fn select_form(profiles: &[&str], selected: Option<&str>, trigger: Option<&str>) -> Markup {
     html! {
         form hx-post="/admin/profiles/select" hx-trigger={"change"(trigger.map(|x| format!(", {x}")).unwrap_or_default())} {
@@ -248,16 +250,18 @@ pub fn select_form(profiles: &[&str], selected: Option<&str>, trigger: Option<&s
     }
 }
 
+#[must_use]
 pub fn select(profiles: &[&str], selected: Option<&str>) -> Markup {
     html! {
         select name="profile" {
-            @for p in profiles.iter() {
+            @for p in profiles {
                 option value=(p) selected[selected.is_some_and(|x| &x == p)] { (p) }
             }
         }
     }
 }
 
+#[must_use]
 pub fn profile(profile: &str) -> Markup {
     html! {
         li {
@@ -270,6 +274,9 @@ pub fn profile(profile: &str) -> Markup {
     }
 }
 
+/// # Errors
+///
+/// * If fails to fetch the profiles from the database
 pub async fn profiles(db: &ConfigDatabase) -> Result<Markup, DbError> {
     let profiles = moosicbox_config::get_profiles(db).await?;
 
