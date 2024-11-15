@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use moosicbox_async_service::{tokio::sync::RwLock, Arc, JoinHandle};
 use moosicbox_config::AppType;
@@ -48,12 +49,14 @@ impl service::Processor for service::Service {
         match command {
             Command::RunEvent { event } => {
                 log::debug!("process_command: Received RunEvent command");
-                if let Err(e) = ctx.read().await.handle_event(event) {
+                let response = ctx.read().await.handle_event(&event);
+                if let Err(e) = response {
                     log::error!("process_command: Failed to handle event: {e:?}");
                 }
             }
             Command::WaitForStartup { sender } => {
-                if let Some(receiver) = ctx.write().await.receiver.take() {
+                let receiver = ctx.write().await.receiver.take();
+                if let Some(receiver) = receiver {
                     log::debug!("process_command: Waiting for startup...");
                     if let Err(e) = receiver.await {
                         log::error!(
@@ -69,7 +72,8 @@ impl service::Processor for service::Service {
                 }
             }
             Command::WaitForShutdown { sender } => {
-                if let Some(handle) = ctx.write().await.server_handle.take() {
+                let handle = ctx.write().await.server_handle.take();
+                if let Some(handle) = handle {
                     handle.await??;
                 }
                 if let Err(e) = sender.send(()) {
@@ -87,6 +91,7 @@ pub struct Context {
 }
 
 impl Context {
+    #[must_use]
     pub fn new(handle: &tokio::runtime::Handle) -> Self {
         let (sender, receiver) = tokio::sync::oneshot::channel();
 
@@ -110,21 +115,19 @@ impl Context {
         }
     }
 
-    pub fn handle_event(&self, event: Arc<RunEvent>) -> Result<(), std::io::Error> {
-        match *event {
-            tauri::RunEvent::Exit { .. } => {}
-            tauri::RunEvent::ExitRequested { .. } => {
-                self.shutdown()?;
-            }
-            tauri::RunEvent::WindowEvent { .. } => {}
-            tauri::RunEvent::Ready => {}
-            tauri::RunEvent::Resumed => {}
-            tauri::RunEvent::MainEventsCleared => {}
-            _ => {}
+    /// # Errors
+    ///
+    /// * If an IO error occurs
+    pub fn handle_event(&self, event: &Arc<RunEvent>) -> Result<(), std::io::Error> {
+        if let tauri::RunEvent::ExitRequested { .. } = **event {
+            self.shutdown()?;
         }
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// * None
     pub fn shutdown(&self) -> Result<(), std::io::Error> {
         if let Some(handle) = &self.server_handle {
             handle.abort();
