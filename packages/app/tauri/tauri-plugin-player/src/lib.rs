@@ -1,3 +1,6 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+
 use tauri::{
     plugin::{Builder, TauriPlugin},
     Manager, Runtime,
@@ -33,14 +36,15 @@ impl<R: Runtime, T: Manager<R>> crate::PlayerExt<R> for T {
 }
 
 /// Initializes the plugin.
+#[must_use]
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("player")
         .invoke_handler(tauri::generate_handler![commands::update_state])
         .setup(|app, api| {
             #[cfg(mobile)]
-            let player = mobile::init(app, api)?;
+            let player = mobile::init(app, &api)?;
             #[cfg(desktop)]
-            let player = desktop::init(app, api)?;
+            let player = desktop::init(app, &api);
             app.manage(player);
             Ok(())
         })

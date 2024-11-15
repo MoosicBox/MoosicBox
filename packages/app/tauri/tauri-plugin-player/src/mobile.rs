@@ -15,7 +15,7 @@ tauri::ios_plugin_binding!(init_plugin_player);
 // initializes the Kotlin or Swift plugin classes
 pub fn init<R: Runtime, C: DeserializeOwned>(
     _app: &AppHandle<R>,
-    api: PluginApi<R, C>,
+    api: &PluginApi<R, C>,
 ) -> crate::Result<Player<R>> {
     #[cfg(target_os = "android")]
     let handle = api.register_android_plugin(PLUGIN_IDENTIFIER, "PlayerPlugin")?;
