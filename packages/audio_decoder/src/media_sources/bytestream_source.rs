@@ -44,7 +44,7 @@ impl ByteStreamSourceFetcher {
         let (tx, rx) = bounded(1);
         let (tx_ready, rx_ready) = bounded(1);
 
-        let mut fetcher = ByteStreamSourceFetcher {
+        let mut fetcher = Self {
             start,
             end,
             buffer: vec![],
@@ -80,11 +80,11 @@ impl ByteStreamSourceFetcher {
 
                 while let Some(item) = tokio::select! {
                     resp = stream.next() => resp,
-                    _ = abort.cancelled() => {
+                    () = abort.cancelled() => {
                         log::debug!("Aborted");
                         None
                     }
-                    _ = stream_abort.cancelled() => {
+                    () = stream_abort.cancelled() => {
                         log::debug!("Stream aborted");
                         None
                     }
@@ -128,6 +128,7 @@ impl Drop for ByteStreamSourceFetcher {
 }
 
 impl ByteStreamSource {
+    #[must_use]
     pub fn new(
         stream: ByteStreamType,
         size: Option<u64>,
@@ -135,7 +136,7 @@ impl ByteStreamSource {
         seekable: bool,
         abort: CancellationToken,
     ) -> Self {
-        ByteStreamSource {
+        Self {
             finished: false,
             seekable,
             size,
@@ -160,6 +161,7 @@ impl Read for ByteStreamSource {
             let receiver = self.fetcher.receiver.clone();
             let fetcher = &mut self.fetcher;
             let buffer_len = fetcher.buffer.len();
+            #[allow(clippy::cast_possible_truncation)]
             let fetcher_start = fetcher.start as usize;
 
             log::debug!(
@@ -217,8 +219,10 @@ impl Read for ByteStreamSource {
 impl Seek for ByteStreamSource {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         let seek_position: usize = match pos {
+            #[allow(clippy::cast_possible_truncation)]
             std::io::SeekFrom::Start(pos) => pos as usize,
             std::io::SeekFrom::Current(pos) => {
+                #[allow(clippy::cast_possible_wrap)]
                 let pos = self.read_position as i64 + pos;
                 pos.try_into().map_err(|_| {
                     std::io::Error::new(
@@ -228,6 +232,7 @@ impl Seek for ByteStreamSource {
                 })?
             }
             std::io::SeekFrom::End(pos) => {
+                #[allow(clippy::cast_possible_wrap)]
                 let pos = self.size.unwrap() as i64 - pos;
                 pos.try_into().map_err(|_| {
                     std::io::Error::new(

@@ -53,7 +53,7 @@ pub fn play_media_source(
             let decode_opts = DecoderOptions { verify };
 
             // Play it!
-            Ok(decode(probed.format, track_num, seek_time, &decode_opts)?)
+            Ok(decode(probed.format, track_num, seek_time, decode_opts)?)
         }
         Err(err) => {
             // The input was not supported by any format reader.

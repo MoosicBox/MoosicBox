@@ -13,11 +13,18 @@ struct PlayTrackOptions {
     seek_ts: u64,
 }
 
+/// # Panics
+///
+/// * If fails to get the first supported track
+///
+/// # Errors
+///
+/// * If the audio fails to decode
 pub fn decode(
     mut reader: Box<dyn FormatReader>,
     track_num: Option<usize>,
     seek_time: Option<f64>,
-    decode_opts: &DecoderOptions,
+    decode_opts: DecoderOptions,
 ) -> Result<Receiver<AudioBuffer<f32>>, DecodeError> {
     // If the user provided a track number, select that track if it exists, otherwise, select the
     // first track with a known codec.
@@ -38,7 +45,7 @@ pub fn decode(
     // Note: This is a half-baked approach to seeking! After seeking the reader, packets should be
     // decoded and *samples* discarded up-to the exact *sample* indicated by required_ts. The
     // current approach will discard excess samples if seeking to a sample within a packet.
-    let seek_ts = if let Some(time) = seek_time {
+    let seek_ts = seek_time.map_or(0, |time| {
         let seek_to = SeekTo::Time {
             time: Time::from(time),
             track_id: Some(track_id),
@@ -58,20 +65,18 @@ pub fn decode(
                 0
             }
         }
-    } else {
-        // If not seeking, the seek timestamp is 0.
-        0
-    };
+    });
 
     let track_info = PlayTrackOptions { track_id, seek_ts };
 
     decode_track(reader, track_info, decode_opts)
 }
 
+#[allow(clippy::similar_names)]
 fn decode_track(
     mut reader: Box<dyn FormatReader>,
     play_opts: PlayTrackOptions,
-    decode_opts: &DecoderOptions,
+    decode_opts: DecoderOptions,
 ) -> Result<Receiver<AudioBuffer<f32>>, DecodeError> {
     let (sender, receiver) = flume::unbounded::<AudioBuffer<f32>>();
 
@@ -84,7 +89,7 @@ fn decode_track(
         .clone();
 
     // Create a decoder for the track.
-    let mut decoder = symphonia::default::get_codecs().make(&track.codec_params, decode_opts)?;
+    let mut decoder = symphonia::default::get_codecs().make(&track.codec_params, &decode_opts)?;
 
     log::trace!("Spawning decoder loop");
 
@@ -119,9 +124,9 @@ fn decode_track(
                         if let Err(err) = sender.send(buf) {
                             log::error!("Receiver dropped: {err:?}");
                             break Ok(());
-                        } else {
-                            log::trace!("Wrote decoded to audio output");
                         }
+
+                        log::trace!("Wrote decoded to audio output");
                     } else {
                         log::trace!("Not to seeked position yet. Continuing decode");
                     }

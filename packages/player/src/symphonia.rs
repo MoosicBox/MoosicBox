@@ -154,7 +154,7 @@ fn play_media_source(
                 audio_decode_handler,
                 track_num,
                 seek_time,
-                &decode_opts,
+                decode_opts,
             )?)
         }
         Err(err) => {

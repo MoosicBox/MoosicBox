@@ -25,13 +25,17 @@ pub struct StreamableFile {
 }
 
 impl StreamableFile {
+    /// # Panics
+    ///
+    /// * If the client fails to send the request and get the Content-Length response header
+    #[must_use]
     pub fn new(url: String) -> Self {
         // Get the size of the file we are streaming.
         let res = Client::new().head(&url).send().unwrap();
         let header = res.headers().get("Content-Length").unwrap();
         let size: usize = header.to_str().unwrap().parse().unwrap();
 
-        StreamableFile {
+        Self {
             url,
             buffer: vec![0; size],
             read_position: 0,
@@ -44,7 +48,7 @@ impl StreamableFile {
     /// Gets the next chunk in the sequence.
     ///
     /// Returns the received bytes by sending them via `tx`.
-    fn read_chunk(tx: Sender<(usize, Vec<u8>)>, url: String, start: usize, file_size: usize) {
+    fn read_chunk(tx: &Sender<(usize, Vec<u8>)>, url: String, start: usize, file_size: usize) {
         let end = (start + CHUNK_SIZE).min(file_size);
 
         let chunk = Client::new()
@@ -144,6 +148,7 @@ impl Read for StreamableFile {
 
         debug!("Read: read_pos[{}] read_max[{read_max}] buf[{}] write_pos[{chunk_write_pos}] download[{should_get_chunk}]", self.read_position, buf.len());
         if should_get_chunk {
+            #[allow(clippy::range_plus_one)]
             self.requested
                 .insert(chunk_write_pos..chunk_write_pos + CHUNK_SIZE + 1);
 
@@ -158,7 +163,7 @@ impl Read for StreamableFile {
             self.receivers.push((id, rx));
 
             thread::spawn(move || {
-                Self::read_chunk(tx, url, chunk_write_pos, file_size);
+                Self::read_chunk(&tx, url, chunk_write_pos, file_size);
             });
         }
 
@@ -179,8 +184,10 @@ impl Read for StreamableFile {
 impl Seek for StreamableFile {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         let seek_position: usize = match pos {
+            #[allow(clippy::cast_possible_truncation)]
             std::io::SeekFrom::Start(pos) => pos as usize,
             std::io::SeekFrom::Current(pos) => {
+                #[allow(clippy::cast_possible_wrap)]
                 let pos = self.read_position as i64 + pos;
                 pos.try_into().map_err(|_| {
                     std::io::Error::new(
@@ -190,6 +197,7 @@ impl Seek for StreamableFile {
                 })?
             }
             std::io::SeekFrom::End(pos) => {
+                #[allow(clippy::cast_possible_wrap)]
                 let pos = self.buffer.len() as i64 + pos;
                 pos.try_into().map_err(|_| {
                     std::io::Error::new(

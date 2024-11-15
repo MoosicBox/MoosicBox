@@ -24,13 +24,17 @@ pub struct StreamableFileAsync {
 }
 
 impl StreamableFileAsync {
+    /// # Panics
+    ///
+    /// * If the client fails to send the request and get the Content-Length response header
+    #[must_use]
     pub async fn new(url: String) -> Self {
         // Get the size of the file we are streaming.
         let res = Client::new().head(&url).send().await.unwrap();
         let header = res.headers().get("Content-Length").unwrap();
         let size: usize = header.to_str().unwrap().parse().unwrap();
 
-        StreamableFileAsync {
+        Self {
             url,
             buffer: vec![0; size],
             read_position: 0,
@@ -145,6 +149,7 @@ impl Read for StreamableFileAsync {
 
         debug!("Read: read_pos[{}] read_max[{read_max}] buf[{}] write_pos[{chunk_write_pos}] download[{should_get_chunk}]", self.read_position, buf.len());
         if should_get_chunk {
+            #[allow(clippy::range_plus_one)]
             self.requested
                 .insert(chunk_write_pos..chunk_write_pos + CHUNK_SIZE + 1);
 
@@ -183,8 +188,10 @@ impl Read for StreamableFileAsync {
 impl Seek for StreamableFileAsync {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         let seek_position: usize = match pos {
+            #[allow(clippy::cast_possible_truncation)]
             std::io::SeekFrom::Start(pos) => pos as usize,
             std::io::SeekFrom::Current(pos) => {
+                #[allow(clippy::cast_possible_wrap)]
                 let pos = self.read_position as i64 + pos;
                 pos.try_into().map_err(|_| {
                     std::io::Error::new(
@@ -194,6 +201,7 @@ impl Seek for StreamableFileAsync {
                 })?
             }
             std::io::SeekFrom::End(pos) => {
+                #[allow(clippy::cast_possible_wrap)]
                 let pos = self.buffer.len() as i64 + pos;
                 pos.try_into().map_err(|_| {
                     std::io::Error::new(
