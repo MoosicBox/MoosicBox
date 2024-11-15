@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::future::Future;
 use std::sync::{Arc, RwLock};
@@ -68,10 +69,8 @@ pub struct WsHandle {
 }
 
 impl WsHandle {
-    pub async fn close(&self) -> Result<(), CloseError> {
+    pub fn close(&self) {
         self.cancellation_token.cancel();
-
-        Ok(())
     }
 }
 
@@ -104,6 +103,7 @@ pub struct WsClient {
 }
 
 impl WsClient {
+    #[must_use]
     pub fn new(url: String) -> (Self, WsHandle) {
         let sender = Arc::new(RwLock::new(None));
         let cancellation_token = CancellationToken::new();
@@ -115,13 +115,14 @@ impl WsClient {
         (
             Self {
                 url,
-                sender: sender.clone(),
-                cancellation_token: cancellation_token.clone(),
+                sender,
+                cancellation_token,
             },
             handle,
         )
     }
 
+    #[must_use]
     pub fn with_cancellation_token(mut self, token: CancellationToken) -> Self {
         self.cancellation_token = token;
         self
@@ -147,7 +148,7 @@ impl WsClient {
     }
 
     pub fn start(
-        &mut self,
+        &self,
         client_id: Option<String>,
         signature_token: Option<String>,
         profile: String,
@@ -162,8 +163,9 @@ impl WsClient {
         )
     }
 
+    #[allow(clippy::too_many_lines)]
     fn start_handler<T, O>(
-        &mut self,
+        &self,
         client_id: Option<String>,
         signature_token: Option<String>,
         profile: String,
@@ -191,24 +193,21 @@ impl WsClient {
                 sender_arc.write().unwrap().replace(txf.clone());
 
                 let profile_param = format!("?moosicboxProfile={profile}");
-                let client_id_param = if let Some(id) = &client_id {
-                    format!("&clientId={id}")
-                } else {
-                    "".to_string()
-                };
+                let client_id_param = client_id
+                    .as_ref()
+                    .map_or_else(String::new, |id| format!("&clientId={id}"));
                 let signature_token_param = if client_id.is_some() {
-                    if let Some(token) = &signature_token {
-                        format!("&signature={token}")
-                    } else {
-                        "".to_string()
-                    }
+                    signature_token
+                        .as_ref()
+                        .map_or_else(String::new, |token| format!("&signature={token}"))
                 } else {
-                    "".to_string()
+                    String::new()
                 };
                 log::debug!("Connecting to websocket...");
+                #[allow(clippy::redundant_pub_crate)]
                 match select!(
                     resp = connect_async(format!("{url}{profile_param}{client_id_param}{signature_token_param}")) => resp,
-                    _ = cancellation_token.cancelled() => {
+                    () = cancellation_token.cancelled() => {
                         log::debug!("Cancelling connect");
                         break;
                     }
@@ -275,9 +274,9 @@ impl WsClient {
                             async move {
                                 loop {
                                     select!(
-                                        _ = close_token.cancelled() => { break; }
-                                        _ = cancellation_token.cancelled() => { break; }
-                                        _ = tokio::time::sleep(std::time::Duration::from_millis(5000)) => {
+                                        () = close_token.cancelled() => { break; }
+                                        () = cancellation_token.cancelled() => { break; }
+                                        () = tokio::time::sleep(std::time::Duration::from_millis(5000)) => {
                                             log::trace!("Sending ping to server");
                                             if let Err(e) = txf.unbounded_send(WsMessage::Ping) {
                                                 log::error!("Pinger Send Loop error: {e:?}");
@@ -292,8 +291,8 @@ impl WsClient {
 
                         pin_mut!(ws_writer, ws_reader);
                         select!(
-                            _ = close_token.cancelled() => {}
-                            _ = cancellation_token.cancelled() => {}
+                            () = close_token.cancelled() => {}
+                            () = cancellation_token.cancelled() => {}
                             _ = future::select(ws_writer, ws_reader) => {}
                         );
                         if !close_token.is_cancelled() {
@@ -305,8 +304,8 @@ impl WsClient {
                         }
                         log::info!("WebSocket connection closed");
                     }
-                    Err(err) => match err {
-                        Error::Http(response) => {
+                    Err(err) => {
+                        if let Error::Http(response) = err {
                             if let Ok(body) =
                                 std::str::from_utf8(response.body().as_ref().unwrap_or(&vec![]))
                             {
@@ -314,15 +313,17 @@ impl WsClient {
                             } else {
                                 log::error!("body: (unable to get body)");
                             }
+                        } else {
+                            log::error!("Failed to connect to websocket server: {err:?}");
                         }
-                        _ => log::error!("Failed to connect to websocket server: {err:?}"),
-                    },
+                    }
                 }
 
+                #[allow(clippy::redundant_pub_crate)]
                 if just_retried {
                     select!(
-                        _ = sleep(Duration::from_millis(5000)) => {}
-                        _ = cancellation_token.cancelled() => {
+                        () = sleep(Duration::from_millis(5000)) => {}
+                        () = cancellation_token.cancelled() => {
                             log::debug!("Cancelling retry");
                             break;
                         }

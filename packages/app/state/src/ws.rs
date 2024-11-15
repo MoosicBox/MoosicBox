@@ -108,7 +108,7 @@ impl AppState {
 
         self.ws_handle.write().await.replace(handle.clone());
 
-        let mut client = client.with_cancellation_token(token.clone());
+        let client = client.with_cancellation_token(token.clone());
         let state = self.clone();
 
         self.ws_join_handle
@@ -208,7 +208,7 @@ impl AppState {
 
         let handle = self.ws_handle.read().await.clone();
         if let Some(handle) = handle {
-            handle.close().await.map_err(CloseWsError::Close)?;
+            handle.close();
         }
 
         let handle = self.ws_join_handle.write().await.take();
