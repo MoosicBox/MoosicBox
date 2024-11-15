@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::{io::Write as _, path::Path};
 
@@ -12,6 +13,10 @@ pub struct Config {
 }
 
 impl Config {
+    /// # Panics
+    ///
+    /// * If the `Config` fails to serialize
+    #[must_use]
     pub fn to_json(&self) -> String {
         let json = serde_json::to_string(self).unwrap();
 
@@ -19,6 +24,9 @@ impl Config {
     }
 }
 
+/// # Panics
+///
+/// * If the file fails to open
 pub fn gen<P: AsRef<Path>>(bundled: bool, output: P) {
     let config = Config {
         web: false,
