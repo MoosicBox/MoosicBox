@@ -1,7 +1,10 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+
 use std::{
     env,
     fmt::Debug,
-    sync::{Arc, LazyLock, OnceLock},
+    sync::{LazyLock, OnceLock},
 };
 
 use moosicbox_app_state::{
@@ -32,13 +35,13 @@ pub enum TauriPlayerError {
 
 impl From<AppStateError> for TauriPlayerError {
     fn from(err: AppStateError) -> Self {
-        TauriPlayerError::Unknown(err.to_string())
+        Self::Unknown(err.to_string())
     }
 }
 
 impl From<PlayerError> for TauriPlayerError {
     fn from(err: PlayerError) -> Self {
-        TauriPlayerError::Unknown(err.to_string())
+        Self::Unknown(err.to_string())
     }
 }
 
@@ -165,11 +168,14 @@ async fn update_log_layer(state: UpdateAppState) {
 async fn get_url_and_query() -> Option<(String, String)> {
     let url = { STATE.api_url.read().await.clone() }?;
 
+    let client_id = STATE.client_id.read().await.clone();
+    let signature_token = STATE.signature_token.read().await.clone();
+
     let mut query = String::new();
-    if let Some(client_id) = STATE.client_id.read().await.clone() {
+    if let Some(client_id) = client_id {
         query.push_str(&format!("&clientId={client_id}"));
     }
-    if let Some(signature_token) = STATE.signature_token.read().await.clone() {
+    if let Some(signature_token) = signature_token {
         query.push_str(&format!("&signature={signature_token}"));
     }
 
@@ -190,6 +196,7 @@ async fn update_player_plugin_playlist(session: ApiSession) {
         .update_state(app_tauri_plugin_player::UpdateState {
             playing: Some(session.playing),
             position: session.position,
+            #[allow(clippy::cast_precision_loss)]
             seek: session.seek.map(|x| x as f64),
             volume: session.volume,
             playlist: Some(app_tauri_plugin_player::Playlist {
@@ -197,7 +204,7 @@ async fn update_player_plugin_playlist(session: ApiSession) {
                     .playlist
                     .tracks
                     .into_iter()
-                    .filter_map(|x| convert_track(x, &url, &query))
+                    .map(|x| convert_track(x, &url, &query))
                     .collect::<Vec<_>>(),
             }),
         }) {
@@ -212,11 +219,12 @@ async fn update_player_plugin_playlist(session: ApiSession) {
 
 async fn handle_before_ws_message(message: OutboundPayload) {
     if let OutboundPayload::ConnectionId(payload) = &message {
+        let ws_url = STATE.ws_url.read().await.to_owned().unwrap_or_default();
         if let Err(e) = APP.get().unwrap().emit(
             "ws-connect",
             WsConnectMessage {
-                connection_id: payload.connection_id.to_owned(),
-                ws_url: STATE.ws_url.read().await.to_owned().unwrap_or_default(),
+                connection_id: payload.connection_id.clone(),
+                ws_url,
             },
         ) {
             log::error!("Failed to emit ws-connect: {e:?}");
@@ -230,7 +238,7 @@ async fn handle_after_ws_message(message: OutboundPayload) {
     }
 }
 
-#[derive(Copy, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone)]
+#[derive(Copy, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone)]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[serde(untagged)]
 pub enum TrackId {
@@ -242,9 +250,7 @@ pub enum TrackId {
 impl From<TrackId> for Id {
     fn from(value: TrackId) -> Self {
         match value {
-            TrackId::Library(id) => Id::Number(id),
-            TrackId::Tidal(id) => Id::Number(id),
-            TrackId::Qobuz(id) => Id::Number(id),
+            TrackId::Library(id) | TrackId::Tidal(id) | TrackId::Qobuz(id) => Self::Number(id),
         }
     }
 }
@@ -280,6 +286,7 @@ async fn set_playback_quality(quality: PlaybackQuality) -> Result<(), TauriPlaye
             )
             .await?;
     }
+    drop(binding);
 
     Ok(())
 }
@@ -332,7 +339,9 @@ async fn propagate_playback_event(update: UpdateSession, to_plugin: bool) -> Res
         propagate_state_to_plugin(update.clone().into()).await;
     }
 
-    if let Some(handle) = STATE.ws_handle.read().await.as_ref() {
+    let handle = STATE.ws_handle.read().await.clone();
+
+    if let Some(handle) = handle {
         log::debug!("on_playback_event: Sending update session: update={update:?}");
 
         APP.get().unwrap().emit(
@@ -344,7 +353,7 @@ async fn propagate_playback_event(update: UpdateSession, to_plugin: bool) -> Res
 
         if let Err(e) = STATE
             .send_ws_message(
-                handle,
+                &handle,
                 InboundPayload::UpdateSession(UpdateSessionPayload { payload: update }),
                 false,
             )
@@ -390,7 +399,7 @@ async fn propagate_state_to_plugin(update: ApiUpdateSession) {
                         tracks: x
                             .tracks
                             .iter()
-                            .filter_map(|x| convert_track(x.clone(), &url, &query))
+                            .map(|x| convert_track(x.clone(), &url, &query))
                             .collect::<Vec<_>>(),
                     }),
             }) {
@@ -404,11 +413,7 @@ fn album_cover_url(album_id: &str, source: ApiSource, url: &str, query: &str) ->
     format!("{url}/files/albums/{album_id}/300x300?source={source}{query}")
 }
 
-fn convert_track(
-    track: ApiTrack,
-    url: &str,
-    query: &str,
-) -> Option<app_tauri_plugin_player::Track> {
+fn convert_track(track: ApiTrack, url: &str, query: &str) -> app_tauri_plugin_player::Track {
     let api_source = track.api_source;
 
     let album_cover = if track.contains_cover {
@@ -421,7 +426,7 @@ fn convert_track(
     } else {
         None
     };
-    Some(app_tauri_plugin_player::Track {
+    app_tauri_plugin_player::Track {
         id: track.track_id.to_string(),
         number: track.number,
         title: track.title,
@@ -430,7 +435,7 @@ fn convert_track(
         artist: track.artist,
         artist_cover: None,
         duration: track.duration,
-    })
+    }
 }
 
 #[cfg(target_os = "android")]
@@ -591,7 +596,11 @@ async fn handle_media_event(
     Ok(())
 }
 
+/// # Panics
+///
+/// * If the `UPnP` listener fails to initialize
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[allow(clippy::too_many_lines)]
 pub fn run() {
     if std::env::var("TOKIO_CONSOLE") == Ok("1".to_string()) {
         console_subscriber::init();
@@ -648,7 +657,7 @@ pub fn run() {
     let join_upnp_service = upnp_service.start_on(&tokio_handle);
 
     UPNP_LISTENER_HANDLE
-        .set(upnp_service_handle.clone())
+        .set(upnp_service_handle)
         .unwrap_or_else(|_| panic!("Failed to set UPNP_LISTENER_HANDLE"));
 
     let (mdns_handle, join_mdns_service) = mdns::spawn_mdns_scanner();
@@ -712,29 +721,17 @@ pub fn run() {
             move |_handle, event| {
                 log::trace!("event: {event:?}");
 
-                let event = Arc::new(event);
-
                 #[cfg(feature = "bundled")]
                 {
                     use moosicbox_app_tauri_bundled::service::Commander as _;
 
-                    if let Err(e) = app_server_handle.send_command(
-                        moosicbox_app_tauri_bundled::Command::RunEvent {
-                            event: event.clone(),
-                        },
-                    ) {
+                    let event = std::sync::Arc::new(event);
+
+                    if let Err(e) = app_server_handle
+                        .send_command(moosicbox_app_tauri_bundled::Command::RunEvent { event })
+                    {
                         log::error!("AppServer failed to handle event: {e:?}");
                     }
-                }
-
-                match &*event {
-                    tauri::RunEvent::Exit { .. } => {}
-                    tauri::RunEvent::ExitRequested { .. } => {}
-                    tauri::RunEvent::WindowEvent { .. } => {}
-                    tauri::RunEvent::Ready => {}
-                    tauri::RunEvent::Resumed => {}
-                    tauri::RunEvent::MainEventsCleared => {}
-                    _ => {}
                 }
             }
         });

@@ -16,7 +16,7 @@ pub struct MoosicBox {
 
 impl From<moosicbox_mdns::scanner::MoosicBox> for MoosicBox {
     fn from(value: moosicbox_mdns::scanner::MoosicBox) -> Self {
-        MoosicBox {
+        Self {
             id: value.id,
             name: value.name,
             host: format!("http://{}", value.host),
