@@ -1238,12 +1238,9 @@ impl MusicApi for LibraryMusicApi {
                 #[cfg(feature = "aac")]
                 AudioFormat::Aac => {
                     let writer = moosicbox_stream_utils::ByteWriter::default();
-                    moosicbox_audio_output::encoder::aac::encode_aac_spawn(
-                        path.to_string(),
-                        writer.clone(),
-                    )
-                    .await
-                    .map_err(|e| TrackError::Other(Box::new(e)))?;
+                    moosicbox_audio_output::encoder::aac::encode_aac_spawn(path, writer.clone())
+                        .await
+                        .map_err(|e| TrackError::Other(Box::new(e)))?;
                     writer.bytes_written()
                 }
                 #[cfg(feature = "flac")]
@@ -1255,23 +1252,17 @@ impl MusicApi for LibraryMusicApi {
                 #[cfg(feature = "mp3")]
                 AudioFormat::Mp3 => {
                     let writer = moosicbox_stream_utils::ByteWriter::default();
-                    moosicbox_audio_output::encoder::mp3::encode_mp3_spawn(
-                        path.to_string(),
-                        writer.clone(),
-                    )
-                    .await
-                    .map_err(|e| TrackError::Other(Box::new(e)))?;
+                    moosicbox_audio_output::encoder::mp3::encode_mp3_spawn(path, writer.clone())
+                        .await
+                        .map_err(|e| TrackError::Other(Box::new(e)))?;
                     writer.bytes_written()
                 }
                 #[cfg(feature = "opus")]
                 AudioFormat::Opus => {
                     let writer = moosicbox_stream_utils::ByteWriter::default();
-                    moosicbox_audio_output::encoder::opus::encode_opus_spawn(
-                        path.to_string(),
-                        writer.clone(),
-                    )
-                    .await
-                    .map_err(|e| TrackError::Other(Box::new(e)))?;
+                    moosicbox_audio_output::encoder::opus::encode_opus_spawn(path, writer.clone())
+                        .await
+                        .map_err(|e| TrackError::Other(Box::new(e)))?;
                     writer.bytes_written()
                 }
                 AudioFormat::Source => File::open(path).unwrap().metadata().unwrap().len(),

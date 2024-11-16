@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Host, SampleFormat, SizedSample, StreamConfig};
 use rb::{RbConsumer, RbProducer, SpscRb, RB};
@@ -46,6 +48,9 @@ impl AudioOutputSample for u32 {}
 impl AudioOutputSample for f64 {}
 
 impl CpalAudioOutput {
+    /// # Errors
+    ///
+    /// * If the relevant `CpalAudioOutputImpl` fails to initialize
     pub fn new(device: cpal::Device, format: SampleFormat) -> Result<Self, AudioOutputError> {
         Ok(Self {
             write: match format {
@@ -83,7 +88,7 @@ impl TryFrom<Device> for AudioOutputFactory {
             log::trace!("\tinput: {input:?}",);
         }
 
-        let name = device.name().unwrap_or("(Unknown)".into());
+        let name = device.name().unwrap_or_else(|_| "(Unknown)".into());
         let config = device
             .default_output_config()
             .map_err(|_e| AudioOutputError::NoOutputs)?;
@@ -101,10 +106,7 @@ impl TryFrom<Device> for AudioOutputFactory {
     }
 }
 
-struct CpalAudioOutputImpl<T: AudioOutputSample>
-where
-    T: AudioOutputSample,
-{
+struct CpalAudioOutputImpl<T: AudioOutputSample> {
     spec: SignalSpec,
     ring_buf_producer: rb::Producer<T>,
     sample_buf: Option<SampleBuffer<T>>,
@@ -250,6 +252,7 @@ fn list_devices(host: &Host) {
     }
 }
 
+#[must_use]
 pub fn scan_default_output() -> Option<AudioOutputFactory> {
     cpal::default_host()
         .default_output_device()
@@ -261,6 +264,6 @@ pub fn scan_available_outputs() -> impl Iterator<Item = AudioOutputFactory> {
         .iter()
         .filter_map(|id| cpal::host_from_id(*id).ok())
         .filter_map(|host| host.devices().ok())
-        .flat_map(|devices| devices.into_iter())
+        .flat_map(IntoIterator::into_iter)
         .filter_map(|device| device.try_into().ok())
 }

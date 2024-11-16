@@ -1255,7 +1255,7 @@ impl TunnelSender {
                                             response_headers,
                                             ranges,
                                             moosicbox_audio_output::encoder::aac::encode_aac_stream(
-                                                path,
+                                                &path,
                                             ),
                                             encoding,
                                         )
@@ -1269,7 +1269,7 @@ impl TunnelSender {
                                             response_headers,
                                             ranges,
                                             moosicbox_audio_output::encoder::mp3::encode_mp3_stream(
-                                                path,
+                                                &path,
                                             ),
                                             encoding,
                                         )
@@ -1279,7 +1279,7 @@ impl TunnelSender {
                                     Some(AudioFormat::Opus) => {
                                         self.send_stream(request_id, 200, response_headers, ranges,
                                         moosicbox_audio_output::encoder::opus::encode_opus_stream(
-                                            path,
+                                            &path,
                                         ),
                                         encoding,
                                     ).await?;

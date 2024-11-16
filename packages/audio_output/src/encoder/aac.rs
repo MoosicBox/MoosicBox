@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use std::sync::RwLock;
 
 use bytes::Bytes;
@@ -6,9 +8,11 @@ use moosicbox_audio_decoder::{
 };
 use moosicbox_audio_encoder::aac::encoder_aac;
 use moosicbox_stream_utils::{ByteStream, ByteWriter};
-use symphonia::core::formats::Track;
-use symphonia::core::units::Duration;
-use symphonia::core::{audio::*, formats::Packet};
+use symphonia::core::{
+    audio::{AudioBuffer, Channels, Signal, SignalSpec},
+    formats::{Packet, Track},
+    units::Duration,
+};
 
 use crate::{to_samples, AudioOutputError, AudioWrite};
 use moosicbox_resampler::Resampler;
@@ -26,6 +30,10 @@ pub struct AacEncoder {
 }
 
 impl AacEncoder {
+    /// # Panics
+    ///
+    /// * If fails to get the aac encoder
+    #[must_use]
     pub fn new() -> Self {
         Self {
             resampler: None,
@@ -38,6 +46,9 @@ impl AacEncoder {
         }
     }
 
+    /// # Panics
+    ///
+    /// * If fails to get the aac encoder
     pub fn with_writer<W: std::io::Write + Send + Sync + 'static>(writer: W) -> Self {
         Self {
             resampler: None,
@@ -72,6 +83,7 @@ impl AacEncoder {
         self
     }
 
+    #[must_use]
     pub fn open(mut self, spec: SignalSpec, duration: Duration) -> Self {
         self.init_resampler(&spec, duration);
         self
@@ -135,7 +147,7 @@ impl AacEncoder {
                 spec.channels,
                 spec.channels.count(),
             );
-            Ok(to_samples(decoded))
+            Ok(to_samples(&decoded))
         }
     }
 }
@@ -157,7 +169,7 @@ impl AudioEncoder for AacEncoder {
 
     fn spec(&self) -> SignalSpec {
         SignalSpec {
-            rate: self.output_rate as u32,
+            rate: u32::try_from(self.output_rate).unwrap(),
             channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
         }
     }
@@ -233,7 +245,8 @@ impl AudioWrite for AacEncoder {
     }
 }
 
-pub fn encode_aac_stream(path: String) -> ByteStream {
+#[must_use]
+pub fn encode_aac_stream(path: &str) -> ByteStream {
     let writer = ByteWriter::default();
     let stream = writer.stream();
 
@@ -243,16 +256,16 @@ pub fn encode_aac_stream(path: String) -> ByteStream {
 }
 
 pub fn encode_aac_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
-    path: String,
+    path: &str,
     writer: T,
 ) -> tokio::task::JoinHandle<()> {
-    let path = path.clone();
+    let path = path.to_string();
     moosicbox_task::spawn_blocking("audio_decoder: encode_aac", move || {
-        encode_aac(path, writer)
+        encode_aac(&path, writer);
     })
 }
 
-pub fn encode_aac<T: std::io::Write + Send + Sync + Clone + 'static>(path: String, writer: T) {
+pub fn encode_aac<T: std::io::Write + Send + Sync + Clone + 'static>(path: &str, writer: T) {
     let mut audio_decode_handler =
         AudioDecodeHandler::new().with_output(Box::new(move |spec, duration| {
             Ok(Box::new(
@@ -260,7 +273,7 @@ pub fn encode_aac<T: std::io::Write + Send + Sync + Clone + 'static>(path: Strin
             ))
         }));
 
-    if let Err(err) = decode_file_path_str(&path, &mut audio_decode_handler, true, true, None, None)
+    if let Err(err) = decode_file_path_str(path, &mut audio_decode_handler, true, true, None, None)
     {
         log::error!("Failed to encode to aac: {err:?}");
     }

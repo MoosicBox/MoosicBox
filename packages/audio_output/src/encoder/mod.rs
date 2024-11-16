@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use bytes::Bytes;
 use symphonia::core::audio::{AudioBuffer, SignalSpec};
 
@@ -13,6 +15,9 @@ pub mod mp3;
 pub mod opus;
 
 pub trait AudioEncoder: Send + Sync {
+    /// # Errors
+    ///
+    /// * If the audio fails to encode
     fn encode(&mut self, decoded: AudioBuffer<f32>) -> Result<Bytes, AudioOutputError>;
     fn spec(&self) -> SignalSpec;
 }

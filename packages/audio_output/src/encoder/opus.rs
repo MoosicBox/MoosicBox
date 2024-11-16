@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use std::sync::{Mutex, RwLock};
 
 use bytes::Bytes;
@@ -9,9 +11,11 @@ use moosicbox_audio_encoder::opus::{
 };
 use moosicbox_stream_utils::{ByteStream, ByteWriter};
 use ogg::{PacketWriteEndInfo, PacketWriter};
-use symphonia::core::formats::Track;
-use symphonia::core::units::Duration;
-use symphonia::core::{audio::*, formats::Packet};
+use symphonia::core::{
+    audio::{AudioBuffer, Channels, Signal, SignalSpec},
+    formats::{Packet, Track},
+    units::Duration,
+};
 
 use crate::{to_samples, AudioOutputError, AudioWrite};
 use moosicbox_resampler::Resampler;
@@ -39,6 +43,10 @@ pub struct OpusEncoder<'a> {
 }
 
 impl OpusEncoder<'_> {
+    /// # Panics
+    ///
+    /// * If fails to get the opus encoder
+    #[must_use]
     pub fn new() -> Self {
         let packet_writer = PacketWriter::new(Vec::new());
 
@@ -88,6 +96,7 @@ impl OpusEncoder<'_> {
         self
     }
 
+    #[must_use]
     pub fn open(mut self, spec: SignalSpec, duration: Duration) -> Self {
         self.init_resampler(&spec, duration);
         self
@@ -259,7 +268,7 @@ impl OpusEncoder<'_> {
                 spec.channels,
                 spec.channels.count(),
             );
-            Ok(to_samples(decoded))
+            Ok(to_samples(&decoded))
         }
     }
 }
@@ -281,7 +290,7 @@ impl AudioEncoder for OpusEncoder<'_> {
 
     fn spec(&self) -> SignalSpec {
         SignalSpec {
-            rate: self.output_rate as u32,
+            rate: u32::try_from(self.output_rate).unwrap(),
             channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
         }
     }
@@ -357,7 +366,8 @@ impl AudioWrite for OpusEncoder<'_> {
     }
 }
 
-pub fn encode_opus_stream(path: String) -> ByteStream {
+#[must_use]
+pub fn encode_opus_stream(path: &str) -> ByteStream {
     let writer = ByteWriter::default();
     let stream = writer.stream();
 
@@ -367,16 +377,16 @@ pub fn encode_opus_stream(path: String) -> ByteStream {
 }
 
 pub fn encode_opus_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
-    path: String,
+    path: &str,
     writer: T,
 ) -> tokio::task::JoinHandle<()> {
-    let path = path.clone();
+    let path = path.to_string();
     moosicbox_task::spawn_blocking("audio_decoder: encode_opus", move || {
-        encode_opus(path, writer)
+        encode_opus(&path, writer);
     })
 }
 
-pub fn encode_opus<T: std::io::Write + Send + Sync + Clone + 'static>(path: String, writer: T) {
+pub fn encode_opus<T: std::io::Write + Send + Sync + Clone + 'static>(path: &str, writer: T) {
     let mut audio_decode_handler =
         AudioDecodeHandler::new().with_output(Box::new(move |spec, duration| {
             Ok(Box::new(
@@ -384,7 +394,7 @@ pub fn encode_opus<T: std::io::Write + Send + Sync + Clone + 'static>(path: Stri
             ))
         }));
 
-    if let Err(err) = decode_file_path_str(&path, &mut audio_decode_handler, true, true, None, None)
+    if let Err(err) = decode_file_path_str(path, &mut audio_decode_handler, true, true, None, None)
     {
         log::error!("Failed to encode to opus: {err:?}");
     }

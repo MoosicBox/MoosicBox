@@ -1,18 +1,16 @@
-use std::ops::Deref;
 use std::sync::atomic::AtomicUsize;
 use std::{cell::RefCell, rc::Rc, time::SystemTime};
 
 use libpulse_binding as pulse;
 use moosicbox_env_utils::option_env_u32;
-use pulse::context::{Context, FlagSet as ContextFlagSet};
+use pulse::context::{Context, FlagSet as ContextFlagSet, State};
 use pulse::def::BufferAttr;
 use pulse::error::PAErr;
 use pulse::mainloop::standard::{IterateResult, Mainloop};
 use pulse::proplist::Proplist;
 use pulse::stream::{FlagSet as StreamFlagSet, Latency, Stream};
 use pulse::time::MicroSeconds;
-use symphonia::core::audio::SignalSpec;
-use symphonia::core::audio::*;
+use symphonia::core::audio::{AudioBuffer, Layout, RawSampleBuffer, Signal, SignalSpec};
 use symphonia::core::units::Duration;
 use thiserror::Error;
 
@@ -24,14 +22,28 @@ static SAMPLE_RATE: Option<u32> = option_env_u32!("PULSEAUDIO_RESAMPLE_RATE");
 pub struct PulseAudioOutput {
     mainloop: Rc<RefCell<Mainloop>>,
     stream: Rc<RefCell<pulse::stream::Stream>>,
-    context: Rc<RefCell<pulse::context::Context>>,
+    context: Rc<RefCell<Context>>,
     sample_buf: Option<RawSampleBuffer<f32>>,
     spec: SignalSpec,
     bytes: AtomicUsize,
 }
 
 impl PulseAudioOutput {
-    pub fn try_open(spec: SignalSpec) -> Result<PulseAudioOutput, AudioOutputError> {
+    /// # Panics
+    ///
+    /// * If fails to convert the channels count to u8
+    /// * If the spec is invalid
+    /// * If fails to create the `PulseAudio` mainloop
+    /// * If fails to initialize the `PulseAudio` `Proplist`
+    /// * If fails to create a new `PulseAudio` context
+    /// * If fails to connect the context to the playback
+    /// * If fails to create a new `PulseAudio` stream
+    /// * If fails to connect the stream to the playback
+    ///
+    /// # Errors
+    ///
+    /// * If the `PulseAudio` context fails to initialize to `State::Ready`
+    pub fn try_open(spec: SignalSpec) -> Result<Self, AudioOutputError> {
         let pa_spec = {
             log::debug!(
                 "Creating PulseAudio stream with spec rate={} channels={}",
@@ -41,7 +53,7 @@ impl PulseAudioOutput {
             // Create a PulseAudio stream specification.
             pulse::sample::Spec {
                 format: pulse::sample::Format::FLOAT32NE,
-                channels: spec.channels.count() as u8,
+                channels: u8::try_from(spec.channels.count()).unwrap(),
                 rate: spec.rate,
             }
         };
@@ -63,7 +75,7 @@ impl PulseAudioOutput {
             .unwrap();
 
         let context = Rc::new(RefCell::new(
-            Context::new_with_proplist(mainloop.borrow().deref(), "FooAppContext", &proplist)
+            Context::new_with_proplist(&*mainloop.borrow(), "FooAppContext", &proplist)
                 .expect("Failed to create new context"),
         ));
 
@@ -72,20 +84,16 @@ impl PulseAudioOutput {
 
             ctx.set_state_callback(Some(Box::new(|| log::trace!("Context STATE"))));
             ctx.set_event_callback(Some(Box::new(|evt, _props| {
-                log::trace!("Context EVENT: {evt}")
+                log::trace!("Context EVENT: {evt}");
             })));
             ctx.set_subscribe_callback(Some(Box::new(|_facility, _operation, _index| {
-                log::trace!("Context SUBSCRIBED")
+                log::trace!("Context SUBSCRIBED");
             })));
 
             ctx.connect(None, ContextFlagSet::NOFLAGS, None)
                 .expect("Failed to connect context");
 
-            wait_for_context(
-                &mut mainloop.borrow_mut(),
-                &mut ctx,
-                pulse::context::State::Ready,
-            )?;
+            wait_for_context(&mut mainloop.borrow_mut(), &ctx, State::Ready)?;
         }
 
         let stream = Rc::new(RefCell::new(
@@ -134,10 +142,10 @@ impl PulseAudioOutput {
             })));
         }
 
-        Ok(PulseAudioOutput {
-            mainloop: mainloop.clone(),
-            stream: stream.clone(),
-            context: context.clone(),
+        Ok(Self {
+            mainloop,
+            stream,
+            context,
             sample_buf: None,
             spec,
             bytes: AtomicUsize::new(0),
@@ -166,7 +174,7 @@ enum MainloopError {
 
 impl<T> From<MainloopError> for StateError<T> {
     fn from(err: MainloopError) -> Self {
-        StateError::Mainloop(err)
+        Self::Mainloop(err)
     }
 }
 
@@ -186,14 +194,14 @@ fn iterate_mainloop(mainloop: &mut Mainloop) -> Result<(), MainloopError> {
     }
 }
 
-fn wait_for_state<'a, T>(
+fn wait_for_state<T>(
     mainloop: &mut Mainloop,
-    get_state: Box<dyn Fn() -> T + 'a>,
+    get_state: impl Fn() -> T,
     expected_state: T,
     failure_states: &[T],
 ) -> Result<(), StateError<T>>
 where
-    T: std::fmt::Debug + PartialEq + Clone,
+    T: std::fmt::Debug + PartialEq + Clone + Copy,
 {
     let mut last_state = None;
     loop {
@@ -205,7 +213,7 @@ where
             failure_states
                 .iter()
                 .find(|s| **s == state)
-                .map(|s| Err::<(), _>(StateError::State((*s).clone())))
+                .map(|s| Err::<(), _>(StateError::State(*s)))
                 .transpose()?;
             log::trace!("Stream state {state:?}");
         }
@@ -215,24 +223,20 @@ where
 
 fn wait_for_context(
     mainloop: &mut Mainloop,
-    context: &mut Context,
-    expected_state: pulse::context::State,
+    context: &Context,
+    expected_state: State,
 ) -> Result<(), AudioOutputError> {
     wait_for_state(
         mainloop,
-        Box::new(|| context.get_state()),
+        || context.get_state(),
         expected_state,
-        &[
-            pulse::context::State::Failed,
-            pulse::context::State::Terminated,
-        ],
+        &[State::Failed, State::Terminated],
     )
     .map_err(|e| match e {
         StateError::State(state) => {
             log::error!("Context failure state {:?}, quitting...", state);
             match state {
-                pulse::context::State::Failed => AudioOutputError::StreamClosed,
-                pulse::context::State::Terminated => AudioOutputError::StreamClosed,
+                State::Failed | State::Terminated => AudioOutputError::StreamClosed,
                 _ => unreachable!(),
             }
         }
@@ -242,12 +246,12 @@ fn wait_for_context(
 
 fn wait_for_stream(
     mainloop: &mut Mainloop,
-    stream: &mut Stream,
+    stream: &Stream,
     expected_state: pulse::stream::State,
 ) -> Result<(), AudioOutputError> {
     wait_for_state(
         mainloop,
-        Box::new(|| stream.get_state()),
+        || stream.get_state(),
         expected_state,
         &[
             pulse::stream::State::Failed,
@@ -258,8 +262,9 @@ fn wait_for_stream(
         StateError::State(state) => {
             log::error!("Stream failure state {:?}, quitting...", state);
             match state {
-                pulse::stream::State::Failed => AudioOutputError::StreamClosed,
-                pulse::stream::State::Terminated => AudioOutputError::StreamClosed,
+                pulse::stream::State::Failed | pulse::stream::State::Terminated => {
+                    AudioOutputError::StreamClosed
+                }
                 _ => unreachable!(),
             }
         }
@@ -278,19 +283,17 @@ fn write_bytes(stream: &mut Stream, mut bytes: &[u8]) -> Result<usize, AudioOutp
         // stream.begin_write(Some(byte_count)).unwrap();
         log::trace!("Writing to pulse audio {byte_count} bytes ({size_left} left)");
         // Write interleaved samples to PulseAudio.
-        let written = match stream.write(buffer, None, 0, pulse::stream::SeekMode::Relative) {
-            Err(err) => {
+        let written =
+            if let Err(err) = stream.write(buffer, None, 0, pulse::stream::SeekMode::Relative) {
                 log::error!("audio output stream write error: {}", err);
 
                 return Err(AudioOutputError::StreamClosed);
-            }
-            _ => {
+            } else {
                 if stream.is_corked().unwrap() {
                     stream.uncork(None);
                 }
                 byte_count
-            }
-        };
+            };
 
         if end == bytes.len() {
             break Ok(written);
@@ -344,12 +347,12 @@ impl AudioWrite for PulseAudioOutput {
         // Wait for context to be ready
         wait_for_context(
             &mut self.mainloop.borrow_mut(),
-            &mut self.context.borrow_mut(),
-            pulse::context::State::Ready,
+            &self.context.borrow(),
+            State::Ready,
         )?;
         wait_for_stream(
             &mut self.mainloop.borrow_mut(),
-            &mut self.stream.borrow_mut(),
+            &self.stream.borrow(),
             pulse::stream::State::Ready,
         )?;
 
@@ -423,17 +426,18 @@ impl Drop for PulseAudioOutput {
         };
         match wait_for_stream(
             &mut self.mainloop.borrow_mut(),
-            &mut self.stream.borrow_mut(),
+            &self.stream.borrow(),
             pulse::stream::State::Terminated,
         ) {
             Ok(()) => log::debug!("Terminated stream"),
             Err(err) => log::error!("Failed to terminate stream: {err:?}"),
         }
 
-        self.context.borrow_mut().disconnect()
+        self.context.borrow_mut().disconnect();
     }
 }
 
+#[must_use]
 pub fn scan_default_output() -> Option<AudioOutputFactory> {
     let spec = SignalSpec {
         rate: SAMPLE_RATE.unwrap_or(pulse::sample::Spec::RATE_MAX),

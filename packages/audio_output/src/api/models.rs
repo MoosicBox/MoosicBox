@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{AudioOutputFactory, SignalSpec};
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiAudioOutput {
     pub id: String,

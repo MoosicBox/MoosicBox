@@ -4,11 +4,11 @@ use log::warn;
 
 use symphonia::core::audio::Channels;
 
-/// Maps a set of Symphonia `Channels` to a PulseAudio channel map.
+/// Maps a set of Symphonia `Channels` to a `PulseAudio` channel map.
 pub fn map_channels_to_pa_channelmap(channels: Channels) -> Option<pulse::channelmap::Map> {
-    let mut map: pulse::channelmap::Map = Default::default();
+    let mut map = pulse::channelmap::Map::default();
     map.init();
-    map.set_len(channels.count() as u8);
+    map.set_len(u8::try_from(channels.count()).unwrap());
 
     let is_mono = channels.count() == 1;
 

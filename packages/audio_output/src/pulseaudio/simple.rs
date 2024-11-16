@@ -3,8 +3,7 @@ use std::time::SystemTime;
 use libpulse_binding as pulse;
 use libpulse_simple_binding as psimple;
 use moosicbox_env_utils::option_env_u32;
-use symphonia::core::audio::SignalSpec;
-use symphonia::core::audio::*;
+use symphonia::core::audio::{AudioBuffer, Layout, RawSampleBuffer, Signal, SignalSpec};
 use symphonia::core::units::Duration;
 
 use crate::{
@@ -21,11 +20,19 @@ pub struct PulseAudioOutput {
 }
 
 impl PulseAudioOutput {
-    pub fn try_open(spec: SignalSpec) -> Result<PulseAudioOutput, AudioOutputError> {
+    /// # Panics
+    ///
+    /// * If fails to convert the channels count to u8
+    /// * If the spec is invalid
+    ///
+    /// # Errors
+    ///
+    /// * If `psimple::Simple::new` fails to initialize with the given spec
+    pub fn try_open(spec: SignalSpec) -> Result<Self, AudioOutputError> {
         // Create a PulseAudio stream specification.
         let pa_spec = pulse::sample::Spec {
             format: pulse::sample::Format::FLOAT32NE,
-            channels: spec.channels.count() as u8,
+            channels: u8::try_from(spec.channels.count()).unwrap(),
             rate: spec.rate,
         };
 
@@ -46,7 +53,7 @@ impl PulseAudioOutput {
         );
 
         match pa_result {
-            Ok(pa) => Ok(PulseAudioOutput {
+            Ok(pa) => Ok(Self {
                 spec,
                 pa,
                 sample_buf: None,
@@ -94,23 +101,21 @@ impl AudioWrite for PulseAudioOutput {
         );
         let start = SystemTime::now();
         // Write interleaved samples to PulseAudio.
-        match self.pa.write(buffer) {
-            Err(err) => {
-                log::error!("audio output stream write error: {}", err);
+        if let Err(err) = self.pa.write(buffer) {
+            log::error!("audio output stream write error: {}", err);
 
-                Err(AudioOutputError::StreamClosed)
+            Err(AudioOutputError::StreamClosed)
+        } else {
+            let end = SystemTime::now();
+            let took_ms = end.duration_since(start).unwrap().as_millis();
+            if took_ms >= 500 {
+                log::error!("Detected audio interrupt");
+                return Err(AudioOutputError::Interrupt);
             }
-            _ => {
-                let end = SystemTime::now();
-                let took_ms = end.duration_since(start).unwrap().as_millis();
-                if took_ms >= 500 {
-                    log::error!("Detected audio interrupt");
-                    return Err(AudioOutputError::Interrupt);
-                } else {
-                    log::trace!("Successfully wrote to pulse audio. Took {}ms", took_ms);
-                }
-                Ok(buffer.len())
-            }
+
+            log::trace!("Successfully wrote to pulse audio. Took {}ms", took_ms);
+
+            Ok(buffer.len())
         }
     }
 
@@ -121,6 +126,7 @@ impl AudioWrite for PulseAudioOutput {
     }
 }
 
+#[must_use]
 pub fn scan_default_output() -> Option<AudioOutputFactory> {
     let spec = SignalSpec {
         rate: SAMPLE_RATE.unwrap_or(pulse::sample::Spec::RATE_MAX),

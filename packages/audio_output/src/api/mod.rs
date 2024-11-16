@@ -62,12 +62,12 @@ pub async fn audio_outputs_endpoint(
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(30);
     let outputs = crate::output_factories().await;
-    let total = outputs.len() as u32;
+    let total = u32::try_from(outputs.len()).unwrap();
     let outputs = outputs
         .into_iter()
         .skip(offset as usize)
         .take(limit as usize)
-        .map(|x| x.into())
+        .map(Into::into)
         .collect::<Vec<_>>();
 
     Ok(Json(Page::WithTotal {

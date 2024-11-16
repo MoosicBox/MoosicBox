@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::sync::{Arc, LazyLock};
 
@@ -33,6 +34,7 @@ pub struct AudioOutput {
 }
 
 impl AudioOutput {
+    #[must_use]
     pub fn new(id: String, name: String, spec: SignalSpec, writer: Box<dyn AudioWrite>) -> Self {
         Self {
             id,
@@ -50,9 +52,8 @@ impl AudioOutput {
         Ok(if let Some(resampler) = &mut self.resampler {
             // Resampling is required. The resampler will return interleaved samples in the
             // correct sample format.
-            let samples = match resampler.resample(decoded) {
-                Some(resampled) => resampled,
-                None => return Err(AudioOutputError::StreamEnd),
+            let Some(samples) = resampler.resample(decoded) else {
+                return Err(AudioOutputError::StreamEnd);
             };
 
             to_audio_buffer(samples, self.spec)
@@ -156,6 +157,7 @@ impl AudioOutputFactory {
         }
     }
 
+    #[must_use]
     pub fn new_box(id: String, name: String, spec: SignalSpec, writer: GetWriter) -> Self {
         Self {
             id,
@@ -165,6 +167,9 @@ impl AudioOutputFactory {
         }
     }
 
+    /// # Errors
+    ///
+    /// * If fails to instantiate the `AudioOutput`
     pub fn try_into_output(&self) -> Result<AudioOutput, AudioOutputError> {
         self.try_into()
     }
@@ -189,9 +194,9 @@ impl TryFrom<&AudioOutputFactory> for AudioOutput {
 
     fn try_from(value: &AudioOutputFactory) -> Result<Self, Self::Error> {
         Ok(Self {
-            id: value.id.to_owned(),
-            name: value.name.to_owned(),
-            spec: value.spec.to_owned(),
+            id: value.id.clone(),
+            name: value.name.clone(),
+            spec: value.spec,
             resampler: None,
             writer: (value.get_writer.lock().unwrap())()?,
         })
@@ -199,7 +204,14 @@ impl TryFrom<&AudioOutputFactory> for AudioOutput {
 }
 
 pub trait AudioWrite {
+    /// # Errors
+    ///
+    /// * If fails to write the `AudioBuffer`
     fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError>;
+
+    /// # Errors
+    ///
+    /// * If fails to flush the `AudioWrite`
     fn flush(&mut self) -> Result<(), AudioOutputError>;
 }
 
@@ -263,7 +275,7 @@ pub enum AudioOutputError {
 }
 
 #[allow(unused)]
-fn to_samples<S: FromSample<f32> + Default + Clone>(decoded: AudioBuffer<f32>) -> Vec<S> {
+fn to_samples<S: FromSample<f32> + Default + Clone>(decoded: &AudioBuffer<f32>) -> Vec<S> {
     let n_channels = decoded.spec().channels.count();
     let n_samples = decoded.frames() * n_channels;
     let mut buf: Vec<S> = vec![S::default(); n_samples];
@@ -283,6 +295,9 @@ fn to_samples<S: FromSample<f32> + Default + Clone>(decoded: AudioBuffer<f32>) -
 static AUDIO_OUTPUT_SCANNER: LazyLock<Arc<Mutex<AudioOutputScanner>>> =
     LazyLock::new(|| Arc::new(Mutex::new(AudioOutputScanner::new())));
 
+/// # Errors
+///
+/// * If the `scan` fails
 pub async fn scan_outputs() -> Result<(), AudioOutputScannerError> {
     AUDIO_OUTPUT_SCANNER.lock().await.scan().await
 }
@@ -296,12 +311,14 @@ pub async fn default_output_factory() -> Option<AudioOutputFactory> {
         .lock()
         .await
         .default_output_factory()
-        .await
         .cloned()
 }
 
+/// # Errors
+///
+/// * If there is no default output
 pub async fn default_output() -> Result<AudioOutput, AudioOutputScannerError> {
-    AUDIO_OUTPUT_SCANNER.lock().await.default_output().await
+    AUDIO_OUTPUT_SCANNER.lock().await.default_output()
 }
 
 pub struct AudioOutputScanner {
@@ -322,13 +339,22 @@ pub enum AudioOutputScannerError {
 }
 
 impl AudioOutputScanner {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             outputs: vec![],
             default_output: None,
         }
     }
 
+    /// # Panics
+    ///
+    /// * If time went backwards
+    ///
+    /// # Errors
+    ///
+    /// * If the tokio spawned tasks fail to join
+    #[allow(clippy::too_many_lines, clippy::unused_async)]
     pub async fn scan(&mut self) -> Result<(), AudioOutputScannerError> {
         self.default_output = None;
         self.outputs = vec![];
@@ -383,10 +409,10 @@ impl AudioOutputScanner {
 
                 if let Some(output) = &self.default_output {
                     if !self.outputs.iter().any(|x| x.id == output.id) {
-                        if !self.outputs.is_empty() {
-                            self.outputs.insert(0, output.clone());
-                        } else {
+                        if self.outputs.is_empty() {
                             self.outputs.push(output.clone());
+                        } else {
+                            self.outputs.insert(0, output.clone());
                         }
                     }
                 }
@@ -448,10 +474,10 @@ impl AudioOutputScanner {
 
                 if let Some(output) = &self.default_output {
                     if !self.outputs.iter().any(|x| x.id == output.id) {
-                        if !self.outputs.is_empty() {
-                            self.outputs.insert(0, output.clone());
-                        } else {
+                        if self.outputs.is_empty() {
                             self.outputs.push(output.clone());
+                        } else {
+                            self.outputs.insert(0, output.clone());
                         }
                     }
                 }
@@ -513,10 +539,10 @@ impl AudioOutputScanner {
 
                 if let Some(output) = &self.default_output {
                     if !self.outputs.iter().any(|x| x.id == output.id) {
-                        if !self.outputs.is_empty() {
-                            self.outputs.insert(0, output.clone());
-                        } else {
+                        if self.outputs.is_empty() {
                             self.outputs.push(output.clone());
+                        } else {
+                            self.outputs.insert(0, output.clone());
                         }
                     }
                 }
@@ -526,14 +552,17 @@ impl AudioOutputScanner {
         Ok(())
     }
 
-    pub async fn default_output_factory(&self) -> Option<&AudioOutputFactory> {
+    #[must_use]
+    pub const fn default_output_factory(&self) -> Option<&AudioOutputFactory> {
         self.default_output.as_ref()
     }
 
-    pub async fn default_output(&self) -> Result<AudioOutput, AudioOutputScannerError> {
+    /// # Errors
+    ///
+    /// * If there is no default output
+    pub fn default_output(&self) -> Result<AudioOutput, AudioOutputScannerError> {
         self.default_output_factory()
-            .await
-            .map(|x| x.try_into())
+            .map(TryInto::try_into)
             .transpose()?
             .ok_or(AudioOutputScannerError::NoOutputs)
     }
