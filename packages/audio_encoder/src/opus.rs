@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use std::fs::File;
 
 use ogg::{PacketReader, PacketWriteEndInfo, PacketWriter};
@@ -15,10 +17,17 @@ pub enum EncoderError {
 
 impl From<::opus::Error> for EncoderError {
     fn from(value: ::opus::Error) -> Self {
-        EncoderError::OpusEncoder(value)
+        Self::OpusEncoder(value)
     }
 }
 
+/// # Panics
+///
+/// * If the samples len fails to convert to u32 type
+///
+/// # Errors
+///
+/// * If the encoder fails to encode the samples
 pub fn encode_audiopus(samples: &[f32]) -> Result<(u32, Vec<u8>), EncoderError> {
     use audiopus::{
         coder::Encoder, Application, Bitrate, Channels, Error as OpusError,
@@ -28,6 +37,7 @@ pub fn encode_audiopus(samples: &[f32]) -> Result<(u32, Vec<u8>), EncoderError> 
     let mut encoder = Encoder::new(sample_rate, Channels::Stereo, Application::Audio)?;
     encoder.set_bitrate(Bitrate::Max)?; //BitsPerSecond(24000))?;
 
+    #[allow(clippy::cast_sign_loss)]
     let frame_size = (sample_rate as i32 / 1000 * 2 * 20) as usize;
 
     let mut output = vec![0u8; samples.len().max(256)];
@@ -77,9 +87,13 @@ pub fn encode_audiopus(samples: &[f32]) -> Result<(u32, Vec<u8>), EncoderError> 
 
     output.truncate(output_i);
 
+    #[allow(clippy::cast_sign_loss)]
     Ok((sample_rate as i32 as u32, output))
 }
 
+/// # Errors
+///
+/// * If the encoder fails to initialize
 pub fn encoder_opus() -> Result<::opus::Encoder, EncoderError> {
     let encoder =
         ::opus::Encoder::new(48000, ::opus::Channels::Stereo, ::opus::Application::Audio)?;
@@ -87,6 +101,9 @@ pub fn encoder_opus() -> Result<::opus::Encoder, EncoderError> {
     Ok(encoder)
 }
 
+/// # Errors
+///
+/// * If the encoder fails to encode the samples
 pub fn encode_opus_float(
     encoder: &mut ::opus::Encoder,
     input: &[f32],
@@ -100,6 +117,9 @@ pub fn encode_opus_float(
     })
 }
 
+/// # Panics
+///
+/// * If the packet reader fails to read the next packet
 pub fn read_write_ogg(mut read: std::fs::File, mut write: std::fs::File) {
     let mut pck_rdr = PacketReader::new(&mut read);
 
@@ -139,6 +159,7 @@ pub fn read_write_ogg(mut read: std::fs::File, mut write: std::fs::File) {
         }
     }
 }
+
 pub fn write_ogg(file: std::fs::File, content: &[u8]) {
     let mut writer = PacketWriter::new(file);
 
@@ -196,6 +217,10 @@ pub const OPUS_STREAM_COMMENTS_HEADER: [u8; 23] = [
 ];
 
 impl OpusWrite<'_> {
+    /// # Panics
+    ///
+    /// * If the output file fails to be opened
+    #[must_use]
     pub fn new(path: &str) -> Self {
         let _ = std::fs::remove_file(path);
         let file = std::fs::OpenOptions::new()
@@ -210,7 +235,7 @@ impl OpusWrite<'_> {
 
         Self {
             packet_writer,
-            serial: 2873470314,
+            serial: 2_873_470_314,
             absgp,
             packet_num: 0,
             page_num: 0,

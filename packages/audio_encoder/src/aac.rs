@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use fdk_aac::enc::{BitRate, ChannelMode, Encoder, EncoderParams, Transport};
 use thiserror::Error;
 
@@ -20,10 +22,13 @@ impl From<fdk_aac::enc::EncodeInfo> for EncodeInfo {
 
 impl From<fdk_aac::enc::EncoderError> for EncoderError {
     fn from(value: fdk_aac::enc::EncoderError) -> Self {
-        EncoderError::Encoder(value)
+        Self::Encoder(value)
     }
 }
 
+/// # Errors
+///
+/// * If the encoder fails to initialize
 pub fn encoder_aac() -> Result<Encoder, EncoderError> {
     let encoder = Encoder::new(EncoderParams {
         audio_object_type: fdk_aac::enc::AudioObjectType::Mpeg4LowComplexity,
@@ -35,6 +40,9 @@ pub fn encoder_aac() -> Result<Encoder, EncoderError> {
     Ok(encoder)
 }
 
+/// # Errors
+///
+/// * If the encoder fails to encode the input bytes
 pub fn encode_aac(
     encoder: &Encoder,
     input: &[i16],

@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use thiserror::Error;
 
 use crate::EncodeInfo;
@@ -14,22 +16,33 @@ pub enum EncoderError {
 
 impl From<mp3lame_encoder::EncodeError> for EncoderError {
     fn from(value: mp3lame_encoder::EncodeError) -> Self {
-        EncoderError::Encoder(value)
+        Self::Encoder(value)
     }
 }
 
 impl From<mp3lame_encoder::Id3TagError> for EncoderError {
     fn from(value: mp3lame_encoder::Id3TagError) -> Self {
-        EncoderError::Id3Tag(value)
+        Self::Id3Tag(value)
     }
 }
 
 impl From<mp3lame_encoder::BuildError> for EncoderError {
     fn from(value: mp3lame_encoder::BuildError) -> Self {
-        EncoderError::Build(value)
+        Self::Build(value)
     }
 }
 
+/// # Panics
+///
+/// * If the `mp3lame_encoder::Builder` fails to initialize.
+/// * If fails to set the number of channels
+/// * If fails to set the sample rate
+/// * If fails to set the bit rate
+/// * If fails to set the quality
+///
+/// # Errors
+///
+/// * If the encoder fails to initialize
 pub fn encoder_mp3() -> Result<mp3lame_encoder::Encoder, EncoderError> {
     use mp3lame_encoder::{Builder, Id3Tag};
 
@@ -56,6 +69,9 @@ pub fn encoder_mp3() -> Result<mp3lame_encoder::Encoder, EncoderError> {
     Ok(mp3_encoder)
 }
 
+/// # Errors
+///
+/// * If the encoder fails to encode the input bytes
 pub fn encode_mp3(
     encoder: &mut mp3lame_encoder::Encoder,
     input: &[i16],

@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use flacenc::{
     bitsink::{ByteSink, MemSink},
     component::BitRepr as _,
@@ -26,10 +28,13 @@ pub enum EncoderError {
 
 impl From<flacenc::error::EncodeError> for EncoderError {
     fn from(value: flacenc::error::EncodeError) -> Self {
-        EncoderError::Encode(value)
+        Self::Encode(value)
     }
 }
 
+/// # Errors
+///
+/// * If the encoder fails to initialize
 pub fn encoder_flac() -> Result<Encoder, EncoderError> {
     let mut encoder = flacenc::config::Encoder::default();
     encoder.block_size = 512;
@@ -44,6 +49,9 @@ pub fn encoder_flac() -> Result<Encoder, EncoderError> {
     })
 }
 
+/// # Errors
+///
+/// * If the encoder fails to encode the input bytes
 pub fn encode_flac(
     encoder: &mut Encoder,
     input: &[i32],
