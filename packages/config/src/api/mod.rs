@@ -53,7 +53,7 @@ pub async fn get_profiles_endpoint(db: ConfigDatabase) -> Result<Json<Vec<ApiPro
             .await
             .map_err(ErrorInternalServerError)?
             .into_iter()
-            .map(|x| x.into())
+            .map(Into::into)
             .collect::<Vec<ApiProfile>>(),
     ))
 }

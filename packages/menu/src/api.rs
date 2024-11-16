@@ -283,8 +283,8 @@ pub async fn get_albums_endpoint(
                 .artist_id
                 .as_ref()
                 .and_then(|x| Id::try_from_str(x.as_str(), source, IdType::Artist).ok()),
-            tidal_artist_id: query.tidal_artist_id.map(|x| x.into()),
-            qobuz_artist_id: query.qobuz_artist_id.map(|x| x.into()),
+            tidal_artist_id: query.tidal_artist_id.map(Into::into),
+            qobuz_artist_id: query.qobuz_artist_id.map(Into::into),
         }),
     };
 

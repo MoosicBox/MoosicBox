@@ -85,7 +85,7 @@ pub async fn audio_zones_endpoint(
         .into_iter()
         .skip(offset as usize)
         .take(limit as usize)
-        .map(|x| x.into())
+        .map(Into::into)
         .collect::<Vec<_>>();
 
     Ok(Json(Page::WithTotal {
@@ -139,7 +139,7 @@ pub async fn audio_zone_with_sessions_endpoint(
         .into_iter()
         .skip(offset as usize)
         .take(limit as usize)
-        .map(|x| x.into())
+        .map(Into::into)
         .collect::<Vec<_>>();
 
     Ok(Json(Page::WithTotal {

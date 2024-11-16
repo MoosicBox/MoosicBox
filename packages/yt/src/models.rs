@@ -2128,17 +2128,17 @@ impl From<YtSearchResultsFormatted> for ApiSearchResultsResponse {
         let artists = value
             .artists
             .into_iter()
-            .map(|x| x.into())
+            .map(Into::into)
             .collect::<Vec<ApiGlobalSearchResult>>();
         let albums = value
             .albums
             .into_iter()
-            .map(|x| x.into())
+            .map(Into::into)
             .collect::<Vec<ApiGlobalSearchResult>>();
         let tracks = value
             .tracks
             .into_iter()
-            .map(|x| x.into())
+            .map(Into::into)
             .collect::<Vec<ApiGlobalSearchResult>>();
 
         let position = value.offset + value.limit;

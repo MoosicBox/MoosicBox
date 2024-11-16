@@ -681,7 +681,7 @@ pub async fn get_tracks_info(
 
     log::trace!("Got tracks {tracks:?}");
 
-    Ok(tracks.into_iter().map(|t| t.into()).collect())
+    Ok(tracks.into_iter().map(Into::into).collect())
 }
 
 pub async fn get_track_info(

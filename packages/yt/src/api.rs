@@ -1116,7 +1116,7 @@ pub async fn artist_albums_endpoint(
             &query.artist_id.into(),
             query.offset,
             query.limit,
-            query.album_type.map(|t| t.into()),
+            query.album_type.map(Into::into),
             query.country_code.clone(),
             query.locale.clone(),
             query.device_type,

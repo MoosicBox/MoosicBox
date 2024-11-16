@@ -310,7 +310,7 @@ pub async fn download_tasks_endpoint(
         .into_iter()
         .skip(offset as usize)
         .take(limit as usize)
-        .map(|x| x.into())
+        .map(Into::into)
         .collect::<Vec<ApiDownloadTask>>();
 
     for task in tasks.iter_mut() {
@@ -370,7 +370,7 @@ pub async fn get_download_locations_endpoint(
         .into_iter()
         .skip(offset as usize)
         .take(limit as usize)
-        .map(|x| x.into())
+        .map(Into::into)
         .collect::<Vec<ApiDownloadLocation>>();
 
     Ok(Json(Page::WithTotal {

@@ -72,7 +72,7 @@ pub fn parse_integer_ranges_to_ids(
 ) -> std::result::Result<Vec<Id>, ParseIntegersError> {
     Ok(parse_integer_ranges(integer_ranges)?
         .into_iter()
-        .map(|x| x.into())
+        .map(Into::into)
         .collect::<Vec<Id>>())
 }
 

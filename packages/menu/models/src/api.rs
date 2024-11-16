@@ -21,7 +21,7 @@ pub struct ApiAlbumVersion {
 impl ToApi<ApiAlbumVersion> for AlbumVersion {
     fn to_api(self) -> ApiAlbumVersion {
         ApiAlbumVersion {
-            tracks: self.tracks.into_iter().map(|track| track.into()).collect(),
+            tracks: self.tracks.into_iter().map(Into::into).collect(),
             format: self.format,
             bit_depth: self.bit_depth,
             sample_rate: self.sample_rate,

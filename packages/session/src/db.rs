@@ -121,7 +121,7 @@ pub async fn create_session(
                 .playlist
                 .tracks
                 .iter()
-                .map(|x| x.into())
+                .map(Into::into)
                 .collect::<Vec<Id>>(),
         ),
     )

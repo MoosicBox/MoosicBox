@@ -684,14 +684,14 @@ impl ScanOutput {
                             #[cfg(feature = "tidal")]
                             ApiSource::Tidal => None,
                             #[cfg(feature = "qobuz")]
-                            ApiSource::Qobuz => track.id.as_ref().map(|x| x.into()),
+                            ApiSource::Qobuz => track.id.as_ref().map(Into::into),
                             #[cfg(feature = "yt")]
                             ApiSource::Yt => None,
                         },
                         tidal_id: match track.api_source {
                             ApiSource::Library => None,
                             #[cfg(feature = "tidal")]
-                            ApiSource::Tidal => track.id.as_ref().map(|x| x.into()),
+                            ApiSource::Tidal => track.id.as_ref().map(Into::into),
                             #[cfg(feature = "qobuz")]
                             ApiSource::Qobuz => None,
                             #[cfg(feature = "yt")]
@@ -796,7 +796,7 @@ impl ScanOutput {
         let artists = db::get_artists(db)
             .await?
             .into_iter()
-            .map(|x| x.into())
+            .map(Into::into)
             .map(|artist: Artist| artist.as_data_values())
             .collect::<Vec<_>>();
 
@@ -805,7 +805,7 @@ impl ScanOutput {
         let albums = db::get_albums(db)
             .await?
             .into_iter()
-            .map(|x| x.into())
+            .map(Into::into)
             .map(|album: Album| album.as_data_values())
             .collect::<Vec<_>>();
 
@@ -814,7 +814,7 @@ impl ScanOutput {
         let tracks = db::get_tracks(db, None)
             .await?
             .into_iter()
-            .map(|x| x.into())
+            .map(Into::into)
             .map(|track: Track| track.as_data_values())
             .collect::<Vec<_>>();
 

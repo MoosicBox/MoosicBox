@@ -315,7 +315,7 @@ pub async fn add_album(
             .artists
             .clone()
             .into_iter()
-            .map(|x| x.into())
+            .map(Into::into)
             .map(|artist: Artist| artist.as_data_values())
             .collect::<Vec<_>>(),
         false,
@@ -336,7 +336,7 @@ pub async fn add_album(
         &albums
             .clone()
             .into_iter()
-            .map(|x| x.into())
+            .map(Into::into)
             .map(|album: Album| album.as_data_values())
             .collect::<Vec<_>>(),
         false,
@@ -460,17 +460,17 @@ pub async fn remove_album(
     log::debug!("Deleting track db items: {track_ids:?}");
     delete_session_playlist_tracks_by_track_id(
         db,
-        Some(&track_ids.iter().map(|x| x.into()).collect::<Vec<_>>()),
+        Some(&track_ids.iter().map(Into::into).collect::<Vec<_>>()),
     )
     .await?;
     delete_track_sizes_by_track_id(
         db,
-        Some(&track_ids.iter().map(|x| x.into()).collect::<Vec<_>>()),
+        Some(&track_ids.iter().map(Into::into).collect::<Vec<_>>()),
     )
     .await?;
     delete_tracks(
         db,
-        Some(&track_ids.iter().map(|x| x.into()).collect::<Vec<_>>()),
+        Some(&track_ids.iter().map(Into::into).collect::<Vec<_>>()),
     )
     .await?;
 
@@ -584,7 +584,7 @@ pub async fn refavorite_album(
     let existing: Option<Album> = library_api
         .library_album_from_source(album_id, api.source())
         .await?
-        .map(|x| x.into());
+        .map(Into::into);
 
     let (artist, album) = if let Some(album) = existing {
         if let Some(artist_id) = album.artist_sources.get(api.source()) {

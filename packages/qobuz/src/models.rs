@@ -711,19 +711,19 @@ impl From<QobuzSearchResults> for ApiSearchResultsResponse {
             .artists
             .items
             .into_iter()
-            .map(|x| x.into())
+            .map(Into::into)
             .collect::<Vec<ApiGlobalSearchResult>>();
         let albums = value
             .albums
             .items
             .into_iter()
-            .map(|x| x.into())
+            .map(Into::into)
             .collect::<Vec<ApiGlobalSearchResult>>();
         let tracks = value
             .tracks
             .items
             .into_iter()
-            .map(|x| x.into())
+            .map(Into::into)
             .collect::<Vec<ApiGlobalSearchResult>>();
 
         let position = value.albums.offset + value.albums.limit;

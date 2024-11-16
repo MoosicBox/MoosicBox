@@ -574,9 +574,9 @@ pub async fn artist_albums_endpoint(
             &query.artist_id.into(),
             query.offset,
             query.limit,
-            query.release_type.map(|x| x.into()),
-            query.sort.map(|x| x.into()),
-            query.order.map(|x| x.into()),
+            query.release_type.map(Into::into),
+            query.sort.map(Into::into),
+            query.order.map(Into::into),
             query.track_size,
             req.headers()
                 .get(QOBUZ_ACCESS_TOKEN_HEADER)
