@@ -28,17 +28,27 @@ pub async fn on_audio_zones_updated_event<
         .push(Box::new(move || Box::pin(listener())));
 }
 
+/// # Errors
+///
+/// * If any of the event handlers fail with an error
 pub async fn trigger_audio_zones_updated_event(
 ) -> Result<(), Vec<Box<dyn std::error::Error + Send>>> {
     send_audio_zones_updated_event().await
 }
 
+/// # Errors
+///
+/// * If any of the event handlers fail with an error
 pub async fn send_audio_zones_updated_event() -> Result<(), Vec<Box<dyn std::error::Error + Send>>>
 {
     let mut errors = vec![];
-    for listener in AUDIO_ZONES_UPDATED_EVENT_LISTENERS.read().await.iter() {
-        if let Err(e) = listener().await {
-            errors.push(e);
+
+    {
+        let listeners = AUDIO_ZONES_UPDATED_EVENT_LISTENERS.read().await;
+        for listener in listeners.iter() {
+            if let Err(e) = listener().await {
+                errors.push(e);
+            }
         }
     }
 

@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use db::{audio_zone_try_from_db, audio_zone_with_session_try_from_db};
 use moosicbox_audio_zone_models::{
@@ -16,6 +17,9 @@ pub mod events;
 pub mod db;
 pub use moosicbox_audio_zone_models as models;
 
+/// # Errors
+///
+/// * If fails to fetch `AudioZone`s from the database
 pub async fn zones(db: &ConfigDatabase) -> Result<Vec<AudioZone>, DatabaseFetchError> {
     let mut results = vec![];
     let zones = crate::db::get_zones(db).await?;
@@ -25,6 +29,9 @@ pub async fn zones(db: &ConfigDatabase) -> Result<Vec<AudioZone>, DatabaseFetchE
     Ok(results)
 }
 
+/// # Errors
+///
+/// * If fails to fetch `AudioZoneWithSession`s from the database
 pub async fn zones_with_sessions(
     config_db: &ConfigDatabase,
     library_db: &LibraryDatabase,
@@ -37,6 +44,9 @@ pub async fn zones_with_sessions(
     Ok(results)
 }
 
+/// # Errors
+///
+/// * If fails to fetch the `AudioZone` from the database
 pub async fn get_zone(
     db: &ConfigDatabase,
     id: u64,
@@ -48,6 +58,9 @@ pub async fn get_zone(
     })
 }
 
+/// # Errors
+///
+/// * If fails to create the `AudioZone` in the database
 pub async fn create_audio_zone(
     db: &ConfigDatabase,
     zone: &CreateAudioZone,
@@ -67,6 +80,9 @@ pub async fn create_audio_zone(
     Ok(resp)
 }
 
+/// # Errors
+///
+/// * If fails to update the `AudioZone` in the database
 pub async fn update_audio_zone(
     db: &ConfigDatabase,
     update: UpdateAudioZone,
@@ -86,6 +102,9 @@ pub async fn update_audio_zone(
     Ok(resp)
 }
 
+/// # Errors
+///
+/// * If fails to delete the `AudioZone` from the database
 pub async fn delete_audio_zone(
     db: &ConfigDatabase,
     id: u64,

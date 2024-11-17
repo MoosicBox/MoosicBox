@@ -1,9 +1,15 @@
+#![allow(clippy::module_name_repetitions)]
+
 use std::sync::Arc;
 
 use models::AudioZoneWithSessionModel;
 use moosicbox_audio_zone_models::{AudioZone, AudioZoneWithSession};
 use moosicbox_database::{
-    boxed, config::ConfigDatabase, profiles::LibraryDatabase, query::*, Database, DatabaseValue,
+    boxed,
+    config::ConfigDatabase,
+    profiles::LibraryDatabase,
+    query::{identifier, FilterableQuery},
+    Database, DatabaseValue,
 };
 use moosicbox_json_utils::{database::DatabaseFetchError, ToValueType};
 
@@ -13,6 +19,9 @@ use self::models::AudioZoneModel;
 
 pub mod models;
 
+/// # Errors
+///
+/// * If there is a database error
 pub async fn update_audio_zone(
     db: &ConfigDatabase,
     zone: UpdateAudioZone,
@@ -65,6 +74,9 @@ pub async fn update_audio_zone(
     Ok(inserted)
 }
 
+/// # Errors
+///
+/// * If there is a database error
 pub async fn get_zones(
     db: &ConfigDatabase,
 ) -> Result<Vec<models::AudioZoneModel>, DatabaseFetchError> {
@@ -75,6 +87,9 @@ pub async fn get_zones(
         .to_value_type()?)
 }
 
+/// # Errors
+///
+/// * If there is a database error
 pub async fn get_zone_with_sessions(
     config_db: &ConfigDatabase,
     library_db: &LibraryDatabase,
@@ -111,6 +126,9 @@ pub async fn get_zone_with_sessions(
         .collect())
 }
 
+/// # Errors
+///
+/// * If there is a database error
 pub async fn create_audio_zone(
     db: &ConfigDatabase,
     zone: &CreateAudioZone,
@@ -123,6 +141,9 @@ pub async fn create_audio_zone(
         .to_value_type()?)
 }
 
+/// # Errors
+///
+/// * If there is a database error
 pub async fn delete_audio_zone(
     db: &ConfigDatabase,
     id: u64,
@@ -136,6 +157,9 @@ pub async fn delete_audio_zone(
         .transpose()?)
 }
 
+/// # Errors
+///
+/// * If there is a database error
 pub async fn get_zone(
     db: &ConfigDatabase,
     id: u64,
@@ -149,6 +173,9 @@ pub async fn get_zone(
         .transpose()?)
 }
 
+/// # Errors
+///
+/// * If there is a database error
 pub async fn get_players(
     db: &ConfigDatabase,
     audio_zone_id: u64,
@@ -166,6 +193,9 @@ pub async fn get_players(
         .to_value_type()?)
 }
 
+/// # Errors
+///
+/// * If there is a database error
 pub async fn audio_zone_try_from_db(
     value: AudioZoneModel,
     db: Arc<Box<dyn Database>>,
@@ -177,6 +207,9 @@ pub async fn audio_zone_try_from_db(
     })
 }
 
+/// # Errors
+///
+/// * If there is a database error
 pub async fn audio_zone_with_session_try_from_db(
     value: AudioZoneWithSessionModel,
     db: Arc<Box<dyn Database>>,

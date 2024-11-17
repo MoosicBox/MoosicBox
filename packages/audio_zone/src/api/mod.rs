@@ -80,6 +80,7 @@ pub async fn audio_zones_endpoint(
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(30);
     let zones = crate::zones(&db).await.map_err(ErrorInternalServerError)?;
+    #[allow(clippy::cast_possible_truncation)]
     let total = zones.len() as u32;
     let zones = zones
         .into_iter()
@@ -134,6 +135,7 @@ pub async fn audio_zone_with_sessions_endpoint(
     let zones = crate::zones_with_sessions(&config_db, &library_db)
         .await
         .map_err(ErrorInternalServerError)?;
+    #[allow(clippy::cast_possible_truncation)]
     let total = zones.len() as u32;
     let zones = zones
         .into_iter()
@@ -224,7 +226,7 @@ pub async fn delete_audio_zone_endpoint(
     let zone = crate::delete_audio_zone(&db, query.id)
         .await
         .map_err(ErrorInternalServerError)?
-        .ok_or(ErrorNotFound("Audio zone not found"))?
+        .ok_or_else(|| ErrorNotFound("Audio zone not found"))?
         .into();
 
     Ok(Json(zone))
