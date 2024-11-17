@@ -137,7 +137,7 @@ chrono = { version = "0.4.38", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = { version = "4.5.20", features = ["derive"] }
+clap = { version = "4.5.21", features = ["derive"] }
 color-hex = "0.2.0"
 console-subscriber = "0.4.1"
 cpal = "0.15.3"
@@ -154,8 +154,8 @@ enum-as-inner = "0.6.1"
 env_logger = "0.11"
 fdk-aac = "0.7.0"
 flacenc = "0.4.0"
-fltk = "1.4.35"
-fltk-sys = "1.4.35"
+fltk = "1.4.36"
+fltk-sys = "1.4.36"
 flume = "0.11.1"
 free_log_client = { version = "0.4.1", default-features = false }
 futures = "0.3"
@@ -197,7 +197,7 @@ nanoid = "0.4.0"
 native-tls = "0.2.12"
 ndk-context = "0.1.1"
 ogg = "0.9.1"
-open = "5.3.0"
+open = "5.3.1"
 openssl = { version = "0.10.68", features = ["v110"] }
 opus = "0.3.0"
 pin-project = "1.1.7"
@@ -230,7 +230,7 @@ rusqlite = { version = "0.32.1", features = ["bundled"] }
 rustls = "0.23"
 serde = { version = "1", features = ["derive"] }
 serde-aux = "4.5.0"
-serde_json = "1.0.132"
+serde_json = "1.0.133"
 serial_test = "3.2.0"
 sha2 = "0.10.8"
 sqlx = { version = "0.8.2", default-features = false, features = [
@@ -248,7 +248,7 @@ strum = "0.26.3"
 strum_macros = "0.26.4"
 symphonia = { version = "0.5.4", features = ["all"] }
 tantivy = "0.22.0"
-tauri = { version = "2.1.0", features = ["protocol-asset"] }
+tauri = { version = "2.1.1", features = ["protocol-asset"] }
 tauri-build = { version = "2.0.3", features = [] }
 tauri-plugin = { version = "2.0.3", features = ["build"] }
 tauri-plugin-dialog = "2.0.3"
