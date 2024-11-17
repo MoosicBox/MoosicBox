@@ -19,6 +19,7 @@ pub struct PrioritizedSender<T: Send> {
 }
 
 impl<T: Send> PrioritizedSender<T> {
+    #[must_use]
     pub fn with_priority(mut self, func: impl (Fn(&T) -> usize) + Send + Sync + 'static) -> Self {
         self.priority.replace(Arc::new(Box::new(func)));
         self
@@ -73,6 +74,8 @@ impl<T: Send> MoosicBoxSender<T, TrySendError<T>> for PrioritizedSender<T> {
                     buffer.push((priority, msg));
                 }
 
+                drop(buffer);
+
                 return Ok(());
             }
         }
@@ -95,6 +98,9 @@ impl<T: Send> Clone for PrioritizedSender<T> {
 }
 
 impl<T: Send> PrioritizedSender<T> {
+    /// # Errors
+    ///
+    /// * If the send failed
     pub fn unbounded_send(&self, msg: T) -> Result<(), TrySendError<T>> {
         self.inner.unbounded_send(msg)
     }
@@ -150,6 +156,7 @@ impl<T: Send> Stream for PrioritizedReceiver<T> {
     }
 }
 
+#[must_use]
 pub fn unbounded<T: Send>() -> (PrioritizedSender<T>, PrioritizedReceiver<T>) {
     let (tx, rx) = futures_channel::mpsc::unbounded();
     let ready_to_send = Arc::new(AtomicBool::new(true));
@@ -158,7 +165,7 @@ pub fn unbounded<T: Send>() -> (PrioritizedSender<T>, PrioritizedReceiver<T>) {
         inner: tx,
         priority: None,
         buffer: Arc::new(RwLock::new(vec![])),
-        ready_to_send: ready_to_send.clone(),
+        ready_to_send,
     };
 
     let rx = PrioritizedReceiver {
