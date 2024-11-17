@@ -1,3 +1,6 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -75,10 +78,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let value: Value = toml::from_str(&source)?;
 
             let specific_features =
-                specific_features.map(|x| x.split(",").map(|x| x.to_string()).collect_vec());
+                specific_features.map(|x| x.split(',').map(str::to_string).collect_vec());
 
             let skip_features =
-                skip_features.map(|x| x.split(",").map(|x| x.to_string()).collect_vec());
+                skip_features.map(|x| x.split(',').map(str::to_string).collect_vec());
 
             match output {
                 OutputType::Json => {
@@ -90,9 +93,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     {
                         let mut packages = vec![];
 
-                        if output == OutputType::Raw {
-                            panic!("workspace Cargo.toml is not supported for raw output");
-                        }
+                        assert!(
+                            output != OutputType::Raw,
+                            "workspace Cargo.toml is not supported for raw output"
+                        );
 
                         for file in workspace_members {
                             let path = PathBuf::from_str(file)?;
@@ -127,9 +131,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         specific_features.as_deref(),
                         skip_features.as_deref(),
                     );
-                    if chunked.is_some() {
-                        panic!("chunked arg is not supported for raw output");
-                    }
+                    assert!(
+                        chunked.is_none(),
+                        "chunked arg is not supported for raw output"
+                    );
                     println!("{}", features.join("\n"));
                 }
             }
@@ -163,19 +168,20 @@ fn process_configs(
 
     log::debug!("{path:?} conf={conf:?}");
 
-    let configs = if let Some(config) = conf.as_ref().map(|x| x.config.clone()) {
-        config
-    } else {
-        vec![ClippierConfiguration {
-            os: "ubuntu".to_string(),
-            dependencies: None,
-            env: None,
-            cargo: None,
-            name: None,
-            ci_steps: None,
-            skip_features: None,
-        }]
-    };
+    let configs = conf.as_ref().map(|x| x.config.clone()).map_or_else(
+        || {
+            vec![ClippierConfiguration {
+                os: "ubuntu".to_string(),
+                dependencies: None,
+                env: None,
+                cargo: None,
+                name: None,
+                ci_steps: None,
+                skip_features: None,
+            }]
+        },
+        |config| config,
+    );
 
     let mut packages = vec![];
 
@@ -183,7 +189,7 @@ fn process_configs(
         .get("package")
         .and_then(|x| x.get("name"))
         .and_then(|x| x.as_str())
-        .map(|x| x.to_string())
+        .map(str::to_string)
     {
         for config in configs {
             let features = fetch_features(
@@ -228,6 +234,7 @@ fn process_configs(
     Ok(packages)
 }
 
+#[allow(clippy::too_many_lines)]
 fn create_map(
     conf: Option<&ClippierConf>,
     config: &ClippierConfiguration,
@@ -288,8 +295,7 @@ fn create_map(
             (
                 k,
                 match v {
-                    ClippierEnv::Value(value) => value,
-                    ClippierEnv::FilteredValue { value, .. } => value,
+                    ClippierEnv::Value(value) | ClippierEnv::FilteredValue { value, .. } => value,
                 },
             )
         })
@@ -359,12 +365,14 @@ enum FeaturesList {
     NotChunked(Vec<String>),
 }
 
-impl From<FeaturesList> for serde_json::Value {
-    fn from(value: FeaturesList) -> Self {
-        match value {
-            FeaturesList::Chunked(x) => serde_json::to_value(x).unwrap(),
-            FeaturesList::NotChunked(x) => serde_json::to_value(x).unwrap(),
-        }
+impl TryFrom<FeaturesList> for serde_json::Value {
+    type Error = serde_json::Error;
+
+    fn try_from(value: FeaturesList) -> Result<Self, Self::Error> {
+        Ok(match value {
+            FeaturesList::Chunked(x) => serde_json::to_value(x)?,
+            FeaturesList::NotChunked(x) => serde_json::to_value(x)?,
+        })
     }
 }
 
@@ -376,14 +384,14 @@ fn process_features(features: Vec<String>, chunked: Option<u16>, spread: bool) -
             vec![features]
         } else if spread && count > 1 {
             split(&features, chunked as usize)
-                .map(|x| x.to_vec())
+                .map(<[String]>::to_vec)
                 .collect::<Vec<_>>()
         } else {
             features
                 .into_iter()
                 .chunks(chunked as usize)
                 .into_iter()
-                .map(|x| x.collect::<Vec<_>>())
+                .map(Iterator::collect)
                 .collect::<Vec<_>>()
         })
     } else {
@@ -398,8 +406,8 @@ fn fetch_features(
     specific_features: Option<&[String]>,
     skip_features: Option<&[String]>,
 ) -> Vec<String> {
-    if let Some(features) = value.get("features") {
-        if let Some(features) = features.as_table() {
+    value.get("features").map_or_else(Vec::new, |features| {
+        features.as_table().map_or_else(Vec::new, |features| {
             let offset = offset.unwrap_or_default().into();
             let feature_count = features.keys().len() - offset;
             features
@@ -407,18 +415,11 @@ fn fetch_features(
                 .filter(|x| !specific_features.as_ref().is_some_and(|s| !s.contains(x)))
                 .filter(|x| !skip_features.as_ref().is_some_and(|s| s.contains(x)))
                 .skip(offset)
-                .take(
-                    max.map(|x| std::cmp::min(feature_count, x as usize))
-                        .unwrap_or(feature_count),
-                )
+                .take(max.map_or(feature_count, |x| std::cmp::min(feature_count, x as usize)))
                 .cloned()
                 .collect::<Vec<_>>()
-        } else {
-            vec![]
-        }
-    } else {
-        vec![]
-    }
+        })
+    })
 }
 
 pub fn split<T>(slice: &[T], n: usize) -> impl Iterator<Item = &[T]> {
