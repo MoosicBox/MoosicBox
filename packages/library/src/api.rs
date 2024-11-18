@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
     error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
@@ -106,7 +108,7 @@ pub fn bind_services<
 )]
 pub struct Api;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiLibraryAlbum {
@@ -178,7 +180,7 @@ impl ToApi<ApiArtist> for LibraryArtist {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiLibraryArtist {
@@ -415,7 +417,7 @@ pub async fn add_favorite_artist_endpoint(
     query: web::Query<LibraryAddFavoriteArtistsQuery>,
     db: LibraryDatabase,
 ) -> Result<Json<Value>> {
-    add_favorite_artist(&db, &query.artist_id.into()).await?;
+    add_favorite_artist(&db, &query.artist_id.into())?;
 
     Ok(Json(serde_json::json!({
         "success": true
@@ -459,7 +461,7 @@ pub async fn remove_favorite_artist_endpoint(
     query: web::Query<LibraryRemoveFavoriteArtistsQuery>,
     db: LibraryDatabase,
 ) -> Result<Json<Value>> {
-    remove_favorite_artist(&db, &query.artist_id.into()).await?;
+    remove_favorite_artist(&db, &query.artist_id.into())?;
 
     Ok(Json(serde_json::json!({
         "success": true
@@ -503,7 +505,7 @@ pub async fn add_favorite_album_endpoint(
     query: web::Query<LibraryAddFavoriteAlbumsQuery>,
     db: LibraryDatabase,
 ) -> Result<Json<Value>> {
-    add_favorite_album(&db, &query.album_id.into()).await?;
+    add_favorite_album(&db, &query.album_id.into())?;
 
     Ok(Json(serde_json::json!({
         "success": true
@@ -547,7 +549,7 @@ pub async fn remove_favorite_album_endpoint(
     query: web::Query<LibraryRemoveFavoriteAlbumsQuery>,
     db: LibraryDatabase,
 ) -> Result<Json<Value>> {
-    remove_favorite_album(&db, &query.album_id.into()).await?;
+    remove_favorite_album(&db, &query.album_id.into())?;
 
     Ok(Json(serde_json::json!({
         "success": true
@@ -591,7 +593,7 @@ pub async fn add_favorite_track_endpoint(
     query: web::Query<LibraryAddFavoriteTracksQuery>,
     db: LibraryDatabase,
 ) -> Result<Json<Value>> {
-    add_favorite_track(&db, &query.track_id.into()).await?;
+    add_favorite_track(&db, &query.track_id.into())?;
 
     Ok(Json(serde_json::json!({
         "success": true
@@ -635,7 +637,7 @@ pub async fn remove_favorite_track_endpoint(
     query: web::Query<LibraryRemoveFavoriteTracksQuery>,
     db: LibraryDatabase,
 ) -> Result<Json<Value>> {
-    remove_favorite_track(&db, &query.track_id.into()).await?;
+    remove_favorite_track(&db, &query.track_id.into())?;
 
     Ok(Json(serde_json::json!({
         "success": true
@@ -738,9 +740,9 @@ pub enum AlbumType {
 impl From<AlbumType> for LibraryAlbumType {
     fn from(value: AlbumType) -> Self {
         match value {
-            AlbumType::Lp => LibraryAlbumType::Lp,
-            AlbumType::EpsAndSingles => LibraryAlbumType::EpsAndSingles,
-            AlbumType::Compilations => LibraryAlbumType::Compilations,
+            AlbumType::Lp => Self::Lp,
+            AlbumType::EpsAndSingles => Self::EpsAndSingles,
+            AlbumType::Compilations => Self::Compilations,
         }
     }
 }
@@ -1015,12 +1017,11 @@ pub async fn search_endpoint(
         &query.query,
         query.offset,
         query.limit,
-        query
+        &query
             .types
             .clone()
             .map(|x| x.into_iter().map(Into::into).collect::<Vec<_>>()),
-    )
-    .await?;
+    )?;
 
     Ok(Json(results.into()))
 }

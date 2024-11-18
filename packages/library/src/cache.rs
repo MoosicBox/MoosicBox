@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use enum_as_inner::EnumAsInner;
 use futures::Future;
 use serde::{Deserialize, Serialize};
@@ -24,6 +26,10 @@ pub enum CacheItemType {
     Album(Arc<LibraryAlbum>),
 }
 
+/// # Panics
+///
+/// * If time went backwards
+#[must_use]
 pub fn current_time_nanos() -> u128 {
     let start = SystemTime::now();
     let since_the_epoch = start
@@ -40,17 +46,27 @@ pub struct CacheRequest<'a> {
 static CACHE_MAP: LazyLock<RwLock<HashMap<String, CacheItem>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
+/// # Panics
+///
+/// * If `RwLock` is poisoned
 pub fn clear_cache() {
     CACHE_MAP.write().unwrap().clear();
 }
 
+/// # Panics
+///
+/// * If `RwLock` is poisoned
+///
+/// # Errors
+///
+/// * If the `compute` `Fn` fails
 pub async fn get_or_set_to_cache<Fut, Err>(
     request: CacheRequest<'_>,
-    compute: impl Fn() -> Fut,
+    compute: impl Fn() -> Fut + Send,
 ) -> Result<CacheItemType, Err>
 where
     Err: Error,
-    Fut: Future<Output = Result<CacheItemType, Err>>,
+    Fut: Future<Output = Result<CacheItemType, Err>> + Send,
 {
     if let Some(entry) = CACHE_MAP.read().unwrap().get(request.key) {
         if entry.expiration > current_time_nanos() {

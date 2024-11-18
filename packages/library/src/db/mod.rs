@@ -8,7 +8,12 @@ use moosicbox_core::{
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_database::{
-    boxed, profiles::LibraryDatabase, query::*, DatabaseError, DatabaseValue,
+    boxed,
+    profiles::LibraryDatabase,
+    query::{
+        coalesce, identifier, literal, where_in, where_not_eq, FilterableQuery, SortDirection,
+    },
+    DatabaseError, DatabaseValue,
 };
 use moosicbox_json_utils::ToValueType;
 use thiserror::Error;
@@ -20,6 +25,9 @@ use crate::{
     models::{LibraryAlbum, LibraryArtist, LibraryTrack},
 };
 
+/// # Errors
+///
+/// * If there was a database error
 #[allow(clippy::too_many_arguments)]
 pub async fn create_library_config(
     db: &LibraryDatabase,
@@ -50,6 +58,9 @@ pub async fn create_library_config(
     Ok(())
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn delete_library_config(
     db: &LibraryDatabase,
     refresh_token: &str,
@@ -72,6 +83,10 @@ pub enum LibraryConfigError {
     NoConfigsAvailable,
 }
 
+/// # Errors
+///
+/// * If there was a database error
+/// * If there were no configs available
 pub async fn get_library_config(
     db: &LibraryDatabase,
 ) -> Result<Option<LibraryConfig>, LibraryConfigError> {
@@ -90,24 +105,36 @@ pub async fn get_library_config(
     Ok(configs.first().cloned())
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn get_library_access_tokens(
     db: &LibraryDatabase,
 ) -> Result<Option<(String, String)>, LibraryConfigError> {
     Ok(get_library_config(db)
         .await?
-        .map(|c| (c.access_token.clone(), c.refresh_token.clone())))
+        .map(|c| (c.access_token.clone(), c.refresh_token)))
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn get_library_access_token(
     db: &LibraryDatabase,
 ) -> Result<Option<String>, LibraryConfigError> {
     Ok(get_library_access_tokens(db).await?.map(|c| c.0))
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn get_artists(db: &LibraryDatabase) -> Result<Vec<LibraryArtist>, DbError> {
     Ok(db.select("artists").execute(db).await?.to_value_type()?)
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn get_albums(db: &LibraryDatabase) -> Result<Vec<LibraryAlbum>, DbError> {
     db.select("albums")
         .distinct()
@@ -136,6 +163,9 @@ pub async fn get_albums(db: &LibraryDatabase) -> Result<Vec<LibraryAlbum>, DbErr
         .as_model_mapped()
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn get_artist(
     db: &LibraryDatabase,
     column: &str,
@@ -150,6 +180,9 @@ pub async fn get_artist(
         .to_value_type()?)
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn get_artist_by_album_id(
     db: &LibraryDatabase,
     id: u64,
@@ -164,6 +197,9 @@ pub async fn get_artist_by_album_id(
         .to_value_type()?)
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn get_artists_by_album_ids(
     db: &LibraryDatabase,
     album_ids: &[u64],
@@ -178,6 +214,9 @@ pub async fn get_artists_by_album_ids(
         .to_value_type()?)
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn get_album_artist(
     db: &LibraryDatabase,
     album_id: u64,
@@ -193,6 +232,9 @@ pub async fn get_album_artist(
         .transpose()?)
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn get_tidal_album_artist(
     db: &LibraryDatabase,
     tidal_album_id: u64,
@@ -208,6 +250,9 @@ pub async fn get_tidal_album_artist(
         .transpose()?)
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn get_qobuz_album_artist(
     db: &LibraryDatabase,
     qobuz_album_id: &str,
@@ -223,6 +268,9 @@ pub async fn get_qobuz_album_artist(
         .transpose()?)
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn get_album(
     db: &LibraryDatabase,
     column: &str,
@@ -244,6 +292,9 @@ pub async fn get_album(
         .to_value_type()?)
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn get_album_tracks(
     db: &LibraryDatabase,
     album_id: &Id,
@@ -282,6 +333,9 @@ pub async fn get_album_tracks(
         .to_value_type()?)
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn get_artist_albums(
     db: &LibraryDatabase,
     artist_id: &Id,
@@ -322,6 +376,9 @@ pub struct SetTrackSize {
     pub channels: Option<Option<u8>>,
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn set_track_size(
     db: &LibraryDatabase,
     value: SetTrackSize,
@@ -333,6 +390,9 @@ pub async fn set_track_size(
         .clone())
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn set_track_sizes(
     db: &LibraryDatabase,
     values: &[SetTrackSize],
@@ -341,7 +401,11 @@ pub async fn set_track_sizes(
         .iter()
         .map(|v| {
             let mut values = vec![
-                ("track_id", DatabaseValue::Number(v.track_id as i64)),
+                (
+                    "track_id",
+                    #[allow(clippy::cast_possible_wrap)]
+                    DatabaseValue::Number(v.track_id as i64),
+                ),
                 (
                     "format",
                     DatabaseValue::String(v.quality.format.as_ref().to_string()),
@@ -349,36 +413,40 @@ pub async fn set_track_sizes(
             ];
 
             if let Some(bytes) = v.bytes {
-                values.push(("bytes", DatabaseValue::NumberOpt(bytes.map(|x| x as i64))));
+                values.push((
+                    "bytes",
+                    #[allow(clippy::cast_possible_wrap)]
+                    DatabaseValue::NumberOpt(bytes.map(|x| x as i64)),
+                ));
             }
             if let Some(bit_depth) = v.bit_depth {
                 values.push((
                     "bit_depth",
-                    DatabaseValue::NumberOpt(bit_depth.map(|x| x as i64)),
+                    DatabaseValue::NumberOpt(bit_depth.map(i64::from)),
                 ));
             }
             if let Some(audio_bitrate) = v.audio_bitrate {
                 values.push((
                     "audio_bitrate",
-                    DatabaseValue::NumberOpt(audio_bitrate.map(|x| x as i64)),
+                    DatabaseValue::NumberOpt(audio_bitrate.map(i64::from)),
                 ));
             }
             if let Some(overall_bitrate) = v.overall_bitrate {
                 values.push((
                     "overall_bitrate",
-                    DatabaseValue::NumberOpt(overall_bitrate.map(|x| x as i64)),
+                    DatabaseValue::NumberOpt(overall_bitrate.map(i64::from)),
                 ));
             }
             if let Some(sample_rate) = v.sample_rate {
                 values.push((
                     "sample_rate",
-                    DatabaseValue::NumberOpt(sample_rate.map(|x| x as i64)),
+                    DatabaseValue::NumberOpt(sample_rate.map(i64::from)),
                 ));
             }
             if let Some(channels) = v.channels {
                 values.push((
                     "channels",
-                    DatabaseValue::NumberOpt(channels.map(|x| x as i64)),
+                    DatabaseValue::NumberOpt(channels.map(i64::from)),
                 ));
             }
 
@@ -403,6 +471,9 @@ pub async fn set_track_sizes(
         .to_value_type()?)
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn get_track_size(
     db: &LibraryDatabase,
     id: &Id,
@@ -422,6 +493,9 @@ pub async fn get_track_size(
         .flatten())
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn get_track(db: &LibraryDatabase, id: &Id) -> Result<Option<LibraryTrack>, DbError> {
     Ok(get_tracks(db, Some(&[id.to_owned()]))
         .await?
@@ -429,11 +503,14 @@ pub async fn get_track(db: &LibraryDatabase, id: &Id) -> Result<Option<LibraryTr
         .next())
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn get_tracks(
     db: &LibraryDatabase,
     ids: Option<&[Id]>,
 ) -> Result<Vec<LibraryTrack>, DbError> {
-    if ids.is_some_and(|ids| ids.is_empty()) {
+    if ids.is_some_and(<[Id]>::is_empty) {
         return Ok(vec![]);
     }
 
@@ -470,26 +547,35 @@ pub async fn get_tracks(
         .to_value_type()?)
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn delete_track(db: &LibraryDatabase, id: u64) -> Result<Option<LibraryTrack>, DbError> {
     Ok(delete_tracks(db, Some(&vec![id])).await?.into_iter().next())
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn delete_tracks(
     db: &LibraryDatabase,
     ids: Option<&Vec<u64>>,
 ) -> Result<Vec<LibraryTrack>, DbError> {
-    if ids.is_some_and(|ids| ids.is_empty()) {
+    if ids.is_some_and(Vec::is_empty) {
         return Ok(vec![]);
     }
 
     Ok(db
         .delete("tracks")
-        .filter_if_some(ids.map(|ids| where_in("id", ids.to_vec())))
+        .filter_if_some(ids.map(|ids| where_in("id", ids.clone())))
         .execute(db)
         .await?
         .to_value_type()?)
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn delete_track_size_by_track_id(
     db: &LibraryDatabase,
     id: u64,
@@ -500,22 +586,28 @@ pub async fn delete_track_size_by_track_id(
         .next())
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn delete_track_sizes_by_track_id(
     db: &LibraryDatabase,
     ids: Option<&Vec<u64>>,
 ) -> Result<Vec<TrackSize>, DbError> {
-    if ids.is_some_and(|ids| ids.is_empty()) {
+    if ids.is_some_and(Vec::is_empty) {
         return Ok(vec![]);
     }
 
     Ok(db
         .delete("track_sizes")
-        .filter_if_some(ids.map(|ids| where_in("track_id", ids.to_vec())))
+        .filter_if_some(ids.map(|ids| where_in("track_id", ids.clone())))
         .execute(db)
         .await?
         .to_value_type()?)
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn add_artist_and_get_artist(
     db: &LibraryDatabase,
     artist: LibraryArtist,
@@ -523,13 +615,19 @@ pub async fn add_artist_and_get_artist(
     Ok(add_artists_and_get_artists(db, vec![artist]).await?[0].clone())
 }
 
-pub async fn add_artist_map_and_get_artist(
+/// # Errors
+///
+/// * If there was a database error
+pub async fn add_artist_map_and_get_artist<S: ::std::hash::BuildHasher + Send>(
     db: &LibraryDatabase,
-    artist: HashMap<&str, DatabaseValue>,
+    artist: HashMap<&str, DatabaseValue, S>,
 ) -> Result<LibraryArtist, DbError> {
     Ok(add_artist_maps_and_get_artists(db, vec![artist]).await?[0].clone())
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn add_artists_and_get_artists(
     db: &LibraryDatabase,
     artists: Vec<LibraryArtist>,
@@ -549,20 +647,23 @@ pub async fn add_artists_and_get_artists(
     .await
 }
 
-pub async fn add_artist_maps_and_get_artists(
+/// # Errors
+///
+/// * If there was a database error
+pub async fn add_artist_maps_and_get_artists<S: ::std::hash::BuildHasher + Send>(
     db: &LibraryDatabase,
-    artists: Vec<HashMap<&str, DatabaseValue>>,
+    artists: Vec<HashMap<&str, DatabaseValue, S>>,
 ) -> Result<Vec<LibraryArtist>, DbError> {
     let mut results = vec![];
 
     for artist in artists {
-        if !artist.contains_key("title") {
+        let Some(title) = artist.get("title") else {
             return Err(DbError::InvalidRequest);
-        }
+        };
 
         let row: LibraryArtist = db
             .upsert("artists")
-            .where_eq("title", artist.get("title").unwrap().clone())
+            .where_eq("title", title.clone())
             .values(artist.into_iter().collect::<Vec<_>>())
             .execute_first(db)
             .await?
@@ -574,6 +675,9 @@ pub async fn add_artist_maps_and_get_artists(
     Ok(results)
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn add_albums(
     db: &LibraryDatabase,
     albums: Vec<LibraryAlbum>,
@@ -600,6 +704,9 @@ pub async fn add_albums(
     Ok(data)
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn add_album_and_get_album(
     db: &LibraryDatabase,
     album: LibraryAlbum,
@@ -607,13 +714,19 @@ pub async fn add_album_and_get_album(
     Ok(add_albums_and_get_albums(db, vec![album]).await?[0].clone())
 }
 
-pub async fn add_album_map_and_get_album(
+/// # Errors
+///
+/// * If there was a database error
+pub async fn add_album_map_and_get_album<S: ::std::hash::BuildHasher + Send>(
     db: &LibraryDatabase,
-    album: HashMap<&str, DatabaseValue>,
+    album: HashMap<&str, DatabaseValue, S>,
 ) -> Result<LibraryAlbum, DbError> {
     Ok(add_album_maps_and_get_albums(db, vec![album]).await?[0].clone())
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn add_albums_and_get_albums(
     db: &LibraryDatabase,
     albums: Vec<LibraryAlbum>,
@@ -624,7 +737,11 @@ pub async fn add_albums_and_get_albums(
             .into_iter()
             .map(|album| {
                 HashMap::from([
-                    ("artist_id", DatabaseValue::Number(album.artist_id as i64)),
+                    (
+                        "artist_id",
+                        #[allow(clippy::cast_possible_wrap)]
+                        DatabaseValue::Number(album.artist_id as i64),
+                    ),
                     ("title", DatabaseValue::String(album.title)),
                     (
                         "date_released",
@@ -639,9 +756,12 @@ pub async fn add_albums_and_get_albums(
     .await
 }
 
-pub async fn add_album_maps_and_get_albums(
+/// # Errors
+///
+/// * If there was a database error
+pub async fn add_album_maps_and_get_albums<S: ::std::hash::BuildHasher + Send>(
     db: &LibraryDatabase,
-    albums: Vec<HashMap<&str, DatabaseValue>>,
+    albums: Vec<HashMap<&str, DatabaseValue, S>>,
 ) -> Result<Vec<LibraryAlbum>, DbError> {
     let mut values = vec![];
 
@@ -673,6 +793,9 @@ pub struct InsertTrack {
     pub tidal_id: Option<u64>,
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn add_tracks(
     db: &LibraryDatabase,
     tracks: Vec<InsertTrack>,
@@ -681,9 +804,16 @@ pub async fn add_tracks(
         .iter()
         .map(|insert| {
             let mut values = vec![
-                ("number", DatabaseValue::Number(insert.track.number as i64)),
+                (
+                    "number",
+                    DatabaseValue::Number(i64::from(insert.track.number)),
+                ),
                 ("duration", DatabaseValue::Real(insert.track.duration)),
-                ("album_id", DatabaseValue::Number(insert.album_id as i64)),
+                (
+                    "album_id",
+                    #[allow(clippy::cast_possible_wrap)]
+                    DatabaseValue::Number(insert.album_id as i64),
+                ),
                 ("title", DatabaseValue::String(insert.track.title.clone())),
                 (
                     "format",
@@ -702,11 +832,19 @@ pub async fn add_tracks(
             }
 
             if let Some(qobuz_id) = &insert.qobuz_id {
-                values.push(("qobuz_id", DatabaseValue::Number(*qobuz_id as i64)));
+                values.push((
+                    "qobuz_id",
+                    #[allow(clippy::cast_possible_wrap)]
+                    DatabaseValue::Number(*qobuz_id as i64),
+                ));
             }
 
             if let Some(tidal_id) = &insert.tidal_id {
-                values.push(("tidal_id", DatabaseValue::Number(*tidal_id as i64)));
+                values.push((
+                    "tidal_id",
+                    #[allow(clippy::cast_possible_wrap)]
+                    DatabaseValue::Number(*tidal_id as i64),
+                ));
             }
 
             values

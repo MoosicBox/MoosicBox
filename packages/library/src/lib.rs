@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::{
     cmp::Ordering,
@@ -53,7 +54,7 @@ pub mod models {
     pub use moosicbox_library_models::*;
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -61,7 +62,7 @@ pub enum LibraryArtistOrder {
     Date,
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -86,8 +87,8 @@ pub async fn favorite_artists(
     db: &LibraryDatabase,
     offset: Option<u32>,
     limit: Option<u32>,
-    _order: Option<LibraryArtistOrder>,
-    _order_direction: Option<LibraryArtistOrderDirection>,
+    #[allow(clippy::used_underscore_binding)] _order: Option<LibraryArtistOrder>,
+    #[allow(clippy::used_underscore_binding)] _order_direction: Option<LibraryArtistOrderDirection>,
 ) -> PagingResult<LibraryArtist, LibraryFavoriteArtistsError> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
@@ -95,6 +96,7 @@ pub async fn favorite_artists(
     let items = db::get_artists(db).await?;
     log::trace!("Received favorite artists response: {items:?}");
 
+    #[allow(clippy::cast_possible_truncation)]
     let total = items.len() as u32;
 
     let db = db.to_owned();
@@ -126,8 +128,13 @@ pub enum LibraryAddFavoriteArtistError {
     Db(#[from] DbError),
 }
 
+/// # Errors
+///
+/// * If no user id is available for the request
+/// * If the request failed
+/// * If there was a database error
 #[allow(clippy::too_many_arguments)]
-pub async fn add_favorite_artist(
+pub const fn add_favorite_artist(
     _db: &LibraryDatabase,
     _artist_id: &Id,
 ) -> Result<(), LibraryAddFavoriteArtistError> {
@@ -144,15 +151,20 @@ pub enum LibraryRemoveFavoriteArtistError {
     Db(#[from] DbError),
 }
 
+/// # Errors
+///
+/// * If no user id is available for the request
+/// * If the request failed
+/// * If there was a database error
 #[allow(clippy::too_many_arguments)]
-pub async fn remove_favorite_artist(
+pub const fn remove_favorite_artist(
     _db: &LibraryDatabase,
     _artist_id: &Id,
 ) -> Result<(), LibraryRemoveFavoriteArtistError> {
     Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -160,7 +172,7 @@ pub enum LibraryAlbumOrder {
     Date,
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -249,6 +261,7 @@ pub fn filter_albums<'a>(
     albums
 }
 
+#[must_use]
 pub fn sort_albums<'a>(
     mut albums: Vec<&'a LibraryAlbum>,
     request: &'a AlbumsRequest,
@@ -262,16 +275,16 @@ pub fn sort_albums<'a>(
     }
     match request.sort {
         Some(AlbumSort::ArtistAsc) => {
-            albums.sort_by(|a, b| a.artist.to_lowercase().cmp(&b.artist.to_lowercase()))
+            albums.sort_by(|a, b| a.artist.to_lowercase().cmp(&b.artist.to_lowercase()));
         }
         Some(AlbumSort::NameAsc) => {
-            albums.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
+            albums.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
         }
         Some(AlbumSort::ArtistDesc) => {
-            albums.sort_by(|a, b| b.artist.to_lowercase().cmp(&a.artist.to_lowercase()))
+            albums.sort_by(|a, b| b.artist.to_lowercase().cmp(&a.artist.to_lowercase()));
         }
         Some(AlbumSort::NameDesc) => {
-            albums.sort_by(|a, b| b.title.to_lowercase().cmp(&a.title.to_lowercase()))
+            albums.sort_by(|a, b| b.title.to_lowercase().cmp(&a.title.to_lowercase()));
         }
         Some(AlbumSort::ReleaseDateAsc) => albums.sort_by(|a, b| {
             if a.date_released.is_none() {
@@ -320,9 +333,10 @@ pub async fn favorite_albums(
     let albums = db::get_albums(db).await?; // TODO: should this be cached?
     let items = sort_albums(filter_albums(&albums, request).collect::<Vec<_>>(), request);
 
+    #[allow(clippy::cast_possible_truncation)]
     let total = items.len() as u32;
-    let offset = request.page.as_ref().map(|x| x.offset).unwrap_or(0);
-    let limit = request.page.as_ref().map(|x| x.limit).unwrap_or(total);
+    let offset = request.page.as_ref().map_or(0, |x| x.offset);
+    let limit = request.page.as_ref().map_or(total, |x| x.limit);
 
     let items = if offset != 0 || limit != total {
         items
@@ -348,7 +362,7 @@ pub async fn favorite_albums(
             total,
         },
         fetch: Arc::new(Mutex::new(Box::new(move |offset, limit| {
-            let db = db.to_owned();
+            let db = db.clone();
             let mut request = request.clone();
 
             request.page = Some(PagingRequest { offset, limit });
@@ -368,8 +382,13 @@ pub enum LibraryAddFavoriteAlbumError {
     Db(#[from] DbError),
 }
 
+/// # Errors
+///
+/// * If no user id is available for the request
+/// * If the request failed
+/// * If there was a database error
 #[allow(clippy::too_many_arguments)]
-pub async fn add_favorite_album(
+pub const fn add_favorite_album(
     _db: &LibraryDatabase,
     _album_id: &Id,
 ) -> Result<(), LibraryAddFavoriteAlbumError> {
@@ -386,15 +405,20 @@ pub enum LibraryRemoveFavoriteAlbumError {
     Db(#[from] DbError),
 }
 
+/// # Errors
+///
+/// * If no user id is available for the request
+/// * If the request failed
+/// * If there was a database error
 #[allow(clippy::too_many_arguments)]
-pub async fn remove_favorite_album(
+pub const fn remove_favorite_album(
     _db: &LibraryDatabase,
     _album_id: &Id,
 ) -> Result<(), LibraryRemoveFavoriteAlbumError> {
     Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -402,7 +426,7 @@ pub enum LibraryTrackOrder {
     Date,
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -428,8 +452,8 @@ pub async fn favorite_tracks(
     track_ids: Option<&[Id]>,
     offset: Option<u32>,
     limit: Option<u32>,
-    _order: Option<LibraryTrackOrder>,
-    _order_direction: Option<LibraryTrackOrderDirection>,
+    #[allow(clippy::used_underscore_binding)] _order: Option<LibraryTrackOrder>,
+    #[allow(clippy::used_underscore_binding)] _order_direction: Option<LibraryTrackOrderDirection>,
 ) -> PagingResult<LibraryTrack, LibraryFavoriteTracksError> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
@@ -437,6 +461,7 @@ pub async fn favorite_tracks(
     let items = db::get_tracks(db, track_ids).await?;
     log::trace!("Received favorite tracks response: {items:?}");
 
+    #[allow(clippy::cast_possible_truncation)]
     let total = items.len() as u32;
 
     Ok(PagingResponse {
@@ -448,7 +473,7 @@ pub async fn favorite_tracks(
         },
         fetch: Arc::new(Mutex::new(Box::new({
             let db = db.to_owned();
-            let track_ids = track_ids.map(|x| x.to_vec());
+            let track_ids = track_ids.map(<[Id]>::to_vec);
 
             move |offset, limit| {
                 let db = db.clone();
@@ -480,8 +505,13 @@ pub enum LibraryAddFavoriteTrackError {
     Db(#[from] DbError),
 }
 
+/// # Errors
+///
+/// * If no user id i available for the request
+/// * If the request failed
+/// * If there was a database error
 #[allow(clippy::too_many_arguments)]
-pub async fn add_favorite_track(
+pub const fn add_favorite_track(
     _db: &LibraryDatabase,
     _track_id: &Id,
 ) -> Result<(), LibraryAddFavoriteTrackError> {
@@ -498,8 +528,13 @@ pub enum LibraryRemoveFavoriteTrackError {
     Db(#[from] DbError),
 }
 
+/// # Errors
+///
+/// * If no user id is available for the request
+/// * If the request failed
+/// * If there was a database error
 #[allow(clippy::too_many_arguments)]
-pub async fn remove_favorite_track(
+pub const fn remove_favorite_track(
     _db: &LibraryDatabase,
     _track_id: &Id,
 ) -> Result<(), LibraryRemoveFavoriteTrackError> {
@@ -537,6 +572,7 @@ pub async fn artist_albums(
     };
     log::trace!("Received artist albums response: {items:?}");
 
+    #[allow(clippy::cast_possible_truncation)]
     let total = items.len() as u32;
 
     let db = db.to_owned();
@@ -582,6 +618,7 @@ pub async fn album_tracks(
     let items = db::get_album_tracks(db, album_id).await?;
     log::trace!("Received album tracks response: {items:?}");
 
+    #[allow(clippy::cast_possible_truncation)]
     let total = items.len() as u32;
 
     let db = db.to_owned();
@@ -609,6 +646,9 @@ pub enum LibraryAlbumError {
     Db(#[from] DbError),
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn album_from_source(
     db: &LibraryDatabase,
     album_id: &Id,
@@ -622,6 +662,9 @@ pub async fn album_from_source(
     .await?)
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn album(
     db: &LibraryDatabase,
     album_id: &Id,
@@ -637,6 +680,10 @@ pub enum LibraryArtistError {
     Db(#[from] DbError),
 }
 
+/// # Errors
+///
+/// * If the artist was not found
+/// * If there was a database error
 #[allow(clippy::too_many_arguments)]
 pub async fn artist(
     db: &LibraryDatabase,
@@ -655,6 +702,10 @@ pub enum LibraryTrackError {
     Db(#[from] DbError),
 }
 
+/// # Errors
+///
+/// * If the track was not found
+/// * If there was a database error
 pub async fn track(
     db: &LibraryDatabase,
     track_id: &Id,
@@ -678,12 +729,12 @@ pub enum SearchType {
 impl From<SearchType> for LibrarySearchType {
     fn from(value: SearchType) -> Self {
         match value {
-            SearchType::Artists => LibrarySearchType::Artists,
-            SearchType::Albums => LibrarySearchType::Albums,
-            SearchType::Tracks => LibrarySearchType::Tracks,
-            SearchType::Videos => LibrarySearchType::Videos,
-            SearchType::Playlists => LibrarySearchType::Playlists,
-            SearchType::UserProfiles => LibrarySearchType::UserProfiles,
+            SearchType::Artists => Self::Artists,
+            SearchType::Albums => Self::Albums,
+            SearchType::Tracks => Self::Tracks,
+            SearchType::Videos => Self::Videos,
+            SearchType::Playlists => Self::Playlists,
+            SearchType::UserProfiles => Self::UserProfiles,
         }
     }
 }
@@ -706,13 +757,16 @@ pub enum LibrarySearchError {
     Db(#[from] DbError),
 }
 
+/// # Errors
+///
+/// * If there was a database error
 #[allow(clippy::too_many_arguments)]
-pub async fn search(
+pub fn search(
     _db: &LibraryDatabase,
     _query: &str,
     _offset: Option<usize>,
     _limit: Option<usize>,
-    _types: Option<Vec<LibrarySearchType>>,
+    _types: &Option<Vec<LibrarySearchType>>,
 ) -> Result<Vec<ApiGlobalSearchResult>, LibrarySearchError> {
     let items = vec![];
     log::trace!("Received search response: {items:?}");
@@ -720,7 +774,7 @@ pub async fn search(
     Ok(items)
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -738,6 +792,11 @@ pub enum LibraryTrackFileUrlError {
     LibraryTrack(#[from] LibraryTrackError),
 }
 
+/// # Errors
+///
+/// * If the track has no associated file
+/// * If the track was not found
+/// * If there was a database error
 pub async fn track_file_url(
     db: &LibraryDatabase,
     _audio_quality: LibraryAudioQuality,
@@ -754,7 +813,7 @@ pub async fn track_file_url(
 impl From<ArtistOrder> for LibraryArtistOrder {
     fn from(value: ArtistOrder) -> Self {
         match value {
-            ArtistOrder::DateAdded => LibraryArtistOrder::Date,
+            ArtistOrder::DateAdded => Self::Date,
         }
     }
 }
@@ -762,8 +821,8 @@ impl From<ArtistOrder> for LibraryArtistOrder {
 impl From<ArtistOrderDirection> for LibraryArtistOrderDirection {
     fn from(value: ArtistOrderDirection) -> Self {
         match value {
-            ArtistOrderDirection::Ascending => LibraryArtistOrderDirection::Asc,
-            ArtistOrderDirection::Descending => LibraryArtistOrderDirection::Desc,
+            ArtistOrderDirection::Ascending => Self::Asc,
+            ArtistOrderDirection::Descending => Self::Desc,
         }
     }
 }
@@ -771,7 +830,7 @@ impl From<ArtistOrderDirection> for LibraryArtistOrderDirection {
 impl From<AlbumOrder> for LibraryAlbumOrder {
     fn from(value: AlbumOrder) -> Self {
         match value {
-            AlbumOrder::DateAdded => LibraryAlbumOrder::Date,
+            AlbumOrder::DateAdded => Self::Date,
         }
     }
 }
@@ -779,8 +838,8 @@ impl From<AlbumOrder> for LibraryAlbumOrder {
 impl From<AlbumOrderDirection> for LibraryAlbumOrderDirection {
     fn from(value: AlbumOrderDirection) -> Self {
         match value {
-            AlbumOrderDirection::Ascending => LibraryAlbumOrderDirection::Asc,
-            AlbumOrderDirection::Descending => LibraryAlbumOrderDirection::Desc,
+            AlbumOrderDirection::Ascending => Self::Asc,
+            AlbumOrderDirection::Descending => Self::Desc,
         }
     }
 }
@@ -788,7 +847,7 @@ impl From<AlbumOrderDirection> for LibraryAlbumOrderDirection {
 impl From<TrackOrder> for LibraryTrackOrder {
     fn from(value: TrackOrder) -> Self {
         match value {
-            TrackOrder::DateAdded => LibraryTrackOrder::Date,
+            TrackOrder::DateAdded => Self::Date,
         }
     }
 }
@@ -796,8 +855,8 @@ impl From<TrackOrder> for LibraryTrackOrder {
 impl From<TrackOrderDirection> for LibraryTrackOrderDirection {
     fn from(value: TrackOrderDirection) -> Self {
         match value {
-            TrackOrderDirection::Ascending => LibraryTrackOrderDirection::Asc,
-            TrackOrderDirection::Descending => LibraryTrackOrderDirection::Desc,
+            TrackOrderDirection::Ascending => Self::Asc,
+            TrackOrderDirection::Descending => Self::Desc,
         }
     }
 }
@@ -810,91 +869,91 @@ pub enum TryFromAlbumTypeError {
 
 impl From<LibraryFavoriteArtistsError> for ArtistsError {
     fn from(err: LibraryFavoriteArtistsError) -> Self {
-        ArtistsError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<LibraryArtistError> for ArtistError {
     fn from(err: LibraryArtistError) -> Self {
-        ArtistError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<LibraryAddFavoriteArtistError> for AddArtistError {
     fn from(err: LibraryAddFavoriteArtistError) -> Self {
-        AddArtistError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<LibraryRemoveFavoriteArtistError> for RemoveArtistError {
     fn from(err: LibraryRemoveFavoriteArtistError) -> Self {
-        RemoveArtistError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<LibraryFavoriteAlbumsError> for AlbumsError {
     fn from(err: LibraryFavoriteAlbumsError) -> Self {
-        AlbumsError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<LibraryAlbumError> for AlbumError {
     fn from(err: LibraryAlbumError) -> Self {
-        AlbumError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<LibraryArtistAlbumsError> for ArtistAlbumsError {
     fn from(err: LibraryArtistAlbumsError) -> Self {
-        ArtistAlbumsError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<TryFromAlbumTypeError> for ArtistAlbumsError {
     fn from(err: TryFromAlbumTypeError) -> Self {
-        ArtistAlbumsError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<LibraryAddFavoriteAlbumError> for AddAlbumError {
     fn from(err: LibraryAddFavoriteAlbumError) -> Self {
-        AddAlbumError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<LibraryRemoveFavoriteAlbumError> for RemoveAlbumError {
     fn from(err: LibraryRemoveFavoriteAlbumError) -> Self {
-        RemoveAlbumError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<LibraryFavoriteTracksError> for TracksError {
     fn from(err: LibraryFavoriteTracksError) -> Self {
-        TracksError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<LibraryAlbumTracksError> for TracksError {
     fn from(err: LibraryAlbumTracksError) -> Self {
-        TracksError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<LibraryTrackError> for TrackError {
     fn from(err: LibraryTrackError) -> Self {
-        TrackError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<LibraryAddFavoriteTrackError> for AddTrackError {
     fn from(err: LibraryAddFavoriteTrackError) -> Self {
-        AddTrackError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<LibraryRemoveFavoriteTrackError> for RemoveTrackError {
     fn from(err: LibraryRemoveFavoriteTrackError) -> Self {
-        RemoveTrackError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
@@ -930,10 +989,14 @@ impl From<LibraryDatabase> for LibraryMusicApi {
 }
 
 impl LibraryMusicApi {
-    pub fn new(db: LibraryDatabase) -> Self {
+    #[must_use]
+    pub const fn new(db: LibraryDatabase) -> Self {
         Self { db }
     }
 
+    /// # Errors
+    ///
+    /// * If failed to get the library artist
     pub async fn library_artist(
         &self,
         artist_id: &Id,
@@ -941,6 +1004,9 @@ impl LibraryMusicApi {
         Ok(Some(artist(&self.db, artist_id).await?))
     }
 
+    /// # Errors
+    ///
+    /// * If failed to get the library album artist
     pub async fn library_album_artist(
         &self,
         album_id: &Id,
@@ -950,6 +1016,9 @@ impl LibraryMusicApi {
             .map_err(|e| ArtistError::Other(e.into()))
     }
 
+    /// # Errors
+    ///
+    /// * If failed to get the library album from source
     pub async fn library_album_from_source(
         &self,
         album_id: &Id,
@@ -958,10 +1027,16 @@ impl LibraryMusicApi {
         Ok(album_from_source(&self.db, album_id, source).await?)
     }
 
+    /// # Errors
+    ///
+    /// * If failed to get the library album
     pub async fn library_album(&self, album_id: &Id) -> Result<Option<LibraryAlbum>, AlbumError> {
         Ok(album(&self.db, album_id).await?)
     }
 
+    /// # Errors
+    ///
+    /// * If failed to get the library albums
     pub async fn library_albums(
         &self,
         request: &AlbumsRequest,
@@ -969,10 +1044,16 @@ impl LibraryMusicApi {
         favorite_albums(&self.db, request).await
     }
 
+    /// # Errors
+    ///
+    /// * If failed to get the library track
     pub async fn library_track(&self, track_id: &Id) -> Result<Option<LibraryTrack>, TrackError> {
         Ok(track(&self.db, track_id).await?)
     }
 
+    /// # Errors
+    ///
+    /// * If failed to get the library album tracks
     pub async fn library_album_tracks(
         &self,
         album_id: &Id,
@@ -1014,11 +1095,11 @@ impl MusicApi for LibraryMusicApi {
     }
 
     async fn add_artist(&self, artist_id: &Id) -> Result<(), AddArtistError> {
-        Ok(add_favorite_artist(&self.db, artist_id).await?)
+        Ok(add_favorite_artist(&self.db, artist_id)?)
     }
 
     async fn remove_artist(&self, artist_id: &Id) -> Result<(), RemoveArtistError> {
-        Ok(remove_favorite_artist(&self.db, artist_id).await?)
+        Ok(remove_favorite_artist(&self.db, artist_id)?)
     }
 
     async fn album_artist(&self, album_id: &Id) -> Result<Option<Artist>, ArtistError> {
@@ -1030,11 +1111,7 @@ impl MusicApi for LibraryMusicApi {
         artist: &Artist,
         _size: ImageCoverSize,
     ) -> Result<Option<ImageCoverSource>, ArtistError> {
-        Ok(artist
-            .cover
-            .as_ref()
-            .cloned()
-            .map(ImageCoverSource::LocalFilePath))
+        Ok(artist.cover.clone().map(ImageCoverSource::LocalFilePath))
     }
 
     async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
@@ -1091,14 +1168,14 @@ impl MusicApi for LibraryMusicApi {
 
             let total = pages.iter().map(|page| page.total().unwrap()).sum();
 
-            let db = self.db.to_owned();
+            let db = self.db.clone();
             let artist_id = artist_id.clone();
 
             PagingResponse {
                 page: Page::WithTotal {
                     items: pages
                         .into_iter()
-                        .flat_map(|page| page.into_items())
+                        .flat_map(PagingResponse::into_items)
                         .collect::<Vec<_>>(),
                     offset,
                     limit,
@@ -1118,11 +1195,11 @@ impl MusicApi for LibraryMusicApi {
     }
 
     async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {
-        Ok(add_favorite_album(&self.db, album_id).await?)
+        Ok(add_favorite_album(&self.db, album_id)?)
     }
 
     async fn remove_album(&self, album_id: &Id) -> Result<(), RemoveAlbumError> {
-        Ok(remove_favorite_album(&self.db, album_id).await?)
+        Ok(remove_favorite_album(&self.db, album_id)?)
     }
 
     async fn album_cover_source(
@@ -1130,11 +1207,7 @@ impl MusicApi for LibraryMusicApi {
         album: &Album,
         _size: ImageCoverSize,
     ) -> Result<Option<ImageCoverSource>, AlbumError> {
-        Ok(album
-            .artwork
-            .as_ref()
-            .cloned()
-            .map(ImageCoverSource::LocalFilePath))
+        Ok(album.artwork.clone().map(ImageCoverSource::LocalFilePath))
     }
 
     async fn tracks(
@@ -1176,11 +1249,11 @@ impl MusicApi for LibraryMusicApi {
     }
 
     async fn add_track(&self, track_id: &Id) -> Result<(), AddTrackError> {
-        Ok(add_favorite_track(&self.db, track_id).await?)
+        Ok(add_favorite_track(&self.db, track_id)?)
     }
 
     async fn remove_track(&self, track_id: &Id) -> Result<(), RemoveTrackError> {
-        Ok(remove_favorite_track(&self.db, track_id).await?)
+        Ok(remove_favorite_track(&self.db, track_id)?)
     }
 
     async fn track_source(
@@ -1210,7 +1283,7 @@ impl MusicApi for LibraryMusicApi {
         Ok(Some(TrackSource::LocalFilePath {
             path,
             format: track.format.unwrap_or(AudioFormat::Source),
-            track_id: Some(track.id.to_owned()),
+            track_id: Some(track.id.clone()),
             source: track.track_source,
         }))
     }
@@ -1313,6 +1386,15 @@ pub enum ReindexError {
     PopulateIndex(#[from] PopulateIndexError),
 }
 
+/// # Panics
+///
+/// * If time went backwards
+///
+/// # Errors
+///
+/// * If there was a database error
+/// * If failed to recreate the index
+/// * If failed to populate the index
 pub async fn reindex_global_search_index(db: &LibraryDatabase) -> Result<(), ReindexError> {
     let reindex_start = std::time::SystemTime::now();
 
@@ -1391,8 +1473,8 @@ mod test {
 
         let local = LibraryAlbum {
             id: 0,
-            title: "".to_string(),
-            artist: "".to_string(),
+            title: String::new(),
+            artist: String::new(),
             artwork: None,
             versions: vec![AlbumVersionQuality {
                 source: TrackApiSource::Local,
@@ -1402,8 +1484,8 @@ mod test {
         };
         let tidal = LibraryAlbum {
             id: 0,
-            title: "".to_string(),
-            artist: "".to_string(),
+            title: String::new(),
+            artist: String::new(),
             artwork: None,
             versions: vec![AlbumVersionQuality {
                 source: TrackApiSource::Tidal,
@@ -1413,8 +1495,8 @@ mod test {
         };
         let qobuz = LibraryAlbum {
             id: 0,
-            title: "".to_string(),
-            artist: "".to_string(),
+            title: String::new(),
+            artist: String::new(),
             artwork: None,
             versions: vec![AlbumVersionQuality {
                 source: TrackApiSource::Qobuz,
@@ -1445,7 +1527,7 @@ mod test {
         let bob = LibraryAlbum {
             id: 0,
             title: "bob".to_string(),
-            artist: "".to_string(),
+            artist: String::new(),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -1453,7 +1535,7 @@ mod test {
         let sally = LibraryAlbum {
             id: 0,
             title: "sally".to_string(),
-            artist: "".to_string(),
+            artist: String::new(),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -1461,7 +1543,7 @@ mod test {
         let test = LibraryAlbum {
             id: 0,
             title: "test".to_string(),
-            artist: "".to_string(),
+            artist: String::new(),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -1492,7 +1574,7 @@ mod test {
         let bob = LibraryAlbum {
             id: 0,
             title: "bob".to_string(),
-            artist: "".to_string(),
+            artist: String::new(),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -1500,7 +1582,7 @@ mod test {
         let sally = LibraryAlbum {
             id: 0,
             title: "sally".to_string(),
-            artist: "".to_string(),
+            artist: String::new(),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -1508,7 +1590,7 @@ mod test {
         let test = LibraryAlbum {
             id: 0,
             title: "one test two".to_string(),
-            artist: "".to_string(),
+            artist: String::new(),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -1538,7 +1620,7 @@ mod test {
     fn filter_albums_filters_albums_of_artist_that_dont_match() {
         let bob = LibraryAlbum {
             id: 0,
-            title: "".to_string(),
+            title: String::new(),
             artist: "bob".to_string(),
             artwork: None,
             source: AlbumSource::Local,
@@ -1546,7 +1628,7 @@ mod test {
         };
         let sally = LibraryAlbum {
             id: 0,
-            title: "".to_string(),
+            title: String::new(),
             artist: "sally".to_string(),
             artwork: None,
             source: AlbumSource::Local,
@@ -1554,7 +1636,7 @@ mod test {
         };
         let test = LibraryAlbum {
             id: 0,
-            title: "".to_string(),
+            title: String::new(),
             artist: "test".to_string(),
             artwork: None,
             source: AlbumSource::Local,
@@ -1585,7 +1667,7 @@ mod test {
     fn filter_albums_filters_albums_of_artist_that_dont_match_and_searches_multiple_words() {
         let bob = LibraryAlbum {
             id: 0,
-            title: "".to_string(),
+            title: String::new(),
             artist: "bob".to_string(),
             artwork: None,
             source: AlbumSource::Local,
@@ -1593,7 +1675,7 @@ mod test {
         };
         let sally = LibraryAlbum {
             id: 0,
-            title: "".to_string(),
+            title: String::new(),
             artist: "sally".to_string(),
             artwork: None,
             source: AlbumSource::Local,
@@ -1601,7 +1683,7 @@ mod test {
         };
         let test = LibraryAlbum {
             id: 0,
-            title: "".to_string(),
+            title: String::new(),
             artist: "one test two".to_string(),
             artwork: None,
             source: AlbumSource::Local,
@@ -1632,7 +1714,7 @@ mod test {
     fn filter_albums_filters_albums_of_search_that_dont_match_artist() {
         let bob = LibraryAlbum {
             id: 0,
-            title: "".to_string(),
+            title: String::new(),
             artist: "bob".to_string(),
             artwork: None,
             source: AlbumSource::Local,
@@ -1640,7 +1722,7 @@ mod test {
         };
         let sally = LibraryAlbum {
             id: 0,
-            title: "".to_string(),
+            title: String::new(),
             artist: "sally".to_string(),
             artwork: None,
             source: AlbumSource::Local,
@@ -1648,7 +1730,7 @@ mod test {
         };
         let test = LibraryAlbum {
             id: 0,
-            title: "".to_string(),
+            title: String::new(),
             artist: "test".to_string(),
             artwork: None,
             source: AlbumSource::Local,
@@ -1679,7 +1761,7 @@ mod test {
     fn filter_albums_filters_albums_of_search_that_dont_match_artist_and_searches_multiple_words() {
         let bob = LibraryAlbum {
             id: 0,
-            title: "".to_string(),
+            title: String::new(),
             artist: "bob".to_string(),
             artwork: None,
             source: AlbumSource::Local,
@@ -1687,7 +1769,7 @@ mod test {
         };
         let sally = LibraryAlbum {
             id: 0,
-            title: "".to_string(),
+            title: String::new(),
             artist: "sally".to_string(),
             artwork: None,
             source: AlbumSource::Local,
@@ -1695,7 +1777,7 @@ mod test {
         };
         let test = LibraryAlbum {
             id: 0,
-            title: "".to_string(),
+            title: String::new(),
             artist: "one test two".to_string(),
             artwork: None,
             source: AlbumSource::Local,
@@ -1727,7 +1809,7 @@ mod test {
         let bob = LibraryAlbum {
             id: 0,
             title: "bob".to_string(),
-            artist: "".to_string(),
+            artist: String::new(),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -1735,7 +1817,7 @@ mod test {
         let sally = LibraryAlbum {
             id: 0,
             title: "sally".to_string(),
-            artist: "".to_string(),
+            artist: String::new(),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -1743,7 +1825,7 @@ mod test {
         let test = LibraryAlbum {
             id: 0,
             title: "test".to_string(),
-            artist: "".to_string(),
+            artist: String::new(),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -1774,7 +1856,7 @@ mod test {
         let bob = LibraryAlbum {
             id: 0,
             title: "bob".to_string(),
-            artist: "".to_string(),
+            artist: String::new(),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -1782,7 +1864,7 @@ mod test {
         let sally = LibraryAlbum {
             id: 0,
             title: "sally".to_string(),
-            artist: "".to_string(),
+            artist: String::new(),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -1790,7 +1872,7 @@ mod test {
         let test = LibraryAlbum {
             id: 0,
             title: "one test two".to_string(),
-            artist: "".to_string(),
+            artist: String::new(),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -1829,7 +1911,7 @@ mod test {
         let sally = LibraryAlbum {
             id: 0,
             title: "sally".to_string(),
-            artist: "".to_string(),
+            artist: String::new(),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
@@ -1837,7 +1919,7 @@ mod test {
         let test = LibraryAlbum {
             id: 0,
             title: "one test two".to_string(),
-            artist: "".to_string(),
+            artist: String::new(),
             artwork: None,
             source: AlbumSource::Local,
             ..Default::default()
