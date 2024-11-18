@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::path::PathBuf;
 
@@ -28,26 +29,32 @@ impl std::fmt::Display for AppType {
     }
 }
 
+#[must_use]
 pub fn get_config_dir_path() -> Option<PathBuf> {
     home::home_dir().map(|home| home.join(".local").join("moosicbox"))
 }
 
+#[must_use]
 pub fn get_app_config_dir_path(app_type: AppType) -> Option<PathBuf> {
     get_config_dir_path().map(|x| x.join(app_type.to_string()))
 }
 
+#[must_use]
 pub fn get_profiles_dir_path(app_type: AppType) -> Option<PathBuf> {
     get_app_config_dir_path(app_type).map(|x| x.join("profiles"))
 }
 
+#[must_use]
 pub fn get_profile_dir_path(app_type: AppType, profile: &str) -> Option<PathBuf> {
     get_profiles_dir_path(app_type).map(|x| x.join(profile))
 }
 
+#[must_use]
 pub fn get_cache_dir_path() -> Option<PathBuf> {
     get_config_dir_path().map(|config| config.join("cache"))
 }
 
+#[must_use]
 pub fn make_config_dir_path() -> Option<PathBuf> {
     if let Some(path) = get_config_dir_path() {
         if path.is_dir() || std::fs::create_dir_all(&path).is_ok() {
@@ -58,6 +65,7 @@ pub fn make_config_dir_path() -> Option<PathBuf> {
     None
 }
 
+#[must_use]
 pub fn make_profile_dir_path(app_type: AppType, profile: &str) -> Option<PathBuf> {
     if let Some(path) = get_profile_dir_path(app_type, profile) {
         if path.is_dir() || std::fs::create_dir_all(&path).is_ok() {
@@ -68,6 +76,7 @@ pub fn make_profile_dir_path(app_type: AppType, profile: &str) -> Option<PathBuf
     None
 }
 
+#[must_use]
 pub fn make_cache_dir_path() -> Option<PathBuf> {
     if let Some(path) = get_cache_dir_path() {
         if path.is_dir() || std::fs::create_dir_all(&path).is_ok() {
@@ -79,6 +88,7 @@ pub fn make_cache_dir_path() -> Option<PathBuf> {
 }
 
 #[cfg(feature = "test")]
+#[must_use]
 pub fn get_tests_dir_path() -> PathBuf {
     std::env::temp_dir().join(format!(
         "moosicbox_tests_{}",
@@ -96,16 +106,26 @@ mod db_impl {
 
     use crate::db::{models, GetOrInitServerIdentityError};
 
+    /// # Errors
+    ///
+    /// * If a database error occurs
     pub async fn get_server_identity(db: &ConfigDatabase) -> Result<Option<String>, DatabaseError> {
         crate::db::get_server_identity(db).await
     }
 
+    /// # Errors
+    ///
+    /// * If a database error occurs
+    /// * If the server server identity has not been initialized
     pub async fn get_or_init_server_identity(
         db: &ConfigDatabase,
     ) -> Result<String, GetOrInitServerIdentityError> {
         crate::db::get_or_init_server_identity(db).await
     }
 
+    /// # Errors
+    ///
+    /// * If a database error occurs
     pub async fn upsert_profile(
         db: &ConfigDatabase,
         name: &str,
@@ -119,6 +139,9 @@ mod db_impl {
         create_profile(db, name).await
     }
 
+    /// # Errors
+    ///
+    /// * If a database error occurs
     pub async fn delete_profile(
         db: &ConfigDatabase,
         name: &str,
@@ -141,6 +164,9 @@ mod db_impl {
         Ok(profiles)
     }
 
+    /// # Errors
+    ///
+    /// * If a database error occurs
     pub async fn create_profile(
         db: &ConfigDatabase,
         name: &str,
@@ -159,6 +185,9 @@ mod db_impl {
         Ok(profile)
     }
 
+    /// # Errors
+    ///
+    /// * If a database error occurs
     pub async fn get_profiles(
         db: &ConfigDatabase,
     ) -> Result<Vec<models::Profile>, DatabaseFetchError> {
