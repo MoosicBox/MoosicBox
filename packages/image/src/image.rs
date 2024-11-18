@@ -4,6 +4,9 @@ use thiserror::Error;
 
 use crate::Encoding;
 
+/// # Errors
+///
+/// * If the image encoder fails to encode the resized image
 pub fn try_resize_local_file(
     width: u32,
     height: u32,
@@ -20,15 +23,11 @@ pub fn try_resize_local_file(
             encoder.encode_image(&resized)?;
             Ok(Some(buffer.into()))
         }
-        Encoding::Webp => {
-            if let Ok(encoder) = webp::Encoder::from_image(&resized) {
-                let memory = encoder.encode(quality.into());
-                let bytes = memory.to_vec();
-                Ok(Some(bytes.into()))
-            } else {
-                Ok(None)
-            }
-        }
+        Encoding::Webp => webp::Encoder::from_image(&resized).map_or(Ok(None), |encoder| {
+            let memory = encoder.encode(quality.into());
+            let bytes = memory.to_vec();
+            Ok(Some(bytes.into()))
+        }),
     }
 }
 
@@ -40,6 +39,10 @@ pub enum ResizeImageError {
     Join(#[from] tokio::task::JoinError),
 }
 
+/// # Errors
+///
+/// * If the image encoder fails to encode the resized image
+/// * If the `tokio` task fails to join
 pub async fn try_resize_local_file_async(
     width: u32,
     height: u32,

@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use strum_macros::{AsRefStr, Display, EnumString};
 
@@ -8,7 +9,7 @@ pub mod image;
 #[cfg(feature = "libvips")]
 pub mod libvips;
 
-#[derive(Debug, Display, EnumString, AsRefStr)]
+#[derive(Debug, Copy, Clone, Display, EnumString, AsRefStr)]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum Encoding {
     Jpeg,

@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::{
     io::{Seek as _, Write as _},
@@ -83,36 +84,49 @@ async fn try_resize_local_file(
         let reader = ::image::ImageReader::open(file_path)?;
         let dimensions = reader.into_dimensions()?;
 
-        if let Some(width) = width {
-            (
-                width,
-                ((dimensions.1 as f64) * ((width as f64) / (dimensions.0 as f64))).round() as u32,
-            )
-        } else if let Some(height) = height {
-            (
-                ((dimensions.0 as f64) * ((height as f64) / (dimensions.1 as f64))).round() as u32,
-                height,
-            )
-        } else {
-            (
-                width.unwrap_or(dimensions.0),
-                height.unwrap_or(dimensions.1),
-            )
-        }
+        width.map_or_else(
+            || {
+                height.map_or_else(
+                    || {
+                        (
+                            width.unwrap_or(dimensions.0),
+                            height.unwrap_or(dimensions.1),
+                        )
+                    },
+                    |height| {
+                        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                        (
+                            (f64::from(dimensions.0)
+                                * (f64::from(height) / f64::from(dimensions.1)))
+                            .round() as u32,
+                            height,
+                        )
+                    },
+                )
+            },
+            |width| {
+                #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                (
+                    width,
+                    (f64::from(dimensions.1) * (f64::from(width) / f64::from(dimensions.0))).round()
+                        as u32,
+                )
+            },
+        )
     };
 
     let output = Path::new(output);
 
-    let encoding = encoding.unwrap_or(
+    let encoding = encoding.unwrap_or_else(|| {
         output
             .extension()
-            .and_then(|ext| ext.to_ascii_uppercase().to_str().map(|x| x.to_string()))
+            .and_then(|ext| ext.to_ascii_uppercase().to_str().map(str::to_string))
             .and_then(|ext| Encoding::from_str(&ext).ok())
             .unwrap_or_else(|| {
                 log::debug!("Defaulting encoding to Jpeg");
                 Encoding::Jpeg
-            }),
-    );
+            })
+    });
 
     log::debug!("Resizing local image file path={path} width={width} height={height} encoding={encoding} quality={quality}");
 
