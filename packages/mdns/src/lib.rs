@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use mdns_sd::{ServiceDaemon, ServiceInfo};
 use thiserror::Error;
@@ -14,6 +15,10 @@ pub enum RegisterServiceError {
     IO(#[from] std::io::Error),
 }
 
+/// # Errors
+///
+/// * If `mdns_sd` has an error initializing the mdns service
+/// * If there is an IO error
 pub fn register_service(
     instance_name: &str,
     ip: &str,
@@ -25,7 +30,7 @@ pub fn register_service(
         "{}.local.",
         hostname::get()?
             .into_string()
-            .unwrap_or("unknown".to_string())
+            .unwrap_or_else(|_| "unknown".to_string())
     );
 
     log::debug!("register_service: Registering mdns service service_type={service_type} instance_name={instance_name} host_name={host_name} ip={ip} port={port}");

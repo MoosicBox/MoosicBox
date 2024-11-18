@@ -39,6 +39,7 @@ pub struct Context {
 }
 
 impl Context {
+    #[must_use]
     pub fn new(sender: kanal::AsyncSender<MoosicBox>) -> Self {
         Self {
             token: CancellationToken::new(),
@@ -74,7 +75,7 @@ impl service::Processor for service::Service {
                 while let Ok(Some(event)) = {
                     moosicbox_async_service::tokio::select! {
                         event = receiver.recv_async() => event.map(Some),
-                        _ = token.cancelled() => Ok(None)
+                        () = token.cancelled() => Ok(None)
                     }
                 } {
                     if let ServiceEvent::ServiceResolved(info) = event {
@@ -83,13 +84,13 @@ impl service::Processor for service::Service {
                             info.get_fullname()
                         );
 
-                        for addr in info.get_addresses().iter().filter(|x| x.is_ipv4()).cloned() {
+                        for addr in info.get_addresses().iter().filter(|x| x.is_ipv4()).copied() {
                             let socket_addr = SocketAddr::new(addr, info.get_port());
                             log::debug!("mdns scanner: Server address: {}", addr);
                             let dns = info.get_fullname().to_string();
 
                             let server = MoosicBox {
-                                id: dns.split_once(".").expect("Invalid dns").0.to_string(),
+                                id: dns.split_once('.').expect("Invalid dns").0.to_string(),
                                 name: info.get_hostname().to_string(),
                                 host: socket_addr,
                                 dns,
@@ -104,6 +105,8 @@ impl service::Processor for service::Service {
             },
         ));
 
+        drop(ctx);
+
         Ok(())
     }
 
@@ -112,7 +115,7 @@ impl service::Processor for service::Service {
 
         if let Some(handle) = handle {
             ctx.read().await.token.cancel();
-            handle.await??
+            handle.await??;
         }
 
         Ok(())
