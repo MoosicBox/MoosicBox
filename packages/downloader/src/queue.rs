@@ -1,9 +1,13 @@
+#![allow(clippy::module_name_repetitions)]
+
 use std::{path::PathBuf, pin::Pin, str::FromStr as _, sync::Arc, time::Duration};
 
 use futures::Future;
 use lazy_static::lazy_static;
 use moosicbox_core::sqlite::db::DbError;
-use moosicbox_database::{profiles::LibraryDatabase, query::*, DatabaseError, DatabaseValue, Row};
+use moosicbox_database::{
+    profiles::LibraryDatabase, query::FilterableQuery, DatabaseError, DatabaseValue, Row,
+};
 use moosicbox_scan::local::ScanItem;
 use thiserror::Error;
 use tokio::{
@@ -18,7 +22,7 @@ use crate::{
 };
 
 lazy_static! {
-    static ref TIMEOUT_DURATION: Option<Duration> = Some(Duration::from_secs(30));
+    static ref TIMEOUT_DURATION: Duration = Duration::from_secs(30);
 }
 
 #[derive(Debug, Error)]
@@ -67,7 +71,7 @@ struct DownloadQueueState {
 }
 
 impl DownloadQueueState {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             tasks: vec![],
             results: vec![],
@@ -135,6 +139,7 @@ pub struct DownloadQueue {
 }
 
 impl DownloadQueue {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             progress_listeners: vec![],
@@ -146,34 +151,41 @@ impl DownloadQueue {
         }
     }
 
-    pub fn has_database(&self) -> bool {
+    #[must_use]
+    pub const fn has_database(&self) -> bool {
         self.database.is_some()
     }
 
+    #[must_use]
     pub fn with_database(mut self, database: LibraryDatabase) -> Self {
         self.database.replace(database);
         self
     }
 
+    #[must_use]
     pub fn has_downloader(&self) -> bool {
         self.downloader.is_some()
     }
 
+    #[must_use]
     pub fn with_downloader(mut self, downloader: Box<dyn Downloader + Send + Sync>) -> Self {
         self.downloader.replace(Arc::new(downloader));
         self
     }
 
+    #[must_use]
     pub fn add_progress_listener(mut self, listener: ProgressListenerRef) -> Self {
         self.progress_listeners.push(Arc::new(listener));
         self
     }
 
-    pub fn with_scan(mut self, scan: bool) -> Self {
+    #[must_use]
+    pub const fn with_scan(mut self, scan: bool) -> Self {
         self.scan = scan;
         self
     }
 
+    #[must_use]
     pub fn speed(&self) -> Option<f64> {
         self.downloader
             .clone()
@@ -190,7 +202,7 @@ impl DownloadQueue {
 
     pub fn process(&mut self) -> JoinHandle<Result<(), ProcessDownloadQueueError>> {
         let join_handle = self.join_handle.clone();
-        let mut this = self.clone();
+        let this = self.clone();
 
         moosicbox_task::spawn("downloader: queue - process", async move {
             let mut handle = join_handle.lock().await;
@@ -209,12 +221,14 @@ impl DownloadQueue {
                 },
             ));
 
+            drop(handle);
+
             Ok::<_, ProcessDownloadQueueError>(())
         })
     }
 
     #[allow(unused)]
-    async fn shutdown(&mut self) -> Result<(), ProcessDownloadQueueError> {
+    async fn shutdown(&self) -> Result<(), ProcessDownloadQueueError> {
         let mut handle = self.join_handle.lock().await;
 
         if let Some(handle) = handle.as_mut() {
@@ -228,7 +242,7 @@ impl DownloadQueue {
         }
     }
 
-    async fn process_inner(&mut self) -> Result<(), ProcessDownloadQueueError> {
+    async fn process_inner(&self) -> Result<(), ProcessDownloadQueueError> {
         while let Some(mut task) = {
             let state = self.state.as_ref().read().await;
             state.tasks.first().cloned()
@@ -267,7 +281,7 @@ impl DownloadQueue {
             )
             .await;
 
-        for listener in self.progress_listeners.iter() {
+        for listener in &self.progress_listeners {
             #[allow(unreachable_code)]
             listener(&ProgressEvent::State {
                 task: task.clone(),
@@ -294,10 +308,14 @@ impl DownloadQueue {
             .ok_or(UpdateTaskError::NoRow)
     }
 
-    #[allow(unreachable_code)]
-    #[allow(unused)]
+    #[allow(
+        unreachable_code,
+        unused,
+        clippy::too_many_lines,
+        clippy::uninhabited_references
+    )]
     async fn process_task(
-        &mut self,
+        &self,
         task: &mut DownloadTask,
     ) -> Result<ProcessDownloadTaskResponse, ProcessDownloadQueueError> {
         log::debug!("Processing task {task:?}");
@@ -346,8 +364,8 @@ impl DownloadQueue {
                                 );
                             }
                         }
-                        GenericProgressEvent::Speed { .. } => {}
-                        GenericProgressEvent::BytesRead { .. } => {}
+                        GenericProgressEvent::Speed { .. }
+                        | GenericProgressEvent::BytesRead { .. } => {}
                     }
 
                     let event = match event {
@@ -367,7 +385,7 @@ impl DownloadQueue {
                             }
                         }
                     };
-                    for listener in listeners.iter() {
+                    for listener in &listeners {
                         listener(&event).await;
                     }
                 }) as ProgressListenerFut
@@ -412,7 +430,7 @@ impl DownloadQueue {
                         *quality,
                         *source,
                         on_progress,
-                        *TIMEOUT_DURATION,
+                        Some(*TIMEOUT_DURATION),
                     )
                     .await?;
 
@@ -572,9 +590,7 @@ mod tests {
             _source: DownloadApiSource,
             _on_size: ProgressListener,
         ) -> Result<Artist, DownloadAlbumError> {
-            Ok(Artist {
-                ..Default::default()
-            })
+            Ok(Artist::default())
         }
     }
 
@@ -687,8 +703,8 @@ mod tests {
                     contains_cover: false,
                 },
                 file_path,
-                created: "".into(),
-                updated: "".into(),
+                created: String::new(),
+                updated: String::new(),
                 total_bytes: None,
             })
             .await;
@@ -739,8 +755,8 @@ mod tests {
                         contains_cover: false,
                     },
                     file_path: file_path.clone(),
-                    created: "".into(),
-                    updated: "".into(),
+                    created: String::new(),
+                    updated: String::new(),
                     total_bytes: None,
                 },
                 DownloadTask {
@@ -758,8 +774,8 @@ mod tests {
                         contains_cover: false,
                     },
                     file_path,
-                    created: "".into(),
-                    updated: "".into(),
+                    created: String::new(),
+                    updated: String::new(),
                     total_bytes: None,
                 },
             ])
@@ -814,8 +830,8 @@ mod tests {
                         contains_cover: false,
                     },
                     file_path: file_path.clone(),
-                    created: "".into(),
-                    updated: "".into(),
+                    created: String::new(),
+                    updated: String::new(),
                     total_bytes: None,
                 },
                 DownloadTask {
@@ -833,8 +849,8 @@ mod tests {
                         contains_cover: false,
                     },
                     file_path,
-                    created: "".into(),
-                    updated: "".into(),
+                    created: String::new(),
+                    updated: String::new(),
                     total_bytes: None,
                 },
             ])
@@ -885,8 +901,8 @@ mod tests {
                     contains_cover: false,
                 },
                 file_path: file_path.clone(),
-                created: "".into(),
-                updated: "".into(),
+                created: String::new(),
+                updated: String::new(),
                 total_bytes: None,
             })
             .await;
@@ -909,8 +925,8 @@ mod tests {
                     contains_cover: false,
                 },
                 file_path,
-                created: "".into(),
-                updated: "".into(),
+                created: String::new(),
+                updated: String::new(),
                 total_bytes: None,
             })
             .await;

@@ -8,8 +8,9 @@ use moosicbox_json_utils::{
 use moosicbox_music_api::models::TrackAudioQuality;
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
+use thiserror::Error;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadLocation {
     pub id: u64,
@@ -42,11 +43,14 @@ impl ToValueType<DownloadLocation> for &serde_json::Value {
 
 impl AsId for DownloadLocation {
     fn as_id(&self) -> DatabaseValue {
+        #[allow(clippy::cast_possible_wrap)]
         DatabaseValue::Number(self.id as i64)
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, Clone, Copy, PartialEq, Default)]
+#[derive(
+    Debug, Serialize, Deserialize, EnumString, AsRefStr, Clone, Copy, PartialEq, Eq, Default,
+)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum DownloadTaskState {
@@ -80,7 +84,7 @@ impl ToValueType<DownloadTaskState> for &serde_json::Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -97,11 +101,11 @@ impl From<ApiSource> for DownloadApiSource {
     fn from(value: ApiSource) -> Self {
         match value {
             #[cfg(feature = "tidal")]
-            ApiSource::Tidal => DownloadApiSource::Tidal,
+            ApiSource::Tidal => Self::Tidal,
             #[cfg(feature = "qobuz")]
-            ApiSource::Qobuz => DownloadApiSource::Qobuz,
+            ApiSource::Qobuz => Self::Qobuz,
             #[cfg(feature = "yt")]
-            ApiSource::Yt => DownloadApiSource::Yt,
+            ApiSource::Yt => Self::Yt,
             _ => unreachable!(),
         }
     }
@@ -111,11 +115,11 @@ impl From<DownloadApiSource> for ApiSource {
     fn from(value: DownloadApiSource) -> Self {
         match value {
             #[cfg(feature = "tidal")]
-            DownloadApiSource::Tidal => ApiSource::Tidal,
+            DownloadApiSource::Tidal => Self::Tidal,
             #[cfg(feature = "qobuz")]
-            DownloadApiSource::Qobuz => ApiSource::Qobuz,
+            DownloadApiSource::Qobuz => Self::Qobuz,
             #[cfg(feature = "yt")]
-            DownloadApiSource::Yt => ApiSource::Yt,
+            DownloadApiSource::Yt => Self::Yt,
         }
     }
 }
@@ -124,26 +128,35 @@ impl From<DownloadApiSource> for TrackApiSource {
     fn from(value: DownloadApiSource) -> Self {
         match value {
             #[cfg(feature = "tidal")]
-            DownloadApiSource::Tidal => TrackApiSource::Tidal,
+            DownloadApiSource::Tidal => Self::Tidal,
             #[cfg(feature = "qobuz")]
-            DownloadApiSource::Qobuz => TrackApiSource::Qobuz,
+            DownloadApiSource::Qobuz => Self::Qobuz,
             #[cfg(feature = "yt")]
-            DownloadApiSource::Yt => TrackApiSource::Yt,
+            DownloadApiSource::Yt => Self::Yt,
         }
     }
 }
 
-impl From<TrackApiSource> for DownloadApiSource {
-    fn from(value: TrackApiSource) -> Self {
-        match value {
+#[derive(Debug, Error)]
+pub enum TryFromTrackApiSourceError {
+    #[error("Invalid source")]
+    InvalidSource,
+}
+
+impl TryFrom<TrackApiSource> for DownloadApiSource {
+    type Error = TryFromTrackApiSourceError;
+
+    fn try_from(value: TrackApiSource) -> Result<Self, Self::Error> {
+        #[allow(unreachable_code)]
+        Ok(match value {
             #[cfg(feature = "tidal")]
-            TrackApiSource::Tidal => DownloadApiSource::Tidal,
+            TrackApiSource::Tidal => Self::Tidal,
             #[cfg(feature = "qobuz")]
-            TrackApiSource::Qobuz => DownloadApiSource::Qobuz,
+            TrackApiSource::Qobuz => Self::Qobuz,
             #[cfg(feature = "yt")]
-            TrackApiSource::Yt => DownloadApiSource::Yt,
-            _ => panic!("Invalid TrackApiSource"),
-        }
+            TrackApiSource::Yt => Self::Yt,
+            _ => return Err(Self::Error::InvalidSource),
+        })
     }
 }
 
@@ -201,76 +214,73 @@ pub enum DownloadItem {
     },
 }
 
+#[allow(clippy::uninhabited_references)]
 impl DownloadItem {
-    pub fn source(&self) -> &DownloadApiSource {
+    pub const fn source(&self) -> &DownloadApiSource {
         match self {
-            DownloadItem::Track { source, .. } => source,
-            DownloadItem::AlbumCover { source, .. } => source,
-            DownloadItem::ArtistCover { source, .. } => source,
+            Self::Track { source, .. }
+            | Self::AlbumCover { source, .. }
+            | Self::ArtistCover { source, .. } => source,
         }
     }
 
-    pub fn quality(&self) -> Option<&TrackAudioQuality> {
+    pub const fn quality(&self) -> Option<&TrackAudioQuality> {
         match self {
-            DownloadItem::Track { quality, .. } => Some(quality),
-            DownloadItem::AlbumCover { .. } => None,
-            DownloadItem::ArtistCover { .. } => None,
+            Self::Track { quality, .. } => Some(quality),
+            Self::AlbumCover { .. } | Self::ArtistCover { .. } => None,
         }
     }
 
-    pub fn track(&self) -> Option<&String> {
+    pub const fn track(&self) -> Option<&String> {
         match self {
-            DownloadItem::Track { title, .. } => Some(title),
-            DownloadItem::AlbumCover { .. } => None,
-            DownloadItem::ArtistCover { .. } => None,
+            Self::Track { title, .. } => Some(title),
+            Self::AlbumCover { .. } | Self::ArtistCover { .. } => None,
         }
     }
 
-    pub fn track_id(&self) -> Option<&Id> {
+    pub const fn track_id(&self) -> Option<&Id> {
         match self {
-            DownloadItem::Track { track_id, .. } => Some(track_id),
-            DownloadItem::AlbumCover { .. } => None,
-            DownloadItem::ArtistCover { .. } => None,
+            Self::Track { track_id, .. } => Some(track_id),
+            Self::AlbumCover { .. } | Self::ArtistCover { .. } => None,
         }
     }
 
-    pub fn album(&self) -> Option<&String> {
+    pub const fn album(&self) -> Option<&String> {
         match self {
-            DownloadItem::Track { album, .. } => Some(album),
-            DownloadItem::AlbumCover { title, .. } => Some(title),
-            DownloadItem::ArtistCover { .. } => None,
+            Self::Track { album, .. } => Some(album),
+            Self::AlbumCover { title, .. } => Some(title),
+            Self::ArtistCover { .. } => None,
         }
     }
 
-    pub fn album_id(&self) -> Option<&Id> {
+    pub const fn album_id(&self) -> &Id {
         match self {
-            DownloadItem::Track { album_id, .. } => Some(album_id),
-            DownloadItem::AlbumCover { album_id, .. } => Some(album_id),
-            DownloadItem::ArtistCover { album_id, .. } => Some(album_id),
+            Self::Track { album_id, .. }
+            | Self::AlbumCover { album_id, .. }
+            | Self::ArtistCover { album_id, .. } => album_id,
         }
     }
 
-    pub fn artist(&self) -> Option<&String> {
+    pub const fn artist(&self) -> &String {
         match self {
-            DownloadItem::Track { artist, .. } => Some(artist),
-            DownloadItem::AlbumCover { artist, .. } => Some(artist),
-            DownloadItem::ArtistCover { title, .. } => Some(title),
+            Self::Track { artist, .. } | Self::AlbumCover { artist, .. } => artist,
+            Self::ArtistCover { title, .. } => title,
         }
     }
 
-    pub fn artist_id(&self) -> Option<&Id> {
+    pub const fn artist_id(&self) -> &Id {
         match self {
-            DownloadItem::Track { artist_id, .. } => Some(artist_id),
-            DownloadItem::AlbumCover { artist_id, .. } => Some(artist_id),
-            DownloadItem::ArtistCover { artist_id, .. } => Some(artist_id),
+            Self::Track { artist_id, .. }
+            | Self::AlbumCover { artist_id, .. }
+            | Self::ArtistCover { artist_id, .. } => artist_id,
         }
     }
 
-    pub fn contains_cover(&self) -> bool {
+    pub const fn contains_cover(&self) -> bool {
         match self {
-            DownloadItem::Track { contains_cover, .. } => *contains_cover,
-            DownloadItem::AlbumCover { contains_cover, .. } => *contains_cover,
-            DownloadItem::ArtistCover { contains_cover, .. } => *contains_cover,
+            Self::Track { contains_cover, .. }
+            | Self::AlbumCover { contains_cover, .. }
+            | Self::ArtistCover { contains_cover, .. } => *contains_cover,
         }
     }
 }
@@ -405,6 +415,7 @@ impl ToValueType<DownloadTask> for &serde_json::Value {
 
 impl AsId for DownloadTask {
     fn as_id(&self) -> DatabaseValue {
+        #[allow(clippy::cast_possible_wrap)]
         DatabaseValue::Number(self.id as i64)
     }
 }

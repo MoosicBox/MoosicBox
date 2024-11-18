@@ -1,4 +1,6 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::redundant_pub_crate)]
 
 use std::{
     error::Error,
@@ -51,7 +53,7 @@ use tokio::select;
 #[cfg(feature = "api")]
 pub mod api;
 
-pub mod db;
+pub(crate) mod db;
 pub mod queue;
 
 #[derive(Debug, Error)]
@@ -64,6 +66,15 @@ pub enum GetDownloadPathError {
     NotFound,
 }
 
+/// # Panics
+///
+/// * If the path cannot be created from the download location string
+///
+/// # Errors
+///
+/// * If there is a database error
+/// * If there is no config dir set
+/// * If the download path is not found
 pub async fn get_download_path(
     db: &LibraryDatabase,
     location_id: Option<u64>,
@@ -105,6 +116,12 @@ pub enum GetCreateDownloadTasksError {
     NotFound,
 }
 
+/// # Errors
+///
+/// * If there is a database error
+/// * If there are errors fetching track/album/artist info
+/// * If IDs fail to parse
+/// * If given an invalid `ApiSource`
 #[allow(clippy::too_many_arguments)]
 pub async fn get_create_download_tasks(
     api: &dyn MusicApi,
@@ -186,6 +203,12 @@ pub async fn get_create_download_tasks(
     Ok(tasks)
 }
 
+/// # Errors
+///
+/// * If there is a database error
+/// * If there are errors fetching track/album/artist info
+/// * If IDs fail to parse
+/// * If given an invalid `ApiSource`
 pub async fn get_create_download_tasks_for_track_ids(
     api: &dyn MusicApi,
     track_ids: &[Id],
@@ -202,6 +225,16 @@ pub async fn get_create_download_tasks_for_track_ids(
     get_create_download_tasks_for_tracks(api, &tracks, download_path, source, quality).await
 }
 
+/// # Panics
+///
+/// * If the track `Path` fails to be converted to a `str`
+///
+/// # Errors
+///
+/// * If there is a database error
+/// * If there are errors fetching track/album/artist info
+/// * If IDs fail to parse
+/// * If given an invalid `ApiSource`
 pub async fn get_create_download_tasks_for_tracks(
     api: &dyn MusicApi,
     tracks: &[Track],
@@ -212,17 +245,24 @@ pub async fn get_create_download_tasks_for_tracks(
     let mut tasks = vec![];
 
     for track in tracks {
-        let source = if let Some(source) = source {
-            source
-        } else {
-            match track.track_source {
-                TrackApiSource::Local => return Err(GetCreateDownloadTasksError::InvalidSource),
-                #[cfg(feature = "tidal")]
-                TrackApiSource::Tidal => DownloadApiSource::Tidal,
-                #[cfg(feature = "qobuz")]
-                TrackApiSource::Qobuz => DownloadApiSource::Qobuz,
-                #[cfg(feature = "yt")]
-                TrackApiSource::Yt => DownloadApiSource::Yt,
+        static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"/mnt/(\w+)").unwrap());
+
+        #[allow(clippy::manual_let_else)]
+        let source = {
+            if let Some(source) = source {
+                source
+            } else {
+                match track.track_source {
+                    TrackApiSource::Local => {
+                        return Err(GetCreateDownloadTasksError::InvalidSource)
+                    }
+                    #[cfg(feature = "tidal")]
+                    TrackApiSource::Tidal => DownloadApiSource::Tidal,
+                    #[cfg(feature = "qobuz")]
+                    TrackApiSource::Qobuz => DownloadApiSource::Qobuz,
+                    #[cfg(feature = "yt")]
+                    TrackApiSource::Yt => DownloadApiSource::Yt,
+                }
             }
         };
 
@@ -238,8 +278,6 @@ pub async fn get_create_download_tasks_for_tracks(
             .unwrap()
             .to_string();
 
-        static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"/mnt/(\w+)").unwrap());
-
         let path = if std::env::consts::OS == "windows" {
             REGEX
                 .replace(&path, |caps: &Captures| {
@@ -253,22 +291,32 @@ pub async fn get_create_download_tasks_for_tracks(
         tasks.push(CreateDownloadTask {
             file_path: path,
             item: DownloadItem::Track {
-                track_id: track.id.to_owned(),
+                track_id: track.id.clone(),
                 source,
                 quality,
-                artist_id: track.artist_id.to_owned(),
-                artist: track.artist.to_owned(),
-                album_id: track.album_id.to_owned(),
-                album: track.album.to_owned(),
-                title: track.title.to_owned(),
+                artist_id: track.artist_id.clone(),
+                artist: track.artist.clone(),
+                album_id: track.album_id.clone(),
+                album: track.album.clone(),
+                title: track.title.clone(),
                 contains_cover: album.is_some_and(|x| x.artwork.is_some()),
             },
-        })
+        });
     }
 
     Ok(tasks)
 }
 
+/// # Panics
+///
+/// * If the album `Path` fails to be converted to a `str`
+///
+/// # Errors
+///
+/// * If there is a database error
+/// * If there are errors fetching track/album/artist info
+/// * If IDs fail to parse
+/// * If given an invalid `ApiSource`
 #[allow(clippy::too_many_arguments)]
 pub async fn get_create_download_tasks_for_album_ids(
     api: &dyn MusicApi,
@@ -288,13 +336,13 @@ pub async fn get_create_download_tasks_for_album_ids(
             .ok_or(GetCreateDownloadTasksError::NotFound)?;
 
         if download_album_cover || download_artist_cover {
+            static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"/mnt/(\w+)").unwrap());
+
             let album_path = download_path
                 .join(sanitize_filename(&album.artist))
                 .join(sanitize_filename(&album.title));
 
             let path = album_path.join("cover.jpg").to_str().unwrap().to_string();
-
-            static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"/mnt/(\w+)").unwrap());
 
             let path = if std::env::consts::OS == "windows" {
                 REGEX
@@ -307,6 +355,9 @@ pub async fn get_create_download_tasks_for_album_ids(
             };
 
             if download_artist_cover {
+                static REGEX: LazyLock<Regex> =
+                    LazyLock::new(|| Regex::new(r"/mnt/(\w+)").unwrap());
+
                 let artist = api
                     .artist(&album.artist_id)
                     .await?
@@ -319,9 +370,6 @@ pub async fn get_create_download_tasks_for_album_ids(
                     .to_str()
                     .unwrap()
                     .to_string();
-
-                static REGEX: LazyLock<Regex> =
-                    LazyLock::new(|| Regex::new(r"/mnt/(\w+)").unwrap());
 
                 let path = if std::env::consts::OS == "windows" {
                     REGEX
@@ -371,12 +419,13 @@ pub async fn get_create_download_tasks_for_album_ids(
             .await?
             .into_iter()
             .filter(|track| {
-                if let Some(source) = source {
-                    let track_source = source.into();
-                    track.track_source == track_source
-                } else {
-                    track.track_source != TrackApiSource::Local
-                }
+                source.map_or_else(
+                    || track.track_source != TrackApiSource::Local,
+                    |source| {
+                        let track_source = source.into();
+                        track.track_source == track_source
+                    },
+                )
             })
             .collect::<Vec<_>>();
 
@@ -399,6 +448,9 @@ pub enum CreateDownloadTasksError {
     Db(#[from] DbError),
 }
 
+/// # Errors
+///
+/// * If the download tasks fail to be created in the database
 pub async fn create_download_tasks(
     db: &LibraryDatabase,
     tasks: Vec<CreateDownloadTask>,
@@ -448,6 +500,17 @@ pub enum DownloadTrackError {
     NotFound,
 }
 
+/// # Errors
+///
+/// * If there is a database error
+/// * If there are errors fetching track/album/artist info
+/// * If failed to fetch the track source
+/// * If failed to add tags to the downloaded audio file
+/// * If an IO error occurs
+/// * If there is an error saving the bytes stream to the file
+/// * If failed to get the content length of the audio data to download
+/// * If given an invalid `ApiSource`
+/// * If an item is not found
 #[allow(clippy::too_many_arguments)]
 pub async fn download_track_id(
     api: &dyn MusicApi,
@@ -508,7 +571,7 @@ async fn download_track(
     )
     .await
     {
-        Ok(_) => Ok(()),
+        Ok(()) => Ok(()),
         Err(err) => Err(match err {
             DownloadTrackInnerError::Db(err) => DownloadTrackError::Db(err),
             DownloadTrackInnerError::Track(err) => DownloadTrackError::Track(err),
@@ -569,7 +632,7 @@ pub enum DownloadTrackInnerError {
     Timeout(Option<u64>),
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 async fn download_track_inner(
     api: &dyn MusicApi,
     path: &str,
@@ -590,7 +653,7 @@ async fn download_track_inner(
     let result = if let Some(timeout_duration) = timeout_duration {
         select! {
             result = req => result,
-            _ = tokio::time::sleep(timeout_duration) => {
+            () = tokio::time::sleep(timeout_duration) => {
                 return Err(DownloadTrackInnerError::Timeout(start));
             }
         }
@@ -605,14 +668,15 @@ async fn download_track_inner(
         }
         Err(err) => {
             let is_timeout = err.source().is_some_and(|source| {
-                if let Some(error) = source.downcast_ref::<hyper::Error>() {
-                    error.is_timeout()
-                        || error.is_closed()
-                        || error.is_canceled()
-                        || error.is_incomplete_message()
-                } else {
-                    source.to_string() == "operation timed out"
-                }
+                source.downcast_ref::<hyper::Error>().map_or_else(
+                    || source.to_string() == "operation timed out",
+                    |error| {
+                        error.is_timeout()
+                            || error.is_closed()
+                            || error.is_canceled()
+                            || error.is_incomplete_message()
+                    },
+                )
             });
 
             if is_timeout {
@@ -626,11 +690,7 @@ async fn download_track_inner(
     let size = match &source {
         TrackSource::LocalFilePath { path, .. } => {
             if let Ok(file) = tokio::fs::File::open(path).await {
-                if let Ok(metadata) = file.metadata().await {
-                    Some(metadata.len())
-                } else {
-                    None
-                }
+                (file.metadata().await).map_or(None, |metadata| Some(metadata.len()))
             } else {
                 None
             }
@@ -703,7 +763,7 @@ async fn download_track_inner(
                             bytes_per_second: x,
                         })
                         .await;
-                        speed.store(x, std::sync::atomic::Ordering::SeqCst)
+                        speed.store(x, std::sync::atomic::Ordering::SeqCst);
                     })
                 }
             }),
@@ -736,7 +796,7 @@ async fn download_track_inner(
 
     log::debug!("Finished downloading track to track_path={track_path:?}");
 
-    tag_track_file(&track_path, track).await?;
+    tag_track_file(&track_path, track)?;
 
     log::debug!("Completed track download for track_path={track_path:?}");
 
@@ -749,13 +809,21 @@ pub enum TagTrackFileError {
     Tag(#[from] moosicbox_audiotags::Error),
 }
 
-pub async fn tag_track_file(track_path: &Path, track: &Track) -> Result<(), TagTrackFileError> {
+/// # Panics
+///
+/// * If the track number fails to be converted to a `u16`
+/// * If the track `Path` fails to be converted to a `str`
+///
+/// # Errors
+///
+/// * If `moosicbox_audiotags` fails to tag the audio file
+pub fn tag_track_file(track_path: &Path, track: &Track) -> Result<(), TagTrackFileError> {
     log::debug!("Adding tags to track_path={track_path:?}");
 
     let mut tag = Tag::new().read_from_path(track_path)?;
 
     tag.set_title(&track.title);
-    tag.set_track_number(track.number as u16);
+    tag.set_track_number(u16::try_from(track.number).unwrap());
     tag.set_album_title(&track.album);
     tag.set_artist(&track.artist);
     tag.set_album_artist(&track.artist);
@@ -799,6 +867,17 @@ pub enum DownloadAlbumError {
     NotFound,
 }
 
+/// # Errors
+///
+/// * If there is a database error
+/// * If there are errors fetching track/album/artist info
+/// * If failed to fetch the track source
+/// * If failed to add tags to the downloaded audio file
+/// * If an IO error occurs
+/// * If there is an error saving the bytes stream to the file
+/// * If failed to get the content length of the audio data to download
+/// * If given an invalid `ApiSource`
+/// * If an item is not found
 #[allow(clippy::too_many_arguments)]
 pub async fn download_album_id(
     api: &dyn MusicApi,
@@ -825,7 +904,7 @@ pub async fn download_album_id(
         .filter(|track| track.track_source == track_source)
         .collect::<Vec<_>>();
 
-    for track in tracks.iter() {
+    for track in &tracks {
         download_track(
             api,
             path,
@@ -837,7 +916,7 @@ pub async fn download_album_id(
             speed.clone(),
             timeout_duration,
         )
-        .await?
+        .await?;
     }
 
     log::debug!("Completed album download for {} tracks", tracks.len());
@@ -853,6 +932,21 @@ pub async fn download_album_id(
     Ok(())
 }
 
+/// # Panics
+///
+/// * If the track `Path` fails to be converted to a `str`
+///
+/// # Errors
+///
+/// * If there is a database error
+/// * If there are errors fetching track/album/artist info
+/// * If failed to fetch the track source
+/// * If failed to add tags to the downloaded audio file
+/// * If an IO error occurs
+/// * If there is an error saving the bytes stream to the file
+/// * If failed to get the content length of the audio data to download
+/// * If given an invalid `ApiSource`
+/// * If an item is not found
 pub async fn download_album_cover(
     api: &dyn MusicApi,
     db: &LibraryDatabase,
@@ -923,6 +1017,21 @@ pub async fn download_album_cover(
     Ok(album)
 }
 
+/// # Panics
+///
+/// * If the track `Path` fails to be converted to a `str`
+///
+/// # Errors
+///
+/// * If there is a database error
+/// * If there are errors fetching track/album/artist info
+/// * If failed to fetch the track source
+/// * If failed to add tags to the downloaded audio file
+/// * If an IO error occurs
+/// * If there is an error saving the bytes stream to the file
+/// * If failed to get the content length of the audio data to download
+/// * If given an invalid `ApiSource`
+/// * If an item is not found
 pub async fn download_artist_cover(
     api: &dyn MusicApi,
     db: &LibraryDatabase,
@@ -1031,6 +1140,7 @@ pub struct MoosicboxDownloader {
 }
 
 impl MoosicboxDownloader {
+    #[must_use]
     pub fn new(db: LibraryDatabase, music_apis: MusicApis) -> Self {
         Self {
             speed: Arc::new(AtomicF64::new(0.0)),

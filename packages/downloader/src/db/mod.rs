@@ -1,11 +1,15 @@
 use moosicbox_core::sqlite::db::DbError;
-use moosicbox_database::{profiles::LibraryDatabase, query::*};
+use moosicbox_database::{
+    profiles::LibraryDatabase,
+    query::{where_eq, FilterableQuery},
+};
 use moosicbox_json_utils::ToValueType;
 
 pub mod models;
 
 use self::models::{CreateDownloadTask, DownloadLocation, DownloadTask};
 
+#[cfg(feature = "api")]
 pub async fn create_download_location(
     db: &LibraryDatabase,
     path: &str,
@@ -32,6 +36,7 @@ pub async fn get_download_location(
         .to_value_type()?)
 }
 
+#[cfg(feature = "api")]
 pub async fn get_download_locations(
     db: &LibraryDatabase,
 ) -> Result<Vec<DownloadLocation>, DbError> {
@@ -47,7 +52,7 @@ pub async fn create_download_task(
     task: &CreateDownloadTask,
 ) -> Result<DownloadTask, DbError> {
     let source = task.item.source().as_ref();
-    let quality = task.item.quality().map(|x| x.as_ref());
+    let quality = task.item.quality().map(AsRef::as_ref);
     let track_id = task.item.track_id();
     let track = task.item.track();
     let album_id = task.item.album_id();
@@ -61,10 +66,10 @@ pub async fn create_download_task(
         .where_eq("file_path", task.file_path.clone())
         .where_eq("type", task.item.as_ref())
         .where_eq("source", source)
+        .where_eq("album_id", album_id)
+        .where_eq("artist_id", artist_id)
         .filter_if_some(track_id.map(|x| where_eq("track_id", x)))
         .filter_if_some(quality.map(|x| where_eq("quality", x)))
-        .filter_if_some(album_id.map(|x| where_eq("album_id", x)))
-        .filter_if_some(artist_id.map(|x| where_eq("artist_id", x)))
         .value("file_path", task.file_path.clone())
         .value("type", task.item.as_ref())
         .value("track", track)
@@ -81,10 +86,11 @@ pub async fn create_download_task(
         .to_value_type()?)
 }
 
+#[cfg(feature = "api")]
 pub async fn get_download_tasks(db: &LibraryDatabase) -> Result<Vec<DownloadTask>, DbError> {
     Ok(db
         .select("download_tasks")
-        .sort("id", SortDirection::Desc)
+        .sort("id", moosicbox_database::query::SortDirection::Desc)
         .execute(db)
         .await?
         .to_value_type()?)

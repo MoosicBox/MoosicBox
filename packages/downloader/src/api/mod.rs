@@ -172,6 +172,7 @@ pub struct DownloadQuery {
     )
 )]
 #[route("/download", method = "POST")]
+#[allow(clippy::future_not_send)]
 pub async fn download_endpoint(
     query: web::Query<DownloadQuery>,
     db: LibraryDatabase,
@@ -202,6 +203,8 @@ pub async fn download_endpoint(
 
     download_queue.add_tasks_to_queue(tasks).await;
     download_queue.process();
+
+    drop(download_queue);
 
     Ok(Json(serde_json::json!({"success": true})))
 }
@@ -304,8 +307,9 @@ pub async fn download_tasks_endpoint(
     current.sort_by(|a, b| a.id.cmp(&b.id));
     history.sort_by(|a, b| b.id.cmp(&a.id));
 
+    #[allow(clippy::tuple_array_conversions)]
     let tasks = [current, history].concat();
-    let total = tasks.len() as u32;
+    let total = u32::try_from(tasks.len()).unwrap();
     let mut tasks = tasks
         .into_iter()
         .skip(offset as usize)
@@ -313,8 +317,9 @@ pub async fn download_tasks_endpoint(
         .map(Into::into)
         .collect::<Vec<ApiDownloadTask>>();
 
-    for task in tasks.iter_mut() {
+    for task in &mut tasks {
         if task.state == ApiDownloadTaskState::Started {
+            #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
             task.speed
                 .replace(DOWNLOAD_QUEUE.read().await.speed().unwrap_or(0.0) as u64);
         }
@@ -365,7 +370,7 @@ pub async fn get_download_locations_endpoint(
     let locations = get_download_locations(&db)
         .await
         .map_err(ErrorInternalServerError)?;
-    let total = locations.len() as u32;
+    let total = u32::try_from(locations.len()).unwrap();
     let locations = locations
         .into_iter()
         .skip(offset as usize)
@@ -407,6 +412,7 @@ pub struct AddDownloadLocation {
     )
 )]
 #[route("/download-locations", method = "POST")]
+#[allow(clippy::future_not_send)]
 pub async fn add_download_location_endpoint(
     query: web::Query<AddDownloadLocation>,
     db: LibraryDatabase,
@@ -420,7 +426,7 @@ pub async fn add_download_location_endpoint(
             })
             .replace('/', "\\")
     } else {
-        query.path.to_owned()
+        query.path.clone()
     };
 
     let path = PathBuf::from_str(&path)?.canonicalize()?;

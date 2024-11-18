@@ -67,7 +67,7 @@ impl From<&ProgressEvent> for ApiProgressEvent {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiDownloadLocation {
     pub id: u64,
@@ -92,7 +92,7 @@ impl From<DownloadLocation> for ApiDownloadLocation {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum ApiDownloadTaskState {
@@ -118,17 +118,17 @@ impl ToValueType<ApiDownloadTaskState> for &serde_json::Value {
 impl From<DownloadTaskState> for ApiDownloadTaskState {
     fn from(value: DownloadTaskState) -> Self {
         match value {
-            DownloadTaskState::Pending => ApiDownloadTaskState::Pending,
-            DownloadTaskState::Paused => ApiDownloadTaskState::Paused,
-            DownloadTaskState::Cancelled => ApiDownloadTaskState::Cancelled,
-            DownloadTaskState::Started => ApiDownloadTaskState::Started,
-            DownloadTaskState::Finished => ApiDownloadTaskState::Finished,
-            DownloadTaskState::Error => ApiDownloadTaskState::Error,
+            DownloadTaskState::Pending => Self::Pending,
+            DownloadTaskState::Paused => Self::Paused,
+            DownloadTaskState::Cancelled => Self::Cancelled,
+            DownloadTaskState::Started => Self::Started,
+            DownloadTaskState::Finished => Self::Finished,
+            DownloadTaskState::Error => Self::Error,
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum ApiDownloadApiSource {
@@ -144,11 +144,11 @@ impl From<DownloadApiSource> for ApiDownloadApiSource {
     fn from(value: DownloadApiSource) -> Self {
         match value {
             #[cfg(feature = "tidal")]
-            DownloadApiSource::Tidal => ApiDownloadApiSource::Tidal,
+            DownloadApiSource::Tidal => Self::Tidal,
             #[cfg(feature = "qobuz")]
-            DownloadApiSource::Qobuz => ApiDownloadApiSource::Qobuz,
+            DownloadApiSource::Qobuz => Self::Qobuz,
             #[cfg(feature = "yt")]
-            DownloadApiSource::Yt => ApiDownloadApiSource::Yt,
+            DownloadApiSource::Yt => Self::Yt,
         }
     }
 }
@@ -229,7 +229,7 @@ impl From<DownloadItem> for ApiDownloadItem {
                 album,
                 title,
                 contains_cover,
-            } => ApiDownloadItem::Track {
+            } => Self::Track {
                 source,
                 track_id,
                 quality,
@@ -248,7 +248,7 @@ impl From<DownloadItem> for ApiDownloadItem {
                 title,
                 contains_cover,
                 ..
-            } => ApiDownloadItem::AlbumCover {
+            } => Self::AlbumCover {
                 source,
                 artist_id,
                 artist,
@@ -263,7 +263,7 @@ impl From<DownloadItem> for ApiDownloadItem {
                 title,
                 contains_cover,
                 ..
-            } => ApiDownloadItem::ArtistCover {
+            } => Self::ArtistCover {
                 source,
                 artist_id,
                 album_id,
@@ -282,17 +282,13 @@ impl From<DownloadItem> for StrippedApiDownloadItem {
                 source,
                 quality,
                 ..
-            } => StrippedApiDownloadItem::Track {
+            } => Self::Track {
                 track_id,
                 source,
                 quality,
             },
-            DownloadItem::AlbumCover { album_id, .. } => {
-                StrippedApiDownloadItem::AlbumCover { album_id }
-            }
-            DownloadItem::ArtistCover { album_id, .. } => {
-                StrippedApiDownloadItem::ArtistCover { album_id }
-            }
+            DownloadItem::AlbumCover { album_id, .. } => Self::AlbumCover { album_id },
+            DownloadItem::ArtistCover { album_id, .. } => Self::ArtistCover { album_id },
         }
     }
 }
@@ -434,9 +430,10 @@ fn calc_progress_for_task(mut task: ApiDownloadTask) -> ApiDownloadTask {
         .and_then(|file| file.metadata().ok().map(|metadata| metadata.len()))
         .unwrap_or(0);
 
+    #[allow(clippy::cast_precision_loss)]
     if let Some(total_bytes) = task.total_bytes {
         task.progress = 100.0_f64.min((task.bytes as f64) / (total_bytes as f64) * 100.0);
-    } else if let ApiDownloadTaskState::Finished = task.state {
+    } else if task.state == ApiDownloadTaskState::Finished {
         task.progress = 100.0;
     }
 
