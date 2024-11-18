@@ -37,7 +37,7 @@ thiserror = { workspace = true }
 tokio     = { workspace = true, optional = true, features = ["sync"] }
 
 [features]
-default = ["mysql-sqlx", "postgres-sqlx", "sqlite-sqlx"]
+default = ["mysql-sqlx", "postgres-sqlx", "sqlite-rusqlite", "sqlite-sqlx"]
 
 fail-on-warnings = []
 
