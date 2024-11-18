@@ -132,6 +132,8 @@ jobs:
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
                           command="${{ matrix.package.env }} cargo clippy --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}"
+                          # Trim whitespace
+                          command=$(echo "$command" | xargs)
                           echo "RUNNING \`$command\`"
                           if ${{ matrix.package.env }} cargo clippy \
                               --no-default-features \
@@ -139,6 +141,7 @@ jobs:
                               echo "SUCCESS \`$command\`";
                           else
                               >&2 echo "FAILED \`$command\`";
+                              >&2 echo "COMMAND: (cd ${{ matrix.package.path }}; $command)";
                               return 1
                           fi
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
@@ -149,6 +152,8 @@ jobs:
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
                           command="${{ matrix.package.env }} cargo build --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}"
+                          # Trim whitespace
+                          command=$(echo "$command" | xargs)
                           echo "RUNNING \`$command\`"
                           if ${{ matrix.package.env }} cargo build \
                               --no-default-features \
@@ -156,6 +161,7 @@ jobs:
                               echo "SUCCESS \`$command\`";
                           else
                               >&2 echo "FAILED \`$command\`";
+                              >&2 echo "COMMAND: (cd ${{ matrix.package.path }}; $command)";
                               return 1
                           fi
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
@@ -166,6 +172,8 @@ jobs:
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
                           command="${{ matrix.package.env }} cargo test --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}"
+                          # Trim whitespace
+                          command=$(echo "$command" | xargs)
                           echo "RUNNING \`$command\`"
                           if ${{ matrix.package.env }} cargo test \
                               --no-default-features \
@@ -173,6 +181,7 @@ jobs:
                               echo "SUCCESS \`$command\`";
                           else
                               >&2 echo "FAILED \`$command\`";
+                              >&2 echo "COMMAND: (cd ${{ matrix.package.path }}; $command)";
                               return 1
                           fi
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
