@@ -1,3 +1,9 @@
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
+
 use tantivy::schema::{NamedFieldDocument, OwnedValue, Value as _};
 
 use crate::{ParseError, ToValueType};
@@ -91,6 +97,9 @@ impl ToValueType<u64> for &OwnedValue {
 }
 
 pub trait ToValue<Type> {
+    /// # Errors
+    ///
+    /// * If the value failed to parse
     fn to_value<'a, T>(&'a self, index: &str) -> Result<T, ParseError>
     where
         Type: 'a,
@@ -117,6 +126,9 @@ impl ToValue<Vec<OwnedValue>> for &NamedFieldDocument {
     }
 }
 
+/// # Errors
+///
+/// * If the value failed to parse
 pub fn get_doc_value_types<'a, T>(
     value: &'a NamedFieldDocument,
     index: &str,
@@ -128,9 +140,12 @@ where
         return inner.to_value_type();
     }
 
-    Err(ParseError::Parse(format!("Missing value: '{}'", index)))
+    Err(ParseError::Parse(format!("Missing value: '{index}'")))
 }
 
+/// # Errors
+///
+/// * If the value failed to parse
 pub fn get_value_type<'a, T>(value: &'a NamedFieldDocument, index: &str) -> Result<T, ParseError>
 where
     &'a OwnedValue: ToValueType<T>,
@@ -142,7 +157,7 @@ where
         }
     }
 
-    Err(ParseError::Parse(format!("Missing value: '{}'", index)))
+    Err(ParseError::Parse(format!("Missing value: '{index}'")))
 }
 
 impl<'a> ToValueType<&'a Vec<OwnedValue>> for &'a Vec<OwnedValue> {
@@ -157,7 +172,7 @@ where
 {
     fn to_value_type(self) -> Result<Vec<T>, ParseError> {
         self.iter()
-            .map(|inner| inner.to_value_type())
+            .map(ToValueType::to_value_type)
             .collect::<Result<Vec<_>, _>>()
     }
 }
@@ -168,7 +183,7 @@ where
 {
     fn to_value_type(self) -> Result<T, ParseError> {
         self.first()
-            .map(|inner| inner.to_value_type())
+            .map(ToValueType::to_value_type)
             .ok_or_else(|| ParseError::ConvertType("&str".into()))?
     }
 }

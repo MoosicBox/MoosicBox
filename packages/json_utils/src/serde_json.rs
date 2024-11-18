@@ -1,8 +1,17 @@
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
+
 use serde_json::Value;
 
 use crate::{ParseError, ToValueType};
 
 pub trait ToNested<Type> {
+    /// # Errors
+    ///
+    /// * If the value failed to parse
     fn to_nested<'a>(&'a self, path: &[&str]) -> Result<&'a Type, ParseError>;
 }
 
@@ -12,6 +21,9 @@ impl ToNested<Value> for &Value {
     }
 }
 
+/// # Errors
+///
+/// * If the value failed to parse
 pub fn get_nested_value<'a>(mut value: &'a Value, path: &[&str]) -> Result<&'a Value, ParseError> {
     for (i, x) in path.iter().enumerate() {
         if let Some(inner) = value.get(x) {
@@ -22,7 +34,7 @@ pub fn get_nested_value<'a>(mut value: &'a Value, path: &[&str]) -> Result<&'a V
         let message = if i > 0 {
             format!("Path '{}' missing value: '{}'", path[..i].join(" -> "), x)
         } else {
-            format!("Missing value: '{}' ({value})", x)
+            format!("Missing value: '{x}' ({value})")
         };
 
         return Err(ParseError::Parse(message));
@@ -65,7 +77,7 @@ where
         self.as_array()
             .ok_or_else(|| ParseError::ConvertType("Vec<T>".into()))?
             .iter()
-            .map(|inner| inner.to_value_type())
+            .map(ToValueType::to_value_type)
             .collect::<Result<Vec<_>, _>>()
     }
 }
@@ -180,6 +192,9 @@ impl ToValueType<isize> for &Value {
 }
 
 pub trait ToValue {
+    /// # Errors
+    ///
+    /// * If the value failed to parse
     fn to_value<'a, T>(&'a self, index: &str) -> Result<T, ParseError>
     where
         &'a Value: ToValueType<T>;
@@ -204,6 +219,9 @@ impl ToValue for &Value {
 }
 
 pub trait ToNestedValue {
+    /// # Errors
+    ///
+    /// * If the value failed to parse
     fn to_nested_value<'a, T>(&'a self, path: &[&str]) -> Result<T, ParseError>
     where
         &'a Value: ToValueType<T>;
@@ -227,6 +245,9 @@ impl ToNestedValue for &Value {
     }
 }
 
+/// # Errors
+///
+/// * If the value failed to parse
 pub fn get_nested_value_type<'a, T>(value: &'a Value, path: &[&str]) -> Result<T, ParseError>
 where
     &'a Value: ToValueType<T>,
@@ -240,9 +261,9 @@ where
         }
 
         let message = if i > 0 {
-            format!("Path '{}' missing value: '{}'", path[..i].join(" -> "), x)
+            format!("Path '{}' missing value: '{x}'", path[..i].join(" -> "))
         } else {
-            format!("Missing value: '{}' ({value})", x)
+            format!("Missing value: '{x}' ({value})")
         };
 
         return inner_value.missing_value(ParseError::Parse(message));

@@ -1,4 +1,6 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::module_name_repetitions)]
 
 use thiserror::Error;
 
@@ -25,13 +27,23 @@ pub enum ParseError {
 }
 
 pub trait ToValueType<T> {
+    /// # Errors
+    ///
+    /// * If the value failed to parse
     fn to_value_type(self) -> Result<T, ParseError>;
+
+    /// # Errors
+    ///
+    /// * If the missing value failed to parse
     fn missing_value(&self, error: ParseError) -> Result<T, ParseError> {
         Err(error)
     }
 }
 
 pub trait MissingValue<Type> {
+    /// # Errors
+    ///
+    /// * If the missing value failed to parse
     fn missing_value(&self, error: ParseError) -> Result<Type, ParseError> {
         Err(error)
     }
