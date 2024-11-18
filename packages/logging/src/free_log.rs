@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use free_log_client::FreeLogLayer;
 use moosicbox_config::make_config_dir_path;
 use moosicbox_env_utils::default_env;
@@ -15,6 +17,11 @@ pub enum InitError {
     BuildFileWriterConfig(#[from] free_log_client::BuildFileWriterConfigError),
 }
 
+/// # Errors
+///
+/// * If the logs failed to initialize
+/// * If failed to build the logs config
+/// * If Failed to build the file writer config
 pub fn init(filename: Option<&str>) -> Result<FreeLogLayer, InitError> {
     #[cfg(debug_assertions)]
     const DEFAULT_LOG_LEVEL: &str = "moosicbox=trace";
