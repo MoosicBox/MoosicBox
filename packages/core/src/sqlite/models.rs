@@ -501,6 +501,7 @@ impl From<ApiArtist> for Artist {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
 pub struct AlbumVersionQuality {
     pub format: Option<AudioFormat>,
     pub bit_depth: Option<u8>,
