@@ -15,7 +15,7 @@ async fn add_profile(
 ) -> Result<(), DatabaseFetchError> {
     log::debug!("add_profile: app_type={app_type} profile={profile}");
 
-    #[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
+    #[cfg(feature = "sqlite")]
     let library_db_profile_path = {
         let path = crate::db::make_profile_library_db_path(app_type, profile)
             .expect("Failed to get DB profile path");
@@ -29,7 +29,7 @@ async fn add_profile(
     };
 
     let library_db = moosicbox_database_connection::init(
-        #[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
+        #[cfg(feature = "sqlite")]
         &library_db_profile_path,
         None,
     )

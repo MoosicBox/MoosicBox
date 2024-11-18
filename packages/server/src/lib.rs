@@ -4,7 +4,7 @@
 mod api;
 #[cfg(feature = "static-token-auth")]
 mod auth;
-#[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
+#[cfg(feature = "sqlite")]
 pub(crate) mod db;
 mod events;
 #[cfg(feature = "player")]
@@ -49,7 +49,7 @@ pub async fn run(
     #[cfg(feature = "upnp")] upnp_players: bool,
     on_startup: impl FnOnce() + Send,
 ) -> std::io::Result<()> {
-    #[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
+    #[cfg(feature = "sqlite")]
     let config_db_path = {
         let path = db::make_config_db_path(app_type).expect("Failed to get DB config path");
 
@@ -62,7 +62,7 @@ pub async fn run(
     };
 
     let config_db = moosicbox_database_connection::init(
-        #[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
+        #[cfg(feature = "sqlite")]
         &config_db_path,
         None,
     )

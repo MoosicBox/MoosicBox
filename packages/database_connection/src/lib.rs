@@ -31,7 +31,7 @@ impl Credentials {
 pub enum InitDbError {
     #[cfg(feature = "sqlite-rusqlite")]
     #[error(transparent)]
-    InitSqlite(#[from] InitSqliteError),
+    InitSqlite(#[from] InitSqliteRusqliteError),
     #[cfg(feature = "postgres")]
     #[error(transparent)]
     InitPostgres(#[from] InitPostgresError),
@@ -62,7 +62,7 @@ pub enum InitDbError {
 /// * If fails to initialize the generic database connection
 #[allow(clippy::branches_sharing_code, clippy::unused_async)]
 pub async fn init(
-    #[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
+    #[cfg(feature = "sqlite")]
     #[allow(unused)]
     path: &std::path::Path,
     #[allow(unused)] creds: Option<Credentials>,
@@ -96,7 +96,7 @@ pub async fn init(
         panic!("Invalid database features")
     } else if cfg!(feature = "sqlite-rusqlite") {
         #[cfg(feature = "sqlite-rusqlite")]
-        return Ok(init_sqlite(path)?);
+        return Ok(init_sqlite_rusqlite(path)?);
         #[cfg(not(feature = "sqlite-rusqlite"))]
         panic!("Invalid database features")
     } else if cfg!(feature = "sqlite-sqlx") {
@@ -111,17 +111,20 @@ pub async fn init(
 
 #[cfg(feature = "sqlite-rusqlite")]
 #[derive(Debug, Error)]
-pub enum InitSqliteError {
+pub enum InitSqliteRusqliteError {
     #[error(transparent)]
     Sqlite(#[from] ::rusqlite::Error),
 }
 
+/// # Errors
+///
+/// * If fails to initialize the Sqlite connection via rusqlite
 #[cfg(feature = "sqlite-rusqlite")]
-pub fn init_sqlite(db_location: &std::path::Path) -> Result<Box<dyn Database>, InitSqliteError> {
+pub fn init_sqlite_rusqlite(
+    db_location: &std::path::Path,
+) -> Result<Box<dyn Database>, InitSqliteRusqliteError> {
     let library = ::rusqlite::Connection::open(db_location)?;
-    library
-        .busy_timeout(std::time::Duration::from_millis(10))
-        .expect("Failed to set busy timeout");
+    library.busy_timeout(std::time::Duration::from_millis(10))?;
     let library = std::sync::Arc::new(tokio::sync::Mutex::new(library));
 
     Ok(Box::new(
