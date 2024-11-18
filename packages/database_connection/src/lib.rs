@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use moosicbox_database::Database;
 use thiserror::Error;
@@ -15,7 +16,8 @@ pub struct Credentials {
 }
 
 impl Credentials {
-    pub fn new(host: String, name: String, user: String, password: Option<String>) -> Self {
+    #[must_use]
+    pub const fn new(host: String, name: String, user: String, password: Option<String>) -> Self {
         Self {
             host,
             name,
@@ -51,6 +53,14 @@ pub enum InitDbError {
     CredentialsRequired,
 }
 
+/// # Panics
+///
+/// * If invalid features are specified for the crate
+///
+/// # Errors
+///
+/// * If fails to initialize the generic database connection
+#[allow(clippy::branches_sharing_code, clippy::unused_async)]
 pub async fn init(
     #[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
     #[allow(unused)]
@@ -145,6 +155,9 @@ pub enum InitSqliteSqlxDatabaseError {
     SqliteSqlx(#[from] sqlx::Error),
 }
 
+/// # Errors
+///
+/// * If fails to initialize the Sqlite connection via Sqlx
 #[cfg(feature = "sqlite-sqlx")]
 #[allow(unused)]
 pub async fn init_sqlite_sqlx(
@@ -187,6 +200,9 @@ pub enum InitDatabaseError {
     InvalidConnectionOptions,
 }
 
+/// # Errors
+///
+/// * If fails to initialize the raw Postgres connection via Sqlx
 #[cfg(feature = "postgres-sqlx")]
 #[allow(unused)]
 pub async fn init_postgres_sqlx(
@@ -217,6 +233,9 @@ pub async fn init_postgres_sqlx(
     ))))
 }
 
+/// # Errors
+///
+/// * If fails to initialize the raw Postgres connection over native TLS
 #[cfg(all(feature = "postgres-native-tls", feature = "postgres-raw"))]
 #[allow(unused)]
 pub async fn init_postgres_raw_native_tls(
@@ -251,6 +270,9 @@ pub async fn init_postgres_raw_native_tls(
     Ok(Box::new(PostgresDatabase::new(client, connection)))
 }
 
+/// # Errors
+///
+/// * If fails to initialize the raw Postgres connection over OpenSSL
 #[cfg(all(feature = "postgres-openssl", feature = "postgres-raw"))]
 #[allow(unused)]
 pub async fn init_postgres_raw_openssl(
@@ -286,6 +308,9 @@ pub async fn init_postgres_raw_openssl(
     Ok(Box::new(PostgresDatabase::new(client, connection)))
 }
 
+/// # Errors
+///
+/// * If fails to initialize the raw Postgres connection
 #[cfg(feature = "postgres-raw")]
 #[allow(unused)]
 pub async fn init_postgres_raw_no_tls(

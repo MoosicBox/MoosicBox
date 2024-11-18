@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use thiserror::Error;
 
 use crate::Credentials;
@@ -6,8 +8,23 @@ use crate::Credentials;
 pub enum GetDbCredsError {
     #[error("Invalid Connection Options")]
     InvalidConnectionOptions,
+    #[error("Failed to fetch SSM Parameters: {0:?}")]
+    FailedSsmParameters(
+        #[from]
+        aws_sdk_ssm::error::SdkError<aws_sdk_ssm::operation::get_parameters::GetParametersError>,
+    ),
+    #[error("Invalid SSM Parameters")]
+    InvalidSsmParameters,
+    #[error("Missing SSM Parameters")]
+    MissingSsmParameters,
+    #[error("Missing SSM Parameter: {0}")]
+    MissingSsmParameter(&'static str),
 }
 
+/// # Errors
+///
+/// * If invalid connection options were given
+/// * If failed to retrieve the credentials from the SSM parameters
 pub async fn get_db_creds() -> Result<Credentials, GetDbCredsError> {
     log::trace!("get_db_creds");
 
@@ -64,35 +81,44 @@ pub async fn get_db_creds() -> Result<Credentials, GetDbCredsError> {
                 .await
             {
                 Ok(params) => params,
-                Err(err) => panic!("Failed to get parameters {err:?}"),
+                Err(err) => return Err(GetDbCredsError::FailedSsmParameters(err)),
             };
-            let params = params.parameters.expect("Failed to get params");
+            let params = params
+                .parameters
+                .ok_or(GetDbCredsError::InvalidSsmParameters)?;
             let params: HashMap<String, String> = params
                 .iter()
                 .map(|param| {
-                    (
-                        param.name().unwrap().to_string(),
-                        param.value().unwrap().to_string(),
-                    )
+                    param
+                        .name()
+                        .map(str::to_string)
+                        .ok_or(GetDbCredsError::InvalidSsmParameters)
+                        .and_then(|name| {
+                            param
+                                .value()
+                                .map(str::to_string)
+                                .ok_or(GetDbCredsError::InvalidSsmParameters)
+                                .map(|value| (name, value))
+                        })
                 })
-                .collect();
+                .collect::<Result<_, _>>()?;
 
             let host = params
                 .get(ssm_db_host_param_name)
                 .cloned()
-                .expect("No hostname");
+                .ok_or(GetDbCredsError::MissingSsmParameter("No hostname"))?;
             let name = params
                 .get(ssm_db_name_param_name)
                 .cloned()
-                .expect("No db_name");
+                .ok_or(GetDbCredsError::MissingSsmParameter("No db_name"))?;
             let user = params
                 .get(ssm_db_user_param_name)
                 .cloned()
-                .expect("No db_user");
+                .ok_or(GetDbCredsError::MissingSsmParameter("No db_user"))?;
             let password = params
                 .get(ssm_db_password_param_name)
                 .cloned()
-                .expect("No db_password");
+                .ok_or(GetDbCredsError::MissingSsmParameter("No db_password"))?;
 
             let password = if password.is_empty() {
                 None
