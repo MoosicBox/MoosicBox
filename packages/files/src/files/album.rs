@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use std::path::{Path, PathBuf};
 
 use bytes::BytesMut;
@@ -6,7 +8,7 @@ use moosicbox_core::sqlite::{
     db::DbError,
     models::{Album, Id},
 };
-use moosicbox_database::{profiles::LibraryDatabase, query::*, DatabaseError};
+use moosicbox_database::{profiles::LibraryDatabase, query::FilterableQuery, DatabaseError};
 use moosicbox_music_api::{
     models::{ImageCoverSize, ImageCoverSource},
     AlbumError, MusicApi,
@@ -60,6 +62,13 @@ pub enum AlbumCoverError {
     InvalidSource,
 }
 
+/// # Errors
+///
+/// * If the album cover was not found
+/// * If failed to get the album info
+/// * If an IO error occurs
+/// * If a database error occurs
+/// * If the `ApiSource` is invalid
 pub async fn get_local_album_cover(
     api: &dyn MusicApi,
     db: &LibraryDatabase,
@@ -69,7 +78,7 @@ pub async fn get_local_album_cover(
     let source = api
         .album_cover_source(album, size)
         .await?
-        .ok_or_else(|| AlbumCoverError::NotFound(album.id.to_owned()))?;
+        .ok_or_else(|| AlbumCoverError::NotFound(album.id.clone()))?;
 
     if let Ok(cover) =
         fetch_local_album_cover(db, album, source.clone(), album.directory.as_ref()).await
@@ -82,9 +91,16 @@ pub async fn get_local_album_cover(
         return copy_streaming_cover_to_local(db, album, cover).await;
     }
 
-    Err(AlbumCoverError::NotFound(album.id.to_owned()))
+    Err(AlbumCoverError::NotFound(album.id.clone()))
 }
 
+/// # Errors
+///
+/// * If the album cover was not found
+/// * If failed to get the album info
+/// * If an IO error occurs
+/// * If a database error occurs
+/// * If the `ApiSource` is invalid
 pub async fn get_local_album_cover_bytes(
     api: &dyn MusicApi,
     db: &LibraryDatabase,
@@ -95,7 +111,7 @@ pub async fn get_local_album_cover_bytes(
     let source = api
         .album_cover_source(album, size)
         .await?
-        .ok_or_else(|| AlbumCoverError::NotFound(album.id.to_owned()))?;
+        .ok_or_else(|| AlbumCoverError::NotFound(album.id.clone()))?;
 
     if let Ok(cover) = fetch_local_album_cover_bytes(db, album, album.directory.as_ref()).await {
         return Ok(cover);
@@ -107,7 +123,7 @@ pub async fn get_local_album_cover_bytes(
         return Ok(cover);
     }
 
-    Err(AlbumCoverError::NotFound(album.id.to_owned()))
+    Err(AlbumCoverError::NotFound(album.id.clone()))
 }
 
 #[derive(Debug, Error)]
@@ -177,13 +193,9 @@ async fn fetch_local_album_cover_bytes(
     let cover_path = std::path::PathBuf::from(&cover);
 
     if Path::is_file(&cover_path) {
-        let file = tokio::fs::File::open(cover_path.to_path_buf()).await?;
+        let file = tokio::fs::File::open(cover_path.clone()).await?;
 
-        let size = if let Ok(metadata) = file.metadata().await {
-            Some(metadata.len())
-        } else {
-            None
-        };
+        let size = (file.metadata().await).map_or(None, |metadata| Some(metadata.len()));
 
         return Ok(CoverBytes {
             stream: StalledReadMonitor::new(
@@ -214,11 +226,7 @@ async fn fetch_local_album_cover_bytes(
 
         let file = tokio::fs::File::open(path).await?;
 
-        let size = if let Ok(metadata) = file.metadata().await {
-            Some(metadata.len())
-        } else {
-            None
-        };
+        let size = (file.metadata().await).map_or(None, |metadata| Some(metadata.len()));
 
         return Ok(CoverBytes {
             stream: StalledReadMonitor::new(
@@ -249,6 +257,13 @@ async fn copy_streaming_cover_to_local(
     Ok(cover)
 }
 
+/// # Errors
+///
+/// * If the album cover was not found
+/// * If failed to get the album info
+/// * If an IO error occurs
+/// * If a database error occurs
+/// * If the `ApiSource` is invalid
 pub async fn get_album_cover(
     api: &dyn MusicApi,
     db: &LibraryDatabase,
@@ -258,6 +273,13 @@ pub async fn get_album_cover(
     get_local_album_cover(api, db, album, size).await
 }
 
+/// # Errors
+///
+/// * If the album cover was not found
+/// * If failed to get the album info
+/// * If an IO error occurs
+/// * If a database error occurs
+/// * If the `ApiSource` is invalid
 pub async fn get_album_cover_bytes(
     api: &dyn MusicApi,
     db: &LibraryDatabase,
@@ -268,7 +290,7 @@ pub async fn get_album_cover_bytes(
     get_local_album_cover_bytes(api, db, album, size, try_to_get_stream_size).await
 }
 
-async fn get_remote_album_cover_request(
+fn get_remote_album_cover_request(
     album: &Album,
     source: ImageCoverSource,
     size: ImageCoverSize,
@@ -294,7 +316,7 @@ async fn get_remote_album_cover(
     source: ImageCoverSource,
     size: ImageCoverSize,
 ) -> Result<String, AlbumCoverError> {
-    let request = get_remote_album_cover_request(album, source, size).await?;
+    let request = get_remote_album_cover_request(album, source, size)?;
 
     Ok(get_or_fetch_cover_from_remote_url(&request.url, &request.file_path).await?)
 }
@@ -305,7 +327,7 @@ async fn get_remote_album_cover_bytes(
     size: ImageCoverSize,
     try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, AlbumCoverError> {
-    let request = get_remote_album_cover_request(album, source, size).await?;
+    let request = get_remote_album_cover_request(album, source, size)?;
 
     Ok(get_or_fetch_cover_bytes_from_remote_url(
         &request.url,

@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use std::{
     collections::HashMap,
     fmt::Display,
@@ -94,6 +96,7 @@ pub struct Context {
 }
 
 impl Context {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -129,9 +132,9 @@ impl Context {
                 );
 
                 return Ok(track_bytes);
-            } else {
-                log::trace!("No existing track in pool for key={key}",);
             }
+
+            log::trace!("No existing track in pool for key={key}",);
         }
 
         let filename = match source {
@@ -213,6 +216,7 @@ impl service::Processor for service::Service {
         let mut ctx = self.ctx.write().await;
         ctx.token.replace(self.token.clone());
         ctx.handle.replace(self.handle());
+        drop(ctx);
         Ok(())
     }
 
@@ -250,8 +254,9 @@ impl service::Processor for service::Service {
                 start,
                 end,
             } => {
-                if let Some(track_bytes_source) = ctx.read().await.pool.get(&key) {
-                    let mut track_bytes_source = track_bytes_source.clone();
+                let ctx = ctx.read().await;
+                if let Some(track_bytes_source) = ctx.pool.get(&key) {
+                    let track_bytes_source = track_bytes_source.clone();
                     moosicbox_task::spawn(
                         &format!("files: track_pool process_command {cmd_str}"),
                         async move {
@@ -300,6 +305,7 @@ impl TrackBytesSource {
                     bytes.len(),
                 );
                 id_writer.write_all(bytes.as_ref())?;
+                drop(bytes);
 
                 if finished {
                     id_writer.close();
@@ -319,6 +325,8 @@ impl TrackBytesSource {
             writers.push(id_writer);
         }
 
+        drop(writers);
+
         Ok((id, stream.boxed()))
     }
 
@@ -335,7 +343,7 @@ impl TrackBytesSource {
     }
 
     async fn start_fetch_track_bytes(
-        &mut self,
+        &self,
         key: String,
         stream: StalledReadMonitor<BytesStreamItem, BytesStream>,
         _size: Option<u64>,
@@ -398,6 +406,7 @@ impl TrackBytesSource {
     }
 }
 
+#[must_use]
 pub fn track_key(source: &TrackSource, output_format: AudioFormat) -> String {
     match source {
         TrackSource::LocalFilePath {
@@ -431,6 +440,14 @@ pub fn track_key(source: &TrackSource, output_format: AudioFormat) -> String {
     }
 }
 
+/// # Errors
+///
+/// * If the track cover was not found
+/// * If failed to get the track info
+/// * If an IO error occurs
+/// * If a database error occurs
+/// * If the `ApiSource` is invalid
+/// * If the `AudioFormat` is invalid
 pub async fn get_or_fetch_track(
     source: &TrackSource,
     output_format: AudioFormat,

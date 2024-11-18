@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use thiserror::Error;
 
 #[derive(Debug, Clone)]
@@ -16,6 +18,11 @@ pub enum ParseRangesError {
     TooManyValues(String),
 }
 
+/// # Errors
+///
+/// * If fails to parse a `usize`
+/// * If too few values in the range
+/// * If too many values in the range
 pub fn parse_range(range: &str) -> std::result::Result<Range, ParseRangesError> {
     let ends = range
         .split('-')
@@ -42,6 +49,11 @@ pub fn parse_range(range: &str) -> std::result::Result<Range, ParseRangesError> 
     }
 }
 
+/// # Errors
+///
+/// * If fails to parse a `usize`
+/// * If too few values in the range
+/// * If too many values in the range
 pub fn parse_ranges(ranges: &str) -> std::result::Result<Vec<Range>, ParseRangesError> {
     ranges.split(',').map(parse_range).collect()
 }

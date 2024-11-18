@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::{
     io::{Seek, Write},
@@ -48,6 +49,10 @@ pub enum GetContentLengthError {
 static CLIENT: LazyLock<reqwest::Client> =
     LazyLock::new(|| reqwest::Client::builder().build().unwrap());
 
+/// # Errors
+///
+/// * If the request fails
+/// * If the content-length value is not a valid `u64`
 pub async fn get_content_length(
     url: &str,
     start: Option<u64>,
@@ -56,13 +61,13 @@ pub async fn get_content_length(
     let mut client = CLIENT.head(url);
 
     if start.is_some() || end.is_some() {
-        let start = start.map(|x| x.to_string()).unwrap_or("".into());
-        let end = end.map(|x| x.to_string()).unwrap_or("".into());
+        let start = start.map_or_else(String::new, |x| x.to_string());
+        let end = end.map_or_else(String::new, |x| x.to_string());
 
         client = client.header("range", format!("bytes={start}-{end}"));
     }
 
-    let res = client.send().await.unwrap();
+    let res = client.send().await?;
 
     Ok(if let Some(header) = res.headers().get("content-length") {
         Some(header.to_str()?.parse::<u64>()?)
@@ -71,6 +76,13 @@ pub async fn get_content_length(
     })
 }
 
+/// # Panics
+///
+/// * If the path has no parent directory
+///
+/// # Errors
+///
+/// * If there is an IO error
 pub fn save_bytes_to_file(
     bytes: &[u8],
     path: &Path,
@@ -111,7 +123,10 @@ pub enum SaveBytesStreamToFileError {
     },
 }
 
-pub async fn save_bytes_stream_to_file<S: Stream<Item = Result<Bytes, std::io::Error>>>(
+/// # Errors
+///
+/// * If there is an IO error
+pub async fn save_bytes_stream_to_file<S: Stream<Item = Result<Bytes, std::io::Error>> + Send>(
     stream: S,
     path: &Path,
     start: Option<u64>,
@@ -124,8 +139,11 @@ type OnSpeed = Box<dyn (FnMut(f64) -> Pin<Box<dyn Future<Output = ()> + Send>>) 
 type OnProgressFut = Pin<Box<dyn Future<Output = ()> + Send>>;
 type OnProgress = Box<dyn (FnMut(usize, usize) -> OnProgressFut) + Send>;
 
+/// # Errors
+///
+/// * If there is an IO error
 pub async fn save_bytes_stream_to_file_with_speed_listener<
-    S: Stream<Item = Result<Bytes, std::io::Error>>,
+    S: Stream<Item = Result<Bytes, std::io::Error>> + Send,
 >(
     stream: S,
     path: &Path,
@@ -138,13 +156,10 @@ pub async fn save_bytes_stream_to_file_with_speed_listener<
     let speed = Arc::new(AtomicF64::new(0.0));
 
     let has_on_progress = on_progress.is_some();
-    let on_progress = Arc::new(tokio::sync::Mutex::new(
-        if let Some(on_progress) = on_progress {
-            on_progress
-        } else {
+    let on_progress =
+        Arc::new(tokio::sync::Mutex::new(on_progress.unwrap_or_else(|| {
             Box::new(|_, _| Box::pin(async move {}) as OnProgressFut)
-        },
-    ));
+        })));
     let on_speed = Arc::new(tokio::sync::Mutex::new(on_speed));
 
     save_bytes_stream_to_file_with_progress_listener(
@@ -171,6 +186,7 @@ pub async fn save_bytes_stream_to_file_with_speed_listener<
                     let millis = now.duration_since(*last_instant).as_millis();
 
                     if millis >= 1000 {
+                        #[allow(clippy::cast_precision_loss)]
                         let speed_millis = (bytes as f64) * (millis as f64 / 1000.0);
                         speed.store(speed_millis, std::sync::atomic::Ordering::SeqCst);
                         log::debug!(
@@ -180,7 +196,8 @@ pub async fn save_bytes_stream_to_file_with_speed_listener<
                         );
                         (on_speed.lock().await)(speed_millis).await;
                         *last_instant = now;
-                        bytes_since_last_interval.store(0, std::sync::atomic::Ordering::SeqCst)
+                        drop(last_instant);
+                        bytes_since_last_interval.store(0, std::sync::atomic::Ordering::SeqCst);
                     }
                 }) as Pin<Box<dyn Future<Output = ()> + Send>>
             }
@@ -189,8 +206,15 @@ pub async fn save_bytes_stream_to_file_with_speed_listener<
     .await
 }
 
+/// # Panics
+///
+/// * If the path has no parent directory
+///
+/// # Errors
+///
+/// * If there is an IO error
 pub async fn save_bytes_stream_to_file_with_progress_listener<
-    S: Stream<Item = Result<Bytes, std::io::Error>>,
+    S: Stream<Item = Result<Bytes, std::io::Error>> + Send,
 >(
     stream: S,
     path: &Path,
@@ -214,14 +238,12 @@ pub async fn save_bytes_stream_to_file_with_progress_listener<
 
     pin!(stream);
 
-    let mut read = start.unwrap_or(0) as usize;
+    let mut read = usize::try_from(start.unwrap_or(0)).unwrap();
 
     let has_on_progress = on_progress.is_some();
-    let mut on_progress = if let Some(on_progress) = on_progress {
-        on_progress
-    } else {
+    let mut on_progress = on_progress.unwrap_or_else(|| {
         Box::new(|_, _| Box::pin(async move {}) as Pin<Box<dyn Future<Output = ()> + Send>>)
-    };
+    });
 
     while let Some(bytes) = stream.next().await {
         let bytes = bytes.map_err(|err| SaveBytesStreamToFileError::Read {
@@ -290,11 +312,7 @@ async fn get_or_fetch_cover_bytes_from_remote_url(
     if Path::exists(file_path) {
         let file = tokio::fs::File::open(file_path.to_path_buf()).await?;
 
-        let size = if let Ok(metadata) = file.metadata().await {
-            Some(metadata.len())
-        } else {
-            None
-        };
+        let size = (file.metadata().await).map_or(None, |metadata| Some(metadata.len()));
 
         return Ok(CoverBytes {
             stream: moosicbox_stream_utils::stalled_monitor::StalledReadMonitor::new(
@@ -304,20 +322,20 @@ async fn get_or_fetch_cover_bytes_from_remote_url(
             ),
             size,
         });
-    } else {
-        let size = if try_to_get_stream_size {
-            get_content_length(url, None, None).await?
-        } else {
-            None
-        };
-
-        Ok(CoverBytes {
-            stream: moosicbox_stream_utils::stalled_monitor::StalledReadMonitor::new(
-                fetch_bytes_from_remote_url(&IMAGE_CLIENT, url).await?,
-            ),
-            size,
-        })
     }
+
+    let size = if try_to_get_stream_size {
+        get_content_length(url, None, None).await?
+    } else {
+        None
+    };
+
+    Ok(CoverBytes {
+        stream: moosicbox_stream_utils::stalled_monitor::StalledReadMonitor::new(
+            fetch_bytes_from_remote_url(&IMAGE_CLIENT, url).await?,
+        ),
+        size,
+    })
 }
 
 #[cfg(feature = "files")]
@@ -354,6 +372,10 @@ pub enum FetchAndSaveBytesFromRemoteUrlError {
     RequestFailed { status: u16, message: String },
 }
 
+/// # Errors
+///
+/// * If the request fails
+/// * If there is an IO error
 pub async fn fetch_bytes_from_remote_url(
     client: &reqwest::Client,
     url: &str,
@@ -367,7 +389,7 @@ pub async fn fetch_bytes_from_remote_url(
     let status = response.status();
 
     if status != 200 {
-        let message = response.text().await.unwrap_or("".to_string());
+        let message = response.text().await.unwrap_or_else(|_| String::new());
 
         log::error!("Request failed: {status} ({message})");
         return Err(FetchAndSaveBytesFromRemoteUrlError::RequestFailed {
@@ -382,6 +404,10 @@ pub async fn fetch_bytes_from_remote_url(
         .boxed())
 }
 
+/// # Errors
+///
+/// * If the request fails
+/// * If there is an IO error
 pub async fn fetch_and_save_bytes_from_remote_url(
     client: &reqwest::Client,
     file_path: &Path,
@@ -393,6 +419,10 @@ pub async fn fetch_and_save_bytes_from_remote_url(
     Ok(file_path.to_path_buf())
 }
 
+/// # Errors
+///
+/// * If the request fails
+/// * If there is an IO error
 pub async fn search_for_cover(
     path: PathBuf,
     filename: &str,

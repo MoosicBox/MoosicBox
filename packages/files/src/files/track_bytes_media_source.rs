@@ -48,7 +48,7 @@ impl TrackBytesMediaSource {
                 log::debug!("Acquired lock for inner bytes for writer id={id}");
 
                 tokio::select!(
-                    _ = tokio::time::sleep(Duration::from_millis(15000)) => {
+                    () = tokio::time::sleep(Duration::from_millis(15000)) => {
                         moosicbox_assert::die_or_error!(
                             "Timed out waiting for bytes from stream for writer id={id}"
                         );
@@ -70,7 +70,7 @@ impl TrackBytesMediaSource {
                                 }
                                 break;
                             }
-                            Some(Err(err)) | Some(Ok(Err(err))) => {
+                            Some(Err(err) | Ok(Err(err))) => {
                                 moosicbox_assert::die_or_error!(
                                     "Byte stream returned error: writer id={id} {err:?}"
                                 );
@@ -78,6 +78,8 @@ impl TrackBytesMediaSource {
                         }
                     }
                 );
+
+                drop(bytes);
             }
         });
     }

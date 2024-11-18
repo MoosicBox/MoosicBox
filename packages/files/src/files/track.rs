@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use std::{
     pin::Pin,
     sync::{Arc, RwLock},
@@ -31,7 +33,7 @@ use serde::{Deserialize, Serialize};
 use symphonia::core::{
     audio::{AudioBuffer, Signal},
     conv::IntoSample,
-    io::MediaSourceStream,
+    io::{MediaSourceStream, MediaSourceStreamOptions},
     probe::Hint,
     sample::Sample,
     util::clamp::clamp_i16,
@@ -50,10 +52,13 @@ use crate::files::{
 
 use super::track_pool::service::CommanderError;
 
+#[must_use]
 pub fn track_source_to_content_type(source: &TrackSource) -> Option<String> {
     audio_format_to_content_type(&source.format())
 }
 
+#[must_use]
+#[allow(clippy::missing_const_for_fn)]
 pub fn audio_format_to_content_type(format: &AudioFormat) -> Option<String> {
     match format {
         #[cfg(feature = "aac")]
@@ -82,6 +87,13 @@ pub enum TrackSourceError {
     MusicApis(#[from] MusicApisError),
 }
 
+/// # Errors
+///
+/// * If the track cover was not found
+/// * If failed to get the track info
+/// * If an IO error occurs
+/// * If a database error occurs
+/// * If the `ApiSource` is invalid
 pub async fn get_track_id_source(
     apis: MusicApis,
     track_id: &Id,
@@ -102,7 +114,9 @@ pub async fn get_track_id_source(
 
     let track_source = track.track_source.into();
 
-    let (api, track) = if track_source != source {
+    let (api, track) = if track_source == source {
+        (track_api, track)
+    } else {
         let api = apis.get(track_source)?;
 
         (
@@ -116,13 +130,18 @@ pub async fn get_track_id_source(
             .await?
             .ok_or_else(|| TrackSourceError::NotFound(track_id.to_owned()))?,
         )
-    } else {
-        (track_api, track)
     };
 
     get_track_source(&**api, &track, quality).await
 }
 
+/// # Errors
+///
+/// * If the track cover was not found
+/// * If failed to get the track info
+/// * If an IO error occurs
+/// * If a database error occurs
+/// * If the `ApiSource` is invalid
 pub async fn get_track_source(
     api: &dyn MusicApi,
     track: &Track,
@@ -141,7 +160,7 @@ pub async fn get_track_source(
         quality.unwrap_or(TrackAudioQuality::FlacHighestRes),
     )
     .await?
-    .ok_or_else(|| TrackSourceError::NotFound(track.id.to_owned()))
+    .ok_or_else(|| TrackSourceError::NotFound(track.id.clone()))
 }
 
 #[derive(Debug, Error)]
@@ -205,6 +224,14 @@ impl std::fmt::Debug for TrackBytes {
     }
 }
 
+/// # Errors
+///
+/// * If the track cover was not found
+/// * If failed to get the track info
+/// * If an IO error occurs
+/// * If a database error occurs
+/// * If the `ApiSource` is invalid
+/// * If the `AudioFormat` is invalid
 pub async fn get_track_bytes(
     api: &dyn MusicApi,
     track_id: &Id,
@@ -268,7 +295,11 @@ pub enum GetSilenceBytesError {
     AudioOutput(#[from] AudioOutputError),
 }
 
-pub async fn get_silence_bytes(
+/// # Errors
+///
+/// * If failed to encode the audio bytes
+/// * If the `ApiSource` is invalid
+pub fn get_silence_bytes(
     format: AudioFormat,
     duration: u64,
 ) -> Result<TrackBytes, GetSilenceBytesError> {
@@ -283,7 +314,7 @@ pub async fn get_silence_bytes(
         channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
     };
     #[allow(unused)]
-    let duration: u64 = (spec.rate as u64) * duration;
+    let duration: u64 = u64::from(spec.rate) * duration;
 
     moosicbox_task::spawn_blocking("get_silence_bytes: encode", move || {
         #[allow(unused)]
@@ -291,24 +322,22 @@ pub async fn get_silence_bytes(
             #[cfg(feature = "aac")]
             AudioFormat::Aac => {
                 use moosicbox_audio_output::encoder::aac::AacEncoder;
-                Box::new(AacEncoder::with_writer(writer.clone()).open(spec, duration))
+                Box::new(AacEncoder::with_writer(writer).open(spec, duration))
             }
             #[cfg(feature = "flac")]
             AudioFormat::Flac => {
                 use moosicbox_audio_output::encoder::flac::FlacEncoder;
-                Box::new(FlacEncoder::with_writer(writer.clone()).open(spec, duration))
+                Box::new(FlacEncoder::with_writer(writer).open(spec, duration))
             }
             #[cfg(feature = "mp3")]
             AudioFormat::Mp3 => {
                 use moosicbox_audio_output::encoder::mp3::Mp3Encoder;
-                let encoder_writer = writer.clone();
-                Box::new(Mp3Encoder::with_writer(encoder_writer.clone()).open(spec, duration))
+                Box::new(Mp3Encoder::with_writer(writer).open(spec, duration))
             }
             #[cfg(feature = "opus")]
             AudioFormat::Opus => {
                 use moosicbox_audio_output::encoder::opus::OpusEncoder;
-                let encoder_writer = writer.clone();
-                Box::new(OpusEncoder::with_writer(encoder_writer.clone()).open(spec, duration))
+                Box::new(OpusEncoder::with_writer(writer).open(spec, duration))
             }
             AudioFormat::Source => return Err::<(), _>(GetSilenceBytesError::InvalidSource),
         };
@@ -334,6 +363,14 @@ pub async fn get_silence_bytes(
     })
 }
 
+/// # Errors
+///
+/// * If the track cover was not found
+/// * If failed to get the track info
+/// * If an IO error occurs
+/// * If a database error occurs
+/// * If the `ApiSource` is invalid
+#[allow(clippy::too_many_lines)]
 pub async fn get_audio_bytes(
     source: TrackSource,
     format: AudioFormat,
@@ -452,7 +489,10 @@ pub async fn get_audio_bytes(
                             )
                             .into();
                             if let Err(err) = decode_media_source_async(
-                                MediaSourceStream::new(Box::new(source), Default::default()),
+                                MediaSourceStream::new(
+                                    Box::new(source),
+                                    MediaSourceStreamOptions::default(),
+                                ),
                                 &Hint::new(),
                                 get_handler,
                                 true,
@@ -543,7 +583,8 @@ async fn request_audio_bytes_from_file(
         "request_audio_bytes_from_file calculated size={size} original_size={original_size}"
     );
 
-    let framed_read = FramedRead::with_capacity(file, BytesCodec::new(), size as usize);
+    let framed_read =
+        FramedRead::with_capacity(file, BytesCodec::new(), usize::try_from(size).unwrap());
 
     Ok(TrackBytes {
         id: new_byte_writer_id(),
@@ -570,8 +611,8 @@ async fn request_track_bytes_from_url(
     let mut request = client.get(url);
 
     if start.is_some() || end.is_some() {
-        let start = start.map_or("".into(), |start| start.to_string());
-        let end = end.map_or("".into(), |end| end.to_string());
+        let start = start.map_or_else(String::new, |start| start.to_string());
+        let end = end.map_or_else(String::new, |end| end.to_string());
 
         log::debug!("request_track_bytes_from_url: Using byte range start={start} end={end}");
         request = request.header("Range", format!("bytes={start}-{end}"));
@@ -652,7 +693,7 @@ pub struct TrackInfo {
 
 impl From<Track> for TrackInfo {
     fn from(value: Track) -> Self {
-        TrackInfo {
+        Self {
             id: value.id,
             number: value.number,
             title: value.title,
@@ -667,6 +708,13 @@ impl From<Track> for TrackInfo {
     }
 }
 
+/// # Errors
+///
+/// * If the track cover was not found
+/// * If failed to get the track info
+/// * If an IO error occurs
+/// * If a database error occurs
+/// * If the `ApiSource` is invalid
 pub async fn get_tracks_info(
     api: &dyn MusicApi,
     track_ids: &[Id],
@@ -684,6 +732,13 @@ pub async fn get_tracks_info(
     Ok(tracks.into_iter().map(Into::into).collect())
 }
 
+/// # Errors
+///
+/// * If the track cover was not found
+/// * If failed to get the track info
+/// * If an IO error occurs
+/// * If a database error occurs
+/// * If the `ApiSource` is invalid
 pub async fn get_track_info(
     api: &dyn MusicApi,
     track_id: &Id,
@@ -694,15 +749,19 @@ pub async fn get_track_info(
 
     log::trace!("Got track {track:?}");
 
-    if track.is_none() {
+    let Some(track) = track else {
         return Err(TrackInfoError::NotFound(track_id.to_owned()));
-    }
+    };
 
-    Ok(track.unwrap().into())
+    Ok(track.into())
 }
 
 const DIV: u16 = u16::MAX / u8::MAX as u16;
 
+/// # Panics
+///
+/// * If fails to convert sample into `u16`
+#[must_use]
 pub fn visualize<S>(input: &AudioBuffer<S>) -> Vec<u8>
 where
     S: Sample + IntoSample<i16>,
@@ -713,22 +772,36 @@ where
 
     for c in 0..channels {
         for (i, x) in input.chan(c).iter().enumerate() {
-            let value = clamp_i16(((*x).into_sample() as i32).abs()) as u16;
+            let value = u16::try_from(clamp_i16(i32::from((*x).into_sample()).abs())).unwrap();
             values[i] += (value / DIV) as u8;
         }
     }
 
-    for value in values.iter_mut() {
+    #[allow(clippy::cast_possible_truncation)]
+    for value in &mut values {
         *value /= channels as u8;
     }
 
     values
 }
 
+/// # Panics
+///
+/// * If the `RwLock` is poisoned
+///
+/// # Errors
+///
+/// * If the track cover was not found
+/// * If failed to get the track info
+/// * If an IO error occurs
+/// * If a database error occurs
+/// * If the `ApiSource` is invalid
 pub async fn get_or_init_track_visualization(
     source: &TrackSource,
     max: u16,
 ) -> Result<Vec<u8>, TrackInfoError> {
+    const MAX_DELTA: i16 = 50;
+
     log::debug!(
         "Getting track visualization track_id={:?} max={max}",
         source.track_id()
@@ -757,7 +830,7 @@ pub async fn get_or_init_track_visualization(
 
     let hint = Hint::new();
     let media_source = TrackBytesMediaSource::new(bytes);
-    let mss = MediaSourceStream::new(Box::new(media_source), Default::default());
+    let mss = MediaSourceStream::new(Box::new(media_source), MediaSourceStreamOptions::default());
 
     decode_media_source_async(mss, &hint, get_handler, true, true, None, None).await?;
 
@@ -766,11 +839,13 @@ pub async fn get_or_init_track_visualization(
     let mut ret_viz = Vec::with_capacity(count);
 
     if viz.len() > max as usize {
-        let offset = (viz.len() as f64) / (max as f64);
+        #[allow(clippy::cast_precision_loss)]
+        let offset = (viz.len() as f64) / f64::from(max);
         log::debug!("Trimming visualization: offset={offset}");
         let mut last_pos = 0_usize;
         let mut pos = offset;
 
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         while (pos as usize) < viz.len() {
             let pos_usize = pos as usize;
             let mut sum = viz[last_pos] as usize;
@@ -793,10 +868,12 @@ pub async fn get_or_init_track_visualization(
         ret_viz.extend_from_slice(&viz[..count]);
     }
 
+    drop(viz);
+
     let mut min_value = u8::MAX;
     let mut max_value = 0;
 
-    for x in ret_viz.iter() {
+    for x in &ret_viz {
         let x = *x;
 
         if x < min_value {
@@ -808,23 +885,23 @@ pub async fn get_or_init_track_visualization(
     }
 
     let dyn_range = max_value - min_value;
-    let coefficient = u8::MAX as f64 / dyn_range as f64;
+    let coefficient = f64::from(u8::MAX) / f64::from(dyn_range);
 
     log::debug!("dyn_range={dyn_range} coefficient={coefficient} min_value={min_value} max_value={max_value}");
 
-    for x in ret_viz.iter_mut() {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    for x in &mut ret_viz {
         *x -= min_value;
-        let diff = *x as f64 * coefficient;
+        let diff = f64::from(*x) * coefficient;
         *x = diff as u8;
     }
 
     let mut smooth_viz = vec![0; ret_viz.len()];
     let mut last = 0;
 
-    const MAX_DELTA: i16 = 50;
-
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     for (i, x) in smooth_viz.iter_mut().enumerate() {
-        let mut current = ret_viz[i] as i16;
+        let mut current = i16::from(ret_viz[i]);
 
         if i > 0 && (current - last).abs() > MAX_DELTA {
             if current > last {
@@ -843,6 +920,13 @@ pub async fn get_or_init_track_visualization(
     Ok(ret_viz)
 }
 
+/// # Errors
+///
+/// * If the track cover was not found
+/// * If failed to get the track info
+/// * If an IO error occurs
+/// * If a database error occurs
+/// * If the `ApiSource` is invalid
 pub async fn get_or_init_track_size(
     api: &dyn MusicApi,
     track_id: &Id,

@@ -185,6 +185,7 @@ pub struct GetSilenceQuery {
     )
 )]
 #[route("/silence", method = "GET", method = "HEAD")]
+#[allow(clippy::future_not_send)]
 pub async fn get_silence_endpoint(query: web::Query<GetSilenceQuery>) -> Result<HttpResponse> {
     #[cfg(feature = "aac")]
     let default = AudioFormat::Aac;
@@ -197,7 +198,7 @@ pub async fn get_silence_endpoint(query: web::Query<GetSilenceQuery>) -> Result<
     response.insert_header((actix_web::http::header::CONTENT_ENCODING, "identity"));
     response.insert_header((actix_web::http::header::CONTENT_TYPE, content_type));
 
-    let bytes = get_silence_bytes(format, query.duration.unwrap_or(5)).await?;
+    let bytes = get_silence_bytes(format, query.duration.unwrap_or(5))?;
 
     response.insert_header((
         actix_web::http::header::CONTENT_DISPOSITION,
@@ -280,6 +281,7 @@ pub struct GetTrackQuery {
     )
 )]
 #[route("/track", method = "GET", method = "HEAD")]
+#[allow(clippy::future_not_send, clippy::too_many_lines)]
 pub async fn track_endpoint(
     req: HttpRequest,
     query: web::Query<GetTrackQuery>,
@@ -306,7 +308,7 @@ pub async fn track_endpoint(
         .format
         .as_ref()
         .and_then(audio_format_to_content_type)
-        .or(track_source_to_content_type(&source));
+        .or_else(|| track_source_to_content_type(&source));
 
     let format = query.format.unwrap_or_default();
 
@@ -320,8 +322,8 @@ pub async fn track_endpoint(
 
             range
                 .strip_prefix("bytes=")
-                .map(|s| s.to_string())
-                .ok_or(ErrorBadRequest(format!("Invalid range: {range}")))
+                .map(ToString::to_string)
+                .ok_or_else(|| ErrorBadRequest(format!("Invalid range: {range}")))
         })
         .transpose()?
         .map(|range| {
@@ -356,7 +358,7 @@ pub async fn track_endpoint(
                     );
                 }
             }
-            _ => {
+            TrackSource::LocalFilePath { .. } => {
                 moosicbox_assert::die_or_warn!("Failed to get CONTENT_TYPE for track source");
             }
         }
@@ -383,7 +385,7 @@ pub async fn track_endpoint(
             "inline{filename}",
             filename = bytes
                 .filename
-                .map_or("".into(), |x| format!("; filename=\"{x}\""))
+                .map_or_else(String::new, |x| format!("; filename=\"{x}\""))
         ),
     ));
 
@@ -399,6 +401,7 @@ pub async fn track_endpoint(
         let size = if let Some(range) = range {
             let mut size = original_size;
             if let Some(end) = range.end {
+                #[allow(clippy::cast_possible_truncation)]
                 if end > size as usize {
                     let error = format!("Range end out of bounds: {end}");
                     log::error!("{}", error);
@@ -407,6 +410,7 @@ pub async fn track_endpoint(
                 size = end as u64;
             }
             if let Some(start) = range.start {
+                #[allow(clippy::cast_possible_truncation)]
                 if start > size as usize {
                     let error = format!("Range start out of bounds: {start}");
                     log::error!("{}", error);
@@ -419,8 +423,8 @@ pub async fn track_endpoint(
                 actix_web::http::header::CONTENT_RANGE,
                 format!(
                     "bytes {start}-{end}/{original_size}",
-                    start = range.start.map_or("".to_string(), |x| x.to_string()),
-                    end = range.end.map(|x| x as u64).unwrap_or(original_size - 1),
+                    start = range.start.map_or_else(String::new, |x| x.to_string()),
+                    end = range.end.map_or(original_size - 1, |x| x as u64),
                 ),
             ));
             size
@@ -473,6 +477,7 @@ pub struct GetTrackInfoQuery {
     )
 )]
 #[route("/track/info", method = "GET")]
+#[allow(clippy::future_not_send)]
 pub async fn track_info_endpoint(
     query: web::Query<GetTrackInfoQuery>,
     music_apis: MusicApis,
@@ -517,6 +522,7 @@ pub struct GetTracksInfoQuery {
     )
 )]
 #[route("/tracks/info", method = "GET")]
+#[allow(clippy::future_not_send)]
 pub async fn tracks_info_endpoint(
     query: web::Query<GetTracksInfoQuery>,
     music_apis: MusicApis,
@@ -669,6 +675,7 @@ pub struct ArtistCoverQuery {
     )
 )]
 #[route("/artists/{artistId}/source", method = "GET", method = "HEAD")]
+#[allow(clippy::future_not_send)]
 pub async fn artist_source_artwork_endpoint(
     req: HttpRequest,
     path: web::Path<String>,
@@ -699,7 +706,7 @@ pub async fn artist_source_artwork_endpoint(
         .artist(&artist_id)
         .await
         .map_err(|e| ErrorNotFound(format!("Failed to get artist: {e:?}")))?
-        .ok_or_else(|| ErrorNotFound(format!("Artist not found: {}", artist_id.to_owned())))?;
+        .ok_or_else(|| ErrorNotFound(format!("Artist not found: {}", artist_id.clone())))?;
 
     log::debug!("artist_source_cover_endpoint: artist={artist:?}");
 
@@ -769,7 +776,7 @@ pub async fn artist_cover_endpoint(
         .collect::<Result<Vec<_>>>()?;
     let (width, height) = (dimensions[0], dimensions[1]);
 
-    let size = (std::cmp::max(width, height) as u16).into();
+    let size = u16::try_from(std::cmp::max(width, height)).unwrap().into();
     let api = music_apis
         .get(source)
         .map_err(|e| ErrorInternalServerError(format!("Failed to get music_api: {e:?}")))?;
@@ -777,7 +784,7 @@ pub async fn artist_cover_endpoint(
         .artist(&artist_id)
         .await
         .map_err(|e| ErrorNotFound(format!("Failed to get artist: {e:?}")))?
-        .ok_or_else(|| ErrorNotFound(format!("Artist not found: {}", artist_id.to_owned())))?;
+        .ok_or_else(|| ErrorNotFound(format!("Artist not found: {}", artist_id.clone())))?;
 
     log::debug!("artist_cover_endpoint: artist={artist:?}");
 
@@ -831,6 +838,7 @@ pub struct AlbumCoverQuery {
     )
 )]
 #[route("/albums/{albumId}/source", method = "GET", method = "HEAD")]
+#[allow(clippy::future_not_send)]
 pub async fn album_source_artwork_endpoint(
     req: HttpRequest,
     path: web::Path<String>,
@@ -861,7 +869,7 @@ pub async fn album_source_artwork_endpoint(
         .album(&album_id)
         .await
         .map_err(|e| ErrorNotFound(format!("Failed to get album: {e:?}")))?
-        .ok_or_else(|| ErrorNotFound(format!("Album not found: {}", album_id.to_owned())))?;
+        .ok_or_else(|| ErrorNotFound(format!("Album not found: {}", album_id.clone())))?;
 
     log::debug!("album_source_cover_endpoint: album={album:?}");
 
@@ -931,7 +939,7 @@ pub async fn album_artwork_endpoint(
         .collect::<Result<Vec<_>>>()?;
     let (width, height) = (dimensions[0], dimensions[1]);
 
-    let size = (std::cmp::max(width, height) as u16).into();
+    let size = u16::try_from(std::cmp::max(width, height)).unwrap().into();
     let api = music_apis
         .get(source)
         .map_err(|e| ErrorInternalServerError(format!("Failed to get music_api: {e:?}")))?;
@@ -939,7 +947,7 @@ pub async fn album_artwork_endpoint(
         .album(&album_id)
         .await
         .map_err(|e| ErrorNotFound(format!("Failed to get album: {e:?}")))?
-        .ok_or_else(|| ErrorNotFound(format!("Album not found: {}", album_id.to_owned())))?;
+        .ok_or_else(|| ErrorNotFound(format!("Album not found: {}", album_id.clone())))?;
 
     log::debug!("album_cover_endpoint: album={album:?}");
 
@@ -960,7 +968,7 @@ pub enum ResizeImageError {
     Join(#[from] tokio::task::JoinError),
 }
 
-#[allow(unused)]
+#[allow(unused, clippy::unused_async)]
 pub(crate) async fn resize_image_path(
     path: &str,
     width: u32,
@@ -971,8 +979,10 @@ pub(crate) async fn resize_image_path(
 
     #[cfg(feature = "libvips")]
     {
+        use actix_web::http::header::{CacheControl, CacheDirective};
         use log::error;
         use moosicbox_image::libvips::{get_error, resize_local_file};
+
         image_type = "jpeg";
         let resized = moosicbox_task::spawn_blocking("files: resize_image_path", {
             let path = path.to_owned();
@@ -985,7 +995,6 @@ pub(crate) async fn resize_image_path(
         })
         .await??;
 
-        use actix_web::http::header::{CacheControl, CacheDirective};
         let mut response = HttpResponse::Ok();
         response.insert_header(CacheControl(vec![CacheDirective::MaxAge(86400u32 * 14)]));
         response.content_type(format!("image/{image_type}"));
@@ -993,7 +1002,9 @@ pub(crate) async fn resize_image_path(
     }
     #[cfg(feature = "image")]
     {
+        use actix_web::http::header::{CacheControl, CacheDirective};
         use moosicbox_image::{image::try_resize_local_file_async, Encoding};
+
         let resized = if let Ok(Some(resized)) =
             try_resize_local_file_async(width, height, path, Encoding::Webp, 80)
                 .await
@@ -1008,7 +1019,6 @@ pub(crate) async fn resize_image_path(
                 .expect("Failed to resize to jpeg image")
         };
 
-        use actix_web::http::header::{CacheControl, CacheDirective};
         let mut response = HttpResponse::Ok();
         response.insert_header(CacheControl(vec![CacheDirective::MaxAge(86400u32 * 14)]));
         response.content_type(format!("image/{image_type}"));
