@@ -10,24 +10,24 @@ use pingora_proxy::{ProxyHttp, Session};
 
 pub static PORT: LazyLock<u16> = LazyLock::new(|| {
     std::env::var("PORT")
-        .unwrap_or("6188".to_string())
+        .unwrap_or_else(|_| "6188".to_string())
         .parse::<u16>()
         .expect("Invalid PORT")
 });
 
 pub static SSL_PORT: LazyLock<u16> = LazyLock::new(|| {
     std::env::var("SSL_PORT")
-        .unwrap_or("6189".to_string())
+        .unwrap_or_else(|_| "6189".to_string())
         .parse::<u16>()
         .expect("Invalid SSL_PORT")
 });
 
 pub static SSL_CRT_PATH: LazyLock<String> = LazyLock::new(|| {
-    std::env::var("SSL_CRT_PATH").unwrap_or("/etc/pingora/ssl/tls.crt".to_string())
+    std::env::var("SSL_CRT_PATH").unwrap_or_else(|_| "/etc/pingora/ssl/tls.crt".to_string())
 });
 
 pub static SSL_KEY_PATH: LazyLock<String> = LazyLock::new(|| {
-    std::env::var("SSL_KEY_PATH").unwrap_or("/etc/pingora/ssl/tls.key".to_string())
+    std::env::var("SSL_KEY_PATH").unwrap_or_else(|_| "/etc/pingora/ssl/tls.key".to_string())
 });
 
 static SNI: LazyLock<String> = LazyLock::new(|| format!("127.0.0.1:{}", *SSL_PORT));
@@ -35,7 +35,8 @@ static SNI: LazyLock<String> = LazyLock::new(|| format!("127.0.0.1:{}", *SSL_POR
 pub struct Router(HashMap<String, Arc<LoadBalancer<RoundRobin>>>);
 
 impl Router {
-    pub fn new(upstreams: HashMap<String, Arc<LoadBalancer<RoundRobin>>>) -> Self {
+    #[must_use]
+    pub const fn new(upstreams: HashMap<String, Arc<LoadBalancer<RoundRobin>>>) -> Self {
         Self(upstreams)
     }
 }
@@ -82,8 +83,8 @@ impl ProxyHttp for Router {
         );
 
         let lb = if Self::is_challenge(session) {
-            log::debug!("upstream_peer: Received challenge request");
             static NAME: &str = "solver";
+            log::debug!("upstream_peer: Received challenge request");
             self.0.get(NAME).inspect(|_x| {
                 log::debug!("upstream_peer: Using cluster name={NAME}");
             })
@@ -93,15 +94,17 @@ impl ProxyHttp for Router {
                 .inspect(|_x| {
                     log::debug!("upstream_peer: Using cluster name={host}");
                 })
-                .or_else(|| match self.0.get("*") {
-                    Some(fallback) => {
-                        log::debug!("upstream_peer: Unsupported host={host} Falling back to *");
-                        Some(fallback)
-                    }
-                    None => {
-                        log::debug!("upstream_peer: Unsupported host={host}");
-                        None
-                    }
+                .or_else(|| {
+                    self.0.get("*").map_or_else(
+                        || {
+                            log::debug!("upstream_peer: Unsupported host={host}");
+                            None
+                        },
+                        |fallback| {
+                            log::debug!("upstream_peer: Unsupported host={host} Falling back to *");
+                            Some(fallback)
+                        },
+                    )
                 })
         };
 
