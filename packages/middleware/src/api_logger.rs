@@ -9,6 +9,7 @@ use std::future::{ready, Ready};
 pub struct ApiLogger {}
 
 impl ApiLogger {
+    #[must_use]
     pub const fn new() -> Self {
         Self {}
     }
