@@ -239,7 +239,7 @@ impl OpusEncoder<'_> {
 
     fn resample_if_needed(
         &mut self,
-        decoded: AudioBuffer<f32>,
+        decoded: &AudioBuffer<f32>,
     ) -> Result<Vec<f32>, AudioOutputError> {
         let spec = decoded.spec();
         let duration = decoded.capacity() as u64;
@@ -268,7 +268,7 @@ impl OpusEncoder<'_> {
                 spec.channels,
                 spec.channels.count(),
             );
-            Ok(to_samples(&decoded))
+            Ok(to_samples(decoded))
         }
     }
 }
@@ -283,7 +283,7 @@ impl AudioEncoder for OpusEncoder<'_> {
     fn encode(&mut self, decoded: AudioBuffer<f32>) -> Result<Bytes, AudioOutputError> {
         log::debug!("OpusEncoder encode {} frames", decoded.frames());
 
-        let decoded = self.resample_if_needed(decoded)?;
+        let decoded = self.resample_if_needed(&decoded)?;
 
         Ok(self.write_samples(decoded))
     }

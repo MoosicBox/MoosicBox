@@ -118,7 +118,7 @@ impl AacEncoder {
 
     fn resample_if_needed(
         &mut self,
-        decoded: AudioBuffer<f32>,
+        decoded: &AudioBuffer<f32>,
     ) -> Result<Vec<i16>, AudioOutputError> {
         let spec = decoded.spec();
         let duration = decoded.capacity() as u64;
@@ -147,7 +147,7 @@ impl AacEncoder {
                 spec.channels,
                 spec.channels.count(),
             );
-            Ok(to_samples(&decoded))
+            Ok(to_samples(decoded))
         }
     }
 }
@@ -162,7 +162,7 @@ impl AudioEncoder for AacEncoder {
     fn encode(&mut self, decoded: AudioBuffer<f32>) -> Result<Bytes, AudioOutputError> {
         log::debug!("AacEncoder encode {} frames", decoded.frames());
 
-        let decoded = self.resample_if_needed(decoded)?;
+        let decoded = self.resample_if_needed(&decoded)?;
 
         Ok(self.encode_output(&decoded))
     }

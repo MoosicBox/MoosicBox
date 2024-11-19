@@ -283,7 +283,7 @@ impl std::io::Read for SignalChainStepProcessor {
                 let channels = audio.spec().channels.count();
 
                 log::debug!("Resampling frames...");
-                let samples = resampler.resample(audio).ok_or_else(|| {
+                let samples = resampler.resample(&audio).ok_or_else(|| {
                     std::io::Error::new(std::io::ErrorKind::Other, "Failed to resample")
                 })?;
                 let buf = AudioBuffer::new((samples.len() / channels) as u64, resampler.spec);

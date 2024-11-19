@@ -52,7 +52,7 @@ impl AudioOutput {
         Ok(if let Some(resampler) = &mut self.resampler {
             // Resampling is required. The resampler will return interleaved samples in the
             // correct sample format.
-            let Some(samples) = resampler.resample(decoded) else {
+            let Some(samples) = resampler.resample(&decoded) else {
                 return Err(AudioOutputError::StreamEnd);
             };
 

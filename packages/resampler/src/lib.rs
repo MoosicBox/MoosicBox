@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use symphonia::core::audio::{AudioBuffer, Signal, SignalSpec};
 use symphonia::core::conv::{IntoSample, ReversibleSample};
@@ -19,9 +20,9 @@ where
 {
     fn resample_inner(&mut self) -> &[T] {
         {
-            let mut input: arrayvec::ArrayVec<&[f32], 32> = Default::default();
+            let mut input: arrayvec::ArrayVec<&[f32], 32> = arrayvec::ArrayVec::default();
 
-            for channel in self.input.iter() {
+            for channel in &self.input {
                 input.push(&channel[..self.duration]);
             }
 
@@ -36,7 +37,7 @@ where
         }
 
         // Remove consumed samples from the input buffer.
-        for channel in self.input.iter_mut() {
+        for channel in &mut self.input {
             channel.drain(0..self.duration);
         }
 
@@ -60,8 +61,13 @@ impl<T> Resampler<T>
 where
     T: Sample + ReversibleSample<f32>,
 {
+    /// # Panics
+    ///
+    /// * If the `duration` cannot be converted to a `usize`
+    /// * If failed to create the `FftFixedIn` resampler
+    #[must_use]
     pub fn new(spec: SignalSpec, to_sample_rate: usize, duration: u64) -> Self {
-        let duration = duration as usize;
+        let duration = usize::try_from(duration).unwrap();
         let num_channels = spec.channels.count();
 
         let resampler = rubato::FftFixedIn::<f32>::new(
@@ -85,16 +91,16 @@ where
             output,
             duration,
             spec,
-            interleaved: Default::default(),
+            interleaved: Vec::default(),
         }
     }
 
     /// Resamples a planar/non-interleaved input.
     ///
     /// Returns the resampled samples in an interleaved format.
-    pub fn resample(&mut self, input: AudioBuffer<f32>) -> Option<&[T]> {
+    pub fn resample(&mut self, input: &AudioBuffer<f32>) -> Option<&[T]> {
         // Copy and convert samples into input buffer.
-        convert_samples(&input, &mut self.input);
+        convert_samples(input, &mut self.input);
 
         // Check if more samples are required.
         if self.input[0].len() < self.duration {
@@ -104,7 +110,7 @@ where
         Some(self.resample_inner())
     }
 
-    pub fn resample_to_audio_buffer(&mut self, input: AudioBuffer<f32>) -> Option<AudioBuffer<T>> {
+    pub fn resample_to_audio_buffer(&mut self, input: &AudioBuffer<f32>) -> Option<AudioBuffer<T>> {
         let spec = self.spec;
         self.resample(input)
             .map(|samples| to_audio_buffer(samples, spec))
@@ -124,7 +130,7 @@ where
         if partial_len != 0 {
             // Fill each input channel buffer with silence to the next multiple of the resampler
             // duration.
-            for channel in self.input.iter_mut() {
+            for channel in &mut self.input {
                 channel.resize(len + (self.duration - partial_len), f32::MID);
             }
         }
