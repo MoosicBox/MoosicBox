@@ -1,10 +1,12 @@
+#![allow(clippy::module_name_repetitions)]
+
 use flume::Receiver;
 use moosicbox_audio_decoder::{AudioDecodeError, AudioDecodeHandler};
 use moosicbox_audio_output::encoder::AudioEncoder;
 use moosicbox_resampler::Resampler;
 use symphonia::core::{
     audio::{AudioBuffer, Signal},
-    io::{MediaSource, MediaSourceStream},
+    io::{MediaSource, MediaSourceStream, MediaSourceStreamOptions},
     probe::Hint,
 };
 use thiserror::Error;
@@ -27,10 +29,12 @@ pub struct SignalChain {
 }
 
 impl SignalChain {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self { steps: vec![] }
     }
 
+    #[must_use]
     pub fn with_hint(mut self, hint: Hint) -> Self {
         if let Some(step) = self.steps.pop() {
             self.steps.push(step.with_hint(hint));
@@ -38,6 +42,7 @@ impl SignalChain {
         self
     }
 
+    #[must_use]
     pub fn with_audio_decode_handler<F: (FnOnce() -> AudioDecodeHandler) + Send + 'static>(
         mut self,
         handler: F,
@@ -49,6 +54,7 @@ impl SignalChain {
         self
     }
 
+    #[must_use]
     pub fn with_encoder<F: (FnOnce() -> Box<dyn AudioEncoder>) + Send + 'static>(
         mut self,
         encoder: F,
@@ -59,6 +65,7 @@ impl SignalChain {
         self
     }
 
+    #[must_use]
     pub fn with_verify(mut self, verify: bool) -> Self {
         if let Some(step) = self.steps.pop() {
             self.steps.push(step.with_verify(verify));
@@ -66,6 +73,7 @@ impl SignalChain {
         self
     }
 
+    #[must_use]
     pub fn with_seek(mut self, seek: Option<f64>) -> Self {
         if let Some(step) = self.steps.pop() {
             self.steps.push(step.with_seek(seek));
@@ -73,16 +81,19 @@ impl SignalChain {
         self
     }
 
+    #[must_use]
     pub fn next_step(mut self) -> Self {
         self.steps.push(SignalChainStep::new());
         self
     }
 
+    #[must_use]
     pub fn add_step(mut self, step: SignalChainStep) -> Self {
         self.steps.push(step);
         self
     }
 
+    #[must_use]
     pub fn add_encoder_step<F: (FnOnce() -> Box<dyn AudioEncoder>) + Send + 'static>(
         mut self,
         encoder: F,
@@ -92,12 +103,16 @@ impl SignalChain {
         self
     }
 
+    #[must_use]
     pub fn add_resampler_step(mut self, resampler: Resampler<f32>) -> Self {
         self.steps
             .push(SignalChainStep::new().with_resampler(resampler));
         self
     }
 
+    /// # Errors
+    ///
+    /// * If fails to process the audio somewhere in the `SignalChain`
     pub fn process(
         mut self,
         media_source: Box<dyn MediaSource>,
@@ -135,6 +150,7 @@ pub struct SignalChainStep {
 }
 
 impl SignalChainStep {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             hint: None,
@@ -147,11 +163,13 @@ impl SignalChainStep {
         }
     }
 
+    #[must_use]
     pub fn with_hint(mut self, hint: Hint) -> Self {
         self.hint.replace(hint);
         self
     }
 
+    #[must_use]
     pub fn with_audio_decode_handler<F: (FnOnce() -> AudioDecodeHandler) + Send + 'static>(
         mut self,
         handler: F,
@@ -160,6 +178,7 @@ impl SignalChainStep {
         self
     }
 
+    #[must_use]
     pub fn with_encoder<F: (FnOnce() -> Box<dyn AudioEncoder>) + Send + 'static>(
         mut self,
         encoder: F,
@@ -168,27 +187,33 @@ impl SignalChainStep {
         self
     }
 
+    #[must_use]
     pub fn with_resampler(mut self, resampler: Resampler<f32>) -> Self {
         self.resampler.replace(resampler);
         self
     }
 
-    pub fn with_verify(mut self, verify: bool) -> Self {
+    #[must_use]
+    pub const fn with_verify(mut self, verify: bool) -> Self {
         self.verify = verify;
         self
     }
 
-    pub fn with_seek(mut self, seek: Option<f64>) -> Self {
+    #[must_use]
+    pub const fn with_seek(mut self, seek: Option<f64>) -> Self {
         self.seek = seek;
         self
     }
 
+    /// # Errors
+    ///
+    /// * If fails to process the audio somewhere in the `SignalChain`
     pub fn process(
         self,
         media_source: Box<dyn MediaSource>,
     ) -> Result<SignalChainStepProcessor, SignalChainError> {
         let hint = self.hint.unwrap_or_default();
-        let mss = MediaSourceStream::new(media_source, Default::default());
+        let mss = MediaSourceStream::new(media_source, MediaSourceStreamOptions::default());
 
         let receiver = play_media_source(
             mss,
@@ -258,10 +283,9 @@ impl std::io::Read for SignalChainStepProcessor {
                 let channels = audio.spec().channels.count();
 
                 log::debug!("Resampling frames...");
-                let samples = resampler.resample(audio).ok_or(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Failed to resample",
-                ))?;
+                let samples = resampler.resample(audio).ok_or_else(|| {
+                    std::io::Error::new(std::io::ErrorKind::Other, "Failed to resample")
+                })?;
                 let buf = AudioBuffer::new((samples.len() / channels) as u64, resampler.spec);
                 log::debug!("Resampled into {} frames", buf.frames());
                 buf

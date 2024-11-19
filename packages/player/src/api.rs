@@ -1,3 +1,5 @@
+#![allow(clippy::future_not_send)]
+
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
     error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
@@ -101,17 +103,17 @@ impl From<PlayerError> for actix_web::Error {
             PlayerError::PlaybackError(err) => ErrorInternalServerError(err),
             PlayerError::Send(err) => ErrorInternalServerError(err),
             PlayerError::IO(err) => ErrorInternalServerError(err),
-            PlayerError::InvalidSession { .. } => ErrorInternalServerError(err.to_string()),
-            PlayerError::Join { .. } => ErrorInternalServerError(err.to_string()),
+            PlayerError::InvalidSession { .. }
+            | PlayerError::Join { .. }
+            | PlayerError::NoAudioOutputs
+            | PlayerError::Cancelled
+            | PlayerError::RetryRequested
+            | PlayerError::InvalidState
+            | PlayerError::InvalidSource
+            | PlayerError::MissingSessionId
+            | PlayerError::MissingProfile => ErrorInternalServerError(err),
             PlayerError::Acquire(err) => ErrorInternalServerError(err),
             PlayerError::Seek(err) => ErrorInternalServerError(err),
-            PlayerError::NoAudioOutputs => ErrorInternalServerError(err),
-            PlayerError::Cancelled => ErrorInternalServerError(err),
-            PlayerError::RetryRequested => ErrorInternalServerError(err),
-            PlayerError::InvalidState => ErrorInternalServerError(err),
-            PlayerError::InvalidSource => ErrorInternalServerError(err),
-            PlayerError::MissingSessionId => ErrorInternalServerError(err),
-            PlayerError::MissingProfile => ErrorInternalServerError(err),
         }
     }
 }
@@ -123,6 +125,7 @@ static PLAYER_CACHE: std::sync::LazyLock<
     std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()))
 });
 
+#[allow(clippy::unused_async)]
 async fn get_player(
     #[allow(unused)] host: Option<&str>,
 ) -> Result<PlaybackHandler, actix_web::Error> {
@@ -138,10 +141,10 @@ async fn get_player(
         Ok(PLAYER_CACHE
             .lock()
             .await
-            .entry(match &host {
-                Some(h) => format!("stream|{h}"),
-                None => "local".into(),
-            })
+            .entry(
+                host.as_ref()
+                    .map_or_else(|| "local".into(), |h| format!("stream|{h}")),
+            )
             .or_insert(if let Some(host) = host {
                 let local_player = LocalPlayer::new(
                     PlayerSource::Remote {
@@ -156,7 +159,7 @@ async fn get_player(
                 .with_output(
                     default_output_factory()
                         .await
-                        .ok_or(ErrorInternalServerError("Missing default audio output"))?,
+                        .ok_or_else(|| ErrorInternalServerError("Missing default audio output"))?,
                 );
 
                 let playback = local_player.playback.clone();
@@ -176,14 +179,13 @@ async fn get_player(
 
                 handler
             } else {
-                let local_player = LocalPlayer::new(PlayerSource::Local, None)
-                    .await
-                    .map_err(ErrorInternalServerError)?
-                    .with_output(
-                        default_output_factory()
-                            .await
-                            .ok_or(ErrorInternalServerError("Missing default audio output"))?,
-                    );
+                let local_player =
+                    LocalPlayer::new(PlayerSource::Local, None)
+                        .await
+                        .map_err(ErrorInternalServerError)?
+                        .with_output(default_output_factory().await.ok_or_else(|| {
+                            ErrorInternalServerError("Missing default audio output")
+                        })?);
 
                 let playback = local_player.playback.clone();
                 let output = local_player.output.clone();
@@ -206,6 +208,9 @@ async fn get_player(
     }
 }
 
+/// # Errors
+///
+/// * If failed to get the tracks from the `MusicApi`
 pub async fn get_track_or_ids_from_track_id_ranges(
     api: &dyn MusicApi,
     track_ids: &str,
@@ -362,10 +367,7 @@ pub async fn play_track_endpoint(
     .await?
     .into_iter()
     .next()
-    .ok_or(ErrorBadRequest(format!(
-        "Invalid trackId '{}'",
-        query.track_id
-    )))?;
+    .ok_or_else(|| ErrorBadRequest(format!("Invalid trackId '{}'", query.track_id)))?;
 
     get_player(query.host.as_deref())
         .await?

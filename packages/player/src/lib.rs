@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::{
     collections::HashMap,
@@ -135,7 +136,7 @@ impl std::fmt::Debug for PlayableTrack {
         f.debug_struct("PlayableTrack")
             .field("track_id", &self.track_id)
             .field("source", &"{{source}}")
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -163,8 +164,8 @@ impl Playback {
         session_id: u64,
         profile: String,
         playback_target: Option<PlaybackTarget>,
-    ) -> Playback {
-        Playback {
+    ) -> Self {
+        Self {
             id: thread_rng().gen::<u64>(),
             session_id,
             profile,
@@ -215,6 +216,15 @@ pub struct PlaybackStatus {
     pub success: bool,
 }
 
+/// # Panics
+///
+/// * If the `SERVICE_PORT` `RwLock` is poisoned
+///
+/// # Errors
+///
+/// * If an HTTP request fails
+/// * If failed to fetch the track
+#[allow(clippy::too_many_lines, clippy::unused_async)]
 pub async fn get_track_url(
     track_id: &Id,
     api_source: ApiSource,
@@ -316,7 +326,7 @@ pub async fn get_track_url(
         serializer.finish()
     };
 
-    let query_string = format!("?{}", query_params);
+    let query_string = format!("?{query_params}");
 
     let url = match api_source {
         ApiSource::Library => Ok::<_, PlayerError>(format!("{host}/files/track{query_string}")),
@@ -370,6 +380,9 @@ pub async fn get_track_url(
     Ok((url, headers))
 }
 
+/// # Errors
+///
+/// * If the session playlist is missing
 pub async fn get_session_playlist_id_from_session_id(
     db: &LibraryDatabase,
     session_id: Option<u64>,
@@ -431,6 +444,7 @@ impl PlaybackHandler {
         Self::new_boxed(Box::new(player))
     }
 
+    #[must_use]
     pub fn new_boxed(player: Box<dyn Player + Sync>) -> Self {
         let playback = Arc::new(std::sync::RwLock::new(None));
         let output = None;
@@ -445,11 +459,13 @@ impl PlaybackHandler {
         }
     }
 
+    #[must_use]
     pub fn with_playback(mut self, playback: Arc<std::sync::RwLock<Option<Playback>>>) -> Self {
         self.playback = playback;
         self
     }
 
+    #[must_use]
     pub fn with_output(
         mut self,
         output: Option<Arc<std::sync::Mutex<AudioOutputFactory>>>,
@@ -458,6 +474,7 @@ impl PlaybackHandler {
         self
     }
 
+    #[must_use]
     pub fn with_receiver(
         mut self,
         receiver: Arc<tokio::sync::RwLock<Option<Receiver<()>>>>,
@@ -468,6 +485,9 @@ impl PlaybackHandler {
 }
 
 impl PlaybackHandler {
+    /// # Errors
+    ///
+    /// * If failed to update the playback from the session
     pub async fn init_from_api_session(
         &mut self,
         profile: String,
@@ -481,6 +501,7 @@ impl PlaybackHandler {
                 None,
                 Some(session.playing),
                 session.position,
+                #[allow(clippy::cast_precision_loss)]
                 session.seek.map(|x| x as f64),
                 session.volume,
                 Some(
@@ -509,6 +530,9 @@ impl PlaybackHandler {
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// * If failed to update the playback from the session
     pub async fn init_from_session(
         &mut self,
         profile: String,
@@ -561,6 +585,10 @@ impl PlaybackHandler {
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// * If failed to fetch the album tracks
+    /// * If failed to play the tracks
     #[allow(clippy::too_many_arguments)]
     pub async fn play_album(
         &mut self,
@@ -604,6 +632,9 @@ impl PlaybackHandler {
         .await
     }
 
+    /// # Errors
+    ///
+    /// * If failed to play the track
     #[allow(clippy::too_many_arguments)]
     pub async fn play_track(
         &mut self,
@@ -630,6 +661,14 @@ impl PlaybackHandler {
         .await
     }
 
+    /// # Panics
+    ///
+    /// * If the `playback` `RwLock` is poisoned
+    ///
+    /// # Errors
+    ///
+    /// * If failed to play the tracks
+    /// * If failed to stop an existing playback
     #[allow(clippy::too_many_arguments)]
     pub async fn play_tracks(
         &mut self,
@@ -667,6 +706,13 @@ impl PlaybackHandler {
         self.play_playback(seek, retry_options).await
     }
 
+    /// # Panics
+    ///
+    /// * If the `playback` `RwLock` is poisoned
+    ///
+    /// # Errors
+    ///
+    /// * If failed to play the existing playback
     pub async fn play_playback(
         &mut self,
         seek: Option<f64>,
@@ -690,8 +736,10 @@ impl PlaybackHandler {
             let old = playback.clone();
 
             playback.playing = true;
+            let playback = playback.clone();
+            drop(binding);
 
-            (playback.clone(), old)
+            (playback, old)
         };
 
         trigger_playback_event(&playback, &old);
@@ -714,6 +762,7 @@ impl PlaybackHandler {
                 .clone()
                 .ok_or(PlayerError::NoPlayersPlaying)?;
 
+            #[allow(clippy::redundant_pub_crate)]
             while playback.playing && (playback.position as usize) < playback.tracks.len() {
                 let track_or_id = &playback.tracks[playback.position as usize];
                 log::debug!("play_playback: track={track_or_id:?} seek={seek:?}");
@@ -722,7 +771,7 @@ impl PlaybackHandler {
 
                 log::debug!("player cancelled={}", playback.abort.is_cancelled());
                 tokio::select! {
-                    _ = playback.abort.cancelled() => {
+                    () = playback.abort.cancelled() => {
                         log::debug!("play_playback: Playback cancelled");
                         return Err(PlayerError::Cancelled);
                     }
@@ -786,6 +835,9 @@ impl PlaybackHandler {
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// * If failed to play the existing playback
     pub async fn play(
         &mut self,
         seek: Option<f64>,
@@ -806,6 +858,9 @@ impl PlaybackHandler {
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// * If failed to stop the existing playback
     pub async fn stop(
         &mut self,
         retry_options: Option<PlaybackRetryOptions>,
@@ -825,6 +880,9 @@ impl PlaybackHandler {
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// * If failed to seek the current playback
     pub async fn seek(
         &mut self,
         seek: f64,
@@ -845,6 +903,13 @@ impl PlaybackHandler {
         Ok(())
     }
 
+    /// # Panics
+    ///
+    /// * If the `playback` `RwLock` is poisoned
+    ///
+    /// # Errors
+    ///
+    /// * If failed to change to the next track
     pub async fn next_track(
         &mut self,
         seek: Option<f64>,
@@ -859,7 +924,7 @@ impl PlaybackHandler {
                 .ok_or(PlayerError::NoPlayersPlaying)?
         };
 
-        if playback.position + 1 >= playback.tracks.len() as u16 {
+        if playback.position + 1 >= u16::try_from(playback.tracks.len()).unwrap() {
             return Err(PlayerError::PositionOutOfBounds(playback.position + 1));
         }
 
@@ -882,6 +947,13 @@ impl PlaybackHandler {
         .await
     }
 
+    /// # Panics
+    ///
+    /// * If the `playback` `RwLock` is poisoned
+    ///
+    /// # Errors
+    ///
+    /// * If failed to change to the previous track
     pub async fn previous_track(
         &mut self,
         seek: Option<f64>,
@@ -919,11 +991,23 @@ impl PlaybackHandler {
         .await
     }
 
+    /// # Errors
+    ///
+    /// * If failed to handle logic in the `before_update_playback`
+    #[allow(clippy::unused_async)]
     pub async fn before_update_playback(&mut self) -> Result<(), PlayerError> {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
+    /// # Panics
+    ///
+    /// * If the `playback` `RwLock` is poisoned
+    ///
+    /// # Errors
+    ///
+    /// * If any of the playback actions failed
+    /// * If failed to handle logic in the `before_update_playback`
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     pub async fn update_playback(
         &mut self,
         modify_playback: bool,
@@ -977,15 +1061,17 @@ impl PlaybackHandler {
             )
         };
 
-        let original = original.unwrap_or(Playback::new(
-            tracks.clone().unwrap_or_default(),
-            position,
-            AtomicF64::new(volume.unwrap_or(1.0)),
-            quality.unwrap_or_default(),
-            session_id,
-            profile.clone(),
-            playback_target.clone(),
-        ));
+        let original = original.unwrap_or_else(|| {
+            Playback::new(
+                tracks.clone().unwrap_or_default(),
+                position,
+                AtomicF64::new(volume.unwrap_or(1.0)),
+                quality.unwrap_or_default(),
+                session_id,
+                profile.clone(),
+                playback_target.clone(),
+            )
+        });
 
         let playing = playing.unwrap_or(original.playing);
         let same_track = same_active_track(position, tracks.as_deref(), &original);
@@ -1077,6 +1163,9 @@ impl PlaybackHandler {
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// * If failed to pause the current `Playback`
     pub async fn pause(
         &mut self,
         retry_options: Option<PlaybackRetryOptions>,
@@ -1096,6 +1185,9 @@ impl PlaybackHandler {
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// * If failed to resume the current `Playback`
     pub async fn resume(
         &mut self,
         retry_options: Option<PlaybackRetryOptions>,
@@ -1136,6 +1228,9 @@ pub trait Player: std::fmt::Debug + Send {
 
     async fn trigger_resume(&self) -> Result<(), PlayerError>;
 
+    /// # Errors
+    ///
+    /// * If failed to access the player status
     fn player_status(&self) -> Result<ApiPlaybackStatus, PlayerError>;
 
     fn get_source(&self) -> &PlayerSource;
@@ -1166,6 +1261,9 @@ fn same_active_track(position: Option<u16>, tracks: Option<&[Track]>, playback: 
 
 pub static SERVICE_PORT: LazyLock<RwLock<Option<u16>>> = LazyLock::new(|| RwLock::new(None));
 
+/// # Panics
+///
+/// * If the `SERVICE_PORT` `RwLock` is poisoned
 pub fn set_service_port(service_port: u16) {
     SERVICE_PORT.write().unwrap().replace(service_port);
 }
@@ -1175,6 +1273,9 @@ type PlaybackEventCallback = fn(&UpdateSession, &Playback);
 static PLAYBACK_EVENT_LISTENERS: LazyLock<Arc<RwLock<Vec<PlaybackEventCallback>>>> =
     LazyLock::new(|| Arc::new(RwLock::new(Vec::new())));
 
+/// # Panics
+///
+/// * If the `PLAYBACK_EVENT_LISTENERS` `RwLock` is poisoned
 pub fn on_playback_event(listener: PlaybackEventCallback) {
     PLAYBACK_EVENT_LISTENERS.write().unwrap().push(listener);
 }
@@ -1186,36 +1287,40 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
 
     let mut has_change = false;
 
-    let playing = if current.playing != previous.playing {
+    let playing = if current.playing == previous.playing {
+        None
+    } else {
         has_change = true;
         Some(current.playing)
-    } else {
-        None
     };
-    let position = if current.position != previous.position {
+    let position = if current.position == previous.position {
+        None
+    } else {
         has_change = true;
         Some(current.position)
-    } else {
-        None
     };
-    let seek = if current.progress as usize != previous.progress as usize {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let seek = if current.progress as usize == previous.progress as usize {
+        None
+    } else {
         has_change = true;
         Some(current.progress)
-    } else {
-        None
     };
     let current_volume = current.volume.load(std::sync::atomic::Ordering::SeqCst);
-    let volume = if current_volume != previous.volume.load(std::sync::atomic::Ordering::SeqCst) {
+    let volume = if (current_volume - previous.volume.load(std::sync::atomic::Ordering::SeqCst))
+        .abs()
+        < 0.001
+    {
+        None
+    } else {
         has_change = true;
         Some(current_volume)
-    } else {
-        None
     };
-    let quality = if current.quality != previous.quality {
+    let quality = if current.quality == previous.quality {
+        None
+    } else {
         has_change = true;
         Some(current.quality)
-    } else {
-        None
     };
     let tracks = current
         .tracks
@@ -1229,14 +1334,14 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
         .cloned()
         .map(Into::into)
         .collect::<Vec<_>>();
-    let playlist = if tracks != prev_tracks {
+    let playlist = if tracks == prev_tracks {
+        None
+    } else {
         has_change = true;
         Some(UpdateSessionPlaylist {
             session_playlist_id: 0,
             tracks,
         })
-    } else {
-        None
     };
 
     if !has_change {
@@ -1272,10 +1377,10 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
         quality,
     };
 
-    send_playback_event(&update, current)
+    send_playback_event(&update, current);
 }
 
-#[allow(unused)]
+#[allow(unused, clippy::too_many_lines)]
 async fn track_to_playable_file(
     track: &Track,
     quality: PlaybackQuality,
@@ -1294,13 +1399,11 @@ async fn track_to_playable_file(
         }
     }
 
+    #[allow(clippy::match_wildcard_for_single_variants)]
     let same_source = match quality.format {
         AudioFormat::Source => true,
         #[allow(unreachable_patterns)]
-        _ => match track.format {
-            Some(format) => format == quality.format,
-            None => true,
-        },
+        _ => track.format.map_or(true, |format| format == quality.format),
     };
 
     let source: Box<dyn MediaSource> = if same_source {
@@ -1312,8 +1415,8 @@ async fn track_to_playable_file(
         match quality.format {
             #[cfg(feature = "aac")]
             AudioFormat::Aac => {
-                log::debug!("Encoding playback with AacEncoder");
                 use moosicbox_audio_output::encoder::aac::AacEncoder;
+                log::debug!("Encoding playback with AacEncoder");
                 let mut hint = Hint::new();
                 hint.with_extension("m4a");
                 signal_chain = signal_chain
@@ -1322,8 +1425,8 @@ async fn track_to_playable_file(
             }
             #[cfg(feature = "flac")]
             AudioFormat::Flac => {
-                log::debug!("Encoding playback with FlacEncoder");
                 use moosicbox_audio_output::encoder::flac::FlacEncoder;
+                log::debug!("Encoding playback with FlacEncoder");
                 let mut hint = Hint::new();
                 hint.with_extension("flac");
                 signal_chain = signal_chain
@@ -1332,8 +1435,8 @@ async fn track_to_playable_file(
             }
             #[cfg(feature = "mp3")]
             AudioFormat::Mp3 => {
-                log::debug!("Encoding playback with Mp3Encoder");
                 use moosicbox_audio_output::encoder::mp3::Mp3Encoder;
+                log::debug!("Encoding playback with Mp3Encoder");
                 let mut hint = Hint::new();
                 hint.with_extension("mp3");
                 signal_chain = signal_chain
@@ -1342,8 +1445,8 @@ async fn track_to_playable_file(
             }
             #[cfg(feature = "opus")]
             AudioFormat::Opus => {
-                log::debug!("Encoding playback with OpusEncoder");
                 use moosicbox_audio_output::encoder::opus::OpusEncoder;
+                log::debug!("Encoding playback with OpusEncoder");
                 let mut hint = Hint::new();
                 hint.with_extension("opus");
                 signal_chain = signal_chain
@@ -1391,7 +1494,7 @@ async fn track_to_playable_file(
     };
 
     Ok(PlayableTrack {
-        track_id: track.id.to_owned(),
+        track_id: track.id.clone(),
         source,
         hint,
     })
@@ -1475,7 +1578,7 @@ async fn track_or_id_to_playable(
 ) -> Result<PlayableTrack, PlayerError> {
     log::trace!("track_or_id_to_playable playback_type={playback_type:?} track={track:?} quality={quality:?}");
     Ok(match (playback_type, track.api_source) {
-        (PlaybackType::File, ApiSource::Library) | (PlaybackType::Default, ApiSource::Library) => {
+        (PlaybackType::File | PlaybackType::Default, ApiSource::Library) => {
             track_to_playable_file(track, quality).await?
         }
         _ => track_to_playable_stream(track, quality, player_source, abort).await?,
@@ -1504,7 +1607,7 @@ async fn handle_retry<
             }
             Err(e) => {
                 let e = e.into();
-                if let PlayerError::Cancelled = e {
+                if matches!(e, PlayerError::Cancelled) {
                     log::debug!("Action cancelled");
                     return Err(e);
                 }
@@ -1523,15 +1626,18 @@ async fn handle_retry<
                         retry_options.max_attempts
                     );
                     continue;
-                } else {
-                    log::debug!("No retry options");
-                    break Err(e);
                 }
+
+                log::debug!("No retry options");
+                break Err(e);
             }
         }
     }
 }
 
+/// # Panics
+///
+/// * If the `PLAYBACK_EVENT_LISTENERS` `RwLock` is poisoned
 pub fn send_playback_event(update: &UpdateSession, playback: &Playback) {
     for listener in PLAYBACK_EVENT_LISTENERS.read().unwrap().iter() {
         listener(update, playback);

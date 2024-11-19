@@ -1,13 +1,15 @@
+#![allow(clippy::module_name_repetitions)]
+
 use std::sync::{atomic::AtomicBool, Arc, Mutex, RwLock};
 
 use async_trait::async_trait;
 use flume::Receiver;
 use moosicbox_audio_decoder::{AudioDecodeError, AudioDecodeHandler};
 use moosicbox_audio_output::{AudioOutput, AudioOutputFactory};
-use moosicbox_core::sqlite::models::{ToApi as _, TrackApiSource};
+use moosicbox_core::sqlite::models::{ToApi, TrackApiSource};
 use moosicbox_session::models::UpdateSession;
 use rand::{thread_rng, Rng as _};
-use symphonia::core::io::MediaSourceStream;
+use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
@@ -36,7 +38,7 @@ impl std::fmt::Debug for LocalPlayer {
             .field("output", &self.output)
             .field("receiver", &self.receiver)
             .field("playback", &self.playback)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -60,6 +62,7 @@ impl Player for LocalPlayer {
         Ok(())
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn trigger_play(&self, seek: Option<f64>) -> Result<(), PlayerError> {
         let Some(playback) = self.playback.read().unwrap().clone() else {
             return Err(PlayerError::NoPlayersPlaying);
@@ -87,7 +90,8 @@ impl Player for LocalPlayer {
             playback.abort.clone(),
         )
         .await?;
-        let mss = MediaSourceStream::new(playable_track.source, Default::default());
+        let mss =
+            MediaSourceStream::new(playable_track.source, MediaSourceStreamOptions::default());
 
         let active_playback = self.playback.clone();
         let sent_playback_start_event = AtomicBool::new(false);
@@ -107,7 +111,7 @@ impl Player for LocalPlayer {
                         if let Some(tb) = track.codec_params.time_base {
                             let ts = packet.ts();
                             let t = tb.calc_time(ts);
-                            let secs = f64::from(t.seconds as u32) + t.frac;
+                            let secs = f64::from(u32::try_from(t.seconds).unwrap()) + t.frac;
 
                             let mut binding = active_playback.write().unwrap();
                             if let Some(playback) = binding.as_mut() {
@@ -163,7 +167,7 @@ impl Player for LocalPlayer {
 
                     Ok(Box::new(output))
                 }))
-                .with_cancellation_token(playback.abort.clone());
+                .with_cancellation_token(playback.abort);
 
             moosicbox_assert::assert_or_err!(
                 audio_decode_handler.contains_outputs_to_open(),
@@ -207,7 +211,8 @@ impl Player for LocalPlayer {
             playback.abort.cancel();
 
             log::trace!("Waiting for playback completion response");
-            if let Some(receiver) = self.receiver.write().await.take() {
+            let receiver = self.receiver.write().await.take();
+            if let Some(receiver) = receiver {
                 tokio::select! {
                     resp = receiver.recv_async() => {
                         match resp {
@@ -219,7 +224,7 @@ impl Player for LocalPlayer {
                             }
                         }
                     }
-                    _ = tokio::time::sleep(std::time::Duration::from_millis(5000)) => {
+                    () = tokio::time::sleep(std::time::Duration::from_millis(5000)) => {
                         log::error!("Playback timed out waiting for abort completion");
                     }
                 }
@@ -246,7 +251,8 @@ impl Player for LocalPlayer {
             playback.abort.cancel();
 
             log::trace!("Waiting for playback completion response");
-            if let Some(receiver) = self.receiver.write().await.take() {
+            let receiver = self.receiver.write().await.take();
+            if let Some(receiver) = receiver {
                 if let Err(err) = receiver.recv_async().await {
                     log::trace!("Sender correlated with receiver has dropped: {err:?}");
                 }
@@ -305,7 +311,7 @@ impl Player for LocalPlayer {
                 .read()
                 .unwrap()
                 .clone()
-                .map(|x| x.to_api()),
+                .map(ToApi::to_api),
         })
     }
 
@@ -315,6 +321,9 @@ impl Player for LocalPlayer {
 }
 
 impl LocalPlayer {
+    /// # Errors
+    ///
+    /// * If failed to generate a `LocalPlayer` `id`
     pub async fn new(
         source: PlayerSource,
         playback_type: Option<PlaybackType>,
@@ -333,6 +342,7 @@ impl LocalPlayer {
         })
     }
 
+    #[must_use]
     pub fn with_output(mut self, output: AudioOutputFactory) -> Self {
         self.output.replace(Arc::new(Mutex::new(output)));
         self

@@ -13,7 +13,8 @@ where
     for c in 0..channels {
         let src = input.chan_mut(c);
         for x in src {
-            let s: f32 = (((*x).into_sample() as f64) * volume) as f32;
+            #[allow(clippy::cast_possible_truncation)]
+            let s: f32 = (f64::from((*x).into_sample()) * volume) as f32;
             *x = s.into_sample();
         }
     }

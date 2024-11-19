@@ -2,7 +2,10 @@ use std::{fs::File, path::Path};
 
 use moosicbox_audio_decoder::{decode, AudioDecodeHandler, DecodeError};
 use symphonia::core::{
-    codecs::DecoderOptions, formats::FormatOptions, io::MediaSourceStream, meta::MetadataOptions,
+    codecs::DecoderOptions,
+    formats::FormatOptions,
+    io::{MediaSourceStream, MediaSourceStreamOptions},
+    meta::MetadataOptions,
     probe::Hint,
 };
 use thiserror::Error;
@@ -10,7 +13,7 @@ use tokio::task::JoinError;
 
 impl From<std::io::Error> for PlaybackError {
     fn from(err: std::io::Error) -> Self {
-        PlaybackError::Symphonia(symphonia::core::errors::Error::IoError(err))
+        Self::Symphonia(symphonia::core::errors::Error::IoError(err))
     }
 }
 
@@ -28,6 +31,10 @@ pub enum PlaybackError {
     InvalidSource,
 }
 
+/// # Errors
+///
+/// * If failed to play the file path
+/// * If the tokio task failed to join
 pub async fn play_file_path_str_async(
     path_str: &str,
     get_audio_output_handler: impl FnOnce() -> GetAudioDecodeHandlerRet + Send + 'static,
@@ -75,7 +82,7 @@ fn play_file_path_str(
     let source = Box::new(File::open(path)?);
 
     // Create the media source stream using the boxed media source from above.
-    let mss = MediaSourceStream::new(source, Default::default());
+    let mss = MediaSourceStream::new(source, MediaSourceStreamOptions::default());
 
     play_media_source(
         mss,
@@ -90,6 +97,10 @@ fn play_file_path_str(
 
 pub type GetAudioDecodeHandlerRet = Result<AudioDecodeHandler, PlaybackError>;
 
+/// # Errors
+///
+/// * If failed to play the `MediaSourceStream`
+/// * If the tokio task failed to join
 pub async fn play_media_source_async(
     media_source_stream: MediaSourceStream,
     hint: &Hint,
@@ -132,7 +143,7 @@ fn play_media_source(
     };
 
     // Use the default options for metadata readers.
-    let metadata_opts: MetadataOptions = Default::default();
+    let metadata_opts = MetadataOptions::default();
 
     // Probe the media source stream for metadata and get the format reader.
     match symphonia::default::get_probe().format(

@@ -8,7 +8,7 @@ use thiserror::Error;
 
 impl From<std::io::Error> for PlaybackError {
     fn from(err: std::io::Error) -> Self {
-        PlaybackError::Symphonia(symphonia::core::errors::Error::IoError(err))
+        Self::Symphonia(symphonia::core::errors::Error::IoError(err))
     }
 }
 
@@ -20,6 +20,10 @@ pub enum PlaybackError {
     Symphonia(#[from] symphonia::core::errors::Error),
 }
 
+/// # Errors
+///
+/// * If failed to play the `MediaSourceStream`
+/// * If failed to probe for the media metadata format
 #[allow(clippy::too_many_arguments)]
 pub fn play_media_source(
     media_source_stream: MediaSourceStream,
@@ -36,7 +40,7 @@ pub fn play_media_source(
     };
 
     // Use the default options for metadata readers.
-    let metadata_opts: MetadataOptions = Default::default();
+    let metadata_opts = MetadataOptions::default();
 
     // Probe the media source stream for metadata and get the format reader.
     match symphonia::default::get_probe().format(
