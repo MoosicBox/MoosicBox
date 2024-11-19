@@ -34,6 +34,9 @@ pub async fn on_profiles_updated_event<
         }));
 }
 
+/// # Errors
+///
+/// * If any of the event listeners fail
 pub async fn trigger_profiles_updated_event(
     added: Vec<String>,
     removed: Vec<String>,
@@ -41,16 +44,21 @@ pub async fn trigger_profiles_updated_event(
     send_profiles_updated_event(added, removed).await
 }
 
+/// # Errors
+///
+/// * If any of the event listeners fail
 pub async fn send_profiles_updated_event(
     added: Vec<String>,
     removed: Vec<String>,
 ) -> Result<(), Vec<Box<dyn std::error::Error + Send>>> {
     let mut errors = vec![];
-    for listener in PROFILES_UPDATED_EVENT_LISTENERS.read().await.iter() {
+    let listeners = PROFILES_UPDATED_EVENT_LISTENERS.read().await;
+    for listener in listeners.iter() {
         if let Err(e) = listener(&added, &removed).await {
             errors.push(e);
         }
     }
+    drop(listeners);
 
     if !errors.is_empty() {
         return Err(errors);
