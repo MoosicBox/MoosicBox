@@ -1,4 +1,6 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::type_complexity)]
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -20,22 +22,30 @@ use tokio::sync::{Mutex, RwLock};
 pub mod profiles;
 
 #[derive(Clone)]
-pub struct MusicApis(Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>>>);
+pub struct MusicApis<S: ::std::hash::BuildHasher + Clone = std::hash::RandomState>(
+    Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>, S>>,
+);
 
-impl From<&MusicApis> for Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>>> {
-    fn from(value: &MusicApis) -> Self {
+impl<S: ::std::hash::BuildHasher + Clone> From<&MusicApis<S>>
+    for Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>, S>>
+{
+    fn from(value: &MusicApis<S>) -> Self {
         value.0.clone()
     }
 }
 
-impl From<MusicApis> for Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>>> {
-    fn from(value: MusicApis) -> Self {
+impl<S: ::std::hash::BuildHasher + Clone> From<MusicApis<S>>
+    for Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>, S>>
+{
+    fn from(value: MusicApis<S>) -> Self {
         value.0
     }
 }
 
-impl From<Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>>>> for MusicApis {
-    fn from(value: Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>>>) -> Self {
+impl<S: ::std::hash::BuildHasher + Clone> From<Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>, S>>>
+    for MusicApis<S>
+{
+    fn from(value: Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>, S>>) -> Self {
         Self(value)
     }
 }
@@ -46,7 +56,7 @@ pub enum MusicApisError {
     NotFound(ApiSource),
 }
 
-impl SourceToMusicApi for MusicApis {
+impl<S: ::std::hash::BuildHasher + Clone> SourceToMusicApi for MusicApis<S> {
     fn get(&self, source: ApiSource) -> Result<Arc<Box<dyn MusicApi>>, MusicApisError> {
         let api = self
             .0
@@ -58,6 +68,9 @@ impl SourceToMusicApi for MusicApis {
 }
 
 pub trait SourceToMusicApi {
+    /// # Errors
+    ///
+    /// * If the `MusicApi` is not found
     fn get(&self, source: ApiSource) -> Result<Arc<Box<dyn MusicApi>>, MusicApisError>;
 }
 
@@ -157,17 +170,21 @@ pub enum TrackOrId {
 }
 
 impl TrackOrId {
+    /// # Errors
+    ///
+    /// * If failed to get the track from the `MusicApi`
     pub async fn track(self, api: &dyn MusicApi) -> Result<Option<Track>, TrackError> {
         Ok(match self {
-            TrackOrId::Track(track) => Some(*track),
-            TrackOrId::Id(id) => api.track(&id).await?,
+            Self::Track(track) => Some(*track),
+            Self::Id(id) => api.track(&id).await?,
         })
     }
 
-    pub fn id(&self) -> &Id {
+    #[must_use]
+    pub const fn id(&self) -> &Id {
         match self {
-            TrackOrId::Track(track) => &track.id,
-            TrackOrId::Id(id) => id,
+            Self::Track(track) => &track.id,
+            Self::Id(id) => id,
         }
     }
 }
@@ -231,11 +248,7 @@ pub trait MusicApi: Send + Sync {
         artist: &Artist,
         _size: ImageCoverSize,
     ) -> Result<Option<ImageCoverSource>, ArtistError> {
-        Ok(artist
-            .cover
-            .as_ref()
-            .cloned()
-            .map(ImageCoverSource::RemoteUrl))
+        Ok(artist.cover.clone().map(ImageCoverSource::RemoteUrl))
     }
 
     async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, AlbumsError>;
@@ -262,11 +275,7 @@ pub trait MusicApi: Send + Sync {
         album: &Album,
         _size: ImageCoverSize,
     ) -> Result<Option<ImageCoverSource>, AlbumError> {
-        Ok(album
-            .artwork
-            .as_ref()
-            .cloned()
-            .map(ImageCoverSource::RemoteUrl))
+        Ok(album.artwork.clone().map(ImageCoverSource::RemoteUrl))
     }
 
     async fn tracks(
@@ -326,7 +335,8 @@ impl<T: MusicApi> CachedMusicApi<T> {
         }
     }
 
-    pub fn with_cascade_delete(mut self, cascade_delete: bool) -> Self {
+    #[must_use]
+    pub const fn with_cascade_delete(mut self, cascade_delete: bool) -> Self {
         self.cascade_delete = cascade_delete;
         self
     }
@@ -368,7 +378,10 @@ impl<T: MusicApi> CachedMusicApi<T> {
         Self::cache_empty_values(&self.tracks, ids).await;
     }
 
-    async fn cache_empty_values<E>(cache: &RwLock<HashMap<Id, Option<E>>>, ids: &[&Id]) {
+    async fn cache_empty_values<E: Send + Sync>(
+        cache: &RwLock<HashMap<Id, Option<E>>>,
+        ids: &[&Id],
+    ) {
         let mut cache = cache.write().await;
         for id in ids {
             cache.insert((*id).to_owned(), None);
@@ -382,7 +395,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
     async fn cache_artists_inner(cache: &RwLock<HashMap<Id, Option<Artist>>>, artists: &[Artist]) {
         let mut cache = cache.write().await;
         for artist in artists {
-            cache.insert(artist.id.to_owned(), Some(artist.to_owned()));
+            cache.insert(artist.id.clone(), Some(artist.to_owned()));
         }
     }
 
@@ -393,7 +406,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
     async fn cache_albums_inner(cache: &RwLock<HashMap<Id, Option<Album>>>, albums: &[Album]) {
         let mut cache = cache.write().await;
         for album in albums {
-            cache.insert(album.id.to_owned(), Some(album.to_owned()));
+            cache.insert(album.id.clone(), Some(album.to_owned()));
         }
     }
 
@@ -404,12 +417,12 @@ impl<T: MusicApi> CachedMusicApi<T> {
     async fn cache_tracks_inner(cache: &RwLock<HashMap<Id, Option<Track>>>, tracks: &[Track]) {
         let mut cache = cache.write().await;
         for track in tracks {
-            cache.insert(track.id.to_owned(), Some(track.to_owned()));
+            cache.insert(track.id.clone(), Some(track.to_owned()));
         }
     }
 
     pub async fn remove_cache_artist_ids(&self, ids: &[&Id]) {
-        Self::remove_cache_ids(&mut *self.artists.write().await, ids).await;
+        Self::remove_cache_ids(&mut *self.artists.write().await, ids);
 
         if self.cascade_delete {
             self.remove_cache_albums_for_artist_ids(ids).await;
@@ -455,18 +468,18 @@ impl<T: MusicApi> CachedMusicApi<T> {
     }
 
     pub async fn remove_cache_album_ids(&self, ids: &[&Id]) {
-        Self::remove_cache_album_ids_inner(&mut *self.albums.write().await, ids).await;
+        Self::remove_cache_album_ids_inner(&mut *self.albums.write().await, ids);
     }
 
-    async fn remove_cache_album_ids_inner(albums: &mut HashMap<Id, Option<Album>>, ids: &[&Id]) {
-        Self::remove_cache_ids(albums, ids).await;
+    fn remove_cache_album_ids_inner(albums: &mut HashMap<Id, Option<Album>>, ids: &[&Id]) {
+        Self::remove_cache_ids(albums, ids);
     }
 
     pub async fn remove_cache_track_ids(&self, ids: &[&Id]) {
-        Self::remove_cache_ids(&mut *self.tracks.write().await, ids).await;
+        Self::remove_cache_ids(&mut *self.tracks.write().await, ids);
     }
 
-    async fn remove_cache_ids<E>(cache: &mut HashMap<Id, Option<E>>, ids: &[&Id]) {
+    fn remove_cache_ids<E>(cache: &mut HashMap<Id, Option<E>>, ids: &[&Id]) {
         for id in ids {
             cache.remove(*id);
         }
@@ -800,6 +813,7 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
 }
 
 #[cfg(test)]
+#[allow(clippy::module_name_repetitions)]
 mod test {
     use async_trait::async_trait;
     use moosicbox_music_api_models::{

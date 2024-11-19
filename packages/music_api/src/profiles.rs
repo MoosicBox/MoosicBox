@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use std::{
     collections::HashMap,
     sync::{Arc, LazyLock, RwLock},
@@ -7,22 +9,23 @@ use moosicbox_core::sqlite::models::ApiSource;
 
 use crate::{MusicApi, MusicApis};
 
-pub static PROFILES: LazyLock<MusicApisProfiles> = LazyLock::new(MusicApisProfiles::default);
+pub static PROFILES: LazyLock<MusicApisProfiles<std::hash::RandomState>> =
+    LazyLock::new(MusicApisProfiles::default);
 
 #[allow(clippy::module_name_repetitions)]
 #[derive(Default)]
-pub struct MusicApisProfiles {
-    profiles: Arc<RwLock<Vec<(String, MusicApis)>>>,
+pub struct MusicApisProfiles<S: ::std::hash::BuildHasher + Clone = std::hash::RandomState> {
+    profiles: Arc<RwLock<Vec<(String, MusicApis<S>)>>>,
 }
 
-impl MusicApisProfiles {
+impl<S: ::std::hash::BuildHasher + Clone> MusicApisProfiles<S> {
     /// # Panics
     ///
     /// Will panic if `RwLock` is poisoned
     pub fn add(
         &self,
         profile: String,
-        music_apis: Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>>>,
+        music_apis: Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>, S>>,
     ) {
         self.profiles
             .write()
@@ -45,8 +48,8 @@ impl MusicApisProfiles {
     pub fn fetch_add(
         &self,
         profile: &str,
-        music_apis: Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>>>,
-    ) -> MusicApis {
+        music_apis: Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>, S>>,
+    ) -> MusicApis<S> {
         self.add(profile.to_owned(), music_apis);
         self.get(profile).unwrap()
     }
@@ -55,10 +58,10 @@ impl MusicApisProfiles {
     ///
     /// Will panic if `RwLock` is poisoned
     #[must_use]
-    pub fn get(&self, profile: &str) -> Option<MusicApis> {
-        self.profiles.read().unwrap().iter().find_map(|(p, db)| {
+    pub fn get(&self, profile: &str) -> Option<MusicApis<S>> {
+        self.profiles.read().unwrap().iter().find_map(|(p, api)| {
             if p == profile {
-                Some(db.clone())
+                Some(api.clone())
             } else {
                 None
             }
