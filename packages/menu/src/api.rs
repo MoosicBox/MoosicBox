@@ -156,7 +156,7 @@ pub async fn get_artists_endpoint(
             .map(|sources| {
                 sources
                     .split(',')
-                    .map(|s| s.trim())
+                    .map(str::trim)
                     .map(|s| {
                         AlbumSource::from_str(s)
                             .map_err(|_e| ErrorBadRequest(format!("Invalid sort value: {s}")))
@@ -258,7 +258,7 @@ pub async fn get_albums_endpoint(
             .map(|sources| {
                 sources
                     .split(',')
-                    .map(|s| s.trim())
+                    .map(str::trim)
                     .map(|s| {
                         AlbumSource::from_str(s)
                             .map_err(|_e| ErrorBadRequest(format!("Invalid sort value: {s}")))
@@ -430,7 +430,7 @@ pub async fn get_album_versions_endpoint(
             .await
             .map_err(|_e| ErrorInternalServerError("Failed to fetch album versions"))?
             .into_iter()
-            .map(|t| t.to_api())
+            .map(ToApi::to_api)
             .collect(),
     ))
 }
@@ -584,7 +584,7 @@ pub async fn get_album_endpoint(
         get_album_from_source(&db, &id, source)
             .await
             .map_err(ErrorInternalServerError)?
-            .ok_or(ErrorNotFound("Album not found"))?
+            .ok_or_else(|| ErrorNotFound("Album not found"))?
             .into()
     } else {
         #[allow(unused)]
@@ -619,7 +619,7 @@ pub async fn get_album_endpoint(
             get_library_album(&db, &id, source)
                 .await
                 .map_err(ErrorInternalServerError)?
-                .ok_or(ErrorNotFound("Album not found"))?
+                .ok_or_else(|| ErrorNotFound("Album not found"))?
                 .into()
         }
     }))
@@ -653,6 +653,7 @@ pub struct AddAlbumQuery {
     )
 )]
 #[post("/album")]
+#[allow(clippy::future_not_send)]
 pub async fn add_album_endpoint(
     query: web::Query<AddAlbumQuery>,
     db: LibraryDatabase,
@@ -702,6 +703,7 @@ pub struct RemoveAlbumQuery {
     )
 )]
 #[delete("/album")]
+#[allow(clippy::future_not_send)]
 pub async fn remove_album_endpoint(
     query: web::Query<RemoveAlbumQuery>,
     db: LibraryDatabase,
@@ -751,6 +753,7 @@ pub struct ReFavoriteAlbumQuery {
     )
 )]
 #[post("/album/re-favorite")]
+#[allow(clippy::future_not_send)]
 pub async fn refavorite_album_endpoint(
     query: web::Query<ReFavoriteAlbumQuery>,
     db: LibraryDatabase,

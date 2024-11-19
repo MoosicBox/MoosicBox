@@ -4,7 +4,9 @@ use moosicbox_core::sqlite::{
     db::DbError,
     models::{Album, ApiSource, Artist, Id, Track, TrackApiSource},
 };
-use moosicbox_database::{profiles::LibraryDatabase, query::*, DatabaseError, DatabaseValue};
+use moosicbox_database::{
+    profiles::LibraryDatabase, query::FilterableQuery, DatabaseError, DatabaseValue,
+};
 use moosicbox_library::{
     db::{delete_track_sizes_by_track_id, delete_tracks},
     models::{track_source_to_u8, LibraryAlbum},
@@ -83,6 +85,9 @@ pub enum GetAlbumsError {
     ArtistAlbums(#[from] ArtistAlbumsError),
 }
 
+/// # Errors
+///
+/// * If the `MusicApi` fails to get the albums from the `ApiSource`
 pub async fn get_albums_from_source(
     db: &LibraryDatabase,
     api: &dyn MusicApi,
@@ -132,6 +137,9 @@ pub enum GetAlbumVersionsError {
     YtAlbumTracks(#[from] moosicbox_yt::YtAlbumTracksError),
 }
 
+/// # Errors
+///
+/// * If the `MusicApi` fails to get the album versions from the `ApiSource`
 pub async fn get_album_versions_from_source(
     #[allow(unused)] db: &LibraryDatabase,
     library_api: &LibraryMusicApi,
@@ -139,62 +147,61 @@ pub async fn get_album_versions_from_source(
     source: ApiSource,
 ) -> Result<Vec<AlbumVersion>, GetAlbumVersionsError> {
     #[allow(unreachable_code)]
-    Ok(match source {
-        ApiSource::Library => get_library_album_versions(library_api, album_id).await?,
-        #[allow(unreachable_patterns)]
-        _ => {
-            #[allow(unused)]
-            let tracks: Vec<Track> = match source {
+    Ok(if source == ApiSource::Library {
+        get_library_album_versions(library_api, album_id).await?
+    } else {
+        #[allow(unused)]
+        let tracks: Vec<Track> = match source {
+            ApiSource::Library => unreachable!(),
+            #[cfg(feature = "tidal")]
+            ApiSource::Tidal => {
+                moosicbox_tidal::album_tracks(db, album_id, None, None, None, None, None, None)
+                    .await?
+                    .into_items()
+                    .into_iter()
+                    .map(Into::into)
+                    .collect::<Vec<_>>()
+            }
+
+            #[cfg(feature = "qobuz")]
+            ApiSource::Qobuz => moosicbox_qobuz::album_tracks(db, album_id, None, None, None, None)
+                .await?
+                .into_items()
+                .into_iter()
+                .map(Into::into)
+                .collect::<Vec<_>>(),
+            #[cfg(feature = "yt")]
+            ApiSource::Yt => {
+                moosicbox_yt::album_tracks(db, album_id, None, None, None, None, None, None)
+                    .await?
+                    .into_items()
+                    .into_iter()
+                    .map(Into::into)
+                    .collect::<Vec<_>>()
+            }
+        };
+        vec![AlbumVersion {
+            tracks,
+            format: None,
+            bit_depth: None,
+            sample_rate: None,
+            channels: None,
+            source: match source {
                 ApiSource::Library => unreachable!(),
                 #[cfg(feature = "tidal")]
-                ApiSource::Tidal => {
-                    moosicbox_tidal::album_tracks(db, album_id, None, None, None, None, None, None)
-                        .await?
-                        .into_items()
-                        .into_iter()
-                        .map(Into::into)
-                        .collect::<Vec<_>>()
-                }
-
+                ApiSource::Tidal => TrackApiSource::Tidal,
                 #[cfg(feature = "qobuz")]
-                ApiSource::Qobuz => {
-                    moosicbox_qobuz::album_tracks(db, album_id, None, None, None, None)
-                        .await?
-                        .into_items()
-                        .into_iter()
-                        .map(Into::into)
-                        .collect::<Vec<_>>()
-                }
+                ApiSource::Qobuz => TrackApiSource::Qobuz,
                 #[cfg(feature = "yt")]
-                ApiSource::Yt => {
-                    moosicbox_yt::album_tracks(db, album_id, None, None, None, None, None, None)
-                        .await?
-                        .into_items()
-                        .into_iter()
-                        .map(Into::into)
-                        .collect::<Vec<_>>()
-                }
-            };
-            vec![AlbumVersion {
-                tracks,
-                format: None,
-                bit_depth: None,
-                sample_rate: None,
-                channels: None,
-                source: match source {
-                    ApiSource::Library => unreachable!(),
-                    #[cfg(feature = "tidal")]
-                    ApiSource::Tidal => TrackApiSource::Tidal,
-                    #[cfg(feature = "qobuz")]
-                    ApiSource::Qobuz => TrackApiSource::Qobuz,
-                    #[cfg(feature = "yt")]
-                    ApiSource::Yt => TrackApiSource::Yt,
-                },
-            }]
-        }
+                ApiSource::Yt => TrackApiSource::Yt,
+            },
+        }]
     })
 }
 
+/// # Errors
+///
+/// * If the `LibraryMusicApi` fails to get the album versions
 pub async fn get_library_album_versions(
     library_api: &LibraryMusicApi,
     album_id: &Id,
@@ -273,6 +280,9 @@ pub enum AddAlbumError {
     InvalidAlbumIdType,
 }
 
+/// # Errors
+///
+/// * If the `LibraryMusicApi` fails to add the album to the library
 pub async fn add_album(
     api: &dyn MusicApi,
     library_api: &LibraryMusicApi,
@@ -361,10 +371,12 @@ pub async fn add_album(
         .with_rest_of_items_in_batches()
         .await?;
 
+    drop(output);
+
     moosicbox_search::populate_global_search_index(
         &tracks
             .iter()
-            .map(|track| track.as_data_values())
+            .map(AsDataValues::as_data_values)
             .collect::<Vec<_>>(),
         false,
     )
@@ -402,6 +414,10 @@ pub enum RemoveAlbumError {
     InvalidAlbumIdType,
 }
 
+/// # Errors
+///
+/// * If the `LibraryMusicApi` fails to remove the album from the library
+#[allow(clippy::too_many_lines)]
 pub async fn remove_album(
     api: &dyn MusicApi,
     library_api: &LibraryMusicApi,
@@ -504,7 +520,7 @@ pub async fn remove_album(
     moosicbox_search::delete_from_global_search_index(
         &target_tracks
             .iter()
-            .map(|track| track.as_delete_term())
+            .map(AsDeleteTerm::as_delete_term)
             .collect::<Vec<_>>(),
     )?;
 
@@ -570,6 +586,9 @@ pub enum ReFavoriteAlbumError {
     InvalidAlbumIdType,
 }
 
+/// # Errors
+///
+/// * If the `LibraryMusicApi` fails to refavorite the album in the library
 pub async fn refavorite_album(
     api: &dyn MusicApi,
     library_api: &LibraryMusicApi,
@@ -617,6 +636,7 @@ pub async fn refavorite_album(
         )
     };
 
+    #[allow(clippy::suspicious_operation_groupings)]
     let new_album_id = api
         .artist_albums(&artist.id, None, None, None, None, None)
         .await?

@@ -27,6 +27,9 @@ pub enum GetArtistError {
     InvalidRequest,
 }
 
+/// # Errors
+///
+/// * If the `MusicApi` fails to get the artist
 #[allow(clippy::too_many_arguments)]
 pub async fn get_artist(
     api: &dyn MusicApi,
@@ -64,6 +67,9 @@ impl<T> From<PoisonError<T>> for GetAlbumError {
     }
 }
 
+/// # Errors
+///
+/// * If the `LibraryMusicApi` fails to get the album from the `ApiSource`
 pub async fn get_album_from_source(
     db: &LibraryDatabase,
     album_id: &Id,
@@ -104,6 +110,9 @@ pub async fn get_album_from_source(
     Ok(album)
 }
 
+/// # Errors
+///
+/// * If the `LibraryMusicApi` fails to get the `LibraryAlbum` from the `ApiSource`
 pub async fn get_library_album(
     db: &LibraryDatabase,
     album_id: &Id,
@@ -163,6 +172,13 @@ impl<T> From<PoisonError<T>> for GetAlbumsError {
     }
 }
 
+/// # Panics
+///
+/// * If fails to fetch the `LibraryAlbum`s from the cache
+///
+/// # Errors
+///
+/// * If fails to get the `LibraryAlbum`s from the cache or database
 pub async fn get_albums(db: &LibraryDatabase) -> Result<Arc<Vec<LibraryAlbum>>, GetAlbumsError> {
     let request = CacheRequest {
         key: "sqlite|local_albums",
@@ -198,6 +214,13 @@ impl<T> From<PoisonError<T>> for GetArtistAlbumsError {
     }
 }
 
+/// # Panics
+///
+/// * If fails to fetch the artist's `LibraryAlbum`s from the cache
+///
+/// # Errors
+///
+/// * If fails to get the artist's `LibraryAlbum`s from the cache or database
 pub async fn get_artist_albums(
     artist_id: &Id,
     db: &LibraryDatabase,

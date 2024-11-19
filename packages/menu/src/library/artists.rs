@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use moosicbox_core::sqlite::{
     db::DbError,
     models::{AlbumSource, ArtistSort},
@@ -22,6 +24,7 @@ pub struct ArtistFilters {
     pub search: Option<String>,
 }
 
+#[must_use]
 pub fn filter_artists(artists: Vec<LibraryArtist>, request: &ArtistsRequest) -> Vec<LibraryArtist> {
     artists
         .into_iter()
@@ -41,6 +44,7 @@ pub fn filter_artists(artists: Vec<LibraryArtist>, request: &ArtistsRequest) -> 
         .collect()
 }
 
+#[must_use]
 pub fn sort_artists(
     mut artists: Vec<LibraryArtist>,
     request: &ArtistsRequest,
@@ -52,10 +56,10 @@ pub fn sort_artists(
     }
     match request.sort {
         Some(ArtistSort::NameAsc) | None => {
-            artists.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
+            artists.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
         }
         Some(ArtistSort::NameDesc) => {
-            artists.sort_by(|a, b| b.title.to_lowercase().cmp(&a.title.to_lowercase()))
+            artists.sort_by(|a, b| b.title.to_lowercase().cmp(&a.title.to_lowercase()));
         }
     }
 
@@ -68,6 +72,9 @@ pub enum GetArtistsError {
     DbError(#[from] DbError),
 }
 
+/// # Errors
+///
+/// * If failed to get the artists from the database
 pub async fn get_all_artists(
     db: &LibraryDatabase,
     request: &ArtistsRequest,
