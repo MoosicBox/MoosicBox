@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 #[cfg(feature = "api")]
 pub mod api;
@@ -58,7 +59,7 @@ use crate::models::QobuzImage;
 static AUTH_HEADER_NAME: &str = "x-user-auth-token";
 static APP_ID_HEADER_NAME: &str = "x-app-id";
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum QobuzDeviceType {
@@ -75,12 +76,12 @@ static QOBUZ_API_BASE_URL: &str = "https://www.qobuz.com/api.json/0.2";
 static CLIENT: LazyLock<reqwest::Client> =
     LazyLock::new(|| reqwest::Client::builder().build().unwrap());
 
+#[must_use]
 pub fn format_title(title: &str, version: Option<&str>) -> String {
-    if let Some(version) = &version {
-        format!("{} - {version}", title)
-    } else {
-        title.to_string()
-    }
+    version.as_ref().map_or_else(
+        || title.to_string(),
+        |version| format!("{title} - {version}"),
+    )
 }
 
 #[derive(Clone)]
@@ -104,6 +105,7 @@ pub enum FetchCredentialsError {
     NoAccessTokenAvailable,
 }
 
+#[allow(clippy::unused_async)]
 async fn fetch_credentials(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     app_id: Option<String>,
@@ -114,7 +116,7 @@ async fn fetch_credentials(
         Ok(if let Some(access_token) = access_token {
             log::debug!("Using passed access_token");
             Some(Ok(QobuzCredentials {
-                access_token: access_token.to_string(),
+                access_token,
                 app_id: None,
                 username: None,
                 persist: false,
@@ -228,7 +230,7 @@ async fn authenticated_post_request(
         form.map(|values| {
             values
                 .iter()
-                .map(|(key, value)| (key.to_string(), value.to_string()))
+                .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
                 .collect::<Vec<_>>()
         }),
         1,
@@ -321,9 +323,7 @@ async fn authenticated_request_inner(
         401 => {
             log::debug!("Received unauthorized response");
 
-            let username = if let Some(ref username) = credentials.username {
-                username
-            } else {
+            let Some(username) = credentials.username else {
                 return Err(AuthenticatedRequestError::Unauthorized);
             };
 
@@ -338,7 +338,7 @@ async fn authenticated_request_inner(
                         #[cfg(feature = "db")]
                         db,
                         app_id,
-                        username,
+                        &username,
                         &credentials.access_token,
                         #[cfg(feature = "db")]
                         credentials.persist,
@@ -353,7 +353,7 @@ async fn authenticated_request_inner(
         }
         400..=599 => Err(AuthenticatedRequestError::RequestFailed(
             status,
-            response.text().await.unwrap_or("".to_string()),
+            response.text().await.unwrap_or_else(|_| String::new()),
         )),
         _ => match response.json::<Value>().await {
             Ok(value) => Ok(Some(value)),
@@ -492,7 +492,7 @@ macro_rules! qobuz_api_endpoint {
     };
 }
 
-#[derive(Default, Debug, Serialize, Deserialize, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Default, Debug, Serialize, Deserialize, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "camelCase")]
 #[strum(serialize_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -513,15 +513,14 @@ impl TryFrom<&str> for QobuzAlbumReleaseType {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Ok(match value {
-            "album" => QobuzAlbumReleaseType::Album,
-            "live" => QobuzAlbumReleaseType::Live,
-            "compilation" => QobuzAlbumReleaseType::Compilation,
-            "ep" => QobuzAlbumReleaseType::Ep,
-            "single" => QobuzAlbumReleaseType::Single,
-            "epmini" => QobuzAlbumReleaseType::EpSingle,
-            "epSingle" => QobuzAlbumReleaseType::EpSingle,
-            "other" => QobuzAlbumReleaseType::Other,
-            "download" => QobuzAlbumReleaseType::Download,
+            "album" => Self::Album,
+            "live" => Self::Live,
+            "compilation" => Self::Compilation,
+            "ep" => Self::Ep,
+            "single" => Self::Single,
+            "epmini" | "epSingle" => Self::EpSingle,
+            "other" => Self::Other,
+            "download" => Self::Download,
             _ => return Err(Self::Error::VariantNotFound),
         })
     }
@@ -568,7 +567,9 @@ impl ToValueType<QobuzAlbumReleaseType> for &Value {
     }
 }
 
-#[derive(Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(
+    Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy,
+)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum QobuzAlbumSort {
@@ -578,7 +579,9 @@ pub enum QobuzAlbumSort {
     ReleaseDateByPriority,
 }
 
-#[derive(Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(
+    Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy,
+)]
 #[serde(rename_all = "camelCase")]
 #[strum(serialize_all = "camelCase")]
 pub enum QobuzAlbumOrder {
@@ -615,6 +618,17 @@ pub enum QobuzUserLoginError {
     Unauthorized,
 }
 
+/// # Errors
+///
+/// * If the API request failed
+/// * If there is a database error while saving the configuration
+/// * If there is no access token available
+/// * If there is no app ID available
+/// * If failed to fetch the Qobuz login source
+/// * If failed to fetch the Qobuz app bundle
+/// * If failed to fetch the Qobuz app secrets
+/// * If failed to fetch the Qobuz app ID
+/// * If failed to parse the JSON response
 pub async fn user_login(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     username: &str,
@@ -656,10 +670,9 @@ pub async fn user_login(
             } else {
                 let login_source = fetch_login_source().await?;
                 let bundle_version = search_bundle_version(&login_source)
-                    .await
                     .ok_or(QobuzUserLoginError::FailedToFetchAppId)?;
                 let bundle = fetch_bundle_source(&bundle_version).await?;
-                let config = search_app_config(&bundle).await?;
+                let config = search_app_config(&bundle)?;
 
                 #[cfg(feature = "db")]
                 {
@@ -694,7 +707,7 @@ pub async fn user_login(
         log::error!(
             "Received unsuccessful response: error {}",
             response.status()
-        )
+        );
     }
 
     let value: Value = response.json().await?;
@@ -725,6 +738,17 @@ pub enum QobuzArtistError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the API request failed
+/// * If there is a database error while saving the configuration
+/// * If there is no access token available
+/// * If there is no app ID available
+/// * If failed to fetch the Qobuz login source
+/// * If failed to fetch the Qobuz app bundle
+/// * If failed to fetch the Qobuz app secrets
+/// * If failed to fetch the Qobuz app ID
+/// * If failed to parse the JSON response
 pub async fn artist(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     artist_id: &Id,
@@ -832,6 +856,17 @@ pub enum QobuzAddFavoriteArtistError {
     AuthenticatedRequest(#[from] AuthenticatedRequestError),
 }
 
+/// # Errors
+///
+/// * If the API request failed
+/// * If there is a database error while saving the configuration
+/// * If there is no access token available
+/// * If there is no app ID available
+/// * If failed to fetch the Qobuz login source
+/// * If failed to fetch the Qobuz app bundle
+/// * If failed to fetch the Qobuz app secrets
+/// * If failed to fetch the Qobuz app ID
+/// * If failed to parse the JSON response
 pub async fn add_favorite_artist(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     artist_id: &Id,
@@ -864,6 +899,17 @@ pub enum QobuzRemoveFavoriteArtistError {
     AuthenticatedRequest(#[from] AuthenticatedRequestError),
 }
 
+/// # Errors
+///
+/// * If the API request failed
+/// * If there is a database error while saving the configuration
+/// * If there is no access token available
+/// * If there is no app ID available
+/// * If failed to fetch the Qobuz login source
+/// * If failed to fetch the Qobuz app bundle
+/// * If failed to fetch the Qobuz app secrets
+/// * If failed to fetch the Qobuz app ID
+/// * If failed to parse the JSON response
 pub async fn remove_favorite_artist(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     artist_id: &Id,
@@ -991,6 +1037,17 @@ pub enum QobuzAlbumError {
     NotFound,
 }
 
+/// # Errors
+///
+/// * If the API request failed
+/// * If there is a database error while saving the configuration
+/// * If there is no access token available
+/// * If there is no app ID available
+/// * If failed to fetch the Qobuz login source
+/// * If failed to fetch the Qobuz app bundle
+/// * If failed to fetch the Qobuz app secrets
+/// * If failed to fetch the Qobuz app ID
+/// * If failed to parse the JSON response
 pub async fn album(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     album_id: &Id,
@@ -1068,12 +1125,23 @@ async fn request_favorite_albums(
     }
 }
 
+/// # Errors
+///
+/// * If the API request failed
+/// * If there is a database error while saving the configuration
+/// * If there is no access token available
+/// * If there is no app ID available
+/// * If failed to fetch the Qobuz login source
+/// * If failed to fetch the Qobuz app bundle
+/// * If failed to fetch the Qobuz app secrets
+/// * If failed to fetch the Qobuz app ID
+/// * If failed to parse the JSON response
 #[async_recursion]
 pub async fn favorite_albums(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     offset: Option<u32>,
     limit: Option<u32>,
-    _album_type: Option<QobuzAlbumReleaseType>,
+    #[allow(clippy::used_underscore_binding)] _album_type: Option<QobuzAlbumReleaseType>,
     access_token: Option<String>,
     app_id: Option<String>,
 ) -> PagingResult<QobuzAlbum, QobuzFavoriteAlbumsError> {
@@ -1130,6 +1198,17 @@ pub async fn favorite_albums(
     })
 }
 
+/// # Errors
+///
+/// * If the API request failed
+/// * If there is a database error while saving the configuration
+/// * If there is no access token available
+/// * If there is no app ID available
+/// * If failed to fetch the Qobuz login source
+/// * If failed to fetch the Qobuz app bundle
+/// * If failed to fetch the Qobuz app secrets
+/// * If failed to fetch the Qobuz app ID
+/// * If failed to parse the JSON response
 pub async fn all_favorite_albums(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     access_token: Option<String>,
@@ -1170,6 +1249,17 @@ pub enum QobuzAddFavoriteAlbumError {
     AuthenticatedRequest(#[from] AuthenticatedRequestError),
 }
 
+/// # Errors
+///
+/// * If the API request failed
+/// * If there is a database error while saving the configuration
+/// * If there is no access token available
+/// * If there is no app ID available
+/// * If failed to fetch the Qobuz login source
+/// * If failed to fetch the Qobuz app bundle
+/// * If failed to fetch the Qobuz app secrets
+/// * If failed to fetch the Qobuz app ID
+/// * If failed to parse the JSON response
 pub async fn add_favorite_album(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     album_id: &Id,
@@ -1198,6 +1288,17 @@ pub enum QobuzRemoveFavoriteAlbumError {
     AuthenticatedRequest(#[from] AuthenticatedRequestError),
 }
 
+/// # Errors
+///
+/// * If the API request failed
+/// * If there is a database error while saving the configuration
+/// * If there is no access token available
+/// * If there is no app ID available
+/// * If failed to fetch the Qobuz login source
+/// * If failed to fetch the Qobuz app bundle
+/// * If failed to fetch the Qobuz app secrets
+/// * If failed to fetch the Qobuz app ID
+/// * If failed to parse the JSON response
 pub async fn remove_favorite_album(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     album_id: &Id,
@@ -1332,6 +1433,17 @@ pub enum QobuzTrackError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the API request failed
+/// * If there is a database error while saving the configuration
+/// * If there is no access token available
+/// * If there is no app ID available
+/// * If failed to fetch the Qobuz login source
+/// * If failed to fetch the Qobuz app bundle
+/// * If failed to fetch the Qobuz app secrets
+/// * If failed to fetch the Qobuz app ID
+/// * If failed to parse the JSON response
 #[allow(clippy::too_many_arguments)]
 pub async fn track(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1436,6 +1548,17 @@ pub enum QobuzAddFavoriteTrackError {
     AuthenticatedRequest(#[from] AuthenticatedRequestError),
 }
 
+/// # Errors
+///
+/// * If the API request failed
+/// * If there is a database error while saving the configuration
+/// * If there is no access token available
+/// * If there is no app ID available
+/// * If failed to fetch the Qobuz login source
+/// * If failed to fetch the Qobuz app bundle
+/// * If failed to fetch the Qobuz app secrets
+/// * If failed to fetch the Qobuz app ID
+/// * If failed to parse the JSON response
 pub async fn add_favorite_track(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     track_id: &Id,
@@ -1464,6 +1587,17 @@ pub enum QobuzRemoveFavoriteTrackError {
     AuthenticatedRequest(#[from] AuthenticatedRequestError),
 }
 
+/// # Errors
+///
+/// * If the API request failed
+/// * If there is a database error while saving the configuration
+/// * If there is no access token available
+/// * If there is no app ID available
+/// * If failed to fetch the Qobuz login source
+/// * If failed to fetch the Qobuz app bundle
+/// * If failed to fetch the Qobuz app secrets
+/// * If failed to fetch the Qobuz app ID
+/// * If failed to parse the JSON response
 pub async fn remove_favorite_track(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     track_id: &Id,
@@ -1490,7 +1624,7 @@ pub async fn remove_favorite_track(
     Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -1502,12 +1636,12 @@ pub enum QobuzAudioQuality {
 }
 
 impl QobuzAudioQuality {
-    fn as_format_id(&self) -> u8 {
+    const fn as_format_id(self) -> u8 {
         match self {
-            QobuzAudioQuality::Low => 5,
-            QobuzAudioQuality::FlacLossless => 6,
-            QobuzAudioQuality::FlacHiRes => 7,
-            QobuzAudioQuality::FlacHighestRes => 27,
+            Self::Low => 5,
+            Self::FlacLossless => 6,
+            Self::FlacHiRes => 7,
+            Self::FlacHighestRes => 27,
         }
     }
 }
@@ -1515,10 +1649,10 @@ impl QobuzAudioQuality {
 impl From<TrackAudioQuality> for QobuzAudioQuality {
     fn from(value: TrackAudioQuality) -> Self {
         match value {
-            TrackAudioQuality::Low => QobuzAudioQuality::Low,
-            TrackAudioQuality::FlacLossless => QobuzAudioQuality::FlacLossless,
-            TrackAudioQuality::FlacHiRes => QobuzAudioQuality::FlacHiRes,
-            TrackAudioQuality::FlacHighestRes => QobuzAudioQuality::FlacHighestRes,
+            TrackAudioQuality::Low => Self::Low,
+            TrackAudioQuality::FlacLossless => Self::FlacLossless,
+            TrackAudioQuality::FlacHiRes => Self::FlacHiRes,
+            TrackAudioQuality::FlacHighestRes => Self::FlacHighestRes,
         }
     }
 }
@@ -1539,6 +1673,21 @@ pub enum QobuzTrackFileUrlError {
     Parse(#[from] ParseError),
 }
 
+/// # Panics
+///
+/// * If time went backwards
+///
+/// # Errors
+///
+/// * If the API request failed
+/// * If there is a database error while saving the configuration
+/// * If there is no access token available
+/// * If there is no app ID available
+/// * If failed to fetch the Qobuz login source
+/// * If failed to fetch the Qobuz app bundle
+/// * If failed to fetch the Qobuz app secrets
+/// * If failed to fetch the Qobuz app ID
+/// * If failed to parse the JSON response
 #[allow(clippy::too_many_arguments)]
 pub async fn track_file_url(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1549,18 +1698,17 @@ pub async fn track_file_url(
     app_secret: Option<String>,
 ) -> Result<String, QobuzTrackFileUrlError> {
     #[cfg(feature = "db")]
-    let app_secret = match app_secret {
-        Some(app_secret) => app_secret,
-        _ => {
-            let app_secrets = db::get_qobuz_app_secrets(db).await?;
-            let app_secrets = app_secrets
-                .iter()
-                .find(|secret| secret.timezone == "berlin")
-                .or_else(|| app_secrets.first())
-                .ok_or(QobuzTrackFileUrlError::NoAppSecretAvailable)?;
+    let app_secret = if let Some(app_secret) = app_secret {
+        app_secret
+    } else {
+        let app_secrets = db::get_qobuz_app_secrets(db).await?;
+        let app_secrets = app_secrets
+            .iter()
+            .find(|secret| secret.timezone == "berlin")
+            .or_else(|| app_secrets.first())
+            .ok_or(QobuzTrackFileUrlError::NoAppSecretAvailable)?;
 
-            app_secrets.secret.clone()
-        }
+        app_secrets.secret.clone()
     };
 
     #[cfg(not(feature = "db"))]
@@ -1620,6 +1768,17 @@ pub enum QobuzSearchError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the API request failed
+/// * If there is a database error while saving the configuration
+/// * If there is no access token available
+/// * If there is no app ID available
+/// * If failed to fetch the Qobuz login source
+/// * If failed to fetch the Qobuz app bundle
+/// * If failed to fetch the Qobuz app secrets
+/// * If failed to fetch the Qobuz app ID
+/// * If failed to parse the JSON response
 #[allow(clippy::too_many_arguments)]
 pub async fn search(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1670,7 +1829,7 @@ async fn fetch_login_source() -> Result<String, QobuzFetchLoginSourceError> {
 }
 
 #[allow(unused)]
-async fn search_bundle_version(login_source: &str) -> Option<String> {
+fn search_bundle_version(login_source: &str) -> Option<String> {
     static BUNDLE_ID_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
         regex::Regex::new(
             r#"<script src="/resources/(\d+\.\d+\.\d+-[a-z]\d{3})/bundle\.js"></script>"#,
@@ -1739,9 +1898,13 @@ pub(crate) struct AppConfig {
 }
 
 #[allow(unused)]
-pub(crate) async fn search_app_config(
-    bundle: &str,
-) -> Result<AppConfig, QobuzFetchAppSecretsError> {
+pub(crate) fn search_app_config(bundle: &str) -> Result<AppConfig, QobuzFetchAppSecretsError> {
+    static SEED_AND_TIMEZONE_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r#"[a-z]\.initialSeed\("([\w=]+)",window\.utimezone\.(.+?)\)"#).unwrap()
+    });
+    static INFO_AND_EXTRAS_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r#"name:"\w+/([^"]+)",info:"([\w=]+)",extras:"([\w=]+)""#).unwrap()
+    });
     static APP_ID_REGEX: LazyLock<regex::Regex> =
         LazyLock::new(|| regex::Regex::new(r#"production:\{api:\{appId:"([^"]+)""#).unwrap());
 
@@ -1758,10 +1921,6 @@ pub(crate) async fn search_app_config(
     };
 
     let mut seed_timezones = vec![];
-
-    static SEED_AND_TIMEZONE_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
-        regex::Regex::new(r#"[a-z]\.initialSeed\("([\w=]+)",window\.utimezone\.(.+?)\)"#).unwrap()
-    });
 
     for caps in SEED_AND_TIMEZONE_REGEX.captures_iter(bundle) {
         let seed = if let Some(seed) = caps.get(1) {
@@ -1787,10 +1946,6 @@ pub(crate) async fn search_app_config(
     };
 
     let mut name_info_extras = vec![];
-
-    static INFO_AND_EXTRAS_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
-        regex::Regex::new(r#"name:"\w+/([^"]+)",info:"([\w=]+)",extras:"([\w=]+)""#).unwrap()
-    });
 
     for caps in INFO_AND_EXTRAS_REGEX.captures_iter(bundle) {
         let name = if let Some(name) = caps.get(1) {
@@ -1846,91 +2001,91 @@ pub(crate) async fn search_app_config(
 
 impl From<QobuzFavoriteArtistsError> for ArtistsError {
     fn from(err: QobuzFavoriteArtistsError) -> Self {
-        ArtistsError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<QobuzArtistError> for ArtistError {
     fn from(err: QobuzArtistError) -> Self {
-        ArtistError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<QobuzAddFavoriteArtistError> for AddArtistError {
     fn from(err: QobuzAddFavoriteArtistError) -> Self {
-        AddArtistError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<QobuzRemoveFavoriteArtistError> for RemoveArtistError {
     fn from(err: QobuzRemoveFavoriteArtistError) -> Self {
-        RemoveArtistError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<QobuzFavoriteAlbumsError> for AlbumsError {
     fn from(err: QobuzFavoriteAlbumsError) -> Self {
-        AlbumsError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<QobuzAlbumError> for AlbumError {
     fn from(err: QobuzAlbumError) -> Self {
-        AlbumError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<QobuzArtistAlbumsError> for ArtistAlbumsError {
     fn from(err: QobuzArtistAlbumsError) -> Self {
-        ArtistAlbumsError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<QobuzAddFavoriteAlbumError> for AddAlbumError {
     fn from(err: QobuzAddFavoriteAlbumError) -> Self {
-        AddAlbumError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<QobuzRemoveFavoriteAlbumError> for RemoveAlbumError {
     fn from(err: QobuzRemoveFavoriteAlbumError) -> Self {
-        RemoveAlbumError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<QobuzFavoriteTracksError> for TracksError {
     fn from(err: QobuzFavoriteTracksError) -> Self {
-        TracksError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<QobuzAlbumTracksError> for TracksError {
     fn from(err: QobuzAlbumTracksError) -> Self {
-        TracksError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<QobuzTrackError> for TrackError {
     fn from(err: QobuzTrackError) -> Self {
-        TrackError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<QobuzTrackFileUrlError> for TrackError {
     fn from(err: QobuzTrackFileUrlError) -> Self {
-        TrackError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<QobuzAddFavoriteTrackError> for AddTrackError {
     fn from(err: QobuzAddFavoriteTrackError) -> Self {
-        AddTrackError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<QobuzRemoveFavoriteTrackError> for RemoveTrackError {
     fn from(err: QobuzRemoveFavoriteTrackError) -> Self {
-        RemoveTrackError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
@@ -1941,12 +2096,14 @@ pub struct QobuzMusicApi {
 
 impl QobuzMusicApi {
     #[cfg(not(feature = "db"))]
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {}
     }
 
     #[cfg(feature = "db")]
-    pub fn new(db: LibraryDatabase) -> Self {
+    #[must_use]
+    pub const fn new(db: LibraryDatabase) -> Self {
         Self { db }
     }
 }
@@ -2228,9 +2385,9 @@ impl MusicApi for QobuzMusicApi {
         Ok(PagingResponse {
             page: Page::WithTotal {
                 items: all_tracks.into_iter().map(Into::into).collect(),
-                offset: offset as u32,
-                limit: limit as u32,
-                total: track_ids.len() as u32,
+                offset: u32::try_from(offset).unwrap(),
+                limit: u32::try_from(limit).unwrap(),
+                total: u32::try_from(track_ids.len()).unwrap(),
             },
             fetch: Arc::new(Mutex::new(Box::new(move |_offset, _count| {
                 Box::pin(async move { unimplemented!("Fetching tracks is not implemented") })
@@ -2317,7 +2474,7 @@ impl MusicApi for QobuzMusicApi {
             .map(|track| TrackSource::RemoteUrl {
                 url,
                 format: track.format.unwrap_or(AudioFormat::Source),
-                track_id: Some(track.id.to_owned()),
+                track_id: Some(track.id.clone()),
                 source: track.track_source,
             }))
     }
@@ -2358,18 +2515,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_search_bundle_version() {
-        let version = search_bundle_version(TEST_LOGIN_SOURCE)
-            .await
-            .expect("Failed to search_bundle_version");
+        let version =
+            search_bundle_version(TEST_LOGIN_SOURCE).expect("Failed to search_bundle_version");
 
         assert_eq!(version, "7.1.3-b011");
     }
 
     #[tokio::test]
     async fn test_search_app_config() {
-        let secrets = search_app_config(TEST_BUNDLE_SOURCE)
-            .await
-            .expect("Failed to search_app_config");
+        let secrets = search_app_config(TEST_BUNDLE_SOURCE).expect("Failed to search_app_config");
 
         assert_eq!(
             secrets,

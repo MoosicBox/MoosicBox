@@ -18,7 +18,7 @@ use serde_json::Value;
 
 use crate::{format_title, QobuzAlbumReleaseType};
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzImage {
     pub thumbnail: Option<String>,
@@ -42,11 +42,11 @@ pub enum QobuzImageSize {
 impl From<ImageCoverSize> for QobuzImageSize {
     fn from(value: ImageCoverSize) -> Self {
         match value {
-            ImageCoverSize::Max => QobuzImageSize::Mega,
-            ImageCoverSize::Large => QobuzImageSize::Large,
-            ImageCoverSize::Medium => QobuzImageSize::Medium,
-            ImageCoverSize::Small => QobuzImageSize::Small,
-            ImageCoverSize::Thumbnail => QobuzImageSize::Thumbnail,
+            ImageCoverSize::Max => Self::Mega,
+            ImageCoverSize::Large => Self::Large,
+            ImageCoverSize::Medium => Self::Medium,
+            ImageCoverSize::Small => Self::Small,
+            ImageCoverSize::Thumbnail => Self::Thumbnail,
         }
     }
 }
@@ -67,12 +67,12 @@ impl From<QobuzImageSize> for u16 {
 impl From<u16> for QobuzImageSize {
     fn from(value: u16) -> Self {
         match value {
-            0..=100 => QobuzImageSize::Thumbnail,
-            101..=300 => QobuzImageSize::Small,
-            301..=600 => QobuzImageSize::Medium,
-            601..=1200 => QobuzImageSize::Large,
-            1201..=2400 => QobuzImageSize::ExtraLarge,
-            _ => QobuzImageSize::Mega,
+            0..=100 => Self::Thumbnail,
+            101..=300 => Self::Small,
+            301..=600 => Self::Medium,
+            601..=1200 => Self::Large,
+            1201..=2400 => Self::ExtraLarge,
+            _ => Self::Mega,
         }
     }
 }
@@ -84,64 +84,66 @@ impl Display for QobuzImageSize {
 }
 
 impl QobuzImage {
+    #[must_use]
     pub fn cover_url(&self) -> Option<String> {
         self.cover_url_for_size(QobuzImageSize::Mega)
     }
 
+    #[must_use]
     pub fn cover_url_for_size(&self, size: QobuzImageSize) -> Option<String> {
         match size {
             QobuzImageSize::Thumbnail => self
                 .thumbnail
                 .clone()
-                .or(self.small.clone())
-                .or(self.medium.clone())
-                .or(self.large.clone())
-                .or(self.extralarge.clone())
-                .or(self.mega.clone()),
+                .or_else(|| self.small.clone())
+                .or_else(|| self.medium.clone())
+                .or_else(|| self.large.clone())
+                .or_else(|| self.extralarge.clone())
+                .or_else(|| self.mega.clone()),
 
             QobuzImageSize::Small => self
                 .small
                 .clone()
-                .or(self.medium.clone())
-                .or(self.large.clone())
-                .or(self.extralarge.clone())
-                .or(self.mega.clone())
-                .or(self.thumbnail.clone()),
+                .or_else(|| self.medium.clone())
+                .or_else(|| self.large.clone())
+                .or_else(|| self.extralarge.clone())
+                .or_else(|| self.mega.clone())
+                .or_else(|| self.thumbnail.clone()),
             QobuzImageSize::Medium => self
                 .medium
                 .clone()
-                .or(self.large.clone())
-                .or(self.extralarge.clone())
-                .or(self.mega.clone())
-                .or(self.small.clone())
-                .or(self.thumbnail.clone()),
+                .or_else(|| self.large.clone())
+                .or_else(|| self.extralarge.clone())
+                .or_else(|| self.mega.clone())
+                .or_else(|| self.small.clone())
+                .or_else(|| self.thumbnail.clone()),
 
             QobuzImageSize::Large => self
                 .large
                 .clone()
-                .or(self.extralarge.clone())
-                .or(self.mega.clone())
-                .or(self.medium.clone())
-                .or(self.small.clone())
-                .or(self.thumbnail.clone()),
+                .or_else(|| self.extralarge.clone())
+                .or_else(|| self.mega.clone())
+                .or_else(|| self.medium.clone())
+                .or_else(|| self.small.clone())
+                .or_else(|| self.thumbnail.clone()),
 
             QobuzImageSize::ExtraLarge => self
                 .extralarge
                 .clone()
-                .or(self.mega.clone())
-                .or(self.large.clone())
-                .or(self.medium.clone())
-                .or(self.small.clone())
-                .or(self.thumbnail.clone()),
+                .or_else(|| self.mega.clone())
+                .or_else(|| self.large.clone())
+                .or_else(|| self.medium.clone())
+                .or_else(|| self.small.clone())
+                .or_else(|| self.thumbnail.clone()),
 
             QobuzImageSize::Mega => self
                 .mega
                 .clone()
-                .or(self.extralarge.clone())
-                .or(self.large.clone())
-                .or(self.medium.clone())
-                .or(self.small.clone())
-                .or(self.thumbnail.clone()),
+                .or_else(|| self.extralarge.clone())
+                .or_else(|| self.large.clone())
+                .or_else(|| self.medium.clone())
+                .or_else(|| self.small.clone())
+                .or_else(|| self.thumbnail.clone()),
         }
     }
 }
@@ -165,7 +167,7 @@ impl AsModelResult<QobuzImage, ParseError> for Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzGenre {
     pub id: u64,
@@ -286,8 +288,8 @@ impl From<Album> for QobuzAlbum {
             tracks_count: 0,
             genre: QobuzGenre {
                 id: 0,
-                name: "".to_string(),
-                slug: "".to_string(),
+                name: String::new(),
+                slug: String::new(),
             },
             maximum_channel_count: 0,
             maximum_sampling_rate: 0.0,
@@ -296,8 +298,9 @@ impl From<Album> for QobuzAlbum {
 }
 
 impl QobuzAlbum {
+    #[must_use]
     pub fn cover_url(&self) -> Option<String> {
-        self.image.as_ref().and_then(|image| image.cover_url())
+        self.image.as_ref().and_then(QobuzImage::cover_url)
     }
 }
 
@@ -307,7 +310,8 @@ impl ToValueType<QobuzAlbum> for &Value {
     }
 }
 
-pub fn magic_qobuz_album_release_type_determinizer(
+#[must_use]
+pub const fn magic_qobuz_album_release_type_determinizer(
     duration: u32,
     tracks_count: u32,
 ) -> QobuzAlbumReleaseType {
@@ -383,8 +387,9 @@ pub struct QobuzRelease {
 }
 
 impl QobuzRelease {
+    #[must_use]
     pub fn cover_url(&self) -> Option<String> {
-        self.image.as_ref().and_then(|image| image.cover_url())
+        self.image.as_ref().and_then(QobuzImage::cover_url)
     }
 }
 
@@ -423,7 +428,7 @@ impl AsModelResult<QobuzRelease, ParseError> for Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct QobuzTrack {
     pub id: u64,
@@ -449,7 +454,7 @@ impl From<QobuzTrack> for Track {
             id: value.id.into(),
             number: value.track_number,
             title: format_title(value.title.as_str(), value.version.as_deref()),
-            duration: value.duration as f64,
+            duration: f64::from(value.duration),
             album: value.album,
             album_id: value.album_id.into(),
             album_type: value.album_type.into(),
@@ -497,8 +502,9 @@ impl From<QobuzTrack> for ApiGlobalSearchResult {
 }
 
 impl QobuzTrack {
+    #[must_use]
     pub fn cover_url(&self) -> Option<String> {
-        self.image.as_ref().and_then(|image| image.cover_url())
+        self.image.as_ref().and_then(QobuzImage::cover_url)
     }
 }
 
@@ -509,6 +515,9 @@ impl ToValueType<QobuzTrack> for &Value {
 }
 
 impl QobuzTrack {
+    /// # Errors
+    ///
+    /// * If failed to parse the properties into a `QobuzTrack`
     #[allow(clippy::too_many_arguments)]
     pub fn from_value(
         value: &Value,
@@ -519,8 +528,8 @@ impl QobuzTrack {
         album_type: QobuzAlbumReleaseType,
         album_version: Option<&str>,
         image: Option<QobuzImage>,
-    ) -> Result<QobuzTrack, ParseError> {
-        Ok(QobuzTrack {
+    ) -> Result<Self, ParseError> {
+        Ok(Self {
             id: value.to_value("id")?,
             track_number: value.to_value("track_number")?,
             artist: artist.to_string(),
@@ -566,7 +575,7 @@ impl AsModelResult<QobuzTrack, ParseError> for Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzArtist {
     pub id: u64,
@@ -611,8 +620,9 @@ impl From<QobuzArtist> for ApiGlobalSearchResult {
 }
 
 impl QobuzArtist {
+    #[must_use]
     pub fn cover_url(&self) -> Option<String> {
-        self.image.clone().and_then(|image| image.cover_url())
+        self.image.as_ref().and_then(QobuzImage::cover_url)
     }
 }
 
@@ -634,7 +644,7 @@ impl AsModelResult<QobuzArtist, ParseError> for Value {
 
 impl From<QobuzRelease> for QobuzAlbum {
     fn from(value: QobuzRelease) -> Self {
-        QobuzAlbum {
+        Self {
             id: value.id,
             artist: value.artist,
             artist_id: value.artist_id,
@@ -685,8 +695,8 @@ where
 
 impl<T> AsModelResult<QobuzSearchResultList<T>, ParseError> for Value
 where
-    for<'a> &'a Value: ToValueType<T>,
-    for<'a> &'a Value: ToValueType<usize>,
+    for<'a> &'a Self: ToValueType<T>,
+    for<'a> &'a Self: ToValueType<usize>,
 {
     fn as_model(&self) -> Result<QobuzSearchResultList<T>, ParseError> {
         Ok(QobuzSearchResultList {

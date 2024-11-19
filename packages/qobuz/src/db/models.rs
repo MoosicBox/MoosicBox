@@ -7,7 +7,7 @@ use moosicbox_json_utils::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzAppSecret {
     pub id: u32,
@@ -41,7 +41,7 @@ impl ToValueType<QobuzAppSecret> for &Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzAppConfig {
     pub id: u32,
@@ -75,7 +75,7 @@ impl ToValueType<QobuzAppConfig> for &Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzConfig {
     pub id: u32,

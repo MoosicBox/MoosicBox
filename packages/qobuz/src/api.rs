@@ -1,3 +1,5 @@
+#![allow(clippy::future_not_send, clippy::module_name_repetitions)]
+
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
     error::{ErrorInternalServerError, ErrorUnauthorized},
@@ -141,7 +143,7 @@ pub async fn user_login_endpoint(
     ))
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiQobuzAlbum {
@@ -158,7 +160,7 @@ pub struct ApiQobuzAlbum {
     pub api_source: ApiSource,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiQobuzRelease {
@@ -228,7 +230,7 @@ impl ToApi<ApiTrack> for QobuzTrack {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiQobuzTrack {
     pub id: u64,
@@ -252,7 +254,7 @@ impl From<ApiQobuzTrack> for moosicbox_core::sqlite::models::ApiTrack {
             track_id: value.id.into(),
             number: value.number,
             title: value.title,
-            duration: value.duration as f64,
+            duration: f64::from(value.duration),
             album: value.album,
             album_id: value.album_id.into(),
             album_type: value.album_type.into(),
@@ -275,7 +277,7 @@ impl From<ApiQobuzTrack> for moosicbox_core::sqlite::models::ApiTrack {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiQobuzArtist {
@@ -459,7 +461,7 @@ impl From<QobuzArtistAlbumsError> for actix_web::Error {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -475,17 +477,17 @@ pub enum AlbumReleaseType {
 impl From<AlbumReleaseType> for QobuzAlbumReleaseType {
     fn from(value: AlbumReleaseType) -> Self {
         match value {
-            AlbumReleaseType::Lp => QobuzAlbumReleaseType::Album,
-            AlbumReleaseType::Live => QobuzAlbumReleaseType::Live,
-            AlbumReleaseType::Compilations => QobuzAlbumReleaseType::Compilation,
-            AlbumReleaseType::EpsAndSingles => QobuzAlbumReleaseType::EpSingle,
-            AlbumReleaseType::Other => QobuzAlbumReleaseType::Other,
-            AlbumReleaseType::Download => QobuzAlbumReleaseType::Download,
+            AlbumReleaseType::Lp => Self::Album,
+            AlbumReleaseType::Live => Self::Live,
+            AlbumReleaseType::Compilations => Self::Compilation,
+            AlbumReleaseType::EpsAndSingles => Self::EpSingle,
+            AlbumReleaseType::Other => Self::Other,
+            AlbumReleaseType::Download => Self::Download,
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -498,14 +500,16 @@ pub enum AlbumSort {
 impl From<AlbumSort> for QobuzAlbumSort {
     fn from(value: AlbumSort) -> Self {
         match value {
-            AlbumSort::ReleaseDate => QobuzAlbumSort::ReleaseDate,
-            AlbumSort::Relevant => QobuzAlbumSort::Relevant,
-            AlbumSort::ReleaseDateByPriority => QobuzAlbumSort::ReleaseDateByPriority,
+            AlbumSort::ReleaseDate => Self::ReleaseDate,
+            AlbumSort::Relevant => Self::Relevant,
+            AlbumSort::ReleaseDateByPriority => Self::ReleaseDateByPriority,
         }
     }
 }
 
-#[derive(Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(
+    Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy,
+)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -518,8 +522,8 @@ pub enum AlbumOrder {
 impl From<AlbumOrder> for QobuzAlbumOrder {
     fn from(value: AlbumOrder) -> Self {
         match value {
-            AlbumOrder::Asc => QobuzAlbumOrder::Asc,
-            AlbumOrder::Desc => QobuzAlbumOrder::Desc,
+            AlbumOrder::Asc => Self::Asc,
+            AlbumOrder::Desc => Self::Desc,
         }
     }
 }

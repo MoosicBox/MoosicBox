@@ -1,5 +1,5 @@
 use moosicbox_core::sqlite::db::DbError;
-use moosicbox_database::{profiles::LibraryDatabase, query::*};
+use moosicbox_database::{profiles::LibraryDatabase, query::FilterableQuery};
 use moosicbox_json_utils::ToValueType;
 
 pub mod models;
@@ -8,6 +8,9 @@ use crate::db::models::QobuzConfig;
 
 use self::models::{QobuzAppConfig, QobuzAppSecret};
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn create_qobuz_app_secret(
     db: &LibraryDatabase,
     qobuz_bundle_id: u32,
@@ -26,6 +29,9 @@ pub async fn create_qobuz_app_secret(
     Ok(())
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn create_qobuz_app_config(
     db: &LibraryDatabase,
     bundle_version: &str,
@@ -41,6 +47,9 @@ pub async fn create_qobuz_app_config(
         .to_value_type()?)
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn create_qobuz_config(
     db: &LibraryDatabase,
     access_token: &str,
@@ -60,6 +69,9 @@ pub async fn create_qobuz_config(
     Ok(())
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn get_qobuz_app_secrets(db: &LibraryDatabase) -> Result<Vec<QobuzAppSecret>, DbError> {
     Ok(db
         .select("qobuz_bundle_secrets")
@@ -68,6 +80,9 @@ pub async fn get_qobuz_app_secrets(db: &LibraryDatabase) -> Result<Vec<QobuzAppS
         .to_value_type()?)
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn get_qobuz_app_config(db: &LibraryDatabase) -> Result<Option<QobuzAppConfig>, DbError> {
     let app_configs = db
         .select("qobuz_bundles")
@@ -78,6 +93,9 @@ pub async fn get_qobuz_app_config(db: &LibraryDatabase) -> Result<Option<QobuzAp
     Ok(app_configs.last().cloned())
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn get_qobuz_config(db: &LibraryDatabase) -> Result<Option<QobuzConfig>, DbError> {
     let configs = db
         .select("qobuz_config")
@@ -88,6 +106,9 @@ pub async fn get_qobuz_config(db: &LibraryDatabase) -> Result<Option<QobuzConfig
     Ok(configs.last().cloned())
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn get_qobuz_access_token(db: &LibraryDatabase) -> Result<Option<String>, DbError> {
-    Ok(get_qobuz_config(db).await?.map(|c| c.access_token.clone()))
+    Ok(get_qobuz_config(db).await?.map(|c| c.access_token))
 }
