@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use async_trait::async_trait;
 use moosicbox_core::{
@@ -35,6 +36,7 @@ pub struct RemoteLibraryMusicApi {
 }
 
 impl RemoteLibraryMusicApi {
+    #[must_use]
     pub fn new(host: String, api_source: ApiSource) -> Self {
         let client = Client::new();
 
