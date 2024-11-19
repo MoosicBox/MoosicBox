@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use moosicbox_core::sqlite::models::ToApi;
 use std::{ops::Deref, pin::Pin, sync::Arc};
@@ -57,14 +58,14 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for Page<T> {
         let extended: Extended<T> = Extended::deserialize(deserializer)?;
 
         Ok(if let Some(total) = extended.total {
-            Page::WithTotal {
+            Self::WithTotal {
                 offset: extended.offset,
                 limit: extended.limit,
                 total,
                 items: extended.items,
             }
         } else {
-            Page::WithHasMore {
+            Self::WithHasMore {
                 offset: extended.offset,
                 limit: extended.limit,
                 has_more: extended.has_more,
@@ -80,7 +81,7 @@ impl<T: Serialize> Serialize for Page<T> {
         S: serde::Serializer,
     {
         match self {
-            Page::WithTotal {
+            Self::WithTotal {
                 items,
                 offset,
                 limit,
@@ -101,12 +102,12 @@ impl<T: Serialize> Serialize for Page<T> {
                     offset,
                     limit,
                     total,
-                    has_more: (items.len() as u32) + offset < *total,
+                    has_more: u32::try_from(items.len()).unwrap() + offset < *total,
                 };
 
                 Ok(ext.serialize(serializer)?)
             }
-            Page::WithHasMore {
+            Self::WithHasMore {
                 items,
                 offset,
                 limit,
@@ -133,20 +134,24 @@ impl<T: Serialize> Serialize for Page<T> {
 }
 
 impl<T> Page<T> {
-    pub fn offset(&self) -> u32 {
+    #[must_use]
+    pub const fn offset(&self) -> u32 {
         match self {
-            Self::WithTotal { offset, .. } => *offset,
-            Self::WithHasMore { offset, .. } => *offset,
+            Self::WithTotal { offset, .. } | Self::WithHasMore { offset, .. } => *offset,
         }
     }
 
-    pub fn limit(&self) -> u32 {
+    #[must_use]
+    pub const fn limit(&self) -> u32 {
         match self {
-            Self::WithTotal { limit, .. } => *limit,
-            Self::WithHasMore { limit, .. } => *limit,
+            Self::WithTotal { limit, .. } | Self::WithHasMore { limit, .. } => *limit,
         }
     }
 
+    /// # Panics
+    ///
+    /// * If the `items.len()` cannot be converted to a `u32`
+    #[must_use]
     pub fn has_more(&self) -> bool {
         match self {
             Self::WithTotal {
@@ -154,19 +159,21 @@ impl<T> Page<T> {
                 offset,
                 total,
                 ..
-            } => *offset + (items.len() as u32) < *total,
+            } => *offset + u32::try_from(items.len()).unwrap() < *total,
             Self::WithHasMore { has_more, .. } => *has_more,
         }
     }
 
-    pub fn total(&self) -> Option<u32> {
+    #[must_use]
+    pub const fn total(&self) -> Option<u32> {
         match self {
             Self::WithTotal { total, .. } => Some(*total),
             Self::WithHasMore { .. } => None,
         }
     }
 
-    pub fn remaining(&self) -> Option<u32> {
+    #[must_use]
+    pub const fn remaining(&self) -> Option<u32> {
         match self {
             Self::WithTotal {
                 total,
@@ -178,17 +185,17 @@ impl<T> Page<T> {
         }
     }
 
+    #[must_use]
     pub fn items(&self) -> &[T] {
         match self {
-            Self::WithTotal { items, .. } => items,
-            Self::WithHasMore { items, .. } => items,
+            Self::WithTotal { items, .. } | Self::WithHasMore { items, .. } => items,
         }
     }
 
+    #[must_use]
     pub fn into_items(self) -> Vec<T> {
         match self {
-            Self::WithTotal { items, .. } => items,
-            Self::WithHasMore { items, .. } => items,
+            Self::WithTotal { items, .. } | Self::WithHasMore { items, .. } => items,
         }
     }
 
@@ -198,7 +205,7 @@ impl<T> Page<T> {
         T: 'static,
     {
         match self {
-            Page::WithTotal {
+            Self::WithTotal {
                 items,
                 offset,
                 limit,
@@ -209,7 +216,7 @@ impl<T> Page<T> {
                 limit,
                 total,
             },
-            Page::WithHasMore {
+            Self::WithHasMore {
                 items,
                 offset,
                 limit,
@@ -225,11 +232,10 @@ impl<T> Page<T> {
 
     pub fn into<TU>(self) -> Page<TU>
     where
-        T: 'static,
-        T: Into<TU>,
+        T: Into<TU> + 'static,
     {
         match self {
-            Page::WithTotal {
+            Self::WithTotal {
                 items,
                 offset,
                 limit,
@@ -240,7 +246,7 @@ impl<T> Page<T> {
                 limit,
                 total,
             },
-            Page::WithHasMore {
+            Self::WithHasMore {
                 items,
                 offset,
                 limit,
@@ -270,7 +276,10 @@ pub struct PagingResponse<T, E> {
     pub fetch: Arc<Mutex<FetchPagingResponse<T, E>>>,
 }
 
-impl<T, E> PagingResponse<T, E> {
+impl<T: Send, E: Send> PagingResponse<T, E> {
+    /// # Errors
+    ///
+    /// * If failed to fetch any of the subsequent `Page`s
     pub async fn rest_of_pages_in_batches(self) -> Result<Vec<Page<T>>, E> {
         self.rest_of_pages_in_batches_inner(false).await
     }
@@ -317,28 +326,40 @@ impl<T, E> PagingResponse<T, E> {
         Ok(responses)
     }
 
+    /// # Errors
+    ///
+    /// * If failed to fetch any of the subsequent `Page`s
     pub async fn rest_of_items_in_batches(self) -> Result<Vec<T>, E> {
         Ok(self
             .rest_of_pages_in_batches()
             .await?
             .into_iter()
-            .flat_map(|response| response.into_items())
+            .flat_map(Page::into_items)
             .collect::<Vec<_>>())
     }
 
+    /// # Errors
+    ///
+    /// * If failed to fetch any of the subsequent `Page`s
     pub async fn with_rest_of_pages_in_batches(self) -> Result<Vec<Page<T>>, E> {
         self.rest_of_pages_in_batches_inner(true).await
     }
 
+    /// # Errors
+    ///
+    /// * If failed to fetch any of the subsequent `Page`s
     pub async fn with_rest_of_items_in_batches(self) -> Result<Vec<T>, E> {
         Ok(self
             .with_rest_of_pages_in_batches()
             .await?
             .into_iter()
-            .flat_map(|response| response.into_items())
+            .flat_map(Page::into_items)
             .collect::<Vec<_>>())
     }
 
+    /// # Errors
+    ///
+    /// * If failed to fetch any of the subsequent `Page`s
     pub async fn rest_of_pages(self) -> Result<Vec<Page<T>>, E> {
         self.rest_of_pages_inner(false).await
     }
@@ -371,48 +392,63 @@ impl<T, E> PagingResponse<T, E> {
         Ok(responses)
     }
 
+    /// # Errors
+    ///
+    /// * If failed to fetch any of the subsequent `Page`s
     pub async fn rest_of_items(self) -> Result<Vec<T>, E> {
         Ok(self
             .rest_of_pages()
             .await?
             .into_iter()
-            .flat_map(|response| response.into_items())
+            .flat_map(Page::into_items)
             .collect::<Vec<_>>())
     }
 
+    /// # Errors
+    ///
+    /// * If failed to fetch any of the subsequent `Page`s
     pub async fn with_rest_of_pages(self) -> Result<Vec<Page<T>>, E> {
         self.rest_of_pages_inner(true).await
     }
 
+    /// # Errors
+    ///
+    /// * If failed to fetch any of the subsequent `Page`s
     pub async fn with_rest_of_items(self) -> Result<Vec<T>, E> {
         Ok(self
             .with_rest_of_pages()
             .await?
             .into_iter()
-            .flat_map(|response| response.into_items())
+            .flat_map(Page::into_items)
             .collect::<Vec<_>>())
     }
 
-    pub fn offset(&self) -> u32 {
+    #[must_use]
+    pub const fn offset(&self) -> u32 {
         self.page.offset()
     }
 
-    pub fn limit(&self) -> u32 {
+    #[must_use]
+    pub const fn limit(&self) -> u32 {
         self.page.limit()
     }
 
+    #[must_use]
     pub fn has_more(&self) -> bool {
         self.page.has_more()
     }
 
-    pub fn total(&self) -> Option<u32> {
+    #[must_use]
+    pub const fn total(&self) -> Option<u32> {
         self.page.total()
     }
 
+    #[must_use]
     pub fn items(&self) -> &[T] {
         self.page.items()
     }
 
+    #[must_use]
     pub fn into_items(self) -> Vec<T> {
         self.page.into_items()
     }
@@ -475,12 +511,11 @@ impl<T, E> PagingResponse<T, E> {
         }
     }
 
-    pub fn inner_into<TU: 'static, EU: 'static>(self) -> PagingResponse<TU, EU>
+    #[must_use]
+    pub fn inner_into<TU: Send + 'static, EU: Send + 'static>(self) -> PagingResponse<TU, EU>
     where
-        T: 'static,
-        E: 'static,
-        T: Into<TU>,
-        E: Into<EU>,
+        T: Into<TU> + Send + 'static,
+        E: Into<EU> + Send + 'static,
     {
         let page = self.page.into();
 
@@ -504,11 +539,11 @@ impl<T, E> PagingResponse<T, E> {
         }
     }
 
-    pub fn ok_into<TU: 'static>(self) -> PagingResponse<TU, E>
+    #[must_use]
+    pub fn ok_into<TU: Send + 'static>(self) -> PagingResponse<TU, E>
     where
-        T: 'static,
-        E: 'static,
-        T: Into<TU>,
+        T: Into<TU> + Send + 'static,
+        E: Send + 'static,
     {
         let page = self.page.into();
 
@@ -529,11 +564,11 @@ impl<T, E> PagingResponse<T, E> {
         }
     }
 
+    #[must_use]
     pub fn err_into<EU: 'static>(self) -> PagingResponse<T, EU>
     where
-        T: 'static,
-        E: 'static,
-        E: Into<EU>,
+        T: Send + 'static,
+        E: Into<EU> + Send + 'static,
     {
         let page = self.page;
 
@@ -571,8 +606,7 @@ impl<T> Deref for Page<T> {
 
     fn deref(&self) -> &Self::Target {
         match self {
-            Self::WithTotal { items, .. } => items,
-            Self::WithHasMore { items, .. } => items,
+            Self::WithTotal { items, .. } | Self::WithHasMore { items, .. } => items,
         }
     }
 }
@@ -586,19 +620,18 @@ impl<T, E> From<PagingResponse<T, E>> for Page<T> {
 impl<T> From<Page<T>> for Vec<T> {
     fn from(value: Page<T>) -> Self {
         match value {
-            Page::WithTotal { items, .. } => items,
-            Page::WithHasMore { items, .. } => items,
+            Page::WithTotal { items, .. } | Page::WithHasMore { items, .. } => items,
         }
     }
 }
 
-impl<In, Out, E> ToApi<PagingResponse<Out, E>> for PagingResponse<In, E>
+impl<In, Out: Send + 'static, E> ToApi<PagingResponse<Out, E>> for PagingResponse<In, E>
 where
-    In: ToApi<Out> + 'static,
-    E: 'static,
+    In: Send + ToApi<Out> + 'static,
+    E: Send + 'static,
 {
     fn to_api(self) -> PagingResponse<Out, E> {
-        self.map(|item| item.to_api())
+        self.map(ToApi::to_api)
     }
 }
 
