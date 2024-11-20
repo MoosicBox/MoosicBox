@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions, clippy::future_not_send)]
+
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
     error::{ErrorInternalServerError, ErrorNotFound, ErrorUnauthorized},
@@ -97,7 +99,7 @@ pub fn bind_services<
 )]
 pub struct Api;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiYtAlbum {
     pub id: String,
@@ -141,7 +143,7 @@ impl ToApi<ApiTrack> for YtTrack {
             isrc: self.isrc.clone(),
             popularity: self.popularity,
             title: self.title.clone(),
-            media_metadata_tags: self.media_metadata_tags.clone(),
+            media_metadata_tags: self.media_metadata_tags,
             api_source: ApiSource::Yt,
         })
     }
@@ -154,7 +156,7 @@ impl From<ApiTrack> for moosicbox_core::sqlite::models::ApiTrack {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiYtTrack {
     pub id: String,
@@ -182,7 +184,7 @@ impl From<ApiYtTrack> for moosicbox_core::sqlite::models::ApiTrack {
             track_id: value.id.clone().into(),
             number: value.number,
             title: value.title,
-            duration: value.duration as f64,
+            duration: f64::from(value.duration),
             album: value.album,
             album_id: value.album_id.into(),
             album_type: value.album_type.into(),
@@ -205,7 +207,7 @@ impl From<ApiYtTrack> for moosicbox_core::sqlite::models::ApiTrack {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiYtArtist {
     pub id: String,
@@ -1071,9 +1073,9 @@ pub enum AlbumType {
 impl From<AlbumType> for YtAlbumType {
     fn from(value: AlbumType) -> Self {
         match value {
-            AlbumType::Lp => YtAlbumType::Lp,
-            AlbumType::EpsAndSingles => YtAlbumType::EpsAndSingles,
-            AlbumType::Compilations => YtAlbumType::Compilations,
+            AlbumType::Lp => Self::Lp,
+            AlbumType::EpsAndSingles => Self::EpsAndSingles,
+            AlbumType::Compilations => Self::Compilations,
         }
     }
 }

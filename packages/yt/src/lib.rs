@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 #[cfg(feature = "api")]
 pub mod api;
@@ -44,7 +45,7 @@ use thiserror::Error;
 use tokio::sync::Mutex;
 use url::form_urlencoded;
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -85,6 +86,7 @@ static YT_API_BASE_URL: &str = "https://music.youtube.com/youtubei/v1";
 
 impl ToUrl for YtApiEndpoint {
     fn to_url(&self) -> String {
+        #[allow(clippy::match_same_arms)]
         match self {
             Self::DeviceAuthorization => {
                 format!("{YT_API_BASE_URL}/")
@@ -168,6 +170,10 @@ pub enum YtDeviceAuthorizationError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
 pub async fn device_authorization(
     client_id: String,
     open: bool,
@@ -188,7 +194,7 @@ pub async fn device_authorization(
 
     if open {
         match open::that(&url) {
-            Ok(_) => {
+            Ok(()) => {
                 log::debug!("Opened url in default browser");
             }
             Err(err) => {
@@ -236,7 +242,7 @@ async fn post_request(
         form.map(|values| {
             values
                 .iter()
-                .map(|(key, value)| (key.to_string(), value.to_string()))
+                .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
                 .collect::<Vec<_>>()
         }),
         1,
@@ -291,7 +297,7 @@ async fn request_inner(
         }
         400..=599 => Err(RequestError::RequestFailed(
             status,
-            response.text().await.unwrap_or("".to_string()),
+            response.text().await.unwrap_or_default(),
         )),
         _ => match response.json::<Value>().await {
             Ok(value) => Ok(Some(value)),
@@ -317,6 +323,15 @@ pub enum YtDeviceAuthorizationTokenError {
     Parse(#[from] ParseError),
 }
 
+/// # Panics
+///
+/// * If failed to serialize user `Value` to string
+///
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 pub async fn device_authorization_token(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     client_id: String,
@@ -391,6 +406,7 @@ pub enum FetchCredentialsError {
     NoAccessTokenAvailable,
 }
 
+#[allow(clippy::unused_async)]
 async fn fetch_credentials(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     access_token: Option<String>,
@@ -400,7 +416,7 @@ async fn fetch_credentials(
         Ok(if let Some(access_token) = access_token {
             log::debug!("Using passed access_token");
             Some(Ok(YtCredentials {
-                access_token: access_token.to_string(),
+                access_token,
                 client_id: None,
                 refresh_token: None,
                 persist: false,
@@ -495,7 +511,7 @@ async fn authenticated_post_request(
         form.map(|values| {
             values
                 .iter()
-                .map(|(key, value)| (key.to_string(), value.to_string()))
+                .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
                 .collect::<Vec<_>>()
         }),
         1,
@@ -521,7 +537,7 @@ async fn authenticated_delete_request(
     .await
 }
 
-#[derive(Copy, Debug, EnumString, AsRefStr, PartialEq, Clone)]
+#[derive(Copy, Debug, EnumString, AsRefStr, PartialEq, Eq, Clone)]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 enum Method {
     Get,
@@ -610,14 +626,14 @@ async fn authenticated_request_inner(
                     attempt + 1,
                 )
                 .await;
-            } else {
-                log::debug!("No client_id or refresh_token available. Unauthorized");
-                Err(AuthenticatedRequestError::Unauthorized)
             }
+
+            log::debug!("No client_id or refresh_token available. Unauthorized");
+            Err(AuthenticatedRequestError::Unauthorized)
         }
         400..=599 => Err(AuthenticatedRequestError::RequestFailed(
             status,
-            response.text().await.unwrap_or("".to_string()),
+            response.text().await.unwrap_or_default(),
         )),
         _ => match response.json::<Value>().await {
             Ok(value) => Ok(Some(value)),
@@ -690,7 +706,7 @@ async fn refetch_access_token(
     Ok(access_token.to_string())
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -698,7 +714,7 @@ pub enum YtArtistOrder {
     Date,
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -761,8 +777,11 @@ pub async fn favorite_artists(
                     .unwrap_or(YtArtistOrderDirection::Desc)
                     .as_ref(),
             ),
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(YtDeviceType::Browser).as_ref(),
@@ -839,6 +858,11 @@ pub enum YtAddFavoriteArtistError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_artist(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -865,8 +889,11 @@ pub async fn add_favorite_artist(
         AddFavoriteArtist,
         &[(":userId", &user_id.to_string())],
         &[
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(YtDeviceType::Browser).as_ref(),
@@ -901,6 +928,11 @@ pub enum YtRemoveFavoriteArtistError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_artist(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -930,8 +962,11 @@ pub async fn remove_favorite_artist(
             (":artistId", &artist_id.to_string())
         ],
         &[
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(YtDeviceType::Browser).as_ref(),
@@ -952,7 +987,7 @@ pub async fn remove_favorite_artist(
     Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -962,11 +997,11 @@ pub enum YtAlbumOrder {
 
 impl From<AlbumSort> for YtAlbumOrder {
     fn from(_value: AlbumSort) -> Self {
-        YtAlbumOrder::Date
+        Self::Date
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -978,14 +1013,14 @@ pub enum YtAlbumOrderDirection {
 impl From<AlbumSort> for YtAlbumOrderDirection {
     fn from(value: AlbumSort) -> Self {
         match value {
-            AlbumSort::ArtistAsc => YtAlbumOrderDirection::Asc,
-            AlbumSort::ArtistDesc => YtAlbumOrderDirection::Desc,
-            AlbumSort::NameAsc => YtAlbumOrderDirection::Asc,
-            AlbumSort::NameDesc => YtAlbumOrderDirection::Desc,
-            AlbumSort::ReleaseDateAsc => YtAlbumOrderDirection::Asc,
-            AlbumSort::ReleaseDateDesc => YtAlbumOrderDirection::Desc,
-            AlbumSort::DateAddedAsc => YtAlbumOrderDirection::Asc,
-            AlbumSort::DateAddedDesc => YtAlbumOrderDirection::Desc,
+            AlbumSort::ArtistAsc
+            | AlbumSort::NameAsc
+            | AlbumSort::ReleaseDateAsc
+            | AlbumSort::DateAddedAsc => Self::Asc,
+            AlbumSort::ArtistDesc
+            | AlbumSort::NameDesc
+            | AlbumSort::ReleaseDateDesc
+            | AlbumSort::DateAddedDesc => Self::Desc,
         }
     }
 }
@@ -1044,8 +1079,11 @@ pub async fn favorite_albums(
                     .unwrap_or(YtAlbumOrderDirection::Desc)
                     .as_ref(),
             ),
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(YtDeviceType::Browser).as_ref(),
@@ -1110,6 +1148,11 @@ pub async fn favorite_albums(
     })
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 pub async fn all_favorite_albums(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1144,7 +1187,7 @@ pub async fn all_favorite_albums(
 
         all_albums.extend_from_slice(&albums);
 
-        if albums.is_empty() || all_albums.len() == (albums.has_more() as usize) {
+        if albums.is_empty() || all_albums.len() == usize::from(albums.has_more()) {
             break;
         }
 
@@ -1166,6 +1209,11 @@ pub enum YtAddFavoriteAlbumError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_album(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1192,8 +1240,11 @@ pub async fn add_favorite_album(
         AddFavoriteAlbum,
         &[(":userId", &user_id.to_string())],
         &[
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(YtDeviceType::Browser).as_ref(),
@@ -1228,6 +1279,11 @@ pub enum YtRemoveFavoriteAlbumError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_album(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1257,8 +1313,11 @@ pub async fn remove_favorite_album(
             (":albumId", &album_id.to_string())
         ],
         &[
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(YtDeviceType::Browser).as_ref(),
@@ -1279,7 +1338,7 @@ pub async fn remove_favorite_album(
     Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -1287,7 +1346,7 @@ pub enum YtTrackOrder {
     Date,
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -1350,8 +1409,11 @@ pub async fn favorite_tracks(
                     .unwrap_or(YtTrackOrderDirection::Desc)
                     .as_ref(),
             ),
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(YtDeviceType::Browser).as_ref(),
@@ -1428,6 +1490,11 @@ pub enum YtAddFavoriteTrackError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_track(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1454,8 +1521,11 @@ pub async fn add_favorite_track(
         AddFavoriteTrack,
         &[(":userId", &user_id.to_string())],
         &[
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(YtDeviceType::Browser).as_ref(),
@@ -1490,6 +1560,11 @@ pub enum YtRemoveFavoriteTrackError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_track(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1519,8 +1594,11 @@ pub async fn remove_favorite_track(
             (":trackId", &track_id.to_string())
         ],
         &[
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(YtDeviceType::Browser).as_ref(),
@@ -1605,8 +1683,11 @@ pub async fn artist_albums(
     let mut query: Vec<(&str, String)> = vec![
         ("offset", offset.to_string()),
         ("limit", limit.to_string()),
-        ("countryCode", country_code.clone().unwrap_or("US".into())),
-        ("locale", locale.clone().unwrap_or("en_US".into())),
+        (
+            "countryCode",
+            country_code.clone().unwrap_or_else(|| "US".into()),
+        ),
+        ("locale", locale.clone().unwrap_or_else(|| "en_US".into())),
         (
             "deviceType",
             device_type
@@ -1719,8 +1800,11 @@ pub async fn album_tracks(
         &[
             ("offset", &offset.to_string()),
             ("limit", &limit.to_string()),
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(YtDeviceType::Browser).as_ref(),
@@ -1791,6 +1875,11 @@ pub enum YtAlbumError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 pub async fn album(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1804,8 +1893,11 @@ pub async fn album(
         Album,
         &[(":albumId", &album_id.to_string())],
         &[
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(YtDeviceType::Browser).as_ref(),
@@ -1832,6 +1924,11 @@ pub enum YtArtistError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 pub async fn artist(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1845,8 +1942,11 @@ pub async fn artist(
         Artist,
         &[(":artistId", &artist_id.to_string())],
         &[
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(YtDeviceType::Browser).as_ref(),
@@ -1875,6 +1975,11 @@ pub enum YtTrackError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 pub async fn track(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     track_id: &Id,
@@ -1887,8 +1992,11 @@ pub async fn track(
         Track,
         &[(":trackId", &track_id.to_string())],
         &[
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(YtDeviceType::Browser).as_ref(),
@@ -1919,6 +2027,11 @@ pub enum YtSearchError {
     EmptyResponse,
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 pub async fn search(
     query: &str,
@@ -1952,7 +2065,7 @@ pub async fn search(
     Ok(value.as_model()?)
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -1965,10 +2078,9 @@ pub enum YtAudioQuality {
 impl From<TrackAudioQuality> for YtAudioQuality {
     fn from(value: TrackAudioQuality) -> Self {
         match value {
-            TrackAudioQuality::Low => YtAudioQuality::High,
-            TrackAudioQuality::FlacLossless => YtAudioQuality::Lossless,
-            TrackAudioQuality::FlacHiRes => YtAudioQuality::HiResLossless,
-            TrackAudioQuality::FlacHighestRes => YtAudioQuality::HiResLossless,
+            TrackAudioQuality::Low => Self::High,
+            TrackAudioQuality::FlacLossless => Self::Lossless,
+            TrackAudioQuality::FlacHiRes | TrackAudioQuality::FlacHighestRes => Self::HiResLossless,
         }
     }
 }
@@ -1981,6 +2093,11 @@ pub enum YtTrackFileUrlError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 pub async fn track_file_url(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     audio_quality: YtAudioQuality,
@@ -2039,6 +2156,11 @@ pub enum YtTrackPlaybackInfoError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 pub async fn track_playback_info(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     audio_quality: YtAudioQuality,
@@ -2071,7 +2193,7 @@ pub async fn track_playback_info(
 impl From<ArtistOrder> for YtArtistOrder {
     fn from(value: ArtistOrder) -> Self {
         match value {
-            ArtistOrder::DateAdded => YtArtistOrder::Date,
+            ArtistOrder::DateAdded => Self::Date,
         }
     }
 }
@@ -2079,8 +2201,8 @@ impl From<ArtistOrder> for YtArtistOrder {
 impl From<ArtistOrderDirection> for YtArtistOrderDirection {
     fn from(value: ArtistOrderDirection) -> Self {
         match value {
-            ArtistOrderDirection::Ascending => YtArtistOrderDirection::Asc,
-            ArtistOrderDirection::Descending => YtArtistOrderDirection::Desc,
+            ArtistOrderDirection::Ascending => Self::Asc,
+            ArtistOrderDirection::Descending => Self::Desc,
         }
     }
 }
@@ -2088,7 +2210,7 @@ impl From<ArtistOrderDirection> for YtArtistOrderDirection {
 impl From<AlbumOrder> for YtAlbumOrder {
     fn from(value: AlbumOrder) -> Self {
         match value {
-            AlbumOrder::DateAdded => YtAlbumOrder::Date,
+            AlbumOrder::DateAdded => Self::Date,
         }
     }
 }
@@ -2096,8 +2218,8 @@ impl From<AlbumOrder> for YtAlbumOrder {
 impl From<AlbumOrderDirection> for YtAlbumOrderDirection {
     fn from(value: AlbumOrderDirection) -> Self {
         match value {
-            AlbumOrderDirection::Ascending => YtAlbumOrderDirection::Asc,
-            AlbumOrderDirection::Descending => YtAlbumOrderDirection::Desc,
+            AlbumOrderDirection::Ascending => Self::Asc,
+            AlbumOrderDirection::Descending => Self::Desc,
         }
     }
 }
@@ -2105,7 +2227,7 @@ impl From<AlbumOrderDirection> for YtAlbumOrderDirection {
 impl From<TrackOrder> for YtTrackOrder {
     fn from(value: TrackOrder) -> Self {
         match value {
-            TrackOrder::DateAdded => YtTrackOrder::Date,
+            TrackOrder::DateAdded => Self::Date,
         }
     }
 }
@@ -2113,8 +2235,8 @@ impl From<TrackOrder> for YtTrackOrder {
 impl From<TrackOrderDirection> for YtTrackOrderDirection {
     fn from(value: TrackOrderDirection) -> Self {
         match value {
-            TrackOrderDirection::Ascending => YtTrackOrderDirection::Asc,
-            TrackOrderDirection::Descending => YtTrackOrderDirection::Desc,
+            TrackOrderDirection::Ascending => Self::Asc,
+            TrackOrderDirection::Descending => Self::Desc,
         }
     }
 }
@@ -2130,9 +2252,9 @@ impl TryFrom<AlbumType> for YtAlbumType {
 
     fn try_from(value: AlbumType) -> Result<Self, Self::Error> {
         match value {
-            AlbumType::Lp => Ok(YtAlbumType::Lp),
-            AlbumType::Compilations => Ok(YtAlbumType::Compilations),
-            AlbumType::EpsAndSingles => Ok(YtAlbumType::EpsAndSingles),
+            AlbumType::Lp => Ok(Self::Lp),
+            AlbumType::Compilations => Ok(Self::Compilations),
+            AlbumType::EpsAndSingles => Ok(Self::EpsAndSingles),
             _ => Err(TryFromAlbumTypeError::UnsupportedAlbumType),
         }
     }
@@ -2140,97 +2262,97 @@ impl TryFrom<AlbumType> for YtAlbumType {
 
 impl From<YtFavoriteArtistsError> for ArtistsError {
     fn from(err: YtFavoriteArtistsError) -> Self {
-        ArtistsError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<YtArtistError> for ArtistError {
     fn from(err: YtArtistError) -> Self {
-        ArtistError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<YtAddFavoriteArtistError> for AddArtistError {
     fn from(err: YtAddFavoriteArtistError) -> Self {
-        AddArtistError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<YtRemoveFavoriteArtistError> for RemoveArtistError {
     fn from(err: YtRemoveFavoriteArtistError) -> Self {
-        RemoveArtistError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<YtFavoriteAlbumsError> for AlbumsError {
     fn from(err: YtFavoriteAlbumsError) -> Self {
-        AlbumsError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<YtAlbumError> for AlbumError {
     fn from(err: YtAlbumError) -> Self {
-        AlbumError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<YtArtistAlbumsError> for ArtistAlbumsError {
     fn from(err: YtArtistAlbumsError) -> Self {
-        ArtistAlbumsError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<TryFromAlbumTypeError> for ArtistAlbumsError {
     fn from(err: TryFromAlbumTypeError) -> Self {
-        ArtistAlbumsError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<YtAddFavoriteAlbumError> for AddAlbumError {
     fn from(err: YtAddFavoriteAlbumError) -> Self {
-        AddAlbumError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<YtRemoveFavoriteAlbumError> for RemoveAlbumError {
     fn from(err: YtRemoveFavoriteAlbumError) -> Self {
-        RemoveAlbumError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<YtFavoriteTracksError> for TracksError {
     fn from(err: YtFavoriteTracksError) -> Self {
-        TracksError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<YtAlbumTracksError> for TracksError {
     fn from(err: YtAlbumTracksError) -> Self {
-        TracksError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<YtTrackError> for TrackError {
     fn from(err: YtTrackError) -> Self {
-        TrackError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<YtTrackFileUrlError> for TrackError {
     fn from(err: YtTrackFileUrlError) -> Self {
-        TrackError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<YtAddFavoriteTrackError> for AddTrackError {
     fn from(err: YtAddFavoriteTrackError) -> Self {
-        AddTrackError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<YtRemoveFavoriteTrackError> for RemoveTrackError {
     fn from(err: YtRemoveFavoriteTrackError) -> Self {
-        RemoveTrackError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
@@ -2241,12 +2363,14 @@ pub struct YtMusicApi {
 
 impl YtMusicApi {
     #[cfg(not(feature = "db"))]
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {}
     }
 
     #[cfg(feature = "db")]
-    pub fn new(db: LibraryDatabase) -> Self {
+    #[must_use]
+    pub const fn new(db: LibraryDatabase) -> Self {
         Self { db }
     }
 }
@@ -2444,7 +2568,7 @@ impl MusicApi for YtMusicApi {
                 page: Page::WithTotal {
                     items: pages
                         .into_iter()
-                        .flat_map(|page| page.into_items())
+                        .flat_map(moosicbox_paging::PagingResponse::into_items)
                         .collect::<Vec<_>>(),
                     offset,
                     limit,
@@ -2615,7 +2739,7 @@ impl MusicApi for YtMusicApi {
         )
         .await?
         .first()
-        .map(|x| x.to_string());
+        .map(ToString::to_string);
 
         let Some(url) = url else {
             return Ok(None);
@@ -2627,7 +2751,7 @@ impl MusicApi for YtMusicApi {
             .map(|track| TrackSource::RemoteUrl {
                 url,
                 format: track.format.unwrap_or(AudioFormat::Source),
-                track_id: Some(track.id.to_owned()),
+                track_id: Some(track.id.clone()),
                 source: track.track_source,
             }))
     }
@@ -2638,7 +2762,7 @@ impl MusicApi for YtMusicApi {
         _source: &TrackSource,
         _quality: PlaybackQuality,
     ) -> Result<Option<u64>, TrackError> {
-        let url = if let Some(url) = track_file_url(
+        let Some(url) = track_file_url(
             #[cfg(feature = "db")]
             &self.db,
             YtAudioQuality::High,
@@ -2647,10 +2771,7 @@ impl MusicApi for YtMusicApi {
         )
         .await?
         .into_iter()
-        .next()
-        {
-            url
-        } else {
+        .next() else {
             return Ok(None);
         };
 

@@ -17,7 +17,7 @@ use serde_json::Value;
 
 use crate::YtAlbumType;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct YtArtist {
     pub id: String,
@@ -84,10 +84,10 @@ impl From<YtArtistImageSize> for u16 {
 impl From<u16> for YtArtistImageSize {
     fn from(value: u16) -> Self {
         match value {
-            0..=160 => YtArtistImageSize::Small,
-            161..=320 => YtArtistImageSize::Medium,
-            321..=480 => YtArtistImageSize::Large,
-            _ => YtArtistImageSize::Max,
+            0..=160 => Self::Small,
+            161..=320 => Self::Medium,
+            321..=480 => Self::Large,
+            _ => Self::Max,
         }
     }
 }
@@ -118,7 +118,7 @@ impl AsModelResult<YtArtist, ParseError> for serde_json::Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchArtist {
     pub id: u64,
@@ -129,6 +129,7 @@ pub struct YtSearchArtist {
 }
 
 impl YtSearchArtist {
+    #[must_use]
     pub fn picture_url(&self, size: YtArtistImageSize) -> Option<String> {
         self.picture.as_ref().map(|picture| {
             let picture_path = picture.replace('-', "/");
@@ -157,7 +158,7 @@ impl AsModelResult<YtSearchArtist, ParseError> for serde_json::Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct YtAlbum {
     pub id: String,
@@ -247,11 +248,11 @@ impl From<YtAlbumImageSize> for u16 {
 impl From<u16> for YtAlbumImageSize {
     fn from(value: u16) -> Self {
         match value {
-            0..=80 => YtAlbumImageSize::Thumbnail,
-            81..=160 => YtAlbumImageSize::Small,
-            161..=320 => YtAlbumImageSize::Medium,
-            321..=640 => YtAlbumImageSize::Large,
-            _ => YtAlbumImageSize::Max,
+            0..=80 => Self::Thumbnail,
+            81..=160 => Self::Small,
+            161..=320 => Self::Medium,
+            321..=640 => Self::Large,
+            _ => Self::Max,
         }
     }
 }
@@ -262,7 +263,7 @@ impl Display for YtAlbumImageSize {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchAlbum {
     pub id: u64,
@@ -281,6 +282,7 @@ pub struct YtSearchAlbum {
 }
 
 impl YtSearchAlbum {
+    #[must_use]
     pub fn cover_url(&self, size: YtAlbumImageSize) -> Option<String> {
         self.cover.as_ref().map(|cover| {
             let cover_path = cover.replace('-', "/");
@@ -316,6 +318,7 @@ impl AsModelResult<YtSearchAlbum, ParseError> for serde_json::Value {
 }
 
 impl YtAlbum {
+    #[must_use]
     pub fn cover_url(&self, size: YtAlbumImageSize) -> Option<String> {
         self.cover.as_ref().map(|cover| {
             let cover_path = cover.replace('-', "/");
@@ -352,7 +355,7 @@ impl AsModelResult<YtAlbum, ParseError> for serde_json::Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct YtTrack {
     pub id: String,
@@ -380,7 +383,7 @@ impl From<YtTrack> for Track {
             id: value.id.as_str().into(),
             number: value.track_number,
             title: value.title,
-            duration: value.duration as f64,
+            duration: f64::from(value.duration),
             album: value.album,
             album_id: value.album_id.into(),
             album_type: value.album_type.into(),
@@ -457,7 +460,7 @@ impl AsModelResult<YtTrack, ParseError> for serde_json::Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct YtVideo {
     pub id: String,
@@ -497,7 +500,7 @@ impl AsModelResult<YtVideo, ParseError> for serde_json::Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct YtSearchTrack {
     pub id: u64,
@@ -564,8 +567,8 @@ where
 
 impl<T> AsModelResult<YtSearchResultList<T>, ParseError> for Value
 where
-    for<'a> &'a Value: ToValueType<T>,
-    for<'a> &'a Value: ToValueType<usize>,
+    for<'a> &'a Self: ToValueType<T>,
+    for<'a> &'a Self: ToValueType<usize>,
 {
     fn as_model(&self) -> Result<YtSearchResultList<T>, ParseError> {
         Ok(YtSearchResultList {
@@ -1697,24 +1700,17 @@ fn track_from_search_result(value: &YtSearchResultsContentsListItemRenderer) -> 
                             id: endpoint.video_id.as_deref().unwrap_or("N/A").to_string(),
                             artist: album
                                 .as_ref()
-                                .map(|x| x.artist.as_str())
-                                .unwrap_or("N/A")
+                                .map_or("N/A", |x| x.artist.as_str())
                                 .to_string(),
                             artist_id: album
                                 .as_ref()
-                                .map(|x| x.artist_id.as_str())
-                                .unwrap_or("N/A")
+                                .map_or("N/A", |x| x.artist_id.as_str())
                                 .to_string(),
                             album: album
                                 .as_ref()
-                                .map(|x| x.title.as_str())
-                                .unwrap_or("N/A")
+                                .map_or("N/A", |x| x.title.as_str())
                                 .to_string(),
-                            album_id: album
-                                .as_ref()
-                                .map(|x| x.id.as_str())
-                                .unwrap_or("N/A")
-                                .to_string(),
+                            album_id: album.as_ref().map_or("N/A", |x| x.id.as_str()).to_string(),
                             album_cover: value
                                 .thumbnail
                                 .music_thumbnail_renderer
@@ -1920,13 +1916,11 @@ fn track_album_from_search_result(
                                     id: browse.browse_id.clone(),
                                     artist: artist
                                         .as_ref()
-                                        .map(|x| x.name.as_str())
-                                        .unwrap_or("N/A")
+                                        .map_or("N/A", |x| x.name.as_str())
                                         .to_string(),
                                     artist_id: artist
                                         .as_ref()
-                                        .map(|x| x.id.as_str())
-                                        .unwrap_or("N/A")
+                                        .map_or("N/A", |x| x.id.as_str())
                                         .to_string(),
                                     contains_cover: artist
                                         .as_ref()
@@ -1976,14 +1970,9 @@ fn album_from_search_result(value: &YtSearchResultsContentsListItemRenderer) -> 
                     id: endpoint.browse_id.clone(),
                     artist: artist
                         .as_ref()
-                        .map(|x| x.name.as_str())
-                        .unwrap_or("N/A")
+                        .map_or("N/A", |x| x.name.as_str())
                         .to_string(),
-                    artist_id: artist
-                        .as_ref()
-                        .map(|x| x.id.as_str())
-                        .unwrap_or("N/A")
-                        .to_string(),
+                    artist_id: artist.as_ref().map_or("N/A", |x| x.id.as_str()).to_string(),
                     contains_cover: artist.as_ref().is_some_and(|x| x.picture.is_some()),
                     cover: artist.as_ref().and_then(|x| x.picture.as_ref()).cloned(),
                     title: value
@@ -2016,14 +2005,14 @@ impl From<&YtSearchResults> for Vec<YtArtist> {
                     .search_suggestions_section_renderer
                     .contents
                     .iter()
-                    .flat_map(|section| {
+                    .filter_map(|section| {
                         section
                             .music_responsive_list_item_renderer
                             .as_ref()
                             .and_then(artist_from_search_result)
                     })
             })
-            .collect::<Vec<_>>()
+            .collect()
     }
 }
 
@@ -2037,14 +2026,14 @@ impl From<&YtSearchResults> for Vec<YtAlbum> {
                     .search_suggestions_section_renderer
                     .contents
                     .iter()
-                    .flat_map(|section| {
+                    .filter_map(|section| {
                         section
                             .music_responsive_list_item_renderer
                             .as_ref()
                             .and_then(album_from_search_result)
                     })
             })
-            .collect::<Vec<_>>()
+            .collect()
     }
 }
 
@@ -2058,14 +2047,14 @@ impl From<&YtSearchResults> for Vec<YtVideo> {
                     .search_suggestions_section_renderer
                     .contents
                     .iter()
-                    .flat_map(|section| {
+                    .filter_map(|section| {
                         section
                             .music_responsive_list_item_renderer
                             .as_ref()
                             .and_then(video_from_search_result)
                     })
             })
-            .collect::<Vec<_>>()
+            .collect()
     }
 }
 
@@ -2079,14 +2068,14 @@ impl From<&YtSearchResults> for Vec<YtTrack> {
                     .search_suggestions_section_renderer
                     .contents
                     .iter()
-                    .flat_map(|section| {
+                    .filter_map(|section| {
                         section
                             .music_responsive_list_item_renderer
                             .as_ref()
                             .and_then(track_from_search_result)
                     })
             })
-            .collect::<Vec<_>>()
+            .collect()
     }
 }
 

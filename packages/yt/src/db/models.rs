@@ -3,7 +3,7 @@ use moosicbox_database::{AsId, DatabaseValue, Row};
 use moosicbox_json_utils::{database::ToValue, MissingValue, ParseError, ToValueType};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct YtConfig {
     pub id: u32,
@@ -56,6 +56,6 @@ impl AsModel<YtConfig> for Row {
 
 impl AsId for YtConfig {
     fn as_id(&self) -> DatabaseValue {
-        DatabaseValue::Number(self.id as i64)
+        DatabaseValue::Number(i64::from(self.id))
     }
 }
