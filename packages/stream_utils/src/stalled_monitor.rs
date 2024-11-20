@@ -14,7 +14,7 @@ pub struct StalledReadMonitor<T, R: futures::Stream<Item = T>> {
 }
 
 impl<T, R: futures::Stream<Item = T>> StalledReadMonitor<T, R> {
-    pub fn new(inner: R) -> Self {
+    pub const fn new(inner: R) -> Self {
         Self {
             inner,
             sleeper: None,
@@ -22,6 +22,7 @@ impl<T, R: futures::Stream<Item = T>> StalledReadMonitor<T, R> {
         }
     }
 
+    #[must_use]
     pub fn with_timeout(self, timeout_duration: Duration) -> Self {
         let mut sleeper = tokio::time::interval(timeout_duration);
         sleeper.reset();
@@ -33,6 +34,7 @@ impl<T, R: futures::Stream<Item = T>> StalledReadMonitor<T, R> {
         }
     }
 
+    #[must_use]
     pub fn with_throttle(self, throttle_duration: Duration) -> Self {
         let mut throttler = tokio::time::interval(throttle_duration);
         throttler.reset();

@@ -43,7 +43,7 @@ impl RemoteByteStreamFetcher {
         let (tx, rx) = unbounded();
         let (tx_ready, rx_ready) = bounded(1);
 
-        let mut fetcher = RemoteByteStreamFetcher {
+        let mut fetcher = Self {
             url,
             start,
             end,
@@ -75,7 +75,7 @@ impl RemoteByteStreamFetcher {
         let bytes_range = format!(
             "bytes={}-{}",
             start,
-            end.map(|n| n.to_string()).unwrap_or("".into())
+            end.map_or_else(String::new, |n| n.to_string())
         );
         log::debug!("Starting fetch for byte stream with range {bytes_range}");
 
@@ -120,11 +120,11 @@ impl RemoteByteStreamFetcher {
 
                 while let Some(item) = tokio::select! {
                     resp = stream.next() => resp,
-                    _ = abort.cancelled() => {
+                    () = abort.cancelled() => {
                         log::debug!("Aborted");
                         None
                     }
-                    _ = stream_abort.cancelled() => {
+                    () = stream_abort.cancelled() => {
                         log::debug!("Stream aborted");
                         None
                     }
@@ -174,6 +174,7 @@ impl Drop for RemoteByteStreamFetcher {
 }
 
 impl RemoteByteStream {
+    #[must_use]
     pub fn new(
         url: String,
         size: Option<u64>,
@@ -181,7 +182,7 @@ impl RemoteByteStream {
         seekable: bool,
         abort: CancellationToken,
     ) -> Self {
-        RemoteByteStream {
+        Self {
             url: url.clone(),
             finished: false,
             seekable,
@@ -207,7 +208,7 @@ impl Read for RemoteByteStream {
             let receiver = self.fetcher.receiver.clone();
             let fetcher = &mut self.fetcher;
             let buffer_len = fetcher.buffer.len();
-            let fetcher_start = fetcher.start as usize;
+            let fetcher_start = usize::try_from(fetcher.start).unwrap();
 
             log::debug!(
                 "Read: read_pos[{}] write_max[{}] fetcher_start[{}] buffer_len[{}] written[{}]",
@@ -264,8 +265,9 @@ impl Read for RemoteByteStream {
 impl Seek for RemoteByteStream {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         let seek_position: usize = match pos {
-            std::io::SeekFrom::Start(pos) => pos as usize,
+            std::io::SeekFrom::Start(pos) => usize::try_from(pos).unwrap(),
             std::io::SeekFrom::Current(pos) => {
+                #[allow(clippy::cast_possible_wrap)]
                 let pos = self.read_position as i64 + pos;
                 pos.try_into().map_err(|_| {
                     std::io::Error::new(
@@ -275,6 +277,7 @@ impl Seek for RemoteByteStream {
                 })?
             }
             std::io::SeekFrom::End(pos) => {
+                #[allow(clippy::cast_possible_wrap)]
                 let pos = self.size.unwrap() as i64 - pos;
                 pos.try_into().map_err(|_| {
                     std::io::Error::new(
@@ -292,7 +295,10 @@ impl Seek for RemoteByteStream {
 
         self.read_position = seek_position;
 
-        if self.size.is_some_and(|size| seek_position >= size as usize) {
+        if self
+            .size
+            .is_some_and(|size| seek_position >= usize::try_from(size).unwrap())
+        {
             self.fetcher.abort();
         } else {
             self.fetcher = RemoteByteStreamFetcher::new(

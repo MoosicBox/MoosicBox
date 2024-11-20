@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::{
     sync::{atomic::AtomicUsize, Arc, RwLock},
@@ -27,14 +28,22 @@ pub struct ByteWriter {
 }
 
 impl ByteWriter {
+    #[must_use]
     pub fn stream(&self) -> ByteStream {
         ByteStream::from(self)
     }
 
+    /// # Panics
+    ///
+    /// * If the internal `RwLock` is poisoned
+    #[must_use]
     pub fn bytes_written(&self) -> u64 {
         *self.written.read().unwrap()
     }
 
+    /// # Panics
+    ///
+    /// * If the internal `RwLock` is poisoned
     pub fn close(&self) {
         self.senders.write().unwrap().retain(|sender| {
             if sender.send(Bytes::new()).is_err() {
@@ -112,9 +121,10 @@ pub struct ByteStream {
 
 #[cfg(feature = "stalled-monitor")]
 impl ByteStream {
+    #[must_use]
     pub fn stalled_monitor(
         self,
-    ) -> stalled_monitor::StalledReadMonitor<Result<Bytes, std::io::Error>, ByteStream> {
+    ) -> stalled_monitor::StalledReadMonitor<Result<Bytes, std::io::Error>, Self> {
         self.into()
     }
 }
@@ -124,7 +134,7 @@ impl From<ByteStream>
     for stalled_monitor::StalledReadMonitor<Result<Bytes, std::io::Error>, ByteStream>
 {
     fn from(val: ByteStream) -> Self {
-        stalled_monitor::StalledReadMonitor::new(val)
+        Self::new(val)
     }
 }
 
@@ -151,6 +161,7 @@ impl futures::Stream for ByteStream {
     }
 }
 
+#[allow(clippy::fallible_impl_from)]
 impl From<&ByteWriter> for ByteStream {
     fn from(value: &ByteWriter) -> Self {
         let (sender, receiver) = unbounded_channel();
@@ -169,12 +180,16 @@ pub struct TypedWriter<T> {
 }
 
 impl<T> TypedWriter<T> {
+    #[must_use]
     pub fn stream(&self) -> TypedStream<T> {
         TypedStream::from(self)
     }
 }
 
 impl<T: Clone> TypedWriter<T> {
+    /// # Panics
+    ///
+    /// * If the internal `RwLock` is poisoned
     pub fn write(&self, buf: T) {
         let mut senders = self.senders.write().unwrap();
         let mut remove = vec![];
@@ -218,7 +233,8 @@ pub struct TypedStream<T> {
 
 #[cfg(feature = "stalled-monitor")]
 impl<T> TypedStream<T> {
-    pub fn stalled_monitor(self) -> stalled_monitor::StalledReadMonitor<T, TypedStream<T>> {
+    #[must_use]
+    pub fn stalled_monitor(self) -> stalled_monitor::StalledReadMonitor<T, Self> {
         self.into()
     }
 }
@@ -226,7 +242,7 @@ impl<T> TypedStream<T> {
 #[cfg(feature = "stalled-monitor")]
 impl<T> From<TypedStream<T>> for stalled_monitor::StalledReadMonitor<T, TypedStream<T>> {
     fn from(val: TypedStream<T>) -> Self {
-        stalled_monitor::StalledReadMonitor::new(val)
+        Self::new(val)
     }
 }
 
@@ -249,6 +265,7 @@ impl<T> futures::Stream for TypedStream<T> {
     }
 }
 
+#[allow(clippy::fallible_impl_from)]
 impl<T> From<&TypedWriter<T>> for TypedStream<T> {
     fn from(value: &TypedWriter<T>) -> Self {
         let (sender, receiver) = unbounded_channel();
