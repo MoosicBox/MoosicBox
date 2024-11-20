@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::{collections::HashMap, fmt::Display, task::Poll, time::SystemTime};
 
@@ -14,7 +15,7 @@ use tokio_util::sync::CancellationToken;
 #[cfg(feature = "base64")]
 static BASE64_TUNNEL_RESPONSE_PREFIX: &str = "TUNNEL_RESPONSE:";
 
-#[derive(Debug, Serialize, Deserialize, EnumString, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, EnumString, PartialEq, Eq, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum TunnelEncoding {
@@ -59,13 +60,13 @@ pub enum Method {
 impl Display for Method {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Method::Head => "HEAD",
-            Method::Get => "GET",
-            Method::Post => "POST",
-            Method::Put => "PUT",
-            Method::Patch => "PATCH",
-            Method::Delete => "DELETE",
-            Method::Options => "OPTIONS",
+            Self::Head => "HEAD",
+            Self::Get => "GET",
+            Self::Post => "POST",
+            Self::Put => "PUT",
+            Self::Patch => "PATCH",
+            Self::Delete => "DELETE",
+            Self::Options => "OPTIONS",
         })
     }
 }
@@ -108,34 +109,41 @@ pub struct TunnelAbortRequest {
     pub request_id: usize,
 }
 
-impl From<Bytes> for TunnelResponse {
-    fn from(bytes: Bytes) -> Self {
+#[derive(Debug, Error)]
+pub enum TryFromBytesError {
+    #[error(transparent)]
+    TryFromSlice(#[from] std::array::TryFromSliceError),
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
+}
+
+impl TryFrom<Bytes> for TunnelResponse {
+    type Error = TryFromBytesError;
+
+    fn try_from(bytes: Bytes) -> Result<Self, Self::Error> {
         let mut data = bytes.slice(13..);
-        let request_id = usize::from_be_bytes(bytes[..8].try_into().unwrap());
-        let packet_id = u32::from_be_bytes(bytes[8..12].try_into().unwrap());
-        let last = u8::from_be_bytes(bytes[12..13].try_into().unwrap()) == 1;
+        let request_id = usize::from_be_bytes(bytes[..8].try_into()?);
+        let packet_id = u32::from_be_bytes(bytes[8..12].try_into()?);
+        let last = u8::from_be_bytes(bytes[12..13].try_into()?) == 1;
         let (status, headers) = if packet_id == 1 {
-            let status = u16::from_be_bytes(data[..2].try_into().unwrap());
+            let status = u16::from_be_bytes(data[..2].try_into()?);
             data = data.slice(2..);
-            let len = u32::from_be_bytes(data[..4].try_into().unwrap()) as usize;
+            let len = u32::from_be_bytes(data[..4].try_into()?) as usize;
             let headers_bytes = &data.slice(4..(4 + len));
             data = data.slice((4 + len)..);
-            (
-                Some(status),
-                Some(serde_json::from_slice(headers_bytes).unwrap()),
-            )
+            (Some(status), Some(serde_json::from_slice(headers_bytes)?))
         } else {
             (None, None)
         };
 
-        TunnelResponse {
+        Ok(Self {
             request_id,
             packet_id,
             last,
             bytes: data,
             status,
             headers,
-        }
+        })
     }
 }
 
@@ -155,26 +163,26 @@ impl TryFrom<&str> for TunnelResponse {
     fn try_from(base64: &str) -> Result<Self, Self::Error> {
         use base64::{engine::general_purpose, Engine};
 
-        let base64 = base64.strip_prefix(BASE64_TUNNEL_RESPONSE_PREFIX).ok_or(
-            Base64DecodeError::InvalidContent("Invalid TunnelRequest base64 data string".into()),
-        )?;
+        let base64 = base64
+            .strip_prefix(BASE64_TUNNEL_RESPONSE_PREFIX)
+            .ok_or_else(|| {
+                Base64DecodeError::InvalidContent("Invalid TunnelRequest base64 data string".into())
+            })?;
 
-        let request_id_pos =
-            base64
-                .chars()
-                .position(|c| c == '|')
-                .ok_or(Base64DecodeError::InvalidContent(
-                    "Missing request_id. Expected '|' delimiter".into(),
-                ))?;
+        let request_id_pos = base64.chars().position(|c| c == '|').ok_or_else(|| {
+            Base64DecodeError::InvalidContent("Missing request_id. Expected '|' delimiter".into())
+        })?;
         let request_id = base64[..request_id_pos].parse::<usize>().unwrap();
 
         let packet_id_pos = base64
             .chars()
             .skip(request_id_pos + 2)
             .position(|c| c == '|')
-            .ok_or(Base64DecodeError::InvalidContent(
-                "Missing packet_id. Expected '|' delimiter".into(),
-            ))?;
+            .ok_or_else(|| {
+                Base64DecodeError::InvalidContent(
+                    "Missing packet_id. Expected '|' delimiter".into(),
+                )
+            })?;
         let packet_id = base64[request_id_pos + 1..packet_id_pos]
             .parse::<u32>()
             .unwrap();
@@ -190,9 +198,11 @@ impl TryFrom<&str> for TunnelResponse {
                 .chars()
                 .skip(status_pos + 2)
                 .position(|c| c == '}')
-                .ok_or(Base64DecodeError::InvalidContent(
-                    "Missing headers. Expected '}' delimiter".into(),
-                ))?;
+                .ok_or_else(|| {
+                    Base64DecodeError::InvalidContent(
+                        "Missing headers. Expected '}' delimiter".into(),
+                    )
+                })?;
 
             let headers_str = &base64[status_pos + 1..headers_pos];
 
@@ -206,7 +216,7 @@ impl TryFrom<&str> for TunnelResponse {
 
         let bytes = Bytes::from(general_purpose::STANDARD.decode(base64)?);
 
-        Ok(TunnelResponse {
+        Ok(Self {
             request_id,
             packet_id,
             last,
@@ -254,8 +264,8 @@ impl<'a, F: Future<Output = Result<(), Box<dyn std::error::Error>>>> TunnelStrea
         rx: UnboundedReceiver<TunnelResponse>,
         abort_token: CancellationToken,
         on_end: &'a impl Fn(usize) -> F,
-    ) -> TunnelStream<'a, F> {
-        TunnelStream {
+    ) -> Self {
+        Self {
             start: SystemTime::now(),
             request_id,
             time_to_first_byte: None,
@@ -321,6 +331,7 @@ fn return_polled_bytes<F: Future<Output = Result<(), Box<dyn std::error::Error>>
 impl<F: Future<Output = Result<(), Box<dyn std::error::Error>>>> Stream for TunnelStream<'_, F> {
     type Item = Result<Bytes, TunnelStreamError>;
 
+    #[allow(clippy::too_many_lines)]
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
@@ -361,8 +372,7 @@ impl<F: Future<Output = Result<(), Box<dyn std::error::Error>>>> Stream for Tunn
                 stream
                     .time_to_first_byte
                     .map(|t| t.duration_since(stream.start).unwrap().as_millis())
-                    .map(|t| t.to_string())
-                    .unwrap_or("N/A".into())
+                    .map_or_else(|| "N/A".into(), |t| t.to_string())
             );
 
                 (stream.on_end)(stream.request_id);

@@ -112,7 +112,7 @@ pub async fn handle_ws(
                 Message::Binary(bytes) => {
                     last_heartbeat = Instant::now();
 
-                    ws_server.response(conn_id, bytes.into()).await;
+                    ws_server.response(conn_id, bytes.try_into().unwrap()).await;
                 }
 
                 Message::Close(reason) => break reason,
