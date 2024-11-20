@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use thiserror::Error;
 
@@ -24,6 +25,13 @@ pub enum MigrateError {
     DieselMigration(Box<dyn std::error::Error + Send + Sync>),
 }
 
+/// # Panics
+///
+/// * If the db connection fails to establish
+///
+/// # Errors
+///
+/// * If the migrations fail to run
 #[cfg(any(feature = "postgres", feature = "sqlite"))]
 pub fn migrate_config(database_url: &str) -> Result<(), MigrateError> {
     use diesel::Connection as _;
@@ -50,6 +58,13 @@ pub fn migrate_config(database_url: &str) -> Result<(), MigrateError> {
     Ok(())
 }
 
+/// # Panics
+///
+/// * If the db connection fails to establish
+///
+/// # Errors
+///
+/// * If the migrations fail to run
 #[cfg(any(feature = "postgres", feature = "sqlite"))]
 pub fn migrate_library(database_url: &str) -> Result<(), MigrateError> {
     use diesel::Connection as _;
