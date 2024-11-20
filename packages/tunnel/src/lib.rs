@@ -15,7 +15,7 @@ use tokio_util::sync::CancellationToken;
 #[cfg(feature = "base64")]
 static BASE64_TUNNEL_RESPONSE_PREFIX: &str = "TUNNEL_RESPONSE:";
 
-#[derive(Debug, Serialize, Deserialize, EnumString, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, Deserialize, EnumString, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum TunnelEncoding {
