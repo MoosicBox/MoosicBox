@@ -71,7 +71,7 @@ pub struct ApiSearchResultsResponse {
 
 impl From<Vec<ApiGlobalSearchResult>> for ApiSearchResultsResponse {
     fn from(value: Vec<ApiGlobalSearchResult>) -> Self {
-        ApiSearchResultsResponse {
+        Self {
             position: 0,
             results: value,
         }

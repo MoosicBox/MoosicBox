@@ -148,11 +148,11 @@ impl ToValueType<ApiGlobalSearchResult> for &NamedFieldDocument {
 impl ApiGlobalSearchResult {
     fn to_key(&self) -> String {
         match self {
-            ApiGlobalSearchResult::Artist(artist) => format!("artist|{}", artist.title),
-            ApiGlobalSearchResult::Album(album) => {
+            Self::Artist(artist) => format!("artist|{}", artist.title),
+            Self::Album(album) => {
                 format!("album|{}|{}", album.title, album.artist)
             }
-            ApiGlobalSearchResult::Track(track) => {
+            Self::Track(track) => {
                 format!("track|{}|{}|{}", track.title, track.album, track.artist)
             }
         }

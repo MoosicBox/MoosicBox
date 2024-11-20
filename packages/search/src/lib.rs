@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, RwLock};
@@ -8,7 +9,13 @@ use tantivy::collector::TopDocs;
 use tantivy::directory::MmapDirectory;
 use tantivy::query::{BooleanQuery, BoostQuery, DisjunctionMaxQuery, QueryParser, TermQuery};
 use tantivy::query_grammar::Occur;
-use tantivy::{schema::*, Directory, IndexWriter};
+use tantivy::{
+    schema::{
+        Document, Field, IndexRecordOption, NamedFieldDocument, Schema, TantivyDocument, Term,
+        STORED, STRING, TEXT,
+    },
+    Directory, IndexWriter,
+};
 use tantivy::{Index, IndexReader, ReloadPolicy};
 use thiserror::Error;
 use tokio::sync::Semaphore;
@@ -56,7 +63,7 @@ static GLOBAL_SEARCH_INDEX: LazyLock<RwLock<Result<Index, GetGlobalSearchIndexEr
         let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
         RwLock::new(
             create_global_search_index(path, false).map_err(|e| match e {
-                CreateIndexError::Tantivy(err) => GetGlobalSearchIndexError::Tantivy(err.clone()),
+                CreateIndexError::Tantivy(err) => GetGlobalSearchIndexError::Tantivy(err),
                 _ => GetGlobalSearchIndexError::FailedToGetIndex(e.to_string()),
             }),
         )
@@ -79,17 +86,17 @@ static GLOBAL_SEARCH_READER: LazyLock<RwLock<Result<IndexReader, GetGlobalSearch
                 GetGlobalSearchIndexError::Tantivy(err) => {
                     return RwLock::new(Err(GetGlobalSearchReaderError::Tantivy(err.clone())))
                 }
-                _ => {
+                GetGlobalSearchIndexError::FailedToGetIndex(_) => {
                     return RwLock::new(Err(GetGlobalSearchReaderError::FailedToGetReader(
                         err.to_string(),
                     )))
                 }
             },
         };
-        RwLock::new(
-            get_index_reader(index)
-                .map_err(|e| GetGlobalSearchReaderError::FailedToGetReader(e.to_string())),
-        )
+        let index = get_index_reader(index)
+            .map_err(|e| GetGlobalSearchReaderError::FailedToGetReader(e.to_string()));
+        drop(binding);
+        RwLock::new(index)
     });
 
 #[derive(Debug, Error)]
@@ -206,11 +213,11 @@ fn create_global_search_index(
             log::trace!("No existing index in dir {path:?}");
         }
         log::debug!("Creating Index in dir {path:?}");
-        Index::create_in_dir(path, schema.clone())?
+        Index::create_in_dir(path, schema)?
     } else {
         let directory: Box<dyn Directory> = Box::new(mmap_directory);
         log::debug!("Opening or creating index in dir {path:?}");
-        Index::open_or_create(directory, schema.clone())?
+        Index::open_or_create(directory, schema)?
     })
 }
 
@@ -270,6 +277,9 @@ pub enum DataValue {
     Number(u64),
 }
 
+/// # Errors
+///
+/// * If failed to populate the global search index
 pub async fn populate_global_search_index(
     data: &[Vec<(&str, DataValue)>],
     delete: bool,
@@ -303,6 +313,13 @@ pub async fn populate_global_search_index(
     Ok(())
 }
 
+/// # Panics
+///
+/// * If any `RwLock`s are poisoned
+///
+/// # Errors
+///
+/// * If failed to populate the global search index
 pub fn populate_global_search_index_sync(
     data: &[Vec<(&str, DataValue)>],
     delete: bool,
@@ -315,7 +332,7 @@ pub fn populate_global_search_index_sync(
     }
 
     let binding = GLOBAL_SEARCH_INDEX.read().unwrap();
-    let index = binding.as_ref().map_err(|e| e.clone())?;
+    let index = binding.as_ref().map_err(Clone::clone)?;
     let schema = index.schema();
     // To insert a document we will need an index writer.
     // There must be only one writer at a time.
@@ -326,13 +343,13 @@ pub fn populate_global_search_index_sync(
     // Using a bigger memory_arena for the indexer may increase
     // throughput, but 50 MB is already plenty.
     let memory_budget = *GLOBAL_SEARCH_INDEX_WRITER_MEMORY_BUDGET.read().unwrap();
+    let threads = *GLOBAL_SEARCH_INDEX_WRITER_NUM_THREADS.read().unwrap();
 
-    let mut index_writer =
-        if let Some(threads) = *GLOBAL_SEARCH_INDEX_WRITER_NUM_THREADS.read().unwrap() {
-            index.writer_with_num_threads(threads, memory_budget)?
-        } else {
-            index.writer(memory_budget)?
-        };
+    let mut index_writer = if let Some(threads) = threads {
+        index.writer_with_num_threads(threads, memory_budget)?
+    } else {
+        index.writer(memory_budget)?
+    };
 
     if delete {
         index_writer.delete_all_documents()?;
@@ -370,15 +387,14 @@ pub fn populate_global_search_index_sync(
                                     .iter()
                                     .enumerate()
                                     .map(|(i, word)| {
-                                        if let Some(escaped) = permutation
+                                        permutation
                                             .iter()
                                             .find(|(x, _)| *x == i)
                                             .map(|(_, word)| word)
-                                        {
-                                            escaped.to_string()
-                                        } else {
-                                            word.to_string()
-                                        }
+                                            .map_or_else(
+                                                || (*word).to_string(),
+                                                ToString::to_string,
+                                            )
                                     })
                                     .collect::<Vec<_>>()
                                     .join(" ");
@@ -412,11 +428,12 @@ pub fn populate_global_search_index_sync(
     //
     // This call is blocking.
     index_writer.commit()?;
+    drop(binding);
     GLOBAL_SEARCH_READER
         .read()
         .unwrap()
         .as_ref()
-        .map_err(|e| e.clone())?
+        .map_err(Clone::clone)?
         .reload()?;
 
     // If `.commit()` returns correctly, then all of the
@@ -442,6 +459,13 @@ pub enum DeleteFromIndexError {
     Tantivy(#[from] tantivy::error::TantivyError),
 }
 
+/// # Panics
+///
+/// * If any `RwLock`s are poisoned
+///
+/// # Errors
+///
+/// * If failed to delete from the global search index
 pub fn delete_from_global_search_index(
     data: &[(&str, DataValue)],
 ) -> Result<(), DeleteFromIndexError> {
@@ -453,7 +477,7 @@ pub fn delete_from_global_search_index(
     }
 
     let binding = GLOBAL_SEARCH_INDEX.read().unwrap();
-    let index = binding.as_ref().map_err(|e| e.clone())?;
+    let index = binding.as_ref().map_err(Clone::clone)?;
     let schema = index.schema();
     // To remove a document we will need an index writer.
     // There must be only one writer at a time.
@@ -464,13 +488,13 @@ pub fn delete_from_global_search_index(
     // Using a bigger memory_arena for the indexer may increase
     // throughput, but 50 MB is already plenty.
     let memory_budget = *GLOBAL_SEARCH_INDEX_WRITER_MEMORY_BUDGET.read().unwrap();
+    let threads = *GLOBAL_SEARCH_INDEX_WRITER_NUM_THREADS.read().unwrap();
 
-    let mut index_writer: IndexWriter<TantivyDocument> =
-        if let Some(threads) = *GLOBAL_SEARCH_INDEX_WRITER_NUM_THREADS.read().unwrap() {
-            index.writer_with_num_threads(threads, memory_budget)?
-        } else {
-            index.writer(memory_budget)?
-        };
+    let mut index_writer: IndexWriter<TantivyDocument> = if let Some(threads) = threads {
+        index.writer_with_num_threads(threads, memory_budget)?
+    } else {
+        index.writer(memory_budget)?
+    };
 
     for (key, value) in data {
         let field = schema.get_field(key)?;
@@ -495,11 +519,12 @@ pub fn delete_from_global_search_index(
     //
     // This call is blocking.
     index_writer.commit()?;
+    drop(binding);
     GLOBAL_SEARCH_READER
         .read()
         .unwrap()
         .as_ref()
-        .map_err(|e| e.clone())?
+        .map_err(Clone::clone)?
         .reload()?;
 
     // If `.commit()` returns correctly, then all of the
@@ -525,6 +550,9 @@ pub enum ReindexError {
     Join(#[from] JoinError),
 }
 
+/// # Errors
+///
+/// * If failed to reindex the global search index
 pub async fn reindex_global_search_index(
     data: &[Vec<(&str, DataValue)>],
 ) -> Result<(), ReindexError> {
@@ -609,9 +637,11 @@ fn construct_query_for_fields(
             query_parser.set_field_boost(*field, *boost);
         }
         let exact_query = query_parser.parse_query(&format!("\"{search}\"")).unwrap();
+        #[allow(clippy::cast_precision_loss)]
+        let search_f32 = search.len() as f32;
         let boost_query = Box::new(BoostQuery::new(
             Box::new(exact_query),
-            4.0 * (search.len() as f32 / 3.0) * (search.len() as f32 / 3.0),
+            4.0 * (search_f32 / 3.0) * (search_f32 / 3.0),
         ));
 
         parts.push(boost_query);
@@ -648,6 +678,7 @@ fn construct_query_for_fields(
     DisjunctionMaxQuery::new(parts)
 }
 
+#[allow(clippy::too_many_lines)]
 fn construct_global_search_query(
     search: &str,
     index: &Index,
@@ -826,6 +857,13 @@ fn construct_global_search_query(
     DisjunctionMaxQuery::new(queries)
 }
 
+/// # Panics
+///
+/// * If any `RwLock`s are poisoned
+///
+/// # Errors
+///
+/// * If failed to search the global search index
 pub fn search_global_search_index(
     search: &str,
     offset: usize,
@@ -834,7 +872,7 @@ pub fn search_global_search_index(
     log::debug!("Searching global_search_index...");
     let query = sanitize_query(search);
     let binding = GLOBAL_SEARCH_INDEX.read().unwrap();
-    let index = binding.as_ref().map_err(|e| e.clone())?;
+    let index = binding.as_ref().map_err(Clone::clone)?;
     let schema = index.schema();
 
     // # Searching
@@ -850,8 +888,8 @@ pub fn search_global_search_index(
     //
     // In the code below, we rely on the 'ON_COMMIT' policy: the reader
     // will reload the index automatically after each commit.
-    let binding = GLOBAL_SEARCH_READER.read().unwrap();
-    let reader = binding.as_ref().map_err(|e| e.clone())?;
+    let reader_binding = GLOBAL_SEARCH_READER.read().unwrap();
+    let reader = reader_binding.as_ref().map_err(Clone::clone)?;
 
     // ### Searcher
     //
@@ -908,6 +946,9 @@ pub fn search_global_search_index(
             Ok(retrieved_doc.to_named_doc(&schema))
         })
         .collect::<Result<Vec<_>, tantivy::error::TantivyError>>()?;
+
+    drop(reader_binding);
+    drop(binding);
 
     log::debug!("Searched global_search_index");
 
