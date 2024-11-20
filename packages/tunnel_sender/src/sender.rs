@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Cursor;
@@ -35,7 +37,7 @@ use moosicbox_ws::{PlayerAction, WebsocketContext, WebsocketSendError, Websocket
 use rand::{thread_rng, Rng as _};
 use regex::Regex;
 use serde_json::Value;
-use symphonia::core::io::MediaSourceStream;
+use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
 use symphonia::core::probe::Hint;
 use thiserror::Error;
 use tokio::select;
@@ -69,12 +71,13 @@ pub struct TunnelSenderHandle {
 }
 
 impl TunnelSenderHandle {
-    pub async fn close(&self) -> Result<(), CloseError> {
+    pub fn close(&self) {
         self.cancellation_token.cancel();
-
-        Ok(())
     }
 
+    /// # Panics
+    ///
+    /// * If the `player_actions` `RwLock` is poisoned
     pub fn add_player_action(&self, id: u64, action: PlayerAction) {
         self.player_actions.write().unwrap().push((id, action));
     }
@@ -190,6 +193,7 @@ static WS_MAX_PACKET_SIZE: usize =
     default_env_usize!("WS_MAX_PACKET_SIZE", DEFAULT_WS_MAX_PACKET_SIZE);
 
 impl TunnelSender {
+    #[must_use]
     pub fn new(
         host: String,
         url: String,
@@ -214,8 +218,8 @@ impl TunnelSender {
                 url,
                 client_id,
                 access_token,
-                sender: sender.clone(),
-                cancellation_token: cancellation_token.clone(),
+                sender,
+                cancellation_token,
                 abort_request_tokens: Arc::new(RwLock::new(HashMap::new())),
                 player_actions,
                 config_db,
@@ -224,11 +228,16 @@ impl TunnelSender {
         )
     }
 
+    #[must_use]
     pub fn with_cancellation_token(mut self, token: CancellationToken) -> Self {
         self.cancellation_token = token;
         self
     }
 
+    /// # Panics
+    ///
+    /// * If the `player_actions` `RwLock` is poisoned
+    #[must_use]
     pub fn add_player_action(self, id: u64, action: PlayerAction) -> Self {
         self.player_actions.write().unwrap().push((id, action));
         self
@@ -250,13 +259,13 @@ impl TunnelSender {
         .await
     }
 
-    pub fn start(&mut self) -> Receiver<TunnelMessage> {
+    pub fn start(&self) -> Receiver<TunnelMessage> {
         self.start_tunnel(Self::message_handler)
     }
 
     fn is_request_aborted(
         request_id: usize,
-        tokens: Arc<RwLock<HashMap<usize, CancellationToken>>>,
+        tokens: &Arc<RwLock<HashMap<usize, CancellationToken>>>,
     ) -> bool {
         if let Some(token) = tokens.read().unwrap().get(&request_id) {
             return token.is_cancelled();
@@ -264,7 +273,8 @@ impl TunnelSender {
         false
     }
 
-    fn start_tunnel<T, O>(&mut self, handler: fn(sender: Sender<T>, m: Message) -> O) -> Receiver<T>
+    #[allow(clippy::too_many_lines)]
+    fn start_tunnel<T, O>(&self, handler: fn(sender: Sender<T>, m: Message) -> O) -> Receiver<T>
     where
         T: Send + 'static,
         O: Future<Output = Result<(), SendError<T>>> + Send + 'static,
@@ -285,7 +295,7 @@ impl TunnelSender {
             let token = loop {
                 match select!(
                     resp = moosicbox_auth::fetch_signature_token(&host, &client_id, &access_token) => resp,
-                    _ = cancellation_token.cancelled() => {
+                    () = cancellation_token.cancelled() => {
                         log::debug!("Cancelling fetch");
                         return;
                     }
@@ -303,8 +313,8 @@ impl TunnelSender {
                 }
 
                 select!(
-                    _ = sleep(Duration::from_millis(5000)) => {}
-                    _ = cancellation_token.cancelled() => {
+                    () = sleep(Duration::from_millis(5000)) => {}
+                    () = cancellation_token.cancelled() => {
                         log::debug!("Cancelling retry");
                         return;
                     }
@@ -342,7 +352,7 @@ impl TunnelSender {
                     resp = connect_async(
                         format!("{url}?clientId={client_id}&sender=true&signature={token}"),
                     ) => resp,
-                    _ = cancellation_token.cancelled() => {
+                    () = cancellation_token.cancelled() => {
                         log::debug!("Cancelling connect");
                         break;
                     }
@@ -361,7 +371,7 @@ impl TunnelSender {
                                 .filter(|message| {
                                     match message {
                                         TunnelResponseMessage::Packet(packet) => {
-                                            if Self::is_request_aborted(packet.request_id, abort_request_tokens.clone()) {
+                                            if Self::is_request_aborted(packet.request_id, &abort_request_tokens) {
                                                 log::debug!(
                                                     "Not sending packet from aborted request request_id={} packet_id={} size={}",
                                                     packet.request_id,
@@ -460,9 +470,9 @@ impl TunnelSender {
                             async move {
                                 loop {
                                     select!(
-                                        _ = close_token.cancelled() => { break; }
-                                        _ = cancellation_token.cancelled() => { break; }
-                                        _ = tokio::time::sleep(std::time::Duration::from_millis(5000)) => {
+                                        () = close_token.cancelled() => { break; }
+                                        () = cancellation_token.cancelled() => { break; }
+                                        () = tokio::time::sleep(std::time::Duration::from_millis(5000)) => {
                                             log::trace!("Sending ping to tunnel");
                                             if let Err(e) = txf.send(TunnelResponseMessage::Ping) {
                                                 log::error!("Pinger Send Loop error: {e:?}");
@@ -477,8 +487,8 @@ impl TunnelSender {
 
                         pin_mut!(ws_writer, ws_reader);
                         select!(
-                            _ = close_token.cancelled() => {}
-                            _ = cancellation_token.cancelled() => {}
+                            () = close_token.cancelled() => {}
+                            () = cancellation_token.cancelled() => {}
                             _ = future::select(ws_writer, ws_reader) => {}
                         );
                         if !close_token.is_cancelled() {
@@ -490,8 +500,8 @@ impl TunnelSender {
                         }
                         log::info!("WebSocket connection closed");
                     }
-                    Err(err) => match err {
-                        Error::Http(response) => {
+                    Err(err) => {
+                        if let Error::Http(response) = err {
                             if let Ok(body) =
                                 std::str::from_utf8(response.body().as_ref().unwrap_or(&vec![]))
                             {
@@ -499,15 +509,16 @@ impl TunnelSender {
                             } else {
                                 log::error!("body: (unable to get body)");
                             }
+                        } else {
+                            log::error!("Failed to connect to websocket server: {err:?}");
                         }
-                        _ => log::error!("Failed to connect to websocket server: {err:?}"),
-                    },
+                    }
                 }
 
                 if just_retried {
                     select!(
-                        _ = sleep(Duration::from_millis(5000)) => {}
-                        _ = cancellation_token.cancelled() => {
+                        () = sleep(Duration::from_millis(5000)) => {}
+                        () = cancellation_token.cancelled() => {
                             log::debug!("Cancelling retry");
                             break;
                         }
@@ -523,6 +534,13 @@ impl TunnelSender {
         rx
     }
 
+    /// # Panics
+    ///
+    /// * If the `Sender` `RwLock` is poisoned
+    ///
+    /// # Errors
+    ///
+    /// * If failed to send the bytes
     pub fn send_bytes(
         &self,
         request_id: usize,
@@ -549,6 +567,13 @@ impl TunnelSender {
         Ok(())
     }
 
+    /// # Panics
+    ///
+    /// * If the `Sender` `RwLock` is poisoned
+    ///
+    /// # Errors
+    ///
+    /// * If failed to send the message
     pub fn send_message(
         &self,
         request_id: usize,
@@ -577,16 +602,20 @@ impl TunnelSender {
         Ok(())
     }
 
+    #[allow(clippy::unnecessary_wraps)]
     fn send(
         &self,
         request_id: usize,
         status: u16,
-        headers: HashMap<String, String>,
+        headers: &HashMap<String, String>,
         reader: impl std::io::Read,
         encoding: TunnelEncoding,
     ) -> Result<(), TunnelRequestError> {
         match encoding {
-            TunnelEncoding::Binary => self.send_binary(request_id, status, headers, reader),
+            TunnelEncoding::Binary => {
+                self.send_binary(request_id, status, headers, reader);
+                Ok(())
+            }
             #[cfg(feature = "base64")]
             TunnelEncoding::Base64 => self.send_base64(request_id, status, headers, reader),
         }
@@ -596,9 +625,9 @@ impl TunnelSender {
         &self,
         request_id: usize,
         status: u16,
-        headers: HashMap<String, String>,
+        headers: &HashMap<String, String>,
         ranges: Option<Vec<Range>>,
-        stream: impl Stream<Item = Result<Bytes, E>> + std::marker::Unpin,
+        stream: impl Stream<Item = Result<Bytes, E>> + std::marker::Unpin + Send,
         encoding: TunnelEncoding,
     ) -> Result<(), TunnelRequestError> {
         match encoding {
@@ -634,7 +663,7 @@ impl TunnelSender {
         buf[offset..(offset + len)].copy_from_slice(&packet_id_bytes);
         offset += len;
 
-        let last_bytes = if last { 1u8 } else { 0u8 }.to_be_bytes();
+        let last_bytes = u8::from(last).to_be_bytes();
         let len = last_bytes.len();
         buf[offset..(offset + len)].copy_from_slice(&last_bytes);
         offset += len;
@@ -652,7 +681,7 @@ impl TunnelSender {
             offset += len;
             let headers = serde_json::to_string(&headers).unwrap();
             let headers_bytes = headers.as_bytes();
-            let headers_len = headers_bytes.len() as u32;
+            let headers_len = u32::try_from(headers_bytes.len()).unwrap();
             let headers_len_bytes = headers_len.to_be_bytes();
             let len = headers_len_bytes.len();
             buf[offset..(offset + len)].copy_from_slice(&headers_len_bytes);
@@ -665,13 +694,14 @@ impl TunnelSender {
         offset
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn send_binary_stream<E: std::error::Error + Sized>(
         &self,
         request_id: usize,
         status: u16,
-        headers: HashMap<String, String>,
+        headers: &HashMap<String, String>,
         ranges: Option<Vec<Range>>,
-        mut stream: impl Stream<Item = Result<Bytes, E>> + std::marker::Unpin,
+        mut stream: impl Stream<Item = Result<Bytes, E>> + std::marker::Unpin + Send,
     ) -> Result<(), TunnelRequestError> {
         let mut bytes_read = 0_usize;
         let mut bytes_consumed = 0_usize;
@@ -680,13 +710,13 @@ impl TunnelSender {
         let mut last = false;
 
         while !last {
-            if Self::is_request_aborted(request_id, self.abort_request_tokens.clone()) {
+            if Self::is_request_aborted(request_id, &self.abort_request_tokens) {
                 log::debug!("Aborting send_binary_stream");
                 break;
             }
             let mut buf = vec![0_u8; WS_MAX_PACKET_SIZE];
             let mut header_offset = Self::init_binary_request_buffer(
-                request_id, packet_id, false, status, &headers, &mut buf,
+                request_id, packet_id, false, status, headers, &mut buf,
             );
             let mut offset = header_offset;
 
@@ -759,7 +789,7 @@ impl TunnelSender {
                 for (i, range) in matching_ranges.iter().enumerate() {
                     if i > 0 {
                         header_offset = Self::init_binary_request_buffer(
-                            request_id, packet_id, false, status, &headers, &mut buf,
+                            request_id, packet_id, false, status, headers, &mut buf,
                         );
                     }
                     headers_bytes[0..header_offset].copy_from_slice(&buf[..header_offset]);
@@ -813,22 +843,22 @@ impl TunnelSender {
         &self,
         request_id: usize,
         status: u16,
-        headers: HashMap<String, String>,
+        headers: &HashMap<String, String>,
         mut reader: impl std::io::Read,
-    ) -> Result<(), TunnelRequestError> {
+    ) {
         let mut bytes_read = 0_usize;
         let mut packet_id = 0_u32;
         let mut last = false;
 
         while !last {
-            if Self::is_request_aborted(request_id, self.abort_request_tokens.clone()) {
+            if Self::is_request_aborted(request_id, &self.abort_request_tokens) {
                 log::debug!("Aborting send_binary");
                 break;
             }
             packet_id += 1;
             let mut buf = vec![0_u8; WS_MAX_PACKET_SIZE];
             let offset = Self::init_binary_request_buffer(
-                request_id, packet_id, false, status, &headers, &mut buf,
+                request_id, packet_id, false, status, headers, &mut buf,
             );
 
             let mut read = 0;
@@ -856,8 +886,6 @@ impl TunnelSender {
                 break;
             }
         }
-
-        Ok(())
     }
 
     #[cfg(feature = "base64")]
@@ -871,7 +899,7 @@ impl TunnelSender {
     ) -> String {
         if !overflow_buf.is_empty() {
             overflow_buf.push_str(buf);
-            *buf = overflow_buf.to_string();
+            *buf = (*overflow_buf).to_string();
             "".clone_into(overflow_buf);
         }
 
@@ -879,7 +907,7 @@ impl TunnelSender {
         if packet_id == 1 {
             prefix.push_str(&status.to_string());
             let mut headers_base64 =
-                general_purpose::STANDARD.encode(serde_json::to_string(&headers).unwrap().clone());
+                general_purpose::STANDARD.encode(serde_json::to_string(&headers).unwrap());
             headers_base64.insert(0, '{');
             headers_base64.push('}');
             prefix.push_str(&headers_base64);
@@ -893,19 +921,19 @@ impl TunnelSender {
         &self,
         request_id: usize,
         status: u16,
-        headers: HashMap<String, String>,
+        headers: &HashMap<String, String>,
         mut reader: impl std::io::Read,
     ) -> Result<(), TunnelRequestError> {
         use std::cmp::min;
 
         let buf_size = 1024 * 32;
-        let mut overflow_buf = "".to_owned();
+        let mut overflow_buf = String::new();
 
         let mut bytes_read = 0_usize;
         let mut packet_id = 0_u32;
 
         loop {
-            if Self::is_request_aborted(request_id, self.abort_request_tokens.clone()) {
+            if Self::is_request_aborted(request_id, &self.abort_request_tokens) {
                 log::debug!("Aborting send_base64");
                 break Ok(());
             }
@@ -935,7 +963,7 @@ impl TunnelSender {
                     if !overflow_buf.is_empty() {
                         overflow_buf.push_str(&base64);
                         base64 = overflow_buf;
-                        overflow_buf = "".to_string();
+                        overflow_buf = String::new();
                     }
                     let end = min(base64.len(), buf_size - prefix.len());
                     let data = &base64[..end];
@@ -946,7 +974,7 @@ impl TunnelSender {
                     if size == 0 {
                         while !overflow_buf.is_empty() {
                             let base64 = overflow_buf;
-                            overflow_buf = "".to_string();
+                            overflow_buf = String::new();
                             let end = min(base64.len(), buf_size - prefix.len());
                             let data = &base64[..end];
                             overflow_buf.push_str(&base64[end..]);
@@ -973,36 +1001,36 @@ impl TunnelSender {
         &self,
         request_id: usize,
         status: u16,
-        headers: HashMap<String, String>,
+        headers: &HashMap<String, String>,
         ranges: Option<Vec<Range>>,
-        mut stream: impl Stream<Item = Result<Bytes, E>> + std::marker::Unpin,
+        mut stream: impl Stream<Item = Result<Bytes, E>> + std::marker::Unpin + Send,
     ) -> Result<(), TunnelRequestError> {
+        use std::cmp::min;
+
         if ranges.is_some() {
             todo!("Byte ranges for base64 not implemented");
         }
 
-        use std::cmp::min;
-
         let buf_size = 1024 * 32;
-        let mut overflow_buf = "".to_owned();
+        let mut overflow_buf = String::new();
 
         let mut bytes_read = 0_usize;
         let mut packet_id = 0_u32;
 
         loop {
-            if Self::is_request_aborted(request_id, self.abort_request_tokens.clone()) {
+            if Self::is_request_aborted(request_id, &self.abort_request_tokens) {
                 log::debug!("Aborting send_base64_stream");
                 break Ok(());
             }
             packet_id += 1;
 
-            let mut buf = "".to_owned();
+            let mut buf = String::new();
 
             let prefix = Self::init_base64_request_buffer(
                 request_id,
                 packet_id,
                 status,
-                &headers,
+                headers,
                 &mut buf,
                 &mut overflow_buf,
             );
@@ -1083,7 +1111,7 @@ impl TunnelSender {
             .join("&");
 
         if !query_string.is_empty() {
-            query_string.insert(0, '?')
+            query_string.insert(0, '?');
         }
 
         let url = format!("{host}/{path}{query_string}");
@@ -1118,7 +1146,7 @@ impl TunnelSender {
         self.send_stream(
             request_id,
             response.status().as_u16(),
-            headers,
+            &headers,
             None,
             response.bytes_stream(),
             encoding,
@@ -1148,7 +1176,7 @@ impl TunnelSender {
         };
 
         if let Some(headers) = headers {
-            for (key, value) in headers.as_object().unwrap().iter() {
+            for (key, value) in headers.as_object().unwrap() {
                 builder = builder.header(key, value.as_str().unwrap());
             }
         }
@@ -1168,7 +1196,14 @@ impl TunnelSender {
         builder.send().await
     }
 
-    #[allow(clippy::too_many_arguments)]
+    /// # Panics
+    ///
+    /// * If any of the relevant `RwLock`s are poisoned
+    ///
+    /// # Errors
+    ///
+    /// * If an error occurs processing the tunnel request
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     pub async fn tunnel_request(
         &self,
         service_port: u16,
@@ -1209,13 +1244,11 @@ impl TunnelSender {
                                     .map(|range| range.as_str().unwrap().to_string())
                             })
                             .map(|range| {
-                                range
-                                    .clone()
-                                    .strip_prefix("bytes=")
-                                    .map(|s| s.to_string())
-                                    .ok_or(TunnelRequestError::BadRequest(format!(
+                                range.strip_prefix("bytes=").map(ToString::to_string).ok_or(
+                                    TunnelRequestError::BadRequest(format!(
                                         "Invalid bytes range '{range:?}'"
-                                    )))
+                                    )),
+                                )
                             })
                             .transpose()?
                             .map(|range| {
@@ -1252,7 +1285,7 @@ impl TunnelSender {
                                         self.send_stream(
                                             request_id,
                                             200,
-                                            response_headers,
+                                            &response_headers,
                                             ranges,
                                             moosicbox_audio_output::encoder::aac::encode_aac_stream(
                                                 &path,
@@ -1266,7 +1299,7 @@ impl TunnelSender {
                                         self.send_stream(
                                             request_id,
                                             200,
-                                            response_headers,
+                                            &response_headers,
                                             ranges,
                                             moosicbox_audio_output::encoder::mp3::encode_mp3_stream(
                                                 &path,
@@ -1277,7 +1310,7 @@ impl TunnelSender {
                                     }
                                     #[cfg(feature = "opus")]
                                     Some(AudioFormat::Opus) => {
-                                        self.send_stream(request_id, 200, response_headers, ranges,
+                                        self.send_stream(request_id, 200, &response_headers, ranges,
                                         moosicbox_audio_output::encoder::opus::encode_opus_stream(
                                             &path,
                                         ),
@@ -1288,7 +1321,7 @@ impl TunnelSender {
                                         self.send(
                                             request_id,
                                             200,
-                                            response_headers,
+                                            &response_headers,
                                             File::open(path)?,
                                             encoding,
                                         )?;
@@ -1391,7 +1424,10 @@ impl TunnelSender {
                                 .into();
 
                                 if let Err(err) = play_media_source_async(
-                                    MediaSourceStream::new(Box::new(source), Default::default()),
+                                    MediaSourceStream::new(
+                                        Box::new(source),
+                                        MediaSourceStreamOptions::default(),
+                                    ),
                                     &Hint::new(),
                                     get_handler,
                                     true,
@@ -1407,7 +1443,7 @@ impl TunnelSender {
                                 self.send_stream(
                                     request_id,
                                     200,
-                                    response_headers,
+                                    &response_headers,
                                     ranges,
                                     stream,
                                     encoding,
@@ -1452,7 +1488,7 @@ impl TunnelSender {
                     if let Ok(track_info) = get_track_info(&**api, &query.track_id.into()).await {
                         let mut bytes: Vec<u8> = Vec::new();
                         serde_json::to_writer(&mut bytes, &track_info)?;
-                        self.send(request_id, 200, headers, Cursor::new(bytes), encoding)?;
+                        self.send(request_id, 200, &headers, Cursor::new(bytes), encoding)?;
                     }
 
                     Ok(())
@@ -1516,7 +1552,7 @@ impl TunnelSender {
                                 .ok_or_else(|| {
                                     TunnelRequestError::NotFound(format!(
                                         "Album not found: {}",
-                                        album_id.to_owned()
+                                        album_id.clone()
                                     ))
                                 })?;
 
@@ -1524,7 +1560,7 @@ impl TunnelSender {
                                 &**api,
                                 &db.ok_or(TunnelRequestError::MissingProfile)?,
                                 &album,
-                                (std::cmp::max(width, height) as u16).into(),
+                                u16::try_from(std::cmp::max(width, height)).unwrap().into(),
                             )
                             .await
                             .map_err(|e| TunnelRequestError::Request(e.to_string()))?;
@@ -1585,7 +1621,7 @@ impl TunnelSender {
                                 "cache-control".to_string(),
                                 format!("max-age={}", 86400u32 * 14),
                             );
-                            self.send(request_id, 200, headers, Cursor::new(resized), encoding)?;
+                            self.send(request_id, 200, &headers, Cursor::new(resized), encoding)?;
 
                             Ok(())
                         }
@@ -1611,6 +1647,13 @@ impl TunnelSender {
         }
     }
 
+    /// # Panics
+    ///
+    /// * If any of the relevant `RwLock`s are poisoned
+    ///
+    /// # Errors
+    ///
+    /// * If the websocket request fails to process
     pub async fn ws_request(
         &self,
         conn_id: usize,
@@ -1640,6 +1683,9 @@ impl TunnelSender {
         Ok(())
     }
 
+    /// # Panics
+    ///
+    /// * If the `abort_request_tokens` `RwLock` is poisoned
     pub fn abort_request(&self, request_id: usize) {
         if let Some(token) = self.abort_request_tokens.read().unwrap().get(&request_id) {
             token.cancel();

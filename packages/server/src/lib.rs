@@ -519,7 +519,7 @@ pub async fn run(
             #[cfg(feature = "tunnel")]
             if let Some(handle) = tunnel_handle {
                 log::debug!("Closing tunnel connection...");
-                let _ = handle.close().await;
+                handle.close();
             }
 
             #[cfg(feature = "tunnel")]

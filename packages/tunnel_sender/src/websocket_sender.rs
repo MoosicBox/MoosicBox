@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use async_trait::async_trait;
 use futures_channel::mpsc::TrySendError;
 use moosicbox_channel_utils::{futures_channel::PrioritizedSender, MoosicBoxSender as _};
