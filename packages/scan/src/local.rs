@@ -50,6 +50,9 @@ pub enum ScanError {
     Lofty(#[from] moosicbox_lofty::LoftyError),
 }
 
+/// # Errors
+///
+/// * If the scan fails
 pub async fn scan(
     directory: &str,
     db: &LibraryDatabase,
@@ -66,6 +69,10 @@ pub async fn scan(
     scan_items(items, db, token, scanner).await
 }
 
+/// # Errors
+///
+/// * If the scan fails
+/// * If a tokio task failed to join
 pub async fn scan_items(
     items: Vec<ScanItem>,
     db: &LibraryDatabase,
@@ -112,16 +119,15 @@ pub async fn scan_items(
     });
 
     for resp in futures::future::join_all(handles).await {
-        resp??
+        resp??;
     }
 
     log::info!("Finished initial scan");
 
-    {
-        let output = output.read().await;
-        output.update_database(db).await?;
-        output.reindex_global_search_index(db).await?;
-    }
+    let output = output.read().await;
+    output.update_database(db).await?;
+    output.reindex_global_search_index(db).await?;
+    drop(output);
 
     log::info!("Finished total scan");
 
@@ -129,12 +135,9 @@ pub async fn scan_items(
 }
 
 fn extract_track_number(track_filestem: &str) -> Option<u16> {
-    let numbers = track_filestem
+    let number = track_filestem
         .chars()
         .take_while(|c| c.is_numeric())
-        .collect::<Vec<_>>();
-    let number = numbers
-        .into_iter()
         .skip_while(|c| *c == '0')
         .collect::<String>();
 
@@ -159,6 +162,7 @@ fn extract_track_name(track_filestem: &str) -> Option<String> {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn scan_track(
     path: PathBuf,
     output: Arc<RwLock<ScanOutput>>,
@@ -208,7 +212,10 @@ fn scan_track(
                     e
                 })?;
 
-            let duration = if path.clone().to_str().unwrap().ends_with(".mp3") {
+            let duration = if std::path::Path::new(path.clone().to_str().unwrap())
+                .extension()
+                .map_or(false, |ext| ext.eq_ignore_ascii_case("mp3"))
+            {
                 mp3_duration::from_path(path.as_path())
                     .unwrap()
                     .as_secs_f64()
@@ -220,7 +227,7 @@ fn scan_track(
                 }
             };
 
-            let tag = tag.and_then(|x| x.ok());
+            let tag = tag.and_then(Result::ok);
 
             let path_artist = path.clone().parent().unwrap().parent().unwrap().to_owned();
             let artist_dir_name = path_artist
@@ -253,14 +260,15 @@ fn scan_track(
             let bytes = metadata.len();
             let title = tag
                 .as_ref()
-                .and_then(|tag| tag.title().map(|title| title.to_string()))
+                .and_then(|tag| tag.title().map(ToString::to_string))
                 .or_else(|| extract_track_name(&track_filestem))
-                .unwrap_or("(untitled)".to_string());
-            let number = tag
-                .as_ref()
-                .and_then(|tag| tag.track_number())
-                .or_else(|| extract_track_number(&track_filestem))
-                .unwrap_or(1) as i32;
+                .unwrap_or_else(|| "(untitled)".to_string());
+            let number = i32::from(
+                tag.as_ref()
+                    .and_then(|tag| tag.track_number())
+                    .or_else(|| extract_track_number(&track_filestem))
+                    .unwrap_or(1),
+            );
             let album = tag
                 .as_ref()
                 .and_then(|tag| tag.album_title())
@@ -268,7 +276,7 @@ fn scan_track(
                 .to_string();
             let artist_name = tag
                 .as_ref()
-                .and_then(|tag| tag.artist().or(tag.album_artist()))
+                .and_then(|tag| tag.artist().or_else(|| tag.album_artist()))
                 .unwrap_or(&artist_dir_name)
                 .to_string();
             let album_artist = tag
@@ -301,8 +309,8 @@ fn scan_track(
             log::debug!("album title: {}", album);
             log::debug!("artist directory name: {}", artist_dir_name);
             log::debug!("album directory name: {}", album_dir_name);
-            log::debug!("artist: {}", artist_name.clone());
-            log::debug!("album_artist: {}", album_artist.clone());
+            log::debug!("artist: {}", artist_name);
+            log::debug!("album_artist: {}", album_artist);
             log::debug!("date_released: {:?}", date_released);
             log::debug!(
                 "contains cover: {:?}",
@@ -310,12 +318,12 @@ fn scan_track(
             );
 
             let album_artist = match MULTI_ARTIST_PATTERN.find(album_artist.as_str()) {
-                Some(comma) => album_artist[..comma.start() + 1].to_string(),
+                Some(comma) => album_artist[..=comma.start()].to_string(),
                 None => album_artist,
             };
 
             Ok::<_, ScanError>((
-                path.to_path_buf(),
+                path.clone(),
                 tag,
                 path_album,
                 format,
@@ -409,10 +417,12 @@ fn scan_track(
             }
         }
 
+        drop(artist);
+
         let _ = album
             .add_track(
                 &Some(path.to_str().unwrap()),
-                number as u32,
+                u32::try_from(number).unwrap(),
                 &title,
                 duration,
                 &Some(bytes),
@@ -428,10 +438,14 @@ fn scan_track(
             )
             .await;
 
+        drop(album);
+        drop(output);
+
         Ok(())
     })
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn scan_album_cover(
     album: Option<Album>,
     path: PathBuf,
@@ -440,11 +454,11 @@ fn scan_album_cover(
     _scanner: Scanner,
 ) -> Pin<Box<dyn Future<Output = Result<(), ScanError>> + Send>> {
     Box::pin(async move {
-        let mut output = output.write().await;
-
         if let Some(album) = album {
             if let Some(path_str) = path.to_str() {
                 let artist = output
+                    .write()
+                    .await
                     .add_artist(&album.artist, &None, ApiSource::Library)
                     .await;
 
@@ -474,6 +488,7 @@ fn scan_album_cover(
     })
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn scan_artist_cover(
     artist: Option<Artist>,
     path: PathBuf,
@@ -482,11 +497,11 @@ fn scan_artist_cover(
     _scanner: Scanner,
 ) -> Pin<Box<dyn Future<Output = Result<(), ScanError>> + Send>> {
     Box::pin(async move {
-        let mut output = output.write().await;
-
         if let Some(artist) = artist {
             if let Some(path_str) = path.to_str() {
                 let output_artist = output
+                    .write()
+                    .await
                     .add_artist(&artist.title, &None, ApiSource::Library)
                     .await;
 

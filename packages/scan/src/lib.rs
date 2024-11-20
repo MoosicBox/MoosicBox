@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::ops::Deref;
 use std::sync::{Arc, LazyLock};
@@ -37,7 +38,7 @@ pub fn cancel() {
     CANCELLATION_TOKEN.cancel();
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -60,11 +61,11 @@ impl From<ScanOrigin> for ApiSource {
                 moosicbox_assert::die_or_panic!("Local ScanOrigin cant map to ApiSource")
             }
             #[cfg(feature = "tidal")]
-            ScanOrigin::Tidal => ApiSource::Tidal,
+            ScanOrigin::Tidal => Self::Tidal,
             #[cfg(feature = "qobuz")]
-            ScanOrigin::Qobuz => ApiSource::Qobuz,
+            ScanOrigin::Qobuz => Self::Qobuz,
             #[cfg(feature = "yt")]
-            ScanOrigin::Yt => ApiSource::Yt,
+            ScanOrigin::Yt => Self::Yt,
         }
     }
 }
@@ -76,11 +77,11 @@ impl From<ApiSource> for ScanOrigin {
                 moosicbox_assert::die_or_panic!("Library ApiSource cant map to ScanOrigin")
             }
             #[cfg(feature = "tidal")]
-            ApiSource::Tidal => ScanOrigin::Tidal,
+            ApiSource::Tidal => Self::Tidal,
             #[cfg(feature = "qobuz")]
-            ApiSource::Qobuz => ScanOrigin::Qobuz,
+            ApiSource::Qobuz => Self::Qobuz,
             #[cfg(feature = "yt")]
-            ApiSource::Yt => ScanOrigin::Yt,
+            ApiSource::Yt => Self::Yt,
         }
     }
 }
@@ -91,7 +92,7 @@ impl From<TrackApiSource> for ScanOrigin {
             TrackApiSource::Local => {
                 #[cfg(feature = "local")]
                 {
-                    ScanOrigin::Local
+                    Self::Local
                 }
                 #[cfg(not(feature = "local"))]
                 {
@@ -99,11 +100,11 @@ impl From<TrackApiSource> for ScanOrigin {
                 }
             }
             #[cfg(feature = "tidal")]
-            TrackApiSource::Tidal => ScanOrigin::Tidal,
+            TrackApiSource::Tidal => Self::Tidal,
             #[cfg(feature = "qobuz")]
-            TrackApiSource::Qobuz => ScanOrigin::Qobuz,
+            TrackApiSource::Qobuz => Self::Qobuz,
             #[cfg(feature = "yt")]
-            TrackApiSource::Yt => ScanOrigin::Yt,
+            TrackApiSource::Yt => Self::Yt,
         }
     }
 }
@@ -112,13 +113,13 @@ impl From<ScanOrigin> for TrackApiSource {
     fn from(value: ScanOrigin) -> Self {
         match value {
             #[cfg(feature = "local")]
-            ScanOrigin::Local => TrackApiSource::Local,
+            ScanOrigin::Local => Self::Local,
             #[cfg(feature = "tidal")]
-            ScanOrigin::Tidal => TrackApiSource::Tidal,
+            ScanOrigin::Tidal => Self::Tidal,
             #[cfg(feature = "qobuz")]
-            ScanOrigin::Qobuz => TrackApiSource::Qobuz,
+            ScanOrigin::Qobuz => Self::Qobuz,
             #[cfg(feature = "yt")]
-            ScanOrigin::Yt => TrackApiSource::Yt,
+            ScanOrigin::Yt => Self::Yt,
         }
     }
 }
@@ -134,7 +135,7 @@ async fn get_origins_or_default(
         origins
             .iter()
             .filter(|o| enabled_origins.iter().any(|enabled| enabled == *o))
-            .cloned()
+            .copied()
             .collect::<Vec<_>>()
     } else {
         enabled_origins
@@ -162,7 +163,14 @@ pub struct Scanner {
 }
 
 impl Scanner {
-    #[allow(unused)]
+    /// # Panics
+    ///
+    /// * If the scan location path is missing
+    ///
+    /// # Errors
+    ///
+    /// * If a database error occurs
+    #[allow(unused, clippy::unused_async)]
     pub async fn from_origin(db: &LibraryDatabase, origin: ScanOrigin) -> Result<Self, DbError> {
         let task = match origin {
             #[cfg(feature = "local")]
@@ -186,10 +194,11 @@ impl Scanner {
             _ => ScanTask::Api { origin },
         };
 
-        Ok(Self::new(task).await)
+        Ok(Self::new(task))
     }
 
-    pub async fn new(task: ScanTask) -> Self {
+    #[must_use]
+    pub fn new(task: ScanTask) -> Self {
         Self {
             scanned: Arc::new(AtomicUsize::new(0)),
             total: Arc::new(AtomicUsize::new(0)),
@@ -200,10 +209,9 @@ impl Scanner {
     #[allow(unused)]
     async fn increase_total(&self, count: usize) {
         let total = self.total.load(std::sync::atomic::Ordering::SeqCst) + count;
-        self.on_total_updated(total).await
+        self.on_total_updated(total).await;
     }
 
-    #[allow(unused)]
     #[allow(unused)]
     async fn on_total_updated(&self, total: usize) {
         let scanned = self.scanned.load(std::sync::atomic::Ordering::SeqCst);
@@ -215,8 +223,9 @@ impl Scanner {
             task: self.task.deref().clone(),
         };
 
+        let mut listeners = PROGRESS_LISTENERS.read().await;
         #[allow(unreachable_code)]
-        for listener in PROGRESS_LISTENERS.read().await.clone().iter_mut() {
+        for listener in listeners.iter() {
             listener(&event).await;
         }
     }
@@ -234,8 +243,9 @@ impl Scanner {
             task: self.task.deref().clone(),
         };
 
+        let mut listeners = PROGRESS_LISTENERS.read().await;
         #[allow(unreachable_code)]
-        for listener in PROGRESS_LISTENERS.read().await.clone().iter_mut() {
+        for listener in listeners.iter() {
             listener(&event).await;
         }
     }
@@ -251,22 +261,28 @@ impl Scanner {
             task: self.task.deref().clone(),
         };
 
+        let mut listeners = PROGRESS_LISTENERS.read().await;
         #[allow(unreachable_code)]
-        for listener in PROGRESS_LISTENERS.read().await.clone().iter_mut() {
+        for listener in listeners.iter() {
             listener(&event).await;
         }
     }
 
+    /// # Errors
+    ///
+    /// * If the scan fails
+    /// * If a tokio task fails to join
+    #[allow(clippy::uninhabited_references)]
     pub async fn scan(&self, music_apis: MusicApis, db: &LibraryDatabase) -> Result<(), ScanError> {
         self.scanned.store(0, std::sync::atomic::Ordering::SeqCst);
         self.total.store(0, std::sync::atomic::Ordering::SeqCst);
 
-        match self.task.deref() {
+        match &*self.task {
             #[cfg(feature = "local")]
             ScanTask::Local { paths } => self.scan_local(db, paths).await?,
             ScanTask::Api { origin } => {
                 self.scan_music_api(&**music_apis.get((*origin).into())?, db)
-                    .await?
+                    .await?;
             }
         }
 
@@ -275,15 +291,20 @@ impl Scanner {
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// * If the scan fails
+    /// * If a tokio task fails to join
     #[cfg(feature = "local")]
     pub async fn scan_local(
         &self,
         db: &LibraryDatabase,
         paths: &[String],
     ) -> Result<(), local::ScanError> {
-        let handles = paths.iter().cloned().map(|path| {
+        let handles = paths.iter().map(|path| {
             let db = db.clone();
             let scanner = self.clone();
+            let path = path.to_owned();
 
             moosicbox_task::spawn(&format!("scan_local: scan '{path}'"), async move {
                 local::scan(&path, &db, CANCELLATION_TOKEN.clone(), scanner).await
@@ -291,12 +312,16 @@ impl Scanner {
         });
 
         for resp in futures::future::join_all(handles).await {
-            resp??
+            resp??;
         }
 
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// * If the scan fails
+    /// * If tokio task fails to join
     pub async fn scan_music_api(
         &self,
         api: &dyn MusicApi,
@@ -322,10 +347,16 @@ impl Scanner {
     }
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn get_scan_origins(db: &LibraryDatabase) -> Result<Vec<ScanOrigin>, DbError> {
     get_enabled_scan_origins(db).await
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn enable_scan_origin(db: &LibraryDatabase, origin: ScanOrigin) -> Result<(), DbError> {
     #[cfg(feature = "local")]
     if origin == ScanOrigin::Local {
@@ -341,6 +372,9 @@ pub async fn enable_scan_origin(db: &LibraryDatabase, origin: ScanOrigin) -> Res
     db::enable_scan_origin(db, origin).await
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn disable_scan_origin(db: &LibraryDatabase, origin: ScanOrigin) -> Result<(), DbError> {
     let locations = db::get_scan_locations(db).await?;
 
@@ -351,6 +385,10 @@ pub async fn disable_scan_origin(db: &LibraryDatabase, origin: ScanOrigin) -> Re
     db::disable_scan_origin(db, origin).await
 }
 
+/// # Errors
+///
+/// * If a database error occurs
+/// * If the scan fails
 pub async fn run_scan(
     origins: Option<Vec<ScanOrigin>>,
     db: &LibraryDatabase,
@@ -371,6 +409,13 @@ pub async fn run_scan(
     Ok(())
 }
 
+/// # Panics
+///
+/// * If the download location path is missing
+///
+/// # Errors
+///
+/// * If a database error occurs
 #[cfg(feature = "local")]
 pub async fn get_scan_paths(db: &LibraryDatabase) -> Result<Vec<String>, DbError> {
     let locations = db::get_scan_locations_for_origin(db, ScanOrigin::Local).await?;
@@ -387,6 +432,9 @@ pub async fn get_scan_paths(db: &LibraryDatabase) -> Result<Vec<String>, DbError
         .collect::<Vec<_>>())
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 #[cfg(feature = "local")]
 pub async fn add_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), DbError> {
     let locations = db::get_scan_locations(db).await?;
@@ -401,6 +449,9 @@ pub async fn add_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), DbErr
     db::add_scan_path(db, path).await
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 #[cfg(feature = "local")]
 pub async fn remove_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), DbError> {
     let locations = db::get_scan_locations(db).await?;

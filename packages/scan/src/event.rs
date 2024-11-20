@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use std::{
     pin::Pin,
     sync::{Arc, LazyLock},
@@ -10,7 +12,7 @@ use tokio::sync::RwLock;
 
 use crate::ScanOrigin;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(tag = "type")]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ApiScanTask {
@@ -25,13 +27,13 @@ impl From<ScanTask> for ApiScanTask {
     fn from(value: ScanTask) -> Self {
         match value {
             #[cfg(feature = "local")]
-            ScanTask::Local { paths } => ApiScanTask::Local { paths },
-            ScanTask::Api { origin } => ApiScanTask::Api { origin },
+            ScanTask::Local { paths } => Self::Local { paths },
+            ScanTask::Api { origin } => Self::Api { origin },
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(tag = "type")]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ApiProgressEvent {
@@ -113,7 +115,7 @@ pub enum ProgressEvent {
     },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScanTask {
     #[cfg(feature = "local")]
     Local {
@@ -124,7 +126,9 @@ pub enum ScanTask {
     },
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, Clone, Copy, PartialEq, Default)]
+#[derive(
+    Debug, Serialize, Deserialize, EnumString, AsRefStr, Clone, Copy, PartialEq, Eq, Default,
+)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum ScanTaskState {

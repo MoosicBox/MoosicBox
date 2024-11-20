@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ScanOrigin;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanLocation {
     pub id: u32,
@@ -20,7 +20,7 @@ impl MissingValue<ScanOrigin> for &moosicbox_database::Row {}
 impl ToValueType<ScanOrigin> for &moosicbox_database::Row {
     fn to_value_type(self) -> Result<ScanOrigin, ParseError> {
         self.get("origin")
-            .ok_or(ParseError::MissingValue("origin".into()))?
+            .ok_or_else(|| ParseError::MissingValue("origin".into()))?
             .to_value_type()
     }
 }
@@ -49,7 +49,7 @@ impl ToValueType<ScanLocation> for &moosicbox_database::Row {
 
 impl AsId for ScanLocation {
     fn as_id(&self) -> DatabaseValue {
-        DatabaseValue::Number(self.id as i64)
+        DatabaseValue::Number(i64::from(self.id))
     }
 }
 

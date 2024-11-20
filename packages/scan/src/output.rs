@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
@@ -45,7 +47,7 @@ async fn search_for_cover(
 
     if let Some(cover_file) = std::fs::read_dir(path)
         .unwrap()
-        .filter_map(|p| p.ok())
+        .filter_map(Result::ok)
         .find(|p| p.file_name().to_str().unwrap() == name)
         .map(|dir| dir.path())
     {
@@ -79,8 +81,8 @@ pub struct ScanTrack {
 }
 
 impl ScanTrack {
-    #[allow(clippy::too_many_arguments)]
-    #[allow(unused)]
+    #[allow(unused, clippy::too_many_arguments, clippy::ref_option_ref)]
+    #[must_use]
     pub fn new(
         path: &Option<&str>,
         number: u32,
@@ -98,7 +100,7 @@ impl ScanTrack {
         api_source: ApiSource,
     ) -> Self {
         Self {
-            path: path.map(|p| p.to_string()),
+            path: path.map(ToString::to_string),
             number,
             name: name.to_string(),
             duration,
@@ -130,7 +132,8 @@ pub struct ScanAlbum {
 }
 
 impl ScanAlbum {
-    #[allow(unused)]
+    #[allow(unused, clippy::ref_option_ref)]
+    #[must_use]
     pub fn new(
         artist: ScanArtist,
         name: &str,
@@ -145,15 +148,15 @@ impl ScanAlbum {
             cover: None,
             searched_cover: false,
             date_released: date_released.clone(),
-            directory: directory.map(|d| d.to_string()),
+            directory: directory.map(ToString::to_string),
             tracks: Arc::new(RwLock::new(Vec::new())),
             id: id.cloned(),
             api_source,
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    #[allow(unused)]
+    #[allow(unused, clippy::too_many_arguments, clippy::ref_option_ref)]
+    #[must_use]
     pub async fn add_track(
         &mut self,
         path: &Option<&str>,
@@ -188,6 +191,7 @@ impl ScanAlbum {
                     break;
                 }
             }
+            drop(tracks);
             maybe_track
         } {
             track
@@ -214,6 +218,14 @@ impl ScanAlbum {
         }
     }
 
+    /// # Panics
+    ///
+    /// * If the cover path fails to be converted to a str
+    ///
+    /// # Errors
+    ///
+    /// * If the HTTP request failed
+    /// * If there is an IO error
     #[allow(unused)]
     pub async fn search_cover(
         &mut self,
@@ -247,10 +259,17 @@ impl ScanAlbum {
         Ok(self.cover.clone())
     }
 
+    /// # Panics
+    ///
+    /// * If failed to convert `artist_id` to a `i64`
+    #[must_use]
     pub fn to_sqlite_values<'a>(self, artist_id: u64) -> HashMap<&'a str, DatabaseValue> {
         #[allow(unused_mut)]
         let mut values = HashMap::from([
-            ("artist_id", DatabaseValue::Number(artist_id as i64)),
+            (
+                "artist_id",
+                DatabaseValue::Number(i64::try_from(artist_id).unwrap()),
+            ),
             ("title", DatabaseValue::String(self.name)),
             (
                 "date_released",
@@ -280,10 +299,17 @@ impl ScanAlbum {
         values
     }
 
+    /// # Panics
+    ///
+    /// * If failed to convert `artist_id` to a `i64`
+    #[must_use]
     pub fn to_database_values<'a>(self, artist_id: u64) -> HashMap<&'a str, DatabaseValue> {
         #[allow(unused_mut)]
         let mut values = HashMap::from([
-            ("artist_id", DatabaseValue::Number(artist_id as i64)),
+            (
+                "artist_id",
+                DatabaseValue::Number(i64::try_from(artist_id).unwrap()),
+            ),
             ("title", DatabaseValue::String(self.name)),
             (
                 "date_released",
@@ -325,7 +351,8 @@ pub struct ScanArtist {
 }
 
 impl ScanArtist {
-    #[allow(unused)]
+    #[allow(unused, clippy::ref_option_ref)]
+    #[must_use]
     pub fn new(name: &str, id: &Option<&Id>, api_source: ApiSource) -> Self {
         Self {
             name: name.to_string(),
@@ -337,7 +364,7 @@ impl ScanArtist {
         }
     }
 
-    #[allow(unused)]
+    #[allow(unused, clippy::ref_option_ref)]
     pub async fn add_album(
         &mut self,
         name: &str,
@@ -356,6 +383,7 @@ impl ScanArtist {
                     break;
                 }
             }
+            drop(albums);
             maybe_entry
         } {
             album
@@ -374,6 +402,14 @@ impl ScanArtist {
         }
     }
 
+    /// # Panics
+    ///
+    /// * If the cover path fails to be converted to a str
+    ///
+    /// # Errors
+    ///
+    /// * If the HTTP request failed
+    /// * If there is an IO error
     #[allow(unused)]
     pub async fn search_cover(
         &mut self,
@@ -406,6 +442,7 @@ impl ScanArtist {
         Ok(self.cover.clone())
     }
 
+    #[must_use]
     pub fn to_sqlite_values<'a>(self) -> HashMap<&'a str, DatabaseValue> {
         #[allow(unused_mut)]
         let mut values = HashMap::from([
@@ -433,6 +470,7 @@ impl ScanArtist {
         values
     }
 
+    #[must_use]
     pub fn to_database_values<'a>(self) -> HashMap<&'a str, DatabaseValue> {
         #[allow(unused_mut)]
         let mut values = HashMap::from([
@@ -493,6 +531,7 @@ pub struct ScanOutput {
 
 impl ScanOutput {
     #[allow(unused)]
+    #[must_use]
     pub fn new() -> Self {
         Self {
             artists: Arc::new(RwLock::new(Vec::new())),
@@ -500,7 +539,7 @@ impl ScanOutput {
         }
     }
 
-    #[allow(unused)]
+    #[allow(unused, clippy::ref_option_ref)]
     pub async fn add_artist(
         &mut self,
         name: &str,
@@ -517,6 +556,7 @@ impl ScanOutput {
                     break;
                 }
             }
+            drop(artists);
             maybe_entry
         } {
             artist
@@ -528,7 +568,14 @@ impl ScanOutput {
         }
     }
 
-    #[allow(unused)]
+    /// # Panics
+    ///
+    /// * If the ID failed to be retrieved from the row
+    ///
+    /// # Errors
+    ///
+    /// * If the database fails to update
+    #[allow(unused, clippy::too_many_lines)]
     pub async fn update_database(
         &self,
         db: &LibraryDatabase,
@@ -538,20 +585,13 @@ impl ScanOutput {
                 .read()
                 .await
                 .iter()
-                .map(|artist| async { artist.read().await.clone() })
-                .collect::<Vec<_>>(),
+                .map(|artist| async { artist.read().await.clone() }),
         )
         .await;
         let artist_count = artists.len();
         let albums = join_all(artists.iter().map(|artist| async {
             let artist = artist.albums.read().await;
-            join_all(
-                artist
-                    .iter()
-                    .map(|a| async { a.read().await.clone() })
-                    .collect::<Vec<_>>(),
-            )
-            .await
+            join_all(artist.iter().map(|a| async { a.read().await.clone() })).await
         }))
         .await
         .into_iter()
@@ -561,13 +601,7 @@ impl ScanOutput {
         let album_count = albums.len();
         let tracks = join_all(albums.iter().map(|album| async {
             let tracks = album.tracks.read().await;
-            join_all(
-                tracks
-                    .iter()
-                    .map(|a| async { a.read().await.clone() })
-                    .collect::<Vec<_>>(),
-            )
-            .await
+            join_all(tracks.iter().map(|a| async { a.read().await.clone() })).await
         }))
         .await
         .into_iter()
@@ -785,6 +819,13 @@ impl ScanOutput {
         })
     }
 
+    /// # Panics
+    ///
+    /// * If time went backwards
+    ///
+    /// # Errors
+    ///
+    /// * If the reindex failed
     pub async fn reindex_global_search_index(
         &self,
         db: &LibraryDatabase,

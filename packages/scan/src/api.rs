@@ -97,7 +97,7 @@ pub async fn run_scan_endpoint(
         .map(|origins| {
             origins
                 .split(',')
-                .map(|s| s.trim())
+                .map(str::trim)
                 .map(|s| {
                     ScanOrigin::from_str(s)
                         .map_err(|_e| ErrorBadRequest(format!("Invalid ScanOrigin value: {s}")))
@@ -145,7 +145,7 @@ pub async fn start_scan_endpoint(
         .map(|origins| {
             origins
                 .split(',')
-                .map(|s| s.trim())
+                .map(str::trim)
                 .map(|s| {
                     ScanOrigin::from_str(s)
                         .map_err(|_e| ErrorBadRequest(format!("Invalid ScanOrigin value: {s}")))
@@ -202,8 +202,7 @@ pub async fn run_scan_path_endpoint(
 ) -> Result<Json<Value>> {
     let scanner = crate::Scanner::new(crate::event::ScanTask::Local {
         paths: vec![query.path.clone()],
-    })
-    .await;
+    });
 
     scanner
         .scan(music_apis, &db)

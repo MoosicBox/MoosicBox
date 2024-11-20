@@ -1,5 +1,5 @@
 use moosicbox_core::sqlite::db::DbError;
-use moosicbox_database::{profiles::LibraryDatabase, query::*};
+use moosicbox_database::{profiles::LibraryDatabase, query::FilterableQuery};
 use moosicbox_json_utils::ToValueType;
 
 use crate::ScanOrigin;
@@ -8,6 +8,9 @@ use self::models::ScanLocation;
 
 pub mod models;
 
+/// # Errors
+///
+/// * If a database error occurs
 #[cfg(feature = "local")]
 pub async fn add_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), DbError> {
     db.upsert("scan_locations")
@@ -21,6 +24,9 @@ pub async fn add_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), DbErr
     Ok(())
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 #[cfg(feature = "local")]
 pub async fn remove_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), DbError> {
     db.delete("scan_locations")
@@ -32,6 +38,9 @@ pub async fn remove_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), Db
     Ok(())
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn enable_scan_origin(db: &LibraryDatabase, origin: ScanOrigin) -> Result<(), DbError> {
     db.upsert("scan_locations")
         .where_eq("origin", origin.as_ref())
@@ -42,6 +51,9 @@ pub async fn enable_scan_origin(db: &LibraryDatabase, origin: ScanOrigin) -> Res
     Ok(())
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn disable_scan_origin(db: &LibraryDatabase, origin: ScanOrigin) -> Result<(), DbError> {
     db.delete("scan_locations")
         .where_eq("origin", origin.as_ref())
@@ -51,6 +63,9 @@ pub async fn disable_scan_origin(db: &LibraryDatabase, origin: ScanOrigin) -> Re
     Ok(())
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn get_enabled_scan_origins(db: &LibraryDatabase) -> Result<Vec<ScanOrigin>, DbError> {
     Ok(db
         .select("scan_locations")
@@ -61,6 +76,9 @@ pub async fn get_enabled_scan_origins(db: &LibraryDatabase) -> Result<Vec<ScanOr
         .to_value_type()?)
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn get_scan_locations(db: &LibraryDatabase) -> Result<Vec<ScanLocation>, DbError> {
     Ok(db
         .select("scan_locations")
@@ -68,6 +86,10 @@ pub async fn get_scan_locations(db: &LibraryDatabase) -> Result<Vec<ScanLocation
         .await?
         .to_value_type()?)
 }
+
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn get_scan_locations_for_origin(
     db: &LibraryDatabase,
     origin: ScanOrigin,

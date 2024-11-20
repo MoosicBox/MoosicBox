@@ -403,12 +403,11 @@ impl DownloadQueue {
             let scan_paths = moosicbox_scan::get_scan_paths(&database.clone()).await?;
 
             if scan_paths.iter().any(|x| path.starts_with(x)) {
-                Some(
-                    moosicbox_scan::Scanner::new(moosicbox_scan::event::ScanTask::Local {
+                Some(moosicbox_scan::Scanner::new(
+                    moosicbox_scan::event::ScanTask::Local {
                         paths: vec![path.parent().unwrap().to_str().unwrap().to_string()],
-                    })
-                    .await,
-                )
+                    },
+                ))
             } else {
                 None
             }

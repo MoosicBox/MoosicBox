@@ -32,6 +32,14 @@ pub enum ScanError {
     FetchAndSaveBytesFromRemoteUrl(#[from] FetchAndSaveBytesFromRemoteUrlError),
 }
 
+/// # Panics
+///
+/// * If the page total is missing
+/// * If the page count is outside the range of a `u32`
+///
+/// # Errors
+///
+/// * If the scan fails
 pub async fn scan(
     api: &dyn MusicApi,
     db: &LibraryDatabase,
@@ -70,7 +78,7 @@ pub async fn scan(
                             break;
                         }
 
-                        offset += page_count as u32;
+                        offset += u32::try_from(page_count).unwrap();
                     }
                     Err(err) =>  {
                         log::warn!("music api scan error: {err:?}");
@@ -78,7 +86,7 @@ pub async fn scan(
                     }
                 }
             },
-            _ = token.cancelled() => {
+            () = token.cancelled() => {
                 log::debug!("Cancelling music api scan");
                 return Ok(());
             }
@@ -91,11 +99,10 @@ pub async fn scan(
         end.duration_since(start).unwrap().as_millis()
     );
 
-    {
-        let output = output.read().await;
-        output.update_database(db).await?;
-        output.reindex_global_search_index(db).await?;
-    }
+    let output = output.read().await;
+    output.update_database(db).await?;
+    output.reindex_global_search_index(db).await?;
+    drop(output);
 
     let end = std::time::SystemTime::now();
     log::info!(
@@ -106,6 +113,15 @@ pub async fn scan(
     Ok(())
 }
 
+/// # Panics
+///
+/// * If the page total is missing
+/// * If the page count is outside the range of a `u32`
+///
+/// # Errors
+///
+/// * If the albums scan fails
+#[allow(clippy::too_many_lines)]
 pub async fn scan_albums(
     api: &dyn MusicApi,
     albums: &[Album],
@@ -219,7 +235,7 @@ pub async fn scan_albums(
                                 break;
                             }
 
-                            offset += page_count as u32;
+                            offset += u32::try_from(page_count).unwrap();
                         }
                         Err(err) =>  {
                             log::error!("music api scan error: {err:?}");
@@ -227,7 +243,7 @@ pub async fn scan_albums(
                         }
                     }
                 },
-                _ = token.cancelled() => {
+                () = token.cancelled() => {
                     log::debug!("Cancelling music api scan");
                     return Ok(());
                 }
@@ -238,6 +254,9 @@ pub async fn scan_albums(
     Ok(())
 }
 
+/// # Errors
+///
+/// * If the tracks scan fails
 async fn scan_tracks(
     api: &dyn MusicApi,
     tracks: &[Track],
