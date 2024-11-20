@@ -24,7 +24,7 @@ impl FromRequest for GeneralHeaderAuthorized {
     fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
         log::trace!("GeneralHeaderAuthorized from_request {}", req.path());
         if is_authorized(req) {
-            ok(GeneralHeaderAuthorized)
+            ok(Self)
         } else {
             log::warn!(
                 "Unauthorized GeneralHeaderAuthorized request to '{}'",
@@ -64,7 +64,7 @@ impl FromRequest for ClientHeaderAuthorized {
         let auth_header = req.headers().get(http::header::AUTHORIZATION).cloned();
         Box::pin(async move {
             match client_is_authorized(&query_string, auth_header).await {
-                Ok(true) => return Ok(ClientHeaderAuthorized),
+                Ok(true) => return Ok(Self),
                 Ok(false) => log::warn!("Unauthorized ClientHeaderAuthorized request to '{path}'"),
                 Err(err) => log::error!("ClientHeaderAuthorized Database error: {err:?}"),
             }
@@ -95,9 +95,9 @@ async fn client_is_authorized(
 
                 let token_hash = &hash_token(token);
                 return valid_client_access_token(client_id, token_hash).await;
-            } else {
-                log::debug!("UNAUTHORIZED: Invalid auth header");
             }
+
+            log::debug!("UNAUTHORIZED: Invalid auth header");
         } else {
             log::debug!("UNAUTHORIZED: No auth header");
         }
@@ -117,7 +117,7 @@ impl FromRequest for QueryAuthorized {
     fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
         log::trace!("QueryAuthorized from_request {}", req.path());
         if is_query_authorized(req) {
-            ok(QueryAuthorized)
+            ok(Self)
         } else {
             log::warn!("Unauthorized QueryAuthorized request to '{}'", req.path());
             err(ErrorUnauthorized("Unauthorized"))
@@ -152,7 +152,7 @@ impl FromRequest for SignatureAuthorized {
         let query_string = req.query_string().to_owned();
         Box::pin(async move {
             match is_signature_authorized(&query_string).await {
-                Ok(true) => Ok(SignatureAuthorized),
+                Ok(true) => Ok(Self),
                 Ok(false) => {
                     log::warn!("Unauthorized SignatureAuthorized request to '{path}'");
                     Err(ErrorUnauthorized("Unauthorized"))
@@ -196,7 +196,7 @@ static HASH_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
 pub fn hash_token(token: &str) -> String {
     if let Some(existing) = HASH_CACHE
         .lock()
-        .unwrap_or_else(|e| e.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .get(token)
     {
         return existing.clone();
@@ -209,7 +209,7 @@ pub fn hash_token(token: &str) -> String {
 
     HASH_CACHE
         .lock()
-        .unwrap_or_else(|e| e.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .insert(token.to_string(), hash.clone());
 
     hash

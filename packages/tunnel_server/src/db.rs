@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions, clippy::struct_field_names)]
+
 use std::{pin::Pin, sync::LazyLock};
 
 use actix_web::error::ErrorInternalServerError;
@@ -31,6 +33,7 @@ pub enum DatabaseError {
     Parse(#[from] moosicbox_json_utils::ParseError),
 }
 
+#[allow(clippy::significant_drop_tightening)]
 pub async fn init() -> Result<(), DatabaseError> {
     #[allow(unused_mut)]
     let mut binding = DB.lock().await;
@@ -146,10 +149,9 @@ impl ToValueType<MagicToken> for &Row {
     }
 }
 
-pub(crate) static DB: LazyLock<Mutex<Option<Box<dyn Database>>>> =
-    LazyLock::new(|| Mutex::new(None));
+pub static DB: LazyLock<Mutex<Option<Box<dyn Database>>>> = LazyLock::new(|| Mutex::new(None));
 
-async fn resilient_exec<T, F>(
+async fn resilient_exec<T: Send, F>(
     exec: Box<dyn Fn() -> Pin<Box<F>> + Send + Sync>,
 ) -> Result<T, DatabaseError>
 where

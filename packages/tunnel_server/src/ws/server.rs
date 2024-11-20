@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use std::{
     collections::HashMap,
     fmt,
@@ -98,6 +100,7 @@ impl service::Processor for service::Service {
         Ok(())
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn process_command(
         ctx: Arc<RwLock<WsServer>>,
         command: Command,
@@ -183,9 +186,8 @@ impl service::Processor for service::Service {
                                 ctx.headers_senders.remove(&request_id);
                                 drop(ctx);
                             }
-                            if let Err(err) =
-                                ctx.read().await.abort_request(conn_id, request_id).await
-                            {
+                            let response = ctx.read().await.abort_request(conn_id, request_id);
+                            if let Err(err) = response {
                                 log::error!("process_command: Failed to abort request_id={request_id}: {err:?}");
                             }
                         }
@@ -209,8 +211,8 @@ impl service::Processor for service::Service {
                         let mut binding = ctx.write().await;
                         binding.senders.remove(&request_id);
                         drop(binding);
-                        if let Err(err) = ctx.read().await.abort_request(conn_id, request_id).await
-                        {
+                        let response = ctx.read().await.abort_request(conn_id, request_id);
+                        if let Err(err) = response {
                             log::error!(
                                 "process_command: Failed to abort request_id={request_id} {err:?}"
                             );
@@ -244,8 +246,7 @@ impl service::Processor for service::Service {
                     });
                     let binding = ctx.read().await;
                     let response = binding
-                        .send_message_to(client_conn_id, serde_json::to_string(&body).unwrap())
-                        .await;
+                        .send_message_to(client_conn_id, serde_json::to_string(&body).unwrap());
                     drop(binding);
 
                     if let Err(error) = response {
@@ -264,9 +265,7 @@ impl service::Processor for service::Service {
                 if let Some(to_connection_ids) = message.to_connection_ids {
                     for conn_id in to_connection_ids {
                         let binding = ctx.read().await;
-                        let response = binding
-                            .send_message_to(conn_id, message.body.to_string())
-                            .await;
+                        let response = binding.send_message_to(conn_id, message.body.to_string());
                         drop(binding);
                         if let Err(error) = response {
                             log::error!("Failed to send WsResponse to {conn_id}: {error:?}");
@@ -274,16 +273,15 @@ impl service::Processor for service::Service {
                     }
                 } else if let Some(exclude_connection_ids) = message.exclude_connection_ids {
                     let binding = ctx.read().await;
-                    let response = binding
-                        .broadcast_except(&exclude_connection_ids, message.body.to_string())
-                        .await;
+                    let response =
+                        binding.broadcast_except(&exclude_connection_ids, message.body.to_string());
                     drop(binding);
                     if let Err(error) = response {
                         log::error!("Failed to broadcast_except WsMessage: {error:?}");
                     }
                 } else {
                     let binding = ctx.read().await;
-                    let response = binding.broadcast(message.body.to_string()).await;
+                    let response = binding.broadcast(message.body.to_string());
                     drop(binding);
                     if let Err(error) = response {
                         log::error!("Failed to broadcast WsMessage: {error:?}");
@@ -293,13 +291,11 @@ impl service::Processor for service::Service {
 
             Command::WsResponse { response } => {
                 let binding = ctx.read().await;
-                let ws_id = binding.ws_requests.get(&response.request_id).cloned();
+                let ws_id = binding.ws_requests.get(&response.request_id).copied();
                 drop(binding);
                 if let Some(ws_id) = ws_id {
                     let binding = ctx.read().await;
-                    let response = binding
-                        .send_message_to(ws_id, response.body.to_string())
-                        .await;
+                    let response = binding.send_message_to(ws_id, response.body.to_string());
                     drop(binding);
                     if let Err(error) = response {
                         log::error!("Failed to send WsResponse to {ws_id}: {error:?}");
@@ -311,7 +307,7 @@ impl service::Processor for service::Service {
 
             Command::Message { conn, msg } => {
                 let binding = ctx.read().await;
-                let response = binding.send_message_to(conn, &msg).await;
+                let response = binding.send_message_to(conn, &msg);
                 drop(binding);
                 if let Err(error) = response {
                     log::error!("Failed to send message to {conn}: {msg:?}: {error:?}");
@@ -357,7 +353,7 @@ pub enum InboundMessageType {
 
 impl fmt::Display for InboundMessageType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -382,11 +378,7 @@ impl WsServer {
         }
     }
 
-    async fn abort_request(
-        &self,
-        id: ConnId,
-        request_id: usize,
-    ) -> Result<(), WebsocketMessageError> {
+    fn abort_request(&self, id: ConnId, request_id: usize) -> Result<(), WebsocketMessageError> {
         log::debug!("Aborting request {request_id} (conn_id={id})");
         if let Some(abort_token) = self.abort_request_tokens.get(&request_id) {
             abort_token.cancel();
@@ -395,11 +387,10 @@ impl WsServer {
         }
         let body = TunnelRequest::Abort(TunnelAbortRequest { request_id });
         self.send_message_to(id, serde_json::to_string(&body).unwrap())
-            .await
     }
 
     /// Send message directly to the user.
-    async fn send_message_to(
+    fn send_message_to(
         &self,
         id: ConnId,
         msg: impl Into<String>,
@@ -415,19 +406,19 @@ impl WsServer {
     }
 
     /// Send message directly to the user.
-    async fn broadcast(&self, msg: impl Into<String>) -> Result<(), WebsocketMessageError> {
+    fn broadcast(&self, msg: impl Into<String>) -> Result<(), WebsocketMessageError> {
         log::debug!("Broadcasting message");
         let message = msg.into();
 
         for session in self.clients.values() {
             // errors if client disconnected abruptly and hasn't been timed-out yet
-            session.send(message.clone())?
+            session.send(message.clone())?;
         }
         Ok(())
     }
 
     /// Send message directly to the user.
-    async fn broadcast_except(
+    fn broadcast_except(
         &self,
         ids: &[ConnId],
         msg: impl Into<String>,
@@ -440,7 +431,7 @@ impl WsServer {
                 continue;
             }
             // errors if client disconnected abruptly and hasn't been timed-out yet
-            session.send(message.clone())?
+            session.send(message.clone())?;
         }
         Ok(())
     }
@@ -557,7 +548,7 @@ impl service::Handle {
         conn_id: usize,
         client_id: &str,
         profile: Option<String>,
-        msg: impl Into<String>,
+        msg: impl Into<String> + Send,
     ) -> Result<(), WsRequestError> {
         let request_id = thread_rng().gen::<usize>();
 
@@ -614,7 +605,7 @@ pub async fn get_connection_id(client_id: &str) -> Result<usize, ConnectionIdErr
     } else {
         let tunnel_ws_id = select_connection(client_id)
             .await?
-            .ok_or(ConnectionIdError::NotFound(client_id.to_string()))?
+            .ok_or_else(|| ConnectionIdError::NotFound(client_id.to_string()))?
             .tunnel_ws_id;
 
         let conn_id = tunnel_ws_id

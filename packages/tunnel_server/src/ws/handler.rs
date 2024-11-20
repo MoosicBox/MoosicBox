@@ -1,3 +1,5 @@
+#![allow(clippy::future_not_send)]
+
 use std::time::{Duration, Instant};
 
 use actix_ws::Message;
@@ -18,6 +20,7 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Echo text & binary messages received from the client, respond to ping messages, and monitor
 /// connection health to detect network issues and free up resources.
+#[allow(clippy::too_many_lines)]
 pub async fn handle_ws(
     ws_server: super::server::service::Handle,
     mut session: actix_ws::Session,
@@ -74,7 +77,7 @@ pub async fn handle_ws(
                     #[cfg(feature = "base64")]
                     if let Ok(response) = text.try_into() {
                         ws_server.response(conn_id, response).await;
-                        finished = true
+                        finished = true;
                     }
 
                     if !finished {

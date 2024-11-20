@@ -18,6 +18,7 @@ pub struct ConnectRequest {
 }
 
 #[get("/ws")]
+#[allow(clippy::similar_names, clippy::future_not_send)]
 pub async fn websocket(
     req: actix_web::HttpRequest,
     stream: web::Payload,

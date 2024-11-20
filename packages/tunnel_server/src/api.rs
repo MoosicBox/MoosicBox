@@ -1,3 +1,5 @@
+#![allow(clippy::future_not_send)]
+
 use actix_web::error::{
     ErrorBadRequest, ErrorFailedDependency, ErrorInternalServerError, ErrorUnauthorized,
 };
@@ -84,7 +86,7 @@ pub async fn auth_magic_token_endpoint(
         .iter()
         .find(|(key, _)| key.eq_ignore_ascii_case("clientId"))
         .map(|(_, value)| value)
-        .ok_or(ErrorBadRequest("Missing clientId"))?;
+        .ok_or_else(|| ErrorBadRequest("Missing clientId"))?;
 
     insert_magic_token(client_id, token_hash).await?;
 
@@ -191,7 +193,7 @@ enum ResponseType {
 fn get_headers_for_request(req: &HttpRequest) -> Option<Value> {
     let mut headers = HashMap::<String, String>::new();
 
-    for (key, value) in req.headers().iter() {
+    for (key, value) in req.headers() {
         match *key {
             header::ACCEPT | header::RANGE => {
                 headers.insert(key.to_string(), value.to_str().unwrap().to_string());
@@ -224,7 +226,7 @@ async fn proxy_request(
     let client_id = query
         .get("clientId")
         .cloned()
-        .ok_or(ErrorBadRequest("Missing clientId query param"))?;
+        .ok_or_else(|| ErrorBadRequest("Missing clientId query param"))?;
     let query = serde_json::to_value(query).unwrap();
 
     let body = body
@@ -260,8 +262,8 @@ async fn handle_request(
         payload,
         headers,
         profile,
-        abort_token.clone(),
-    )?;
+        &abort_token,
+    );
 
     let mut builder = HttpResponse::Ok();
 
@@ -307,7 +309,7 @@ async fn handle_request(
                 .collect::<Vec<_>>()
                 .await
                 .into_iter()
-                .filter_map(|bytes| bytes.ok())
+                .filter_map(Result::ok)
                 .flatten()
                 .collect();
 
@@ -334,11 +336,11 @@ fn request(
     payload: Option<Value>,
     headers: Option<Value>,
     profile: Option<String>,
-    abort_token: CancellationToken,
-) -> Result<(
+    abort_token: &CancellationToken,
+) -> (
     oneshot::Receiver<RequestHeaders>,
     UnboundedReceiver<TunnelResponse>,
-)> {
+) {
     let (headers_tx, headers_rx) = oneshot::channel();
     let (tx, rx) = unbounded_channel();
 
@@ -392,5 +394,5 @@ fn request(
         Ok::<_, RequestError>(())
     });
 
-    Ok((headers_rx, rx))
+    (headers_rx, rx)
 }

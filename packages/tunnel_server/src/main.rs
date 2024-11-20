@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 mod api;
 mod auth;
@@ -16,6 +17,7 @@ use tokio::try_join;
 static WS_SERVER_HANDLE: LazyLock<tokio::sync::RwLock<Option<ws::server::service::Handle>>> =
     LazyLock::new(|| tokio::sync::RwLock::new(None));
 
+#[allow(clippy::too_many_lines)]
 fn main() -> Result<(), std::io::Error> {
     if std::env::var("TOKIO_CONSOLE") == Ok("1".to_string()) {
         console_subscriber::init();
@@ -135,14 +137,17 @@ fn main() -> Result<(), std::io::Error> {
                 db::DB.lock().await.take();
 
                 #[cfg(feature = "postgres-raw")]
-                if let Some(db_connection_handle) = db::DB.lock().await.as_mut() {
-                    log::debug!("Shutting down db connection...");
-                    if let Err(e) = db_connection_handle.close().await {
-                        log::error!("Failed to close database connection: {e:?}");
+                {
+                    let mut db = db::DB.lock().await;
+                    if let Some(db_connection_handle) = db.as_mut() {
+                        log::debug!("Shutting down db connection...");
+                        if let Err(e) = db_connection_handle.close().await {
+                            log::error!("Failed to close database connection: {e:?}");
+                        }
+                        log::debug!("Database connection closed");
+                    } else {
+                        log::debug!("No database connection");
                     }
-                    log::debug!("Database connection closed");
-                } else {
-                    log::debug!("No database connection");
                 }
 
                 log::trace!("Connections closed");
