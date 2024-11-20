@@ -28,17 +28,25 @@ pub async fn on_players_updated_event<
         .push(Box::new(move || Box::pin(listener())));
 }
 
+/// # Errors
+///
+/// * If any of the event handlers produce errors
 pub async fn trigger_players_updated_event() -> Result<(), Vec<Box<dyn std::error::Error + Send>>> {
     send_players_updated_event().await
 }
 
+/// # Errors
+///
+/// * If any of the event handlers produce errors
 pub async fn send_players_updated_event() -> Result<(), Vec<Box<dyn std::error::Error + Send>>> {
     let mut errors = vec![];
-    for listener in PLAYERS_UPDATED_EVENT_LISTENERS.read().await.iter() {
+    let listeners = PLAYERS_UPDATED_EVENT_LISTENERS.read().await;
+    for listener in listeners.iter() {
         if let Err(e) = listener().await {
             errors.push(e);
         }
     }
+    drop(listeners);
 
     if !errors.is_empty() {
         return Err(errors);

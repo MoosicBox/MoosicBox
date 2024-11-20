@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use moosicbox_audio_zone::{
     db::audio_zone_try_from_db,
@@ -21,6 +22,9 @@ pub mod api;
 #[cfg(feature = "events")]
 pub mod events;
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn get_session_playlist_tracks(
     db: &LibraryDatabase,
     session_playlist_id: u64,
@@ -28,6 +32,9 @@ pub async fn get_session_playlist_tracks(
     crate::db::get_session_playlist_tracks(db, session_playlist_id).await
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn get_session_playlist(
     db: &LibraryDatabase,
     session_id: u64,
@@ -35,6 +42,9 @@ pub async fn get_session_playlist(
     crate::db::get_session_playlist(db, session_id).await
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn get_session_audio_zone(
     db: &LibraryDatabase,
     session_id: u64,
@@ -48,6 +58,9 @@ pub async fn get_session_audio_zone(
     )
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn set_session_audio_zone(
     db: &LibraryDatabase,
     set_session_audio_zone: &SetSessionAudioZone,
@@ -55,18 +68,30 @@ pub async fn set_session_audio_zone(
     crate::db::set_session_audio_zone(db, set_session_audio_zone).await
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn get_session_playing(db: &LibraryDatabase, id: u64) -> Result<Option<bool>, DbError> {
     crate::db::get_session_playing(db, id).await
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn get_session(db: &LibraryDatabase, id: u64) -> Result<Option<Session>, DbError> {
     crate::db::get_session(db, id).await
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn get_sessions(db: &LibraryDatabase) -> Result<Vec<Session>, DbError> {
     crate::db::get_sessions(db).await
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn create_session(
     db: &LibraryDatabase,
     session: &CreateSession,
@@ -74,18 +99,30 @@ pub async fn create_session(
     crate::db::create_session(db, session).await
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn update_session(db: &LibraryDatabase, session: &UpdateSession) -> Result<(), DbError> {
     crate::db::update_session(db, session).await
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn delete_session(db: &LibraryDatabase, session_id: u64) -> Result<(), DbError> {
     crate::db::delete_session(db, session_id).await
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn get_connections(db: &ConfigDatabase) -> Result<Vec<models::Connection>, DbError> {
     crate::db::get_connections(db).await
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn register_connection(
     db: &ConfigDatabase,
     connection: &models::RegisterConnection,
@@ -107,14 +144,23 @@ pub async fn register_connection(
     })
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn delete_connection(db: &ConfigDatabase, connection_id: &str) -> Result<(), DbError> {
     crate::db::delete_connection(db, connection_id).await
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn get_players(db: &ConfigDatabase, connection_id: &str) -> Result<Vec<Player>, DbError> {
     crate::db::get_players(db, connection_id).await
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn create_player(
     db: &ConfigDatabase,
     connection_id: &str,
@@ -142,6 +188,9 @@ pub enum CreatePlayersError {
     InvalidConnection,
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn create_players(
     db: &ConfigDatabase,
     connection_id: &str,
@@ -170,6 +219,9 @@ pub async fn create_players(
     Ok(results)
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn delete_player(db: &ConfigDatabase, player_id: u64) -> Result<(), DbError> {
     crate::db::delete_player(db, player_id).await?;
 
@@ -185,6 +237,9 @@ pub async fn delete_player(db: &ConfigDatabase, player_id: u64) -> Result<(), Db
     Ok(())
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn delete_session_playlist_track_by_track_id(
     db: &LibraryDatabase,
     id: u64,
@@ -192,6 +247,9 @@ pub async fn delete_session_playlist_track_by_track_id(
     crate::db::delete_session_playlist_track_by_track_id(db, id).await
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn delete_session_playlist_tracks_by_track_id(
     db: &LibraryDatabase,
     ids: Option<&Vec<u64>>,

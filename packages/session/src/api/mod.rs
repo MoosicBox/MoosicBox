@@ -6,7 +6,7 @@ use actix_web::{
     Result, Scope,
 };
 use moosicbox_audio_zone::models::{ApiAudioZone, ApiPlayer};
-use moosicbox_core::sqlite::models::{ApiTrack, ToApi as _};
+use moosicbox_core::sqlite::models::{ApiTrack, ToApi};
 use moosicbox_database::{config::ConfigDatabase, profiles::LibraryDatabase};
 use moosicbox_paging::Page;
 use moosicbox_session_models::{ApiConnection, RegisterConnection};
@@ -96,7 +96,7 @@ pub async fn session_playlist_tracks_endpoint(
     let outputs = crate::get_session_playlist_tracks(&db, query.session_playlist_id)
         .await
         .map_err(ErrorInternalServerError)?;
-    let total = outputs.len() as u32;
+    let total = u32::try_from(outputs.len()).unwrap();
     let outputs = outputs
         .into_iter()
         .skip(offset as usize)
@@ -144,7 +144,7 @@ pub async fn session_playlist_endpoint(
     let playlist = crate::get_session_playlist(&db, query.session_playlist_id)
         .await
         .map_err(ErrorInternalServerError)?
-        .map(|x| x.to_api());
+        .map(ToApi::to_api);
 
     Ok(Json(playlist))
 }
@@ -257,7 +257,7 @@ pub async fn session_endpoint(
     let session = crate::get_session(&db, query.session_id)
         .await
         .map_err(ErrorInternalServerError)?
-        .map(|x| x.to_api());
+        .map(ToApi::to_api);
 
     Ok(Json(session))
 }
@@ -299,12 +299,12 @@ pub async fn sessions_endpoint(
     let sessions = crate::get_sessions(&db)
         .await
         .map_err(ErrorInternalServerError)?;
-    let total = sessions.len() as u32;
+    let total = u32::try_from(sessions.len()).unwrap();
     let sessions = sessions
         .into_iter()
         .skip(offset as usize)
         .take(limit as usize)
-        .map(|x| x.to_api())
+        .map(ToApi::to_api)
         .collect::<Vec<_>>();
 
     Ok(Json(Page::WithTotal {
@@ -360,7 +360,7 @@ pub async fn register_players_endpoint(
     let registered = crate::create_players(&db, &query.connection_id, &players)
         .await?
         .into_iter()
-        .map(|x| x.to_api())
+        .map(ToApi::to_api)
         .collect::<Vec<_>>();
 
     Ok(Json(registered))

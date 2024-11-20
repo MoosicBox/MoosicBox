@@ -199,7 +199,7 @@ pub async fn update_session(db: &LibraryDatabase, session: &UpdateSession) -> Re
     let playlist_id = session
         .playlist
         .as_ref()
-        .map(|p| p.session_playlist_id as i64);
+        .map(|p| i64::try_from(p.session_playlist_id).unwrap());
 
     if let Some(tracks) = session.playlist.as_ref().map(|p| &p.tracks) {
         log::trace!("update_session: Inserting new tracks");
@@ -242,33 +242,34 @@ pub async fn update_session(db: &LibraryDatabase, session: &UpdateSession) -> Re
     }
 
     if let Some(name) = &session.name {
-        values.push(("name", DatabaseValue::String(name.clone())))
+        values.push(("name", DatabaseValue::String(name.clone())));
     }
     if let Some(active) = session.active {
-        values.push(("active", DatabaseValue::Bool(active)))
+        values.push(("active", DatabaseValue::Bool(active)));
     }
     if let Some(playing) = session.playing {
-        values.push(("playing", DatabaseValue::Bool(playing)))
+        values.push(("playing", DatabaseValue::Bool(playing)));
     }
     if let Some(position) = session.position {
-        values.push(("position", DatabaseValue::Number(position as i64)))
+        values.push(("position", DatabaseValue::Number(i64::from(position))));
     }
     if let Some(seek) = session.seek {
-        values.push(("seek", DatabaseValue::Number(seek as i64)))
+        #[allow(clippy::cast_possible_truncation)]
+        values.push(("seek", DatabaseValue::Number(seek as i64)));
     }
     if let Some(volume) = session.volume {
-        values.push(("volume", DatabaseValue::Real(volume)))
+        values.push(("volume", DatabaseValue::Real(volume)));
     }
 
-    if !values.is_empty() {
+    if values.is_empty() {
+        log::trace!("update_session: No values to update on the session");
+    } else {
         log::trace!("update_session: Updating session values values={values:?}");
         db.update("sessions")
             .where_eq("id", session.session_id)
             .values(values)
             .execute_first(db)
             .await?;
-    } else {
-        log::trace!("update_session: No values to update on the session");
     }
 
     log::trace!("update_session: Finished updating session");
@@ -447,13 +448,13 @@ pub async fn delete_session_playlist_tracks_by_track_id(
     db: &LibraryDatabase,
     ids: Option<&Vec<u64>>,
 ) -> Result<Vec<ApiTrack>, DbError> {
-    if ids.is_some_and(|ids| ids.is_empty()) {
+    if ids.is_some_and(Vec::is_empty) {
         return Ok(vec![]);
     }
 
     db.delete("session_playlist_tracks")
         .where_eq("type", "'LIBRARY'")
-        .filter_if_some(ids.map(|ids| where_in("track_id", ids.to_vec())))
+        .filter_if_some(ids.map(|ids| where_in("track_id", ids.clone())))
         .execute(db)
         .await?
         .into_iter()
