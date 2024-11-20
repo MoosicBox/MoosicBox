@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use std::{collections::HashMap, fmt::Display, pin::Pin, sync::Arc, time::Duration};
 
 use futures::Future;
@@ -73,6 +75,7 @@ pub struct UpnpContext {
 }
 
 impl UpnpContext {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -81,9 +84,9 @@ impl UpnpContext {
 impl Default for UpnpContext {
     fn default() -> Self {
         Self {
-            status_join_handles: Default::default(),
-            status_tokens: Default::default(),
-            token: Default::default(),
+            status_join_handles: HashMap::default(),
+            status_tokens: HashMap::default(),
+            token: Option::default(),
             subscription_id: 1,
         }
     }
@@ -92,6 +95,10 @@ impl Default for UpnpContext {
 moosicbox_async_service::async_service!(UpnpCommand, UpnpContext, ListenerError);
 
 impl Handle {
+    /// # Errors
+    ///
+    /// * If failed to send the command
+    /// * If failed to recv the response
     pub async fn subscribe_media_info(
         &self,
         interval: Duration,
@@ -112,6 +119,10 @@ impl Handle {
         Ok(rx.recv_async().await?)
     }
 
+    /// # Errors
+    ///
+    /// * If failed to send the command
+    /// * If failed to recv the response
     pub async fn subscribe_position_info(
         &self,
         interval: Duration,
@@ -132,6 +143,10 @@ impl Handle {
         Ok(rx.recv_async().await?)
     }
 
+    /// # Errors
+    ///
+    /// * If failed to send the command
+    /// * If failed to recv the response
     pub async fn subscribe_transport_info(
         &self,
         interval: Duration,
@@ -152,6 +167,9 @@ impl Handle {
         Ok(rx.recv_async().await?)
     }
 
+    /// # Errors
+    ///
+    /// * If failed to send the command
     pub fn unsubscribe(&self, subscription_id: usize) -> Result<(), CommanderError> {
         self.send_command(UpnpCommand::Unsubscribe { subscription_id })
     }
@@ -167,12 +185,15 @@ impl Processor for Service {
     }
 
     async fn on_shutdown(ctx: Arc<RwLock<UpnpContext>>) -> Result<(), Self::Error> {
-        for (_, handle) in ctx.write().await.status_join_handles.drain() {
+        let mut ctx = ctx.write().await;
+        for (_, handle) in ctx.status_join_handles.drain() {
             handle.await??;
         }
+        drop(ctx);
         Ok(())
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn process_command(
         ctx: Arc<RwLock<UpnpContext>>,
         command: UpnpCommand,
@@ -376,6 +397,7 @@ async fn subscribe(
             Ok(())
         }),
     );
+    drop(ctx);
 
     Ok(subscription_id)
 }

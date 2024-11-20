@@ -550,6 +550,7 @@ pub async fn seek_endpoint(query: web::Query<SeekQuery>) -> Result<Json<HashMap<
         return Err(ErrorBadRequest("Must pass device_udn or device_url"));
     };
     Ok(Json(
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         seek(
             &service,
             device.url(),

@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use std::{
     sync::{
         atomic::{AtomicBool, AtomicUsize},
@@ -64,7 +66,7 @@ impl std::fmt::Debug for UpnpPlayer {
                 &self.position_info_subscription_id,
             )
             .field("expected_state", &self.expected_state)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -86,6 +88,7 @@ impl Player for UpnpPlayer {
             let playback = binding.as_mut().unwrap();
             playback.abort.cancel();
             playback.abort = CancellationToken::new();
+            drop(binding);
         }
 
         Ok(())
@@ -131,12 +134,12 @@ impl Player for UpnpPlayer {
             .await?;
 
         tokio::select! {
-            _ = playback.abort.cancelled() => {
+            () = playback.abort.cancelled() => {
                 log::debug!("playback cancelled");
-                self.unsubscribe(sub_id)?;
+                self.unsubscribe(sub_id);
             }
             retry = finished_rx.recv_async() => {
-                self.unsubscribe(sub_id)?;
+                self.unsubscribe(sub_id);
                 match retry {
                     Ok(false) => {
                         log::debug!("Playback finished and retry wasn't requested");
@@ -180,7 +183,8 @@ impl Player for UpnpPlayer {
         playback.abort.cancel();
 
         log::trace!("Waiting for playback completion response");
-        if let Some(receiver) = self.receiver.write().await.take() {
+        let receiver = self.receiver.write().await.take();
+        if let Some(receiver) = receiver {
             tokio::select! {
                 resp = receiver.recv_async() => {
                     match resp {
@@ -192,7 +196,7 @@ impl Player for UpnpPlayer {
                         }
                     }
                 }
-                _ = tokio::time::sleep(std::time::Duration::from_millis(5000)) => {
+                () = tokio::time::sleep(std::time::Duration::from_millis(5000)) => {
                     log::error!("Playback timed out waiting for abort completion");
                 }
             }
@@ -213,11 +217,12 @@ impl Player for UpnpPlayer {
             self.update_av_transport().await?;
             self.init_transport_state().await?;
         }
-        if let Some("STOPPED") = self.expected_state.read().unwrap().as_deref() {
+        if self.expected_state.read().unwrap().as_deref() == Some("STOPPED") {
             log::debug!("trigger_seek: In STOPPED state. not seeking");
             return Ok(());
         }
 
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         crate::seek(
             &self.service,
             self.device.url(),
@@ -300,7 +305,7 @@ impl Player for UpnpPlayer {
                 .read()
                 .unwrap()
                 .clone()
-                .map(|x| x.to_api()),
+                .map(ToApi::to_api),
         })
     }
 
@@ -316,8 +321,8 @@ impl UpnpPlayer {
         service: Service,
         source: PlayerSource,
         handle: Handle,
-    ) -> UpnpPlayer {
-        UpnpPlayer {
+    ) -> Self {
+        Self {
             id: thread_rng().gen::<usize>(),
             source_to_music_api,
             source,
@@ -393,10 +398,11 @@ impl UpnpPlayer {
         } else {
             None
         };
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         let duration = track.duration.ceil() as u32;
-        let title = track.title.to_owned();
-        let artist = track.artist.to_owned();
-        let album = track.album.to_owned();
+        let title = track.title.clone();
+        let artist = track.artist.clone();
+        let album = track.album.clone();
         let track_number = track.number;
 
         crate::set_av_transport_uri(
@@ -453,7 +459,7 @@ impl UpnpPlayer {
     }
 
     async fn wait_for_transport_state(&self, desired_state: &str) -> Result<(), PlayerError> {
-        let mut state = "".to_owned();
+        let mut state = String::new();
         let mut attempt = 0;
 
         while state.as_str() != desired_state {
@@ -527,12 +533,10 @@ impl UpnpPlayer {
                                 if let Err(e) = finished_tx.send_async(false).await {
                                     log::trace!("send error: {e:?}");
                                 }
-                                if let Err(e) = UpnpPlayer::unsubscribe_events(
+                                Self::unsubscribe_events(
                                     &handle,
                                     sub_id
-                                ) {
-                                    log::error!("Failed to unsubscribe: {e:?}");
-                                }
+                                );
                                 return;
                             }
 
@@ -562,7 +566,7 @@ impl UpnpPlayer {
                                             active: None,
                                             playing: Some(true),
                                             position: None,
-                                            seek: Some(position as f64),
+                                            seek: Some(f64::from(position)),
                                             volume: None,
                                             playlist: None,
                                             quality: None,
@@ -572,7 +576,7 @@ impl UpnpPlayer {
                                 }
 
                                 let old = playback.clone();
-                                playback.progress = position as f64;
+                                playback.progress = f64::from(position);
                                 current_seek.write().unwrap().replace(playback.progress);
                                 trigger_playback_event(playback, &old);
                             }
@@ -594,10 +598,7 @@ impl UpnpPlayer {
         Ok(position_sub)
     }
 
-    fn unsubscribe_events(
-        handle: &Handle,
-        position_info_subscription_id: usize,
-    ) -> Result<(), PlayerError> {
+    fn unsubscribe_events(handle: &Handle, position_info_subscription_id: usize) {
         if let Err(e) = handle.unsubscribe(position_info_subscription_id) {
             log::error!("unsubscribe_position_info error: {e:?}");
         } else {
@@ -605,11 +606,10 @@ impl UpnpPlayer {
         }
 
         log::debug!("unsubscribe_events: unsubscribed");
-        Ok(())
     }
 
-    fn unsubscribe(&self, position_info_subscription_id: usize) -> Result<(), PlayerError> {
-        Self::unsubscribe_events(&self.handle, position_info_subscription_id)
+    fn unsubscribe(&self, position_info_subscription_id: usize) {
+        Self::unsubscribe_events(&self.handle, position_info_subscription_id);
     }
 }
 

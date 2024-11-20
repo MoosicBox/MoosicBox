@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 #[cfg(feature = "api")]
 pub mod api;
@@ -45,7 +46,7 @@ mod cache {
     static DEVICE_MAPPINGS: LazyLock<RwLock<HashMap<String, DeviceMapping>>> =
         LazyLock::new(|| RwLock::new(HashMap::new()));
 
-    pub(crate) fn get_device_from_url(url: &str) -> Result<Device, ScanError> {
+    pub fn get_device_from_url(url: &str) -> Result<Device, ScanError> {
         Ok(DEVICE_MAPPINGS
             .read()
             .unwrap()
@@ -57,7 +58,7 @@ mod cache {
             .clone())
     }
 
-    pub(crate) fn get_device(udn: &str) -> Result<Device, ScanError> {
+    pub fn get_device(udn: &str) -> Result<Device, ScanError> {
         Ok(DEVICE_MAPPINGS
             .read()
             .unwrap()
@@ -69,7 +70,7 @@ mod cache {
             .clone())
     }
 
-    pub(crate) fn insert_device(device: Device) {
+    pub fn insert_device(device: Device) {
         DEVICE_URL_MAPPINGS.write().unwrap().insert(
             device.url().to_string(),
             DeviceMapping {
@@ -86,7 +87,7 @@ mod cache {
         );
     }
 
-    pub(crate) fn get_service(device_udn: &str, service_id: &str) -> Result<Service, ScanError> {
+    pub fn get_service(device_udn: &str, service_id: &str) -> Result<Service, ScanError> {
         Ok(DEVICE_MAPPINGS
             .read()
             .unwrap()
@@ -102,7 +103,7 @@ mod cache {
             .clone())
     }
 
-    pub(crate) fn get_device_and_service(
+    pub fn get_device_and_service(
         device_udn: &str,
         service_id: &str,
     ) -> Result<(Device, Service), ScanError> {
@@ -112,7 +113,7 @@ mod cache {
             .ok_or_else(|| ScanError::DeviceUdnNotFound {
                 device_udn: device_udn.to_string(),
             })?;
-        Ok((
+        let resp = (
             device.device.clone(),
             device
                 .services
@@ -121,10 +122,13 @@ mod cache {
                     service_id: service_id.to_string(),
                 })?
                 .clone(),
-        ))
+        );
+        drop(devices);
+
+        Ok(resp)
     }
 
-    pub(crate) fn get_device_and_service_from_url(
+    pub fn get_device_and_service_from_url(
         device_url: &str,
         service_id: &str,
     ) -> Result<(Device, Service), ScanError> {
@@ -134,7 +138,7 @@ mod cache {
             .ok_or_else(|| ScanError::DeviceUrlNotFound {
                 device_url: device_url.to_string(),
             })?;
-        Ok((
+        let resp = (
             device.device.clone(),
             device
                 .services
@@ -143,10 +147,13 @@ mod cache {
                     service_id: service_id.to_string(),
                 })?
                 .clone(),
-        ))
+        );
+        drop(devices);
+
+        Ok(resp)
     }
 
-    pub(crate) fn insert_service(device: &Device, service: Service) {
+    pub fn insert_service(device: &Device, service: &Service) {
         if let Some(device_mapping) = DEVICE_URL_MAPPINGS
             .write()
             .as_mut()
@@ -170,14 +177,23 @@ mod cache {
     }
 }
 
+/// # Errors
+///
+/// * If a `Device` is not found with the given `udn`
 pub fn get_device(udn: &str) -> Result<Device, ScanError> {
     cache::get_device(udn)
 }
 
+/// # Errors
+///
+/// * If a `Service` is not found with the given `device_udn` and `service_id`
 pub fn get_service(device_udn: &str, service_id: &str) -> Result<Service, ScanError> {
     cache::get_service(device_udn, service_id)
 }
 
+/// # Errors
+///
+/// * If a `Device` or `Service` is not found with the given `device_udn` and `service_id`
 pub fn get_device_and_service(
     device_udn: &str,
     service_id: &str,
@@ -185,10 +201,16 @@ pub fn get_device_and_service(
     cache::get_device_and_service(device_udn, service_id)
 }
 
+/// # Errors
+///
+/// * If a `Device` is not found with the given `url`
 pub fn get_device_from_url(url: &str) -> Result<Device, ScanError> {
     cache::get_device_from_url(url)
 }
 
+/// # Errors
+///
+/// * If a `Device` or `Service` is not found with the given `device_url` and `service_id`
 pub fn get_device_and_service_from_url(
     device_url: &str,
     service_id: &str,
@@ -222,20 +244,21 @@ pub enum ScanError {
     Rupnp(#[from] rupnp::Error),
 }
 
+/// # Panics
+///
+/// * If the duration str is an invalid format
+#[must_use]
 pub fn str_to_duration(duration: &str) -> u32 {
     let time_components = duration
         .split(':')
-        .map(|x| x.parse())
+        .map(str::parse)
         .collect::<Result<Vec<u32>, std::num::ParseIntError>>()
         .expect("Failed to parse time...");
 
     time_components[0] * 60 * 60 + time_components[1] * 60 + time_components[2]
 }
 
-pub fn string_to_duration(duration: String) -> u32 {
-    str_to_duration(duration.as_str())
-}
-
+#[must_use]
 pub fn duration_to_string(duration: u32) -> String {
     format!(
         "{:0>2}:{:0>2}:{:0>2}",
@@ -250,6 +273,9 @@ static UPNP_NS: &str = "urn:schemas-upnp-org:metadata-1-0/upnp/";
 static DC_NS: &str = "http://purl.org/dc/elements/1.1/";
 static SEC_NS: &str = "http://www.sec.co.kr/";
 
+/// # Errors
+///
+/// * If the action failed to execute
 #[allow(clippy::too_many_arguments)]
 pub async fn set_av_transport_uri(
     service: &Service,
@@ -265,6 +291,27 @@ pub async fn set_av_transport_uri(
     duration: Option<u32>,
     size: Option<u64>,
 ) -> Result<HashMap<String, String>, ActionError> {
+    static BRACKET_WHITESPACE: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r">\s+<").expect("Invalid Regex"));
+    static BETWEEN_WHITESPACE: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"\s{2,}").expect("Invalid Regex"));
+
+    // Remove extraneous whitespace
+    fn compress_xml(xml: &str) -> String {
+        BETWEEN_WHITESPACE
+            .replace_all(
+                BRACKET_WHITESPACE.replace_all(xml.trim(), "><").as_ref(),
+                " ",
+            )
+            .to_string()
+            .replace(['\r', '\n'], "")
+            .replace("\" >", "\">")
+    }
+
+    fn escape_xml(xml: &str) -> String {
+        xml::escape::escape_str_attribute(xml).to_string()
+    }
+
     let headers = "*";
 
     let transport_uri = xml::escape::escape_str_attribute(transport_uri);
@@ -289,48 +336,25 @@ pub async fn set_av_transport_uri(
         "###,
         title = title
             .map(xml::escape::escape_str_attribute)
-            .map_or("".to_string(), |x| format!("<dc:title>{x}</dc:title>")),
+            .map_or_else(String::new, |x| format!("<dc:title>{x}</dc:title>")),
         creator = creator
             .map(xml::escape::escape_str_attribute)
-            .map_or("".to_string(), |x| format!("<dc:creator>{x}</dc:creator>")),
+            .map_or_else(String::new, |x| format!("<dc:creator>{x}</dc:creator>")),
         artist = artist
             .map(xml::escape::escape_str_attribute)
-            .map_or("".to_string(), |x| format!(
-                "<upnp:artist>{x}</upnp:artist>"
-            )),
+            .map_or_else(String::new, |x| format!("<upnp:artist>{x}</upnp:artist>")),
         album = album
             .map(xml::escape::escape_str_attribute)
-            .map_or("".to_string(), |x| format!("<upnp:album>{x}</upnp:album>")),
-        original_track_number = original_track_number.map_or("".to_string(), |x| format!(
+            .map_or_else(String::new, |x| format!("<upnp:album>{x}</upnp:album>")),
+        original_track_number = original_track_number.map_or_else(String::new, |x| format!(
             "<upnp:originalTrackNumber>{x}</upnp:originalTrackNumber>"
         )),
-        duration = duration.map_or("".to_string(), |x| format!(
+        duration = duration.map_or_else(String::new, |x| format!(
             " duration=\"{}\"",
             duration_to_string(x)
         )),
-        size = size.map_or("".to_string(), |x| format!(" size=\"{x}\"",)),
+        size = size.map_or_else(String::new, |x| format!(" size=\"{x}\"",)),
     );
-
-    static BRACKET_WHITESPACE: LazyLock<regex::Regex> =
-        LazyLock::new(|| regex::Regex::new(r">\s+<").expect("Invalid Regex"));
-    static BETWEEN_WHITESPACE: LazyLock<regex::Regex> =
-        LazyLock::new(|| regex::Regex::new(r"\s{2,}").expect("Invalid Regex"));
-
-    // Remove extraneous whitespace
-    fn compress_xml(xml: &str) -> String {
-        BETWEEN_WHITESPACE
-            .replace_all(
-                BRACKET_WHITESPACE.replace_all(xml.trim(), "><").as_ref(),
-                " ",
-            )
-            .to_string()
-            .replace(['\r', '\n'], "")
-            .replace("\" >", "\">")
-    }
-
-    fn escape_xml(xml: &str) -> String {
-        xml::escape::escape_str_attribute(xml).to_string()
-    }
 
     let metadata = escape_xml(&compress_xml(&metadata));
 
@@ -460,6 +484,10 @@ pub struct TransportInfo {
     current_speed: String,
 }
 
+/// # Errors
+///
+/// * If the action failed to execute
+/// * If the transport info is missing the required properties
 pub async fn get_transport_info(
     service: &Service,
     url: &Uri,
@@ -505,6 +533,10 @@ pub struct PositionInfo {
     track_duration: u32,
 }
 
+/// # Errors
+///
+/// * If the action failed to execute
+/// * If the position info is missing the required properties
 pub async fn get_position_info(
     service: &Service,
     url: &Uri,
@@ -557,6 +589,9 @@ pub async fn get_position_info(
     })
 }
 
+/// # Errors
+///
+/// * If the action failed to execute
 pub async fn seek(
     service: &Service,
     url: &Uri,
@@ -582,6 +617,9 @@ pub async fn seek(
         .await?)
 }
 
+/// # Errors
+///
+/// * If the action failed to execute
 pub async fn get_volume(
     service: &Service,
     url: &Uri,
@@ -597,6 +635,9 @@ pub async fn get_volume(
         .await?)
 }
 
+/// # Errors
+///
+/// * If the action failed to execute
 pub async fn set_volume(
     service: &Service,
     url: &Uri,
@@ -626,6 +667,10 @@ pub struct MediaInfo {
     current_uri: String,
 }
 
+/// # Errors
+///
+/// * If the action failed to execute
+/// * If the media info is missing the required properties
 pub async fn get_media_info(
     service: &Service,
     url: &Uri,
@@ -672,6 +717,9 @@ pub async fn get_media_info(
     })
 }
 
+/// # Errors
+///
+/// * If the subscription failed to execute
 pub async fn subscribe_events(
     service: &Service,
     url: &Uri,
@@ -685,6 +733,9 @@ pub async fn subscribe_events(
     Ok(service.subscribe(url, 300).await?)
 }
 
+/// # Errors
+///
+/// * If the action failed to execute
 pub async fn play(
     service: &Service,
     url: &Uri,
@@ -700,6 +751,9 @@ pub async fn play(
         .await?)
 }
 
+/// # Errors
+///
+/// * If the action failed to execute
 pub async fn pause(
     service: &Service,
     url: &Uri,
@@ -714,6 +768,9 @@ pub async fn pause(
         .await?)
 }
 
+/// # Errors
+///
+/// * If the action failed to execute
 pub async fn stop(
     service: &Service,
     url: &Uri,
@@ -728,6 +785,9 @@ pub async fn stop(
         .await?)
 }
 
+/// # Errors
+///
+/// * If failed to scan for `UPnP` services
 pub async fn scan_service(
     url: Option<&Uri>,
     service: &Service,
@@ -781,7 +841,7 @@ pub async fn scan_device(
         {path}upc={}\
         ",
         spec.friendly_name(),
-        device.as_ref().map(|x| x.url()),
+        device.as_ref().map(rupnp::Device::url),
         spec.manufacturer(),
         spec.manufacturer_url().unwrap_or("N/A"),
         spec.model_name(),
@@ -804,10 +864,16 @@ pub async fn scan_device(
         let path = format!("{path}\t");
         for service in services {
             if let Some(device) = &device {
-                cache::insert_service(device, service.clone());
+                cache::insert_service(device, service);
             }
-            upnp_services
-                .push(scan_service(device.as_ref().map(|x| x.url()), service, Some(&path)).await?);
+            upnp_services.push(
+                scan_service(
+                    device.as_ref().map(rupnp::Device::url),
+                    service,
+                    Some(&path),
+                )
+                .await?,
+            );
         }
     }
 
@@ -831,6 +897,9 @@ pub async fn scan_device(
 static UPNP_DEVICE_SCANNER: LazyLock<Arc<Mutex<UpnpDeviceScanner>>> =
     LazyLock::new(|| Arc::new(Mutex::new(UpnpDeviceScanner::new())));
 
+/// # Errors
+///
+/// * If failed to scan for `UPnP` devices
 pub async fn scan_devices() -> Result<(), UpnpDeviceScannerError> {
     UPNP_DEVICE_SCANNER.lock().await.scan().await
 }
@@ -858,10 +927,14 @@ pub enum UpnpDeviceScannerError {
 }
 
 impl UpnpDeviceScanner {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// # Errors
+    ///
+    /// * If failed to scan for `UPnP` devices
     pub async fn scan(&mut self) -> Result<(), UpnpDeviceScannerError> {
         if self.scanning || !self.devices.is_empty() {
             return Ok(());

@@ -29,11 +29,13 @@ impl From<&Device> for UpnpDevice {
 }
 
 impl UpnpDevice {
+    #[must_use]
     pub fn with_volume(mut self, volume: Option<String>) -> Self {
         self.volume = volume;
         self
     }
 
+    #[must_use]
     pub fn with_services(mut self, services: Vec<UpnpService>) -> Self {
         self.services = services;
         self
