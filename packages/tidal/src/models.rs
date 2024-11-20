@@ -19,7 +19,7 @@ use crate::TidalAlbumType;
 
 use super::{Album, Artist, AsModelResult, Track};
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalArtist {
     pub id: u64,
@@ -75,11 +75,10 @@ pub enum TidalArtistImageSize {
 impl From<ImageCoverSize> for TidalArtistImageSize {
     fn from(value: ImageCoverSize) -> Self {
         match value {
-            ImageCoverSize::Max => TidalArtistImageSize::Max,
-            ImageCoverSize::Large => TidalArtistImageSize::Large,
-            ImageCoverSize::Medium => TidalArtistImageSize::Medium,
-            ImageCoverSize::Small => TidalArtistImageSize::Small,
-            ImageCoverSize::Thumbnail => TidalArtistImageSize::Small,
+            ImageCoverSize::Max => Self::Max,
+            ImageCoverSize::Large => Self::Large,
+            ImageCoverSize::Medium => Self::Medium,
+            ImageCoverSize::Small | ImageCoverSize::Thumbnail => Self::Small,
         }
     }
 }
@@ -98,10 +97,10 @@ impl From<TidalArtistImageSize> for u16 {
 impl From<u16> for TidalArtistImageSize {
     fn from(value: u16) -> Self {
         match value {
-            0..=160 => TidalArtistImageSize::Small,
-            161..=320 => TidalArtistImageSize::Medium,
-            321..=480 => TidalArtistImageSize::Large,
-            _ => TidalArtistImageSize::Max,
+            0..=160 => Self::Small,
+            161..=320 => Self::Medium,
+            321..=480 => Self::Large,
+            _ => Self::Max,
         }
     }
 }
@@ -113,6 +112,7 @@ impl Display for TidalArtistImageSize {
 }
 
 impl TidalArtist {
+    #[must_use]
     pub fn picture_url(&self, size: TidalArtistImageSize) -> Option<String> {
         artist_picture_url(self.picture.as_deref(), size)
     }
@@ -145,7 +145,7 @@ impl AsModelResult<TidalArtist, ParseError> for serde_json::Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalSearchArtist {
     pub id: u64,
@@ -167,6 +167,7 @@ impl From<TidalSearchArtist> for ApiGlobalSearchResult {
 }
 
 impl TidalSearchArtist {
+    #[must_use]
     pub fn picture_url(&self, size: TidalArtistImageSize) -> Option<String> {
         self.picture.as_ref().map(|picture| {
             let picture_path = picture.replace('-', "/");
@@ -195,7 +196,7 @@ impl AsModelResult<TidalSearchArtist, ParseError> for serde_json::Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalAlbum {
     pub id: u64,
@@ -281,11 +282,11 @@ pub enum TidalAlbumImageSize {
 impl From<ImageCoverSize> for TidalAlbumImageSize {
     fn from(value: ImageCoverSize) -> Self {
         match value {
-            ImageCoverSize::Max => TidalAlbumImageSize::Max,
-            ImageCoverSize::Large => TidalAlbumImageSize::Large,
-            ImageCoverSize::Medium => TidalAlbumImageSize::Medium,
-            ImageCoverSize::Small => TidalAlbumImageSize::Small,
-            ImageCoverSize::Thumbnail => TidalAlbumImageSize::Thumbnail,
+            ImageCoverSize::Max => Self::Max,
+            ImageCoverSize::Large => Self::Large,
+            ImageCoverSize::Medium => Self::Medium,
+            ImageCoverSize::Small => Self::Small,
+            ImageCoverSize::Thumbnail => Self::Thumbnail,
         }
     }
 }
@@ -305,11 +306,11 @@ impl From<TidalAlbumImageSize> for u16 {
 impl From<u16> for TidalAlbumImageSize {
     fn from(value: u16) -> Self {
         match value {
-            0..=80 => TidalAlbumImageSize::Thumbnail,
-            81..=160 => TidalAlbumImageSize::Small,
-            161..=320 => TidalAlbumImageSize::Medium,
-            321..=640 => TidalAlbumImageSize::Large,
-            _ => TidalAlbumImageSize::Max,
+            0..=80 => Self::Thumbnail,
+            81..=160 => Self::Small,
+            161..=320 => Self::Medium,
+            321..=640 => Self::Large,
+            _ => Self::Max,
         }
     }
 }
@@ -320,7 +321,7 @@ impl Display for TidalAlbumImageSize {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalSearchAlbum {
     pub id: u64,
@@ -356,6 +357,7 @@ impl From<TidalSearchAlbum> for ApiGlobalSearchResult {
 }
 
 impl TidalSearchAlbum {
+    #[must_use]
     pub fn cover_url(&self, size: TidalAlbumImageSize) -> Option<String> {
         self.cover.as_ref().map(|cover| {
             let cover_path = cover.replace('-', "/");
@@ -391,6 +393,7 @@ impl AsModelResult<TidalSearchAlbum, ParseError> for serde_json::Value {
 }
 
 impl TidalAlbum {
+    #[must_use]
     pub fn cover_url(&self, size: TidalAlbumImageSize) -> Option<String> {
         self.cover.as_ref().map(|cover| {
             let cover_path = cover.replace('-', "/");
@@ -427,7 +430,7 @@ impl AsModelResult<TidalAlbum, ParseError> for serde_json::Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalTrack {
     pub id: u64,
@@ -455,7 +458,7 @@ impl From<TidalTrack> for Track {
             id: value.id.into(),
             number: value.track_number,
             title: value.title,
-            duration: value.duration as f64,
+            duration: f64::from(value.duration),
             album: value.album,
             album_id: value.album_id.into(),
             album_type: value.album_type.into(),
@@ -511,7 +514,7 @@ impl AsModelResult<TidalTrack, ParseError> for serde_json::Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalSearchTrack {
     pub id: u64,
@@ -601,8 +604,8 @@ where
 
 impl<T> AsModelResult<TidalSearchResultList<T>, ParseError> for Value
 where
-    for<'a> &'a Value: ToValueType<T>,
-    for<'a> &'a Value: ToValueType<usize>,
+    for<'a> &'a Self: ToValueType<T>,
+    for<'a> &'a Self: ToValueType<usize>,
 {
     fn as_model(&self) -> Result<TidalSearchResultList<T>, ParseError> {
         Ok(TidalSearchResultList {

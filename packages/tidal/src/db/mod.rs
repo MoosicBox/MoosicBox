@@ -1,4 +1,4 @@
-use moosicbox_database::{profiles::LibraryDatabase, query::*, DatabaseError};
+use moosicbox_database::{profiles::LibraryDatabase, query::FilterableQuery, DatabaseError};
 use moosicbox_json_utils::ToValueType;
 use thiserror::Error;
 
@@ -6,6 +6,9 @@ pub mod models;
 
 use crate::db::models::TidalConfig;
 
+/// # Errors
+///
+/// * If a database error occurs
 #[allow(clippy::too_many_arguments)]
 pub async fn create_tidal_config(
     db: &LibraryDatabase,
@@ -36,6 +39,9 @@ pub async fn create_tidal_config(
     Ok(())
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn delete_tidal_config(
     db: &LibraryDatabase,
     refresh_token: &str,
@@ -56,6 +62,9 @@ pub enum TidalConfigError {
     Parse(#[from] moosicbox_json_utils::ParseError),
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn get_tidal_config(
     db: &LibraryDatabase,
 ) -> Result<Option<TidalConfig>, TidalConfigError> {
@@ -70,14 +79,20 @@ pub async fn get_tidal_config(
     Ok(configs.first().cloned())
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn get_tidal_access_tokens(
     db: &LibraryDatabase,
 ) -> Result<Option<(String, String)>, TidalConfigError> {
     Ok(get_tidal_config(db)
         .await?
-        .map(|c| (c.access_token.clone(), c.refresh_token.clone())))
+        .map(|c| (c.access_token.clone(), c.refresh_token)))
 }
 
+/// # Errors
+///
+/// * If a database error occurs
 pub async fn get_tidal_access_token(
     db: &LibraryDatabase,
 ) -> Result<Option<String>, TidalConfigError> {

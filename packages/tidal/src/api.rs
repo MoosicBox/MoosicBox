@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
     error::{ErrorInternalServerError, ErrorNotFound, ErrorUnauthorized},
@@ -98,7 +100,7 @@ pub fn bind_services<
 )]
 pub struct Api;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiTidalAlbum {
     pub id: u64,
@@ -143,13 +145,13 @@ impl ToApi<ApiTrack> for TidalTrack {
             isrc: self.isrc.clone(),
             popularity: self.popularity,
             title: self.title.clone(),
-            media_metadata_tags: self.media_metadata_tags.clone(),
+            media_metadata_tags: self.media_metadata_tags,
             api_source: ApiSource::Tidal,
         })
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiTidalTrack {
     pub id: u64,
@@ -177,7 +179,7 @@ impl From<ApiTidalTrack> for moosicbox_core::sqlite::models::ApiTrack {
             track_id: value.id.into(),
             number: value.number,
             title: value.title,
-            duration: value.duration as f64,
+            duration: f64::from(value.duration),
             album: value.album,
             album_id: value.album_id.into(),
             album_type: value.album_type.into(),
@@ -200,7 +202,7 @@ impl From<ApiTidalTrack> for moosicbox_core::sqlite::models::ApiTrack {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiTidalArtist {
     pub id: u64,
@@ -349,6 +351,7 @@ pub struct TidalTrackFileUrlQuery {
     )
 )]
 #[route("/track/url", method = "GET")]
+#[allow(clippy::future_not_send)]
 pub async fn track_file_url_endpoint(
     req: HttpRequest,
     query: web::Query<TidalTrackFileUrlQuery>,
@@ -403,6 +406,7 @@ pub struct TidalTrackPlaybackInfoQuery {
     )
 )]
 #[route("/track/playback-info", method = "GET")]
+#[allow(clippy::future_not_send)]
 pub async fn track_playback_info_endpoint(
     req: HttpRequest,
     query: web::Query<TidalTrackPlaybackInfoQuery>,
@@ -469,6 +473,7 @@ pub struct TidalFavoriteArtistsQuery {
     )
 )]
 #[route("/favorites/artists", method = "GET")]
+#[allow(clippy::future_not_send)]
 pub async fn favorite_artists_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteArtistsQuery>,
@@ -537,6 +542,7 @@ pub struct TidalAddFavoriteArtistsQuery {
     )
 )]
 #[route("/favorites/artists", method = "POST")]
+#[allow(clippy::future_not_send)]
 pub async fn add_favorite_artist_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAddFavoriteArtistsQuery>,
@@ -602,6 +608,7 @@ pub struct TidalRemoveFavoriteArtistsQuery {
     )
 )]
 #[route("/favorites/artists", method = "DELETE")]
+#[allow(clippy::future_not_send)]
 pub async fn remove_favorite_artist_endpoint(
     req: HttpRequest,
     query: web::Query<TidalRemoveFavoriteArtistsQuery>,
@@ -673,6 +680,7 @@ pub struct TidalFavoriteAlbumsQuery {
     )
 )]
 #[route("/favorites/albums", method = "GET")]
+#[allow(clippy::future_not_send)]
 pub async fn favorite_albums_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteAlbumsQuery>,
@@ -741,6 +749,7 @@ pub struct TidalAddFavoriteAlbumsQuery {
     )
 )]
 #[route("/favorites/albums", method = "POST")]
+#[allow(clippy::future_not_send)]
 pub async fn add_favorite_album_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAddFavoriteAlbumsQuery>,
@@ -806,6 +815,7 @@ pub struct TidalRemoveFavoriteAlbumsQuery {
     )
 )]
 #[route("/favorites/albums", method = "DELETE")]
+#[allow(clippy::future_not_send)]
 pub async fn remove_favorite_album_endpoint(
     req: HttpRequest,
     query: web::Query<TidalRemoveFavoriteAlbumsQuery>,
@@ -871,6 +881,7 @@ pub struct TidalAddFavoriteTracksQuery {
     )
 )]
 #[route("/favorites/tracks", method = "POST")]
+#[allow(clippy::future_not_send)]
 pub async fn add_favorite_track_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAddFavoriteTracksQuery>,
@@ -936,6 +947,7 @@ pub struct TidalRemoveFavoriteTracksQuery {
     )
 )]
 #[route("/favorites/tracks", method = "DELETE")]
+#[allow(clippy::future_not_send)]
 pub async fn remove_favorite_track_endpoint(
     req: HttpRequest,
     query: web::Query<TidalRemoveFavoriteTracksQuery>,
@@ -1007,6 +1019,7 @@ pub struct TidalFavoriteTracksQuery {
     )
 )]
 #[route("/favorites/tracks", method = "GET")]
+#[allow(clippy::future_not_send)]
 pub async fn favorite_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<TidalFavoriteTracksQuery>,
@@ -1066,9 +1079,9 @@ pub enum AlbumType {
 impl From<AlbumType> for TidalAlbumType {
     fn from(value: AlbumType) -> Self {
         match value {
-            AlbumType::Lp => TidalAlbumType::Lp,
-            AlbumType::EpsAndSingles => TidalAlbumType::EpsAndSingles,
-            AlbumType::Compilations => TidalAlbumType::Compilations,
+            AlbumType::Lp => Self::Lp,
+            AlbumType::EpsAndSingles => Self::EpsAndSingles,
+            AlbumType::Compilations => Self::Compilations,
         }
     }
 }
@@ -1099,6 +1112,7 @@ impl From<AlbumType> for TidalAlbumType {
     )
 )]
 #[route("/artists/albums", method = "GET")]
+#[allow(clippy::future_not_send)]
 pub async fn artist_albums_endpoint(
     req: HttpRequest,
     query: web::Query<TidalArtistAlbumsQuery>,
@@ -1168,6 +1182,7 @@ pub struct TidalAlbumTracksQuery {
     )
 )]
 #[route("/albums/tracks", method = "GET")]
+#[allow(clippy::future_not_send)]
 pub async fn album_tracks_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAlbumTracksQuery>,
@@ -1242,6 +1257,7 @@ pub struct TidalAlbumQuery {
     )
 )]
 #[route("/albums", method = "GET")]
+#[allow(clippy::future_not_send)]
 pub async fn album_endpoint(
     req: HttpRequest,
     query: web::Query<TidalAlbumQuery>,
@@ -1302,6 +1318,7 @@ pub struct TidalArtistQuery {
     )
 )]
 #[route("/artists", method = "GET")]
+#[allow(clippy::future_not_send)]
 pub async fn artist_endpoint(
     req: HttpRequest,
     query: web::Query<TidalArtistQuery>,
@@ -1362,6 +1379,7 @@ pub struct TidalTrackQuery {
     )
 )]
 #[route("/tracks", method = "GET")]
+#[allow(clippy::future_not_send)]
 pub async fn track_endpoint(
     req: HttpRequest,
     query: web::Query<TidalTrackQuery>,
@@ -1435,6 +1453,7 @@ pub struct TidalSearchQuery {
     )
 )]
 #[route("/search", method = "GET")]
+#[allow(clippy::future_not_send)]
 pub async fn search_endpoint(
     req: HttpRequest,
     query: web::Query<TidalSearchQuery>,

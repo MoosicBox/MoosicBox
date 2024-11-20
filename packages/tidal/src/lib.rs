@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 #[cfg(feature = "api")]
 pub mod api;
@@ -45,7 +46,7 @@ use thiserror::Error;
 use tokio::sync::Mutex;
 use url::form_urlencoded;
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -93,10 +94,7 @@ impl ToUrl for TidalApiEndpoint {
             }
             Self::AuthorizationToken => format!("{TIDAL_AUTH_API_BASE_URL}/oauth2/token"),
             Self::Artist => format!("{TIDAL_API_BASE_URL}/artists/:artistId"),
-            Self::FavoriteArtists => {
-                format!("{TIDAL_API_BASE_URL}/users/:userId/favorites/artists")
-            }
-            Self::AddFavoriteArtist => {
+            Self::FavoriteArtists | Self::AddFavoriteArtist => {
                 format!("{TIDAL_API_BASE_URL}/users/:userId/favorites/artists")
             }
             Self::RemoveFavoriteArtist => {
@@ -170,6 +168,10 @@ pub enum TidalDeviceAuthorizationError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
 pub async fn device_authorization(
     client_id: String,
     open: bool,
@@ -190,7 +192,7 @@ pub async fn device_authorization(
 
     if open {
         match open::that(&url) {
-            Ok(_) => {
+            Ok(()) => {
                 log::debug!("Opened url in default browser");
             }
             Err(err) => {
@@ -216,6 +218,15 @@ pub enum TidalDeviceAuthorizationTokenError {
     Parse(#[from] ParseError),
 }
 
+/// # Panics
+///
+/// * If failed to serialize user `Value` to string
+///
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 pub async fn device_authorization_token(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     client_id: String,
@@ -290,6 +301,7 @@ pub enum FetchCredentialsError {
     NoAccessTokenAvailable,
 }
 
+#[allow(clippy::unused_async)]
 async fn fetch_credentials(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     access_token: Option<String>,
@@ -299,7 +311,7 @@ async fn fetch_credentials(
         Ok(if let Some(access_token) = access_token {
             log::debug!("Using passed access_token");
             Some(Ok(TidalCredentials {
-                access_token: access_token.to_string(),
+                access_token,
                 client_id: None,
                 refresh_token: None,
                 persist: false,
@@ -394,7 +406,7 @@ async fn authenticated_post_request(
         form.map(|values| {
             values
                 .iter()
-                .map(|(key, value)| (key.to_string(), value.to_string()))
+                .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
                 .collect::<Vec<_>>()
         }),
         1,
@@ -420,7 +432,7 @@ async fn authenticated_delete_request(
     .await
 }
 
-#[derive(Copy, Debug, EnumString, AsRefStr, PartialEq, Clone)]
+#[derive(Copy, Debug, EnumString, AsRefStr, PartialEq, Eq, Clone)]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 enum Method {
     Get,
@@ -509,14 +521,14 @@ async fn authenticated_request_inner(
                     attempt + 1,
                 )
                 .await;
-            } else {
-                log::debug!("No client_id or refresh_token available. Unauthorized");
-                Err(AuthenticatedRequestError::Unauthorized)
             }
+
+            log::debug!("No client_id or refresh_token available. Unauthorized");
+            Err(AuthenticatedRequestError::Unauthorized)
         }
         400..=599 => Err(AuthenticatedRequestError::RequestFailed(
             status,
-            response.text().await.unwrap_or("".to_string()),
+            response.text().await.unwrap_or_default(),
         )),
         _ => match response.json::<Value>().await {
             Ok(value) => Ok(Some(value)),
@@ -589,7 +601,7 @@ async fn refetch_access_token(
     Ok(access_token.to_string())
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -597,7 +609,7 @@ pub enum TidalArtistOrder {
     Date,
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -660,8 +672,11 @@ pub async fn favorite_artists(
                     .unwrap_or(TidalArtistOrderDirection::Desc)
                     .as_ref(),
             ),
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
@@ -738,6 +753,11 @@ pub enum TidalAddFavoriteArtistError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_artist(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -764,8 +784,11 @@ pub async fn add_favorite_artist(
         AddFavoriteArtist,
         &[(":userId", &user_id.to_string())],
         &[
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
@@ -800,6 +823,11 @@ pub enum TidalRemoveFavoriteArtistError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_artist(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -829,8 +857,11 @@ pub async fn remove_favorite_artist(
             (":artistId", &artist_id.to_string())
         ],
         &[
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
@@ -851,7 +882,7 @@ pub async fn remove_favorite_artist(
     Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -859,7 +890,7 @@ pub enum TidalAlbumOrder {
     Date,
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -871,14 +902,14 @@ pub enum TidalAlbumOrderDirection {
 impl From<AlbumSort> for TidalAlbumOrderDirection {
     fn from(value: AlbumSort) -> Self {
         match value {
-            AlbumSort::ArtistAsc => TidalAlbumOrderDirection::Asc,
-            AlbumSort::ArtistDesc => TidalAlbumOrderDirection::Desc,
-            AlbumSort::NameAsc => TidalAlbumOrderDirection::Asc,
-            AlbumSort::NameDesc => TidalAlbumOrderDirection::Desc,
-            AlbumSort::ReleaseDateAsc => TidalAlbumOrderDirection::Asc,
-            AlbumSort::ReleaseDateDesc => TidalAlbumOrderDirection::Desc,
-            AlbumSort::DateAddedAsc => TidalAlbumOrderDirection::Asc,
-            AlbumSort::DateAddedDesc => TidalAlbumOrderDirection::Desc,
+            AlbumSort::ArtistAsc
+            | AlbumSort::NameAsc
+            | AlbumSort::ReleaseDateAsc
+            | AlbumSort::DateAddedAsc => Self::Asc,
+            AlbumSort::NameDesc
+            | AlbumSort::ArtistDesc
+            | AlbumSort::ReleaseDateDesc
+            | AlbumSort::DateAddedDesc => Self::Desc,
         }
     }
 }
@@ -937,8 +968,11 @@ pub async fn favorite_albums(
                     .unwrap_or(TidalAlbumOrderDirection::Desc)
                     .as_ref(),
             ),
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
@@ -1003,6 +1037,11 @@ pub async fn favorite_albums(
     })
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 pub async fn all_favorite_albums(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1037,7 +1076,7 @@ pub async fn all_favorite_albums(
 
         all_albums.extend_from_slice(&albums);
 
-        if albums.is_empty() || all_albums.len() == (albums.has_more() as usize) {
+        if albums.is_empty() || all_albums.len() == usize::from(albums.has_more()) {
             break;
         }
 
@@ -1059,6 +1098,11 @@ pub enum TidalAddFavoriteAlbumError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_album(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1085,8 +1129,11 @@ pub async fn add_favorite_album(
         AddFavoriteAlbum,
         &[(":userId", &user_id.to_string())],
         &[
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
@@ -1121,6 +1168,11 @@ pub enum TidalRemoveFavoriteAlbumError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_album(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1150,8 +1202,11 @@ pub async fn remove_favorite_album(
             (":albumId", &album_id.to_string())
         ],
         &[
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
@@ -1172,7 +1227,7 @@ pub async fn remove_favorite_album(
     Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -1180,7 +1235,7 @@ pub enum TidalTrackOrder {
     Date,
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -1243,8 +1298,11 @@ pub async fn favorite_tracks(
                     .unwrap_or(TidalTrackOrderDirection::Desc)
                     .as_ref(),
             ),
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
@@ -1321,6 +1379,11 @@ pub enum TidalAddFavoriteTrackError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 pub async fn add_favorite_track(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1347,8 +1410,11 @@ pub async fn add_favorite_track(
         AddFavoriteTrack,
         &[(":userId", &user_id.to_string())],
         &[
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
@@ -1383,6 +1449,11 @@ pub enum TidalRemoveFavoriteTrackError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 pub async fn remove_favorite_track(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1412,8 +1483,11 @@ pub async fn remove_favorite_track(
             (":trackId", &track_id.to_string())
         ],
         &[
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
@@ -1457,13 +1531,9 @@ pub enum TidalAlbumType {
 impl From<&str> for TidalAlbumType {
     fn from(value: &str) -> Self {
         match value {
-            "LP" => TidalAlbumType::Lp,
-            "EPSANDSINGLES" => TidalAlbumType::EpsAndSingles,
-            "COMPILATIONS" => TidalAlbumType::Compilations,
-            "ALBUM" => TidalAlbumType::Lp,
-            "EP" => TidalAlbumType::EpsAndSingles,
-            "SINGLE" => TidalAlbumType::EpsAndSingles,
-            _ => TidalAlbumType::Lp,
+            "EPSANDSINGLES" | "EP" | "SINGLE" => Self::EpsAndSingles,
+            "COMPILATIONS" => Self::Compilations,
+            _ => Self::Lp,
         }
     }
 }
@@ -1512,8 +1582,11 @@ pub async fn artist_albums(
     let mut query: Vec<(&str, String)> = vec![
         ("offset", offset.to_string()),
         ("limit", limit.to_string()),
-        ("countryCode", country_code.clone().unwrap_or("US".into())),
-        ("locale", locale.clone().unwrap_or("en_US".into())),
+        (
+            "countryCode",
+            country_code.clone().unwrap_or_else(|| "US".into()),
+        ),
+        ("locale", locale.clone().unwrap_or_else(|| "en_US".into())),
         (
             "deviceType",
             device_type
@@ -1626,8 +1699,11 @@ pub async fn album_tracks(
         &[
             ("offset", &offset.to_string()),
             ("limit", &limit.to_string()),
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
@@ -1698,6 +1774,11 @@ pub enum TidalAlbumError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 pub async fn album(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1711,8 +1792,11 @@ pub async fn album(
         Album,
         &[(":albumId", &album_id.to_string())],
         &[
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
@@ -1739,6 +1823,11 @@ pub enum TidalArtistError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 pub async fn artist(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1752,8 +1841,11 @@ pub async fn artist(
         Artist,
         &[(":artistId", &artist_id.to_string())],
         &[
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
@@ -1782,6 +1874,11 @@ pub enum TidalTrackError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 pub async fn track(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     track_id: &Id,
@@ -1794,8 +1891,11 @@ pub async fn track(
         Track,
         &[(":trackId", &track_id.to_string())],
         &[
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
@@ -1832,12 +1932,12 @@ pub enum SearchType {
 impl From<SearchType> for TidalSearchType {
     fn from(value: SearchType) -> Self {
         match value {
-            SearchType::Artists => TidalSearchType::Artists,
-            SearchType::Albums => TidalSearchType::Albums,
-            SearchType::Tracks => TidalSearchType::Tracks,
-            SearchType::Videos => TidalSearchType::Videos,
-            SearchType::Playlists => TidalSearchType::Playlists,
-            SearchType::UserProfiles => TidalSearchType::UserProfiles,
+            SearchType::Artists => Self::Artists,
+            SearchType::Albums => Self::Albums,
+            SearchType::Tracks => Self::Tracks,
+            SearchType::Videos => Self::Videos,
+            SearchType::Playlists => Self::Playlists,
+            SearchType::UserProfiles => Self::UserProfiles,
         }
     }
 }
@@ -1862,6 +1962,11 @@ pub enum TidalSearchError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 pub async fn search(
     #[cfg(feature = "db")] db: &LibraryDatabase,
@@ -1910,14 +2015,17 @@ pub async fn search(
             (
                 "types",
                 &types
-                    .unwrap_or(DEFAULT_TYPES.to_vec())
+                    .unwrap_or_else(|| DEFAULT_TYPES.to_vec())
                     .iter()
-                    .map(|x| x.as_ref())
+                    .map(AsRef::as_ref)
                     .collect::<Vec<_>>()
                     .join(",")
             ),
-            ("countryCode", &country_code.clone().unwrap_or("US".into())),
-            ("locale", &locale.clone().unwrap_or("en_US".into())),
+            (
+                "countryCode",
+                &country_code.clone().unwrap_or_else(|| "US".into())
+            ),
+            ("locale", &locale.clone().unwrap_or_else(|| "en_US".into())),
             (
                 "deviceType",
                 device_type.unwrap_or(TidalDeviceType::Browser).as_ref(),
@@ -1938,7 +2046,7 @@ pub async fn search(
     Ok(value.as_model()?)
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -1951,10 +2059,9 @@ pub enum TidalAudioQuality {
 impl From<TrackAudioQuality> for TidalAudioQuality {
     fn from(value: TrackAudioQuality) -> Self {
         match value {
-            TrackAudioQuality::Low => TidalAudioQuality::High,
-            TrackAudioQuality::FlacLossless => TidalAudioQuality::Lossless,
-            TrackAudioQuality::FlacHiRes => TidalAudioQuality::HiResLossless,
-            TrackAudioQuality::FlacHighestRes => TidalAudioQuality::HiResLossless,
+            TrackAudioQuality::Low => Self::High,
+            TrackAudioQuality::FlacLossless => Self::Lossless,
+            TrackAudioQuality::FlacHiRes | TrackAudioQuality::FlacHighestRes => Self::HiResLossless,
         }
     }
 }
@@ -1967,6 +2074,11 @@ pub enum TidalTrackFileUrlError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 pub async fn track_file_url(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     audio_quality: TidalAudioQuality,
@@ -2025,6 +2137,11 @@ pub enum TidalTrackPlaybackInfoError {
     Parse(#[from] ParseError),
 }
 
+/// # Errors
+///
+/// * If the HTTP request failed
+/// * If the JSON response failed to parse
+/// * If a database error occurred
 pub async fn track_playback_info(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     audio_quality: TidalAudioQuality,
@@ -2057,7 +2174,7 @@ pub async fn track_playback_info(
 impl From<ArtistOrder> for TidalArtistOrder {
     fn from(value: ArtistOrder) -> Self {
         match value {
-            ArtistOrder::DateAdded => TidalArtistOrder::Date,
+            ArtistOrder::DateAdded => Self::Date,
         }
     }
 }
@@ -2065,22 +2182,22 @@ impl From<ArtistOrder> for TidalArtistOrder {
 impl From<ArtistOrderDirection> for TidalArtistOrderDirection {
     fn from(value: ArtistOrderDirection) -> Self {
         match value {
-            ArtistOrderDirection::Ascending => TidalArtistOrderDirection::Asc,
-            ArtistOrderDirection::Descending => TidalArtistOrderDirection::Desc,
+            ArtistOrderDirection::Ascending => Self::Asc,
+            ArtistOrderDirection::Descending => Self::Desc,
         }
     }
 }
 
 impl From<AlbumSort> for TidalAlbumOrder {
     fn from(_value: AlbumSort) -> Self {
-        TidalAlbumOrder::Date
+        Self::Date
     }
 }
 
 impl From<AlbumOrder> for TidalAlbumOrder {
     fn from(value: AlbumOrder) -> Self {
         match value {
-            AlbumOrder::DateAdded => TidalAlbumOrder::Date,
+            AlbumOrder::DateAdded => Self::Date,
         }
     }
 }
@@ -2088,8 +2205,8 @@ impl From<AlbumOrder> for TidalAlbumOrder {
 impl From<AlbumOrderDirection> for TidalAlbumOrderDirection {
     fn from(value: AlbumOrderDirection) -> Self {
         match value {
-            AlbumOrderDirection::Ascending => TidalAlbumOrderDirection::Asc,
-            AlbumOrderDirection::Descending => TidalAlbumOrderDirection::Desc,
+            AlbumOrderDirection::Ascending => Self::Asc,
+            AlbumOrderDirection::Descending => Self::Desc,
         }
     }
 }
@@ -2097,7 +2214,7 @@ impl From<AlbumOrderDirection> for TidalAlbumOrderDirection {
 impl From<TrackOrder> for TidalTrackOrder {
     fn from(value: TrackOrder) -> Self {
         match value {
-            TrackOrder::DateAdded => TidalTrackOrder::Date,
+            TrackOrder::DateAdded => Self::Date,
         }
     }
 }
@@ -2105,8 +2222,8 @@ impl From<TrackOrder> for TidalTrackOrder {
 impl From<TrackOrderDirection> for TidalTrackOrderDirection {
     fn from(value: TrackOrderDirection) -> Self {
         match value {
-            TrackOrderDirection::Ascending => TidalTrackOrderDirection::Asc,
-            TrackOrderDirection::Descending => TidalTrackOrderDirection::Desc,
+            TrackOrderDirection::Ascending => Self::Asc,
+            TrackOrderDirection::Descending => Self::Desc,
         }
     }
 }
@@ -2122,9 +2239,9 @@ impl TryFrom<AlbumType> for TidalAlbumType {
 
     fn try_from(value: AlbumType) -> Result<Self, Self::Error> {
         match value {
-            AlbumType::Lp => Ok(TidalAlbumType::Lp),
-            AlbumType::Compilations => Ok(TidalAlbumType::Compilations),
-            AlbumType::EpsAndSingles => Ok(TidalAlbumType::EpsAndSingles),
+            AlbumType::Lp => Ok(Self::Lp),
+            AlbumType::Compilations => Ok(Self::Compilations),
+            AlbumType::EpsAndSingles => Ok(Self::EpsAndSingles),
             _ => Err(TryFromAlbumTypeError::UnsupportedAlbumType),
         }
     }
@@ -2132,97 +2249,97 @@ impl TryFrom<AlbumType> for TidalAlbumType {
 
 impl From<TidalFavoriteArtistsError> for ArtistsError {
     fn from(err: TidalFavoriteArtistsError) -> Self {
-        ArtistsError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<TidalArtistError> for ArtistError {
     fn from(err: TidalArtistError) -> Self {
-        ArtistError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<TidalAddFavoriteArtistError> for AddArtistError {
     fn from(err: TidalAddFavoriteArtistError) -> Self {
-        AddArtistError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<TidalRemoveFavoriteArtistError> for RemoveArtistError {
     fn from(err: TidalRemoveFavoriteArtistError) -> Self {
-        RemoveArtistError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<TidalFavoriteAlbumsError> for AlbumsError {
     fn from(err: TidalFavoriteAlbumsError) -> Self {
-        AlbumsError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<TidalAlbumError> for AlbumError {
     fn from(err: TidalAlbumError) -> Self {
-        AlbumError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<TidalArtistAlbumsError> for ArtistAlbumsError {
     fn from(err: TidalArtistAlbumsError) -> Self {
-        ArtistAlbumsError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<TryFromAlbumTypeError> for ArtistAlbumsError {
     fn from(err: TryFromAlbumTypeError) -> Self {
-        ArtistAlbumsError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<TidalAddFavoriteAlbumError> for AddAlbumError {
     fn from(err: TidalAddFavoriteAlbumError) -> Self {
-        AddAlbumError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<TidalRemoveFavoriteAlbumError> for RemoveAlbumError {
     fn from(err: TidalRemoveFavoriteAlbumError) -> Self {
-        RemoveAlbumError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<TidalFavoriteTracksError> for TracksError {
     fn from(err: TidalFavoriteTracksError) -> Self {
-        TracksError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<TidalAlbumTracksError> for TracksError {
     fn from(err: TidalAlbumTracksError) -> Self {
-        TracksError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<TidalTrackError> for TrackError {
     fn from(err: TidalTrackError) -> Self {
-        TrackError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<TidalTrackFileUrlError> for TrackError {
     fn from(err: TidalTrackFileUrlError) -> Self {
-        TrackError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<TidalAddFavoriteTrackError> for AddTrackError {
     fn from(err: TidalAddFavoriteTrackError) -> Self {
-        AddTrackError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
 impl From<TidalRemoveFavoriteTrackError> for RemoveTrackError {
     fn from(err: TidalRemoveFavoriteTrackError) -> Self {
-        RemoveTrackError::Other(Box::new(err))
+        Self::Other(Box::new(err))
     }
 }
 
@@ -2233,12 +2350,14 @@ pub struct TidalMusicApi {
 
 impl TidalMusicApi {
     #[cfg(not(feature = "db"))]
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {}
     }
 
     #[cfg(feature = "db")]
-    pub fn new(db: LibraryDatabase) -> Self {
+    #[must_use]
+    pub const fn new(db: LibraryDatabase) -> Self {
         Self { db }
     }
 }
@@ -2450,14 +2569,14 @@ impl MusicApi for TidalMusicApi {
             let total = pages.iter().map(|page| page.total().unwrap()).sum();
 
             #[cfg(feature = "db")]
-            let db = self.db.to_owned();
+            let db = self.db.clone();
             let artist_id = artist_id.clone();
 
             PagingResponse {
                 page: Page::WithTotal {
                     items: pages
                         .into_iter()
-                        .flat_map(|page| page.into_items())
+                        .flat_map(moosicbox_paging::PagingResponse::into_items)
                         .collect::<Vec<_>>(),
                     offset,
                     limit,
@@ -2619,9 +2738,9 @@ impl MusicApi for TidalMusicApi {
         Ok(PagingResponse {
             page: Page::WithTotal {
                 items: all_tracks.into_iter().map(Into::into).collect(),
-                offset: offset as u32,
-                limit: limit as u32,
-                total: track_ids.len() as u32,
+                offset: u32::try_from(offset).unwrap(),
+                limit: u32::try_from(limit).unwrap(),
+                total: u32::try_from(track_ids.len()).unwrap(),
             },
             fetch: Arc::new(Mutex::new(Box::new(move |_offset, _count| {
                 Box::pin(async move { unimplemented!("Fetching tracks is not implemented") })
@@ -2710,7 +2829,7 @@ impl MusicApi for TidalMusicApi {
         )
         .await?
         .first()
-        .map(|x| x.to_string());
+        .map(ToString::to_string);
 
         let Some(url) = url else {
             return Ok(None);
@@ -2722,7 +2841,7 @@ impl MusicApi for TidalMusicApi {
             .map(|track| TrackSource::RemoteUrl {
                 url,
                 format: track.format.unwrap_or(AudioFormat::Source),
-                track_id: Some(track.id.to_owned()),
+                track_id: Some(track.id.clone()),
                 source: track.track_source,
             }))
     }
