@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 #[cfg(tokio_unstable)]
 pub fn spawn<Fut>(name: &str, future: Fut) -> tokio::task::JoinHandle<Fut::Output>
@@ -42,6 +43,9 @@ where
     spawn_blocking_on(name, &tokio::runtime::Handle::current(), function)
 }
 
+/// # Panics
+///
+/// * If fails to `spawn_local` the `tokio` task
 #[cfg(tokio_unstable)]
 pub fn spawn_local<Fut>(name: &str, future: Fut) -> tokio::task::JoinHandle<Fut::Output>
 where
@@ -85,6 +89,9 @@ where
     tokio::task::spawn_local(future)
 }
 
+/// # Panics
+///
+/// * If fails to `spawn_on` the `tokio` task
 #[cfg(tokio_unstable)]
 pub fn spawn_on<Fut>(
     name: &str,
@@ -136,6 +143,9 @@ where
     handle.spawn(future)
 }
 
+/// # Panics
+///
+/// * If fails to `spawn_blocking_on` the `tokio` task
 #[cfg(tokio_unstable)]
 pub fn spawn_blocking_on<Function, Output>(
     name: &str,
@@ -187,6 +197,9 @@ where
     handle.spawn_blocking(function)
 }
 
+/// # Panics
+///
+/// * If fails to `spawn_local_on` the `tokio` task
 #[cfg(tokio_unstable)]
 pub fn spawn_local_on<Fut>(
     name: &str,
