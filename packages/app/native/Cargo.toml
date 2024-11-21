@@ -85,7 +85,7 @@ _canvas = []
 
 datastar  = ["_canvas", "moosicbox_app_native_lib/datastar"]
 egui      = ["_canvas", "moosicbox_app_native_lib/egui"]
-egui-wgpu = ["_canvas", "egui", "moosicbox_app_native_lib/egui-wgpu"]
+egui-wgpu = ["egui", "moosicbox_app_native_lib/egui-wgpu"]
 fltk      = ["_canvas", "moosicbox_app_native_lib/fltk"]
 html      = ["_canvas", "moosicbox_app_native_lib/html"]
 htmx      = ["_canvas", "moosicbox_app_native_lib/htmx"]
