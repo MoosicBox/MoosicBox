@@ -317,28 +317,66 @@ impl ContainerElement {
 
     #[cfg(feature = "id")]
     #[must_use]
-    pub fn find_element_by_id(&self, id: usize) -> Option<&Self> {
+    pub fn find_container_element_by_id(&self, id: usize) -> Option<&Self> {
         if self.id == id {
             Some(self)
         } else {
             self.elements
                 .iter()
                 .filter_map(|x| x.container_element())
-                .find_map(|x| x.find_element_by_id(id))
+                .find_map(|x| x.find_container_element_by_id(id))
         }
     }
 
     #[cfg(feature = "id")]
     #[must_use]
-    pub fn find_element_by_id_mut(&mut self, id: usize) -> Option<&mut Self> {
+    pub fn find_container_element_by_id_mut(&mut self, id: usize) -> Option<&mut Self> {
         if self.id == id {
             Some(self)
         } else {
             self.elements
                 .iter_mut()
                 .filter_map(|x| x.container_element_mut())
-                .find_map(|x| x.find_element_by_id_mut(id))
+                .find_map(|x| x.find_container_element_by_id_mut(id))
         }
+    }
+
+    #[must_use]
+    pub fn find_container_element_by_str_id(&self, str_id: &str) -> Option<&Self> {
+        if self.str_id.as_ref().is_some_and(|id| id == str_id) {
+            Some(self)
+        } else {
+            self.elements
+                .iter()
+                .filter_map(|x| x.container_element())
+                .find_map(|x| x.find_container_element_by_str_id(str_id))
+        }
+    }
+
+    #[must_use]
+    pub fn find_container_element_by_str_id_mut(&mut self, str_id: &str) -> Option<&mut Self> {
+        if self.str_id.as_ref().is_some_and(|id| id == str_id) {
+            Some(self)
+        } else {
+            self.elements
+                .iter_mut()
+                .filter_map(|x| x.container_element_mut())
+                .find_map(|x| x.find_container_element_by_str_id_mut(str_id))
+        }
+    }
+
+    #[must_use]
+    pub fn find_element_by_str_id(&self, str_id: &str) -> Option<&Element> {
+        self.elements
+            .iter()
+            .find_map(|x| x.find_element_by_str_id(str_id))
+    }
+
+    #[must_use]
+    pub fn find_element_by_str_id_mut(&mut self, str_id: &str) -> Option<&mut Element> {
+        self.elements
+            .iter_mut()
+            .find_map(|x| x.find_element_by_str_id_mut(str_id))
     }
 
     #[cfg(feature = "id")]
@@ -1136,6 +1174,36 @@ impl Element {
             | Self::ListItem { element } => Some(element),
             Self::Raw { .. } | Self::Input(_) => None,
         }
+    }
+
+    #[must_use]
+    pub fn find_element_by_str_id(&self, str_id: &str) -> Option<&Self> {
+        self.container_element().and_then(|container| {
+            if container.str_id.as_ref().is_some_and(|id| id == str_id) {
+                Some(self)
+            } else {
+                container
+                    .elements
+                    .iter()
+                    .find_map(|x| x.find_element_by_str_id(str_id))
+            }
+        })
+    }
+
+    #[must_use]
+    pub fn find_element_by_str_id_mut(&mut self, str_id: &str) -> Option<&mut Self> {
+        if let Some(container) = self.container_element() {
+            if container.str_id.as_ref().is_some_and(|id| id == str_id) {
+                return Some(self);
+            } else if let Some(container) = self.container_element_mut() {
+                return container
+                    .elements
+                    .iter_mut()
+                    .find_map(|x| x.find_element_by_str_id_mut(str_id));
+            }
+        }
+
+        None
     }
 }
 
