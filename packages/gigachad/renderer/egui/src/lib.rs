@@ -1329,6 +1329,26 @@ impl EguiApp {
                                             stroke.clone(),
                                         );
                                     }
+                                    CanvasAction::FillRect(start, end) => {
+                                        let egui::epaint::ColorMode::Solid(color) = stroke.color
+                                        else {
+                                            continue;
+                                        };
+                                        painter.rect_filled(
+                                            egui::Rect::from_min_max(
+                                                egui::Pos2::new(
+                                                    start.0 + cursor_px.x,
+                                                    start.1 + cursor_px.y,
+                                                ),
+                                                egui::Pos2::new(
+                                                    end.0 + cursor_px.x,
+                                                    end.1 + cursor_px.y,
+                                                ),
+                                            ),
+                                            0.0,
+                                            color,
+                                        );
+                                    }
                                 }
                             }
 

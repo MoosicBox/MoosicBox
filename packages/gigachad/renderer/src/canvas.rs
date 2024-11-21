@@ -10,6 +10,7 @@ pub enum CanvasAction {
     StrokeSize(f32),
     StrokeColor(Color),
     Line(Pos, Pos),
+    FillRect(Pos, Pos),
     Clear,
 }
 
