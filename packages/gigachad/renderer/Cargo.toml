@@ -21,11 +21,19 @@ log         = { workspace = true }
 maud        = { workspace = true, optional = true }
 
 [features]
-default = ["maud", "viewport", "viewport-immediate", "viewport-retained"]
+default = [
+    "canvas",
+    "maud",
+    "viewport",
+    "viewport-immediate",
+    "viewport-retained",
+]
 
 fail-on-warnings = []
 
 maud = ["dep:maud", "gigachad_transformer/maud"]
+
+canvas = []
 
 viewport           = []
 viewport-immediate = ["viewport"]

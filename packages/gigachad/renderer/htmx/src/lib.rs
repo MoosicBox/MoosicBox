@@ -5,7 +5,7 @@ use std::{io::Write, sync::Arc};
 
 use async_trait::async_trait;
 use flume::Sender;
-use gigachad_renderer::{Color, PartialView, RenderRunner, Renderer, View};
+use gigachad_renderer::{canvas::CanvasUpdate, Color, PartialView, RenderRunner, Renderer, View};
 use gigachad_renderer_html::{
     html::{element_style_to_html, write_attr, HtmlTagRenderer},
     HeaderMap, HtmlRenderer,
@@ -150,6 +150,22 @@ impl Renderer for HtmxRenderer {
         view: PartialView,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         self.html_renderer.render_partial(view)?;
+
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// Will error if htmx fails to render the canvas update.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if elements `Mutex` is poisoned.
+    fn render_canvas(
+        &mut self,
+        _update: CanvasUpdate,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        log::trace!("render_canvas");
 
         Ok(())
     }

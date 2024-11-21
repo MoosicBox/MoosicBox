@@ -14,6 +14,7 @@ use std::{
 
 use async_trait::async_trait;
 use bytes::Bytes;
+use canvas::CanvasUpdate;
 use fltk::{
     app::{self, App},
     enums::{self, Event},
@@ -1336,6 +1337,22 @@ impl Renderer for FltkRenderer {
             ("render_partial: start"),
             ("render_partial: start {:?}", view)
         );
+
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// Will error if FLTK fails to render the canvas update.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if elements `Mutex` is poisoned.
+    fn render_canvas(
+        &mut self,
+        _update: CanvasUpdate,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        log::trace!("render_canvas");
 
         Ok(())
     }

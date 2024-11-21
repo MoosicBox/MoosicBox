@@ -9,6 +9,7 @@ use std::{
 use async_trait::async_trait;
 use eframe::egui::{self, Color32, CursorIcon, Response, Ui, Widget};
 use flume::{Receiver, Sender};
+use gigachad_renderer::canvas::CanvasUpdate;
 use gigachad_renderer::viewport::immediate::{Pos, Viewport, ViewportListener};
 pub use gigachad_renderer::*;
 use gigachad_router::Router;
@@ -209,6 +210,37 @@ impl Renderer for EguiRenderer {
             moosicbox_assert::die_or_warn!("Unable to find element with id {}", view.target);
         }
 
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// Will error if egui fails to render the canvas update.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if elements `Mutex` is poisoned.
+    fn render_canvas(
+        &mut self,
+        update: CanvasUpdate,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        log::trace!("render_canvas: start");
+
+        let mut page = self.app.container.write().unwrap();
+        if let Some(_canvas) = page.find_element_by_str_id_mut(&update.target) {
+            page.calc();
+            drop(page);
+            if let Some(ctx) = &*self.app.ctx.read().unwrap() {
+                ctx.request_repaint();
+            }
+        } else {
+            moosicbox_assert::die_or_warn!(
+                "render_canvas: unable to find element with id {}",
+                update.target
+            );
+        }
+
+        log::trace!("render_canvas: end");
         Ok(())
     }
 }

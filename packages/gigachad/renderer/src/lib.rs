@@ -1,6 +1,8 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
+#[cfg(feature = "canvas")]
+pub mod canvas;
 #[cfg(feature = "viewport")]
 pub mod viewport;
 
@@ -101,5 +103,14 @@ pub trait Renderer: Send + Sync {
     fn render_partial(
         &mut self,
         partial: PartialView,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
+
+    /// # Errors
+    ///
+    /// Will error if `Renderer` implementation fails to render the canvas update.
+    #[cfg(feature = "canvas")]
+    fn render_canvas(
+        &mut self,
+        update: canvas::CanvasUpdate,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
 }

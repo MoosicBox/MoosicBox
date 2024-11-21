@@ -18,6 +18,7 @@ gigachad_color = { version = "0.1.0", path = "../../color", default-features = f
     "egui",
 ] }
 gigachad_renderer = { version = "0.1.0", path = "../", default-features = false, features = [
+    "canvas",
     "viewport-immediate",
 ] }
 gigachad_router = { version = "0.1.0", path = "../../router", default-features = false }

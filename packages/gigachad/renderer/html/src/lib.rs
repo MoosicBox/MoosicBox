@@ -13,7 +13,7 @@ use actix_web::{
 };
 use async_trait::async_trait;
 use flume::{Receiver, Sender};
-use gigachad_renderer::{Color, PartialView, RenderRunner, Renderer, View};
+use gigachad_renderer::{canvas::CanvasUpdate, Color, PartialView, RenderRunner, Renderer, View};
 use gigachad_router::Router;
 use html::{container_element_to_html_response, HtmlTagRenderer};
 use moosicbox_app_native_image::image;
@@ -289,6 +289,22 @@ impl Renderer for HtmlRenderer {
             ("render_partial: start"),
             ("render_partial: start {:?}", view)
         );
+
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// Will error if html fails to render the canvas update.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if elements `Mutex` is poisoned.
+    fn render_canvas(
+        &mut self,
+        _update: CanvasUpdate,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        log::trace!("render_canvas");
 
         Ok(())
     }
