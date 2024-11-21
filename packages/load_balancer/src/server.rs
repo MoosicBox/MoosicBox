@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::{collections::HashMap, path::Path};
 
@@ -42,14 +43,14 @@ fn parse_clusters() -> HashMap<String, GenBackgroundService<LoadBalancer<RoundRo
     std::env::var("CLUSTERS")
         .expect("Must pass CLUSTERS environment variable")
         .split(';')
-        .map(|x| x.trim())
+        .map(str::trim)
         .filter(|x| !x.is_empty())
         .flat_map(|x| {
             let (names, ips) = x.split_once(':').expect("Invalid cluster");
-            let names = names.split(',').collect::<Vec<_>>();
+            let names = names.split(',');
             let ips = ips.split(',').collect::<Vec<_>>();
 
-            names.into_iter().map(move |x| (x.to_owned(), ips.clone()))
+            names.map(move |x| (x.to_owned(), ips.clone()))
         })
         .map(|(name, ips)| {
             let mut upstreams = LoadBalancer::try_from_iter(&ips)
@@ -78,10 +79,10 @@ fn setup_tls(lb: &mut Service<HttpProxy<Router>>) {
         lb.add_tls_with_settings(&ssl_addr, None, tls_settings);
     } else if std::env::var("SSL_CRT_PATH").is_ok() || std::env::var("SSL_KEY_PATH").is_ok() {
         if !crt_valid {
-            log::warn!("Invalid SSL_CRT_PATH")
+            log::warn!("Invalid SSL_CRT_PATH");
         }
         if !key_valid {
-            log::warn!("Invalid SSL_KEY_PATH")
+            log::warn!("Invalid SSL_KEY_PATH");
         }
     } else if crt_valid {
         log::debug!("No key found. Not starting SSL port");
