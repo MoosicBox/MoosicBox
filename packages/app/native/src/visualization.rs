@@ -63,8 +63,6 @@ pub async fn update_visualization(track_id: &Id, api_source: ApiSource, seek: f6
 
     log::debug!("update_visualization: track_id={track_id} api_source={api_source} seek={seek}");
 
-    let key = format!("{api_source}|{track_id}");
-
     let binding = RENDERER.get().unwrap().read().await;
     let (width, height) = if let Some(visualization) = binding
         .container()
@@ -78,6 +76,8 @@ pub async fn update_visualization(track_id: &Id, api_source: ApiSource, seek: f6
         return;
     };
     drop(binding);
+
+    let key = format!("{api_source}|{track_id}|{width}");
 
     let mut binding = CACHE.write().await;
     if let Some(data) = binding.get(&key) {
