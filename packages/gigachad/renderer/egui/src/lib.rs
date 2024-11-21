@@ -7,6 +7,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use canvas::CanvasAction;
 use eframe::egui::{self, Color32, CursorIcon, Response, Ui, Widget};
 use flume::{Receiver, Sender};
 use gigachad_renderer::canvas::CanvasUpdate;
@@ -222,22 +223,20 @@ impl Renderer for EguiRenderer {
     /// Will panic if elements `Mutex` is poisoned.
     fn render_canvas(
         &mut self,
-        update: CanvasUpdate,
+        mut update: CanvasUpdate,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         log::trace!("render_canvas: start");
 
-        let mut page = self.app.container.write().unwrap();
-        if let Some(_canvas) = page.find_element_by_str_id_mut(&update.target) {
-            page.calc();
-            drop(page);
-            if let Some(ctx) = &*self.app.ctx.read().unwrap() {
-                ctx.request_repaint();
-            }
-        } else {
-            moosicbox_assert::die_or_warn!(
-                "render_canvas: unable to find element with id {}",
-                update.target
-            );
+        self.app
+            .canvas_actions
+            .write()
+            .unwrap()
+            .entry(update.target)
+            .or_insert_with(|| Vec::with_capacity(update.canvas_actions.len()))
+            .append(&mut update.canvas_actions);
+
+        if let Some(ctx) = &*self.app.ctx.read().unwrap() {
+            ctx.request_repaint();
         }
 
         log::trace!("render_canvas: end");
@@ -268,6 +267,7 @@ struct EguiApp {
     event_receiver: Receiver<AppEvent>,
     viewport_listeners: Arc<RwLock<HashMap<usize, ViewportListener>>>,
     images: Arc<RwLock<HashMap<String, AppImage>>>,
+    canvas_actions: Arc<RwLock<HashMap<String, Vec<CanvasAction>>>>,
     route_requests: Arc<RwLock<Vec<usize>>>,
     router: Router,
     background: Option<Color32>,
@@ -294,6 +294,7 @@ impl EguiApp {
             event_receiver,
             viewport_listeners: Arc::new(RwLock::new(HashMap::new())),
             images: Arc::new(RwLock::new(HashMap::new())),
+            canvas_actions: Arc::new(RwLock::new(HashMap::new())),
             route_requests: Arc::new(RwLock::new(vec![])),
             router,
             background: None,
@@ -1254,6 +1255,60 @@ impl EguiApp {
                     })
                     .response
             }),
+            Element::Canvas { element } => element.str_id.as_ref().map_or_else(
+                || None,
+                |str_id| {
+                    self.canvas_actions.read().unwrap().get(str_id).map_or_else(
+                        || None,
+                        |actions| {
+                            let (response, painter) = ui.allocate_painter(
+                                egui::Vec2::new(
+                                    element.calculated_width.unwrap(),
+                                    element.calculated_height.unwrap(),
+                                ),
+                                egui::Sense::hover(),
+                            );
+
+                            let pixels_per_point = ctx.pixels_per_point();
+                            let cursor_px = egui::Pos2::new(
+                                response.rect.min.x * pixels_per_point,
+                                response.rect.min.y * pixels_per_point,
+                            )
+                            .ceil();
+
+                            let mut stroke = (1.0, Color32::BLACK);
+
+                            for action in actions {
+                                match action {
+                                    CanvasAction::StrokeSize(size) => {
+                                        stroke.0 = *size;
+                                    }
+                                    CanvasAction::StrokeColor(color) => {
+                                        stroke.1 = (*color).into();
+                                    }
+                                    CanvasAction::Line(start, end) => {
+                                        painter.line_segment(
+                                            [
+                                                egui::Pos2::new(
+                                                    start.0 + cursor_px.x,
+                                                    start.1 + cursor_px.y,
+                                                ),
+                                                egui::Pos2::new(
+                                                    end.0 + cursor_px.x,
+                                                    end.1 + cursor_px.y,
+                                                ),
+                                            ],
+                                            stroke,
+                                        );
+                                    }
+                                }
+                            }
+
+                            Some(response)
+                        },
+                    )
+                },
+            ),
             _ => None,
         };
 
