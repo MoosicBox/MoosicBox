@@ -1299,16 +1299,20 @@ impl EguiApp {
                             )
                             .ceil();
 
-                            let mut stroke = (1.0, Color32::BLACK);
+                            let default_color = Color32::BLACK;
+                            let stroke =
+                                &mut egui::epaint::PathStroke::new(1.0, default_color).inside();
+                            stroke.color = egui::epaint::ColorMode::Solid(default_color);
 
                             for action in actions {
                                 match action {
                                     CanvasAction::Clear => {}
                                     CanvasAction::StrokeSize(size) => {
-                                        stroke.0 = *size;
+                                        stroke.width = *size;
                                     }
                                     CanvasAction::StrokeColor(color) => {
-                                        stroke.1 = (*color).into();
+                                        stroke.color =
+                                            egui::epaint::ColorMode::Solid((*color).into());
                                     }
                                     CanvasAction::Line(start, end) => {
                                         painter.line_segment(
@@ -1322,7 +1326,7 @@ impl EguiApp {
                                                     end.1 + cursor_px.y,
                                                 ),
                                             ],
-                                            stroke,
+                                            stroke.clone(),
                                         );
                                     }
                                 }
