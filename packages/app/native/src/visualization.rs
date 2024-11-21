@@ -38,7 +38,10 @@ async fn visualization_updated(
         let height = if height < 2.0 { 2.0 } else { height };
         let y = (visualization_height - height) / 2.0;
 
-        canvas_actions.push(canvas::CanvasAction::Line(Pos(x, y), Pos(x, y + height)));
+        canvas_actions.push(canvas::CanvasAction::FillRect(
+            Pos(x, y),
+            Pos(x + bar_width, y + height),
+        ));
     }
 
     let view = canvas::CanvasUpdate {
