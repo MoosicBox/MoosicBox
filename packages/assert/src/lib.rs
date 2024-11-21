@@ -111,12 +111,13 @@ macro_rules! assert_or_unimplemented {
 
 #[macro_export]
 macro_rules! assert_or_panic {
-    ($evaluate:expr, $(,)?) => {
+    ($evaluate:expr, $(,)?) => {{
+        let success = ($evaluate);
         if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1"
-            && !($evaluate)
+            && !success
         {
             $crate::assert!($evaluate)
-        } else if !($evaluate) {
+        } else if !success {
             panic!(
                 "{}",
                 $crate::Colorize::on_red($crate::Colorize::white($crate::Colorize::bold(
@@ -129,13 +130,14 @@ macro_rules! assert_or_panic {
                 )))
             );
         }
-    };
-    ($evaluate:expr, $($message:tt)+) => {
+    }};
+    ($evaluate:expr, $($message:tt)+) => {{
+        let success = ($evaluate);
         if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1"
-            && !($evaluate)
+            && !success
         {
             $crate::assert!($evaluate, $($message)*)
-        } else if !($evaluate) {
+        } else if !success {
             panic!(
                 "{}",
                 $crate::Colorize::on_red($crate::Colorize::white($crate::Colorize::bold(
@@ -148,7 +150,7 @@ macro_rules! assert_or_panic {
                 )))
             );
         }
-    };
+    }};
 }
 
 #[macro_export]
