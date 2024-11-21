@@ -25,7 +25,10 @@ use moosicbox_ws::models::{InboundPayload, OutboundPayload};
 use reqwest::RequestBuilder;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::{sync::RwLock, task::JoinHandle};
+use tokio::{
+    sync::{RwLock, RwLockReadGuard},
+    task::JoinHandle,
+};
 use tokio_util::sync::CancellationToken;
 
 pub mod ws;
@@ -435,6 +438,29 @@ impl AppState {
                 Box::pin(async move { listener(message).await })
             })));
         self
+    }
+
+    pub async fn get_current_session(&self) -> Option<ApiSession> {
+        self.get_current_session_ref().await.map(|x| x.clone())
+    }
+
+    pub async fn get_current_session_ref(&self) -> Option<RwLockReadGuard<ApiSession>> {
+        let session_id = (*self.current_session_id.read().await)?;
+        let binding = self.current_sessions.read().await;
+        if !binding.iter().any(|x| x.session_id == session_id) {
+            return None;
+        }
+
+        let binding: RwLockReadGuard<ApiSession> = RwLockReadGuard::map(binding, |x| {
+            for session in x {
+                if session.session_id == session_id {
+                    return session;
+                }
+            }
+            unreachable!();
+        });
+
+        Some(binding)
     }
 
     /// # Errors
