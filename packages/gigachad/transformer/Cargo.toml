@@ -31,9 +31,11 @@ pretty_assertions = { workspace = true }
 test-log          = { workspace = true }
 
 [features]
-default = ["calc", "format", "html", "id", "maud"]
+default = ["calc", "canvas", "format", "html", "id", "maud"]
 
 fail-on-warnings = []
+
+canvas = []
 
 calc = ["dep:itertools"]
 maud = ["dep:maud", "html"]

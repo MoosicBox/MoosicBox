@@ -302,6 +302,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
             "td" => crate::Element::TD {
                 element: parse_element(tag, node, parser),
             },
+            #[cfg(feature = "canvas")]
             "canvas" => crate::Element::Canvas {
                 element: parse_element(tag, node, parser),
             },

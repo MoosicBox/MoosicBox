@@ -33,7 +33,7 @@ fail-on-warnings = []
 
 maud = ["dep:maud", "gigachad_transformer/maud"]
 
-canvas = []
+canvas = ["gigachad_transformer/canvas"]
 
 viewport           = []
 viewport-immediate = ["viewport"]

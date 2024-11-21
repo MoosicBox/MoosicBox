@@ -671,6 +671,7 @@ pub enum Element {
     TD {
         element: ContainerElement,
     },
+    #[cfg(feature = "canvas")]
     Canvas {
         element: ContainerElement,
     },
@@ -1074,6 +1075,7 @@ impl Element {
                 display_elements(&element.elements, f, with_debug_attrs)?;
                 f.write_fmt(format_args!("</td>"))?;
             }
+            #[cfg(feature = "canvas")]
             Self::Canvas { element } => {
                 f.write_fmt(format_args!(
                     "<canvas{attrs}>",
@@ -1113,6 +1115,7 @@ impl Element {
             Self::TBody { .. } => "TBody",
             Self::TR { .. } => "TR",
             Self::TD { .. } => "TD",
+            #[cfg(feature = "canvas")]
             Self::Canvas { .. } => "Canvas",
         }
     }
@@ -1142,8 +1145,9 @@ impl Element {
             | Self::TBody { element }
             | Self::TR { element }
             | Self::TD { element }
-            | Self::Canvas { element }
             | Self::ListItem { element } => Some(element),
+            #[cfg(feature = "canvas")]
+            Self::Canvas { element } => Some(element),
             Self::Raw { .. } | Self::Input(_) => None,
         }
     }
@@ -1170,8 +1174,9 @@ impl Element {
             | Self::TBody { element }
             | Self::TR { element }
             | Self::TD { element }
-            | Self::Canvas { element }
             | Self::ListItem { element } => Some(element),
+            #[cfg(feature = "canvas")]
+            Self::Canvas { element } => Some(element),
             Self::Raw { .. } | Self::Input(_) => None,
         }
     }
