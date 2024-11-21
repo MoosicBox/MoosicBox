@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::str::FromStr as _;
 
@@ -33,14 +34,14 @@ pub struct AlbumFilters {
     pub qobuz_artist_id: Option<Id>,
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum ArtistOrder {
     DateAdded,
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum ArtistOrderDirection {
@@ -48,14 +49,14 @@ pub enum ArtistOrderDirection {
     Descending,
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum AlbumOrder {
     DateAdded,
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum AlbumOrderDirection {
@@ -63,14 +64,14 @@ pub enum AlbumOrderDirection {
     Descending,
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum TrackOrder {
     DateAdded,
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum TrackOrderDirection {
@@ -95,22 +96,26 @@ pub enum TrackSource {
 }
 
 impl TrackSource {
-    pub fn format(&self) -> AudioFormat {
+    #[must_use]
+    pub const fn format(&self) -> AudioFormat {
         match self {
-            TrackSource::LocalFilePath { format, .. } => *format,
-            TrackSource::RemoteUrl { format, .. } => *format,
+            Self::LocalFilePath { format, .. } | Self::RemoteUrl { format, .. } => *format,
         }
     }
 
-    pub fn track_id(&self) -> Option<&Id> {
+    #[must_use]
+    pub const fn track_id(&self) -> Option<&Id> {
         match self {
-            TrackSource::LocalFilePath { track_id, .. } => track_id.as_ref(),
-            TrackSource::RemoteUrl { track_id, .. } => track_id.as_ref(),
+            Self::LocalFilePath { track_id, .. } | Self::RemoteUrl { track_id, .. } => {
+                track_id.as_ref()
+            }
         }
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Clone, Copy)]
+#[derive(
+    Debug, Default, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy,
+)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -180,11 +185,11 @@ impl From<ImageCoverSize> for u16 {
 impl From<u16> for ImageCoverSize {
     fn from(value: u16) -> Self {
         match value {
-            0..=80 => ImageCoverSize::Thumbnail,
-            81..=160 => ImageCoverSize::Small,
-            161..=320 => ImageCoverSize::Medium,
-            321..=640 => ImageCoverSize::Large,
-            _ => ImageCoverSize::Max,
+            0..=80 => Self::Thumbnail,
+            81..=160 => Self::Small,
+            161..=320 => Self::Medium,
+            321..=640 => Self::Large,
+            _ => Self::Max,
         }
     }
 }
@@ -210,6 +215,6 @@ impl FromId for u64 {
     }
 
     fn into_id(str: &str) -> Self {
-        str.parse::<u64>().unwrap()
+        str.parse::<Self>().unwrap()
     }
 }
