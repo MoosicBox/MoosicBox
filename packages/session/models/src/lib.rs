@@ -280,7 +280,7 @@ pub struct Session {
     pub active: bool,
     pub playing: bool,
     pub position: Option<u16>,
-    pub seek: Option<u64>,
+    pub seek: Option<f64>,
     pub volume: Option<f64>,
     pub playback_target: Option<PlaybackTarget>,
     pub playlist: SessionPlaylist,
@@ -298,7 +298,8 @@ impl ToValueType<Session> for &moosicbox_database::Row {
             active: self.to_value("active")?,
             playing: self.to_value("playing")?,
             position: self.to_value("position")?,
-            seek: self.to_value("seek")?,
+            #[allow(clippy::cast_precision_loss)]
+            seek: self.to_value::<Option<i64>>("seek")?.map(|x| x as f64),
             volume: self.to_value("volume")?,
             playback_target: match playback_target_type {
                 Some(PlaybackTarget::AudioZone { .. }) => Some(PlaybackTarget::AudioZone {
@@ -333,7 +334,7 @@ pub struct ApiSession {
     pub active: bool,
     pub playing: bool,
     pub position: Option<u16>,
-    pub seek: Option<u64>,
+    pub seek: Option<f64>,
     pub volume: Option<f64>,
     pub playback_target: Option<PlaybackTarget>,
     pub playlist: ApiSessionPlaylist,

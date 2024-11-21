@@ -9,7 +9,7 @@ pub struct PlaybackState {
     pub session_id: u64,
     pub playing: bool,
     pub position: u16,
-    pub seek: f32,
+    pub seek: f64,
     pub tracks: Vec<ApiTrack>,
 }
 

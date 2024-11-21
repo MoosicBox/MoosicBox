@@ -517,10 +517,7 @@ impl AppState {
 
             if let Some(session) = session {
                 if let Some(seek) = update.seek {
-                    #[allow(clippy::cast_precision_loss)]
-                    #[allow(clippy::cast_sign_loss)]
-                    #[allow(clippy::cast_possible_truncation)]
-                    session.seek.replace(seek as u64);
+                    session.seek.replace(seek);
                 }
                 if let Some(name) = update.name.clone() {
                     session.name = name;

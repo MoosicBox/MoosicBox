@@ -49,7 +49,7 @@ async fn convert_state(app_state: &moosicbox_app_state::AppState) -> state::Stat
                 playing: session.playing,
                 position: session.position.unwrap_or(0),
                 #[allow(clippy::cast_precision_loss)]
-                seek: session.seek.unwrap_or(0) as f32,
+                seek: session.seek.unwrap_or(0.0),
                 tracks: session.playlist.tracks.clone(),
             });
         }
@@ -101,8 +101,7 @@ async fn set_current_session(session: ApiSession) {
         active: Some(session.active),
         playing: Some(session.playing),
         position: session.position,
-        #[allow(clippy::cast_precision_loss)]
-        seek: session.seek.map(|x| x as f64),
+        seek: session.seek,
         volume: session.volume,
         playlist: Some(UpdateSessionPlaylist {
             session_playlist_id: session.playlist.session_playlist_id,

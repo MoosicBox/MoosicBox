@@ -495,7 +495,8 @@ async fn session_as_model_query(
             active: row.to_value("active")?,
             playing: row.to_value("playing")?,
             position: row.to_value("position")?,
-            seek: row.to_value("seek")?,
+            #[allow(clippy::cast_precision_loss)]
+            seek: row.to_value::<Option<i64>>("seek")?.map(|x| x as f64),
             volume: row.to_value("volume")?,
             playback_target: match playback_target_type {
                 Some(PlaybackTarget::AudioZone { .. }) => Some(PlaybackTarget::AudioZone {

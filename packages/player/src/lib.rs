@@ -501,8 +501,7 @@ impl PlaybackHandler {
                 None,
                 Some(session.playing),
                 session.position,
-                #[allow(clippy::cast_precision_loss)]
-                session.seek.map(|x| x as f64),
+                session.seek,
                 session.volume,
                 Some(
                     session

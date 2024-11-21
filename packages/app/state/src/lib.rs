@@ -1374,9 +1374,8 @@ impl AppState {
                     if update.position.is_none() {
                         update.position = session.position;
                     }
-                    #[allow(clippy::cast_precision_loss)]
                     if update.seek.is_none() {
-                        update.seek = session.seek.map(|x| x as f64);
+                        update.seek = session.seek;
                     }
                     if update.volume.is_none() {
                         update.volume = session.volume;

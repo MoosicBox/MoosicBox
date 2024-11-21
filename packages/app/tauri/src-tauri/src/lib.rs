@@ -196,8 +196,7 @@ async fn update_player_plugin_playlist(session: ApiSession) {
         .update_state(app_tauri_plugin_player::UpdateState {
             playing: Some(session.playing),
             position: session.position,
-            #[allow(clippy::cast_precision_loss)]
-            seek: session.seek.map(|x| x as f64),
+            seek: session.seek,
             volume: session.volume,
             playlist: Some(app_tauri_plugin_player::Playlist {
                 tracks: session
