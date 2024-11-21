@@ -131,6 +131,8 @@ async fn set_current_session(session: ApiSession) {
             log::error!("Failed to render_partial: {e:?}");
         }
     }
+
+    visualization::check_visualization_update().await;
 }
 
 fn on_playback_event(update: &UpdateSession, _current: &Playback) {
@@ -191,20 +193,7 @@ async fn handle_playback_update(update: ApiUpdateSession) {
         ("handle_playback_update: update={update:?}")
     );
 
-    let session = STATE.get_current_session_ref().await;
-    if let Some(session) = session {
-        if let Some(position) = session.position {
-            if let Some(track) = session.playlist.tracks.get(position as usize) {
-                let track_id = track.track_id.clone();
-                let api_source = track.api_source;
-                let seek = session.seek.unwrap_or_default();
-                drop(session);
-                visualization::update_visualization(&track_id, api_source, seek).await;
-            }
-        }
-    } else {
-        drop(session);
-    }
+    visualization::check_visualization_update().await;
 }
 
 #[allow(clippy::too_many_lines)]

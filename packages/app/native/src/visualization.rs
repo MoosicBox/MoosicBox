@@ -50,7 +50,7 @@ async fn visualization_updated(
     };
     let response = RENDERER.get().unwrap().write().await.render_canvas(view);
     if let Err(e) = response {
-        log::error!("Failed to render_partial: {e:?}");
+        log::error!("Failed to render_canvas: {e:?}");
     }
 }
 
@@ -123,4 +123,21 @@ pub async fn update_visualization(track_id: &Id, api_source: ApiSource, seek: f6
 
     #[cfg(feature = "_canvas")]
     visualization_updated(BAR_WIDTH, GAP, height, &buf).await;
+}
+
+pub async fn check_visualization_update() {
+    let session = STATE.get_current_session_ref().await;
+    if let Some(session) = session {
+        if let Some(position) = session.position {
+            if let Some(track) = session.playlist.tracks.get(position as usize) {
+                let track_id = track.track_id.clone();
+                let api_source = track.api_source;
+                let seek = session.seek.unwrap_or_default();
+                drop(session);
+                update_visualization(&track_id, api_source, seek).await;
+            }
+        }
+    } else {
+        drop(session);
+    }
 }
