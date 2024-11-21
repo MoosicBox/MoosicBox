@@ -1,7 +1,12 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use std::{ops::Deref, path::PathBuf, str::FromStr as _, sync::Arc};
+use std::{
+    ops::Deref,
+    path::PathBuf,
+    str::FromStr as _,
+    sync::{Arc, RwLockReadGuard, RwLockWriteGuard},
+};
 
 use actix_cors::Cors;
 pub use actix_web::http::header::HeaderMap;
@@ -14,7 +19,7 @@ use actix_web::{
 use async_trait::async_trait;
 use flume::{Receiver, Sender};
 use gigachad_renderer::{canvas::CanvasUpdate, Color, PartialView, RenderRunner, Renderer, View};
-use gigachad_router::Router;
+use gigachad_router::{ContainerElement, Router};
 use html::{container_element_to_html_response, HtmlTagRenderer};
 use moosicbox_app_native_image::image;
 use tokio::runtime::{Handle, Runtime};
@@ -307,6 +312,14 @@ impl Renderer for HtmlRenderer {
         log::trace!("render_canvas");
 
         Ok(())
+    }
+
+    fn container(&self) -> RwLockReadGuard<ContainerElement> {
+        unimplemented!();
+    }
+
+    fn container_mut(&self) -> RwLockWriteGuard<ContainerElement> {
+        unimplemented!();
     }
 }
 

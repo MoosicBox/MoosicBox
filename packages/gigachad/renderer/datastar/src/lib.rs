@@ -1,7 +1,10 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use std::{io::Write, sync::Arc};
+use std::{
+    io::Write,
+    sync::{Arc, RwLockReadGuard, RwLockWriteGuard},
+};
 
 use async_trait::async_trait;
 use flume::Sender;
@@ -153,5 +156,13 @@ impl Renderer for DatastarRenderer {
         log::trace!("render_canvas");
 
         Ok(())
+    }
+
+    fn container(&self) -> RwLockReadGuard<ContainerElement> {
+        unimplemented!();
+    }
+
+    fn container_mut(&self) -> RwLockWriteGuard<ContainerElement> {
+        unimplemented!();
     }
 }

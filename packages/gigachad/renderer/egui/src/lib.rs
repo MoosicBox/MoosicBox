@@ -3,7 +3,7 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
 use async_trait::async_trait;
@@ -241,6 +241,14 @@ impl Renderer for EguiRenderer {
 
         log::trace!("render_canvas: end");
         Ok(())
+    }
+
+    fn container(&self) -> RwLockReadGuard<ContainerElement> {
+        self.app.container.read().unwrap()
+    }
+
+    fn container_mut(&self) -> RwLockWriteGuard<ContainerElement> {
+        self.app.container.write().unwrap()
     }
 }
 

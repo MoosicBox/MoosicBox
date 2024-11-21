@@ -8,7 +8,7 @@ use std::{
     str::FromStr as _,
     sync::{
         atomic::{AtomicBool, AtomicI32},
-        Arc, LazyLock, Mutex, RwLock,
+        Arc, LazyLock, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
     },
 };
 
@@ -101,7 +101,7 @@ type JoinHandleAndCancelled = (JoinHandle<()>, Arc<AtomicBool>);
 pub struct FltkRenderer {
     app: Option<App>,
     window: Option<DoubleWindow>,
-    elements: Arc<Mutex<ContainerElement>>,
+    elements: Arc<RwLock<ContainerElement>>,
     root: Arc<RwLock<Option<group::Flex>>>,
     images: Arc<RwLock<Vec<RegisteredImage>>>,
     viewport_listeners: Arc<RwLock<Vec<ViewportListener>>>,
@@ -123,7 +123,7 @@ impl FltkRenderer {
         Self {
             app: None,
             window: None,
-            elements: Arc::new(Mutex::new(ContainerElement::default())),
+            elements: Arc::new(RwLock::new(ContainerElement::default())),
             root: Arc::new(RwLock::new(None)),
             images: Arc::new(RwLock::new(vec![])),
             viewport_listeners: Arc::new(RwLock::new(vec![])),
@@ -322,7 +322,7 @@ impl FltkRenderer {
             }
             window.begin();
             log::debug!("perform_render: begin");
-            let container: &mut ContainerElement = &mut self.elements.lock().unwrap();
+            let container: &mut ContainerElement = &mut self.elements.write().unwrap();
 
             #[allow(clippy::cast_precision_loss)]
             let window_width = self.width.load(std::sync::atomic::Ordering::SeqCst) as f32;
@@ -1313,7 +1313,7 @@ impl Renderer for FltkRenderer {
         log::debug!("render: {:?}", elements.immediate);
 
         {
-            *self.elements.lock().unwrap() = elements.immediate;
+            *self.elements.write().unwrap() = elements.immediate;
         }
 
         self.perform_render()
@@ -1355,6 +1355,14 @@ impl Renderer for FltkRenderer {
         log::trace!("render_canvas");
 
         Ok(())
+    }
+
+    fn container(&self) -> RwLockReadGuard<ContainerElement> {
+        self.elements.read().unwrap()
+    }
+
+    fn container_mut(&self) -> RwLockWriteGuard<ContainerElement> {
+        self.elements.write().unwrap()
     }
 }
 

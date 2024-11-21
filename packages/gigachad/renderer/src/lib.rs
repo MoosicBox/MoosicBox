@@ -6,7 +6,11 @@ pub mod canvas;
 #[cfg(feature = "viewport")]
 pub mod viewport;
 
-use std::{future::Future, pin::Pin};
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::{RwLockReadGuard, RwLockWriteGuard},
+};
 
 use async_trait::async_trait;
 pub use gigachad_color::Color;
@@ -113,4 +117,7 @@ pub trait Renderer: Send + Sync {
         &mut self,
         update: canvas::CanvasUpdate,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
+
+    fn container(&self) -> RwLockReadGuard<ContainerElement>;
+    fn container_mut(&self) -> RwLockWriteGuard<ContainerElement>;
 }
