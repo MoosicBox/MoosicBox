@@ -227,13 +227,32 @@ impl Renderer for EguiRenderer {
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         log::trace!("render_canvas: start");
 
-        self.app
-            .canvas_actions
-            .write()
-            .unwrap()
+        let (width, height) = {
+            let page = self.container();
+            let (width, height) =
+                if let Some(canvas) = page.find_container_element_by_str_id(&update.target) {
+                    (
+                        canvas.calculated_width.unwrap(),
+                        canvas.calculated_height.unwrap(),
+                    )
+                } else {
+                    return Ok(());
+                };
+            drop(page);
+            (width, height)
+        };
+
+        let mut binding = self.app.canvas_actions.write().unwrap();
+
+        let actions = binding
             .entry(update.target)
-            .or_insert_with(|| Vec::with_capacity(update.canvas_actions.len()))
-            .append(&mut update.canvas_actions);
+            .or_insert_with(|| Vec::with_capacity(update.canvas_actions.len()));
+
+        actions.append(&mut update.canvas_actions);
+
+        compact_canvas_actions(width, height, actions);
+
+        drop(binding);
 
         if let Some(ctx) = &*self.app.ctx.read().unwrap() {
             ctx.request_repaint();
@@ -249,6 +268,24 @@ impl Renderer for EguiRenderer {
 
     fn container_mut(&self) -> RwLockWriteGuard<ContainerElement> {
         self.app.container.write().unwrap()
+    }
+}
+
+fn compact_canvas_actions(width: f32, height: f32, actions: &mut Vec<CanvasAction>) {
+    let len = actions.len();
+    for i in 0..len {
+        let i = len - 1 - i;
+        if let CanvasAction::ClearRect(min, max) = actions[i] {
+            // TODO: handle sub-rects
+            if min.0.abs() < 0.001
+                && min.1.abs() < 0.001
+                && (max.0 - width).abs() < 0.001
+                && (max.1 - height).abs() < 0.001
+            {
+                actions.drain(..=i);
+                return;
+            }
+        }
     }
 }
 
@@ -1288,6 +1325,7 @@ impl EguiApp {
 
                             for action in actions {
                                 match action {
+                                    CanvasAction::ClearRect(..) => {}
                                     CanvasAction::StrokeSize(size) => {
                                         stroke.0 = *size;
                                     }
