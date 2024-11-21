@@ -10,7 +10,7 @@ pub enum CanvasAction {
     StrokeSize(f32),
     StrokeColor(Color),
     Line(Pos, Pos),
-    ClearRect(Pos, Pos),
+    Clear,
 }
 
 #[derive(Default, Debug, Clone)]
