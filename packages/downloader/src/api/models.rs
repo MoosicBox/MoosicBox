@@ -163,7 +163,7 @@ impl ToValueType<ApiDownloadApiSource> for &serde_json::Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, AsRefStr, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, AsRefStr, Clone, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
@@ -180,7 +180,7 @@ pub enum StrippedApiDownloadItem {
     ArtistCover { album_id: Id },
 }
 
-#[derive(Debug, Serialize, Deserialize, AsRefStr, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, AsRefStr, Clone, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
@@ -358,7 +358,7 @@ impl ToValueType<ApiDownloadItem> for &serde_json::Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct StrippedApiDownloadTask {
     pub id: u64,

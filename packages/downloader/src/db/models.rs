@@ -181,7 +181,7 @@ impl ToValueType<DownloadApiSource> for &serde_json::Value {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, AsRefStr, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, AsRefStr, Clone, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
@@ -366,14 +366,14 @@ impl ToValueType<DownloadItem> for &moosicbox_database::Row {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateDownloadTask {
     pub item: DownloadItem,
     pub file_path: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadTask {
     pub id: u64,
