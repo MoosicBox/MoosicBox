@@ -25,6 +25,13 @@ pub struct Color {
 }
 
 impl Color {
+    pub const WHITE: Self = Self {
+        r: 255,
+        g: 255,
+        b: 255,
+        a: None,
+    };
+
     /// Parses a hex string (a-f/A-F/0-9) as a `Color` from the &str,
     /// ignoring surrounding whitespace.
     ///
