@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use moosicbox_core::{
     sqlite::models::{ApiTrack, ToApi, TrackApiSource},
     types::AudioFormat,
