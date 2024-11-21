@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use clap::Parser;
 
@@ -17,5 +18,5 @@ fn main() {
 
     let args = Args::parse();
 
-    moosicbox_app_create_config::gen(args.bundled, args.output)
+    moosicbox_app_create_config::gen(args.bundled, args.output);
 }
