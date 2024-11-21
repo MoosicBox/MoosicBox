@@ -37,9 +37,11 @@ static CONFIG_DB: LazyLock<std::sync::RwLock<Option<ConfigDatabase>>> =
 
 static SERVER_ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
-#[allow(clippy::too_many_lines)]
-#[allow(clippy::missing_panics_doc)]
-#[allow(clippy::missing_errors_doc)]
+#[allow(
+    clippy::too_many_lines,
+    clippy::missing_panics_doc,
+    clippy::missing_errors_doc
+)]
 pub async fn run(
     #[allow(unused)] app_type: AppType,
     addr: &str,
