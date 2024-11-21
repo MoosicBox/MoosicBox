@@ -59,12 +59,13 @@ moosicbox_ws = { version = "0.1.0", path = "../../ws", default-features = false 
 # Bundled dependencies
 moosicbox_app_native_bundled = { version = "0.1.0", path = "bundled", optional = true, default-features = false }
 
-flume     = { workspace = true }
-log       = { workspace = true }
-reqwest   = { workspace = true, features = ["json"] }
-strum     = { workspace = true }
-thiserror = { workspace = true }
-tokio     = { workspace = true, features = ["macros", "rt-multi-thread"] }
+flume      = { workspace = true }
+log        = { workspace = true }
+reqwest    = { workspace = true, features = ["json"] }
+serde_json = { workspace = true }
+strum      = { workspace = true }
+thiserror  = { workspace = true }
+tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]
 default = [
@@ -80,12 +81,14 @@ default = [
 
 fail-on-warnings = []
 
-datastar  = ["moosicbox_app_native_lib/datastar"]
-egui      = ["moosicbox_app_native_lib/egui"]
-egui-wgpu = ["egui", "moosicbox_app_native_lib/egui-wgpu"]
-fltk      = ["moosicbox_app_native_lib/fltk"]
-html      = ["moosicbox_app_native_lib/html"]
-htmx      = ["moosicbox_app_native_lib/htmx"]
+_canvas = []
+
+datastar  = ["_canvas", "moosicbox_app_native_lib/datastar"]
+egui      = ["_canvas", "moosicbox_app_native_lib/egui"]
+egui-wgpu = ["_canvas", "egui", "moosicbox_app_native_lib/egui-wgpu"]
+fltk      = ["_canvas", "moosicbox_app_native_lib/fltk"]
+html      = ["_canvas", "moosicbox_app_native_lib/html"]
+htmx      = ["_canvas", "moosicbox_app_native_lib/htmx"]
 
 bundled = ["all-sources", "dep:moosicbox_app_native_bundled"]
 

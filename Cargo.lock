@@ -5959,6 +5959,7 @@ dependencies = [
  "moosicbox_task",
  "moosicbox_ws",
  "reqwest",
+ "serde_json",
  "strum",
  "thiserror 2.0.3",
  "tokio",
