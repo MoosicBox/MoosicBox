@@ -3,6 +3,8 @@
     all(not(debug_assertions), not(feature = "windows-console")),
     windows_subsystem = "windows"
 )]
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::{
     num::ParseIntError,
@@ -37,22 +39,21 @@ static RENDERER: OnceLock<Arc<RwLock<Box<dyn Renderer>>>> = OnceLock::new();
 async fn convert_state(app_state: &moosicbox_app_state::AppState) -> state::State {
     let mut state = state::State::default();
 
-    if let Some(session_id) = *app_state.current_session_id.read().await {
-        if let Some(session) = app_state
-            .current_sessions
-            .read()
-            .await
-            .iter()
-            .find(|x| x.session_id == session_id)
-        {
+    let session_id = *app_state.current_session_id.read().await;
+    if let Some(session_id) = session_id {
+        let binding = app_state.current_sessions.read().await;
+        let session = binding.iter().find(|x| x.session_id == session_id);
+        if let Some(session) = session {
             state.player.playback = Some(state::PlaybackState {
                 session_id,
                 playing: session.playing,
                 position: session.position.unwrap_or(0),
+                #[allow(clippy::cast_precision_loss)]
                 seek: session.seek.unwrap_or(0) as f32,
                 tracks: session.playlist.tracks.clone(),
             });
         }
+        drop(binding);
     }
 
     state
@@ -100,6 +101,7 @@ async fn set_current_session(session: ApiSession) {
         active: Some(session.active),
         playing: Some(session.playing),
         position: session.position,
+        #[allow(clippy::cast_precision_loss)]
         seek: session.seek.map(|x| x as f64),
         volume: session.volume,
         playlist: Some(UpdateSessionPlaylist {
@@ -120,7 +122,8 @@ async fn set_current_session(session: ApiSession) {
             target: id,
             container: markup.try_into().unwrap(),
         };
-        if let Err(e) = RENDERER.get().unwrap().write().await.render_partial(view) {
+        let response = RENDERER.get().unwrap().write().await.render_partial(view);
+        if let Err(e) = response {
             log::error!("Failed to render_partial: {e:?}");
         }
     }
@@ -168,7 +171,8 @@ async fn handle_playback_event(update: UpdateSession) {
                 target: id,
                 container: markup.try_into().unwrap(),
             };
-            if let Err(e) = RENDERER.get().unwrap().write().await.render_partial(view) {
+            let response = RENDERER.get().unwrap().write().await.render_partial(view);
+            if let Err(e) = response {
                 log::error!("Failed to render_partial: {e:?}");
             }
         }
@@ -177,6 +181,7 @@ async fn handle_playback_event(update: UpdateSession) {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     moosicbox_logging::init(None)?;
 
@@ -208,7 +213,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let source: Option<ApiSource> =
                     req.query.get("source").map(TryFrom::try_from).transpose()?;
 
-                if req.query.get("full").map(|x| x.as_str()) == Some("true") {
+                if req.query.get("full").map(String::as_str) == Some("true") {
                     let url = format!(
                         "{}/menu/album?moosicboxProfile=master&albumId={album_id}{}",
                         std::env::var("MOOSICBOX_HOST")
@@ -367,7 +372,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (action_tx, action_rx) = flume::unbounded();
 
     let mut app = moosicbox_app_native_lib::NativeAppBuilder::new()
-        .with_router(router.clone())
+        .with_router(router)
         .with_runtime_arc(runtime.clone())
         .with_background(Color::from_hex("#181a1b"))
         .with_action_handler(move |x| {
@@ -383,7 +388,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             option_env_u16("WINDOW_HEIGHT").unwrap().unwrap_or(600),
         );
 
-    let mut runner = runtime.clone().block_on(async move {
+    #[cfg(not(feature = "bundled"))]
+    let runner_runtime = runtime;
+    #[cfg(feature = "bundled")]
+    let runner_runtime = runtime.clone();
+
+    let mut runner = runner_runtime.block_on(async move {
         moosicbox_task::spawn("native app action listener", async move {
             while let Ok(action) = action_rx.recv_async().await {
                 match action {
