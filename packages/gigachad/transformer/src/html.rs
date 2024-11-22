@@ -7,7 +7,7 @@ use tl::{Children, HTMLTag, Node, NodeHandle, Parser, ParserOptions};
 
 use crate::{
     parse::{parse_number, GetNumberError},
-    ActionType, JustifyContent, LayoutDirection, LayoutOverflow, Number, Route,
+    ActionType, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, Number, Route,
 };
 
 impl TryFrom<String> for crate::ContainerElement {
@@ -146,6 +146,39 @@ fn get_justify_content(tag: &HTMLTag, name: &str) -> JustifyContent {
     }
 }
 
+fn get_cursor(tag: &HTMLTag) -> Option<Cursor> {
+    get_tag_attr_value_lower(tag, "sx-cursor")
+        .as_deref()
+        .map(|x| match x {
+            "auto" => Cursor::Auto,
+            "pointer" => Cursor::Pointer,
+            "text" => Cursor::Text,
+            "crosshair" => Cursor::Crosshair,
+            "move" => Cursor::Move,
+            "not-allowed" => Cursor::NotAllowed,
+            "no-drop" => Cursor::NoDrop,
+            "grab" => Cursor::Grab,
+            "grabbing" => Cursor::Grabbing,
+            "all-scroll" => Cursor::AllScroll,
+            "col-resize" => Cursor::ColResize,
+            "row-resize" => Cursor::RowResize,
+            "n-resize" => Cursor::NResize,
+            "e-resize" => Cursor::EResize,
+            "s-resize" => Cursor::SResize,
+            "w-resize" => Cursor::WResize,
+            "ne-resize" => Cursor::NeResize,
+            "nw-resize" => Cursor::NwResize,
+            "se-resize" => Cursor::SeResize,
+            "sw-resize" => Cursor::SwResize,
+            "ew-resize" => Cursor::EwResize,
+            "ns-resize" => Cursor::NsResize,
+            "nesw-resize" => Cursor::NeswResize,
+            "zoom-in" => Cursor::ZoomIn,
+            "zoom-out" => Cursor::ZoomOut,
+            _ => Cursor::default(),
+        })
+}
+
 fn get_number(tag: &HTMLTag, name: &str) -> Result<Number, GetNumberError> {
     Ok(if let Some(number) = get_tag_attr_value(tag, name) {
         parse_number(&number)?
@@ -196,6 +229,7 @@ fn parse_element(
         width: get_number(tag, "sx-width").ok(),
         height: get_number(tag, "sx-height").ok(),
         gap: get_number(tag, "sx-gap").ok(),
+        cursor: get_cursor(tag),
         route: get_route(tag),
         actions: get_actions(tag),
         ..Default::default()

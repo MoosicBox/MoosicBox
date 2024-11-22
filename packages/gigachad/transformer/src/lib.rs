@@ -209,6 +209,42 @@ pub enum Route {
     },
 }
 
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Cursor {
+    #[default]
+    Auto,
+    Pointer,
+    Text,
+    Crosshair,
+    Move,
+    NotAllowed,
+    NoDrop,
+    Grab,
+    Grabbing,
+    AllScroll,
+    ColResize,
+    RowResize,
+    NResize,
+    EResize,
+    SResize,
+    WResize,
+    NeResize,
+    NwResize,
+    SeResize,
+    SwResize,
+    EwResize,
+    NsResize,
+    NeswResize,
+    ZoomIn,
+    ZoomOut,
+}
+
+impl Display for Cursor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{self:?}"))
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ActionType {
     Click { action: String },
@@ -228,6 +264,7 @@ pub struct ContainerElement {
     pub width: Option<Number>,
     pub height: Option<Number>,
     pub gap: Option<Number>,
+    pub cursor: Option<Cursor>,
     pub background: Option<Color>,
     pub border_top: Option<(Color, Number)>,
     pub border_right: Option<(Color, Number)>,
