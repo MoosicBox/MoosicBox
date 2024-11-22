@@ -81,12 +81,13 @@ default = [
 
 fail-on-warnings = []
 
-_canvas = []
+_calculated_canvas = ["_canvas"]
+_canvas            = []
 
 datastar  = ["_canvas", "moosicbox_app_native_lib/datastar"]
-egui      = ["_canvas", "moosicbox_app_native_lib/egui"]
+egui      = ["_calculated_canvas", "moosicbox_app_native_lib/egui"]
 egui-wgpu = ["egui", "moosicbox_app_native_lib/egui-wgpu"]
-fltk      = ["_canvas", "moosicbox_app_native_lib/fltk"]
+fltk      = ["_calculated_canvas", "moosicbox_app_native_lib/fltk"]
 html      = ["_canvas", "moosicbox_app_native_lib/html"]
 htmx      = ["_canvas", "moosicbox_app_native_lib/htmx"]
 

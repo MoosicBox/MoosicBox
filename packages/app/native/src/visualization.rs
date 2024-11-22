@@ -1,16 +1,10 @@
 #![allow(clippy::module_name_repetitions)]
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, LazyLock},
-};
-
 use moosicbox_core::sqlite::models::{ApiSource, Id};
-use tokio::sync::RwLock;
 
-use crate::{RENDERER, STATE};
+use crate::STATE;
 
-#[cfg(feature = "_canvas")]
+#[cfg(feature = "_calculated_canvas")]
 async fn visualization_updated(
     bar_width: f32,
     gap: f32,
@@ -21,6 +15,8 @@ async fn visualization_updated(
         canvas::{self, Pos},
         Color,
     };
+
+    use crate::RENDERER;
 
     log::trace!("visualization_updated");
 
@@ -54,8 +50,22 @@ async fn visualization_updated(
     }
 }
 
+#[cfg(not(feature = "_calculated_canvas"))]
+#[allow(clippy::unused_async)]
+pub async fn update_visualization(_track_id: &Id, _api_source: ApiSource, _seek: f64) {}
+
+#[cfg(feature = "_calculated_canvas")]
 #[allow(clippy::unused_async)]
 pub async fn update_visualization(track_id: &Id, api_source: ApiSource, seek: f64) {
+    use std::{
+        collections::HashMap,
+        sync::{Arc, LazyLock},
+    };
+
+    use tokio::sync::RwLock;
+
+    use crate::RENDERER;
+
     static BAR_WIDTH: f32 = 2.0;
     static GAP: f32 = 2.0;
     static CACHE: LazyLock<RwLock<HashMap<String, Arc<[u8]>>>> =
