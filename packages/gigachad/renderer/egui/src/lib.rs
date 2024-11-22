@@ -15,7 +15,8 @@ use gigachad_renderer::viewport::immediate::{Pos, Viewport, ViewportListener};
 pub use gigachad_renderer::*;
 use gigachad_router::Router;
 use gigachad_transformer::{
-    calc::Calc, ActionType, ContainerElement, Element, Input, LayoutDirection, Route, TableIter,
+    calc::Calc, ActionType, ContainerElement, Cursor, Element, Input, LayoutDirection, Route,
+    TableIter,
 };
 use itertools::Itertools;
 
@@ -1372,40 +1373,57 @@ impl EguiApp {
             _ => None,
         };
 
+        #[allow(clippy::option_if_let_else)]
+        let immediate_handler: Option<Handler> =
+            if let Some(cursor) = element.container_element().and_then(|x| x.cursor) {
+                let ctx = ctx.clone();
+                Some(Arc::new(Box::new(move |response| {
+                    let response = response.interact(egui::Sense::click_and_drag());
+                    if response.hovered() || response.is_pointer_button_down_on() {
+                        ctx.output_mut(|x| {
+                            x.cursor_icon = cursor_to_cursor_icon(cursor);
+                        });
+                    }
+                })))
+            } else {
+                match element {
+                    Element::Button { .. } => {
+                        let ctx = ctx.clone();
+                        Some(Arc::new(Box::new(move |response| {
+                            if response.interact(egui::Sense::hover()).hovered() {
+                                ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
+                            }
+                        })))
+                    }
+                    Element::Anchor { href, .. } => {
+                        let href = href.to_owned();
+                        let sender = self.sender.clone();
+                        let ctx = ctx.clone();
+                        Some(Arc::new(Box::new(move |response| {
+                            if response.interact(egui::Sense::click()).clicked() {
+                                if let Some(href) = href.clone() {
+                                    if let Err(e) = sender.send(href) {
+                                        log::error!("Failed to send href event: {e:?}");
+                                    }
+                                }
+                            } else if response.interact(egui::Sense::hover()).hovered() {
+                                ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
+                            }
+                        })))
+                    }
+                    _ => None,
+                }
+            };
+
         if let Some(response) = response {
             if let Some(handler) = handler {
                 handler(&response);
             }
+            if let Some(immediate_handler) = immediate_handler {
+                immediate_handler(&response);
+            }
             return;
         }
-
-        let immediate_handler: Option<Handler> = match element {
-            Element::Button { .. } => {
-                let ctx = ctx.clone();
-                Some(Arc::new(Box::new(move |response| {
-                    if response.interact(egui::Sense::hover()).hovered() {
-                        ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
-                    }
-                })))
-            }
-            Element::Anchor { href, .. } => {
-                let href = href.to_owned();
-                let sender = self.sender.clone();
-                let ctx = ctx.clone();
-                Some(Arc::new(Box::new(move |response| {
-                    if response.interact(egui::Sense::click()).clicked() {
-                        if let Some(href) = href.clone() {
-                            if let Err(e) = sender.send(href) {
-                                log::error!("Failed to send href event: {e:?}");
-                            }
-                        }
-                    } else if response.interact(egui::Sense::hover()).hovered() {
-                        ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
-                    }
-                })))
-            }
-            _ => None,
-        };
 
         if let Some(container) = element.container_element() {
             self.render_container(
@@ -1515,5 +1533,35 @@ fn wrap_handler(inner: Option<Handler>, outer: Option<Handler>) -> Option<Handle
         }
     } else {
         outer
+    }
+}
+
+const fn cursor_to_cursor_icon(cursor: Cursor) -> CursorIcon {
+    match cursor {
+        Cursor::Auto => CursorIcon::Default,
+        Cursor::Pointer => CursorIcon::PointingHand,
+        Cursor::Text => CursorIcon::Text,
+        Cursor::Crosshair => CursorIcon::Crosshair,
+        Cursor::Move => CursorIcon::Move,
+        Cursor::NotAllowed => CursorIcon::NotAllowed,
+        Cursor::NoDrop => CursorIcon::NoDrop,
+        Cursor::Grab => CursorIcon::Grab,
+        Cursor::Grabbing => CursorIcon::Grabbing,
+        Cursor::AllScroll => CursorIcon::AllScroll,
+        Cursor::ColResize => CursorIcon::ResizeColumn,
+        Cursor::RowResize => CursorIcon::ResizeRow,
+        Cursor::NResize => CursorIcon::ResizeNorth,
+        Cursor::EResize => CursorIcon::ResizeEast,
+        Cursor::SResize => CursorIcon::ResizeSouth,
+        Cursor::WResize => CursorIcon::ResizeWest,
+        Cursor::NeResize => CursorIcon::ResizeNorthEast,
+        Cursor::NwResize => CursorIcon::ResizeNorthWest,
+        Cursor::SeResize => CursorIcon::ResizeSouthEast,
+        Cursor::SwResize => CursorIcon::ResizeSouthWest,
+        Cursor::EwResize => CursorIcon::ResizeHorizontal,
+        Cursor::NsResize => CursorIcon::ResizeVertical,
+        Cursor::NeswResize => CursorIcon::ResizeNwSe,
+        Cursor::ZoomIn => CursorIcon::ZoomIn,
+        Cursor::ZoomOut => CursorIcon::ZoomOut,
     }
 }
