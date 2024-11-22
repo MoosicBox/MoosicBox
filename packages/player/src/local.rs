@@ -76,6 +76,7 @@ impl Player for LocalPlayer {
             playback.abort,
         );
 
+        #[allow(clippy::match_wildcard_for_single_variants)]
         let playback_type = match track.track_source {
             TrackApiSource::Local => self.playback_type,
             #[allow(unreachable_patterns)]
