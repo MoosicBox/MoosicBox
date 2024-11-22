@@ -213,7 +213,7 @@ impl Renderer for EguiRenderer {
                 ctx.request_repaint();
             }
         } else {
-            moosicbox_assert::die_or_warn!("Unable to find element with id {}", view.target);
+            log::warn!("Unable to find element with id {}", view.target);
         }
 
         Ok(())
@@ -416,9 +416,7 @@ impl EguiApp {
                                                         ctx.request_repaint();
                                                     }
                                                 } else {
-                                                    moosicbox_assert::die_or_warn!(
-                                                        "Unable to find element with id {container_id}"
-                                                    );
+                                                    log::warn!("Unable to find element with id {container_id}");
                                                 }
                                                 ids
                                             };
@@ -436,9 +434,7 @@ impl EguiApp {
                                                             ctx.request_repaint();
                                                         }
                                                     } else {
-                                                        moosicbox_assert::die_or_warn!(
-                                                            "Unable to find element with ids {ids:?}"
-                                                        );
+                                                        log::warn!("Unable to find element with ids {ids:?}");
                                                     }
                                                 }
                                             }
