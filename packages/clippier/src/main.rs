@@ -412,6 +412,7 @@ fn fetch_features(
             let feature_count = features.keys().len() - offset;
             features
                 .keys()
+                .filter(|x| !x.starts_with('_'))
                 .filter(|x| !specific_features.as_ref().is_some_and(|s| !s.contains(x)))
                 .filter(|x| !skip_features.as_ref().is_some_and(|s| s.contains(x)))
                 .skip(offset)
