@@ -53,7 +53,6 @@ async fn convert_state(app_state: &moosicbox_app_state::AppState) -> state::Stat
                 session_id,
                 playing: session.playing,
                 position: session.position.unwrap_or(0),
-                #[allow(clippy::cast_precision_loss)]
                 seek: session.seek.unwrap_or(0.0),
                 tracks: session.playlist.tracks.clone(),
             });
