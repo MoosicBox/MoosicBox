@@ -130,7 +130,7 @@ audiopus = "0.2.0"
 awc = "3.5.1"
 aws-config = "1.5.10"
 aws-sdk-apigatewaymanagement = "1.49.0"
-aws-sdk-ssm = "1.54.0"
+aws-sdk-ssm = "1.55.0"
 base64 = "0.22.1"
 bytes = "1.8.0"
 chrono = { version = "0.4.38", default-features = false, features = [
@@ -143,7 +143,7 @@ console-subscriber = "0.4.1"
 cpal = "0.15.3"
 debounce = "0.2.2"
 derive_more = "1.0.0"
-diesel = { version = "2.2.4", default-features = false }
+diesel = { version = "2.2.5", default-features = false }
 diesel_migrations = { version = "2.2.0", default-features = false }
 dotenv = "0.15"
 dyn-clone = "1.0.17"
