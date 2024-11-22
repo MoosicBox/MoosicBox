@@ -400,18 +400,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_size(
             option_env_u16("WINDOW_WIDTH").unwrap().unwrap_or(1000),
             option_env_u16("WINDOW_HEIGHT").unwrap().unwrap_or(600),
-        )
-        .with_on_resize({
+        );
+
+    #[cfg(feature = "_calculated_canvas")]
+    {
+        app = app.with_on_resize({
             let handle = runtime.handle().clone();
             move |_, _| {
-                moosicbox_task::spawn_on(
-                    "check_visualization_update",
-                    &handle,
-                    visualization::check_visualization_update(),
-                );
+                moosicbox_task::spawn_on("check_visualization_update", &handle, async move {
+                    let binding = RENDERER.get().unwrap().read().await;
+                    let (width, height) = if let Some(visualization) = binding
+                        .container()
+                        .find_container_element_by_str_id("visualization")
+                    {
+                        (
+                            visualization.calculated_width.unwrap(),
+                            visualization.calculated_height.unwrap(),
+                        )
+                    } else {
+                        return;
+                    };
+                    drop(binding);
+
+                    visualization::set_dimensions(width, height);
+                    visualization::check_visualization_update().await;
+                });
                 Ok::<_, RouteError>(())
             }
         });
+    }
 
     #[cfg(not(feature = "bundled"))]
     let runner_runtime = runtime;

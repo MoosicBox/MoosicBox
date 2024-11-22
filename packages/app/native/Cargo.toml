@@ -66,6 +66,7 @@ serde_json = { workspace = true }
 strum      = { workspace = true }
 thiserror  = { workspace = true }
 tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio-util = { workspace = true }
 
 [features]
 default = [
