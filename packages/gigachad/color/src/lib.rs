@@ -133,7 +133,6 @@ impl Color {
     /// # Panics
     ///
     /// * If a non-hex, non-whitespace character is encountered.
-    #[allow(clippy::many_single_char_names)]
     #[must_use]
     pub fn from_hex(hex: &str) -> Self {
         Self::try_from_hex(hex).unwrap()
