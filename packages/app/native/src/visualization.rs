@@ -142,8 +142,9 @@ pub async fn update_visualization(
     use tokio::sync::RwLock;
 
     static CURSOR_WIDTH: f32 = 3.0;
-    static BAR_WIDTH: f32 = 1.5;
+    static BAR_WIDTH: f32 = 1.0;
     static GAP: f32 = 2.0;
+
     static CACHE: LazyLock<RwLock<HashMap<String, Arc<[u8]>>>> =
         LazyLock::new(|| RwLock::new(HashMap::new()));
 
