@@ -401,7 +401,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_size(
             option_env_u16("WINDOW_WIDTH").unwrap().unwrap_or(1000),
             option_env_u16("WINDOW_HEIGHT").unwrap().unwrap_or(600),
-        );
+        )
+        .with_on_resize({
+            let handle = runtime.handle().clone();
+            move |_, _| {
+                moosicbox_task::spawn_on(
+                    "check_visualization_update",
+                    &handle,
+                    visualization::check_visualization_update(),
+                );
+                Ok::<_, RouteError>(())
+            }
+        });
 
     #[cfg(not(feature = "bundled"))]
     let runner_runtime = runtime;

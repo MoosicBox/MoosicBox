@@ -21,6 +21,7 @@ pub enum NativeAppError {
 }
 
 type ActionHandler = Box<dyn Fn(&str) -> Result<bool, Box<dyn std::error::Error>> + Send>;
+type ResizeListener = Box<dyn Fn(f32, f32) -> Result<(), Box<dyn std::error::Error>> + Send>;
 
 pub struct NativeAppBuilder {
     x: Option<i32>,
@@ -33,6 +34,7 @@ pub struct NativeAppBuilder {
     runtime_handle: Option<tokio::runtime::Handle>,
     runtime: Option<Arc<tokio::runtime::Runtime>>,
     action_handlers: Vec<ActionHandler>,
+    resize_listeners: Vec<ResizeListener>,
 }
 
 impl Default for NativeAppBuilder {
@@ -55,6 +57,7 @@ impl NativeAppBuilder {
             runtime_handle: None,
             runtime: None,
             action_handlers: vec![],
+            resize_listeners: vec![],
         }
     }
 
@@ -132,6 +135,17 @@ impl NativeAppBuilder {
         self
     }
 
+    #[must_use]
+    pub fn with_on_resize<E: std::error::Error + 'static>(
+        mut self,
+        func: impl Fn(f32, f32) -> Result<(), E> + Send + 'static,
+    ) -> Self {
+        self.resize_listeners.push(Box::new(move |width, height| {
+            func(width, height).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+        }));
+        self
+    }
+
     #[allow(unused)]
     #[must_use]
     fn listen_actions(action_handlers: Vec<ActionHandler>) -> flume::Sender<String> {
@@ -158,6 +172,32 @@ impl NativeAppBuilder {
         action_tx
     }
 
+    #[allow(unused)]
+    #[must_use]
+    fn listen_resize(resize_listeners: Vec<ResizeListener>) -> flume::Sender<(f32, f32)> {
+        let (resize_tx, resize_rx) = flume::unbounded::<(f32, f32)>();
+
+        moosicbox_task::spawn("resize listener", {
+            async move {
+                while let Ok((width, height)) = resize_rx.recv_async().await {
+                    log::debug!(
+                        "Received resize: {width}, {height} for {} listener(s)",
+                        resize_listeners.len()
+                    );
+                    for listener in &resize_listeners {
+                        if let Err(e) = listener(width, height) {
+                            moosicbox_assert::die_or_error!(
+                                "Action listener error width={width} height={height}: {e:?}"
+                            );
+                        }
+                    }
+                }
+            }
+        });
+
+        resize_tx
+    }
+
     /// # Panics
     ///
     /// Will panic if failed to start tokio runtime
@@ -176,8 +216,12 @@ impl NativeAppBuilder {
                     #[cfg(feature = "egui")]
                     {
                         let action_tx = Self::listen_actions(self.action_handlers);
-                        let renderer =
-                            gigachad_renderer_egui::EguiRenderer::new(router.clone(), action_tx);
+                        let resize_tx = Self::listen_resize(self.resize_listeners);
+                        let renderer = gigachad_renderer_egui::EguiRenderer::new(
+                            router.clone(),
+                            action_tx,
+                            resize_tx,
+                        );
 
                         moosicbox_task::spawn("egui navigation listener", {
                             let renderer = renderer.clone();

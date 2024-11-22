@@ -31,7 +31,11 @@ pub struct EguiRenderer {
 
 impl EguiRenderer {
     #[must_use]
-    pub fn new(router: Router, request_action: Sender<String>) -> Self {
+    pub fn new(
+        router: Router,
+        request_action: Sender<String>,
+        on_resize: Sender<(f32, f32)>,
+    ) -> Self {
         let (tx, rx) = flume::unbounded();
         let (event_tx, event_rx) = flume::unbounded();
         Self {
@@ -39,7 +43,7 @@ impl EguiRenderer {
             height: None,
             x: None,
             y: None,
-            app: EguiApp::new(router, tx, event_tx, event_rx, request_action),
+            app: EguiApp::new(router, tx, event_tx, event_rx, request_action, on_resize),
             receiver: rx,
         }
     }
@@ -295,6 +299,7 @@ struct EguiApp {
     router: Router,
     background: Option<Color32>,
     request_action: Sender<String>,
+    on_resize: Sender<(f32, f32)>,
 }
 
 type Handler = Arc<Box<dyn Fn(&Response)>>;
@@ -306,6 +311,7 @@ impl EguiApp {
         event: Sender<AppEvent>,
         event_receiver: Receiver<AppEvent>,
         request_action: Sender<String>,
+        on_resize: Sender<(f32, f32)>,
     ) -> Self {
         Self {
             ctx: Arc::new(RwLock::new(None)),
@@ -322,6 +328,7 @@ impl EguiApp {
             router,
             background: None,
             request_action,
+            on_resize,
         }
     }
 
@@ -478,6 +485,11 @@ impl EguiApp {
                 || !current_height.is_some_and(|x| (x - height).abs() < 0.01)
             {
                 self.update_frame_size(width, height);
+                if let Err(e) = self.on_resize.send((width, height)) {
+                    moosicbox_assert::die_or_error!(
+                        "Failed to send on_resize message: {width}, {height}: {e:?}"
+                    );
+                }
             }
         });
     }
@@ -1292,7 +1304,7 @@ impl EguiApp {
                                 egui::Sense::hover(),
                             );
 
-                            let pixels_per_point = ctx.pixels_per_point();
+                            let pixels_per_point = 1.0; // ctx.pixels_per_point();
                             let cursor_px = egui::Pos2::new(
                                 response.rect.min.x * pixels_per_point,
                                 response.rect.min.y * pixels_per_point,
