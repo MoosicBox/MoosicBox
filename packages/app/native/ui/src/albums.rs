@@ -187,14 +187,64 @@ pub fn albums_list(albums: &Page<ApiAlbum>, size: u16) -> Markup {
     show_albums(albums.iter(), size)
 }
 
+#[must_use]
+pub fn album_display(
+    album: &ApiAlbum,
+    size: u16,
+    show_details: bool,
+    show_media_controls: bool,
+) -> Markup {
+    let details = if show_details {
+        html! { (album.title) }
+    } else {
+        html! {}
+    };
+
+    let album_cover = if show_media_controls {
+        html! {
+            div sx-width=(size) sx-height=(size) sx-position="relative" {
+                (album_cover_img(album, size))
+                @let icon_size = size / 6;
+                div
+                    sx-width=(size)
+                    sx-height=(icon_size)
+                    sx-dir="row"
+                    sx-position="absolute"
+                    sx-visibility="hidden"
+                    fx-hover="sx-visibility=visible"
+                {
+                    button {
+                        img
+                            sx-width=(icon_size)
+                            sx-height=(icon_size)
+                            src=(public_img!("play-button-white.svg"));
+                    }
+                    button {
+                        img
+                            sx-width=(icon_size)
+                            sx-height=(icon_size)
+                            src=(public_img!("more-options-white.svg"));
+                    }
+                }
+            }
+        }
+    } else {
+        html! { (album_cover_img(album, size)) }
+    };
+
+    html! {
+        div sx-width=(size) sx-height=(size + if show_details { 30 } else { 0 }) {
+            (album_cover)
+            (details)
+        }
+    }
+}
+
 pub fn show_albums<'a>(albums: impl Iterator<Item = &'a ApiAlbum>, size: u16) -> Markup {
     html! {
         @for album in albums {
             a href=(pre_escaped!("/albums?albumId={}&source={}", album.album_id, album.api_source)) sx-width=(size) sx-height=(size + 30) {
-                div sx-width=(size) sx-height=(size + 30) {
-                    (album_cover_img(album, size))
-                    (album.title)
-                }
+                (album_display(album, size, true, true))
             }
         }
     }
