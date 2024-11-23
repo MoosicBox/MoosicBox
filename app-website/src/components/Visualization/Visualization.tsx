@@ -77,7 +77,7 @@ enum BackToNowPlayingPosition {
 }
 
 export default function player() {
-    let canvas: HTMLCanvasElement;
+    let canvas: HTMLCanvasElement | undefined;
     let progressBar: HTMLDivElement | undefined;
     let progressBarVisualizer: HTMLDivElement | undefined;
     let playlistSlideout: HTMLDivElement | undefined;
@@ -223,10 +223,10 @@ export default function player() {
         setLastDarken(0);
 
         const ratio = window.devicePixelRatio;
-        canvas.width = window.innerWidth * ratio;
-        canvas.height = VIZ_HEIGHT * ratio;
+        canvas!.width = window.innerWidth * ratio;
+        canvas!.height = VIZ_HEIGHT * ratio;
 
-        const ctx = canvas.getContext('2d')!;
+        const ctx = canvas!.getContext('2d')!;
         ctx.scale(ratio, ratio);
         ctx.fillStyle = 'white';
 
@@ -256,7 +256,7 @@ export default function player() {
     }
 
     function darkenVisualization(cursor: number) {
-        const ctx = canvas.getContext('2d')!;
+        const ctx = canvas!.getContext('2d')!;
         const lastDarkenValue = lastDarken();
 
         const points = data();
@@ -273,22 +273,22 @@ export default function player() {
     }
 
     function clearVisualization(cursor: number) {
-        const ctx = canvas.getContext('2d')!;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const ctx = canvas!.getContext('2d')!;
+        ctx.clearRect(0, 0, canvas!.width, canvas!.height);
         drawVisualization(cursor);
     }
 
     function drawVisualization(cursor: number) {
-        const ctx = canvas.getContext('2d')!;
+        const ctx = canvas!.getContext('2d')!;
         const ratio = window.devicePixelRatio;
         const lastCursorValue = lastCursor();
 
         if (typeof lastCursorValue === 'number') {
             const start = lastCursorValue;
             const end = lastCursorValue;
-            const paintStart = ~~((start * canvas.width) / ratio) - 1;
-            const paintEnd = Math.ceil((end * canvas.width) / ratio) + 3;
-            ctx.clearRect(paintStart, 0, paintEnd - paintStart, canvas.height);
+            const paintStart = ~~((start * canvas!.width) / ratio) - 1;
+            const paintEnd = Math.ceil((end * canvas!.width) / ratio) + 3;
+            ctx.clearRect(paintStart, 0, paintEnd - paintStart, canvas!.height);
 
             const points = data();
             const paintStartI = ~~(start * points.length) - 2;
@@ -307,7 +307,7 @@ export default function player() {
 
         ctx.fillStyle = 'white';
         ctx.fillRect(
-            (canvas.width * cursor) / ratio + CURSOR_OFFSET,
+            (canvas!.width * cursor) / ratio + CURSOR_OFFSET,
             0,
             2,
             VIZ_HEIGHT,
@@ -318,7 +318,7 @@ export default function player() {
     function drawVisualizationPoints(start: number, end: number) {
         if (start >= end) return;
 
-        const ctx = canvas.getContext('2d')!;
+        const ctx = canvas!.getContext('2d')!;
         const points = data();
 
         ctx.clearRect(
@@ -397,14 +397,6 @@ export default function player() {
             },
         ),
     );
-
-    let nextTrackListener: () => void;
-    let previousTrackListener: () => void;
-
-    onCleanup(() => {
-        offNextTrack(nextTrackListener);
-        offPreviousTrack(previousTrackListener);
-    });
 
     const [backToNowPlayingPosition, setBackToNowPlayingPosition] =
         createSignal(BackToNowPlayingPosition.none);

@@ -4,13 +4,13 @@ import { api, getNewConnectionId, setConnection } from '~/services/api';
 const id = getNewConnectionId();
 
 export default function serverPage() {
-    let serverAddressInput: HTMLInputElement;
+    let serverAddressInput: HTMLInputElement | undefined;
 
     async function saveServerAddress() {
         await setConnection(id, {
             id,
             name: 'MoosicBox Server',
-            apiUrl: serverAddressInput.value,
+            apiUrl: serverAddressInput!.value,
             clientId: '',
             token: '',
             staticToken: '',

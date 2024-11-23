@@ -17,8 +17,8 @@ import { QueryParams } from '~/services/util';
 let historyListener: () => void;
 
 export default function albums() {
-    let albumsHeaderContainerRef: HTMLDivElement;
-    let backToTopRef: HTMLDivElement;
+    let albumsHeaderContainerRef: HTMLDivElement | undefined;
+    let backToTopRef: HTMLDivElement | undefined;
 
     const [loading, setLoading] = createSignal(false);
     const [albums, setAlbums] = createSignal<Api.Album[]>();
@@ -44,21 +44,21 @@ export default function albums() {
     });
 
     function showBackToTop() {
-        if (backToTopRef.style.display === 'block') return;
+        if (backToTopRef!.style.display === 'block') return;
         clearTimeout(backToTopTimeout);
-        backToTopRef.style.opacity = '0';
-        backToTopRef.style.display = 'block';
+        backToTopRef!.style.opacity = '0';
+        backToTopRef!.style.display = 'block';
         backToTopTimeout = setTimeout(() => {
-            backToTopRef.style.opacity = '1';
+            backToTopRef!.style.opacity = '1';
         }, 0);
     }
 
     function hideBackToTop() {
-        if (backToTopRef.style.opacity === '0') return;
+        if (backToTopRef!.style.opacity === '0') return;
         clearTimeout(backToTopTimeout);
-        backToTopRef.style.opacity = '0';
+        backToTopRef!.style.opacity = '0';
         backToTopTimeout = setTimeout(() => {
-            backToTopRef.style.display = 'none';
+            backToTopRef!.style.display = 'none';
         }, 300);
     }
 
@@ -66,7 +66,7 @@ export default function albums() {
     const scrollListener = () => {
         if (
             (document.querySelector('main')?.scrollTop ?? 0) >
-            albumsHeaderContainerRef.getBoundingClientRect().bottom
+            albumsHeaderContainerRef!.getBoundingClientRect().bottom
         ) {
             showBackToTop();
         } else {

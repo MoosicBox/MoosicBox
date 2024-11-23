@@ -20,7 +20,7 @@ import { config } from '~/config';
 import DownloadSettings from '~/components/DownloadSettings';
 
 export default function settingsPage() {
-    let root: HTMLDivElement;
+    let root: HTMLDivElement | undefined;
 
     const [$connections, _setConnections] = clientSignal(connections);
     const [$connection, setConnection] = clientSignal(connection);
@@ -31,9 +31,9 @@ export default function settingsPage() {
     const [status, setStatus] = createSignal<string>();
     const [loading, setLoading] = createSignal(false);
 
-    let clientIdInput: HTMLInputElement;
-    let apiUrlInput: HTMLInputElement;
-    let nameInput: HTMLInputElement;
+    let clientIdInput: HTMLInputElement | undefined;
+    let apiUrlInput: HTMLInputElement | undefined;
+    let nameInput: HTMLInputElement | undefined;
 
     createEffect(
         on($connection, (con) => {
@@ -44,7 +44,7 @@ export default function settingsPage() {
 
     if (!isServer) {
         onMount(() => {
-            htmx.process(root);
+            htmx.process(root!);
         });
     }
 
@@ -82,14 +82,14 @@ export default function settingsPage() {
 
     async function saveName() {
         await saveConnection({
-            name: nameInput.value,
+            name: nameInput!.value,
         });
     }
 
     async function saveApiUrl() {
         const con = $connection();
         await saveConnection({
-            apiUrl: apiUrlInput.value,
+            apiUrl: apiUrlInput!.value,
             staticToken: con?.staticToken ?? '',
         });
     }
@@ -97,12 +97,12 @@ export default function settingsPage() {
     let connectionNameInput: HTMLInputElement;
 
     function saveConnectionName() {
-        setConnectionName(connectionNameInput.value);
+        setConnectionName(connectionNameInput!.value);
     }
 
     async function saveClientId() {
         await saveConnection({
-            clientId: clientIdInput.value,
+            clientId: clientIdInput!.value,
         });
     }
 
@@ -110,7 +110,7 @@ export default function settingsPage() {
 
     async function saveToken() {
         await saveConnection({
-            token: tokenInput.value,
+            token: tokenInput!.value,
         });
     }
 
@@ -118,14 +118,14 @@ export default function settingsPage() {
 
     async function saveStaticToken() {
         await saveConnection({
-            staticToken: staticTokenInput.value,
+            staticToken: staticTokenInput!.value,
         });
     }
 
     let magicTokenInput: HTMLInputElement;
 
     async function saveMagicToken() {
-        const resp = await api.magicToken(magicTokenInput.value);
+        const resp = await api.magicToken(magicTokenInput!.value);
         setLoading(false);
 
         if (resp) {
@@ -136,7 +136,7 @@ export default function settingsPage() {
                 clientId: resp.clientId,
                 token: resp.accessToken,
             });
-            magicTokenInput.value = '';
+            magicTokenInput!.value = '';
             setStatus('Successfully set values');
         } else {
             setStatus('Failed to authenticate with magic token');

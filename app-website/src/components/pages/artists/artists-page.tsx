@@ -17,9 +17,9 @@ import { QueryParams } from '~/services/util';
 let historyListener: () => void;
 
 export default function artists() {
-    let backToTopRef: HTMLDivElement;
+    let backToTopRef: HTMLDivElement | undefined;
     let artistSortControlsRef: HTMLDivElement | undefined;
-    let artistsHeaderContainerRef: HTMLDivElement;
+    let artistsHeaderContainerRef: HTMLDivElement | undefined;
 
     const [loading, setLoading] = createSignal(false);
     const [artists, setArtists] = createSignal<Api.Artist[]>();
@@ -208,21 +208,21 @@ export default function artists() {
     });
 
     function showBackToTop() {
-        if (backToTopRef.style.display === 'block') return;
+        if (backToTopRef!.style.display === 'block') return;
         clearTimeout(backToTopTimeout);
-        backToTopRef.style.opacity = '0';
-        backToTopRef.style.display = 'block';
+        backToTopRef!.style.opacity = '0';
+        backToTopRef!.style.display = 'block';
         backToTopTimeout = setTimeout(() => {
-            backToTopRef.style.opacity = '1';
+            backToTopRef!.style.opacity = '1';
         }, 0);
     }
 
     function hideBackToTop() {
-        if (backToTopRef.style.opacity === '0') return;
+        if (backToTopRef!.style.opacity === '0') return;
         clearTimeout(backToTopTimeout);
-        backToTopRef.style.opacity = '0';
+        backToTopRef!.style.opacity = '0';
         backToTopTimeout = setTimeout(() => {
-            backToTopRef.style.display = 'none';
+            backToTopRef!.style.display = 'none';
         }, 300);
     }
 
@@ -230,7 +230,7 @@ export default function artists() {
     const scrollListener = () => {
         if (
             (document.querySelector('main')?.scrollTop ?? 0) >
-            artistsHeaderContainerRef.getBoundingClientRect().bottom
+            artistsHeaderContainerRef!.getBoundingClientRect().bottom
         ) {
             showBackToTop();
         } else {

@@ -12,9 +12,9 @@ import { displayApiSource } from '~/services/formatting';
 import Tabs from '../Tabs';
 
 export default function searchInput() {
-    let searchContainerRef: HTMLDivElement;
-    let searchInputRef: HTMLInputElement;
-    let searchResultsRef: HTMLDivElement;
+    let searchContainerRef: HTMLDivElement | undefined;
+    let searchInputRef: HTMLInputElement | undefined;
+    let searchResultsRef: HTMLDivElement | undefined;
 
     const [libraryLoading, setLibraryLoading] = createSignal(false);
     const [qobuzLoading, setQobuzLoading] = createSignal(false);
@@ -31,8 +31,8 @@ export default function searchInput() {
         createSignal<Api.GlobalSearchResult[]>();
 
     function closeSearch() {
-        searchInputRef.focus();
-        searchInputRef.blur();
+        searchInputRef!.focus();
+        searchInputRef!.blur();
     }
 
     function inputFocused(
@@ -82,7 +82,7 @@ export default function searchInput() {
 
         if (!searchString.trim()) return;
 
-        searchResultsRef.scroll({ top: 0, behavior: 'instant' });
+        searchResultsRef!.scroll({ top: 0, behavior: 'instant' });
 
         try {
             setLibraryLoading(true);

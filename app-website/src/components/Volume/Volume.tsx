@@ -24,8 +24,8 @@ function eventToSeekPosition(element: HTMLElement): number {
 }
 
 export default function volumeRender() {
-    let volumeContainerRef: HTMLImageElement;
-    let volumeSliderInnerRef: HTMLImageElement;
+    let volumeContainerRef: HTMLImageElement | undefined;
+    let volumeSliderInnerRef: HTMLImageElement | undefined;
 
     const [showVolume, setShowVolume] = createSignal(false);
     const [inside, setInside] = createSignal(false);
@@ -94,7 +94,7 @@ export default function volumeRender() {
                 setDragging(true);
                 setApplyDrag(true);
                 mouseY = event.clientY;
-                saveVolume(eventToSeekPosition(volumeSliderInnerRef));
+                saveVolume(eventToSeekPosition(volumeSliderInnerRef!));
             }
         };
         dragListener = (event: MouseEvent) => {
@@ -108,7 +108,7 @@ export default function volumeRender() {
             } else {
                 return;
             }
-            saveVolume(eventToSeekPosition(volumeSliderInnerRef));
+            saveVolume(eventToSeekPosition(volumeSliderInnerRef!));
         };
         dragEndListener = (event: MouseEvent) => {
             if (event.button === 0 && dragging()) {
@@ -123,9 +123,9 @@ export default function volumeRender() {
             }
         };
 
-        volumeContainerRef.addEventListener('mouseenter', mouseEnterListener);
-        volumeContainerRef.addEventListener('mouseleave', mouseLeaveListener);
-        volumeSliderInnerRef.addEventListener('mousedown', dragStartListener);
+        volumeContainerRef!.addEventListener('mouseenter', mouseEnterListener);
+        volumeContainerRef!.addEventListener('mouseleave', mouseLeaveListener);
+        volumeSliderInnerRef!.addEventListener('mousedown', dragStartListener);
         window.addEventListener('mousemove', dragListener);
         window.addEventListener('mouseup', dragEndListener);
     });
@@ -135,15 +135,15 @@ export default function volumeRender() {
             return;
         }
 
-        volumeContainerRef.removeEventListener(
+        volumeContainerRef!.removeEventListener(
             'mouseenter',
             mouseEnterListener,
         );
-        volumeContainerRef.removeEventListener(
+        volumeContainerRef!.removeEventListener(
             'mouseleave',
             mouseLeaveListener,
         );
-        volumeSliderInnerRef.removeEventListener(
+        volumeSliderInnerRef!.removeEventListener(
             'mousedown',
             dragStartListener,
         );
