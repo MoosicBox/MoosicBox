@@ -8,6 +8,7 @@ use tl::{Children, HTMLTag, Node, NodeHandle, Parser, ParserOptions};
 use crate::{
     parse::{parse_number, GetNumberError},
     ActionType, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, Number, Position, Route,
+    Visibility,
 };
 
 impl TryFrom<String> for crate::ContainerElement {
@@ -108,6 +109,20 @@ fn get_hidden(tag: &HTMLTag) -> Option<bool> {
         Some("false") => Some(false),
         _ => None,
     }
+}
+
+fn parse_visibility(value: &str) -> Visibility {
+    match value {
+        "visible" => Visibility::Visible,
+        "hidden" => Visibility::Hidden,
+        _ => Visibility::default(),
+    }
+}
+
+fn get_visibility(tag: &HTMLTag) -> Option<Visibility> {
+    get_tag_attr_value_lower(tag, "sx-visibility")
+        .as_deref()
+        .map(parse_visibility)
 }
 
 fn get_route(tag: &HTMLTag) -> Option<Route> {
@@ -233,6 +248,7 @@ fn parse_element(
         border_left: get_border(tag, "sx-border-left"),
         state: get_state(tag, "state"),
         hidden: get_hidden(tag),
+        visibility: get_visibility(tag),
         overflow_x: get_overflow(tag, "sx-overflow-x"),
         overflow_y: get_overflow(tag, "sx-overflow-y"),
         justify_content: get_justify_content(tag, "sx-justify-content"),

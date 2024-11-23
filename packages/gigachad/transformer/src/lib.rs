@@ -259,6 +259,19 @@ impl std::fmt::Display for Position {
     }
 }
 
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Visibility {
+    #[default]
+    Visible,
+    Hidden,
+}
+
+impl std::fmt::Display for Visibility {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{self:?}"))
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ActionType {
     Click { action: String },
@@ -287,6 +300,7 @@ pub struct ContainerElement {
     pub border_left: Option<(Color, Number)>,
     pub state: Option<Value>,
     pub hidden: Option<bool>,
+    pub visibility: Option<Visibility>,
     pub route: Option<Route>,
     pub actions: Vec<ActionType>,
     #[cfg(feature = "calc")]
