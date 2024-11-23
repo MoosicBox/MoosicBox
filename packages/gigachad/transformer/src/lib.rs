@@ -278,6 +278,17 @@ pub enum ActionType {
     Hover { action: String },
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum StyleActionType {
+    Click(StyleAction),
+    Hover(StyleAction),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum StyleAction {
+    SetVisibility(Visibility),
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ContainerElement {
     #[cfg(feature = "id")]
@@ -303,6 +314,7 @@ pub struct ContainerElement {
     pub visibility: Option<Visibility>,
     pub route: Option<Route>,
     pub actions: Vec<ActionType>,
+    pub style_actions: Vec<StyleActionType>,
     #[cfg(feature = "calc")]
     pub margin_left: Option<f32>,
     #[cfg(feature = "calc")]

@@ -8,7 +8,7 @@ use tl::{Children, HTMLTag, Node, NodeHandle, Parser, ParserOptions};
 use crate::{
     parse::{parse_number, GetNumberError},
     ActionType, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, Number, Position, Route,
-    Visibility,
+    StyleAction, StyleActionType, Visibility,
 };
 
 impl TryFrom<String> for crate::ContainerElement {
@@ -213,17 +213,30 @@ fn get_number(tag: &HTMLTag, name: &str) -> Result<Number, GetNumberError> {
     })
 }
 
-fn get_actions(tag: &HTMLTag) -> Vec<ActionType> {
+fn get_actions(tag: &HTMLTag) -> (Vec<ActionType>, Vec<StyleActionType>) {
     let mut actions = vec![];
+    let mut style_actions = vec![];
     if let Some(action) = get_tag_attr_value(tag, "fx-click") {
-        let action = html_escape::decode_html_entities(&action).to_string();
-        actions.push(ActionType::Click { action });
+        if let Some(value) = action.strip_prefix("sx-visibility=") {
+            style_actions.push(StyleActionType::Click(StyleAction::SetVisibility(
+                parse_visibility(value),
+            )));
+        } else {
+            let action = html_escape::decode_html_entities(&action).to_string();
+            actions.push(ActionType::Click { action });
+        }
     }
     if let Some(action) = get_tag_attr_value(tag, "fx-hover") {
-        let action = html_escape::decode_html_entities(&action).to_string();
-        actions.push(ActionType::Hover { action });
+        if let Some(value) = action.strip_prefix("sx-visibility=") {
+            style_actions.push(StyleActionType::Hover(StyleAction::SetVisibility(
+                parse_visibility(value),
+            )));
+        } else {
+            let action = html_escape::decode_html_entities(&action).to_string();
+            actions.push(ActionType::Hover { action });
+        }
     }
-    actions
+    (actions, style_actions)
 }
 
 fn parse_element(
@@ -234,6 +247,8 @@ fn parse_element(
     #[cfg(feature = "id")]
     static CURRENT_ID: std::sync::LazyLock<std::sync::Arc<std::sync::atomic::AtomicUsize>> =
         std::sync::LazyLock::new(|| std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(1)));
+
+    let (actions, style_actions) = get_actions(tag);
 
     #[allow(clippy::needless_update)]
     crate::ContainerElement {
@@ -259,7 +274,8 @@ fn parse_element(
         cursor: get_cursor(tag),
         position: get_position(tag),
         route: get_route(tag),
-        actions: get_actions(tag),
+        actions,
+        style_actions,
         ..Default::default()
     }
 }
