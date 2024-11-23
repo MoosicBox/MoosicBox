@@ -12,7 +12,7 @@ import { config } from '~/config';
 import { clientSignal } from '~/services/util';
 
 export default function profilePage() {
-    let root: HTMLDivElement;
+    let root: HTMLDivElement | undefined;
 
     const [$connection] = clientSignal(connection);
     const [errorMessage, setErrorMessage] = createSignal<string>();
@@ -28,7 +28,7 @@ export default function profilePage() {
                 if (newValue !== showProfiles()) {
                     setShowProfiles(newValue);
                     setTimeout(() => {
-                        htmx.process(root);
+                        htmx.process(root!);
                     }, 0);
                 }
             }
@@ -36,7 +36,7 @@ export default function profilePage() {
     );
 
     onMount(async () => {
-        htmx.process(root);
+        htmx.process(root!);
 
         if (connections.get().length === 0) {
             await setConnection(getNewConnectionId(), {
@@ -47,7 +47,7 @@ export default function profilePage() {
             document.body.dispatchEvent(new Event('load-new-profile'));
         }
 
-        root.addEventListener('create-moosicbox-profile', async (e) => {
+        root!.addEventListener('create-moosicbox-profile', async (e) => {
             if (!('detail' in e))
                 throw new Error(`Invalid create-moosicbox-profile event`);
 
@@ -80,7 +80,7 @@ export default function profilePage() {
             }
         });
 
-        root.addEventListener('select-moosicbox-profile', async (e) => {
+        root!.addEventListener('select-moosicbox-profile', async (e) => {
             if (!('detail' in e))
                 throw new Error(`Invalid create-moosicbox-profile event`);
 

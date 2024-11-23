@@ -12,7 +12,7 @@ import { htmx } from '~/middleware/htmx';
 import { config } from '~/config';
 
 export default function musicPage() {
-    let root: HTMLDivElement;
+    let root: HTMLDivElement | undefined;
 
     const [folders, setFolders] = createSignal<string[]>([]);
     const [qobuzAuthSuccess, setQobuzAuthSuccess] = createSignal<boolean>();
@@ -69,7 +69,7 @@ export default function musicPage() {
     }
 
     onMount(async () => {
-        htmx.process(root);
+        htmx.process(root!);
 
         if (config.bundled && connections.get().length === 0) {
             await setConnection(getNewConnectionId(), {
@@ -80,7 +80,7 @@ export default function musicPage() {
             document.body.dispatchEvent(new Event('load-new-profile'));
         }
 
-        root.addEventListener('qobuz-login-attempt', (e) => {
+        root!.addEventListener('qobuz-login-attempt', (e) => {
             if (!('detail' in e))
                 throw new Error(`Invalid qobuz-login-attempt event`);
 
@@ -92,7 +92,7 @@ export default function musicPage() {
 
             setQobuzAuthSuccess(attempt.success);
         });
-        root.addEventListener('tidal-login-attempt', (e) => {
+        root!.addEventListener('tidal-login-attempt', (e) => {
             if (!('detail' in e))
                 throw new Error(`Invalid tidal-login-attempt event`);
 

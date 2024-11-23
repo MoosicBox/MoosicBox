@@ -16,7 +16,7 @@ type Server = {
 };
 
 export default function serverPage() {
-    let serverAddressInput: HTMLInputElement;
+    let serverAddressInput: HTMLInputElement | undefined;
 
     const [intervalHandle, setIntervalHandle] = createSignal<NodeJS.Timeout>();
     const [servers, setServers] = createSignal<Server[]>([]);
@@ -60,14 +60,14 @@ export default function serverPage() {
     async function saveManualServerAddress() {
         const existing = connections
             .get()
-            .find((x) => x.apiUrl === serverAddressInput.value);
+            .find((x) => x.apiUrl === serverAddressInput!.value);
 
         if (existing) {
             await setConnection(existing.id, existing);
         } else {
             await setConnection(getNewConnectionId(), {
                 name: 'MoosicBox Server',
-                apiUrl: serverAddressInput.value,
+                apiUrl: serverAddressInput!.value,
             });
         }
 
