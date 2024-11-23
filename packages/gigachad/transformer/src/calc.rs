@@ -3,8 +3,9 @@ use std::sync::atomic::AtomicU16;
 use itertools::Itertools;
 
 use crate::{
-    calc_number, visible_elements, visible_elements_mut, ContainerElement, Element, JustifyContent,
-    LayoutDirection, LayoutOverflow, LayoutPosition, Number, TableIter, TableIterMut,
+    calc_number, relative_positioned_elements, relative_positioned_elements_mut, ContainerElement,
+    Element, JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition, Number, TableIter,
+    TableIterMut,
 };
 
 static SCROLLBAR_SIZE: AtomicU16 = AtomicU16::new(16);
@@ -244,7 +245,7 @@ impl Element {
             .replace(heading_height.unwrap_or(0.0) + body_height);
 
         {
-            for element in visible_elements_mut(&mut container.elements) {
+            for element in relative_positioned_elements_mut(&mut container.elements) {
                 match element {
                     Self::THead { element } => {
                         if element.width.is_none() {
@@ -256,7 +257,7 @@ impl Element {
                                 .replace(heading_height.unwrap_or(0.0));
                         }
 
-                        for element in visible_elements_mut(&mut element.elements)
+                        for element in relative_positioned_elements_mut(&mut element.elements)
                             .filter_map(|x| x.container_element_mut())
                         {
                             if element.width.is_none() {
@@ -264,7 +265,7 @@ impl Element {
                             }
                             if element.height.is_none() {
                                 element.calculated_height.replace(
-                                    visible_elements(&element.elements)
+                                    relative_positioned_elements(&element.elements)
                                         .filter_map(|x| x.container_element())
                                         .find_map(|x| x.calculated_height)
                                         .unwrap_or(0.0),
@@ -280,7 +281,7 @@ impl Element {
                             element.calculated_height.replace(body_height);
                         }
 
-                        for element in visible_elements_mut(&mut element.elements)
+                        for element in relative_positioned_elements_mut(&mut element.elements)
                             .filter_map(|x| x.container_element_mut())
                         {
                             if element.width.is_none() {
@@ -288,7 +289,7 @@ impl Element {
                             }
                             if element.height.is_none() {
                                 element.calculated_height.replace(
-                                    visible_elements(&element.elements)
+                                    relative_positioned_elements(&element.elements)
                                         .filter_map(|x| x.container_element())
                                         .find_map(|x| x.calculated_height)
                                         .unwrap_or(0.0),
@@ -302,7 +303,7 @@ impl Element {
                         }
                         if element.height.is_none() {
                             element.calculated_height.replace(
-                                visible_elements(&element.elements)
+                                relative_positioned_elements(&element.elements)
                                     .filter_map(|x| x.container_element())
                                     .find_map(|x| x.calculated_height)
                                     .unwrap_or(0.0),
@@ -376,7 +377,7 @@ impl ContainerElement {
         let direction = self.direction;
 
         let (sized_elements, unsized_elements): (Vec<_>, Vec<_>) =
-            self.visible_elements_mut().partition(|x| {
+            self.relative_positioned_elements_mut().partition(|x| {
                 x.container_element().is_some_and(|x| match direction {
                     LayoutDirection::Row => x.width.is_some(),
                     LayoutDirection::Column => x.height.is_some(),
@@ -418,6 +419,16 @@ impl ContainerElement {
 
             log::debug!("handle_overflow: attempt {}", attempt + 1);
         }
+
+        for element in self.absolute_positioned_elements_mut() {
+            if let Some(container) = element.container_element_mut() {
+                container.calculated_x = Some(0.0);
+                container.calculated_y = Some(0.0);
+                container.calculated_width = Some(container_width);
+                container.calculated_height = Some(container_height);
+            }
+            element.calc();
+        }
     }
 
     fn calc_borders(&mut self, container_width: f32, container_height: f32) {
@@ -437,7 +448,7 @@ impl ContainerElement {
 
     fn calc_hardsized_elements(&mut self) {
         for element in self
-            .visible_elements_mut()
+            .relative_positioned_elements_mut()
             .filter_map(|x| x.container_element_mut())
         {
             element.calc_hardsized_elements();
@@ -560,7 +571,7 @@ impl ContainerElement {
                 );
         };
         Self::calc_unsized_element_sizes(
-            visible_elements_mut(&mut self.elements),
+            relative_positioned_elements_mut(&mut self.elements),
             self.direction,
             container_width,
             container_height,
@@ -649,7 +660,7 @@ impl ContainerElement {
         let gap_x = self.gap.as_ref().map(|x| calc_number(x, container_width));
         let gap_y = self.gap.as_ref().map(|x| calc_number(x, container_height));
 
-        for element in self.visible_elements_mut() {
+        for element in self.relative_positioned_elements_mut() {
             log::trace!("handle_overflow: processing child element\n{element}");
             // TODO:
             // need to handle non container elements that have a width/height that is the split
@@ -889,8 +900,8 @@ impl ContainerElement {
             }
         }
 
-        for element in
-            visible_elements_mut(&mut self.elements).filter_map(|x| x.container_element_mut())
+        for element in relative_positioned_elements_mut(&mut self.elements)
+            .filter_map(|x| x.container_element_mut())
         {
             element.margin_left.take();
             element.margin_top.take();
@@ -997,7 +1008,7 @@ impl ContainerElement {
 
         match self.direction {
             LayoutDirection::Row => self
-                .visible_elements()
+                .relative_positioned_elements()
                 .chunk_by(|x| {
                     x.container_element().and_then(|x| {
                         x.calculated_position.as_ref().and_then(|x| match x {
@@ -1032,7 +1043,7 @@ impl ContainerElement {
                 })
                 .max_by(order_float),
             LayoutDirection::Column => {
-                let columns = self.visible_elements().chunk_by(|x| {
+                let columns = self.relative_positioned_elements().chunk_by(|x| {
                     x.container_element().and_then(|x| {
                         x.calculated_position.as_ref().and_then(|x| match x {
                             LayoutPosition::Wrap { col, .. } => Some(col),
@@ -1080,7 +1091,7 @@ impl ContainerElement {
 
         match self.direction {
             LayoutDirection::Row => {
-                let rows = self.visible_elements().chunk_by(|x| {
+                let rows = self.relative_positioned_elements().chunk_by(|x| {
                     x.container_element().and_then(|x| {
                         x.calculated_position.as_ref().and_then(|x| match x {
                             LayoutPosition::Wrap { row, .. } => Some(row),
@@ -1117,7 +1128,7 @@ impl ContainerElement {
                 }
             }
             LayoutDirection::Column => self
-                .visible_elements()
+                .relative_positioned_elements()
                 .chunk_by(|x| {
                     x.container_element().and_then(|x| {
                         x.calculated_position.as_ref().and_then(|x| match x {
@@ -1166,7 +1177,7 @@ impl ContainerElement {
 
         match self.direction {
             LayoutDirection::Row => self
-                .visible_elements()
+                .relative_positioned_elements()
                 .chunk_by(|x| {
                     x.container_element().and_then(|x| {
                         x.calculated_position.as_ref().and_then(|x| match x {
@@ -1197,7 +1208,7 @@ impl ContainerElement {
                 .max_by(order_float)
                 .unwrap_or(0.0),
             LayoutDirection::Column => self
-                .visible_elements()
+                .relative_positioned_elements()
                 .chunk_by(|x| {
                     x.container_element().and_then(|x| {
                         x.calculated_position.as_ref().and_then(|x| match x {
@@ -1234,7 +1245,7 @@ impl ContainerElement {
     pub fn contained_calculated_height(&self) -> f32 {
         match self.direction {
             LayoutDirection::Row => self
-                .visible_elements()
+                .relative_positioned_elements()
                 .chunk_by(|x| {
                     x.container_element().and_then(|x| {
                         x.calculated_position.as_ref().and_then(|x| match x {
@@ -1256,7 +1267,7 @@ impl ContainerElement {
                 })
                 .sum(),
             LayoutDirection::Column => self
-                .visible_elements()
+                .relative_positioned_elements()
                 .chunk_by(|x| {
                     x.container_element().and_then(|x| {
                         x.calculated_position.as_ref().and_then(|x| match x {
@@ -1282,7 +1293,7 @@ impl ContainerElement {
     }
 
     pub fn rows(&self) -> u32 {
-        self.visible_elements()
+        self.relative_positioned_elements()
             .filter_map(|x| x.container_element())
             .filter_map(|x| x.calculated_position.as_ref())
             .filter_map(LayoutPosition::row)
@@ -1292,7 +1303,7 @@ impl ContainerElement {
     }
 
     pub fn columns(&self) -> u32 {
-        self.visible_elements()
+        self.relative_positioned_elements()
             .filter_map(|x| x.container_element())
             .filter_map(|x| x.calculated_position.as_ref())
             .filter_map(LayoutPosition::column)
@@ -1450,7 +1461,12 @@ impl ContainerElement {
     #[allow(clippy::too_many_lines)]
     #[allow(clippy::cognitive_complexity)]
     fn resize_children(&mut self) -> bool {
-        if self.visible_elements().peekable().peek().is_none() {
+        if self
+            .relative_positioned_elements()
+            .peekable()
+            .peek()
+            .is_none()
+        {
             log::trace!("resize_children: no children");
             return false;
         }
@@ -1533,7 +1549,7 @@ impl ContainerElement {
                     };
 
                     for element in self
-                        .visible_elements_mut()
+                        .relative_positioned_elements_mut()
                         .filter_map(|x| x.container_element_mut())
                         .filter(|x| x.width.is_none())
                     {
@@ -1590,7 +1606,7 @@ impl ContainerElement {
                     };
 
                     for element in self
-                        .visible_elements_mut()
+                        .relative_positioned_elements_mut()
                         .filter_map(|x| x.container_element_mut())
                         .filter(|x| x.height.is_none())
                     {
@@ -1659,7 +1675,7 @@ mod test {
     use crate::{
         calc::{get_scrollbar_size, Calc as _},
         ContainerElement, Element, JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition,
-        Number,
+        Number, Position,
     };
 
     #[test_log::test]
@@ -6846,6 +6862,57 @@ mod test {
                         ..container.elements[0].container_element().unwrap().clone()
                     },
                 }],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_can_calc_absolute_positioned_element_on_top_of_a_relative_element() {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement::default(),
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        position: Some(Position::Absolute),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(100.0),
+            calculated_height: Some(50.0),
+            position: Some(Position::Relative),
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(100.0),
+                            calculated_height: Some(50.0),
+                            calculated_x: Some(0.0),
+                            calculated_y: Some(0.0),
+                            calculated_position: Some(LayoutPosition::Default),
+                            ..Default::default()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(100.0),
+                            calculated_height: Some(50.0),
+                            calculated_x: Some(0.0),
+                            calculated_y: Some(0.0),
+                            position: Some(Position::Absolute),
+                            ..Default::default()
+                        },
+                    }
+                ],
                 ..container
             }
         );

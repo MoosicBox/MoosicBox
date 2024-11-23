@@ -7,7 +7,7 @@ use tl::{Children, HTMLTag, Node, NodeHandle, Parser, ParserOptions};
 
 use crate::{
     parse::{parse_number, GetNumberError},
-    ActionType, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, Number, Route,
+    ActionType, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, Number, Position, Route,
 };
 
 impl TryFrom<String> for crate::ContainerElement {
@@ -179,6 +179,17 @@ fn get_cursor(tag: &HTMLTag) -> Option<Cursor> {
         })
 }
 
+fn get_position(tag: &HTMLTag) -> Option<Position> {
+    get_tag_attr_value_lower(tag, "sx-position")
+        .as_deref()
+        .map(|x| match x {
+            "static" => Position::Static,
+            "relative" => Position::Relative,
+            "absolute" => Position::Absolute,
+            _ => Position::default(),
+        })
+}
+
 fn get_number(tag: &HTMLTag, name: &str) -> Result<Number, GetNumberError> {
     Ok(if let Some(number) = get_tag_attr_value(tag, name) {
         parse_number(&number)?
@@ -230,6 +241,7 @@ fn parse_element(
         height: get_number(tag, "sx-height").ok(),
         gap: get_number(tag, "sx-gap").ok(),
         cursor: get_cursor(tag),
+        position: get_position(tag),
         route: get_route(tag),
         actions: get_actions(tag),
         ..Default::default()

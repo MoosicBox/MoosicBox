@@ -15,8 +15,8 @@ use gigachad_renderer::viewport::immediate::{Pos, Viewport, ViewportListener};
 pub use gigachad_renderer::*;
 use gigachad_router::Router;
 use gigachad_transformer::{
-    calc::Calc, ActionType, ContainerElement, Cursor, Element, Input, LayoutDirection, Route,
-    TableIter,
+    calc::Calc, ActionType, ContainerElement, Cursor, Element, Input, LayoutDirection, Position,
+    Route, TableIter,
 };
 use itertools::Itertools;
 
@@ -596,7 +596,7 @@ impl EguiApp {
         }
     }
 
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
     fn render_container(
         &self,
         ctx: &egui::Context,
@@ -605,6 +605,7 @@ impl EguiApp {
         handler: &Option<Handler>,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
+        relative_container: Option<(egui::Rect, &ContainerElement)>,
     ) {
         let mut frame = egui::Frame::none();
 
@@ -646,6 +647,7 @@ impl EguiApp {
                                                         handler,
                                                         viewport,
                                                         Some(rect),
+                                                        relative_container,
                                                         true,
                                                     );
                                                 }
@@ -670,6 +672,7 @@ impl EguiApp {
                                                         handler,
                                                         viewport,
                                                         Some(rect),
+                                                        relative_container,
                                                         true,
                                                     );
                                                 }
@@ -704,6 +707,7 @@ impl EguiApp {
                                                                     handler,
                                                                     viewport,
                                                                     Some(rect),
+                                                                    relative_container,
                                                                     true,
                                                                 );
                                                             }
@@ -740,6 +744,7 @@ impl EguiApp {
                                                                     handler,
                                                                     viewport,
                                                                     Some(rect),
+                                                                    relative_container,
                                                                     true,
                                                                 );
                                                             }
@@ -763,6 +768,7 @@ impl EguiApp {
                                                         handler,
                                                         viewport,
                                                         Some(rect),
+                                                        relative_container,
                                                         false,
                                                     );
                                                 }
@@ -784,6 +790,7 @@ impl EguiApp {
                                                         handler,
                                                         viewport,
                                                         Some(rect),
+                                                        relative_container,
                                                         false,
                                                     );
                                                 }
@@ -805,6 +812,7 @@ impl EguiApp {
                                                         handler,
                                                         viewport,
                                                         Some(rect),
+                                                        relative_container,
                                                         true,
                                                     );
                                                 }
@@ -826,6 +834,7 @@ impl EguiApp {
                                                         handler,
                                                         viewport,
                                                         Some(rect),
+                                                        relative_container,
                                                         true,
                                                     );
                                                 }
@@ -833,7 +842,14 @@ impl EguiApp {
                                     }
                                     (_, _) => {
                                         self.render_container_contents(
-                                            ctx, ui, container, handler, viewport, rect, false,
+                                            ctx,
+                                            ui,
+                                            container,
+                                            handler,
+                                            viewport,
+                                            rect,
+                                            relative_container,
+                                            false,
                                         );
                                     }
                                 }
@@ -849,136 +865,204 @@ impl EguiApp {
 
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::too_many_lines)]
-    fn render_container_contents(
+    fn render_container_contents<'a>(
         &self,
         ctx: &egui::Context,
         ui: &mut Ui,
-        container: &ContainerElement,
+        container: &'a ContainerElement,
         handler: Option<Handler>,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
+        mut relative_container: Option<(egui::Rect, &'a ContainerElement)>,
         vscroll: bool,
     ) {
-        for element in &container.elements {
-            self.handle_element_side_effects(ui, element, viewport, false);
-        }
+        fn render<'a>(
+            app: &EguiApp,
+            ctx: &egui::Context,
+            ui: &mut Ui,
+            container: &'a ContainerElement,
+            handler: Option<Handler>,
+            viewport: Option<&Viewport>,
+            rect: Option<egui::Rect>,
+            relative_container: Option<(egui::Rect, &'a ContainerElement)>,
+            vscroll: bool,
+        ) {
+            for element in &container.elements {
+                app.handle_element_side_effects(ui, element, viewport, false);
+            }
 
-        if let Some(width) = container.calculated_width {
-            ui.set_width(width);
-        }
-        if let Some(height) = container.calculated_height {
-            ui.set_height(height);
+            if let Some(width) = container.calculated_width {
+                ui.set_width(width);
+            }
+            if let Some(height) = container.calculated_height {
+                ui.set_height(height);
 
-            if vscroll {
-                if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
-                    let rect = egui::Rect::from_pos(egui::emath::pos2(0.0, height));
-                    ui.scroll_to_rect(rect, Some(egui::Align::TOP));
+                if vscroll {
+                    if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
+                        let rect = egui::Rect::from_pos(egui::emath::pos2(0.0, height));
+                        ui.scroll_to_rect(rect, Some(egui::Align::TOP));
+                    }
+                    if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
+                        let rect = egui::Rect::from_pos(egui::emath::pos2(0.0, -height));
+                        ui.scroll_to_rect(rect, Some(egui::Align::TOP));
+                    }
                 }
-                if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
-                    let rect = egui::Rect::from_pos(egui::emath::pos2(0.0, -height));
-                    ui.scroll_to_rect(rect, Some(egui::Align::TOP));
+            }
+
+            match container.direction {
+                LayoutDirection::Row => {
+                    let rows = container
+                        .elements
+                        .iter()
+                        .filter_map(|x| x.container_element().map(|y| (x, y)))
+                        .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
+                        .filter_map(|(x, y)| match y {
+                            gigachad_transformer::LayoutPosition::Wrap { row, .. } => {
+                                Some((*row, x))
+                            }
+                            gigachad_transformer::LayoutPosition::Default => None,
+                        })
+                        .chunk_by(|(row, _element)| *row);
+
+                    let mut rows = rows
+                        .into_iter()
+                        .map(|(_row, y)| y.into_iter().map(|(_, element)| element).collect_vec())
+                        .peekable();
+
+                    if rows.peek().is_some() {
+                        ui.vertical(move |ui| {
+                            for row in rows {
+                                let handler = handler.clone();
+                                ui.horizontal(move |ui| {
+                                    app.render_elements_ref(
+                                        ctx,
+                                        ui,
+                                        &row,
+                                        &handler,
+                                        viewport,
+                                        rect,
+                                        relative_container,
+                                        !vscroll && rect.is_some(),
+                                    );
+                                });
+                            }
+                        });
+                    } else {
+                        ui.horizontal(move |ui| {
+                            app.render_elements(
+                                ctx,
+                                ui,
+                                &container.elements,
+                                &handler,
+                                viewport,
+                                rect,
+                                relative_container,
+                                !vscroll && rect.is_some(),
+                            );
+                        });
+                    }
+                }
+                LayoutDirection::Column => {
+                    let cols = container
+                        .elements
+                        .iter()
+                        .filter_map(|x| x.container_element().map(|y| (x, y)))
+                        .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
+                        .filter_map(|(x, y)| match y {
+                            gigachad_transformer::LayoutPosition::Wrap { col, .. } => {
+                                Some((*col, x))
+                            }
+                            gigachad_transformer::LayoutPosition::Default => None,
+                        })
+                        .chunk_by(|(col, _element)| *col);
+
+                    let mut cols = cols
+                        .into_iter()
+                        .map(|(_row, y)| y.into_iter().map(|(_, element)| element).collect_vec())
+                        .peekable();
+
+                    if cols.peek().is_some() {
+                        ui.horizontal(move |ui| {
+                            for col in cols {
+                                let handler = handler.clone();
+                                ui.vertical(move |ui| {
+                                    app.render_elements_ref(
+                                        ctx,
+                                        ui,
+                                        &col,
+                                        &handler,
+                                        viewport,
+                                        rect,
+                                        relative_container,
+                                        !vscroll && rect.is_some(),
+                                    );
+                                });
+                            }
+                        });
+                    } else {
+                        ui.vertical(move |ui| {
+                            app.render_elements(
+                                ctx,
+                                ui,
+                                &container.elements,
+                                &handler,
+                                viewport,
+                                rect,
+                                relative_container,
+                                !vscroll && rect.is_some(),
+                            );
+                        });
+                    }
                 }
             }
         }
 
-        match container.direction {
-            LayoutDirection::Row => {
-                let rows = container
-                    .elements
-                    .iter()
-                    .filter_map(|x| x.container_element().map(|y| (x, y)))
-                    .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
-                    .filter_map(|(x, y)| match y {
-                        gigachad_transformer::LayoutPosition::Wrap { row, .. } => Some((*row, x)),
-                        gigachad_transformer::LayoutPosition::Default => None,
-                    })
-                    .chunk_by(|(row, _element)| *row);
-
-                let mut rows = rows
-                    .into_iter()
-                    .map(|(_row, y)| y.into_iter().map(|(_, element)| element).collect_vec())
-                    .peekable();
-
-                if rows.peek().is_some() {
-                    ui.vertical(move |ui| {
-                        for row in rows {
-                            let handler = handler.clone();
-                            ui.horizontal(move |ui| {
-                                self.render_elements_ref(
-                                    ctx,
-                                    ui,
-                                    &row,
-                                    &handler,
-                                    viewport,
-                                    rect,
-                                    !vscroll && rect.is_some(),
-                                );
-                            });
-                        }
-                    });
-                } else {
-                    ui.horizontal(move |ui| {
-                        self.render_elements(
-                            ctx,
-                            ui,
-                            &container.elements,
-                            &handler,
-                            viewport,
-                            rect,
-                            !vscroll && rect.is_some(),
-                        );
-                    });
+        match container.position {
+            Some(Position::Relative) => {
+                let start = ui.cursor().left_top();
+                let size = egui::vec2(
+                    container.calculated_width.unwrap(),
+                    container.calculated_height.unwrap(),
+                );
+                relative_container = Some((egui::Rect::from_min_size(start, size), container));
+            }
+            Some(Position::Absolute) => {
+                if let Some((relative_rect, ..)) = relative_container {
+                    ui.allocate_new_ui(
+                        egui::UiBuilder::new().max_rect(relative_rect).layout(
+                            egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                        ),
+                        |ui| {
+                            render(
+                                self,
+                                ctx,
+                                ui,
+                                container,
+                                handler,
+                                viewport,
+                                rect,
+                                relative_container,
+                                vscroll,
+                            );
+                        },
+                    );
+                    return;
                 }
             }
-            LayoutDirection::Column => {
-                let cols = container
-                    .elements
-                    .iter()
-                    .filter_map(|x| x.container_element().map(|y| (x, y)))
-                    .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
-                    .filter_map(|(x, y)| match y {
-                        gigachad_transformer::LayoutPosition::Wrap { col, .. } => Some((*col, x)),
-                        gigachad_transformer::LayoutPosition::Default => None,
-                    })
-                    .chunk_by(|(col, _element)| *col);
-
-                let mut cols = cols
-                    .into_iter()
-                    .map(|(_row, y)| y.into_iter().map(|(_, element)| element).collect_vec())
-                    .peekable();
-
-                if cols.peek().is_some() {
-                    ui.horizontal(move |ui| {
-                        for col in cols {
-                            let handler = handler.clone();
-                            ui.vertical(move |ui| {
-                                self.render_elements_ref(
-                                    ctx,
-                                    ui,
-                                    &col,
-                                    &handler,
-                                    viewport,
-                                    rect,
-                                    !vscroll && rect.is_some(),
-                                );
-                            });
-                        }
-                    });
-                } else {
-                    ui.vertical(move |ui| {
-                        self.render_elements(
-                            ctx,
-                            ui,
-                            &container.elements,
-                            &handler,
-                            viewport,
-                            rect,
-                            !vscroll && rect.is_some(),
-                        );
-                    });
-                }
-            }
+            Some(Position::Static) | None => {}
         }
+
+        render(
+            self,
+            ctx,
+            ui,
+            container,
+            handler,
+            viewport,
+            rect,
+            relative_container,
+            vscroll,
+        );
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -990,6 +1074,7 @@ impl EguiApp {
         handler: &Option<Handler>,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
+        relative_container: Option<(egui::Rect, &ContainerElement)>,
         scroll_child: bool,
     ) {
         log::trace!("render_elements: {} elements", elements.len());
@@ -1001,6 +1086,7 @@ impl EguiApp {
                 handler.clone(),
                 viewport,
                 rect,
+                relative_container,
                 scroll_child,
             );
         }
@@ -1015,6 +1101,7 @@ impl EguiApp {
         handler: &Option<Handler>,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
+        relative_container: Option<(egui::Rect, &ContainerElement)>,
         scroll_child: bool,
     ) {
         for element in elements {
@@ -1025,6 +1112,7 @@ impl EguiApp {
                 handler.clone(),
                 viewport,
                 rect,
+                relative_container,
                 scroll_child,
             );
         }
@@ -1177,6 +1265,7 @@ impl EguiApp {
         handler: Option<Handler>,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
+        relative_container: Option<(egui::Rect, &ContainerElement)>,
         scroll_child: bool,
     ) {
         log::trace!("render_element: rect={rect:?}");
@@ -1191,45 +1280,56 @@ impl EguiApp {
         }
 
         if let Element::Table { .. } = element {
-            self.render_table(ctx, ui, element, &handler, viewport, rect);
+            self.render_table(
+                ctx,
+                ui,
+                element,
+                &handler,
+                viewport,
+                rect,
+                relative_container,
+            );
             return;
         }
 
-        if scroll_child && element.container_element().is_some() {
+        if scroll_child {
             if let Some(rect) = rect {
-                let pos = ui.cursor().min;
-                let (offset_x, offset_y) =
-                    viewport.map_or((0.0, 0.0), |viewport| (viewport.pos.x, viewport.pos.y));
+                if let Some(container) = element.container_element() {
+                    if container.position != Some(Position::Absolute) {
+                        let pos = ui.cursor().min;
+                        let (offset_x, offset_y) = viewport
+                            .map_or((0.0, 0.0), |viewport| (viewport.pos.x, viewport.pos.y));
 
-                let (width, height) = element.container_element().map_or((0.0, 0.0), |container| {
-                    let width = container.calculated_width.unwrap();
-                    let height = container.calculated_height.unwrap();
-                    (width, height)
-                });
+                        let (width, height) =
+                            element.container_element().map_or((0.0, 0.0), |container| {
+                                let width = container.calculated_width.unwrap();
+                                let height = container.calculated_height.unwrap();
+                                (width, height)
+                            });
 
-                if pos.x + width - offset_x < -1.0
-                    || pos.y + height - offset_y < -1.0
-                    || pos.x - offset_x >= rect.width() + 1.0
-                    || pos.y - offset_y >= rect.height() + 1.0
-                {
-                    log::trace!(
-                        "render_element: skipping ({}, {}, {width}, {height}) {element}",
-                        pos.x,
-                        pos.y
-                    );
-                    ui.allocate_space(egui::vec2(width, height));
-                    if let Some(container) = element.container_element() {
-                        for element in &container.elements {
-                            self.handle_element_side_effects(ui, element, viewport, true);
+                        if pos.x + width - offset_x < -1.0
+                            || pos.y + height - offset_y < -1.0
+                            || pos.x - offset_x >= rect.width() + 1.0
+                            || pos.y - offset_y >= rect.height() + 1.0
+                        {
+                            log::trace!(
+                                "render_element: skipping ({}, {}, {width}, {height}) {element}",
+                                pos.x,
+                                pos.y
+                            );
+                            ui.allocate_space(egui::vec2(width, height));
+                            for element in &container.elements {
+                                self.handle_element_side_effects(ui, element, viewport, true);
+                            }
+                            return;
                         }
+                        log::trace!(
+                            "render_element: showing ({}, {}, {width}, {height}) {element}",
+                            pos.x,
+                            pos.y
+                        );
                     }
-                    return;
                 }
-                log::trace!(
-                    "render_element: showing ({}, {}, {width}, {height}) {element}",
-                    pos.x,
-                    pos.y
-                );
             }
         }
 
@@ -1432,10 +1532,12 @@ impl EguiApp {
                 ),
                 viewport,
                 rect,
+                relative_container,
             );
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_table(
         &self,
         ctx: &egui::Context,
@@ -1444,6 +1546,7 @@ impl EguiApp {
         handler: &Option<Handler>,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
+        relative_container: Option<(egui::Rect, &ContainerElement)>,
     ) {
         let TableIter { rows, headings } = element.table_iter();
 
@@ -1454,7 +1557,15 @@ impl EguiApp {
                 for heading in headings {
                     for th in heading {
                         egui::Frame::none().show(ui, |ui| {
-                            self.render_container(ctx, ui, th, handler, viewport, rect);
+                            self.render_container(
+                                ctx,
+                                ui,
+                                th,
+                                handler,
+                                viewport,
+                                rect,
+                                relative_container,
+                            );
                         });
                     }
                     ui.end_row();
@@ -1463,7 +1574,15 @@ impl EguiApp {
             for row in rows {
                 for td in row {
                     egui::Frame::none().show(ui, |ui| {
-                        self.render_container(ctx, ui, td, handler, viewport, rect);
+                        self.render_container(
+                            ctx,
+                            ui,
+                            td,
+                            handler,
+                            viewport,
+                            rect,
+                            relative_container,
+                        );
                     });
                 }
                 ui.end_row();
@@ -1503,7 +1622,7 @@ impl EguiApp {
                             .unwrap_or_else(|| Color32::from_hex("#181a1b").unwrap()),
                     )
                     .show(ui, |ui| {
-                        self.render_container(ctx, ui, container, &None, None, None);
+                        self.render_container(ctx, ui, container, &None, None, None, None);
                     });
             });
     }

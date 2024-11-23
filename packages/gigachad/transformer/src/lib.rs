@@ -1,7 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use std::{fmt::Display, io::Write};
+use std::io::Write;
 
 use gigachad_color::Color;
 use serde_json::Value;
@@ -69,7 +69,7 @@ impl Calculation {
     }
 }
 
-impl Display for Calculation {
+impl std::fmt::Display for Calculation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Number(number) => f.write_str(&number.to_string()),
@@ -93,7 +93,7 @@ pub enum Number {
     Calc(Calculation),
 }
 
-impl Display for Number {
+impl std::fmt::Display for Number {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Real(x) => f.write_fmt(format_args!("{x}")),
@@ -118,7 +118,7 @@ pub enum LayoutDirection {
     Column,
 }
 
-impl Display for LayoutDirection {
+impl std::fmt::Display for LayoutDirection {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Row => f.write_str("Row"),
@@ -137,7 +137,7 @@ pub enum LayoutOverflow {
     Wrap,
 }
 
-impl Display for LayoutOverflow {
+impl std::fmt::Display for LayoutOverflow {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Auto => f.write_str("Auto"),
@@ -157,7 +157,7 @@ pub enum JustifyContent {
     Default,
 }
 
-impl Display for JustifyContent {
+impl std::fmt::Display for JustifyContent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::SpaceBetween => f.write_str("SpaceBetween"),
@@ -239,7 +239,21 @@ pub enum Cursor {
     ZoomOut,
 }
 
-impl Display for Cursor {
+impl std::fmt::Display for Cursor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{self:?}"))
+    }
+}
+
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Position {
+    #[default]
+    Static,
+    Relative,
+    Absolute,
+}
+
+impl std::fmt::Display for Position {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("{self:?}"))
     }
@@ -265,6 +279,7 @@ pub struct ContainerElement {
     pub height: Option<Number>,
     pub gap: Option<Number>,
     pub cursor: Option<Cursor>,
+    pub position: Option<Position>,
     pub background: Option<Color>,
     pub border_top: Option<(Color, Number)>,
     pub border_right: Option<(Color, Number)>,
@@ -333,6 +348,38 @@ fn visible_elements_mut(elements: &mut [Element]) -> impl Iterator<Item = &mut E
     })
 }
 
+fn relative_positioned_elements(elements: &[Element]) -> impl Iterator<Item = &Element> {
+    visible_elements(elements).filter(|x| {
+        !x.container_element()
+            .is_some_and(|x| x.position == Some(Position::Absolute))
+    })
+}
+
+fn relative_positioned_elements_mut(
+    elements: &mut [Element],
+) -> impl Iterator<Item = &mut Element> {
+    visible_elements_mut(elements).filter(|x| {
+        !x.container_element()
+            .is_some_and(|x| x.position == Some(Position::Absolute))
+    })
+}
+
+fn absolute_positioned_elements(elements: &[Element]) -> impl Iterator<Item = &Element> {
+    visible_elements(elements).filter(|x| {
+        x.container_element()
+            .is_some_and(|x| x.position == Some(Position::Absolute))
+    })
+}
+
+fn absolute_positioned_elements_mut(
+    elements: &mut [Element],
+) -> impl Iterator<Item = &mut Element> {
+    visible_elements_mut(elements).filter(|x| {
+        x.container_element()
+            .is_some_and(|x| x.position == Some(Position::Absolute))
+    })
+}
+
 impl ContainerElement {
     #[must_use]
     pub fn is_visible(&self) -> bool {
@@ -350,6 +397,22 @@ impl ContainerElement {
 
     pub fn visible_elements_mut(&mut self) -> impl Iterator<Item = &mut Element> {
         visible_elements_mut(&mut self.elements)
+    }
+
+    pub fn relative_positioned_elements(&self) -> impl Iterator<Item = &Element> {
+        relative_positioned_elements(&self.elements)
+    }
+
+    pub fn relative_positioned_elements_mut(&mut self) -> impl Iterator<Item = &mut Element> {
+        relative_positioned_elements_mut(&mut self.elements)
+    }
+
+    pub fn absolute_positioned_elements(&self) -> impl Iterator<Item = &Element> {
+        absolute_positioned_elements(&self.elements)
+    }
+
+    pub fn absolute_positioned_elements_mut(&mut self) -> impl Iterator<Item = &mut Element> {
+        absolute_positioned_elements_mut(&mut self.elements)
     }
 
     #[cfg(feature = "id")]
@@ -725,12 +788,16 @@ impl Attrs {
     }
 
     #[allow(unused)]
-    fn with_attr<K: Into<String>, V: Display + 'static>(mut self, name: K, value: V) -> Self {
+    fn with_attr<K: Into<String>, V: std::fmt::Display + 'static>(
+        mut self,
+        name: K,
+        value: V,
+    ) -> Self {
         self.add(name, value);
         self
     }
 
-    fn with_attr_opt<K: Into<String>, V: Display + 'static>(
+    fn with_attr_opt<K: Into<String>, V: std::fmt::Display + 'static>(
         mut self,
         name: K,
         value: Option<V>,
@@ -754,11 +821,11 @@ impl Attrs {
         }
     }
 
-    fn add<K: Into<String>, V: Display>(&mut self, name: K, value: V) {
+    fn add<K: Into<String>, V: std::fmt::Display>(&mut self, name: K, value: V) {
         self.values.push((name.into(), value.to_string()));
     }
 
-    fn add_opt<K: Into<String>, V: Display>(&mut self, name: K, value: Option<V>) {
+    fn add_opt<K: Into<String>, V: std::fmt::Display>(&mut self, name: K, value: Option<V>) {
         if let Some(value) = value {
             self.values.push((name.into(), value.to_string()));
         }
@@ -854,7 +921,7 @@ impl ContainerElement {
     }
 }
 
-impl Display for Element {
+impl std::fmt::Display for Element {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(
             &self
@@ -1474,7 +1541,7 @@ pub enum HeaderSize {
     H6,
 }
 
-impl Display for HeaderSize {
+impl std::fmt::Display for HeaderSize {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::H1 => f.write_str("h1"),
@@ -1539,7 +1606,7 @@ impl Input {
     }
 }
 
-impl Display for Input {
+impl std::fmt::Display for Input {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Text { value, placeholder } => {
