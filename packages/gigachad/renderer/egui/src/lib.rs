@@ -16,7 +16,7 @@ pub use gigachad_renderer::*;
 use gigachad_router::Router;
 use gigachad_transformer::{
     calc::Calc, ActionType, ContainerElement, Cursor, Element, Input, LayoutDirection, Position,
-    Route, TableIter,
+    Route, StyleAction, StyleActionType, TableIter, Visibility,
 };
 use itertools::Itertools;
 
@@ -297,6 +297,7 @@ struct EguiApp {
     images: Arc<RwLock<HashMap<String, AppImage>>>,
     canvas_actions: Arc<RwLock<HashMap<String, Vec<CanvasAction>>>>,
     route_requests: Arc<RwLock<Vec<usize>>>,
+    visibilities: Arc<RwLock<HashMap<usize, Visibility>>>,
     router: Router,
     background: Option<Color32>,
     request_action: Sender<String>,
@@ -326,6 +327,7 @@ impl EguiApp {
             images: Arc::new(RwLock::new(HashMap::new())),
             canvas_actions: Arc::new(RwLock::new(HashMap::new())),
             route_requests: Arc::new(RwLock::new(vec![])),
+            visibilities: Arc::new(RwLock::new(HashMap::new())),
             router,
             background: None,
             request_action,
@@ -607,6 +609,20 @@ impl EguiApp {
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &ContainerElement)>,
     ) {
+        if container.visibility == Some(Visibility::Hidden) {
+            let visibility = self
+                .visibilities
+                .read()
+                .unwrap()
+                .get(&container.id)
+                .copied()
+                .unwrap_or(Visibility::Hidden);
+
+            if visibility == Visibility::Hidden {
+                ui.set_opacity(0.0);
+            }
+        }
+
         let mut frame = egui::Frame::none();
 
         if let Some(background) = container.background {
@@ -614,257 +630,259 @@ impl EguiApp {
         }
 
         Self::render_borders(ui, container, |ui| {
-            frame.inner_margin(egui::Margin {
+            let response = frame.inner_margin(egui::Margin {
                     left: container.margin_left.unwrap_or(0.0),
                     right: container.margin_right.unwrap_or(0.0),
                     top: container.margin_top.unwrap_or(0.0),
                     bottom: container.margin_bottom.unwrap_or(0.0),
                 })
-                .show(ui, move |ui| {
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
-                        let response = egui::Frame::none().show(ui, {
-                            let handler = handler.clone();
-                            move |ui| {
-                                let cursor = ui.cursor();
-                                let (pos_x, pos_y) = (cursor.left(), cursor.top());
-                                match (container.overflow_x, container.overflow_y) {
-                                    (
-                                        gigachad_transformer::LayoutOverflow::Auto,
-                                        gigachad_transformer::LayoutOverflow::Auto,
-                                    ) => {
-                                        egui::ScrollArea::both()
-                                            .scroll_bar_visibility(
-                                                egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
-                                            )
-                                            .show_viewport(ui, {
-                                                move |ui, rect| {
-                                                    let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
-                                                    let viewport = Some(&viewport);
-                                                    self.render_container_contents(
-                                                        ctx,
-                                                        ui,
-                                                        container,
-                                                        handler,
-                                                        viewport,
-                                                        Some(rect),
-                                                        relative_container,
-                                                        true,
-                                                    );
-                                                }
-                                            });
-                                    }
-                                    (
-                                        gigachad_transformer::LayoutOverflow::Scroll,
-                                        gigachad_transformer::LayoutOverflow::Scroll,
-                                    ) => {
-                                        egui::ScrollArea::both()
-                                            .scroll_bar_visibility(
-                                                egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
-                                            )
-                                            .show_viewport(ui, {
-                                                move |ui, rect| {
-                                                    let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
-                                                    let viewport = Some(&viewport);
-                                                    self.render_container_contents(
-                                                        ctx,
-                                                        ui,
-                                                        container,
-                                                        handler,
-                                                        viewport,
-                                                        Some(rect),
-                                                        relative_container,
-                                                        true,
-                                                    );
-                                                }
-                                            });
-                                    }
-                                    (
-                                        gigachad_transformer::LayoutOverflow::Auto,
-                                        gigachad_transformer::LayoutOverflow::Scroll,
-                                    ) => {
-                                        egui::ScrollArea::vertical()
-                                            .scroll_bar_visibility(
-                                                egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
-                                            )
-                                            .show_viewport(ui, {
-                                                move |ui, rect| {
-                                                    let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
-                                                    let viewport = Some(&viewport);
-                                                    let cursor = ui.cursor();
-                                                    let (pos_x, pos_y) = (cursor.left(), cursor.top());
-                                                    egui::ScrollArea::horizontal()
-                                                        .scroll_bar_visibility(
-                                                            egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
-                                                        )
-                                                        .show_viewport(ui, {
-                                                            move |ui, rect| {
+                .show(ui, {
+                    let handler = handler.clone();
+                    move |ui| {
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
+                            egui::Frame::none().show(ui, {
+                                move |ui| {
+                                    let cursor = ui.cursor();
+                                    let (pos_x, pos_y) = (cursor.left(), cursor.top());
+                                    match (container.overflow_x, container.overflow_y) {
+                                        (
+                                            gigachad_transformer::LayoutOverflow::Auto,
+                                            gigachad_transformer::LayoutOverflow::Auto,
+                                        ) => {
+                                            egui::ScrollArea::both()
+                                                .scroll_bar_visibility(
+                                                    egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
+                                                )
+                                                .show_viewport(ui, {
+                                                    move |ui, rect| {
+                                                        let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
+                                                        let viewport = Some(&viewport);
+                                                        self.render_container_contents(
+                                                            ctx,
+                                                            ui,
+                                                            container,
+                                                            handler,
+                                                            viewport,
+                                                            Some(rect),
+                                                            relative_container,
+                                                            true,
+                                                        );
+                                                    }
+                                                });
+                                        }
+                                        (
+                                            gigachad_transformer::LayoutOverflow::Scroll,
+                                            gigachad_transformer::LayoutOverflow::Scroll,
+                                        ) => {
+                                            egui::ScrollArea::both()
+                                                .scroll_bar_visibility(
+                                                    egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                                                )
+                                                .show_viewport(ui, {
+                                                    move |ui, rect| {
+                                                        let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
+                                                        let viewport = Some(&viewport);
+                                                        self.render_container_contents(
+                                                            ctx,
+                                                            ui,
+                                                            container,
+                                                            handler,
+                                                            viewport,
+                                                            Some(rect),
+                                                            relative_container,
+                                                            true,
+                                                        );
+                                                    }
+                                                });
+                                        }
+                                        (
+                                            gigachad_transformer::LayoutOverflow::Auto,
+                                            gigachad_transformer::LayoutOverflow::Scroll,
+                                        ) => {
+                                            egui::ScrollArea::vertical()
+                                                .scroll_bar_visibility(
+                                                    egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                                                )
+                                                .show_viewport(ui, {
+                                                    move |ui, rect| {
+                                                        let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
+                                                        let viewport = Some(&viewport);
+                                                        let cursor = ui.cursor();
+                                                        let (pos_x, pos_y) = (cursor.left(), cursor.top());
+                                                        egui::ScrollArea::horizontal()
+                                                            .scroll_bar_visibility(
+                                                                egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
+                                                            )
+                                                            .show_viewport(ui, {
+                                                                move |ui, rect| {
+                                                                    let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
+                                                                    let viewport = Some(&viewport);
+                                                                    self.render_container_contents(
+                                                                        ctx,
+                                                                        ui,
+                                                                        container,
+                                                                        handler,
+                                                                        viewport,
+                                                                        Some(rect),
+                                                                        relative_container,
+                                                                        true,
+                                                                    );
+                                                                }
+                                                            });
+                                                    }
+                                                });
+                                        }
+                                        (
+                                            gigachad_transformer::LayoutOverflow::Scroll,
+                                            gigachad_transformer::LayoutOverflow::Auto,
+                                        ) => {
+                                            egui::ScrollArea::vertical()
+                                                .scroll_bar_visibility(
+                                                    egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
+                                                )
+                                                .show_viewport(ui, {
+                                                    move |ui, rect| {
+                                                        let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
+                                                        let viewport = Some(&viewport);
+                                                        let cursor = ui.cursor();
+                                                        let (pos_x, pos_y) = (cursor.left(), cursor.top());
+                                                        egui::ScrollArea::horizontal()
+                                                            .scroll_bar_visibility(
+                                                                egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                                                            )
+                                                            .show_viewport(ui, {
+                                                                move |ui, rect| {
                                                                 let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
                                                                 let viewport = Some(&viewport);
-                                                                self.render_container_contents(
-                                                                    ctx,
-                                                                    ui,
-                                                                    container,
-                                                                    handler,
-                                                                    viewport,
-                                                                    Some(rect),
-                                                                    relative_container,
-                                                                    true,
-                                                                );
-                                                            }
-                                                        });
-                                                }
-                                            });
-                                    }
-                                    (
-                                        gigachad_transformer::LayoutOverflow::Scroll,
-                                        gigachad_transformer::LayoutOverflow::Auto,
-                                    ) => {
-                                        egui::ScrollArea::vertical()
-                                            .scroll_bar_visibility(
-                                                egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
-                                            )
-                                            .show_viewport(ui, {
-                                                move |ui, rect| {
-                                                    let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
-                                                    let viewport = Some(&viewport);
-                                                    let cursor = ui.cursor();
-                                                    let (pos_x, pos_y) = (cursor.left(), cursor.top());
-                                                    egui::ScrollArea::horizontal()
-                                                        .scroll_bar_visibility(
-                                                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
-                                                        )
-                                                        .show_viewport(ui, {
-                                                            move |ui, rect| {
-                                                            let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
-                                                            let viewport = Some(&viewport);
-                                                                self.render_container_contents(
-                                                                    ctx,
-                                                                    ui,
-                                                                    container,
-                                                                    handler,
-                                                                    viewport,
-                                                                    Some(rect),
-                                                                    relative_container,
-                                                                    true,
-                                                                );
-                                                            }
-                                                        });
-                                                }
-                                            });
-                                    }
-                                    (gigachad_transformer::LayoutOverflow::Auto, _) => {
-                                        egui::ScrollArea::horizontal()
-                                            .scroll_bar_visibility(
-                                                egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
-                                            )
-                                            .show_viewport(ui, {
-                                                move |ui, rect| {
-                                                    let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
-                                                    let viewport = Some(&viewport);
-                                                    self.render_container_contents(
-                                                        ctx,
-                                                        ui,
-                                                        container,
-                                                        handler,
-                                                        viewport,
-                                                        Some(rect),
-                                                        relative_container,
-                                                        false,
-                                                    );
-                                                }
-                                            });
-                                    }
-                                    (gigachad_transformer::LayoutOverflow::Scroll, _) => {
-                                        egui::ScrollArea::horizontal()
-                                            .scroll_bar_visibility(
-                                                egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
-                                            )
-                                            .show_viewport(ui, {
-                                                move |ui, rect| {
-                                                    let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
-                                                    let viewport = Some(&viewport);
-                                                    self.render_container_contents(
-                                                        ctx,
-                                                        ui,
-                                                        container,
-                                                        handler,
-                                                        viewport,
-                                                        Some(rect),
-                                                        relative_container,
-                                                        false,
-                                                    );
-                                                }
-                                            });
-                                    }
-                                    (_, gigachad_transformer::LayoutOverflow::Auto) => {
-                                        egui::ScrollArea::vertical()
-                                            .scroll_bar_visibility(
-                                                egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
-                                            )
-                                            .show_viewport(ui, {
-                                                move |ui, rect| {
-                                                    let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
-                                                    let viewport = Some(&viewport);
-                                                    self.render_container_contents(
-                                                        ctx,
-                                                        ui,
-                                                        container,
-                                                        handler,
-                                                        viewport,
-                                                        Some(rect),
-                                                        relative_container,
-                                                        true,
-                                                    );
-                                                }
-                                            });
-                                    }
-                                    (_, gigachad_transformer::LayoutOverflow::Scroll) => {
-                                        egui::ScrollArea::vertical()
-                                            .scroll_bar_visibility(
-                                                egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
-                                            )
-                                            .show_viewport(ui, {
-                                                move |ui, rect| {
-                                                    let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
-                                                    let viewport = Some(&viewport);
-                                                    self.render_container_contents(
-                                                        ctx,
-                                                        ui,
-                                                        container,
-                                                        handler,
-                                                        viewport,
-                                                        Some(rect),
-                                                        relative_container,
-                                                        true,
-                                                    );
-                                                }
-                                            });
-                                    }
-                                    (_, _) => {
-                                        self.render_container_contents(
-                                            ctx,
-                                            ui,
-                                            container,
-                                            handler,
-                                            viewport,
-                                            rect,
-                                            relative_container,
-                                            false,
-                                        );
+                                                                    self.render_container_contents(
+                                                                        ctx,
+                                                                        ui,
+                                                                        container,
+                                                                        handler,
+                                                                        viewport,
+                                                                        Some(rect),
+                                                                        relative_container,
+                                                                        true,
+                                                                    );
+                                                                }
+                                                            });
+                                                    }
+                                                });
+                                        }
+                                        (gigachad_transformer::LayoutOverflow::Auto, _) => {
+                                            egui::ScrollArea::horizontal()
+                                                .scroll_bar_visibility(
+                                                    egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
+                                                )
+                                                .show_viewport(ui, {
+                                                    move |ui, rect| {
+                                                        let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
+                                                        let viewport = Some(&viewport);
+                                                        self.render_container_contents(
+                                                            ctx,
+                                                            ui,
+                                                            container,
+                                                            handler,
+                                                            viewport,
+                                                            Some(rect),
+                                                            relative_container,
+                                                            false,
+                                                        );
+                                                    }
+                                                });
+                                        }
+                                        (gigachad_transformer::LayoutOverflow::Scroll, _) => {
+                                            egui::ScrollArea::horizontal()
+                                                .scroll_bar_visibility(
+                                                    egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                                                )
+                                                .show_viewport(ui, {
+                                                    move |ui, rect| {
+                                                        let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
+                                                        let viewport = Some(&viewport);
+                                                        self.render_container_contents(
+                                                            ctx,
+                                                            ui,
+                                                            container,
+                                                            handler,
+                                                            viewport,
+                                                            Some(rect),
+                                                            relative_container,
+                                                            false,
+                                                        );
+                                                    }
+                                                });
+                                        }
+                                        (_, gigachad_transformer::LayoutOverflow::Auto) => {
+                                            egui::ScrollArea::vertical()
+                                                .scroll_bar_visibility(
+                                                    egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
+                                                )
+                                                .show_viewport(ui, {
+                                                    move |ui, rect| {
+                                                        let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
+                                                        let viewport = Some(&viewport);
+                                                        self.render_container_contents(
+                                                            ctx,
+                                                            ui,
+                                                            container,
+                                                            handler,
+                                                            viewport,
+                                                            Some(rect),
+                                                            relative_container,
+                                                            true,
+                                                        );
+                                                    }
+                                                });
+                                        }
+                                        (_, gigachad_transformer::LayoutOverflow::Scroll) => {
+                                            egui::ScrollArea::vertical()
+                                                .scroll_bar_visibility(
+                                                    egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                                                )
+                                                .show_viewport(ui, {
+                                                    move |ui, rect| {
+                                                        let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
+                                                        let viewport = Some(&viewport);
+                                                        self.render_container_contents(
+                                                            ctx,
+                                                            ui,
+                                                            container,
+                                                            handler,
+                                                            viewport,
+                                                            Some(rect),
+                                                            relative_container,
+                                                            true,
+                                                        );
+                                                    }
+                                                });
+                                        }
+                                        (_, _) => {
+                                            self.render_container_contents(
+                                                ctx,
+                                                ui,
+                                                container,
+                                                handler,
+                                                viewport,
+                                                rect,
+                                                relative_container,
+                                                false,
+                                            );
+                                        }
                                     }
                                 }
-                            }
+                            });
                         });
-                        if let Some(handler) = handler {
-                            handler(&response.response);
-                        }
-                    });
+                    }
                 });
+
+            if let Some(handler) = handler {
+                handler(&response.response);
+            }
         });
     }
 
-    #[allow(clippy::too_many_arguments)]
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     fn render_container_contents<'a>(
         &self,
         ctx: &egui::Context,
@@ -876,155 +894,152 @@ impl EguiApp {
         mut relative_container: Option<(egui::Rect, &'a ContainerElement)>,
         vscroll: bool,
     ) {
-        fn render<'a>(
-            app: &EguiApp,
-            ctx: &egui::Context,
-            ui: &mut Ui,
-            container: &'a ContainerElement,
-            handler: Option<Handler>,
-            viewport: Option<&Viewport>,
-            rect: Option<egui::Rect>,
-            relative_container: Option<(egui::Rect, &'a ContainerElement)>,
-            vscroll: bool,
-        ) {
-            for element in &container.elements {
-                app.handle_element_side_effects(ui, element, viewport, false);
-            }
+        let render =
+            move |ui: &mut Ui, relative_container: Option<(egui::Rect, &ContainerElement)>| {
+                if let Some(width) = container.calculated_width {
+                    ui.set_width(width);
+                }
+                if let Some(height) = container.calculated_height {
+                    ui.set_height(height);
 
-            if let Some(width) = container.calculated_width {
-                ui.set_width(width);
-            }
-            if let Some(height) = container.calculated_height {
-                ui.set_height(height);
-
-                if vscroll {
-                    if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
-                        let rect = egui::Rect::from_pos(egui::emath::pos2(0.0, height));
-                        ui.scroll_to_rect(rect, Some(egui::Align::TOP));
-                    }
-                    if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
-                        let rect = egui::Rect::from_pos(egui::emath::pos2(0.0, -height));
-                        ui.scroll_to_rect(rect, Some(egui::Align::TOP));
+                    if vscroll {
+                        if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
+                            let rect = egui::Rect::from_pos(egui::emath::pos2(0.0, height));
+                            ui.scroll_to_rect(rect, Some(egui::Align::TOP));
+                        }
+                        if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
+                            let rect = egui::Rect::from_pos(egui::emath::pos2(0.0, -height));
+                            ui.scroll_to_rect(rect, Some(egui::Align::TOP));
+                        }
                     }
                 }
-            }
 
-            match container.direction {
-                LayoutDirection::Row => {
-                    let rows = container
-                        .elements
-                        .iter()
-                        .filter_map(|x| x.container_element().map(|y| (x, y)))
-                        .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
-                        .filter_map(|(x, y)| match y {
-                            gigachad_transformer::LayoutPosition::Wrap { row, .. } => {
-                                Some((*row, x))
-                            }
-                            gigachad_transformer::LayoutPosition::Default => None,
-                        })
-                        .chunk_by(|(row, _element)| *row);
+                match container.direction {
+                    LayoutDirection::Row => {
+                        let rows = container
+                            .elements
+                            .iter()
+                            .filter_map(|x| x.container_element().map(|y| (x, y)))
+                            .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
+                            .filter_map(|(x, y)| match y {
+                                gigachad_transformer::LayoutPosition::Wrap { row, .. } => {
+                                    Some((*row, x))
+                                }
+                                gigachad_transformer::LayoutPosition::Default => {
+                                    self.handle_element_side_effects(None, x, viewport, true);
+                                    None
+                                }
+                            })
+                            .chunk_by(|(row, _element)| *row);
 
-                    let mut rows = rows
-                        .into_iter()
-                        .map(|(_row, y)| y.into_iter().map(|(_, element)| element).collect_vec())
-                        .peekable();
+                        let mut rows = rows
+                            .into_iter()
+                            .map(|(_row, y)| {
+                                y.into_iter().map(|(_, element)| element).collect_vec()
+                            })
+                            .peekable();
 
-                    if rows.peek().is_some() {
-                        ui.vertical(move |ui| {
-                            for row in rows {
-                                let handler = handler.clone();
-                                ui.horizontal(move |ui| {
-                                    app.render_elements_ref(
-                                        ctx,
-                                        ui,
-                                        &row,
-                                        &handler,
-                                        viewport,
-                                        rect,
-                                        relative_container,
-                                        !vscroll && rect.is_some(),
-                                    );
-                                });
-                            }
-                        });
-                    } else {
-                        ui.horizontal(move |ui| {
-                            app.render_elements(
-                                ctx,
-                                ui,
-                                &container.elements,
-                                &handler,
-                                viewport,
-                                rect,
-                                relative_container,
-                                !vscroll && rect.is_some(),
-                            );
-                        });
+                        if rows.peek().is_some() {
+                            ui.vertical(move |ui| {
+                                for row in rows {
+                                    let handler = handler.clone();
+                                    ui.horizontal(move |ui| {
+                                        self.render_elements_ref(
+                                            ctx,
+                                            ui,
+                                            &row,
+                                            &handler,
+                                            viewport,
+                                            rect,
+                                            relative_container,
+                                            !vscroll && rect.is_some(),
+                                        );
+                                    });
+                                }
+                            });
+                        } else {
+                            ui.horizontal(move |ui| {
+                                self.render_elements(
+                                    ctx,
+                                    ui,
+                                    &container.elements,
+                                    &handler,
+                                    viewport,
+                                    rect,
+                                    relative_container,
+                                    !vscroll && rect.is_some(),
+                                );
+                            });
+                        }
+                    }
+                    LayoutDirection::Column => {
+                        let cols = container
+                            .elements
+                            .iter()
+                            .filter_map(|x| x.container_element().map(|y| (x, y)))
+                            .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
+                            .filter_map(|(x, y)| match y {
+                                gigachad_transformer::LayoutPosition::Wrap { col, .. } => {
+                                    Some((*col, x))
+                                }
+                                gigachad_transformer::LayoutPosition::Default => {
+                                    self.handle_element_side_effects(None, x, viewport, true);
+                                    None
+                                }
+                            })
+                            .chunk_by(|(col, _element)| *col);
+
+                        let mut cols = cols
+                            .into_iter()
+                            .map(|(_row, y)| {
+                                y.into_iter().map(|(_, element)| element).collect_vec()
+                            })
+                            .peekable();
+
+                        if cols.peek().is_some() {
+                            ui.horizontal(move |ui| {
+                                for col in cols {
+                                    let handler = handler.clone();
+                                    ui.vertical(move |ui| {
+                                        self.render_elements_ref(
+                                            ctx,
+                                            ui,
+                                            &col,
+                                            &handler,
+                                            viewport,
+                                            rect,
+                                            relative_container,
+                                            !vscroll && rect.is_some(),
+                                        );
+                                    });
+                                }
+                            });
+                        } else {
+                            ui.vertical(move |ui| {
+                                self.render_elements(
+                                    ctx,
+                                    ui,
+                                    &container.elements,
+                                    &handler,
+                                    viewport,
+                                    rect,
+                                    relative_container,
+                                    !vscroll && rect.is_some(),
+                                );
+                            });
+                        }
                     }
                 }
-                LayoutDirection::Column => {
-                    let cols = container
-                        .elements
-                        .iter()
-                        .filter_map(|x| x.container_element().map(|y| (x, y)))
-                        .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
-                        .filter_map(|(x, y)| match y {
-                            gigachad_transformer::LayoutPosition::Wrap { col, .. } => {
-                                Some((*col, x))
-                            }
-                            gigachad_transformer::LayoutPosition::Default => None,
-                        })
-                        .chunk_by(|(col, _element)| *col);
-
-                    let mut cols = cols
-                        .into_iter()
-                        .map(|(_row, y)| y.into_iter().map(|(_, element)| element).collect_vec())
-                        .peekable();
-
-                    if cols.peek().is_some() {
-                        ui.horizontal(move |ui| {
-                            for col in cols {
-                                let handler = handler.clone();
-                                ui.vertical(move |ui| {
-                                    app.render_elements_ref(
-                                        ctx,
-                                        ui,
-                                        &col,
-                                        &handler,
-                                        viewport,
-                                        rect,
-                                        relative_container,
-                                        !vscroll && rect.is_some(),
-                                    );
-                                });
-                            }
-                        });
-                    } else {
-                        ui.vertical(move |ui| {
-                            app.render_elements(
-                                ctx,
-                                ui,
-                                &container.elements,
-                                &handler,
-                                viewport,
-                                rect,
-                                relative_container,
-                                !vscroll && rect.is_some(),
-                            );
-                        });
-                    }
-                }
-            }
-        }
+            };
 
         match container.position {
             Some(Position::Relative) => {
-                let start = ui.cursor().left_top();
+                let pos = ui.cursor().left_top();
                 let size = egui::vec2(
                     container.calculated_width.unwrap(),
                     container.calculated_height.unwrap(),
                 );
-                relative_container = Some((egui::Rect::from_min_size(start, size), container));
+                relative_container = Some((egui::Rect::from_min_size(pos, size), container));
             }
             Some(Position::Absolute) => {
                 if let Some((relative_rect, ..)) = relative_container {
@@ -1033,17 +1048,7 @@ impl EguiApp {
                             egui::Layout::centered_and_justified(egui::Direction::TopDown),
                         ),
                         |ui| {
-                            render(
-                                self,
-                                ctx,
-                                ui,
-                                container,
-                                handler,
-                                viewport,
-                                rect,
-                                relative_container,
-                                vscroll,
-                            );
+                            render(ui, relative_container);
                         },
                     );
                     return;
@@ -1052,17 +1057,7 @@ impl EguiApp {
             Some(Position::Static) | None => {}
         }
 
-        render(
-            self,
-            ctx,
-            ui,
-            container,
-            handler,
-            viewport,
-            rect,
-            relative_container,
-            vscroll,
-        );
+        render(ui, relative_container);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1104,6 +1099,7 @@ impl EguiApp {
         relative_container: Option<(egui::Rect, &ContainerElement)>,
         scroll_child: bool,
     ) {
+        log::trace!("render_elements_ref: {} elements", elements.len());
         for element in elements {
             self.render_element(
                 ctx,
@@ -1119,144 +1115,222 @@ impl EguiApp {
     }
 
     #[allow(clippy::too_many_lines)]
+    fn handle_container_side_effects(
+        &self,
+        ui: Option<&Ui>,
+        container: &ContainerElement,
+        viewport: Option<&Viewport>,
+        recurse: bool,
+    ) -> (Option<Handler>, Option<Handler>) {
+        let mut immediate_handler = None;
+        let mut handler = None;
+
+        if let Some(route) = &container.route {
+            let processed_route = {
+                self.route_requests
+                    .read()
+                    .unwrap()
+                    .iter()
+                    .any(|x| *x == container.id)
+            };
+            if !processed_route {
+                log::debug!(
+                    "processing route route={route:?} container_id={}",
+                    container.id
+                );
+                self.route_requests.write().unwrap().push(container.id);
+                if let Err(e) = self.event.send(AppEvent::ProcessRoute {
+                    route: route.to_owned(),
+                    container_id: container.id,
+                }) {
+                    log::error!("Failed to send ProcessRoute event: {e:?}");
+                }
+            }
+        }
+        if container.is_visible() {
+            for action in &container.style_actions {
+                match action {
+                    StyleActionType::Click(action) => {
+                        let action = action.to_owned();
+                        let id = container.id;
+                        let visibilities = self.visibilities.clone();
+                        immediate_handler = wrap_handler(
+                            Some(Arc::new(Box::new(move |response| {
+                                if response.interact(egui::Sense::click()).clicked() {
+                                    match action {
+                                        StyleAction::SetVisibility(visibility) => {
+                                            visibilities.write().unwrap().insert(id, visibility);
+                                        }
+                                    }
+                                } else {
+                                    match action {
+                                        StyleAction::SetVisibility(_) => {
+                                            let contains =
+                                                { visibilities.read().unwrap().contains_key(&id) };
+                                            if contains {
+                                                visibilities.write().unwrap().remove(&id);
+                                            }
+                                        }
+                                    }
+                                }
+                            }))),
+                            immediate_handler,
+                        );
+                    }
+                    StyleActionType::Hover(action) => {
+                        let action = action.to_owned();
+                        let id = container.id;
+                        let visibilities = self.visibilities.clone();
+                        immediate_handler = wrap_handler(
+                            Some(Arc::new(Box::new(move |response| {
+                                if response.interact(egui::Sense::hover()).contains_pointer() {
+                                    match action {
+                                        StyleAction::SetVisibility(visibility) => {
+                                            visibilities.write().unwrap().insert(id, visibility);
+                                        }
+                                    }
+                                } else {
+                                    match action {
+                                        StyleAction::SetVisibility(_) => {
+                                            let contains =
+                                                { visibilities.read().unwrap().contains_key(&id) };
+                                            if contains {
+                                                visibilities.write().unwrap().remove(&id);
+                                            }
+                                        }
+                                    }
+                                }
+                            }))),
+                            immediate_handler,
+                        );
+                    }
+                }
+            }
+            for action in &container.actions {
+                let request_action = self.request_action.clone();
+
+                match action {
+                    ActionType::Click { action } => {
+                        let action = action.to_owned();
+                        immediate_handler = wrap_handler(
+                            Some(Arc::new(Box::new(move |response| {
+                                if response.interact(egui::Sense::click()).clicked() {
+                                    if let Err(e) = request_action.send(action.clone()) {
+                                        moosicbox_assert::die_or_error!(
+                                            "Failed to request action: {action} ({e:?})"
+                                        );
+                                    }
+                                }
+                            }))),
+                            immediate_handler,
+                        );
+                    }
+                    ActionType::Hover { action } => {
+                        let action = action.to_owned();
+                        immediate_handler = wrap_handler(
+                            Some(Arc::new(Box::new(move |response| {
+                                if response.interact(egui::Sense::hover()).hovered() {
+                                    if let Err(e) = request_action.send(action.clone()) {
+                                        moosicbox_assert::die_or_error!(
+                                            "Failed to request action: {action} ({e:?})"
+                                        );
+                                    }
+                                }
+                            }))),
+                            immediate_handler,
+                        );
+                    }
+                }
+            }
+        }
+
+        if recurse {
+            for element in &container.elements {
+                let (inner_immediate_handler, inner_handler) =
+                    self.handle_element_side_effects(ui, element, viewport, recurse);
+                handler = wrap_handler(inner_handler, handler);
+                immediate_handler = wrap_handler(inner_immediate_handler, immediate_handler);
+            }
+        }
+        (immediate_handler, handler)
+    }
+
     fn handle_element_side_effects(
         &self,
-        ui: &Ui,
+        ui: Option<&Ui>,
         element: &Element,
         viewport: Option<&Viewport>,
         recurse: bool,
-    ) -> Option<Handler> {
-        if let Element::Image {
-            source: Some(source),
-            element,
-        } = element
-        {
-            let listeners: &mut HashMap<_, _> = &mut self.viewport_listeners.write().unwrap();
+    ) -> (Option<Handler>, Option<Handler>) {
+        log::trace!("handle_element_side_effects");
+        if let Some(ui) = ui {
+            if let Element::Image {
+                source: Some(source),
+                element,
+            } = element
+            {
+                let listeners: &mut HashMap<_, _> = &mut self.viewport_listeners.write().unwrap();
 
-            let pos = ui.cursor();
-            let listener = listeners.entry(element.id).or_insert_with(|| {
-                ViewportListener::new(
-                    viewport.cloned(),
-                    0.0,
-                    0.0,
-                    element.calculated_width.unwrap(),
-                    element.calculated_height.unwrap(),
-                )
-            });
-            listener.viewport = viewport.cloned();
-            listener.pos.x = pos.left() + viewport.map_or(0.0, |x| x.viewport.x);
-            listener.pos.y = pos.top() + viewport.map_or(0.0, |x| x.viewport.y);
-
-            let (_, (dist, prev_dist)) = listener.check();
-
-            if !prev_dist.is_some_and(|x| x < 1000.0) && dist < 1000.0 {
-                let contains_image = {
-                    matches!(
-                        self.images.read().unwrap().get(source),
-                        Some(AppImage::Bytes(_))
+                let pos = ui.cursor().left_top();
+                let listener = listeners.entry(element.id).or_insert_with(|| {
+                    ViewportListener::new(
+                        viewport.cloned(),
+                        0.0,
+                        0.0,
+                        element.calculated_width.unwrap(),
+                        element.calculated_height.unwrap(),
                     )
-                };
-                if !contains_image {
-                    let loading_image = {
+                });
+                listener.viewport = viewport.cloned();
+                listener.pos.x = pos.x + viewport.map_or(0.0, |x| x.viewport.x);
+                listener.pos.y = pos.y + viewport.map_or(0.0, |x| x.viewport.y);
+
+                let (_, (dist, prev_dist)) = listener.check();
+
+                if !prev_dist.is_some_and(|x| x < 1000.0) && dist < 1000.0 {
+                    let contains_image = {
                         matches!(
                             self.images.read().unwrap().get(source),
-                            Some(AppImage::Loading)
+                            Some(AppImage::Bytes(_))
                         )
                     };
+                    if !contains_image {
+                        let loading_image = {
+                            matches!(
+                                self.images.read().unwrap().get(source),
+                                Some(AppImage::Loading)
+                            )
+                        };
 
-                    if !loading_image {
-                        log::debug!("render_element: triggering LoadImage for source={source}");
-                        self.images
-                            .write()
-                            .unwrap()
-                            .insert(source.clone(), AppImage::Loading);
-
-                        if let Err(e) = self.event.send(AppEvent::LoadImage {
-                            source: source.to_string(),
-                        }) {
-                            log::error!("Failed to send LoadImage event: {e:?}");
-                        }
-                    }
-                }
-            }
-        }
-
-        let mut handler: Option<Handler> = None;
-        if let Some(container) = element.container_element() {
-            if let Some(route) = &container.route {
-                let processed_route = {
-                    self.route_requests
-                        .read()
-                        .unwrap()
-                        .iter()
-                        .any(|x| *x == container.id)
-                };
-                if !processed_route {
-                    log::debug!(
-                        "processing route route={route:?} container_id={}",
-                        container.id
-                    );
-                    self.route_requests.write().unwrap().push(container.id);
-                    if let Err(e) = self.event.send(AppEvent::ProcessRoute {
-                        route: route.to_owned(),
-                        container_id: container.id,
-                    }) {
-                        log::error!("Failed to send ProcessRoute event: {e:?}");
-                    }
-                }
-            }
-            if container.is_visible() {
-                for action in &container.actions {
-                    let old_handler = handler.take();
-                    let request_action = self.request_action.clone();
-
-                    match action {
-                        ActionType::Click { action } => {
-                            let action = action.to_owned();
-                            handler = wrap_handler(
-                                Some(Arc::new(Box::new(move |response| {
-                                    if response.interact(egui::Sense::click()).clicked() {
-                                        if let Err(e) = request_action.send(action.clone()) {
-                                            moosicbox_assert::die_or_error!(
-                                                "Failed to request action: {action} ({e:?})"
-                                            );
-                                        }
-                                    }
-                                }))),
-                                old_handler,
+                        if !loading_image {
+                            log::debug!(
+                                "render_element: triggering LoadImage for source={source} ({}, {})",
+                                listener.pos.x,
+                                listener.pos.y
                             );
-                        }
-                        ActionType::Hover { action } => {
-                            let action = action.to_owned();
-                            handler = wrap_handler(
-                                Some(Arc::new(Box::new(move |response| {
-                                    if response.interact(egui::Sense::hover()).hovered() {
-                                        if let Err(e) = request_action.send(action.clone()) {
-                                            moosicbox_assert::die_or_error!(
-                                                "Failed to request action: {action} ({e:?})"
-                                            );
-                                        }
-                                    }
-                                }))),
-                                old_handler,
-                            );
+                            self.images
+                                .write()
+                                .unwrap()
+                                .insert(source.clone(), AppImage::Loading);
+
+                            if let Err(e) = self.event.send(AppEvent::LoadImage {
+                                source: source.to_string(),
+                            }) {
+                                log::error!("Failed to send LoadImage event: {e:?}");
+                            }
                         }
                     }
                 }
             }
         }
-        if recurse {
-            if let Some(container) = element.container_element() {
-                for element in &container.elements {
-                    self.handle_element_side_effects(ui, element, viewport, true);
-                }
-            }
-        }
-        handler
+
+        element.container_element().map_or_else(
+            || (None, None),
+            |container| self.handle_container_side_effects(ui, container, viewport, recurse),
+        )
     }
 
-    #[allow(clippy::too_many_arguments)]
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     fn render_element(
         &self,
         ctx: &egui::Context,
@@ -1270,26 +1344,14 @@ impl EguiApp {
     ) {
         log::trace!("render_element: rect={rect:?}");
 
-        let side_effect_handler = self.handle_element_side_effects(ui, element, viewport, false);
-
         if let Some(container) = element.container_element() {
             if container.is_hidden() {
                 log::debug!("render_element: container is hidden. skipping render");
+                for element in &container.elements {
+                    self.handle_element_side_effects(Some(ui), element, viewport, true);
+                }
                 return;
             }
-        }
-
-        if let Element::Table { .. } = element {
-            self.render_table(
-                ctx,
-                ui,
-                element,
-                &handler,
-                viewport,
-                rect,
-                relative_container,
-            );
-            return;
         }
 
         if scroll_child {
@@ -1317,10 +1379,8 @@ impl EguiApp {
                                 pos.x,
                                 pos.y
                             );
+                            self.handle_element_side_effects(Some(ui), element, viewport, true);
                             ui.allocate_space(egui::vec2(width, height));
-                            for element in &container.elements {
-                                self.handle_element_side_effects(ui, element, viewport, true);
-                            }
                             return;
                         }
                         log::trace!(
@@ -1331,6 +1391,22 @@ impl EguiApp {
                     }
                 }
             }
+        }
+
+        let (immediate_side_effect_handler, side_effect_handler) =
+            self.handle_element_side_effects(Some(ui), element, viewport, false);
+
+        if let Element::Table { .. } = element {
+            self.render_table(
+                ctx,
+                ui,
+                element,
+                &handler,
+                viewport,
+                rect,
+                relative_container,
+            );
+            return;
         }
 
         let response: Option<Response> = match element {
@@ -1512,11 +1588,14 @@ impl EguiApp {
             };
 
         if let Some(response) = response {
-            if let Some(handler) = handler {
+            if let Some(handler) = immediate_side_effect_handler {
                 handler(&response);
             }
-            if let Some(immediate_handler) = immediate_handler {
-                immediate_handler(&response);
+            if let Some(handler) = immediate_handler {
+                handler(&response);
+            }
+            if let Some(handler) = handler {
+                handler(&response);
             }
             return;
         }
@@ -1527,7 +1606,10 @@ impl EguiApp {
                 ui,
                 container,
                 &wrap_handler(
-                    wrap_handler(immediate_handler, side_effect_handler),
+                    wrap_handler(
+                        wrap_handler(immediate_side_effect_handler, immediate_handler),
+                        side_effect_handler,
+                    ),
                     handler,
                 ),
                 viewport,
