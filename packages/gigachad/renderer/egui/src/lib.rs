@@ -1042,7 +1042,21 @@ impl EguiApp {
                 relative_container = Some((egui::Rect::from_min_size(pos, size), container));
             }
             Some(Position::Absolute) => {
-                if let Some((relative_rect, ..)) = relative_container {
+                if let Some((mut relative_rect, ..)) = relative_container {
+                    relative_rect = relative_rect
+                        .with_min_x(relative_rect.min.x + container.calculated_x.unwrap())
+                        .with_min_y(relative_rect.min.y + container.calculated_y.unwrap())
+                        .with_max_x(
+                            relative_rect.min.x
+                                + container.calculated_x.unwrap()
+                                + container.calculated_width.unwrap(),
+                        )
+                        .with_max_y(
+                            relative_rect.min.y
+                                + container.calculated_y.unwrap()
+                                + container.calculated_height.unwrap(),
+                        );
+
                     ui.allocate_new_ui(
                         egui::UiBuilder::new().max_rect(relative_rect).layout(
                             egui::Layout::centered_and_justified(egui::Direction::TopDown),
