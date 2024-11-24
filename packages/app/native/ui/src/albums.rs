@@ -208,18 +208,29 @@ pub fn album_display(
                 div
                     sx-width=(size)
                     sx-height=(icon_size)
-                    sx-dir="row"
                     sx-position="absolute"
                     sx-visibility="hidden"
                     fx-hover="sx-visibility=visible"
                 {
-                    button {
+                    button
+                        sx-position="absolute"
+                        sx-bottom="5%"
+                        sx-left="5%"
+                        sx-width=(icon_size)
+                        sx-height=(icon_size)
+                    {
                         img
                             sx-width=(icon_size)
                             sx-height=(icon_size)
                             src=(public_img!("play-button-white.svg"));
                     }
-                    button {
+                    button
+                        sx-position="absolute"
+                        sx-bottom="5%"
+                        sx-right="5%"
+                        sx-width=(icon_size)
+                        sx-height=(icon_size)
+                    {
                         img
                             sx-width=(icon_size)
                             sx-height=(icon_size)
