@@ -3,7 +3,7 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    sync::{atomic::AtomicBool, Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
 use async_trait::async_trait;
@@ -284,9 +284,25 @@ enum AppImage {
     Bytes(Arc<[u8]>),
 }
 
+#[derive(Debug, Default, Clone)]
+struct ActionState {
+    handled_click: Arc<AtomicBool>,
+    handled_hover: Arc<AtomicBool>,
+}
+
+impl ActionState {
+    fn reset(&self) {
+        self.handled_click
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        self.handled_hover
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 #[derive(Clone)]
 struct EguiApp {
     ctx: Arc<RwLock<Option<egui::Context>>>,
+    state: ActionState,
     width: Arc<RwLock<Option<f32>>>,
     height: Arc<RwLock<Option<f32>>>,
     container: Arc<RwLock<ContainerElement>>,
@@ -304,7 +320,7 @@ struct EguiApp {
     on_resize: Sender<(f32, f32)>,
 }
 
-type Handler = Arc<Box<dyn Fn(&Response)>>;
+type Handler = Arc<Box<dyn Fn(&Response) -> bool>>;
 
 impl EguiApp {
     fn new(
@@ -317,6 +333,7 @@ impl EguiApp {
     ) -> Self {
         Self {
             ctx: Arc::new(RwLock::new(None)),
+            state: ActionState::default(),
             width: Arc::new(RwLock::new(None)),
             height: Arc::new(RwLock::new(None)),
             container: Arc::new(RwLock::new(ContainerElement::default())),
@@ -529,7 +546,7 @@ impl EguiApp {
         ui: &mut Ui,
         container: &ContainerElement,
         add_contents: impl FnOnce(&mut Ui) -> R,
-    ) {
+    ) -> Response {
         ui.horizontal(|ui| {
             if let Some((color, size)) = container.calculated_border_left {
                 egui::Frame::none().fill(color.into()).show(ui, |ui| {
@@ -546,14 +563,15 @@ impl EguiApp {
                     ui.set_height(container.calculated_height.unwrap_or(0.0));
                 });
             }
-        });
+        })
+        .response
     }
 
     fn render_vertical_borders<R>(
         ui: &mut Ui,
         container: &ContainerElement,
         add_contents: impl FnOnce(&mut Ui) -> R,
-    ) {
+    ) -> Response {
         ui.vertical(|ui| {
             if let Some((color, size)) = container.calculated_border_top {
                 egui::Frame::none().fill(color.into()).show(ui, |ui| {
@@ -570,14 +588,15 @@ impl EguiApp {
                     ui.set_height(size);
                 });
             }
-        });
+        })
+        .response
     }
 
-    fn render_borders<R>(
+    fn render_borders(
         ui: &mut Ui,
         container: &ContainerElement,
-        add_contents: impl FnOnce(&mut Ui) -> R,
-    ) {
+        add_contents: impl FnOnce(&mut Ui) -> Response,
+    ) -> Response {
         if container.calculated_border_left.is_some() || container.calculated_border_right.is_some()
         {
             Self::render_horizontal_borders(ui, container, |ui| {
@@ -588,13 +607,13 @@ impl EguiApp {
                 } else {
                     add_contents(ui);
                 }
-            });
+            })
         } else if container.calculated_border_top.is_some()
             || container.calculated_border_bottom.is_some()
         {
-            Self::render_vertical_borders(ui, container, add_contents);
+            Self::render_vertical_borders(ui, container, add_contents)
         } else {
-            add_contents(ui);
+            add_contents(ui)
         }
     }
 
@@ -608,7 +627,7 @@ impl EguiApp {
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &ContainerElement)>,
-    ) {
+    ) -> Response {
         if container.visibility == Some(Visibility::Hidden) {
             let visibility = self
                 .visibilities
@@ -630,7 +649,7 @@ impl EguiApp {
         }
 
         Self::render_borders(ui, container, |ui| {
-            let response = frame.inner_margin(egui::Margin {
+            frame.inner_margin(egui::Margin {
                     left: container.margin_left.unwrap_or(0.0),
                     right: container.margin_right.unwrap_or(0.0),
                     top: container.margin_top.unwrap_or(0.0),
@@ -641,6 +660,7 @@ impl EguiApp {
                     move |ui| {
                         ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
                             egui::Frame::none().show(ui, {
+                                let handler = handler.clone();
                                 move |ui| {
                                     let cursor = ui.cursor();
                                     let (pos_x, pos_y) = (cursor.left(), cursor.top());
@@ -874,12 +894,8 @@ impl EguiApp {
                             });
                         });
                     }
-                });
-
-            if let Some(handler) = handler {
-                handler(&response.response);
-            }
-        });
+                }).response
+        })
     }
 
     #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
@@ -893,8 +909,9 @@ impl EguiApp {
         rect: Option<egui::Rect>,
         mut relative_container: Option<(egui::Rect, &'a ContainerElement)>,
         vscroll: bool,
-    ) {
-        let render =
+    ) -> Response {
+        let render = {
+            let handler = handler.clone();
             move |ui: &mut Ui, relative_container: Option<(egui::Rect, &ContainerElement)>| {
                 if let Some(width) = container.calculated_width {
                     ui.set_width(width);
@@ -1030,7 +1047,8 @@ impl EguiApp {
                         }
                     }
                 }
-            };
+            }
+        };
 
         match container.position {
             Some(Position::Relative) => {
@@ -1057,21 +1075,34 @@ impl EguiApp {
                                 + container.calculated_height.unwrap(),
                         );
 
-                    ui.allocate_new_ui(
-                        egui::UiBuilder::new().max_rect(relative_rect).layout(
-                            egui::Layout::centered_and_justified(egui::Direction::TopDown),
-                        ),
-                        |ui| {
-                            render(ui, relative_container);
-                        },
-                    );
-                    return;
+                    let response = ui
+                        .allocate_new_ui(
+                            egui::UiBuilder::new().max_rect(relative_rect).layout(
+                                egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                            ),
+                            |ui| {
+                                render(ui, relative_container);
+                            },
+                        )
+                        .response;
+                    if let Some(handler) = handler {
+                        handler(&response);
+                    }
+                    return response;
                 }
             }
             Some(Position::Static) | None => {}
         }
 
-        render(ui, relative_container);
+        let response = egui::Frame::none()
+            .show(ui, |ui| render(ui, relative_container))
+            .response;
+
+        if let Some(handler) = handler {
+            handler(&response);
+        }
+
+        response
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1165,55 +1196,80 @@ impl EguiApp {
             for action in &container.style_actions {
                 match action {
                     StyleActionType::Click(action) => {
+                        let handled_click = self.state.handled_click.clone();
                         let action = action.to_owned();
                         let id = container.id;
                         let visibilities = self.visibilities.clone();
+                        let pointer = self
+                            .ctx
+                            .read()
+                            .unwrap()
+                            .clone()
+                            .unwrap()
+                            .input(|x| x.pointer.clone());
                         immediate_handler = wrap_handler(
                             Some(Arc::new(Box::new(move |response| {
-                                if response.interact(egui::Sense::click()).clicked() {
+                                if handled_click.load(std::sync::atomic::Ordering::SeqCst) {
+                                    return false;
+                                }
+                                if response.interact(egui::Sense::hover()).contains_pointer()
+                                    && pointer.primary_released()
+                                {
+                                    handled_click.store(true, std::sync::atomic::Ordering::SeqCst);
                                     match action {
                                         StyleAction::SetVisibility(visibility) => {
                                             visibilities.write().unwrap().insert(id, visibility);
                                         }
                                     }
-                                } else {
-                                    match action {
-                                        StyleAction::SetVisibility(_) => {
-                                            let contains =
-                                                { visibilities.read().unwrap().contains_key(&id) };
-                                            if contains {
-                                                visibilities.write().unwrap().remove(&id);
-                                            }
+
+                                    return false;
+                                }
+
+                                match action {
+                                    StyleAction::SetVisibility(_) => {
+                                        let contains =
+                                            { visibilities.read().unwrap().contains_key(&id) };
+                                        if contains {
+                                            visibilities.write().unwrap().remove(&id);
                                         }
                                     }
                                 }
+
+                                true
                             }))),
                             immediate_handler,
                         );
                     }
                     StyleActionType::Hover(action) => {
+                        let handled_hover = self.state.handled_hover.clone();
                         let action = action.to_owned();
                         let id = container.id;
                         let visibilities = self.visibilities.clone();
                         immediate_handler = wrap_handler(
                             Some(Arc::new(Box::new(move |response| {
-                                if response.interact(egui::Sense::hover()).contains_pointer() {
+                                if !handled_hover.load(std::sync::atomic::Ordering::SeqCst)
+                                    && response.interact(egui::Sense::hover()).contains_pointer()
+                                {
                                     match action {
                                         StyleAction::SetVisibility(visibility) => {
                                             visibilities.write().unwrap().insert(id, visibility);
                                         }
                                     }
-                                } else {
-                                    match action {
-                                        StyleAction::SetVisibility(_) => {
-                                            let contains =
-                                                { visibilities.read().unwrap().contains_key(&id) };
-                                            if contains {
-                                                visibilities.write().unwrap().remove(&id);
-                                            }
+
+                                    return false;
+                                }
+
+                                match action {
+                                    StyleAction::SetVisibility(_) => {
+                                        let contains =
+                                            { visibilities.read().unwrap().contains_key(&id) };
+                                        if contains {
+                                            visibilities.write().unwrap().remove(&id);
                                         }
                                     }
                                 }
+
+                                true
                             }))),
                             immediate_handler,
                         );
@@ -1225,31 +1281,58 @@ impl EguiApp {
 
                 match action {
                     ActionType::Click { action } => {
+                        let handled_click = self.state.handled_click.clone();
                         let action = action.to_owned();
+                        let pointer = self
+                            .ctx
+                            .read()
+                            .unwrap()
+                            .clone()
+                            .unwrap()
+                            .input(|x| x.pointer.clone());
                         immediate_handler = wrap_handler(
                             Some(Arc::new(Box::new(move |response| {
-                                if response.interact(egui::Sense::click()).clicked() {
+                                if handled_click.load(std::sync::atomic::Ordering::SeqCst) {
+                                    return false;
+                                }
+                                if response.interact(egui::Sense::hover()).contains_pointer()
+                                    && pointer.primary_released()
+                                {
+                                    handled_click.store(true, std::sync::atomic::Ordering::SeqCst);
                                     if let Err(e) = request_action.send(action.clone()) {
                                         moosicbox_assert::die_or_error!(
                                             "Failed to request action: {action} ({e:?})"
                                         );
                                     }
+
+                                    return false;
                                 }
+
+                                true
                             }))),
                             immediate_handler,
                         );
                     }
                     ActionType::Hover { action } => {
+                        let handled_hover = self.state.handled_hover.clone();
                         let action = action.to_owned();
                         immediate_handler = wrap_handler(
                             Some(Arc::new(Box::new(move |response| {
-                                if response.interact(egui::Sense::hover()).hovered() {
+                                if handled_hover.load(std::sync::atomic::Ordering::SeqCst) {
+                                    return false;
+                                }
+                                if response.interact(egui::Sense::hover()).contains_pointer() {
+                                    handled_hover.store(true, std::sync::atomic::Ordering::SeqCst);
                                     if let Err(e) = request_action.send(action.clone()) {
                                         moosicbox_assert::die_or_error!(
                                             "Failed to request action: {action} ({e:?})"
                                         );
                                     }
+
+                                    return false;
                                 }
+
+                                true
                             }))),
                             immediate_handler,
                         );
@@ -1570,31 +1653,52 @@ impl EguiApp {
                             x.cursor_icon = cursor_to_cursor_icon(cursor);
                         });
                     }
+
+                    true
                 })))
             } else {
                 match element {
                     Element::Button { .. } => {
                         let ctx = ctx.clone();
+                        let handled_hover = self.state.handled_hover.clone();
                         Some(Arc::new(Box::new(move |response| {
+                            if handled_hover.load(std::sync::atomic::Ordering::SeqCst) {
+                                return false;
+                            }
                             if response.interact(egui::Sense::hover()).hovered() {
+                                handled_hover.store(true, std::sync::atomic::Ordering::SeqCst);
                                 ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
                             }
+
+                            true
                         })))
                     }
                     Element::Anchor { href, .. } => {
                         let href = href.to_owned();
                         let sender = self.sender.clone();
                         let ctx = ctx.clone();
+                        let handled_click = self.state.handled_click.clone();
+                        let handled_hover = self.state.handled_hover.clone();
                         Some(Arc::new(Box::new(move |response| {
-                            if response.interact(egui::Sense::click()).clicked() {
+                            if !handled_click.load(std::sync::atomic::Ordering::SeqCst)
+                                && response.interact(egui::Sense::click()).clicked()
+                            {
+                                handled_click.store(true, std::sync::atomic::Ordering::SeqCst);
                                 if let Some(href) = href.clone() {
                                     if let Err(e) = sender.send(href) {
                                         log::error!("Failed to send href event: {e:?}");
                                     }
                                 }
-                            } else if response.interact(egui::Sense::hover()).hovered() {
+                            }
+
+                            if !handled_hover.load(std::sync::atomic::Ordering::SeqCst)
+                                && response.interact(egui::Sense::hover()).hovered()
+                            {
+                                handled_hover.store(true, std::sync::atomic::Ordering::SeqCst);
                                 ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
                             }
+
+                            true
                         })))
                     }
                     _ => None,
@@ -1689,6 +1793,8 @@ impl EguiApp {
     fn paint(&self, ctx: &egui::Context) {
         self.calc(ctx);
 
+        self.state.reset();
+
         let container = self.container.clone();
         let container: &ContainerElement = &container.read().unwrap();
 
@@ -1735,8 +1841,10 @@ fn wrap_handler(inner: Option<Handler>, outer: Option<Handler>) -> Option<Handle
         if let Some(outer) = outer {
             #[allow(clippy::arc_with_non_send_sync)]
             let wrapped: Handler = Arc::new(Box::new(move |response| {
-                inner(response);
-                outer(response);
+                if !inner(response) {
+                    return false;
+                }
+                outer(response)
             }));
             Some(wrapped)
         } else {
