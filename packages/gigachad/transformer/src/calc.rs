@@ -3,9 +3,9 @@ use std::sync::atomic::AtomicU16;
 use itertools::Itertools;
 
 use crate::{
-    calc_number, relative_positioned_elements, relative_positioned_elements_mut, ContainerElement,
-    Element, JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition, Number, TableIter,
-    TableIterMut,
+    absolute_positioned_elements_mut, calc_number, relative_positioned_elements,
+    relative_positioned_elements_mut, ContainerElement, Element, JustifyContent, LayoutDirection,
+    LayoutOverflow, LayoutPosition, Number, Position, TableIter, TableIterMut,
 };
 
 static SCROLLBAR_SIZE: AtomicU16 = AtomicU16::new(16);
@@ -24,25 +24,28 @@ pub trait Calc {
 
 impl Calc for Element {
     fn calc(&mut self) {
+        self.calc_inner(None);
+    }
+}
+
+impl Element {
+    fn calc_inner(&mut self, relative_size: Option<(f32, f32)>) {
         if self
             .container_element()
-            .is_some_and(|x| x.hidden == Some(true))
+            .is_some_and(ContainerElement::is_hidden)
         {
             return;
         }
 
         if let Self::Table { .. } = self {
-            self.calc_table();
+            self.calc_table(relative_size);
         } else if let Some(container) = self.container_element_mut() {
-            container.calc();
+            container.calc_inner(relative_size);
         }
     }
-}
 
-impl Element {
-    #[allow(clippy::too_many_lines)]
-    #[allow(clippy::cognitive_complexity)]
-    fn calc_table(&mut self) {
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+    fn calc_table(&mut self, relative_size: Option<(f32, f32)>) {
         fn size_cells<'a>(
             iter: impl Iterator<Item = &'a mut ContainerElement>,
             col_sizes: &mut Vec<Option<f32>>,
@@ -158,7 +161,7 @@ impl Element {
                                 x.calc_sized_element_width(container_width);
                             } else if x.calculated_width.is_none() {
                                 x.calculated_width = Some(evenly_split_size);
-                                x.calc_unsized_element_size(evenly_split_size);
+                                x.calc_unsized_element_size(relative_size, evenly_split_size);
                             }
                             x
                         });
@@ -180,7 +183,7 @@ impl Element {
                             x.calc_sized_element_width(container_width);
                         } else if x.calculated_width.is_none() {
                             x.calculated_width = Some(evenly_split_size);
-                            x.calc_unsized_element_size(evenly_split_size);
+                            x.calc_unsized_element_size(relative_size, evenly_split_size);
                         }
                         x
                     });
@@ -322,14 +325,14 @@ impl Element {
         if let Some(headings) = headings {
             for heading in headings {
                 for th in heading {
-                    th.calc();
+                    th.calc_inner(relative_size);
                 }
             }
         }
 
         for row in rows {
             for td in row {
-                td.calc();
+                td.calc_inner(relative_size);
             }
         }
     }
@@ -337,12 +340,12 @@ impl Element {
 
 impl Calc for ContainerElement {
     fn calc(&mut self) {
-        self.calc_inner();
+        self.calc_inner(None);
     }
 }
 
 impl ContainerElement {
-    fn calc_inner(&mut self) {
+    fn calc_inner(&mut self, relative_size: Option<(f32, f32)>) {
         static MAX_HANDLE_OVERFLOW: usize = 100;
 
         moosicbox_logging::debug_or_trace!(
@@ -375,6 +378,7 @@ impl ContainerElement {
         self.calc_hardsized_elements();
 
         let direction = self.direction;
+        let relative_size = self.get_relative_position().or(relative_size);
 
         let (sized_elements, unsized_elements): (Vec<_>, Vec<_>) =
             self.relative_positioned_elements_mut().partition(|x| {
@@ -385,6 +389,7 @@ impl ContainerElement {
             });
 
         let remainder = Self::calc_sized_element_sizes(
+            relative_size,
             sized_elements.into_iter(),
             direction,
             container_width,
@@ -392,6 +397,7 @@ impl ContainerElement {
         );
 
         Self::calc_unsized_element_sizes(
+            relative_size,
             unsized_elements.into_iter(),
             direction,
             container_width,
@@ -399,8 +405,22 @@ impl ContainerElement {
             remainder,
         );
 
+        if let Some((width, height)) = relative_size {
+            for element in self.absolute_positioned_elements_mut() {
+                if let Some(container) = element.container_element_mut() {
+                    if container.width.is_none() {
+                        container.calculated_width = Some(width);
+                    }
+                    if container.height.is_none() {
+                        container.calculated_height = Some(height);
+                    }
+                    container.calc_inner(relative_size);
+                }
+            }
+        }
+
         let mut attempt = 0;
-        while self.handle_overflow() {
+        while self.handle_overflow(relative_size) {
             attempt += 1;
 
             {
@@ -418,16 +438,6 @@ impl ContainerElement {
             }
 
             log::debug!("handle_overflow: attempt {}", attempt + 1);
-        }
-
-        for element in self.absolute_positioned_elements_mut() {
-            if let Some(container) = element.container_element_mut() {
-                container.calculated_x = Some(0.0);
-                container.calculated_y = Some(0.0);
-                container.calculated_width = Some(container_width);
-                container.calculated_height = Some(container_height);
-            }
-            element.calc();
         }
     }
 
@@ -448,7 +458,7 @@ impl ContainerElement {
 
     fn calc_hardsized_elements(&mut self) {
         for element in self
-            .relative_positioned_elements_mut()
+            .visible_elements_mut()
             .filter_map(|x| x.container_element_mut())
         {
             element.calc_hardsized_elements();
@@ -537,6 +547,7 @@ impl ContainerElement {
     }
 
     fn calc_sized_element_sizes<'a>(
+        relative_size: Option<(f32, f32)>,
         elements: impl Iterator<Item = &'a mut Element>,
         direction: LayoutDirection,
         container_width: f32,
@@ -555,13 +566,13 @@ impl ContainerElement {
                     container.calc_sized_element_size(direction, container_width, container_height);
             }
 
-            element.calc();
+            element.calc_inner(relative_size);
         }
 
         remainder
     }
 
-    fn calc_unsized_element_size(&mut self, remainder: f32) {
+    fn calc_unsized_element_size(&mut self, relative_size: Option<(f32, f32)>, remainder: f32) {
         let (Some(container_width), Some(container_height)) = (
             self.calculated_width_minus_padding(),
             self.calculated_height_minus_padding(),
@@ -571,6 +582,7 @@ impl ContainerElement {
                 );
         };
         Self::calc_unsized_element_sizes(
+            relative_size,
             relative_positioned_elements_mut(&mut self.elements),
             self.direction,
             container_width,
@@ -580,6 +592,7 @@ impl ContainerElement {
     }
 
     fn calc_unsized_element_sizes<'a>(
+        relative_size: Option<(f32, f32)>,
         elements: impl Iterator<Item = &'a mut Element>,
         direction: LayoutDirection,
         container_width: f32,
@@ -636,12 +649,12 @@ impl ContainerElement {
                 }
             }
 
-            element.calc();
+            element.calc_inner(relative_size);
         }
     }
 
-    #[allow(clippy::too_many_lines)]
-    fn handle_overflow(&mut self) -> bool {
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+    fn handle_overflow(&mut self, relative_size: Option<(f32, f32)>) -> bool {
         log::trace!("handle_overflow: processing self\n{self:?}");
         let mut layout_shifted = false;
 
@@ -660,13 +673,15 @@ impl ContainerElement {
         let gap_x = self.gap.as_ref().map(|x| calc_number(x, container_width));
         let gap_y = self.gap.as_ref().map(|x| calc_number(x, container_height));
 
+        let relative_size = self.get_relative_position().or(relative_size);
+
         for element in self.relative_positioned_elements_mut() {
             log::trace!("handle_overflow: processing child element\n{element}");
             // TODO:
             // need to handle non container elements that have a width/height that is the split
             // remainder of the container width/height
             if let Some(element) = element.container_element_mut() {
-                element.handle_overflow();
+                element.handle_overflow(relative_size);
                 let width = element.calculated_width_minus_padding().unwrap_or(0.0);
                 let height = element.calculated_height_minus_padding().unwrap_or(0.0);
 
@@ -774,7 +789,8 @@ impl ContainerElement {
             log::debug!("handle_overflow: layout_shifted because children were resized");
             layout_shifted = true;
         }
-        self.position_children();
+
+        self.position_children(relative_size);
 
         layout_shifted
     }
@@ -811,9 +827,23 @@ impl ContainerElement {
         increase_opt(&mut self.padding_bottom, value)
     }
 
-    #[allow(clippy::too_many_lines)]
-    #[allow(clippy::cognitive_complexity)]
-    fn position_children(&mut self) {
+    /// # Panics
+    ///
+    /// * If size is not calculated
+    #[must_use]
+    pub fn get_relative_position(&self) -> Option<(f32, f32)> {
+        if self.position == Some(Position::Relative) {
+            Some((
+                self.calculated_width.unwrap(),
+                self.calculated_height.unwrap(),
+            ))
+        } else {
+            None
+        }
+    }
+
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+    fn position_children(&mut self, relative_size: Option<(f32, f32)>) {
         log::trace!("position_children");
 
         let (Some(container_width), Some(container_height)) =
@@ -996,6 +1026,38 @@ impl ContainerElement {
                 height
             };
             max_width = if max_width > width { max_width } else { width };
+        }
+
+        for element in absolute_positioned_elements_mut(&mut self.elements)
+            .filter_map(|x| x.container_element_mut())
+        {
+            if let Some((width, height)) = relative_size {
+                if let Some(left) = &element.left {
+                    element.calculated_x = Some(calc_number(left, width));
+                }
+                if let Some(right) = &element.right {
+                    let a = calc_number(right, width);
+                    element.calculated_x = Some(width - a - element.calculated_width.unwrap());
+                }
+                if let Some(top) = &element.top {
+                    element.calculated_y = Some(calc_number(top, height));
+                }
+                if let Some(bottom) = &element.bottom {
+                    element.calculated_y = Some(
+                        height - calc_number(bottom, height) - element.calculated_height.unwrap(),
+                    );
+                }
+
+                if element.calculated_x.is_none() {
+                    element.calculated_x = Some(0.0);
+                }
+                if element.calculated_y.is_none() {
+                    element.calculated_y = Some(0.0);
+                }
+            } else {
+                element.calculated_x = Some(0.0);
+                element.calculated_y = Some(0.0);
+            }
         }
     }
 
@@ -1886,7 +1948,7 @@ mod test {
             overflow_y: LayoutOverflow::default(),
             ..Default::default()
         };
-        container.calc_inner();
+        container.calc_inner(None);
 
         assert_eq!(
             container.clone(),
@@ -2364,7 +2426,7 @@ mod test {
             overflow_y: LayoutOverflow::Auto,
             ..Default::default()
         };
-        while container.handle_overflow() {}
+        while container.handle_overflow(None) {}
         let width = container.contained_calculated_width();
         let expected = 50.0 - f32::from(get_scrollbar_size());
 
@@ -2411,7 +2473,7 @@ mod test {
             overflow_y: LayoutOverflow::Auto,
             ..Default::default()
         };
-        while container.handle_overflow() {}
+        while container.handle_overflow(None) {}
         let width = 50.0 - f32::from(get_scrollbar_size());
 
         assert_eq!(
@@ -2494,7 +2556,7 @@ mod test {
             overflow_y: LayoutOverflow::Auto,
             ..Default::default()
         };
-        while container.handle_overflow() {}
+        while container.handle_overflow(None) {}
         let width = container.contained_calculated_width();
         let expected = 25.0;
 
@@ -2545,7 +2607,7 @@ mod test {
             overflow_y: LayoutOverflow::Auto,
             ..Default::default()
         };
-        while container.handle_overflow() {}
+        while container.handle_overflow(None) {}
 
         assert_eq!(
             container.clone(),
@@ -2641,7 +2703,7 @@ mod test {
             overflow_y: LayoutOverflow::Auto,
             ..Default::default()
         };
-        while container.handle_overflow() {}
+        while container.handle_overflow(None) {}
 
         assert_eq!(
             container.clone(),
@@ -2757,7 +2819,7 @@ mod test {
             justify_content: JustifyContent::SpaceBetween,
             ..Default::default()
         };
-        while container.handle_overflow() {}
+        while container.handle_overflow(None) {}
 
         assert_eq!(
             container.clone(),
@@ -2884,7 +2946,7 @@ mod test {
             justify_content: JustifyContent::SpaceBetween,
             ..Default::default()
         };
-        while container.handle_overflow() {}
+        while container.handle_overflow(None) {}
 
         assert_eq!(
             container.clone(),
@@ -2980,7 +3042,7 @@ mod test {
         };
 
         log::debug!("First handle_overflow");
-        while container.handle_overflow() {}
+        while container.handle_overflow(None) {}
 
         container.elements.extend(vec![
             div.clone(),
@@ -2991,7 +3053,7 @@ mod test {
         ]);
 
         log::debug!("Second handle_overflow");
-        while container.handle_overflow() {}
+        while container.handle_overflow(None) {}
 
         assert_eq!(
             container.clone(),
@@ -3159,7 +3221,7 @@ mod test {
             gap: Some(Number::Integer(10)),
             ..Default::default()
         };
-        while container.handle_overflow() {}
+        while container.handle_overflow(None) {}
 
         assert_eq!(
             container.clone(),
@@ -3277,7 +3339,7 @@ mod test {
             gap: Some(Number::Integer(10)),
             ..Default::default()
         };
-        while container.handle_overflow() {}
+        while container.handle_overflow(None) {}
 
         let mut actual = container.clone();
         let expected = ContainerElement {
@@ -3340,7 +3402,7 @@ mod test {
 
         assert_eq!(actual, expected);
 
-        while actual.handle_overflow() {}
+        while actual.handle_overflow(None) {}
 
         assert_eq!(actual, expected);
     }
@@ -3397,7 +3459,7 @@ mod test {
             justify_content: JustifyContent::SpaceEvenly,
             ..Default::default()
         };
-        while container.handle_overflow() {}
+        while container.handle_overflow(None) {}
 
         assert_eq!(
             container.clone(),
@@ -3524,7 +3586,7 @@ mod test {
             justify_content: JustifyContent::SpaceEvenly,
             ..Default::default()
         };
-        while container.handle_overflow() {}
+        while container.handle_overflow(None) {}
 
         assert_eq!(
             container.clone(),
@@ -3620,7 +3682,7 @@ mod test {
         };
 
         log::debug!("First handle_overflow");
-        while container.handle_overflow() {}
+        while container.handle_overflow(None) {}
 
         container.elements.extend(vec![
             div.clone(),
@@ -3631,7 +3693,7 @@ mod test {
         ]);
 
         log::debug!("Second handle_overflow");
-        while container.handle_overflow() {}
+        while container.handle_overflow(None) {}
 
         assert_eq!(
             container.clone(),
@@ -3799,7 +3861,7 @@ mod test {
             gap: Some(Number::Integer(10)),
             ..Default::default()
         };
-        while container.handle_overflow() {}
+        while container.handle_overflow(None) {}
 
         assert_eq!(
             container.clone(),
@@ -3917,7 +3979,7 @@ mod test {
             gap: Some(Number::Integer(10)),
             ..Default::default()
         };
-        while container.handle_overflow() {}
+        while container.handle_overflow(None) {}
 
         let mut actual = container.clone();
         let expected = ContainerElement {
@@ -3980,7 +4042,7 @@ mod test {
 
         assert_eq!(actual, expected);
 
-        while actual.handle_overflow() {}
+        while actual.handle_overflow(None) {}
 
         assert_eq!(actual, expected);
     }
@@ -4527,7 +4589,7 @@ mod test {
             ..Default::default()
         };
         let mut shifted = false;
-        while container.handle_overflow() {
+        while container.handle_overflow(None) {
             shifted = true;
         }
 
@@ -4628,7 +4690,7 @@ mod test {
             ..Default::default()
         };
         let mut shifted = false;
-        while container.handle_overflow() {
+        while container.handle_overflow(None) {
             shifted = true;
         }
 
@@ -4737,7 +4799,7 @@ mod test {
             ..Default::default()
         };
         let mut shifted = false;
-        while container.handle_overflow() {
+        while container.handle_overflow(None) {
             shifted = true;
         }
 
@@ -6907,6 +6969,123 @@ mod test {
                             calculated_width: Some(100.0),
                             calculated_height: Some(50.0),
                             calculated_x: Some(0.0),
+                            calculated_y: Some(0.0),
+                            position: Some(Position::Absolute),
+                            ..Default::default()
+                        },
+                    }
+                ],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_can_calc_absolute_positioned_element_nested_on_top_of_a_relative_element_with_left_offset(
+    ) {
+        let mut container = ContainerElement {
+            elements: vec![Element::Div {
+                element: ContainerElement {
+                    elements: vec![
+                        Element::Div {
+                            element: ContainerElement::default(),
+                        },
+                        Element::Div {
+                            element: ContainerElement {
+                                left: Some(Number::Integer(30)),
+                                position: Some(Position::Absolute),
+                                ..Default::default()
+                            },
+                        },
+                    ],
+                    ..Default::default()
+                },
+            }],
+            calculated_width: Some(100.0),
+            calculated_height: Some(50.0),
+            position: Some(Position::Relative),
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![Element::Div {
+                    element: ContainerElement {
+                        elements: vec![
+                            Element::Div {
+                                element: ContainerElement {
+                                    calculated_width: Some(100.0),
+                                    calculated_height: Some(50.0),
+                                    calculated_x: Some(0.0),
+                                    calculated_y: Some(0.0),
+                                    calculated_position: Some(LayoutPosition::Default),
+                                    ..Default::default()
+                                },
+                            },
+                            Element::Div {
+                                element: ContainerElement {
+                                    left: Some(Number::Integer(30)),
+                                    calculated_width: Some(100.0),
+                                    calculated_height: Some(50.0),
+                                    calculated_x: Some(30.0),
+                                    calculated_y: Some(0.0),
+                                    position: Some(Position::Absolute),
+                                    ..Default::default()
+                                },
+                            }
+                        ],
+                        ..container.elements[0].container_element().unwrap().clone()
+                    }
+                }],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_can_calc_absolute_positioned_element_on_top_of_a_relative_element_with_left_offset() {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement::default(),
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        left: Some(Number::Integer(30)),
+                        position: Some(Position::Absolute),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(100.0),
+            calculated_height: Some(50.0),
+            position: Some(Position::Relative),
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(100.0),
+                            calculated_height: Some(50.0),
+                            calculated_x: Some(0.0),
+                            calculated_y: Some(0.0),
+                            calculated_position: Some(LayoutPosition::Default),
+                            ..Default::default()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            left: Some(Number::Integer(30)),
+                            calculated_width: Some(100.0),
+                            calculated_height: Some(50.0),
+                            calculated_x: Some(30.0),
                             calculated_y: Some(0.0),
                             position: Some(Position::Absolute),
                             ..Default::default()
