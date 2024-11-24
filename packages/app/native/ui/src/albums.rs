@@ -5,7 +5,7 @@ use moosicbox_core::sqlite::models::{ApiAlbum, ApiSource};
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_paging::Page;
 
-use crate::{formatting::TimeFormat as _, page, pre_escaped, public_img, state::State};
+use crate::{formatting::TimeFormat as _, page, pre_escaped, public_img, state::State, Action};
 
 pub fn album_cover_url(album: &ApiAlbum, width: u16, height: u16) -> String {
     if album.contains_cover {
@@ -218,6 +218,10 @@ pub fn album_display(
                         sx-left="5%"
                         sx-width=(icon_size)
                         sx-height=(icon_size)
+                        fx-click=(Action::PlayAlbum {
+                            album_id: album.album_id.clone(),
+                            api_source: album.api_source
+                        })
                     {
                         img
                             sx-width=(icon_size)
@@ -230,6 +234,10 @@ pub fn album_display(
                         sx-right="5%"
                         sx-width=(icon_size)
                         sx-height=(icon_size)
+                        fx-click=(Action::AddAlbumToQueue {
+                            album_id: album.album_id.clone(),
+                            api_source: album.api_source
+                        })
                     {
                         img
                             sx-width=(icon_size)

@@ -448,6 +448,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Action::NextTrack => {
                         log::debug!("native app action listener: NextTrack");
                     }
+                    Action::PlayAlbum { album_id, api_source } => {
+                        log::debug!("native app action listener: PlayAlbum album_id={album_id} api_source={api_source}");
+                    }
+                    Action::AddAlbumToQueue { album_id, api_source } => {
+                        log::debug!("native app action listener: AddAlbumToQueue album_id={album_id} api_source={api_source}");
+                    }
                 }
             }
         });
