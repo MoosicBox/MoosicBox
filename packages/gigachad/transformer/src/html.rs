@@ -261,6 +261,7 @@ fn parse_element(
         border_right: get_border(tag, "sx-border-right"),
         border_bottom: get_border(tag, "sx-border-bottom"),
         border_left: get_border(tag, "sx-border-left"),
+        border_radius: get_number(tag, "sx-border-radius").ok(),
         state: get_state(tag, "state"),
         hidden: get_hidden(tag),
         visibility: get_visibility(tag),
