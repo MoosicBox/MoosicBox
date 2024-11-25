@@ -158,6 +158,20 @@ impl std::fmt::Display for JustifyContent {
     }
 }
 
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub enum AlignItems {
+    Center,
+    End,
+    #[default]
+    Default,
+}
+
+impl std::fmt::Display for AlignItems {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{self:?}"))
+    }
+}
+
 #[cfg(feature = "calc")]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum LayoutPosition {
@@ -290,6 +304,7 @@ pub struct ContainerElement {
     pub overflow_x: LayoutOverflow,
     pub overflow_y: LayoutOverflow,
     pub justify_content: JustifyContent,
+    pub align_items: AlignItems,
     pub width: Option<Number>,
     pub height: Option<Number>,
     pub gap: Option<Number>,

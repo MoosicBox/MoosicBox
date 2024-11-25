@@ -7,8 +7,8 @@ use tl::{Children, HTMLTag, Node, NodeHandle, Parser, ParserOptions};
 
 use crate::{
     parse::{parse_number, GetNumberError},
-    ActionType, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, Number, Position, Route,
-    StyleAction, StyleActionType, Visibility,
+    ActionType, AlignItems, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, Number,
+    Position, Route, StyleAction, StyleActionType, Visibility,
 };
 
 impl TryFrom<String> for crate::ContainerElement {
@@ -162,6 +162,14 @@ fn get_justify_content(tag: &HTMLTag, name: &str) -> JustifyContent {
     }
 }
 
+fn get_align_items(tag: &HTMLTag, name: &str) -> AlignItems {
+    match get_tag_attr_value_lower(tag, name).as_deref() {
+        Some("center") => AlignItems::Center,
+        Some("end") => AlignItems::End,
+        _ => AlignItems::default(),
+    }
+}
+
 fn get_cursor(tag: &HTMLTag) -> Option<Cursor> {
     get_tag_attr_value_lower(tag, "sx-cursor")
         .as_deref()
@@ -269,6 +277,7 @@ fn parse_element(
         overflow_x: get_overflow(tag, "sx-overflow-x"),
         overflow_y: get_overflow(tag, "sx-overflow-y"),
         justify_content: get_justify_content(tag, "sx-justify-content"),
+        align_items: get_align_items(tag, "sx-align-items"),
         elements: parse_top_children(node.children(), parser),
         width: get_number(tag, "sx-width").ok(),
         height: get_number(tag, "sx-height").ok(),
