@@ -893,6 +893,17 @@ impl ContainerElement {
                 }
             },
             #[allow(clippy::cast_precision_loss)]
+            JustifyContent::End => match self.direction {
+                LayoutDirection::Row => {
+                    remainder_width = container_width - self.contained_calculated_width();
+                    child_horizontal_offset = remainder_width;
+                }
+                LayoutDirection::Column => {
+                    remainder_height = container_height - self.contained_calculated_height();
+                    child_vertical_offset = remainder_height;
+                }
+            },
+            #[allow(clippy::cast_precision_loss)]
             JustifyContent::SpaceBetween => match self.direction {
                 LayoutDirection::Row => {
                     remainder_width = container_width - self.contained_calculated_width();
