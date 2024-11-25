@@ -139,13 +139,7 @@ pub enum LayoutOverflow {
 
 impl std::fmt::Display for LayoutOverflow {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Auto => f.write_str("Auto"),
-            Self::Scroll => f.write_str("Scroll"),
-            Self::Show => f.write_str("Show"),
-            Self::Squash => f.write_str("Squash"),
-            Self::Wrap => f.write_str("Wrap"),
-        }
+        f.write_fmt(format_args!("{self:?}"))
     }
 }
 
@@ -159,11 +153,7 @@ pub enum JustifyContent {
 
 impl std::fmt::Display for JustifyContent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::SpaceBetween => f.write_str("SpaceBetween"),
-            Self::SpaceEvenly => f.write_str("SpaceEvenly"),
-            Self::Default => f.write_str("Default"),
-        }
+        f.write_fmt(format_args!("{self:?}"))
     }
 }
 
