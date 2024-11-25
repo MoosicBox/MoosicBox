@@ -204,20 +204,26 @@ pub fn album_display(
         html! {
             div sx-width=(size) sx-height=(size) sx-position="relative" {
                 (album_cover_img(album, size))
-                @let icon_size = size / 6;
                 div
                     sx-width=(size)
-                    sx-height=(icon_size)
+                    sx-height=(size)
                     sx-position="absolute"
                     sx-visibility="hidden"
                     fx-hover="sx-visibility=visible"
                 {
+                    @let button_size = size / 4;
+                    @let icon_size = size / 10;
                     button
+                        sx-dir="row"
                         sx-position="absolute"
                         sx-bottom="5%"
                         sx-left="5%"
-                        sx-width=(icon_size)
-                        sx-height=(icon_size)
+                        sx-width=(button_size)
+                        sx-height=(button_size)
+                        sx-justify-content="center"
+                        sx-align-items="center"
+                        sx-background="#fff"
+                        sx-border-radius="100%"
                         fx-click=(Action::PlayAlbum {
                             album_id: album.album_id.clone(),
                             api_source: album.api_source
@@ -226,14 +232,20 @@ pub fn album_display(
                         img
                             sx-width=(icon_size)
                             sx-height=(icon_size)
-                            src=(public_img!("play-button-white.svg"));
+                            src=(public_img!("play-button.svg"));
                     }
+                    @let icon_size = size / 7;
                     button
+                        sx-dir="row"
                         sx-position="absolute"
                         sx-bottom="5%"
                         sx-right="5%"
-                        sx-width=(icon_size)
-                        sx-height=(icon_size)
+                        sx-width=(button_size)
+                        sx-height=(button_size)
+                        sx-justify-content="center"
+                        sx-align-items="center"
+                        sx-background="#fff"
+                        sx-border-radius="100%"
                         fx-click=(Action::AddAlbumToQueue {
                             album_id: album.album_id.clone(),
                             api_source: album.api_source
@@ -242,7 +254,7 @@ pub fn album_display(
                         img
                             sx-width=(icon_size)
                             sx-height=(icon_size)
-                            src=(public_img!("more-options-white.svg"));
+                            src=(public_img!("more-options.svg"));
                     }
                 }
             }
