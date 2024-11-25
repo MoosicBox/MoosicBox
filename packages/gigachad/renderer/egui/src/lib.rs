@@ -1760,8 +1760,7 @@ impl EguiApp {
                             if handled_hover.load(std::sync::atomic::Ordering::SeqCst) {
                                 return false;
                             }
-                            if response.interact(egui::Sense::hover()).hovered() {
-                                handled_hover.store(true, std::sync::atomic::Ordering::SeqCst);
+                            if response.interact(egui::Sense::hover()).contains_pointer() {
                                 ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
                             }
 
@@ -1787,7 +1786,7 @@ impl EguiApp {
                             }
 
                             if !handled_hover.load(std::sync::atomic::Ordering::SeqCst)
-                                && response.interact(egui::Sense::hover()).hovered()
+                                && response.interact(egui::Sense::hover()).contains_pointer()
                             {
                                 ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
                             }
