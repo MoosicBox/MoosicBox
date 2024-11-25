@@ -129,7 +129,7 @@ pub fn player(state: &State) -> Markup {
             }
             div sx-height=(100) sx-dir="row" {
                 (player_current_album_from_state(state, 70))
-                div sx-dir="row" {
+                div sx-dir="row" sx-justify-content="center" {
                     @let size = 36;
                     button sx-width=(size) sx-height=(size) fx-click=(Action::PreviousTrack) {
                         img
@@ -145,7 +145,7 @@ pub fn player(state: &State) -> Markup {
                             src=(public_img!("next-button-white.svg"));
                     }
                 }
-                div sx-dir="row" {
+                div sx-dir="row" sx-justify-content="end" {
                     @let size = 25;
                     button sx-width=(size) sx-height=(size) {
                         img
