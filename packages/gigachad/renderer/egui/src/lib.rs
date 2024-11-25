@@ -1418,7 +1418,6 @@ impl EguiApp {
                                     return false;
                                 }
                                 if response.interact(egui::Sense::hover()).contains_pointer() {
-                                    handled_hover.store(true, std::sync::atomic::Ordering::SeqCst);
                                     if let Err(e) = request_action.send(action.clone()) {
                                         moosicbox_assert::die_or_error!(
                                             "Failed to request action: {action} ({e:?})"
@@ -1790,7 +1789,6 @@ impl EguiApp {
                             if !handled_hover.load(std::sync::atomic::Ordering::SeqCst)
                                 && response.interact(egui::Sense::hover()).hovered()
                             {
-                                handled_hover.store(true, std::sync::atomic::Ordering::SeqCst);
                                 ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
                             }
 
