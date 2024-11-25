@@ -356,6 +356,16 @@ impl ContainerElement {
             return;
         }
 
+        self.margin_left = None;
+        self.margin_right = None;
+        self.margin_top = None;
+        self.margin_bottom = None;
+
+        self.padding_left = None;
+        self.padding_right = None;
+        self.padding_top = None;
+        self.padding_bottom = None;
+
         let (Some(container_width), Some(container_height)) =
             (self.calculated_width, self.calculated_height)
         else {
@@ -866,9 +876,22 @@ impl ContainerElement {
         let rows = self.rows();
         let mut remainder_width = 0.0;
         let mut remainder_height = 0.0;
+        let mut child_horizontal_offset = 0.0;
+        let mut child_vertical_offset = 0.0;
 
         // TODO: Handle variable amount of items in rows/cols (i.e., non-uniform row/cols wrapping)
         match self.justify_content {
+            #[allow(clippy::cast_precision_loss)]
+            JustifyContent::Center => match self.direction {
+                LayoutDirection::Row => {
+                    remainder_width = container_width - self.contained_calculated_width();
+                    child_horizontal_offset = remainder_width / 2.0;
+                }
+                LayoutDirection::Column => {
+                    remainder_height = container_height - self.contained_calculated_height();
+                    child_vertical_offset = remainder_height / 2.0;
+                }
+            },
             #[allow(clippy::cast_precision_loss)]
             JustifyContent::SpaceBetween => match self.direction {
                 LayoutDirection::Row => {
@@ -931,6 +954,13 @@ impl ContainerElement {
             } else {
                 vertical_margin = Some(gap_y);
             }
+        }
+
+        if child_horizontal_offset > 0.0 {
+            self.increase_padding_left(child_horizontal_offset);
+        }
+        if child_vertical_offset > 0.0 {
+            self.increase_padding_top(child_vertical_offset);
         }
 
         for element in relative_positioned_elements_mut(&mut self.elements)
@@ -7095,6 +7125,32 @@ mod test {
                         },
                     }
                 ],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_can_calc_justify_content_center_horizontally() {
+        let mut container = ContainerElement {
+            elements: vec![Element::Div {
+                element: ContainerElement {
+                    width: Some(Number::Integer(30)),
+                    ..Default::default()
+                },
+            }],
+            calculated_width: Some(100.0),
+            calculated_height: Some(50.0),
+            direction: LayoutDirection::Row,
+            justify_content: JustifyContent::Center,
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                padding_left: Some((100.0 - 30.0) / 2.0),
                 ..container
             }
         );

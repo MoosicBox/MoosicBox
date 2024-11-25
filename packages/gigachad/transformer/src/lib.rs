@@ -145,6 +145,7 @@ impl std::fmt::Display for LayoutOverflow {
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum JustifyContent {
+    Center,
     SpaceBetween,
     SpaceEvenly,
     #[default]
