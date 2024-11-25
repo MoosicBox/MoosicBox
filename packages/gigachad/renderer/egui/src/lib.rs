@@ -15,8 +15,8 @@ use gigachad_renderer::viewport::immediate::{Pos, Viewport, ViewportListener};
 pub use gigachad_renderer::*;
 use gigachad_router::Router;
 use gigachad_transformer::{
-    calc::Calc, ActionType, ContainerElement, Cursor, Element, Input, LayoutDirection, Position,
-    Route, StyleAction, StyleActionType, TableIter, Visibility,
+    calc::Calc, ActionType, ContainerElement, Cursor, Element, Input, JustifyContent,
+    LayoutDirection, Position, Route, StyleAction, StyleActionType, TableIter, Visibility,
 };
 use itertools::Itertools;
 
@@ -642,14 +642,8 @@ impl EguiApp {
             }
         }
 
-        let mut frame = egui::Frame::none();
-
-        if let Some(background) = container.background {
-            frame = frame.fill(background.into());
-        }
-
         Self::render_borders(ui, container, |ui| {
-            frame.inner_margin(egui::Margin {
+            egui::Frame::none().inner_margin(egui::Margin {
                     left: container.margin_left.unwrap_or(0.0),
                     right: container.margin_right.unwrap_or(0.0),
                     top: container.margin_top.unwrap_or(0.0),
@@ -898,158 +892,12 @@ impl EguiApp {
         })
     }
 
-    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
-    fn render_container_contents<'a>(
-        &self,
-        ctx: &egui::Context,
+    fn render_position<'a>(
         ui: &mut Ui,
         container: &'a ContainerElement,
-        handler: Option<Handler>,
-        viewport: Option<&Viewport>,
-        rect: Option<egui::Rect>,
         mut relative_container: Option<(egui::Rect, &'a ContainerElement)>,
-        vscroll: bool,
+        inner: impl FnOnce(&mut Ui, Option<(egui::Rect, &'a ContainerElement)>) -> Response,
     ) -> Response {
-        let render = {
-            let handler = handler.clone();
-            move |ui: &mut Ui, relative_container: Option<(egui::Rect, &ContainerElement)>| {
-                if let Some(width) = container.calculated_width {
-                    ui.set_width(width);
-                }
-                if let Some(height) = container.calculated_height {
-                    ui.set_height(height);
-
-                    if vscroll {
-                        if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
-                            let rect = egui::Rect::from_pos(egui::emath::pos2(0.0, height));
-                            ui.scroll_to_rect(rect, Some(egui::Align::TOP));
-                        }
-                        if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
-                            let rect = egui::Rect::from_pos(egui::emath::pos2(0.0, -height));
-                            ui.scroll_to_rect(rect, Some(egui::Align::TOP));
-                        }
-                    }
-                }
-
-                match container.direction {
-                    LayoutDirection::Row => {
-                        let rows = container
-                            .elements
-                            .iter()
-                            .filter_map(|x| x.container_element().map(|y| (x, y)))
-                            .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
-                            .filter_map(|(x, y)| match y {
-                                gigachad_transformer::LayoutPosition::Wrap { row, .. } => {
-                                    Some((*row, x))
-                                }
-                                gigachad_transformer::LayoutPosition::Default => {
-                                    self.handle_element_side_effects(None, x, viewport, true);
-                                    None
-                                }
-                            })
-                            .chunk_by(|(row, _element)| *row);
-
-                        let mut rows = rows
-                            .into_iter()
-                            .map(|(_row, y)| {
-                                y.into_iter().map(|(_, element)| element).collect_vec()
-                            })
-                            .peekable();
-
-                        if rows.peek().is_some() {
-                            ui.vertical(move |ui| {
-                                for row in rows {
-                                    let handler = handler.clone();
-                                    ui.horizontal(move |ui| {
-                                        self.render_elements_ref(
-                                            ctx,
-                                            ui,
-                                            &row,
-                                            &handler,
-                                            viewport,
-                                            rect,
-                                            relative_container,
-                                            !vscroll && rect.is_some(),
-                                        );
-                                    });
-                                }
-                            });
-                        } else {
-                            ui.horizontal(move |ui| {
-                                self.render_elements(
-                                    ctx,
-                                    ui,
-                                    &container.elements,
-                                    &handler,
-                                    viewport,
-                                    rect,
-                                    relative_container,
-                                    !vscroll && rect.is_some(),
-                                );
-                            });
-                        }
-                    }
-                    LayoutDirection::Column => {
-                        let cols = container
-                            .elements
-                            .iter()
-                            .filter_map(|x| x.container_element().map(|y| (x, y)))
-                            .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
-                            .filter_map(|(x, y)| match y {
-                                gigachad_transformer::LayoutPosition::Wrap { col, .. } => {
-                                    Some((*col, x))
-                                }
-                                gigachad_transformer::LayoutPosition::Default => {
-                                    self.handle_element_side_effects(None, x, viewport, true);
-                                    None
-                                }
-                            })
-                            .chunk_by(|(col, _element)| *col);
-
-                        let mut cols = cols
-                            .into_iter()
-                            .map(|(_row, y)| {
-                                y.into_iter().map(|(_, element)| element).collect_vec()
-                            })
-                            .peekable();
-
-                        if cols.peek().is_some() {
-                            ui.horizontal(move |ui| {
-                                for col in cols {
-                                    let handler = handler.clone();
-                                    ui.vertical(move |ui| {
-                                        self.render_elements_ref(
-                                            ctx,
-                                            ui,
-                                            &col,
-                                            &handler,
-                                            viewport,
-                                            rect,
-                                            relative_container,
-                                            !vscroll && rect.is_some(),
-                                        );
-                                    });
-                                }
-                            });
-                        } else {
-                            ui.vertical(move |ui| {
-                                self.render_elements(
-                                    ctx,
-                                    ui,
-                                    &container.elements,
-                                    &handler,
-                                    viewport,
-                                    rect,
-                                    relative_container,
-                                    !vscroll && rect.is_some(),
-                                );
-                            });
-                        }
-                    }
-                }
-            }
-        };
-
         match container.position {
             Some(Position::Relative) => {
                 let pos = ui.cursor().left_top();
@@ -1075,34 +923,258 @@ impl EguiApp {
                                 + container.calculated_height.unwrap(),
                         );
 
-                    let response = ui
+                    return ui
                         .allocate_new_ui(
                             egui::UiBuilder::new().max_rect(relative_rect).layout(
                                 egui::Layout::centered_and_justified(egui::Direction::TopDown),
                             ),
-                            |ui| {
-                                render(ui, relative_container);
-                            },
+                            |ui| inner(ui, relative_container),
                         )
                         .response;
-                    if let Some(handler) = handler {
-                        handler(&response);
-                    }
-                    return response;
                 }
             }
             Some(Position::Static) | None => {}
         }
 
-        let response = egui::Frame::none()
-            .show(ui, |ui| render(ui, relative_container))
-            .response;
+        inner(ui, relative_container)
+    }
 
-        if let Some(handler) = handler {
-            handler(&response);
+    #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
+    fn render_direction<'a>(
+        &self,
+        ctx: &egui::Context,
+        ui: &mut Ui,
+        container: &'a ContainerElement,
+        handler: Option<Handler>,
+        viewport: Option<&Viewport>,
+        rect: Option<egui::Rect>,
+        relative_container: Option<(egui::Rect, &'a ContainerElement)>,
+        vscroll: bool,
+    ) -> Response {
+        match container.direction {
+            LayoutDirection::Row => {
+                let rows = container
+                    .elements
+                    .iter()
+                    .filter_map(|x| x.container_element().map(|y| (x, y)))
+                    .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
+                    .filter_map(|(x, y)| match y {
+                        gigachad_transformer::LayoutPosition::Wrap { row, .. } => Some((*row, x)),
+                        gigachad_transformer::LayoutPosition::Default => {
+                            self.handle_element_side_effects(None, x, viewport, true);
+                            None
+                        }
+                    })
+                    .chunk_by(|(row, _element)| *row);
+
+                let mut rows = rows
+                    .into_iter()
+                    .map(|(_row, y)| y.into_iter().map(|(_, element)| element).collect_vec())
+                    .peekable();
+
+                if rows.peek().is_some() {
+                    ui.vertical(move |ui| {
+                        for row in rows {
+                            let handler = handler.clone();
+                            ui.horizontal(move |ui| {
+                                self.render_elements_ref(
+                                    ctx,
+                                    ui,
+                                    &row,
+                                    &handler,
+                                    viewport,
+                                    rect,
+                                    relative_container,
+                                    !vscroll && rect.is_some(),
+                                );
+                            });
+                        }
+                    })
+                    .response
+                } else {
+                    ui.horizontal(move |ui| {
+                        self.render_elements(
+                            ctx,
+                            ui,
+                            &container.elements,
+                            &handler,
+                            viewport,
+                            rect,
+                            relative_container,
+                            !vscroll && rect.is_some(),
+                        );
+                    })
+                    .response
+                }
+            }
+            LayoutDirection::Column => {
+                let cols = container
+                    .elements
+                    .iter()
+                    .filter_map(|x| x.container_element().map(|y| (x, y)))
+                    .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
+                    .filter_map(|(x, y)| match y {
+                        gigachad_transformer::LayoutPosition::Wrap { col, .. } => Some((*col, x)),
+                        gigachad_transformer::LayoutPosition::Default => {
+                            self.handle_element_side_effects(None, x, viewport, true);
+                            None
+                        }
+                    })
+                    .chunk_by(|(col, _element)| *col);
+
+                let mut cols = cols
+                    .into_iter()
+                    .map(|(_row, y)| y.into_iter().map(|(_, element)| element).collect_vec())
+                    .peekable();
+
+                if cols.peek().is_some() {
+                    ui.horizontal(move |ui| {
+                        for col in cols {
+                            let handler = handler.clone();
+                            ui.vertical(move |ui| {
+                                self.render_elements_ref(
+                                    ctx,
+                                    ui,
+                                    &col,
+                                    &handler,
+                                    viewport,
+                                    rect,
+                                    relative_container,
+                                    !vscroll && rect.is_some(),
+                                );
+                            });
+                        }
+                    })
+                    .response
+                } else {
+                    ui.vertical(move |ui| {
+                        self.render_elements(
+                            ctx,
+                            ui,
+                            &container.elements,
+                            &handler,
+                            viewport,
+                            rect,
+                            relative_container,
+                            !vscroll && rect.is_some(),
+                        );
+                    })
+                    .response
+                }
+            }
+        }
+    }
+
+    fn render_layout<'a>(
+        ui: &mut Ui,
+        container: &'a ContainerElement,
+        relative_container: Option<(egui::Rect, &'a ContainerElement)>,
+        inner: impl FnOnce(&mut Ui, Option<(egui::Rect, &'a ContainerElement)>) -> Response,
+    ) -> Response {
+        if container.justify_content == JustifyContent::Center {
+            return ui
+                .allocate_new_ui(
+                    egui::UiBuilder::new().layout(egui::Layout::centered_and_justified(
+                        egui::Direction::TopDown,
+                    )),
+                    |ui| {
+                        egui::Frame::none().show(ui, |ui| {
+                            ui.set_width(container.contained_calculated_width());
+                            ui.set_height(container.contained_calculated_height());
+
+                            inner(ui, relative_container)
+                        })
+                    },
+                )
+                .response;
         }
 
-        response
+        inner(ui, relative_container)
+    }
+
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+    fn render_container_contents<'a>(
+        &self,
+        ctx: &egui::Context,
+        ui: &mut Ui,
+        container: &'a ContainerElement,
+        handler: Option<Handler>,
+        viewport: Option<&Viewport>,
+        rect: Option<egui::Rect>,
+        relative_container: Option<(egui::Rect, &'a ContainerElement)>,
+        vscroll: bool,
+    ) -> Response {
+        Self::render_position(
+            ui,
+            container,
+            relative_container,
+            |ui, relative_container| {
+                let mut frame = egui::Frame::none();
+
+                if let Some(background) = container.background {
+                    frame = frame.fill(background.into());
+                }
+                if let Some(radius) = container.calculated_border_radius {
+                    frame = frame.rounding(egui::Rounding {
+                        nw: radius,
+                        ne: radius,
+                        sw: radius,
+                        se: radius,
+                    });
+                }
+
+                let response = frame
+                    .show(ui, {
+                        let handler = handler.clone();
+                        |ui| {
+                            if let Some(width) = container.calculated_width {
+                                ui.set_width(width);
+                            }
+                            if let Some(height) = container.calculated_height {
+                                ui.set_height(height);
+
+                                if vscroll {
+                                    if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
+                                        let rect =
+                                            egui::Rect::from_pos(egui::emath::pos2(0.0, height));
+                                        ui.scroll_to_rect(rect, Some(egui::Align::TOP));
+                                    }
+                                    if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
+                                        let rect =
+                                            egui::Rect::from_pos(egui::emath::pos2(0.0, -height));
+                                        ui.scroll_to_rect(rect, Some(egui::Align::TOP));
+                                    }
+                                }
+                            }
+
+                            Self::render_layout(
+                                ui,
+                                container,
+                                relative_container,
+                                move |ui, relative_container| {
+                                    self.render_direction(
+                                        ctx,
+                                        ui,
+                                        container,
+                                        handler,
+                                        viewport,
+                                        rect,
+                                        relative_container,
+                                        vscroll,
+                                    )
+                                },
+                            )
+                        }
+                    })
+                    .response;
+
+                if let Some(handler) = handler {
+                    handler(&response);
+                }
+
+                response
+            },
+        )
     }
 
     #[allow(clippy::too_many_arguments)]
