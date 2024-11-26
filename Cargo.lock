@@ -5953,7 +5953,6 @@ dependencies = [
  "moosicbox_core",
  "moosicbox_env_utils",
  "moosicbox_logging",
- "moosicbox_menu_models",
  "moosicbox_music_api",
  "moosicbox_paging",
  "moosicbox_player",

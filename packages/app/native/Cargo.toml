@@ -47,9 +47,6 @@ moosicbox_env_utils = { version = "0.1.0", path = "../../env_utils", default-fea
 moosicbox_logging = { version = "0.1.0", path = "../../logging", default-features = false, features = [
     "free_log",
 ] }
-moosicbox_menu_models = { version = "0.1.0", path = "../../menu/models", default-features = false, features = [
-    "api",
-] }
 moosicbox_music_api = { version = "0.1.0", path = "../../music_api", default-features = false }
 moosicbox_paging = { version = "0.1.0", path = "../../paging", default-features = false }
 moosicbox_player = { version = "0.1.0", path = "../../player", default-features = false }
@@ -115,20 +112,17 @@ qobuz = [
     "moosicbox_app_native_ui/qobuz",
     "moosicbox_app_state/qobuz",
     "moosicbox_core/qobuz",
-    "moosicbox_menu_models/qobuz",
     "moosicbox_session_models/qobuz",
 ]
 tidal = [
     "moosicbox_app_native_ui/tidal",
     "moosicbox_app_state/tidal",
     "moosicbox_core/tidal",
-    "moosicbox_menu_models/tidal",
     "moosicbox_session_models/tidal",
 ]
 yt = [
     "moosicbox_app_native_ui/yt",
     "moosicbox_app_state/yt",
     "moosicbox_core/yt",
-    "moosicbox_menu_models/yt",
     "moosicbox_session_models/yt",
 ]
