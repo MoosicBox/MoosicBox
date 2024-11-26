@@ -20,6 +20,32 @@ pub struct ApiAlbumVersion {
     pub source: TrackApiSource,
 }
 
+impl From<ApiAlbumVersion> for AlbumVersion {
+    fn from(value: ApiAlbumVersion) -> Self {
+        Self {
+            tracks: value.tracks.into_iter().map(Into::into).collect(),
+            format: value.format,
+            bit_depth: value.bit_depth,
+            sample_rate: value.sample_rate,
+            channels: value.channels,
+            source: value.source,
+        }
+    }
+}
+
+impl From<AlbumVersion> for ApiAlbumVersion {
+    fn from(value: AlbumVersion) -> Self {
+        Self {
+            tracks: value.tracks.into_iter().map(Into::into).collect(),
+            format: value.format,
+            bit_depth: value.bit_depth,
+            sample_rate: value.sample_rate,
+            channels: value.channels,
+            source: value.source,
+        }
+    }
+}
+
 impl ToApi<ApiAlbumVersion> for AlbumVersion {
     fn to_api(self) -> ApiAlbumVersion {
         ApiAlbumVersion {
