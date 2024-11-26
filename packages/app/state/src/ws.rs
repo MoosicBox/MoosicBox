@@ -273,27 +273,30 @@ impl AppState {
                 match &message {
                     InboundPayload::UpdateSession(payload) => {
                         state
-                            .handle_playback_update(&payload.payload.clone().into())
+                            .handle_playback_update(&payload.payload.clone().into(), true)
                             .await?;
                     }
                     InboundPayload::SetSeek(payload) => {
                         #[allow(clippy::cast_precision_loss)]
                         state
-                            .handle_playback_update(&ApiUpdateSession {
-                                session_id: payload.payload.session_id,
-                                profile: payload.payload.profile.clone(),
-                                playback_target: payload.payload.playback_target.clone(),
-                                play: None,
-                                stop: None,
-                                name: None,
-                                active: None,
-                                playing: None,
-                                position: None,
-                                seek: Some(payload.payload.seek as f64),
-                                volume: None,
-                                playlist: None,
-                                quality: None,
-                            })
+                            .handle_playback_update(
+                                &ApiUpdateSession {
+                                    session_id: payload.payload.session_id,
+                                    profile: payload.payload.profile.clone(),
+                                    playback_target: payload.payload.playback_target.clone(),
+                                    play: None,
+                                    stop: None,
+                                    name: None,
+                                    active: None,
+                                    playing: None,
+                                    position: None,
+                                    seek: Some(payload.payload.seek as f64),
+                                    volume: None,
+                                    playlist: None,
+                                    quality: None,
+                                },
+                                true,
+                            )
                             .await?;
                     }
                     _ => {}
@@ -332,26 +335,29 @@ impl AppState {
             async move {
                 match &message {
                     OutboundPayload::SessionUpdated(payload) => {
-                        state.handle_playback_update(&payload.payload).await?;
+                        state.handle_playback_update(&payload.payload, true).await?;
                     }
                     OutboundPayload::SetSeek(payload) => {
                         #[allow(clippy::cast_precision_loss)]
                         state
-                            .handle_playback_update(&ApiUpdateSession {
-                                session_id: payload.payload.session_id,
-                                profile: payload.payload.profile.clone(),
-                                playback_target: payload.payload.playback_target.clone(),
-                                play: None,
-                                stop: None,
-                                name: None,
-                                active: None,
-                                playing: None,
-                                position: None,
-                                seek: Some(payload.payload.seek as f64),
-                                volume: None,
-                                playlist: None,
-                                quality: None,
-                            })
+                            .handle_playback_update(
+                                &ApiUpdateSession {
+                                    session_id: payload.payload.session_id,
+                                    profile: payload.payload.profile.clone(),
+                                    playback_target: payload.payload.playback_target.clone(),
+                                    play: None,
+                                    stop: None,
+                                    name: None,
+                                    active: None,
+                                    playing: None,
+                                    position: None,
+                                    seek: Some(payload.payload.seek as f64),
+                                    volume: None,
+                                    playlist: None,
+                                    quality: None,
+                                },
+                                true,
+                            )
                             .await?;
                     }
                     OutboundPayload::ConnectionId(payload) => {
@@ -531,11 +537,14 @@ impl AppState {
     pub async fn handle_playback_update(
         &self,
         update: &ApiUpdateSession,
+        trigger_events: bool,
     ) -> Result<(), AppStateError> {
         log::debug!("handle_playback_update: {update:?}");
 
-        for listener in &self.on_before_handle_playback_update_listeners {
-            listener(update).await;
+        if trigger_events {
+            for listener in &self.on_before_handle_playback_update_listeners {
+                listener(update).await;
+            }
         }
 
         {
@@ -616,8 +625,10 @@ impl AppState {
                 .await?;
         }
 
-        for listener in &self.on_after_handle_playback_update_listeners {
-            listener(update).await;
+        if trigger_events {
+            for listener in &self.on_after_handle_playback_update_listeners {
+                listener(update).await;
+            }
         }
 
         Ok(())

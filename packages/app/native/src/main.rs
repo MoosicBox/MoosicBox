@@ -17,15 +17,16 @@ use moosicbox_app_native_lib::{
     router::{ContainerElement, RouteRequest, Router},
 };
 use moosicbox_app_native_ui::{state, Action};
+use moosicbox_app_state::AppStateError;
 use moosicbox_core::sqlite::models::{AlbumType, ApiAlbum, ApiArtist, ApiSource};
 use moosicbox_env_utils::{default_env_usize, option_env_i32, option_env_u16};
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_paging::Page;
 use moosicbox_player::Playback;
 use moosicbox_session_models::{
-    ApiSession, ApiUpdateSession, UpdateSession, UpdateSessionPlaylist,
+    ApiPlaybackTarget, ApiSession, ApiUpdateSession, ApiUpdateSessionPlaylist, UpdateSession,
 };
-use moosicbox_ws::models::OutboundPayload;
+use moosicbox_ws::models::{InboundPayload, UpdateSessionPayload};
 use thiserror::Error;
 use tokio::sync::RwLock;
 
@@ -34,7 +35,6 @@ mod visualization;
 static STATE: LazyLock<moosicbox_app_state::AppState> = LazyLock::new(|| {
     moosicbox_app_state::AppState::default()
         .with_on_current_sessions_updated_listener(current_sessions_updated)
-        .with_on_after_handle_ws_message_listener(handle_ws_message)
         .with_on_after_handle_playback_update_listener(handle_playback_update)
 });
 
@@ -95,10 +95,10 @@ async fn set_current_session(session: ApiSession) {
         .await
         .replace(session.session_id);
 
-    let update = UpdateSession {
+    let update = ApiUpdateSession {
         session_id: session.session_id,
         profile: STATE.profile.read().await.clone().unwrap(),
-        playback_target: moosicbox_app_state::PlaybackTarget::AudioZone { audio_zone_id: 0 },
+        playback_target: ApiPlaybackTarget::AudioZone { audio_zone_id: 0 },
         play: None,
         stop: None,
         name: Some(session.name.clone()),
@@ -107,7 +107,7 @@ async fn set_current_session(session: ApiSession) {
         position: session.position,
         seek: session.seek,
         volume: session.volume,
-        playlist: Some(UpdateSessionPlaylist {
+        playlist: Some(ApiUpdateSessionPlaylist {
             session_playlist_id: session.playlist.session_playlist_id,
             tracks: session
                 .playlist
@@ -139,57 +139,34 @@ fn on_playback_event(update: &UpdateSession, _current: &Playback) {
 
     moosicbox_task::spawn(
         "moosicbox_app: handle_playback_event",
-        handle_playback_event(update.to_owned()),
+        handle_playback_update(update.to_owned().into()),
     );
-}
-
-async fn handle_ws_message(message: OutboundPayload) {
-    moosicbox_logging::debug_or_trace!(
-        ("handle_ws_message"),
-        ("handle_ws_message: message={message:?}")
-    );
-
-    if let OutboundPayload::SessionUpdated(payload) = &message {
-        handle_playback_event(payload.payload.clone().into()).await;
-    }
-}
-
-async fn handle_playback_event(update: UpdateSession) {
-    moosicbox_logging::debug_or_trace!(
-        ("handle_playback_event"),
-        ("handle_playback_event: update={update:?}")
-    );
-
-    let session = {
-        STATE
-            .current_sessions
-            .read()
-            .await
-            .iter()
-            .find(|x| x.session_id == update.session_id)
-            .cloned()
-    };
-
-    if let Some(session) = session {
-        for (id, markup) in moosicbox_app_native_ui::session_updated(&update, &session) {
-            let view = PartialView {
-                target: id,
-                container: markup.try_into().unwrap(),
-            };
-            let response = RENDERER.get().unwrap().write().await.render_partial(view);
-            if let Err(e) = response {
-                log::error!("Failed to render_partial: {e:?}");
-            }
-        }
-    } else {
-        log::debug!("handle_playback_event: no session");
-    }
 }
 
 async fn handle_playback_update(update: ApiUpdateSession) {
     moosicbox_logging::debug_or_trace!(
         ("handle_playback_update"),
         ("handle_playback_update: update={update:?}")
+    );
+
+    moosicbox_task::spawn(
+        "moosicbox_app: handle_playback_update: render partials",
+        async move {
+            if let Some(session) = STATE.get_current_session().await {
+                for (id, markup) in moosicbox_app_native_ui::session_updated(&update, &session) {
+                    let view = PartialView {
+                        target: id,
+                        container: markup.try_into().unwrap(),
+                    };
+                    let response = RENDERER.get().unwrap().write().await.render_partial(view);
+                    if let Err(e) = response {
+                        log::error!("Failed to render_partial: {e:?}");
+                    }
+                }
+            } else {
+                log::debug!("handle_playback_update: no session");
+            }
+        },
     );
 
     visualization::check_visualization_update().await;
@@ -438,23 +415,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut runner = runner_runtime.block_on(async move {
         moosicbox_task::spawn("native app action listener", async move {
             while let Ok(action) = action_rx.recv_async().await {
-                match action {
-                    Action::TogglePlayback => {
-                        log::debug!("native app action listener: TogglePlayback");
-                    }
-                    Action::PreviousTrack => {
-                        log::debug!("native app action listener: PreviousTrack");
-                    }
-                    Action::NextTrack => {
-                        log::debug!("native app action listener: NextTrack");
-                    }
-                    Action::PlayAlbum { album_id, api_source } => {
-                        log::debug!("native app action listener: PlayAlbum album_id={album_id} api_source={api_source}");
-                    }
-                    Action::AddAlbumToQueue { album_id, api_source } => {
-                        log::debug!("native app action listener: AddAlbumToQueue album_id={album_id} api_source={api_source}");
-                    }
-                }
+                if let Err(e) = handle_action(action).await {
+                    log::error!("Failed to handle action: {e:?}");
+                };
             }
         });
 
@@ -535,6 +498,187 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     runner.run().unwrap();
 
     Ok(())
+}
+
+#[allow(clippy::too_many_lines)]
+async fn handle_action(action: Action) -> Result<(), AppStateError> {
+    match action {
+        Action::TogglePlayback
+        | Action::PreviousTrack
+        | Action::NextTrack
+        | Action::PlayAlbum { .. }
+        | Action::AddAlbumToQueue { .. } => {
+            let Some(session) = STATE.get_current_session().await else {
+                log::debug!("handle_action: no current session");
+                return Ok(());
+            };
+            let Some(profile) = STATE.profile.read().await.clone() else {
+                log::debug!("handle_action: no current session");
+                return Ok(());
+            };
+
+            let playback_target =
+                { STATE.current_playback_target.read().await.clone() }.or(session.playback_target);
+
+            let Some(playback_target) = playback_target else {
+                log::debug!("handle_action: no playback_target");
+                return Ok(());
+            };
+
+            match action {
+                Action::TogglePlayback => {
+                    log::debug!("handle_action: TogglePlayback");
+                    STATE
+                        .queue_ws_message(
+                            InboundPayload::UpdateSession(UpdateSessionPayload {
+                                payload: UpdateSession {
+                                    session_id: session.session_id,
+                                    profile,
+                                    playback_target,
+                                    play: None,
+                                    stop: None,
+                                    name: None,
+                                    active: None,
+                                    playing: Some(!session.playing),
+                                    position: None,
+                                    seek: None,
+                                    volume: None,
+                                    playlist: None,
+                                    quality: None,
+                                },
+                            }),
+                            true,
+                        )
+                        .await
+                }
+                Action::PreviousTrack => {
+                    log::debug!("handle_action: PreviousTrack");
+                    if let Some(position) = session.position {
+                        if position == 0 {
+                            log::debug!("handle_action: already at first track");
+                            return Ok(());
+                        }
+
+                        STATE
+                            .queue_ws_message(
+                                InboundPayload::UpdateSession(UpdateSessionPayload {
+                                    payload: UpdateSession {
+                                        session_id: session.session_id,
+                                        profile,
+                                        playback_target,
+                                        play: None,
+                                        stop: None,
+                                        name: None,
+                                        active: None,
+                                        playing: None,
+                                        position: Some(position - 1),
+                                        seek: None,
+                                        volume: None,
+                                        playlist: None,
+                                        quality: None,
+                                    },
+                                }),
+                                true,
+                            )
+                            .await
+                    } else {
+                        Ok(())
+                    }
+                }
+                Action::NextTrack => {
+                    log::debug!("handle_action: NextTrack");
+                    if let Some(position) = session.position {
+                        if usize::from(position) + 1 >= session.playlist.tracks.len() {
+                            log::debug!("handle_action: already at last track");
+                            return Ok(());
+                        }
+                        STATE
+                            .queue_ws_message(
+                                InboundPayload::UpdateSession(UpdateSessionPayload {
+                                    payload: UpdateSession {
+                                        session_id: session.session_id,
+                                        profile,
+                                        playback_target,
+                                        play: None,
+                                        stop: None,
+                                        name: None,
+                                        active: None,
+                                        playing: None,
+                                        position: Some(position + 1),
+                                        seek: None,
+                                        volume: None,
+                                        playlist: None,
+                                        quality: None,
+                                    },
+                                }),
+                                true,
+                            )
+                            .await
+                    } else {
+                        Ok(())
+                    }
+                }
+                Action::PlayAlbum {
+                    album_id,
+                    api_source,
+                } => {
+                    log::debug!(
+                        "handle_action: PlayAlbum album_id={album_id} api_source={api_source}"
+                    );
+                    STATE
+                        .queue_ws_message(
+                            InboundPayload::UpdateSession(UpdateSessionPayload {
+                                payload: UpdateSession {
+                                    session_id: session.session_id,
+                                    profile,
+                                    playback_target,
+                                    play: None,
+                                    stop: None,
+                                    name: None,
+                                    active: None,
+                                    playing: None,
+                                    position: None,
+                                    seek: None,
+                                    volume: None,
+                                    playlist: None,
+                                    quality: None,
+                                },
+                            }),
+                            true,
+                        )
+                        .await
+                }
+                Action::AddAlbumToQueue {
+                    album_id,
+                    api_source,
+                } => {
+                    log::debug!("handle_action: AddAlbumToQueue album_id={album_id} api_source={api_source}");
+                    STATE
+                        .queue_ws_message(
+                            InboundPayload::UpdateSession(UpdateSessionPayload {
+                                payload: UpdateSession {
+                                    session_id: session.session_id,
+                                    profile,
+                                    playback_target,
+                                    play: None,
+                                    stop: None,
+                                    name: None,
+                                    active: None,
+                                    playing: None,
+                                    position: None,
+                                    seek: None,
+                                    volume: None,
+                                    playlist: None,
+                                    quality: None,
+                                },
+                            }),
+                            true,
+                        )
+                        .await
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Error)]

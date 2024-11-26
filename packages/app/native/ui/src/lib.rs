@@ -11,7 +11,7 @@ pub mod state;
 use albums::album_cover_img;
 use maud::{html, Markup};
 use moosicbox_core::sqlite::models::{ApiSource, ApiTrack, Id};
-use moosicbox_session_models::{ApiSession, UpdateSession};
+use moosicbox_session_models::{ApiSession, ApiUpdateSession};
 use serde::{Deserialize, Serialize};
 use state::State;
 
@@ -240,16 +240,18 @@ fn player_current_album_from_state(state: &State, size: u16) -> Markup {
 }
 
 #[must_use]
-pub fn session_updated(update: &UpdateSession, session: &ApiSession) -> Vec<(String, Markup)> {
+pub fn session_updated(update: &ApiUpdateSession, session: &ApiSession) -> Vec<(String, Markup)> {
     let mut partials = vec![];
 
     if update.position.is_some() || update.playlist.is_some() {
+        log::debug!("session_updated: position or playlist updated");
         let track: Option<&ApiTrack> = session
             .playlist
             .tracks
             .get(session.position.unwrap_or(0) as usize);
 
         if let Some(track) = track {
+            log::debug!("session_updated: rendering current playing");
             partials.push((
                 "player-current-playing".to_string(),
                 player_current_album(track, CURRENT_ALBUM_SIZE),
@@ -257,6 +259,7 @@ pub fn session_updated(update: &UpdateSession, session: &ApiSession) -> Vec<(Str
         }
     }
     if let Some(playing) = update.playing {
+        log::debug!("session_updated: rendering play button");
         partials.push((
             "player-play-button".to_string(),
             player_play_button(playing),
