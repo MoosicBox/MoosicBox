@@ -3,7 +3,7 @@
 
 use async_trait::async_trait;
 use moosicbox_core::{
-    sqlite::models::{Album, AlbumType, ApiSource, Artist, Id, Track},
+    sqlite::models::{Album, AlbumType, ApiAlbum, ApiSource, Artist, Id, Track},
     types::PlaybackQuality,
 };
 use moosicbox_music_api::{
@@ -94,8 +94,39 @@ impl MusicApi for RemoteLibraryMusicApi {
         unimplemented!("Fetching albums is not implemented")
     }
 
-    async fn album(&self, _album_id: &Id) -> Result<Option<Album>, AlbumError> {
-        unimplemented!("Fetching album is not implemented")
+    async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError> {
+        let request = self
+            .client
+            .request(
+                reqwest::Method::GET,
+                format!(
+                    "{host}/menu/album?albumId={album_id}&source={source}",
+                    host = self.host,
+                    source = self.api_source
+                ),
+            )
+            .header("moosicbox-profile", &self.profile);
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| AlbumError::Other(Box::new(e)))?;
+
+        if !response.status().is_success() {
+            if response.status() == 404 {
+                return Ok(None);
+            }
+            return Err(AlbumError::Other(Box::new(RequestError::Unsuccessful(
+                format!("Status {}", response.status()),
+            ))));
+        }
+
+        let value: ApiAlbum = response
+            .json()
+            .await
+            .map_err(|e| AlbumError::Other(Box::new(e)))?;
+
+        Ok(Some(value.into()))
     }
 
     async fn artist_albums(
