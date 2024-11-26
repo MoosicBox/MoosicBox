@@ -7,6 +7,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::{
+    collections::HashMap,
     num::ParseIntError,
     sync::{Arc, LazyLock, OnceLock},
 };
@@ -20,11 +21,13 @@ use moosicbox_app_native_ui::{state, Action};
 use moosicbox_app_state::AppStateError;
 use moosicbox_core::sqlite::models::{AlbumType, ApiAlbum, ApiArtist, ApiSource};
 use moosicbox_env_utils::{default_env_usize, option_env_i32, option_env_u16};
-use moosicbox_menu_models::api::ApiAlbumVersion;
+use moosicbox_music_api::{profiles::PROFILES, MusicApi, SourceToMusicApi};
 use moosicbox_paging::Page;
 use moosicbox_player::Playback;
+use moosicbox_remote_library::RemoteLibraryMusicApi;
 use moosicbox_session_models::{
     ApiPlaybackTarget, ApiSession, ApiUpdateSession, ApiUpdateSessionPlaylist, UpdateSession,
+    UpdateSessionPlaylist,
 };
 use moosicbox_ws::models::{InboundPayload, UpdateSessionPayload};
 use thiserror::Error;
@@ -172,6 +175,8 @@ async fn handle_playback_update(update: ApiUpdateSession) {
     visualization::check_visualization_update().await;
 }
 
+static PROFILE: &str = "master";
+
 #[allow(clippy::too_many_lines)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     moosicbox_logging::init(None)?;
@@ -187,6 +192,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build()
         .unwrap();
 
+    let mut apis_map: HashMap<ApiSource, Arc<Box<dyn MusicApi>>> = HashMap::new();
+
+    for api_source in ApiSource::all() {
+        apis_map.insert(
+            *api_source,
+            Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
+                RemoteLibraryMusicApi::new(
+                    std::env::var("MOOSICBOX_HOST")
+                        .unwrap_or_else(|_| "http://localhost:8500".to_string()),
+                    *api_source,
+                    PROFILE.to_string(),
+                ),
+            ))),
+        );
+    }
+
+    PROFILES.add(PROFILE.to_string(), Arc::new(apis_map));
+
     let runtime = Arc::new(runtime);
 
     let router = Router::new()
@@ -201,44 +224,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .with_route_result("/albums", |req| async move {
             Ok::<_, Box<dyn std::error::Error>>(if let Some(album_id) = req.query.get("albumId") {
-                let source: Option<ApiSource> =
-                    req.query.get("source").map(TryFrom::try_from).transpose()?;
+                let source: ApiSource = req
+                    .query
+                    .get("source")
+                    .map(TryFrom::try_from)
+                    .transpose()?
+                    .unwrap_or_default();
 
                 if req.query.get("full").map(String::as_str) == Some("true") {
-                    let url = format!(
-                        "{}/menu/album?moosicboxProfile=master&albumId={album_id}{}",
-                        std::env::var("MOOSICBOX_HOST")
-                            .as_deref()
-                            .unwrap_or("http://localhost:8500"),
-                        source.map_or_else(String::new, |x| format!("&source={x}")),
-                    );
-
-                    let response = reqwest::get(url).await?;
-
-                    if !response.status().is_success() {
-                        log::debug!("Error: {} {}", response.status(), response.text().await?);
-                        return Err(RouteError::RouteFailed.into());
-                    }
-
-                    let album: ApiAlbum = response.json().await?;
+                    let album_id = album_id.into();
+                    let api = PROFILES.get(PROFILE).unwrap().get(source)?;
+                    let album = api
+                        .album(&album_id)
+                        .await?
+                        .ok_or(RouteError::RouteFailed)?
+                        .into();
 
                     log::debug!("album: {album:?}");
 
-                    let response = reqwest::get(format!(
-                        "{}/menu/album/versions?moosicboxProfile=master&albumId={album_id}{}",
-                        std::env::var("MOOSICBOX_HOST")
-                            .as_deref()
-                            .unwrap_or("http://localhost:8500"),
-                        source.map_or_else(String::new, |x| format!("&source={x}")),
-                    ))
-                    .await?;
-
-                    if !response.status().is_success() {
-                        log::debug!("Error: {} {}", response.status(), response.text().await?);
-                        return Err(RouteError::RouteFailed.into());
-                    }
-
-                    let versions: Vec<ApiAlbumVersion> = response.json().await?;
+                    let versions = api
+                        .album_versions(&album_id, None, None)
+                        .await?
+                        .map(Into::into);
 
                     log::debug!("versions: {versions:?}");
 
@@ -252,7 +259,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let container: ContainerElement = moosicbox_app_native_ui::albums::album(
                         &convert_state(&STATE).await,
                         album_id,
-                        source,
+                        Some(source),
                     )
                     .into_string()
                     .try_into()?;
@@ -279,7 +286,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         req.query.get("source").map(TryFrom::try_from).transpose()?;
 
                     let response = reqwest::get(format!(
-                        "{}/menu/artist?moosicboxProfile=master&artistId={artist_id}{}",
+                        "{}/menu/artist?moosicboxProfile={PROFILE}&artistId={artist_id}{}",
                         std::env::var("MOOSICBOX_HOST")
                             .as_deref()
                             .unwrap_or("http://localhost:8500"),
@@ -306,7 +313,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     container
                 } else {
                     let response = reqwest::get(format!(
-                        "{}/menu/artists?moosicboxProfile=master&offset=0&limit=2000",
+                        "{}/menu/artists?moosicboxProfile={PROFILE}&offset=0&limit=2000",
                         std::env::var("MOOSICBOX_HOST")
                             .as_deref()
                             .unwrap_or("http://localhost:8500")
@@ -351,7 +358,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 client_id: None,
                 signature_token: None,
                 api_token: None,
-                profile: Some("master".into()),
+                profile: Some(PROFILE.to_string()),
                 playback_target: None,
                 current_session_id: None,
             })
@@ -502,7 +509,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[allow(clippy::too_many_lines)]
 async fn handle_action(action: Action) -> Result<(), AppStateError> {
-    match action {
+    log::debug!("handle_action: {action:?}");
+
+    match &action {
         Action::TogglePlayback
         | Action::PreviousTrack
         | Action::NextTrack
@@ -525,9 +534,8 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
                 return Ok(());
             };
 
-            match action {
+            match &action {
                 Action::TogglePlayback => {
-                    log::debug!("handle_action: TogglePlayback");
                     STATE
                         .queue_ws_message(
                             InboundPayload::UpdateSession(UpdateSessionPayload {
@@ -552,7 +560,6 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
                         .await
                 }
                 Action::PreviousTrack => {
-                    log::debug!("handle_action: PreviousTrack");
                     if let Some(position) = session.position {
                         let seek = session.seek.unwrap_or(0.0);
                         let position = if seek < 5.0 && position > 0 {
@@ -588,7 +595,6 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
                     }
                 }
                 Action::NextTrack => {
-                    log::debug!("handle_action: NextTrack");
                     if let Some(position) = session.position {
                         if usize::from(position) + 1 >= session.playlist.tracks.len() {
                             log::debug!("handle_action: already at last track");
@@ -623,38 +629,38 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
                 Action::PlayAlbum {
                     album_id,
                     api_source,
-                } => {
-                    log::debug!(
-                        "handle_action: PlayAlbum album_id={album_id} api_source={api_source}"
-                    );
-                    STATE
-                        .queue_ws_message(
-                            InboundPayload::UpdateSession(UpdateSessionPayload {
-                                payload: UpdateSession {
-                                    session_id: session.session_id,
-                                    profile,
-                                    playback_target,
-                                    play: None,
-                                    stop: None,
-                                    name: None,
-                                    active: None,
-                                    playing: None,
-                                    position: None,
-                                    seek: None,
-                                    volume: None,
-                                    playlist: None,
-                                    quality: None,
-                                },
-                            }),
-                            true,
-                        )
-                        .await
                 }
-                Action::AddAlbumToQueue {
+                | Action::AddAlbumToQueue {
                     album_id,
                     api_source,
                 } => {
-                    log::debug!("handle_action: AddAlbumToQueue album_id={album_id} api_source={api_source}");
+                    let api = PROFILES
+                        .get(PROFILE)
+                        .unwrap()
+                        .get(*api_source)
+                        .map_err(|e| AppStateError::unknown(e.to_string()))?;
+                    let Some(version) = api
+                        .album_versions(album_id, Some(0), Some(1))
+                        .await
+                        .map_err(|e| AppStateError::unknown(e.to_string()))?
+                        .clone()
+                        .into_iter()
+                        .next()
+                    else {
+                        log::debug!("handle_action: no album tracks");
+                        return Ok(());
+                    };
+
+                    let play = matches!(action, Action::PlayAlbum { .. });
+
+                    let mut tracks = version.tracks.into_iter().map(Into::into).collect();
+
+                    if !play {
+                        tracks = [session.playlist.tracks, tracks].concat();
+                    }
+
+                    let position = if play { Some(0) } else { None };
+
                     STATE
                         .queue_ws_message(
                             InboundPayload::UpdateSession(UpdateSessionPayload {
@@ -662,15 +668,18 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
                                     session_id: session.session_id,
                                     profile,
                                     playback_target,
-                                    play: None,
+                                    play: Some(play),
                                     stop: None,
                                     name: None,
                                     active: None,
                                     playing: None,
-                                    position: None,
+                                    position,
                                     seek: None,
                                     volume: None,
-                                    playlist: None,
+                                    playlist: Some(UpdateSessionPlaylist {
+                                        session_playlist_id: session.playlist.session_playlist_id,
+                                        tracks,
+                                    }),
                                     quality: None,
                                 },
                             }),
@@ -714,7 +723,7 @@ async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteError> 
         0
     };
     let response = reqwest::get(format!(
-        "{}/menu/albums?moosicboxProfile=master&offset={offset}&limit={limit}",
+        "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}",
         std::env::var("MOOSICBOX_HOST")
             .as_deref()
             .unwrap_or("http://localhost:8500")
@@ -753,7 +762,7 @@ async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
     };
     let size = size.parse::<u16>()?;
     let response = reqwest::get(format!(
-        "{}/menu/albums?moosicboxProfile=master&offset={offset}&limit={limit}",
+        "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}",
         std::env::var("MOOSICBOX_HOST")
             .as_deref()
             .unwrap_or("http://localhost:8500")
@@ -802,7 +811,7 @@ async fn artist_albums_list_route(req: RouteRequest) -> Result<View, RouteError>
     };
     let size = size.parse::<u16>()?;
     let url = format!(
-        "{}/menu/albums?moosicboxProfile=master&artistId={artist_id}&source={source}&albumType={album_type}",
+        "{}/menu/albums?moosicboxProfile={PROFILE}&artistId={artist_id}&source={source}&albumType={album_type}",
         std::env::var("MOOSICBOX_HOST")
             .as_deref()
             .unwrap_or("http://localhost:8500")

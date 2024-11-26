@@ -50,8 +50,10 @@ moosicbox_logging = { version = "0.1.0", path = "../../logging", default-feature
 moosicbox_menu_models = { version = "0.1.0", path = "../../menu/models", default-features = false, features = [
     "api",
 ] }
+moosicbox_music_api = { version = "0.1.0", path = "../../music_api", default-features = false }
 moosicbox_paging = { version = "0.1.0", path = "../../paging", default-features = false }
 moosicbox_player = { version = "0.1.0", path = "../../player", default-features = false }
+moosicbox_remote_library = { version = "0.1.0", path = "../../remote_library", default-features = false }
 moosicbox_session_models = { version = "0.1.0", path = "../../session/models", default-features = false }
 moosicbox_task = { version = "0.1.0", path = "../../task", default-features = false }
 moosicbox_ws = { version = "0.1.0", path = "../../ws", default-features = false }
