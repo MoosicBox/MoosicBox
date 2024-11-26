@@ -753,6 +753,32 @@ impl From<Album> for ApiAlbum {
     }
 }
 
+impl From<ApiAlbum> for Album {
+    fn from(value: ApiAlbum) -> Self {
+        Self {
+            id: value.album_id.clone(),
+            title: value.title,
+            artist: value.artist,
+            artist_id: value.artist_id,
+            album_type: value.album_type,
+            date_released: value.date_released,
+            date_added: value.date_added,
+            artwork: if value.contains_cover {
+                Some(value.album_id.to_string())
+            } else {
+                None
+            },
+            blur: value.blur,
+            versions: value.versions,
+            album_source: value.album_source,
+            api_source: value.api_source,
+            artist_sources: value.artist_sources,
+            album_sources: value.album_sources,
+            ..Default::default()
+        }
+    }
+}
+
 impl From<&ApiTrack> for ApiAlbum {
     fn from(value: &ApiTrack) -> Self {
         value.clone().into()
