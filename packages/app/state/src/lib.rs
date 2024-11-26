@@ -1627,7 +1627,7 @@ impl AppState {
     /// * If any of the connection state fails to update
     pub async fn update_connection_state(&self) -> Result<(), AppStateError> {
         let has_connection_id = { self.connection_id.read().await.is_some() };
-        log::debug!("update_state: has_connection_id={has_connection_id}");
+        log::debug!("update_connection_state: has_connection_id={has_connection_id}");
 
         if has_connection_id {
             moosicbox_task::spawn("set_state: scan_outputs", {
