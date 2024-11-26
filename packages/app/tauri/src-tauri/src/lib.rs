@@ -298,17 +298,7 @@ async fn propagate_ws_message(message: InboundPayload) -> Result<(), TauriPlayer
     );
 
     moosicbox_task::spawn("propagate_ws_message", async move {
-        let handle = { STATE.ws_handle.read().await.clone() };
-
-        if let Some(handle) = handle {
-            STATE.send_ws_message(&handle, message, true).await?;
-        } else {
-            moosicbox_logging::debug_or_trace!(
-                ("propagate_ws_message: pushing message to buffer: {message}"),
-                ("propagate_ws_message: pushing message to buffer: {message:?}")
-            );
-            STATE.ws_message_buffer.write().await.push(message);
-        }
+        STATE.queue_ws_message(message, true).await?;
 
         Ok::<_, AppStateError>(())
     });

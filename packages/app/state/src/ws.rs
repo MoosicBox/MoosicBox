@@ -229,6 +229,35 @@ impl AppState {
     /// # Panics
     ///
     /// * If the websocket message serialization fails
+    pub async fn queue_ws_message(
+        &self,
+        message: InboundPayload,
+        handle_update: bool,
+    ) -> Result<(), AppStateError> {
+        let handle = { self.ws_handle.read().await.clone() };
+
+        if let Some(handle) = handle {
+            self.send_ws_message(&handle, message, handle_update)
+                .await?;
+        } else {
+            moosicbox_logging::debug_or_trace!(
+                ("queue_ws_message: pushing message to buffer: {message}"),
+                ("queue_ws_message: pushing message to buffer: {message:?}")
+            );
+            self.ws_message_buffer.write().await.push(message);
+        }
+
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// * If fails to handle playback update
+    /// * If the websocket message fails to send
+    ///
+    /// # Panics
+    ///
+    /// * If the websocket message serialization fails
     pub async fn send_ws_message(
         &self,
         handle: &WsHandle,
