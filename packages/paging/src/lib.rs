@@ -285,6 +285,21 @@ impl<T: std::fmt::Debug, E> std::fmt::Debug for PagingResponse<T, E> {
 }
 
 impl<T: Send, E: Send> PagingResponse<T, E> {
+    #[must_use]
+    pub fn empty() -> Self {
+        Self {
+            page: Page::WithTotal {
+                items: vec![],
+                offset: 0,
+                limit: 0,
+                total: 0,
+            },
+            fetch: Arc::new(Mutex::new(Box::new(move |_offset, _count| {
+                Box::pin(async move { Ok(Self::empty()) })
+            }))),
+        }
+    }
+
     /// # Errors
     ///
     /// * If failed to fetch any of the subsequent `Page`s
