@@ -33,17 +33,19 @@ pub struct RemoteLibraryMusicApi {
     client: Client,
     host: String,
     api_source: ApiSource,
+    profile: String,
 }
 
 impl RemoteLibraryMusicApi {
     #[must_use]
-    pub fn new(host: String, api_source: ApiSource) -> Self {
+    pub fn new(host: String, api_source: ApiSource, profile: String) -> Self {
         let client = Client::new();
 
         Self {
             client,
             host,
             api_source,
+            profile,
         }
     }
 }
@@ -147,14 +149,17 @@ impl MusicApi for RemoteLibraryMusicApi {
     }
 
     async fn track(&self, track_id: &Id) -> Result<Option<Track>, TrackError> {
-        let request = self.client.request(
-            reqwest::Method::GET,
-            format!(
-                "{host}/menu/track?trackId={track_id}&source={source}",
-                host = self.host,
-                source = self.api_source
-            ),
-        );
+        let request = self
+            .client
+            .request(
+                reqwest::Method::GET,
+                format!(
+                    "{host}/menu/track?trackId={track_id}&source={source}",
+                    host = self.host,
+                    source = self.api_source
+                ),
+            )
+            .header("moosicbox-profile", &self.profile);
 
         let response = request
             .send()

@@ -44,6 +44,7 @@ pub static UPNP_LISTENER_HANDLE: std::sync::OnceLock<moosicbox_upnp::listener::H
 #[cfg(feature = "upnp")]
 pub struct SourceToRemoteLibrary {
     host: String,
+    profile: String,
 }
 
 #[cfg(feature = "upnp")]
@@ -54,7 +55,11 @@ impl moosicbox_music_api::SourceToMusicApi for SourceToRemoteLibrary {
     ) -> Result<Arc<Box<dyn moosicbox_music_api::MusicApi>>, moosicbox_music_api::MusicApisError>
     {
         Ok(Arc::new(Box::new(
-            moosicbox_remote_library::RemoteLibraryMusicApi::new(self.host.clone(), source),
+            moosicbox_remote_library::RemoteLibraryMusicApi::new(
+                self.host.clone(),
+                source,
+                self.profile.clone(),
+            ),
         )))
     }
 }
@@ -937,10 +942,15 @@ impl AppState {
             return Ok(());
         };
 
+        let Some(profile) = self.profile.read().await.clone() else {
+            return Ok(());
+        };
+
         for service in services {
             let player_type = PlayerType::Upnp {
                 source_to_music_api: Arc::new(Box::new(SourceToRemoteLibrary {
                     host: url.to_owned(),
+                    profile: profile.clone(),
                 })),
                 device: service.device.clone(),
                 service: service.service.clone(),
