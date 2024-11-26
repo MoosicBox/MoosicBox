@@ -286,6 +286,17 @@ impl<T: std::fmt::Debug, E> std::fmt::Debug for PagingResponse<T, E> {
 
 impl<T: Send, E: Send> PagingResponse<T, E> {
     #[must_use]
+    pub fn new(
+        page: Page<T>,
+        fetch: impl FnMut(u32, u32) -> FuturePagingResponse<T, E> + Send + 'static,
+    ) -> Self {
+        Self {
+            page,
+            fetch: Arc::new(Mutex::new(Box::new(fetch))),
+        }
+    }
+
+    #[must_use]
     pub fn empty() -> Self {
         Self {
             page: Page::WithTotal {
