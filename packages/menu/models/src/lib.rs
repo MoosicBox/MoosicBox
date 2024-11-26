@@ -9,7 +9,7 @@ use moosicbox_core::{
 #[cfg(feature = "api")]
 pub mod api;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct AlbumVersion {
     pub tracks: Vec<Track>,
     pub format: Option<AudioFormat>,
