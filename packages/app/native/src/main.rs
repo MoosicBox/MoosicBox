@@ -554,10 +554,12 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
                 Action::PreviousTrack => {
                     log::debug!("handle_action: PreviousTrack");
                     if let Some(position) = session.position {
-                        if position == 0 {
-                            log::debug!("handle_action: already at first track");
-                            return Ok(());
-                        }
+                        let seek = session.seek.unwrap_or(0.0);
+                        let position = if seek < 5.0 && position > 0 {
+                            position - 1
+                        } else {
+                            position
+                        };
 
                         STATE
                             .queue_ws_message(
@@ -571,8 +573,8 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
                                         name: None,
                                         active: None,
                                         playing: None,
-                                        position: Some(position - 1),
-                                        seek: None,
+                                        position: Some(position),
+                                        seek: Some(0.0),
                                         volume: None,
                                         playlist: None,
                                         quality: None,
@@ -605,7 +607,7 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
                                         active: None,
                                         playing: None,
                                         position: Some(position + 1),
-                                        seek: None,
+                                        seek: Some(0.0),
                                         volume: None,
                                         playlist: None,
                                         quality: None,
