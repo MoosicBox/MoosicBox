@@ -21,7 +21,8 @@ use moosicbox_core::{
 };
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_files::get_content_length;
-use moosicbox_library_models::LibraryAlbumType;
+use moosicbox_library_models::{track_source_to_u8, LibraryAlbumType};
+use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_api::{
     models::{
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
@@ -672,6 +673,76 @@ pub async fn album(
     Ok(db::get_album(db, "id", album_id).await?)
 }
 
+pub fn sort_album_versions(versions: &mut [AlbumVersion]) {
+    versions.sort_by(|a, b| {
+        b.sample_rate
+            .unwrap_or_default()
+            .cmp(&a.sample_rate.unwrap_or_default())
+    });
+    versions.sort_by(|a, b| {
+        b.bit_depth
+            .unwrap_or_default()
+            .cmp(&a.bit_depth.unwrap_or_default())
+    });
+    versions.sort_by(|a, b| track_source_to_u8(a.source).cmp(&track_source_to_u8(b.source)));
+}
+
+/// # Errors
+///
+/// * If there was a database error
+pub async fn album_versions(
+    db: &LibraryDatabase,
+    album_id: &Id,
+) -> Result<Vec<AlbumVersion>, LibraryAlbumTracksError> {
+    let tracks = album_tracks(db, album_id, None, None)
+        .await?
+        .with_rest_of_items_in_batches()
+        .await?;
+    log::trace!("Got {} album id={album_id} tracks", tracks.len());
+
+    let mut versions = vec![];
+
+    for track in tracks {
+        if versions.is_empty() {
+            log::trace!("No versions exist yet. Creating first version");
+            versions.push(AlbumVersion {
+                tracks: vec![track.clone().into()],
+                format: track.format,
+                bit_depth: track.bit_depth,
+                sample_rate: track.sample_rate,
+                channels: track.channels,
+                source: track.source,
+            });
+            continue;
+        }
+
+        if let Some(existing_version) = versions.iter_mut().find(|v| {
+            v.sample_rate == track.sample_rate
+                && v.bit_depth == track.bit_depth
+                && v.tracks[0].directory() == track.directory()
+                && v.source == track.source
+        }) {
+            log::trace!("Adding track to existing version");
+            existing_version.tracks.push(track.into());
+        } else {
+            log::trace!("Adding track to new version");
+            versions.push(AlbumVersion {
+                tracks: vec![track.clone().into()],
+                format: track.format,
+                bit_depth: track.bit_depth,
+                sample_rate: track.sample_rate,
+                channels: track.channels,
+                source: track.source,
+            });
+            continue;
+        }
+    }
+
+    sort_album_versions(&mut versions);
+
+    Ok(versions)
+}
+
 #[derive(Debug, Error)]
 pub enum LibraryArtistError {
     #[error("Not found")]
@@ -1036,6 +1107,16 @@ impl LibraryMusicApi {
 
     /// # Errors
     ///
+    /// * If failed to get the library album versions
+    pub async fn library_album_versions(
+        &self,
+        album_id: &Id,
+    ) -> Result<Vec<AlbumVersion>, LibraryAlbumTracksError> {
+        album_versions(&self.db, album_id).await
+    }
+
+    /// # Errors
+    ///
     /// * If failed to get the library albums
     pub async fn library_albums(
         &self,
@@ -1120,6 +1201,50 @@ impl MusicApi for LibraryMusicApi {
 
     async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError> {
         Ok(self.library_album(album_id).await?.map(Into::into))
+    }
+
+    async fn album_versions(
+        &self,
+        album_id: &Id,
+        offset: Option<u32>,
+        limit: Option<u32>,
+    ) -> PagingResult<AlbumVersion, TracksError> {
+        let offset = offset.unwrap_or(0);
+        let limit = limit.unwrap_or(50);
+
+        let value = self.library_album_versions(album_id).await?;
+
+        let total = u32::try_from(value.len()).unwrap();
+        let items = value
+            .into_iter()
+            .skip(offset as usize)
+            .take(std::cmp::min(total - offset, limit) as usize)
+            .map(Into::into)
+            .collect();
+
+        let page = PagingResponse::new(
+            Page::WithTotal {
+                items,
+                offset,
+                limit,
+                total,
+            },
+            {
+                let api = self.clone();
+                let album_id = album_id.clone();
+
+                move |offset, limit| {
+                    let api = api.clone();
+                    let album_id = album_id.clone();
+                    Box::pin(async move {
+                        api.album_versions(&album_id, Some(offset), Some(limit))
+                            .await
+                    })
+                }
+            },
+        );
+
+        Ok(page)
     }
 
     async fn artist_albums(

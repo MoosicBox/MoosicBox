@@ -6,6 +6,7 @@ use moosicbox_core::{
     sqlite::models::{Album, AlbumType, ApiAlbum, ApiSource, Artist, Id, Track},
     types::PlaybackQuality,
 };
+use moosicbox_menu_models::{api::ApiAlbumVersion, AlbumVersion};
 use moosicbox_music_api::{
     models::{
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
@@ -16,7 +17,7 @@ use moosicbox_music_api::{
     ArtistError, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError, RemoveTrackError,
     TrackError, TrackOrId, TracksError,
 };
-use moosicbox_paging::PagingResult;
+use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use reqwest::Client;
 use thiserror::Error;
 
@@ -127,6 +128,79 @@ impl MusicApi for RemoteLibraryMusicApi {
             .map_err(|e| AlbumError::Other(Box::new(e)))?;
 
         Ok(Some(value.into()))
+    }
+
+    async fn album_versions(
+        &self,
+        album_id: &Id,
+        offset: Option<u32>,
+        limit: Option<u32>,
+    ) -> PagingResult<AlbumVersion, TracksError> {
+        let offset = offset.unwrap_or(0);
+        let limit = limit.unwrap_or(50);
+
+        let request = self
+            .client
+            .request(
+                reqwest::Method::GET,
+                format!(
+                    "{host}/menu/album/versions?albumId={album_id}&source={source}",
+                    host = self.host,
+                    source = self.api_source
+                ),
+            )
+            .header("moosicbox-profile", &self.profile);
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| TracksError::Other(Box::new(e)))?;
+
+        if !response.status().is_success() {
+            if response.status() == 404 {
+                return Ok(PagingResponse::empty());
+            }
+            return Err(TracksError::Other(Box::new(RequestError::Unsuccessful(
+                format!("Status {}", response.status()),
+            ))));
+        }
+
+        let value: Vec<ApiAlbumVersion> = response
+            .json()
+            .await
+            .map_err(|e| TracksError::Other(Box::new(e)))?;
+
+        let total = u32::try_from(value.len()).unwrap();
+        let items = value
+            .into_iter()
+            .skip(offset as usize)
+            .take(std::cmp::min(total - offset, limit) as usize)
+            .map(Into::into)
+            .collect();
+
+        let page = PagingResponse::new(
+            Page::WithTotal {
+                items,
+                offset,
+                limit,
+                total,
+            },
+            {
+                let api = self.clone();
+                let album_id = album_id.clone();
+
+                move |offset, limit| {
+                    let api = api.clone();
+                    let album_id = album_id.clone();
+                    Box::pin(async move {
+                        api.album_versions(&album_id, Some(offset), Some(limit))
+                            .await
+                    })
+                }
+            },
+        );
+
+        Ok(page)
     }
 
     async fn artist_albums(

@@ -16,16 +16,19 @@ ignored = ["strum"]
 [dependencies]
 moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
 moosicbox_core = { version = "0.1.0", path = "../core", default-features = false, features = [
+    "flac",
     "yt",
 ] }
 moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
 moosicbox_files = { version = "0.1.0", path = "../files", default-features = false, features = [
+    "flac",
     "yt",
 ] }
 moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
     "database",
     "serde_json",
 ] }
+moosicbox_menu_models = { version = "0.1.0", path = "../menu/models", default-features = false }
 moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false }
 moosicbox_paging = { version = "0.1.0", path = "../paging", default-features = false }
 moosicbox_search = { version = "0.1.0", path = "../search", default-features = false }

@@ -9,7 +9,7 @@ use moosicbox_database::{
 };
 use moosicbox_library::{
     db::{delete_track_sizes_by_track_id, delete_tracks},
-    models::{track_source_to_u8, LibraryAlbum},
+    models::LibraryAlbum,
     LibraryAlbumTracksError, LibraryMusicApi,
 };
 use moosicbox_menu_models::AlbumVersion;
@@ -40,20 +40,6 @@ impl<T> From<PoisonError<T>> for GetAlbumTracksError {
     fn from(_err: PoisonError<T>) -> Self {
         Self::Poison
     }
-}
-
-pub fn sort_album_versions(versions: &mut [AlbumVersion]) {
-    versions.sort_by(|a, b| {
-        b.sample_rate
-            .unwrap_or_default()
-            .cmp(&a.sample_rate.unwrap_or_default())
-    });
-    versions.sort_by(|a, b| {
-        b.bit_depth
-            .unwrap_or_default()
-            .cmp(&a.bit_depth.unwrap_or_default())
-    });
-    versions.sort_by(|a, b| track_source_to_u8(a.source).cmp(&track_source_to_u8(b.source)));
 }
 
 pub fn propagate_api_sources_from_library_album<'a>(
@@ -148,7 +134,7 @@ pub async fn get_album_versions_from_source(
 ) -> Result<Vec<AlbumVersion>, GetAlbumVersionsError> {
     #[allow(unreachable_code)]
     Ok(if source == ApiSource::Library {
-        get_library_album_versions(library_api, album_id).await?
+        library_api.library_album_versions(album_id).await?
     } else {
         #[allow(unused)]
         let tracks: Vec<Track> = match source {
@@ -197,63 +183,6 @@ pub async fn get_album_versions_from_source(
             },
         }]
     })
-}
-
-/// # Errors
-///
-/// * If the `LibraryMusicApi` fails to get the album versions
-pub async fn get_library_album_versions(
-    library_api: &LibraryMusicApi,
-    album_id: &Id,
-) -> Result<Vec<AlbumVersion>, GetAlbumVersionsError> {
-    let tracks = library_api
-        .library_album_tracks(album_id, None, None, None, None)
-        .await?
-        .with_rest_of_items_in_batches()
-        .await?;
-    log::trace!("Got {} album id={album_id} tracks", tracks.len());
-
-    let mut versions = vec![];
-
-    for track in tracks {
-        if versions.is_empty() {
-            log::trace!("No versions exist yet. Creating first version");
-            versions.push(AlbumVersion {
-                tracks: vec![track.clone().into()],
-                format: track.format,
-                bit_depth: track.bit_depth,
-                sample_rate: track.sample_rate,
-                channels: track.channels,
-                source: track.source,
-            });
-            continue;
-        }
-
-        if let Some(existing_version) = versions.iter_mut().find(|v| {
-            v.sample_rate == track.sample_rate
-                && v.bit_depth == track.bit_depth
-                && v.tracks[0].directory() == track.directory()
-                && v.source == track.source
-        }) {
-            log::trace!("Adding track to existing version");
-            existing_version.tracks.push(track.into());
-        } else {
-            log::trace!("Adding track to new version");
-            versions.push(AlbumVersion {
-                tracks: vec![track.clone().into()],
-                format: track.format,
-                bit_depth: track.bit_depth,
-                sample_rate: track.sample_rate,
-                channels: track.channels,
-                source: track.source,
-            });
-            continue;
-        }
-    }
-
-    sort_album_versions(&mut versions);
-
-    Ok(versions)
 }
 
 #[derive(Debug, Error)]

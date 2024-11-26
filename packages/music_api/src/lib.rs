@@ -14,6 +14,7 @@ use moosicbox_core::{
     sqlite::models::{Album, AlbumType, ApiSource, Artist, Id, Track},
     types::PlaybackQuality,
 };
+use moosicbox_menu_models::AlbumVersion;
 pub use moosicbox_music_api_models as models;
 use moosicbox_paging::PagingResult;
 use thiserror::Error;
@@ -254,6 +255,13 @@ pub trait MusicApi: Send + Sync {
     async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, AlbumsError>;
 
     async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError>;
+
+    async fn album_versions(
+        &self,
+        album_id: &Id,
+        offset: Option<u32>,
+        limit: Option<u32>,
+    ) -> PagingResult<AlbumVersion, TracksError>;
 
     #[allow(clippy::too_many_arguments)]
     async fn artist_albums(
@@ -635,6 +643,15 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
         self.inner.album(album_id).await
     }
 
+    async fn album_versions(
+        &self,
+        album_id: &Id,
+        offset: Option<u32>,
+        limit: Option<u32>,
+    ) -> PagingResult<AlbumVersion, TracksError> {
+        self.inner.album_versions(album_id, offset, limit).await
+    }
+
     #[allow(clippy::too_many_arguments)]
     async fn artist_albums(
         &self,
@@ -820,7 +837,7 @@ mod test {
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
         TrackAudioQuality, TrackOrder, TrackOrderDirection, TrackSource,
     };
-    use moosicbox_paging::{Page, PagingResponse};
+    use moosicbox_paging::PagingResponse;
     use pretty_assertions::assert_eq;
 
     use crate::*;
@@ -840,17 +857,7 @@ mod test {
             _order: Option<ArtistOrder>,
             _order_direction: Option<ArtistOrderDirection>,
         ) -> PagingResult<Artist, ArtistsError> {
-            Ok(PagingResponse {
-                page: Page::WithTotal {
-                    items: vec![],
-                    offset: 0,
-                    limit: 0,
-                    total: 0,
-                },
-                fetch: Arc::new(Mutex::new(Box::new(move |_offset, _count| {
-                    Box::pin(async move { unimplemented!("Fetch artists is not implemented") })
-                }))),
-            })
+            Ok(PagingResponse::empty())
         }
 
         async fn artist(&self, _artist_id: &Id) -> Result<Option<Artist>, ArtistError> {
@@ -866,21 +873,20 @@ mod test {
         }
 
         async fn albums(&self, _request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
-            Ok(PagingResponse {
-                page: Page::WithTotal {
-                    items: vec![],
-                    offset: 0,
-                    limit: 0,
-                    total: 0,
-                },
-                fetch: Arc::new(Mutex::new(Box::new(move |_offset, _count| {
-                    Box::pin(async move { unimplemented!("Fetching albums is not implemented") })
-                }))),
-            })
+            Ok(PagingResponse::empty())
         }
 
         async fn album(&self, _album_id: &Id) -> Result<Option<Album>, AlbumError> {
             Ok(None)
+        }
+
+        async fn album_versions(
+            &self,
+            _album_id: &Id,
+            _offset: Option<u32>,
+            _limit: Option<u32>,
+        ) -> PagingResult<AlbumVersion, TracksError> {
+            Ok(PagingResponse::empty())
         }
 
         #[allow(clippy::too_many_arguments)]
@@ -893,19 +899,7 @@ mod test {
             _order: Option<AlbumOrder>,
             _order_direction: Option<AlbumOrderDirection>,
         ) -> PagingResult<Album, ArtistAlbumsError> {
-            Ok(PagingResponse {
-                page: Page::WithTotal {
-                    items: vec![],
-                    offset: 0,
-                    limit: 0,
-                    total: 0,
-                },
-                fetch: Arc::new(Mutex::new(Box::new(move |_offset, _count| {
-                    Box::pin(
-                        async move { unimplemented!("Fetching artist albums is not implemented") },
-                    )
-                }))),
-            })
+            Ok(PagingResponse::empty())
         }
 
         async fn add_album(&self, _album_id: &Id) -> Result<(), AddAlbumError> {
@@ -924,17 +918,7 @@ mod test {
             _order: Option<TrackOrder>,
             _order_direction: Option<TrackOrderDirection>,
         ) -> PagingResult<Track, TracksError> {
-            Ok(PagingResponse {
-                page: Page::WithTotal {
-                    items: vec![],
-                    offset: 0,
-                    limit: 0,
-                    total: 0,
-                },
-                fetch: Arc::new(Mutex::new(Box::new(move |_offset, _count| {
-                    Box::pin(async move { unimplemented!("Fetching tracks is not implemented") })
-                }))),
-            })
+            Ok(PagingResponse::empty())
         }
 
         async fn track(&self, _track_id: &Id) -> Result<Option<Track>, TrackError> {
@@ -949,19 +933,7 @@ mod test {
             _order: Option<TrackOrder>,
             _order_direction: Option<TrackOrderDirection>,
         ) -> PagingResult<Track, TracksError> {
-            Ok(PagingResponse {
-                page: Page::WithTotal {
-                    items: vec![],
-                    offset: 0,
-                    limit: 0,
-                    total: 0,
-                },
-                fetch: Arc::new(Mutex::new(Box::new(move |_offset, _count| {
-                    Box::pin(
-                        async move { unimplemented!("Fetching album tracks is not implemented") },
-                    )
-                }))),
-            })
+            Ok(PagingResponse::empty())
         }
 
         async fn add_track(&self, _track_id: &Id) -> Result<(), AddTrackError> {

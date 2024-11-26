@@ -23,11 +23,14 @@ use moosicbox_database::DatabaseError;
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use moosicbox_core::{
-    sqlite::models::{Album, AlbumSort, AlbumType, ApiSource, Artist, AsModelResult, Id, Track},
+    sqlite::models::{
+        Album, AlbumSort, AlbumType, ApiSource, Artist, AsModelResult, Id, Track, TrackApiSource,
+    },
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_files::get_content_length;
 use moosicbox_json_utils::{serde_json::ToValue, MissingValue, ParseError, ToValueType};
+use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_api::{
     models::{
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
@@ -2501,6 +2504,57 @@ impl MusicApi for YtMusicApi {
             )
             .await?
             .into(),
+        ))
+    }
+
+    async fn album_versions(
+        &self,
+        album_id: &Id,
+        offset: Option<u32>,
+        limit: Option<u32>,
+    ) -> PagingResult<AlbumVersion, TracksError> {
+        let offset = offset.unwrap_or(0);
+        let limit = limit.unwrap_or(50);
+
+        if limit == 0 || offset > 0 {
+            return Ok(PagingResponse::empty());
+        }
+
+        let tracks = album_tracks(
+            #[cfg(feature = "db")]
+            &self.db,
+            album_id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?
+        .with_rest_of_items_in_batches()
+        .await?
+        .into_iter()
+        .map(Into::into)
+        .collect();
+
+        let items = vec![AlbumVersion {
+            tracks,
+            format: Some(AudioFormat::Flac),
+            bit_depth: None,
+            sample_rate: None,
+            channels: Some(2),
+            source: TrackApiSource::Yt,
+        }];
+
+        Ok(PagingResponse::new(
+            Page::WithTotal {
+                items,
+                offset,
+                limit,
+                total: 1,
+            },
+            |_, _| Box::pin(async move { Ok(PagingResponse::empty()) }),
         ))
     }
 

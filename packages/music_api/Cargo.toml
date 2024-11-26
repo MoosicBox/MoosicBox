@@ -14,19 +14,20 @@ version     = "0.1.0"
 ignored = ["strum"]
 
 [dependencies]
-moosicbox_core = { version = "0.1.0", path = "../core", default-features = false }
-moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
+moosicbox_core             = { version = "0.1.0", path = "../core", default-features = false }
+moosicbox_database         = { version = "0.1.0", path = "../database", default-features = false }
+moosicbox_menu_models      = { version = "0.1.0", path = "../menu/models", default-features = false }
 moosicbox_music_api_models = { version = "0.1.0", path = "models", default-features = false }
-moosicbox_paging = { version = "0.1.0", path = "../paging", default-features = false }
+moosicbox_paging           = { version = "0.1.0", path = "../paging", default-features = false }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
 
-async-trait  = { workspace = true }
-futures      = { workspace = true }
-log          = { workspace = true }
-thiserror    = { workspace = true }
-tokio        = { workspace = true, features = ["macros"] }
+async-trait = { workspace = true }
+futures     = { workspace = true }
+log         = { workspace = true }
+thiserror   = { workspace = true }
+tokio       = { workspace = true, features = ["macros"] }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

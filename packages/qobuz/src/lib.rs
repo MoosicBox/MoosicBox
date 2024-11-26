@@ -18,6 +18,7 @@ use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_database::DatabaseError;
 
 use moosicbox_files::get_content_length;
+use moosicbox_menu_models::AlbumVersion;
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use reqwest::StatusCode;
 use std::{
@@ -30,7 +31,7 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
 use moosicbox_core::{
-    sqlite::models::{Album, AlbumType, ApiSource, Artist, Id, Track},
+    sqlite::models::{Album, AlbumType, ApiSource, Artist, Id, Track, TrackApiSource},
     types::{AudioFormat, PlaybackQuality},
 };
 use moosicbox_json_utils::{
@@ -2239,6 +2240,55 @@ impl MusicApi for QobuzMusicApi {
             )
             .await?
             .into(),
+        ))
+    }
+
+    async fn album_versions(
+        &self,
+        album_id: &Id,
+        offset: Option<u32>,
+        limit: Option<u32>,
+    ) -> PagingResult<AlbumVersion, TracksError> {
+        let offset = offset.unwrap_or(0);
+        let limit = limit.unwrap_or(50);
+
+        if limit == 0 || offset > 0 {
+            return Ok(PagingResponse::empty());
+        }
+
+        let tracks = album_tracks(
+            #[cfg(feature = "db")]
+            &self.db,
+            album_id,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?
+        .with_rest_of_items_in_batches()
+        .await?
+        .into_iter()
+        .map(Into::into)
+        .collect();
+
+        let items = vec![AlbumVersion {
+            tracks,
+            format: Some(AudioFormat::Flac),
+            bit_depth: None,
+            sample_rate: None,
+            channels: Some(2),
+            source: TrackApiSource::Qobuz,
+        }];
+
+        Ok(PagingResponse::new(
+            Page::WithTotal {
+                items,
+                offset,
+                limit,
+                total: 1,
+            },
+            |_, _| Box::pin(async move { Ok(PagingResponse::empty()) }),
         ))
     }
 

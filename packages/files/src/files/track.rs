@@ -507,6 +507,7 @@ pub async fn get_audio_bytes(
                         }
                     }
 
+                    #[allow(clippy::match_wildcard_for_single_variants)]
                     match source {
                         TrackSource::LocalFilePath { path, .. } => match format {
                             AudioFormat::Source => {
