@@ -4,7 +4,7 @@ use std::{
     ops::Deref,
     path::PathBuf,
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, LazyLock},
 };
 
 use async_trait::async_trait;
@@ -921,6 +921,26 @@ pub enum ApiSource {
     Qobuz,
     #[cfg(feature = "yt")]
     Yt,
+}
+
+impl ApiSource {
+    pub fn all() -> &'static [ApiSource] {
+        static ALL: LazyLock<Vec<ApiSource>> = LazyLock::new(|| {
+            #[allow(unused_mut)]
+            let mut all = vec![ApiSource::Library];
+
+            #[cfg(feature = "tidal")]
+            all.push(ApiSource::Tidal);
+            #[cfg(feature = "qobuz")]
+            all.push(ApiSource::Qobuz);
+            #[cfg(feature = "yt")]
+            all.push(ApiSource::Yt);
+
+            all
+        });
+
+        &ALL
+    }
 }
 
 impl TryFrom<&String> for ApiSource {
