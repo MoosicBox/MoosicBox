@@ -32,7 +32,7 @@ macro_rules! pre_escaped {
     };
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Action {
     TogglePlayback,
