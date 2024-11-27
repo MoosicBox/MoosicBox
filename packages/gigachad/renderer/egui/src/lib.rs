@@ -619,6 +619,20 @@ impl EguiApp {
         }
     }
 
+    fn container_hidden(&self, container: &ContainerElement) -> bool {
+        if container.visibility == Some(Visibility::Hidden) {
+            self.visibilities
+                .read()
+                .unwrap()
+                .get(&container.id)
+                .copied()
+                .unwrap_or(Visibility::Hidden)
+                == Visibility::Hidden
+        } else {
+            false
+        }
+    }
+
     #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
     fn render_container(
         &self,
@@ -629,41 +643,31 @@ impl EguiApp {
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &ContainerElement)>,
     ) -> Response {
-        if container.visibility == Some(Visibility::Hidden) {
-            let visibility = self
-                .visibilities
-                .read()
-                .unwrap()
-                .get(&container.id)
-                .copied()
-                .unwrap_or(Visibility::Hidden);
+        if self.container_hidden(container) {
+            let response = ui
+                .allocate_new_ui(
+                    egui::UiBuilder::new().max_rect(Self::get_render_rect(
+                        ui,
+                        container,
+                        relative_container,
+                    )),
+                    |ui| {
+                        ui.set_width(container.calculated_width.unwrap());
+                        ui.set_height(container.calculated_height.unwrap());
+                    },
+                )
+                .response;
 
-            if visibility == Visibility::Hidden {
-                let response = ui
-                    .allocate_new_ui(
-                        egui::UiBuilder::new().max_rect(Self::get_render_rect(
-                            ui,
-                            container,
-                            relative_container,
-                        )),
-                        |ui| {
-                            ui.set_width(container.calculated_width.unwrap());
-                            ui.set_height(container.calculated_height.unwrap());
-                        },
-                    )
-                    .response;
+            self.handle_container_side_effects(
+                ctx,
+                None,
+                container,
+                viewport,
+                Some(&response),
+                true,
+            );
 
-                self.handle_container_side_effects(
-                    ctx,
-                    None,
-                    container,
-                    viewport,
-                    Some(&response),
-                    true,
-                );
-
-                return response;
-            }
+            return response;
         }
 
         Self::render_borders(ui, container, |ui| {
@@ -1821,14 +1825,17 @@ impl EguiApp {
         if let Some(container) = element.container_element() {
             let response =
                 self.render_container(ctx, ui, container, viewport, rect, relative_container);
-            self.handle_element_side_effects(
-                ctx,
-                Some(ui),
-                element,
-                viewport,
-                Some(&response),
-                false,
-            );
+
+            if !self.container_hidden(container) {
+                self.handle_element_side_effects(
+                    ctx,
+                    Some(ui),
+                    element,
+                    viewport,
+                    Some(&response),
+                    false,
+                );
+            }
         }
     }
 
