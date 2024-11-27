@@ -892,6 +892,38 @@ impl EguiApp {
         })
     }
 
+    fn get_render_rect(
+        ui: &Ui,
+        container: &ContainerElement,
+        relative_container: Option<(egui::Rect, &ContainerElement)>,
+    ) -> egui::Rect {
+        if container.position == Some(Position::Absolute) {
+            if let Some((relative_rect, ..)) = relative_container {
+                return relative_rect
+                    .with_min_x(relative_rect.min.x + container.calculated_x.unwrap())
+                    .with_min_y(relative_rect.min.y + container.calculated_y.unwrap())
+                    .with_max_x(
+                        relative_rect.min.x
+                            + container.calculated_x.unwrap()
+                            + container.calculated_width.unwrap(),
+                    )
+                    .with_max_y(
+                        relative_rect.min.y
+                            + container.calculated_y.unwrap()
+                            + container.calculated_height.unwrap(),
+                    );
+            }
+        }
+
+        egui::Rect::from_min_size(
+            ui.cursor().left_top(),
+            egui::vec2(
+                container.calculated_width.unwrap(),
+                container.calculated_height.unwrap(),
+            ),
+        )
+    }
+
     fn render_position<'a>(
         ui: &mut Ui,
         container: &'a ContainerElement,
@@ -908,30 +940,16 @@ impl EguiApp {
                 relative_container = Some((egui::Rect::from_min_size(pos, size), container));
             }
             Some(Position::Absolute) => {
-                if let Some((mut relative_rect, ..)) = relative_container {
-                    relative_rect = relative_rect
-                        .with_min_x(relative_rect.min.x + container.calculated_x.unwrap())
-                        .with_min_y(relative_rect.min.y + container.calculated_y.unwrap())
-                        .with_max_x(
-                            relative_rect.min.x
-                                + container.calculated_x.unwrap()
-                                + container.calculated_width.unwrap(),
-                        )
-                        .with_max_y(
-                            relative_rect.min.y
-                                + container.calculated_y.unwrap()
-                                + container.calculated_height.unwrap(),
-                        );
+                let relative_rect = Self::get_render_rect(ui, container, relative_container);
 
-                    return ui
-                        .allocate_new_ui(
-                            egui::UiBuilder::new().max_rect(relative_rect).layout(
-                                egui::Layout::centered_and_justified(egui::Direction::TopDown),
-                            ),
-                            |ui| inner(ui, relative_container),
-                        )
-                        .response;
-                }
+                return ui
+                    .allocate_new_ui(
+                        egui::UiBuilder::new().max_rect(relative_rect).layout(
+                            egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                        ),
+                        |ui| inner(ui, relative_container),
+                    )
+                    .response;
             }
             Some(Position::Static) | None => {}
         }
