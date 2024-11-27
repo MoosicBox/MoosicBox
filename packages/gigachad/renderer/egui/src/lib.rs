@@ -1683,7 +1683,7 @@ impl EguiApp {
             Element::Input(input) => Some(Self::render_input(ui, input)),
             Element::Raw { value } => Some(ui.label(value)),
             Element::Image { source, element } => source
-                .as_deref()
+                .as_ref()
                 .map(|source| self.render_image(ui, source, element)),
             Element::Canvas { element } => element
                 .str_id
