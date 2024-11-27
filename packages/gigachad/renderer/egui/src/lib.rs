@@ -642,11 +642,49 @@ impl EguiApp {
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &ContainerElement)>,
+        scroll_child: bool,
     ) -> Option<Response> {
         if container.is_hidden() {
             log::debug!("render_container: container is hidden. skipping render");
             self.handle_container_side_effects(ctx, Some(ui), container, viewport, None, true);
             return None;
+        }
+
+        if scroll_child {
+            if let Some(rect) = rect {
+                let render_rect = Self::get_render_rect(ui, container, relative_container);
+                let width = render_rect.width();
+                let height = render_rect.height();
+                let (offset_x, offset_y) =
+                    viewport.map_or((0.0, 0.0), |viewport| (viewport.pos.x, viewport.pos.y));
+
+                if render_rect.min.x + width - offset_x < -1.0
+                    || render_rect.min.y + height - offset_y < -1.0
+                    || render_rect.min.x - offset_x >= rect.width() + 1.0
+                    || render_rect.min.y - offset_y >= rect.height() + 1.0
+                {
+                    log::trace!(
+                        "render_container: skipping ({}, {}, {width}, {height})",
+                        render_rect.min.x,
+                        render_rect.min.y
+                    );
+                    self.handle_container_side_effects(
+                        ctx,
+                        Some(ui),
+                        container,
+                        viewport,
+                        None,
+                        true,
+                    );
+                    ui.allocate_space(egui::vec2(width, height));
+                    return None;
+                }
+                log::trace!(
+                    "render_container: showing ({}, {}, {width}, {height})",
+                    render_rect.min.x,
+                    render_rect.min.y
+                );
+            }
         }
 
         if self.container_hidden(container) {
@@ -1619,47 +1657,16 @@ impl EguiApp {
     ) {
         log::trace!("render_element: rect={rect:?}");
 
-        if scroll_child {
-            if let Some(rect) = rect {
-                if let Some(container) = element.container_element() {
-                    let render_rect = Self::get_render_rect(ui, container, relative_container);
-                    let width = render_rect.width();
-                    let height = render_rect.height();
-                    let (offset_x, offset_y) =
-                        viewport.map_or((0.0, 0.0), |viewport| (viewport.pos.x, viewport.pos.y));
-
-                    if render_rect.min.x + width - offset_x < -1.0
-                        || render_rect.min.y + height - offset_y < -1.0
-                        || render_rect.min.x - offset_x >= rect.width() + 1.0
-                        || render_rect.min.y - offset_y >= rect.height() + 1.0
-                    {
-                        log::trace!(
-                            "render_element: skipping ({}, {}, {width}, {height}) {element}",
-                            render_rect.min.x,
-                            render_rect.min.y
-                        );
-                        self.handle_element_side_effects(
-                            ctx,
-                            Some(ui),
-                            element,
-                            viewport,
-                            None,
-                            true,
-                        );
-                        ui.allocate_space(egui::vec2(width, height));
-                        return;
-                    }
-                    log::trace!(
-                        "render_element: showing ({}, {}, {width}, {height}) {element}",
-                        render_rect.min.x,
-                        render_rect.min.y
-                    );
-                }
-            }
-        }
-
         if let Element::Table { .. } = element {
-            self.render_table(ctx, ui, element, viewport, rect, relative_container);
+            self.render_table(
+                ctx,
+                ui,
+                element,
+                viewport,
+                rect,
+                relative_container,
+                scroll_child,
+            );
             return;
         }
 
@@ -1812,9 +1819,15 @@ impl EguiApp {
         }
 
         if let Some(container) = element.container_element() {
-            if let Some(response) =
-                self.render_container(ctx, ui, container, viewport, rect, relative_container)
-            {
+            if let Some(response) = self.render_container(
+                ctx,
+                ui,
+                container,
+                viewport,
+                rect,
+                relative_container,
+                scroll_child,
+            ) {
                 if !self.container_hidden(container) {
                     self.handle_element_side_effects(
                         ctx,
@@ -1838,6 +1851,7 @@ impl EguiApp {
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &ContainerElement)>,
+        scroll_child: bool,
     ) {
         let TableIter { rows, headings } = element.table_iter();
 
@@ -1848,7 +1862,15 @@ impl EguiApp {
                 for heading in headings {
                     for th in heading {
                         egui::Frame::none().show(ui, |ui| {
-                            self.render_container(ctx, ui, th, viewport, rect, relative_container);
+                            self.render_container(
+                                ctx,
+                                ui,
+                                th,
+                                viewport,
+                                rect,
+                                relative_container,
+                                scroll_child,
+                            );
                         });
                     }
                     ui.end_row();
@@ -1857,7 +1879,15 @@ impl EguiApp {
             for row in rows {
                 for td in row {
                     egui::Frame::none().show(ui, |ui| {
-                        self.render_container(ctx, ui, td, viewport, rect, relative_container);
+                        self.render_container(
+                            ctx,
+                            ui,
+                            td,
+                            viewport,
+                            rect,
+                            relative_container,
+                            scroll_child,
+                        );
                     });
                 }
                 ui.end_row();
@@ -1906,7 +1936,7 @@ impl EguiApp {
                             .unwrap_or_else(|| Color32::from_hex("#181a1b").unwrap()),
                     )
                     .show(ui, |ui| {
-                        self.render_container(ctx, ui, container, None, None, None);
+                        self.render_container(ctx, ui, container, None, None, None, false);
                     });
             });
 
