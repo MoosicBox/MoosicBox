@@ -1395,12 +1395,18 @@ impl EguiApp {
             }
         }
         if let Some(response) = response {
+            let viewport_rect = rect.map(|rect| {
+                let (offset_x, offset_y) =
+                    viewport.map_or((0.0, 0.0), |viewport| (viewport.pos.x, viewport.pos.y));
+                egui::Rect::from_min_size(egui::pos2(offset_x, offset_y), rect.size())
+            });
+
             if let Some(cursor) = container.cursor {
                 let ctx = ctx.clone();
                 let pointer = ctx.input(|x| x.pointer.clone());
                 let response = response.clone();
                 self.trigger_side_effect(move || {
-                    if Self::rect_contains_mouse(&pointer, response.rect, rect) {
+                    if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect) {
                         ctx.output_mut(|x| {
                             x.cursor_icon = cursor_to_cursor_icon(cursor);
                         });
@@ -1423,7 +1429,7 @@ impl EguiApp {
                                 if handled_click.load(std::sync::atomic::Ordering::SeqCst) {
                                     return false;
                                 }
-                                if Self::rect_contains_mouse(&pointer, response.rect, rect)
+                                if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
                                     && pointer.primary_released()
                                 {
                                     handled_click.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1458,7 +1464,11 @@ impl EguiApp {
                             let pointer = ctx.input(|x| x.pointer.clone());
                             self.trigger_side_effect(move || {
                                 if !handled_hover.load(std::sync::atomic::Ordering::SeqCst)
-                                    && Self::rect_contains_mouse(&pointer, response.rect, rect)
+                                    && Self::rect_contains_mouse(
+                                        &pointer,
+                                        response.rect,
+                                        viewport_rect,
+                                    )
                                 {
                                     match action {
                                         StyleAction::SetVisibility(visibility) => {
@@ -1497,7 +1507,7 @@ impl EguiApp {
                                 if handled_click.load(std::sync::atomic::Ordering::SeqCst) {
                                     return false;
                                 }
-                                if Self::rect_contains_mouse(&pointer, response.rect, rect)
+                                if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
                                     && pointer.primary_released()
                                 {
                                     handled_click.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1522,7 +1532,8 @@ impl EguiApp {
                                 if handled_hover.load(std::sync::atomic::Ordering::SeqCst) {
                                     return false;
                                 }
-                                if Self::rect_contains_mouse(&pointer, response.rect, rect) {
+                                if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
+                                {
                                     if let Err(e) = request_action.send(action.clone()) {
                                         moosicbox_assert::die_or_error!(
                                             "Failed to request action: {action} ({e:?})"
@@ -1562,6 +1573,12 @@ impl EguiApp {
     ) {
         log::trace!("handle_element_side_effects");
         if let Some(response) = response {
+            let viewport_rect = rect.map(|rect| {
+                let (offset_x, offset_y) =
+                    viewport.map_or((0.0, 0.0), |viewport| (viewport.pos.x, viewport.pos.y));
+                egui::Rect::from_min_size(egui::pos2(offset_x, offset_y), rect.size())
+            });
+
             match element {
                 Element::Button { .. } => {
                     let handled_hover = self.state.handled_hover.clone();
@@ -1572,7 +1589,7 @@ impl EguiApp {
                         if handled_hover.load(std::sync::atomic::Ordering::SeqCst) {
                             return false;
                         }
-                        if Self::rect_contains_mouse(&pointer, response.rect, rect) {
+                        if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect) {
                             ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
                         }
 
@@ -1589,7 +1606,7 @@ impl EguiApp {
                     let ctx = ctx.clone();
                     self.trigger_side_effect(move || {
                         if !handled_click.load(std::sync::atomic::Ordering::SeqCst)
-                            && Self::rect_contains_mouse(&pointer, response.rect, rect)
+                            && Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
                             && pointer.primary_released()
                         {
                             handled_click.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1601,7 +1618,7 @@ impl EguiApp {
                         }
 
                         if !handled_hover.load(std::sync::atomic::Ordering::SeqCst)
-                            && Self::rect_contains_mouse(&pointer, response.rect, rect)
+                            && Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
                         {
                             ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
                         }
