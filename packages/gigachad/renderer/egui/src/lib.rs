@@ -1930,6 +1930,7 @@ impl EguiApp {
                         let mut handlers = handlers.into_iter().collect_vec();
                         handlers.reverse();
                         let handlers = handlers;
+                        log::trace!("paint: {} handler(s) on render", handlers.len());
 
                         for handler in handlers {
                             if !handler() {
