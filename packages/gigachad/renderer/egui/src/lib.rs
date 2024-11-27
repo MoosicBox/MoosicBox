@@ -318,9 +318,11 @@ struct EguiApp {
     background: Option<Color32>,
     request_action: Sender<String>,
     on_resize: Sender<(f32, f32)>,
+    side_effects_tx: Sender<Handler>,
+    side_effects_rx: Receiver<Handler>,
 }
 
-type Handler = Box<dyn Fn() -> bool>;
+type Handler = Box<dyn Fn() -> bool + Send + Sync>;
 
 impl EguiApp {
     fn new(
@@ -331,6 +333,8 @@ impl EguiApp {
         request_action: Sender<String>,
         on_resize: Sender<(f32, f32)>,
     ) -> Self {
+        let (side_effects_tx, side_effects_rx) = flume::unbounded();
+
         Self {
             ctx: Arc::new(RwLock::new(None)),
             state: ActionState::default(),
@@ -349,6 +353,8 @@ impl EguiApp {
             background: None,
             request_action,
             on_resize,
+            side_effects_tx,
+            side_effects_rx,
         }
     }
 
@@ -623,7 +629,6 @@ impl EguiApp {
         ctx: &egui::Context,
         ui: &mut Ui,
         container: &ContainerElement,
-        events: &Sender<Handler>,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &ContainerElement)>,
@@ -673,7 +678,6 @@ impl EguiApp {
                                                             ctx,
                                                             ui,
                                                             container,
-                                                            events,
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
@@ -698,7 +702,6 @@ impl EguiApp {
                                                             ctx,
                                                             ui,
                                                             container,
-                                                            events,
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
@@ -733,7 +736,6 @@ impl EguiApp {
                                                                         ctx,
                                                                         ui,
                                                                         container,
-                                                                        events,
                                                                         viewport,
                                                                         Some(rect),
                                                                         relative_container,
@@ -770,7 +772,6 @@ impl EguiApp {
                                                                         ctx,
                                                                         ui,
                                                                         container,
-                                                                        events,
                                                                         viewport,
                                                                         Some(rect),
                                                                         relative_container,
@@ -794,7 +795,6 @@ impl EguiApp {
                                                             ctx,
                                                             ui,
                                                             container,
-                                                            events,
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
@@ -816,7 +816,6 @@ impl EguiApp {
                                                             ctx,
                                                             ui,
                                                             container,
-                                                            events,
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
@@ -838,7 +837,6 @@ impl EguiApp {
                                                             ctx,
                                                             ui,
                                                             container,
-                                                            events,
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
@@ -860,7 +858,6 @@ impl EguiApp {
                                                             ctx,
                                                             ui,
                                                             container,
-                                                            events,
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
@@ -874,7 +871,6 @@ impl EguiApp {
                                                 ctx,
                                                 ui,
                                                 container,
-                                                events,
                                                 viewport,
                                                 rect,
                                                 relative_container,
@@ -961,7 +957,6 @@ impl EguiApp {
         ctx: &egui::Context,
         ui: &mut Ui,
         container: &'a ContainerElement,
-        events: &Sender<Handler>,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &'a ContainerElement)>,
@@ -977,9 +972,7 @@ impl EguiApp {
                     .filter_map(|(x, y)| match y {
                         gigachad_transformer::LayoutPosition::Wrap { row, .. } => Some((*row, x)),
                         gigachad_transformer::LayoutPosition::Default => {
-                            self.handle_element_side_effects(
-                                ctx, None, x, events, viewport, None, true,
-                            );
+                            self.handle_element_side_effects(ctx, None, x, viewport, None, true);
                             None
                         }
                     })
@@ -998,7 +991,6 @@ impl EguiApp {
                                     ctx,
                                     ui,
                                     &row,
-                                    events,
                                     viewport,
                                     rect,
                                     relative_container,
@@ -1014,7 +1006,6 @@ impl EguiApp {
                             ctx,
                             ui,
                             &container.elements,
-                            events,
                             viewport,
                             rect,
                             relative_container,
@@ -1033,9 +1024,7 @@ impl EguiApp {
                     .filter_map(|(x, y)| match y {
                         gigachad_transformer::LayoutPosition::Wrap { col, .. } => Some((*col, x)),
                         gigachad_transformer::LayoutPosition::Default => {
-                            self.handle_element_side_effects(
-                                ctx, None, x, events, viewport, None, true,
-                            );
+                            self.handle_element_side_effects(ctx, None, x, viewport, None, true);
                             None
                         }
                     })
@@ -1054,7 +1043,6 @@ impl EguiApp {
                                     ctx,
                                     ui,
                                     &col,
-                                    events,
                                     viewport,
                                     rect,
                                     relative_container,
@@ -1070,7 +1058,6 @@ impl EguiApp {
                             ctx,
                             ui,
                             &container.elements,
-                            events,
                             viewport,
                             rect,
                             relative_container,
@@ -1140,7 +1127,6 @@ impl EguiApp {
         ctx: &egui::Context,
         ui: &mut Ui,
         container: &'a ContainerElement,
-        events: &Sender<Handler>,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &'a ContainerElement)>,
@@ -1197,7 +1183,6 @@ impl EguiApp {
                                         ctx,
                                         ui,
                                         container,
-                                        events,
                                         viewport,
                                         rect,
                                         relative_container,
@@ -1218,7 +1203,6 @@ impl EguiApp {
         ctx: &egui::Context,
         ui: &mut Ui,
         elements: &[Element],
-        events: &Sender<Handler>,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &ContainerElement)>,
@@ -1230,7 +1214,6 @@ impl EguiApp {
                 ctx,
                 ui,
                 element,
-                events,
                 viewport,
                 rect,
                 relative_container,
@@ -1245,7 +1228,6 @@ impl EguiApp {
         ctx: &egui::Context,
         ui: &mut Ui,
         elements: &[&Element],
-        events: &Sender<Handler>,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &ContainerElement)>,
@@ -1257,7 +1239,6 @@ impl EguiApp {
                 ctx,
                 ui,
                 element,
-                events,
                 viewport,
                 rect,
                 relative_container,
@@ -1272,7 +1253,6 @@ impl EguiApp {
         ctx: &egui::Context,
         ui: Option<&Ui>,
         container: &ContainerElement,
-        events: &Sender<Handler>,
         viewport: Option<&Viewport>,
         response: Option<&Response>,
         recurse: bool,
@@ -1303,7 +1283,7 @@ impl EguiApp {
             if let Some(cursor) = container.cursor {
                 let ctx = ctx.clone();
                 let response = response.clone();
-                events
+                self.side_effects_tx
                     .send(Box::new(move || {
                         let response = response.interact(egui::Sense::click_and_drag());
                         if response.hovered() || response.is_pointer_button_down_on() {
@@ -1326,7 +1306,7 @@ impl EguiApp {
                             let visibilities = self.visibilities.clone();
                             let pointer = ctx.input(|x| x.pointer.clone());
                             let response = response.clone();
-                            events
+                            self.side_effects_tx
                                 .send(Box::new(move || {
                                     if handled_click.load(std::sync::atomic::Ordering::SeqCst) {
                                         return false;
@@ -1370,7 +1350,7 @@ impl EguiApp {
                             let visibilities = self.visibilities.clone();
                             let response = response.clone();
                             let pointer = ctx.input(|x| x.pointer.clone());
-                            events
+                            self.side_effects_tx
                                 .send(Box::new(move || {
                                     if let Some(pos) = pointer.latest_pos() {
                                         if !handled_hover.load(std::sync::atomic::Ordering::SeqCst)
@@ -1414,7 +1394,7 @@ impl EguiApp {
                             let action = action.to_owned();
                             let pointer = ctx.input(|x| x.pointer.clone());
                             let response = response.clone();
-                            events
+                            self.side_effects_tx
                                 .send(Box::new(move || {
                                     if handled_click.load(std::sync::atomic::Ordering::SeqCst) {
                                         return false;
@@ -1443,7 +1423,7 @@ impl EguiApp {
                             let action = action.to_owned();
                             let pointer = ctx.input(|x| x.pointer.clone());
                             let response = response.clone();
-                            events
+                            self.side_effects_tx
                                 .send(Box::new(move || {
                                     if handled_hover.load(std::sync::atomic::Ordering::SeqCst) {
                                         return false;
@@ -1471,9 +1451,7 @@ impl EguiApp {
 
         if recurse {
             for element in &container.elements {
-                self.handle_element_side_effects(
-                    ctx, ui, element, events, viewport, response, recurse,
-                );
+                self.handle_element_side_effects(ctx, ui, element, viewport, response, recurse);
             }
         }
     }
@@ -1484,7 +1462,6 @@ impl EguiApp {
         ctx: &egui::Context,
         ui: Option<&Ui>,
         element: &Element,
-        events: &Sender<Handler>,
         viewport: Option<&Viewport>,
         response: Option<&Response>,
         recurse: bool,
@@ -1497,7 +1474,7 @@ impl EguiApp {
                     let response = response.clone();
                     let pointer = ctx.input(|x| x.pointer.clone());
                     let ctx = ctx.clone();
-                    events
+                    self.side_effects_tx
                         .send(Box::new(move || {
                             if handled_hover.load(std::sync::atomic::Ordering::SeqCst) {
                                 return false;
@@ -1520,7 +1497,7 @@ impl EguiApp {
                     let response = response.clone();
                     let pointer = ctx.input(|x| x.pointer.clone());
                     let ctx = ctx.clone();
-                    events
+                    self.side_effects_tx
                         .send(Box::new(move || {
                             if let Some(pos) = pointer.latest_pos() {
                                 if !handled_click.load(std::sync::atomic::Ordering::SeqCst)
@@ -1612,9 +1589,7 @@ impl EguiApp {
         }
 
         if let Some(container) = element.container_element() {
-            self.handle_container_side_effects(
-                ctx, ui, container, events, viewport, response, recurse,
-            );
+            self.handle_container_side_effects(ctx, ui, container, viewport, response, recurse);
         }
     }
 
@@ -1624,7 +1599,6 @@ impl EguiApp {
         ctx: &egui::Context,
         ui: &mut Ui,
         element: &Element,
-        events: &Sender<Handler>,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &ContainerElement)>,
@@ -1636,15 +1610,7 @@ impl EguiApp {
             if container.is_hidden() {
                 log::debug!("render_element: container is hidden. skipping render");
                 for element in &container.elements {
-                    self.handle_element_side_effects(
-                        ctx,
-                        Some(ui),
-                        element,
-                        events,
-                        viewport,
-                        None,
-                        true,
-                    );
+                    self.handle_element_side_effects(ctx, Some(ui), element, viewport, None, true);
                 }
                 return;
             }
@@ -1679,7 +1645,6 @@ impl EguiApp {
                                 ctx,
                                 Some(ui),
                                 element,
-                                events,
                                 viewport,
                                 None,
                                 true,
@@ -1698,7 +1663,7 @@ impl EguiApp {
         }
 
         if let Element::Table { .. } = element {
-            self.render_table(ctx, ui, element, events, viewport, rect, relative_container);
+            self.render_table(ctx, ui, element, viewport, rect, relative_container);
             return;
         }
 
@@ -1843,7 +1808,6 @@ impl EguiApp {
                 ctx,
                 Some(ui),
                 element,
-                events,
                 viewport,
                 Some(&response),
                 false,
@@ -1852,20 +1816,12 @@ impl EguiApp {
         }
 
         if let Some(container) = element.container_element() {
-            let response = self.render_container(
-                ctx,
-                ui,
-                container,
-                events,
-                viewport,
-                rect,
-                relative_container,
-            );
+            let response =
+                self.render_container(ctx, ui, container, viewport, rect, relative_container);
             self.handle_element_side_effects(
                 ctx,
                 Some(ui),
                 element,
-                events,
                 viewport,
                 Some(&response),
                 false,
@@ -1879,7 +1835,6 @@ impl EguiApp {
         ctx: &egui::Context,
         ui: &mut Ui,
         element: &Element,
-        events: &Sender<Handler>,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &ContainerElement)>,
@@ -1893,15 +1848,7 @@ impl EguiApp {
                 for heading in headings {
                     for th in heading {
                         egui::Frame::none().show(ui, |ui| {
-                            self.render_container(
-                                ctx,
-                                ui,
-                                th,
-                                events,
-                                viewport,
-                                rect,
-                                relative_container,
-                            );
+                            self.render_container(ctx, ui, th, viewport, rect, relative_container);
                         });
                     }
                     ui.end_row();
@@ -1910,15 +1857,7 @@ impl EguiApp {
             for row in rows {
                 for td in row {
                     egui::Frame::none().show(ui, |ui| {
-                        self.render_container(
-                            ctx,
-                            ui,
-                            td,
-                            events,
-                            viewport,
-                            rect,
-                            relative_container,
-                        );
+                        self.render_container(ctx, ui, td, viewport, rect, relative_container);
                     });
                 }
                 ui.end_row();
@@ -1960,13 +1899,11 @@ impl EguiApp {
                             .unwrap_or_else(|| Color32::from_hex("#181a1b").unwrap()),
                     )
                     .show(ui, |ui| {
-                        let (tx, rx) = flume::unbounded();
-                        self.render_container(ctx, ui, container, &tx, None, None, None);
+                        self.render_container(ctx, ui, container, None, None, None);
 
                         // Get all handlers and reverse the order to ensure elements on top get the
                         // first event handling treatment
-                        let handlers = rx.drain();
-                        drop(tx);
+                        let handlers = self.side_effects_rx.drain();
                         let mut handlers = handlers.into_iter().collect_vec();
                         handlers.reverse();
                         let handlers = handlers;
