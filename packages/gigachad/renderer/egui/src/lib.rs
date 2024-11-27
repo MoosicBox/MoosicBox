@@ -544,10 +544,10 @@ impl EguiApp {
         viewport
     }
 
-    fn render_horizontal_borders<R>(
+    fn render_horizontal_borders(
         ui: &mut Ui,
         container: &ContainerElement,
-        add_contents: impl FnOnce(&mut Ui) -> R,
+        add_contents: impl FnOnce(&mut Ui) -> Response,
     ) -> Response {
         ui.horizontal(|ui| {
             if let Some((color, size)) = container.calculated_border_left {
@@ -557,7 +557,7 @@ impl EguiApp {
                 });
             }
 
-            add_contents(ui);
+            let response = add_contents(ui);
 
             if let Some((color, size)) = container.calculated_border_right {
                 egui::Frame::none().fill(color.into()).show(ui, |ui| {
@@ -565,14 +565,16 @@ impl EguiApp {
                     ui.set_height(container.calculated_height.unwrap_or(0.0));
                 });
             }
+
+            response
         })
-        .response
+        .inner
     }
 
-    fn render_vertical_borders<R>(
+    fn render_vertical_borders(
         ui: &mut Ui,
         container: &ContainerElement,
-        add_contents: impl FnOnce(&mut Ui) -> R,
+        add_contents: impl FnOnce(&mut Ui) -> Response,
     ) -> Response {
         ui.vertical(|ui| {
             if let Some((color, size)) = container.calculated_border_top {
@@ -582,7 +584,7 @@ impl EguiApp {
                 });
             }
 
-            add_contents(ui);
+            let response = add_contents(ui);
 
             if let Some((color, size)) = container.calculated_border_bottom {
                 egui::Frame::none().fill(color.into()).show(ui, |ui| {
@@ -590,8 +592,10 @@ impl EguiApp {
                     ui.set_height(size);
                 });
             }
+
+            response
         })
-        .response
+        .inner
     }
 
     fn render_borders(
@@ -605,9 +609,9 @@ impl EguiApp {
                 if container.calculated_border_top.is_some()
                     || container.calculated_border_bottom.is_some()
                 {
-                    Self::render_vertical_borders(ui, container, add_contents);
+                    Self::render_vertical_borders(ui, container, add_contents)
                 } else {
-                    add_contents(ui);
+                    add_contents(ui)
                 }
             })
         } else if container.calculated_border_top.is_some()
@@ -751,9 +755,9 @@ impl EguiApp {
                                                             Some(rect),
                                                             relative_container,
                                                             true,
-                                                        );
+                                                        )
                                                     }
-                                                });
+                                                }).inner
                                         }
                                         (
                                             gigachad_transformer::LayoutOverflow::Scroll,
@@ -775,9 +779,9 @@ impl EguiApp {
                                                             Some(rect),
                                                             relative_container,
                                                             true,
-                                                        );
+                                                        )
                                                     }
-                                                });
+                                                }).inner
                                         }
                                         (
                                             gigachad_transformer::LayoutOverflow::Auto,
@@ -809,11 +813,11 @@ impl EguiApp {
                                                                         Some(rect),
                                                                         relative_container,
                                                                         true,
-                                                                    );
+                                                                    )
                                                                 }
-                                                            });
+                                                            }).inner
                                                     }
-                                                });
+                                                }).inner
                                         }
                                         (
                                             gigachad_transformer::LayoutOverflow::Scroll,
@@ -845,11 +849,11 @@ impl EguiApp {
                                                                         Some(rect),
                                                                         relative_container,
                                                                         true,
-                                                                    );
+                                                                    )
                                                                 }
-                                                            });
+                                                            }).inner
                                                     }
-                                                });
+                                                }).inner
                                         }
                                         (gigachad_transformer::LayoutOverflow::Auto, _) => {
                                             egui::ScrollArea::horizontal()
@@ -868,9 +872,9 @@ impl EguiApp {
                                                             Some(rect),
                                                             relative_container,
                                                             false,
-                                                        );
+                                                        )
                                                     }
-                                                });
+                                                }).inner
                                         }
                                         (gigachad_transformer::LayoutOverflow::Scroll, _) => {
                                             egui::ScrollArea::horizontal()
@@ -889,9 +893,9 @@ impl EguiApp {
                                                             Some(rect),
                                                             relative_container,
                                                             false,
-                                                        );
+                                                        )
                                                     }
-                                                });
+                                                }).inner
                                         }
                                         (_, gigachad_transformer::LayoutOverflow::Auto) => {
                                             egui::ScrollArea::vertical()
@@ -910,9 +914,9 @@ impl EguiApp {
                                                             Some(rect),
                                                             relative_container,
                                                             true,
-                                                        );
+                                                        )
                                                     }
-                                                });
+                                                }).inner
                                         }
                                         (_, gigachad_transformer::LayoutOverflow::Scroll) => {
                                             egui::ScrollArea::vertical()
@@ -931,9 +935,9 @@ impl EguiApp {
                                                             Some(rect),
                                                             relative_container,
                                                             true,
-                                                        );
+                                                        )
                                                     }
-                                                });
+                                                }).inner
                                         }
                                         (_, _) => {
                                             self.render_container_contents(
@@ -944,14 +948,14 @@ impl EguiApp {
                                                 rect,
                                                 relative_container,
                                                 false,
-                                            );
+                                            )
                                         }
                                     }
                                 }
-                            });
-                        });
+                            })
+                        })
                     }
-                }).response
+                }).inner.inner.inner
         }))
     }
 
@@ -1387,10 +1391,10 @@ impl EguiApp {
                                                     .write()
                                                     .unwrap()
                                                     .insert(id, visibility);
+
+                                                return true;
                                             }
                                         }
-
-                                        return false;
                                     }
                                 }
 
@@ -1425,10 +1429,10 @@ impl EguiApp {
                                                     .write()
                                                     .unwrap()
                                                     .insert(id, visibility);
+
+                                                return true;
                                             }
                                         }
-
-                                        return false;
                                     }
                                 }
 
@@ -1874,7 +1878,7 @@ impl EguiApp {
         self.side_effects
             .lock()
             .unwrap()
-            .push_front(Box::new(handler));
+            .push_back(Box::new(handler));
     }
 
     fn paint(&self, ctx: &egui::Context) {
