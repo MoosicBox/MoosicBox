@@ -1622,45 +1622,38 @@ impl EguiApp {
         if scroll_child {
             if let Some(rect) = rect {
                 if let Some(container) = element.container_element() {
-                    if container.position != Some(Position::Absolute) {
-                        let pos = ui.cursor().min;
-                        let (offset_x, offset_y) = viewport
-                            .map_or((0.0, 0.0), |viewport| (viewport.pos.x, viewport.pos.y));
+                    let render_rect = Self::get_render_rect(ui, container, relative_container);
+                    let width = render_rect.width();
+                    let height = render_rect.height();
+                    let (offset_x, offset_y) =
+                        viewport.map_or((0.0, 0.0), |viewport| (viewport.pos.x, viewport.pos.y));
 
-                        let (width, height) =
-                            element.container_element().map_or((0.0, 0.0), |container| {
-                                let width = container.calculated_width.unwrap();
-                                let height = container.calculated_height.unwrap();
-                                (width, height)
-                            });
-
-                        if pos.x + width - offset_x < -1.0
-                            || pos.y + height - offset_y < -1.0
-                            || pos.x - offset_x >= rect.width() + 1.0
-                            || pos.y - offset_y >= rect.height() + 1.0
-                        {
-                            log::trace!(
-                                "render_element: skipping ({}, {}, {width}, {height}) {element}",
-                                pos.x,
-                                pos.y
-                            );
-                            self.handle_element_side_effects(
-                                ctx,
-                                Some(ui),
-                                element,
-                                viewport,
-                                None,
-                                true,
-                            );
-                            ui.allocate_space(egui::vec2(width, height));
-                            return;
-                        }
+                    if render_rect.min.x + width - offset_x < -1.0
+                        || render_rect.min.y + height - offset_y < -1.0
+                        || render_rect.min.x - offset_x >= rect.width() + 1.0
+                        || render_rect.min.y - offset_y >= rect.height() + 1.0
+                    {
                         log::trace!(
-                            "render_element: showing ({}, {}, {width}, {height}) {element}",
-                            pos.x,
-                            pos.y
+                            "render_element: skipping ({}, {}, {width}, {height}) {element}",
+                            render_rect.min.x,
+                            render_rect.min.y
                         );
+                        self.handle_element_side_effects(
+                            ctx,
+                            Some(ui),
+                            element,
+                            viewport,
+                            None,
+                            true,
+                        );
+                        ui.allocate_space(egui::vec2(width, height));
+                        return;
                     }
+                    log::trace!(
+                        "render_element: showing ({}, {}, {width}, {height}) {element}",
+                        render_rect.min.x,
+                        render_rect.min.y
+                    );
                 }
             }
         }
