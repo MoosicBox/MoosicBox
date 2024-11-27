@@ -642,7 +642,13 @@ impl EguiApp {
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &ContainerElement)>,
-    ) -> Response {
+    ) -> Option<Response> {
+        if container.is_hidden() {
+            log::debug!("render_container: container is hidden. skipping render");
+            self.handle_container_side_effects(ctx, Some(ui), container, viewport, None, true);
+            return None;
+        }
+
         if self.container_hidden(container) {
             let response = ui
                 .allocate_new_ui(
@@ -667,10 +673,10 @@ impl EguiApp {
                 true,
             );
 
-            return response;
+            return Some(response);
         }
 
-        Self::render_borders(ui, container, |ui| {
+        Some(Self::render_borders(ui, container, |ui| {
             egui::Frame::none().inner_margin(egui::Margin {
                     left: container.margin_left.unwrap_or(0.0),
                     right: container.margin_right.unwrap_or(0.0),
@@ -906,7 +912,7 @@ impl EguiApp {
                         });
                     }
                 }).response
-        })
+        }))
     }
 
     fn get_render_rect(
@@ -1613,16 +1619,6 @@ impl EguiApp {
     ) {
         log::trace!("render_element: rect={rect:?}");
 
-        if let Some(container) = element.container_element() {
-            if container.is_hidden() {
-                log::debug!("render_element: container is hidden. skipping render");
-                for element in &container.elements {
-                    self.handle_element_side_effects(ctx, Some(ui), element, viewport, None, true);
-                }
-                return;
-            }
-        }
-
         if scroll_child {
             if let Some(rect) = rect {
                 if let Some(container) = element.container_element() {
@@ -1823,18 +1819,19 @@ impl EguiApp {
         }
 
         if let Some(container) = element.container_element() {
-            let response =
-                self.render_container(ctx, ui, container, viewport, rect, relative_container);
-
-            if !self.container_hidden(container) {
-                self.handle_element_side_effects(
-                    ctx,
-                    Some(ui),
-                    element,
-                    viewport,
-                    Some(&response),
-                    false,
-                );
+            if let Some(response) =
+                self.render_container(ctx, ui, container, viewport, rect, relative_container)
+            {
+                if !self.container_hidden(container) {
+                    self.handle_element_side_effects(
+                        ctx,
+                        Some(ui),
+                        element,
+                        viewport,
+                        Some(&response),
+                        false,
+                    );
+                }
             }
         }
     }
