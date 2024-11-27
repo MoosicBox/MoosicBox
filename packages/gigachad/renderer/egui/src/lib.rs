@@ -389,10 +389,11 @@ impl EguiApp {
 
                                     match response.bytes().await {
                                         Ok(bytes) => {
-                                            images.write().unwrap().insert(
-                                                source,
-                                                AppImage::Bytes(bytes.to_vec().into()),
-                                            );
+                                            let bytes = bytes.to_vec().into();
+
+                                            let mut binding = images.write().unwrap();
+                                            binding.insert(source, AppImage::Bytes(bytes));
+                                            drop(binding);
 
                                             if let Some(ctx) = &*ctx.read().unwrap() {
                                                 ctx.request_repaint();
