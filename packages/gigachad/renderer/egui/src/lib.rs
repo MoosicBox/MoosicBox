@@ -663,7 +663,15 @@ impl EguiApp {
                     render_rect.min.x,
                     render_rect.min.y
                 );
-                self.handle_container_side_effects(ctx, Some(ui), container, viewport, None, true);
+                self.handle_container_side_effects(
+                    ctx,
+                    Some(ui),
+                    container,
+                    viewport,
+                    Some(rect),
+                    None,
+                    true,
+                );
                 ui.allocate_space(egui::vec2(width, height));
                 return true;
             }
@@ -689,7 +697,15 @@ impl EguiApp {
     ) -> Option<Response> {
         if container.is_hidden() {
             log::debug!("render_container: container is hidden. skipping render");
-            self.handle_container_side_effects(ctx, Some(ui), container, viewport, None, true);
+            self.handle_container_side_effects(
+                ctx,
+                Some(ui),
+                container,
+                viewport,
+                rect,
+                None,
+                true,
+            );
             return None;
         }
 
@@ -713,6 +729,7 @@ impl EguiApp {
                 None,
                 container,
                 viewport,
+                rect,
                 Some(&response),
                 true,
             );
@@ -1045,7 +1062,9 @@ impl EguiApp {
                     .filter_map(|(x, y)| match y {
                         gigachad_transformer::LayoutPosition::Wrap { row, .. } => Some((*row, x)),
                         gigachad_transformer::LayoutPosition::Default => {
-                            self.handle_element_side_effects(ctx, None, x, viewport, None, true);
+                            self.handle_element_side_effects(
+                                ctx, None, x, viewport, rect, None, true,
+                            );
                             None
                         }
                     })
@@ -1097,7 +1116,9 @@ impl EguiApp {
                     .filter_map(|(x, y)| match y {
                         gigachad_transformer::LayoutPosition::Wrap { col, .. } => Some((*col, x)),
                         gigachad_transformer::LayoutPosition::Default => {
-                            self.handle_element_side_effects(ctx, None, x, viewport, None, true);
+                            self.handle_element_side_effects(
+                                ctx, None, x, viewport, rect, None, true,
+                            );
                             None
                         }
                     })
@@ -1320,6 +1341,19 @@ impl EguiApp {
         }
     }
 
+    fn rect_contains_mouse(
+        pointer: &egui::PointerState,
+        rect: egui::Rect,
+        viewport: Option<egui::Rect>,
+    ) -> bool {
+        pointer.latest_pos().is_some_and(|pos| {
+            if viewport.is_some_and(|vp| !vp.contains(pos)) {
+                return false;
+            }
+            rect.contains(pos)
+        })
+    }
+
     #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
     fn handle_container_side_effects(
         &self,
@@ -1327,6 +1361,7 @@ impl EguiApp {
         ui: Option<&Ui>,
         container: &ContainerElement,
         viewport: Option<&Viewport>,
+        rect: Option<egui::Rect>,
         response: Option<&Response>,
         recurse: bool,
     ) {
@@ -1355,10 +1390,10 @@ impl EguiApp {
         if let Some(response) = response {
             if let Some(cursor) = container.cursor {
                 let ctx = ctx.clone();
+                let pointer = ctx.input(|x| x.pointer.clone());
                 let response = response.clone();
                 self.trigger_side_effect(move || {
-                    let response = response.interact(egui::Sense::click_and_drag());
-                    if response.hovered() || response.is_pointer_button_down_on() {
+                    if Self::rect_contains_mouse(&pointer, response.rect, rect) {
                         ctx.output_mut(|x| {
                             x.cursor_icon = cursor_to_cursor_icon(cursor);
                         });
@@ -1381,19 +1416,15 @@ impl EguiApp {
                                 if handled_click.load(std::sync::atomic::Ordering::SeqCst) {
                                     return false;
                                 }
-                                if let Some(pos) = pointer.latest_pos() {
-                                    if response.rect.contains(pos) && pointer.primary_released() {
-                                        handled_click
-                                            .store(true, std::sync::atomic::Ordering::SeqCst);
-                                        match action {
-                                            StyleAction::SetVisibility(visibility) => {
-                                                visibilities
-                                                    .write()
-                                                    .unwrap()
-                                                    .insert(id, visibility);
+                                if Self::rect_contains_mouse(&pointer, response.rect, rect)
+                                    && pointer.primary_released()
+                                {
+                                    handled_click.store(true, std::sync::atomic::Ordering::SeqCst);
+                                    match action {
+                                        StyleAction::SetVisibility(visibility) => {
+                                            visibilities.write().unwrap().insert(id, visibility);
 
-                                                return true;
-                                            }
+                                            return true;
                                         }
                                     }
                                 }
@@ -1419,19 +1450,14 @@ impl EguiApp {
                             let response = response.clone();
                             let pointer = ctx.input(|x| x.pointer.clone());
                             self.trigger_side_effect(move || {
-                                if let Some(pos) = pointer.latest_pos() {
-                                    if !handled_hover.load(std::sync::atomic::Ordering::SeqCst)
-                                        && response.rect.contains(pos)
-                                    {
-                                        match action {
-                                            StyleAction::SetVisibility(visibility) => {
-                                                visibilities
-                                                    .write()
-                                                    .unwrap()
-                                                    .insert(id, visibility);
+                                if !handled_hover.load(std::sync::atomic::Ordering::SeqCst)
+                                    && Self::rect_contains_mouse(&pointer, response.rect, rect)
+                                {
+                                    match action {
+                                        StyleAction::SetVisibility(visibility) => {
+                                            visibilities.write().unwrap().insert(id, visibility);
 
-                                                return true;
-                                            }
+                                            return true;
                                         }
                                     }
                                 }
@@ -1464,18 +1490,17 @@ impl EguiApp {
                                 if handled_click.load(std::sync::atomic::Ordering::SeqCst) {
                                     return false;
                                 }
-                                if let Some(pos) = pointer.latest_pos() {
-                                    if response.rect.contains(pos) && pointer.primary_released() {
-                                        handled_click
-                                            .store(true, std::sync::atomic::Ordering::SeqCst);
-                                        if let Err(e) = request_action.send(action.clone()) {
-                                            moosicbox_assert::die_or_error!(
-                                                "Failed to request action: {action} ({e:?})"
-                                            );
-                                        }
-
-                                        return false;
+                                if Self::rect_contains_mouse(&pointer, response.rect, rect)
+                                    && pointer.primary_released()
+                                {
+                                    handled_click.store(true, std::sync::atomic::Ordering::SeqCst);
+                                    if let Err(e) = request_action.send(action.clone()) {
+                                        moosicbox_assert::die_or_error!(
+                                            "Failed to request action: {action} ({e:?})"
+                                        );
                                     }
+
+                                    return false;
                                 }
 
                                 true
@@ -1490,16 +1515,14 @@ impl EguiApp {
                                 if handled_hover.load(std::sync::atomic::Ordering::SeqCst) {
                                     return false;
                                 }
-                                if let Some(pos) = pointer.latest_pos() {
-                                    if response.rect.contains(pos) {
-                                        if let Err(e) = request_action.send(action.clone()) {
-                                            moosicbox_assert::die_or_error!(
-                                                "Failed to request action: {action} ({e:?})"
-                                            );
-                                        }
-
-                                        return false;
+                                if Self::rect_contains_mouse(&pointer, response.rect, rect) {
+                                    if let Err(e) = request_action.send(action.clone()) {
+                                        moosicbox_assert::die_or_error!(
+                                            "Failed to request action: {action} ({e:?})"
+                                        );
                                     }
+
+                                    return false;
                                 }
 
                                 true
@@ -1512,7 +1535,9 @@ impl EguiApp {
 
         if recurse {
             for element in &container.elements {
-                self.handle_element_side_effects(ctx, ui, element, viewport, response, recurse);
+                self.handle_element_side_effects(
+                    ctx, ui, element, viewport, rect, response, recurse,
+                );
             }
         }
     }
@@ -1524,6 +1549,7 @@ impl EguiApp {
         ui: Option<&Ui>,
         element: &Element,
         viewport: Option<&Viewport>,
+        rect: Option<egui::Rect>,
         response: Option<&Response>,
         recurse: bool,
     ) {
@@ -1539,10 +1565,8 @@ impl EguiApp {
                         if handled_hover.load(std::sync::atomic::Ordering::SeqCst) {
                             return false;
                         }
-                        if let Some(pos) = pointer.latest_pos() {
-                            if response.rect.contains(pos) {
-                                ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
-                            }
+                        if Self::rect_contains_mouse(&pointer, response.rect, rect) {
+                            ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
                         }
 
                         true
@@ -1557,24 +1581,22 @@ impl EguiApp {
                     let pointer = ctx.input(|x| x.pointer.clone());
                     let ctx = ctx.clone();
                     self.trigger_side_effect(move || {
-                        if let Some(pos) = pointer.latest_pos() {
-                            if !handled_click.load(std::sync::atomic::Ordering::SeqCst)
-                                && response.rect.contains(pos)
-                                && pointer.primary_released()
-                            {
-                                handled_click.store(true, std::sync::atomic::Ordering::SeqCst);
-                                if let Some(href) = href.clone() {
-                                    if let Err(e) = sender.send(href) {
-                                        log::error!("Failed to send href event: {e:?}");
-                                    }
+                        if !handled_click.load(std::sync::atomic::Ordering::SeqCst)
+                            && Self::rect_contains_mouse(&pointer, response.rect, rect)
+                            && pointer.primary_released()
+                        {
+                            handled_click.store(true, std::sync::atomic::Ordering::SeqCst);
+                            if let Some(href) = href.clone() {
+                                if let Err(e) = sender.send(href) {
+                                    log::error!("Failed to send href event: {e:?}");
                                 }
                             }
+                        }
 
-                            if !handled_hover.load(std::sync::atomic::Ordering::SeqCst)
-                                && response.rect.contains(pos)
-                            {
-                                ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
-                            }
+                        if !handled_hover.load(std::sync::atomic::Ordering::SeqCst)
+                            && Self::rect_contains_mouse(&pointer, response.rect, rect)
+                        {
+                            ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
                         }
 
                         true
@@ -1646,7 +1668,9 @@ impl EguiApp {
         }
 
         if let Some(container) = element.container_element() {
-            self.handle_container_side_effects(ctx, ui, container, viewport, response, recurse);
+            self.handle_container_side_effects(
+                ctx, ui, container, viewport, rect, response, recurse,
+            );
         }
     }
 
@@ -1702,6 +1726,7 @@ impl EguiApp {
                 Some(ui),
                 element,
                 viewport,
+                rect,
                 Some(&response),
                 false,
             );
@@ -1718,6 +1743,7 @@ impl EguiApp {
                         Some(ui),
                         element,
                         viewport,
+                        rect,
                         Some(&response),
                         false,
                     );
