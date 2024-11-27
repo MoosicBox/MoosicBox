@@ -1748,32 +1748,21 @@ impl EguiApp {
                 ui.set_width(container.calculated_width.unwrap());
                 ui.set_height(container.calculated_height.unwrap());
 
-                let contains_image = {
-                    matches!(
-                        self.images.read().unwrap().get(source),
-                        Some(AppImage::Bytes(_))
-                    )
+                let Some(AppImage::Bytes(bytes)) = self.images.read().unwrap().get(source).cloned()
+                else {
+                    return;
                 };
-                if contains_image {
-                    log::trace!(
-                        "render_element: showing image for source={source} ({}, {})",
-                        container.calculated_width.unwrap(),
-                        container.calculated_height.unwrap(),
-                    );
-                    let Some(AppImage::Bytes(bytes)) =
-                        self.images.read().unwrap().get(source).cloned()
-                    else {
-                        unreachable!()
-                    };
-                    let image = egui::Image::from_bytes(
-                        source.to_string(),
-                        egui::load::Bytes::Shared(bytes),
-                    )
-                    .max_width(container.calculated_width.unwrap())
-                    .max_height(container.calculated_height.unwrap());
 
-                    image.ui(ui);
-                }
+                log::trace!(
+                    "render_image: showing image for source={source} ({}, {})",
+                    container.calculated_width.unwrap(),
+                    container.calculated_height.unwrap(),
+                );
+
+                egui::Image::from_bytes(source.to_string(), egui::load::Bytes::Shared(bytes))
+                    .max_width(container.calculated_width.unwrap())
+                    .max_height(container.calculated_height.unwrap())
+                    .ui(ui);
             })
             .response
     }
