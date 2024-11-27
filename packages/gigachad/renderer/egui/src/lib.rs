@@ -1916,7 +1916,6 @@ impl EguiApp {
             .frame(egui::Frame::none())
             .show(ctx, |ui| {
                 egui::Frame::none()
-                    .inner_margin(egui::Margin::ZERO)
                     .fill(
                         self.background
                             .unwrap_or_else(|| Color32::from_hex("#181a1b").unwrap()),
