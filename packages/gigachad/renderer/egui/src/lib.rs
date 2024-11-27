@@ -378,6 +378,12 @@ impl EguiApp {
                             match reqwest::get(&source).await {
                                 Ok(response) => {
                                     if !response.status().is_success() {
+                                        log::error!(
+                                            "Failed to load image: {}",
+                                            response.text().await.unwrap_or_else(|e| {
+                                                format!("(failed to get response text: {e:?})")
+                                            })
+                                        );
                                         return;
                                     }
 
