@@ -3,7 +3,7 @@
 
 use std::{
     collections::{HashMap, VecDeque},
-    sync::{atomic::AtomicBool, Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    sync::{atomic::AtomicBool, Arc, LazyLock, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
 use async_trait::async_trait;
@@ -374,8 +374,11 @@ impl EguiApp {
                         }
                     } else {
                         moosicbox_task::spawn("renderer: load_image", async move {
+                            static CLIENT: LazyLock<reqwest::Client> =
+                                LazyLock::new(reqwest::Client::new);
+
                             log::trace!("loading image {source}");
-                            match reqwest::get(&source).await {
+                            match CLIENT.get(&source).send().await {
                                 Ok(response) => {
                                     if !response.status().is_success() {
                                         log::error!(
