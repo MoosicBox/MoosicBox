@@ -1306,18 +1306,16 @@ impl EguiApp {
             if let Some(cursor) = container.cursor {
                 let ctx = ctx.clone();
                 let response = response.clone();
-                self.side_effects_tx
-                    .send(Box::new(move || {
-                        let response = response.interact(egui::Sense::click_and_drag());
-                        if response.hovered() || response.is_pointer_button_down_on() {
-                            ctx.output_mut(|x| {
-                                x.cursor_icon = cursor_to_cursor_icon(cursor);
-                            });
-                        }
+                self.handle_side_effect(move || {
+                    let response = response.interact(egui::Sense::click_and_drag());
+                    if response.hovered() || response.is_pointer_button_down_on() {
+                        ctx.output_mut(|x| {
+                            x.cursor_icon = cursor_to_cursor_icon(cursor);
+                        });
+                    }
 
-                        true
-                    }))
-                    .unwrap();
+                    true
+                });
             }
             if container.is_visible() {
                 for action in &container.style_actions {
@@ -1329,42 +1327,39 @@ impl EguiApp {
                             let visibilities = self.visibilities.clone();
                             let pointer = ctx.input(|x| x.pointer.clone());
                             let response = response.clone();
-                            self.side_effects_tx
-                                .send(Box::new(move || {
-                                    if handled_click.load(std::sync::atomic::Ordering::SeqCst) {
+                            self.handle_side_effect(move || {
+                                if handled_click.load(std::sync::atomic::Ordering::SeqCst) {
+                                    return false;
+                                }
+                                if let Some(pos) = pointer.latest_pos() {
+                                    if response.rect.contains(pos) && pointer.primary_released() {
+                                        handled_click
+                                            .store(true, std::sync::atomic::Ordering::SeqCst);
+                                        match action {
+                                            StyleAction::SetVisibility(visibility) => {
+                                                visibilities
+                                                    .write()
+                                                    .unwrap()
+                                                    .insert(id, visibility);
+                                            }
+                                        }
+
                                         return false;
                                     }
-                                    if let Some(pos) = pointer.latest_pos() {
-                                        if response.rect.contains(pos) && pointer.primary_released()
-                                        {
-                                            handled_click
-                                                .store(true, std::sync::atomic::Ordering::SeqCst);
-                                            match action {
-                                                StyleAction::SetVisibility(visibility) => {
-                                                    visibilities
-                                                        .write()
-                                                        .unwrap()
-                                                        .insert(id, visibility);
-                                                }
-                                            }
+                                }
 
-                                            return false;
+                                match action {
+                                    StyleAction::SetVisibility(_) => {
+                                        let contains =
+                                            { visibilities.read().unwrap().contains_key(&id) };
+                                        if contains {
+                                            visibilities.write().unwrap().remove(&id);
                                         }
                                     }
+                                }
 
-                                    match action {
-                                        StyleAction::SetVisibility(_) => {
-                                            let contains =
-                                                { visibilities.read().unwrap().contains_key(&id) };
-                                            if contains {
-                                                visibilities.write().unwrap().remove(&id);
-                                            }
-                                        }
-                                    }
-
-                                    true
-                                }))
-                                .unwrap();
+                                true
+                            });
                         }
                         StyleActionType::Hover(action) => {
                             let handled_hover = self.state.handled_hover.clone();
@@ -1373,38 +1368,36 @@ impl EguiApp {
                             let visibilities = self.visibilities.clone();
                             let response = response.clone();
                             let pointer = ctx.input(|x| x.pointer.clone());
-                            self.side_effects_tx
-                                .send(Box::new(move || {
-                                    if let Some(pos) = pointer.latest_pos() {
-                                        if !handled_hover.load(std::sync::atomic::Ordering::SeqCst)
-                                            && response.rect.contains(pos)
-                                        {
-                                            match action {
-                                                StyleAction::SetVisibility(visibility) => {
-                                                    visibilities
-                                                        .write()
-                                                        .unwrap()
-                                                        .insert(id, visibility);
-                                                }
-                                            }
-
-                                            return false;
-                                        }
-                                    }
-
-                                    match action {
-                                        StyleAction::SetVisibility(_) => {
-                                            let contains =
-                                                { visibilities.read().unwrap().contains_key(&id) };
-                                            if contains {
-                                                visibilities.write().unwrap().remove(&id);
+                            self.handle_side_effect(move || {
+                                if let Some(pos) = pointer.latest_pos() {
+                                    if !handled_hover.load(std::sync::atomic::Ordering::SeqCst)
+                                        && response.rect.contains(pos)
+                                    {
+                                        match action {
+                                            StyleAction::SetVisibility(visibility) => {
+                                                visibilities
+                                                    .write()
+                                                    .unwrap()
+                                                    .insert(id, visibility);
                                             }
                                         }
-                                    }
 
-                                    true
-                                }))
-                                .unwrap();
+                                        return false;
+                                    }
+                                }
+
+                                match action {
+                                    StyleAction::SetVisibility(_) => {
+                                        let contains =
+                                            { visibilities.read().unwrap().contains_key(&id) };
+                                        if contains {
+                                            visibilities.write().unwrap().remove(&id);
+                                        }
+                                    }
+                                }
+
+                                true
+                            });
                         }
                     }
                 }
@@ -1417,55 +1410,50 @@ impl EguiApp {
                             let action = action.to_owned();
                             let pointer = ctx.input(|x| x.pointer.clone());
                             let response = response.clone();
-                            self.side_effects_tx
-                                .send(Box::new(move || {
-                                    if handled_click.load(std::sync::atomic::Ordering::SeqCst) {
+                            self.handle_side_effect(move || {
+                                if handled_click.load(std::sync::atomic::Ordering::SeqCst) {
+                                    return false;
+                                }
+                                if let Some(pos) = pointer.latest_pos() {
+                                    if response.rect.contains(pos) && pointer.primary_released() {
+                                        handled_click
+                                            .store(true, std::sync::atomic::Ordering::SeqCst);
+                                        if let Err(e) = request_action.send(action.clone()) {
+                                            moosicbox_assert::die_or_error!(
+                                                "Failed to request action: {action} ({e:?})"
+                                            );
+                                        }
+
                                         return false;
                                     }
-                                    if let Some(pos) = pointer.latest_pos() {
-                                        if response.rect.contains(pos) && pointer.primary_released()
-                                        {
-                                            handled_click
-                                                .store(true, std::sync::atomic::Ordering::SeqCst);
-                                            if let Err(e) = request_action.send(action.clone()) {
-                                                moosicbox_assert::die_or_error!(
-                                                    "Failed to request action: {action} ({e:?})"
-                                                );
-                                            }
+                                }
 
-                                            return false;
-                                        }
-                                    }
-
-                                    true
-                                }))
-                                .unwrap();
+                                true
+                            });
                         }
                         ActionType::Hover { action } => {
                             let handled_hover = self.state.handled_hover.clone();
                             let action = action.to_owned();
                             let pointer = ctx.input(|x| x.pointer.clone());
                             let response = response.clone();
-                            self.side_effects_tx
-                                .send(Box::new(move || {
-                                    if handled_hover.load(std::sync::atomic::Ordering::SeqCst) {
+                            self.handle_side_effect(move || {
+                                if handled_hover.load(std::sync::atomic::Ordering::SeqCst) {
+                                    return false;
+                                }
+                                if let Some(pos) = pointer.latest_pos() {
+                                    if response.rect.contains(pos) {
+                                        if let Err(e) = request_action.send(action.clone()) {
+                                            moosicbox_assert::die_or_error!(
+                                                "Failed to request action: {action} ({e:?})"
+                                            );
+                                        }
+
                                         return false;
                                     }
-                                    if let Some(pos) = pointer.latest_pos() {
-                                        if response.rect.contains(pos) {
-                                            if let Err(e) = request_action.send(action.clone()) {
-                                                moosicbox_assert::die_or_error!(
-                                                    "Failed to request action: {action} ({e:?})"
-                                                );
-                                            }
+                                }
 
-                                            return false;
-                                        }
-                                    }
-
-                                    true
-                                }))
-                                .unwrap();
+                                true
+                            });
                         }
                     }
                 }
@@ -1497,20 +1485,18 @@ impl EguiApp {
                     let response = response.clone();
                     let pointer = ctx.input(|x| x.pointer.clone());
                     let ctx = ctx.clone();
-                    self.side_effects_tx
-                        .send(Box::new(move || {
-                            if handled_hover.load(std::sync::atomic::Ordering::SeqCst) {
-                                return false;
+                    self.handle_side_effect(move || {
+                        if handled_hover.load(std::sync::atomic::Ordering::SeqCst) {
+                            return false;
+                        }
+                        if let Some(pos) = pointer.latest_pos() {
+                            if response.rect.contains(pos) {
+                                ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
                             }
-                            if let Some(pos) = pointer.latest_pos() {
-                                if response.rect.contains(pos) {
-                                    ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
-                                }
-                            }
+                        }
 
-                            true
-                        }))
-                        .unwrap();
+                        true
+                    });
                 }
                 Element::Anchor { href, .. } => {
                     let href = href.to_owned();
@@ -1520,31 +1506,29 @@ impl EguiApp {
                     let response = response.clone();
                     let pointer = ctx.input(|x| x.pointer.clone());
                     let ctx = ctx.clone();
-                    self.side_effects_tx
-                        .send(Box::new(move || {
-                            if let Some(pos) = pointer.latest_pos() {
-                                if !handled_click.load(std::sync::atomic::Ordering::SeqCst)
-                                    && response.rect.contains(pos)
-                                    && pointer.primary_released()
-                                {
-                                    handled_click.store(true, std::sync::atomic::Ordering::SeqCst);
-                                    if let Some(href) = href.clone() {
-                                        if let Err(e) = sender.send(href) {
-                                            log::error!("Failed to send href event: {e:?}");
-                                        }
+                    self.handle_side_effect(move || {
+                        if let Some(pos) = pointer.latest_pos() {
+                            if !handled_click.load(std::sync::atomic::Ordering::SeqCst)
+                                && response.rect.contains(pos)
+                                && pointer.primary_released()
+                            {
+                                handled_click.store(true, std::sync::atomic::Ordering::SeqCst);
+                                if let Some(href) = href.clone() {
+                                    if let Err(e) = sender.send(href) {
+                                        log::error!("Failed to send href event: {e:?}");
                                     }
-                                }
-
-                                if !handled_hover.load(std::sync::atomic::Ordering::SeqCst)
-                                    && response.rect.contains(pos)
-                                {
-                                    ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
                                 }
                             }
 
-                            true
-                        }))
-                        .unwrap();
+                            if !handled_hover.load(std::sync::atomic::Ordering::SeqCst)
+                                && response.rect.contains(pos)
+                            {
+                                ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
+                            }
+                        }
+
+                        true
+                    });
                 }
                 _ => {}
             }
@@ -1886,6 +1870,10 @@ impl EguiApp {
                 ui.end_row();
             }
         });
+    }
+
+    fn handle_side_effect(&self, handler: impl Fn() -> bool + Send + Sync + 'static) {
+        self.side_effects_tx.send(Box::new(handler)).unwrap();
     }
 
     fn paint(&self, ctx: &egui::Context) {
