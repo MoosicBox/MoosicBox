@@ -643,7 +643,30 @@ impl EguiApp {
                 .unwrap_or(Visibility::Hidden);
 
             if visibility == Visibility::Hidden {
-                ui.set_opacity(0.0);
+                let response = ui
+                    .allocate_new_ui(
+                        egui::UiBuilder::new().max_rect(Self::get_render_rect(
+                            ui,
+                            container,
+                            relative_container,
+                        )),
+                        |ui| {
+                            ui.set_width(container.calculated_width.unwrap());
+                            ui.set_height(container.calculated_height.unwrap());
+                        },
+                    )
+                    .response;
+
+                self.handle_container_side_effects(
+                    ctx,
+                    None,
+                    container,
+                    viewport,
+                    Some(&response),
+                    true,
+                );
+
+                return response;
             }
         }
 
