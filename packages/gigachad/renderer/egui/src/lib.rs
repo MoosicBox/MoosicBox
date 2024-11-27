@@ -2,8 +2,8 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::{
-    collections::HashMap,
-    sync::{atomic::AtomicBool, Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    collections::{HashMap, VecDeque},
+    sync::{atomic::AtomicBool, Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
 use async_trait::async_trait;
@@ -318,8 +318,7 @@ struct EguiApp {
     background: Option<Color32>,
     request_action: Sender<String>,
     on_resize: Sender<(f32, f32)>,
-    side_effects_tx: Sender<Handler>,
-    side_effects_rx: Receiver<Handler>,
+    side_effects: Arc<Mutex<VecDeque<Handler>>>,
 }
 
 type Handler = Box<dyn Fn() -> bool + Send + Sync>;
@@ -333,8 +332,6 @@ impl EguiApp {
         request_action: Sender<String>,
         on_resize: Sender<(f32, f32)>,
     ) -> Self {
-        let (side_effects_tx, side_effects_rx) = flume::unbounded();
-
         Self {
             ctx: Arc::new(RwLock::new(None)),
             state: ActionState::default(),
@@ -353,8 +350,7 @@ impl EguiApp {
             background: None,
             request_action,
             on_resize,
-            side_effects_tx,
-            side_effects_rx,
+            side_effects: Arc::new(Mutex::new(VecDeque::new())),
         }
     }
 
@@ -1873,7 +1869,10 @@ impl EguiApp {
     }
 
     fn handle_side_effect(&self, handler: impl Fn() -> bool + Send + Sync + 'static) {
-        self.side_effects_tx.send(Box::new(handler)).unwrap();
+        self.side_effects
+            .lock()
+            .unwrap()
+            .push_front(Box::new(handler));
     }
 
     fn paint(&self, ctx: &egui::Context) {
@@ -1911,22 +1910,19 @@ impl EguiApp {
                     )
                     .show(ui, |ui| {
                         self.render_container(ctx, ui, container, None, None, None);
-
-                        // Get all handlers and reverse the order to ensure elements on top get the
-                        // first event handling treatment
-                        let handlers = self.side_effects_rx.drain();
-                        let mut handlers = handlers.into_iter().collect_vec();
-                        handlers.reverse();
-                        let handlers = handlers;
-                        log::trace!("paint: {} handler(s) on render", handlers.len());
-
-                        for handler in handlers {
-                            if !handler() {
-                                break;
-                            }
-                        }
                     });
             });
+
+        let mut handlers_count = 0;
+
+        for handler in self.side_effects.lock().unwrap().drain(..) {
+            handlers_count += 1;
+            if !handler() {
+                break;
+            }
+        }
+
+        log::trace!("paint: {handlers_count} handler(s) on render");
     }
 }
 
