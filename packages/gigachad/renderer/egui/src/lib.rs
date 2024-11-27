@@ -1352,7 +1352,7 @@ impl EguiApp {
             if let Some(cursor) = container.cursor {
                 let ctx = ctx.clone();
                 let response = response.clone();
-                self.handle_side_effect(move || {
+                self.trigger_side_effect(move || {
                     let response = response.interact(egui::Sense::click_and_drag());
                     if response.hovered() || response.is_pointer_button_down_on() {
                         ctx.output_mut(|x| {
@@ -1373,7 +1373,7 @@ impl EguiApp {
                             let visibilities = self.visibilities.clone();
                             let pointer = ctx.input(|x| x.pointer.clone());
                             let response = response.clone();
-                            self.handle_side_effect(move || {
+                            self.trigger_side_effect(move || {
                                 if handled_click.load(std::sync::atomic::Ordering::SeqCst) {
                                     return false;
                                 }
@@ -1414,7 +1414,7 @@ impl EguiApp {
                             let visibilities = self.visibilities.clone();
                             let response = response.clone();
                             let pointer = ctx.input(|x| x.pointer.clone());
-                            self.handle_side_effect(move || {
+                            self.trigger_side_effect(move || {
                                 if let Some(pos) = pointer.latest_pos() {
                                     if !handled_hover.load(std::sync::atomic::Ordering::SeqCst)
                                         && response.rect.contains(pos)
@@ -1456,7 +1456,7 @@ impl EguiApp {
                             let action = action.to_owned();
                             let pointer = ctx.input(|x| x.pointer.clone());
                             let response = response.clone();
-                            self.handle_side_effect(move || {
+                            self.trigger_side_effect(move || {
                                 if handled_click.load(std::sync::atomic::Ordering::SeqCst) {
                                     return false;
                                 }
@@ -1482,7 +1482,7 @@ impl EguiApp {
                             let action = action.to_owned();
                             let pointer = ctx.input(|x| x.pointer.clone());
                             let response = response.clone();
-                            self.handle_side_effect(move || {
+                            self.trigger_side_effect(move || {
                                 if handled_hover.load(std::sync::atomic::Ordering::SeqCst) {
                                     return false;
                                 }
@@ -1531,7 +1531,7 @@ impl EguiApp {
                     let response = response.clone();
                     let pointer = ctx.input(|x| x.pointer.clone());
                     let ctx = ctx.clone();
-                    self.handle_side_effect(move || {
+                    self.trigger_side_effect(move || {
                         if handled_hover.load(std::sync::atomic::Ordering::SeqCst) {
                             return false;
                         }
@@ -1552,7 +1552,7 @@ impl EguiApp {
                     let response = response.clone();
                     let pointer = ctx.input(|x| x.pointer.clone());
                     let ctx = ctx.clone();
-                    self.handle_side_effect(move || {
+                    self.trigger_side_effect(move || {
                         if let Some(pos) = pointer.latest_pos() {
                             if !handled_click.load(std::sync::atomic::Ordering::SeqCst)
                                 && response.rect.contains(pos)
@@ -1870,7 +1870,7 @@ impl EguiApp {
         });
     }
 
-    fn handle_side_effect(&self, handler: impl Fn() -> bool + Send + Sync + 'static) {
+    fn trigger_side_effect(&self, handler: impl Fn() -> bool + Send + Sync + 'static) {
         self.side_effects
             .lock()
             .unwrap()
