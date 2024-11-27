@@ -1679,139 +1679,16 @@ impl EguiApp {
             }
         }
 
-        let response: Option<Response> = match element {
-            Element::Input(input) => {
-                let value = match input {
-                    Input::Text { value, .. } | Input::Password { value, .. } => value,
-                };
-
-                let id = ui.next_auto_id();
-                let mut value_text = ui
-                    .data_mut(|data| data.remove_temp::<String>(id))
-                    .unwrap_or_else(|| value.clone().unwrap_or_default());
-                let mut text_edit = egui::TextEdit::singleline(&mut value_text).id(id);
-
-                if let Input::Password { .. } = input {
-                    text_edit = text_edit.password(true);
-                }
-
-                let response = text_edit.ui(ui);
-                ui.data_mut(|data| data.insert_temp(id, value_text));
-                Some(response)
-            }
+        let response = match element {
+            Element::Input(input) => Some(Self::render_input(ui, input)),
             Element::Raw { value } => Some(ui.label(value)),
-            Element::Image { source, element } => source.clone().map(|source| {
-                egui::Frame::none()
-                    .show(ui, |ui| {
-                        ui.set_width(element.calculated_width.unwrap());
-                        ui.set_height(element.calculated_height.unwrap());
-
-                        let contains_image = {
-                            matches!(
-                                self.images.read().unwrap().get(&source),
-                                Some(AppImage::Bytes(_))
-                            )
-                        };
-                        if contains_image {
-                            log::trace!(
-                                "render_element: showing image for source={source} ({}, {})",
-                                element.calculated_width.unwrap(),
-                                element.calculated_height.unwrap(),
-                            );
-                            let Some(AppImage::Bytes(bytes)) =
-                                self.images.read().unwrap().get(&source).cloned()
-                            else {
-                                unreachable!()
-                            };
-                            let image =
-                                egui::Image::from_bytes(source, egui::load::Bytes::Shared(bytes))
-                                    .max_width(element.calculated_width.unwrap())
-                                    .max_height(element.calculated_height.unwrap());
-
-                            image.ui(ui);
-                        }
-                    })
-                    .response
-            }),
-            Element::Canvas { element } => element.str_id.as_ref().map_or_else(
-                || None,
-                |str_id| {
-                    self.canvas_actions.read().unwrap().get(str_id).map_or_else(
-                        || None,
-                        |actions| {
-                            let (response, painter) = ui.allocate_painter(
-                                egui::Vec2::new(
-                                    element.calculated_width.unwrap(),
-                                    element.calculated_height.unwrap(),
-                                ),
-                                egui::Sense::hover(),
-                            );
-
-                            let pixels_per_point = 1.0; // ctx.pixels_per_point();
-                            let cursor_px = egui::Pos2::new(
-                                response.rect.min.x * pixels_per_point,
-                                response.rect.min.y * pixels_per_point,
-                            )
-                            .ceil();
-
-                            let default_color = Color32::BLACK;
-                            let stroke =
-                                &mut egui::epaint::PathStroke::new(1.0, default_color).inside();
-                            stroke.color = egui::epaint::ColorMode::Solid(default_color);
-
-                            for action in actions {
-                                match action {
-                                    CanvasAction::Clear => {}
-                                    CanvasAction::StrokeSize(size) => {
-                                        stroke.width = *size;
-                                    }
-                                    CanvasAction::StrokeColor(color) => {
-                                        stroke.color =
-                                            egui::epaint::ColorMode::Solid((*color).into());
-                                    }
-                                    CanvasAction::Line(start, end) => {
-                                        painter.line_segment(
-                                            [
-                                                egui::Pos2::new(
-                                                    start.0 + cursor_px.x,
-                                                    start.1 + cursor_px.y,
-                                                ),
-                                                egui::Pos2::new(
-                                                    end.0 + cursor_px.x,
-                                                    end.1 + cursor_px.y,
-                                                ),
-                                            ],
-                                            stroke.clone(),
-                                        );
-                                    }
-                                    CanvasAction::FillRect(start, end) => {
-                                        let egui::epaint::ColorMode::Solid(color) = stroke.color
-                                        else {
-                                            continue;
-                                        };
-                                        painter.rect_filled(
-                                            egui::Rect::from_min_max(
-                                                egui::Pos2::new(
-                                                    start.0 + cursor_px.x,
-                                                    start.1 + cursor_px.y,
-                                                ),
-                                                egui::Pos2::new(
-                                                    end.0 + cursor_px.x,
-                                                    end.1 + cursor_px.y,
-                                                ),
-                                            ),
-                                            0.0,
-                                            color,
-                                        );
-                                    }
-                                }
-                            }
-
-                            Some(response)
-                        },
-                    )
-                },
-            ),
+            Element::Image { source, element } => source
+                .as_deref()
+                .map(|source| self.render_image(ui, source, element)),
+            Element::Canvas { element } => element
+                .str_id
+                .as_ref()
+                .map_or_else(|| None, |str_id| self.render_canvas(ui, str_id, element)),
             _ => None,
         };
 
@@ -1843,6 +1720,129 @@ impl EguiApp {
                 }
             }
         }
+    }
+
+    fn render_input(ui: &mut Ui, input: &Input) -> Response {
+        let value = match input {
+            Input::Text { value, .. } | Input::Password { value, .. } => value,
+        };
+
+        let id = ui.next_auto_id();
+        let mut value_text = ui
+            .data_mut(|data| data.remove_temp::<String>(id))
+            .unwrap_or_else(|| value.clone().unwrap_or_default());
+        let mut text_edit = egui::TextEdit::singleline(&mut value_text).id(id);
+
+        if let Input::Password { .. } = input {
+            text_edit = text_edit.password(true);
+        }
+
+        let response = text_edit.ui(ui);
+        ui.data_mut(|data| data.insert_temp(id, value_text));
+        response
+    }
+
+    fn render_image(&self, ui: &mut Ui, source: &str, container: &ContainerElement) -> Response {
+        egui::Frame::none()
+            .show(ui, |ui| {
+                ui.set_width(container.calculated_width.unwrap());
+                ui.set_height(container.calculated_height.unwrap());
+
+                let contains_image = {
+                    matches!(
+                        self.images.read().unwrap().get(source),
+                        Some(AppImage::Bytes(_))
+                    )
+                };
+                if contains_image {
+                    log::trace!(
+                        "render_element: showing image for source={source} ({}, {})",
+                        container.calculated_width.unwrap(),
+                        container.calculated_height.unwrap(),
+                    );
+                    let Some(AppImage::Bytes(bytes)) =
+                        self.images.read().unwrap().get(source).cloned()
+                    else {
+                        unreachable!()
+                    };
+                    let image = egui::Image::from_bytes(
+                        source.to_string(),
+                        egui::load::Bytes::Shared(bytes),
+                    )
+                    .max_width(container.calculated_width.unwrap())
+                    .max_height(container.calculated_height.unwrap());
+
+                    image.ui(ui);
+                }
+            })
+            .response
+    }
+
+    fn render_canvas(
+        &self,
+        ui: &mut Ui,
+        str_id: &str,
+        container: &ContainerElement,
+    ) -> Option<Response> {
+        self.canvas_actions.read().unwrap().get(str_id).map_or_else(
+            || None,
+            |actions| {
+                let (response, painter) = ui.allocate_painter(
+                    egui::Vec2::new(
+                        container.calculated_width.unwrap(),
+                        container.calculated_height.unwrap(),
+                    ),
+                    egui::Sense::hover(),
+                );
+
+                let pixels_per_point = 1.0; // ctx.pixels_per_point();
+                let cursor_px = egui::Pos2::new(
+                    response.rect.min.x * pixels_per_point,
+                    response.rect.min.y * pixels_per_point,
+                )
+                .ceil();
+
+                let default_color = Color32::BLACK;
+                let stroke = &mut egui::epaint::PathStroke::new(1.0, default_color).inside();
+                stroke.color = egui::epaint::ColorMode::Solid(default_color);
+
+                for action in actions {
+                    match action {
+                        CanvasAction::Clear => {}
+                        CanvasAction::StrokeSize(size) => {
+                            stroke.width = *size;
+                        }
+                        CanvasAction::StrokeColor(color) => {
+                            stroke.color = egui::epaint::ColorMode::Solid((*color).into());
+                        }
+                        CanvasAction::Line(start, end) => {
+                            painter.line_segment(
+                                [
+                                    egui::Pos2::new(start.0 + cursor_px.x, start.1 + cursor_px.y),
+                                    egui::Pos2::new(end.0 + cursor_px.x, end.1 + cursor_px.y),
+                                ],
+                                stroke.clone(),
+                            );
+                        }
+                        CanvasAction::FillRect(start, end) => {
+                            let egui::epaint::ColorMode::Solid(color) = stroke.color else {
+                                continue;
+                            };
+                            painter.rect_filled(
+                                egui::Rect::from_min_max(
+                                    egui::Pos2::new(start.0 + cursor_px.x, start.1 + cursor_px.y),
+                                    egui::Pos2::new(end.0 + cursor_px.x, end.1 + cursor_px.y),
+                                ),
+                                0.0,
+                                color,
+                            );
+                        }
+                    }
+                }
+
+                Some(response)
+            },
+        )
     }
 
     #[allow(clippy::too_many_arguments)]
