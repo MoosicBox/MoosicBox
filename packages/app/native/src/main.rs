@@ -660,6 +660,7 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
                     }
 
                     let position = if play { Some(0) } else { None };
+                    let seek = if play { Some(0.0) } else { None };
 
                     STATE
                         .queue_ws_message(
@@ -674,7 +675,7 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
                                     active: None,
                                     playing: None,
                                     position,
-                                    seek: None,
+                                    seek,
                                     volume: None,
                                     playlist: Some(UpdateSessionPlaylist {
                                         session_playlist_id: session.playlist.session_playlist_id,
