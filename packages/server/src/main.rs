@@ -49,6 +49,6 @@ fn main() -> std::io::Result<()> {
         true,
         #[cfg(feature = "upnp")]
         true,
-        || log::info!("Server started on {addr}:{service_port}"),
+        || {},
     ))
 }

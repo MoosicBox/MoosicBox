@@ -429,6 +429,8 @@ pub async fn run(
 
     on_startup();
 
+    log::info!("MoosicBox Server started on {ip}:{service_port}");
+
     let config_db = config_database.clone();
 
     if let Err(err) = try_join!(
