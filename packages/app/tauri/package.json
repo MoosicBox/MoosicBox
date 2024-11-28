@@ -38,7 +38,7 @@
         "@solid-primitives/utils": "^6.2.3",
         "@tauri-apps/api": "^2.1.1",
         "@tauri-apps/plugin-dialog": "^2.0.1",
-        "astro": "^4.16.15",
+        "astro": "^4.16.16",
         "date-fns": "^3.6.0",
         "howler": "^2.2.4",
         "htmx.org": "^2.0.3",
