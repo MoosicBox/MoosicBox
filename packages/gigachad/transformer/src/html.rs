@@ -126,8 +126,7 @@ fn get_visibility(tag: &HTMLTag) -> Option<Visibility> {
 }
 
 fn get_route(tag: &HTMLTag) -> Option<Route> {
-    #[allow(clippy::option_if_let_else)]
-    #[allow(clippy::manual_map)]
+    #[allow(clippy::option_if_let_else, clippy::manual_map)]
     if let Some(get) = get_tag_attr_value(tag, "hx-get") {
         Some(Route::Get {
             route: get.to_string(),
@@ -155,6 +154,7 @@ fn get_overflow(tag: &HTMLTag, name: &str) -> LayoutOverflow {
 
 fn get_justify_content(tag: &HTMLTag, name: &str) -> JustifyContent {
     match get_tag_attr_value_lower(tag, name).as_deref() {
+        Some("start") => JustifyContent::Start,
         Some("center") => JustifyContent::Center,
         Some("end") => JustifyContent::End,
         Some("space-between") => JustifyContent::SpaceBetween,

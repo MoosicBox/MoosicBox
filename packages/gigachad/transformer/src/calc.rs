@@ -882,6 +882,17 @@ impl ContainerElement {
         // TODO: Handle variable amount of items in rows/cols (i.e., non-uniform row/cols wrapping)
         match self.justify_content {
             #[allow(clippy::cast_precision_loss)]
+            JustifyContent::Start => match self.direction {
+                LayoutDirection::Row => {
+                    remainder_width = container_width - self.contained_calculated_width();
+                    child_horizontal_offset = 0.0;
+                }
+                LayoutDirection::Column => {
+                    remainder_height = container_height - self.contained_calculated_height();
+                    child_vertical_offset = 0.0;
+                }
+            },
+            #[allow(clippy::cast_precision_loss)]
             JustifyContent::Center => match self.direction {
                 LayoutDirection::Row => {
                     remainder_width = container_width - self.contained_calculated_width();
@@ -7162,6 +7173,57 @@ mod test {
             container.clone(),
             ContainerElement {
                 padding_left: Some((100.0 - 30.0) / 2.0),
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_can_calc_justify_content_start() {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(30)),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(30)),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(100.0),
+            calculated_height: Some(50.0),
+            direction: LayoutDirection::Row,
+            justify_content: JustifyContent::Start,
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            margin_left: None,
+                            margin_right: None,
+                            calculated_x: Some(0.0),
+                            ..container.elements[0].container_element().unwrap().clone()
+                        }
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            margin_left: None,
+                            margin_right: None,
+                            calculated_x: Some(30.0),
+                            ..container.elements[1].container_element().unwrap().clone()
+                        }
+                    }
+                ],
                 ..container
             }
         );
