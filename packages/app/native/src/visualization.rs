@@ -121,6 +121,22 @@ async fn visualization_updated(
     }
 }
 
+#[cfg(feature = "_calculated_canvas")]
+async fn clear_canvas() {
+    use moosicbox_app_native_lib::renderer::canvas;
+
+    use crate::RENDERER;
+
+    let view = canvas::CanvasUpdate {
+        target: "visualization".to_string(),
+        canvas_actions: vec![canvas::CanvasAction::Clear],
+    };
+    let response = RENDERER.get().unwrap().write().await.render_canvas(view);
+    if let Err(e) = response {
+        log::error!("Failed to render_canvas: {e:?}");
+    }
+}
+
 #[cfg(not(feature = "_calculated_canvas"))]
 #[allow(clippy::unused_async)]
 pub async fn update_visualization(
@@ -131,7 +147,6 @@ pub async fn update_visualization(
 }
 
 #[cfg(feature = "_calculated_canvas")]
-#[allow(clippy::unused_async)]
 pub async fn update_visualization(
     visualization_width: f32,
     visualization_height: f32,
@@ -180,6 +195,8 @@ pub async fn update_visualization(
         .await;
         return;
     }
+
+    clear_canvas().await;
 
     let mut headers = serde_json::Map::new();
     let profile = "master";
