@@ -70,56 +70,58 @@ pub async fn init(
 }
 
 pub async fn load_upnp_players() -> Result<(), moosicbox_upnp::UpnpDeviceScannerError> {
+    static SERVICE_ID: &str = "urn:upnp-org:serviceId:AVTransport";
+
     use moosicbox_audio_output::AudioOutputFactory;
     use moosicbox_player::{PlaybackHandler, PlayerSource};
 
     moosicbox_upnp::scan_devices().await?;
 
-    {
-        for device in moosicbox_upnp::devices().await {
-            let mut players = UPNP_PLAYERS.write().await;
+    for device in moosicbox_upnp::devices().await {
+        let mut players = UPNP_PLAYERS.write().await;
 
-            if !players.iter().any(|(_, x, _)| x.device.udn() == device.udn) {
-                let service_id = "urn:upnp-org:serviceId:AVTransport";
-                if let Ok((device, service)) =
-                    moosicbox_upnp::get_device_and_service(&device.udn, service_id)
-                {
-                    for profile in moosicbox_music_api::profiles::PROFILES.names() {
-                        if let Some(music_apis) =
-                            moosicbox_music_api::profiles::PROFILES.get(&profile)
-                        {
-                            let player = moosicbox_upnp::player::UpnpPlayer::new(
-                                Arc::new(Box::new(music_apis)),
-                                device.clone(),
-                                service.clone(),
-                                PlayerSource::Local,
-                                UPNP_LISTENER_HANDLE.get().unwrap().clone(),
-                            );
+        if players.iter().any(|(_, x, _)| x.device.udn() == device.udn) {
+            continue;
+        }
 
-                            let playback = player.playback.clone();
-                            let receiver = player.receiver.clone();
+        let Ok((device, service)) = moosicbox_upnp::get_device_and_service(&device.udn, SERVICE_ID)
+        else {
+            continue;
+        };
 
-                            let output: AudioOutputFactory = player
-                                .clone()
-                                .try_into()
-                                .expect("Failed to create audio output factory for UpnpPlayer");
+        for profile in moosicbox_music_api::profiles::PROFILES.names() {
+            let Some(music_apis) = moosicbox_music_api::profiles::PROFILES.get(&profile) else {
+                continue;
+            };
 
-                            let handler = PlaybackHandler::new(player.clone())
-                                .with_playback(playback)
-                                .with_output(Some(Arc::new(std::sync::Mutex::new(output.clone()))))
-                                .with_receiver(receiver);
+            let player = moosicbox_upnp::player::UpnpPlayer::new(
+                Arc::new(Box::new(music_apis)),
+                device.clone(),
+                service.clone(),
+                PlayerSource::Local,
+                UPNP_LISTENER_HANDLE.get().unwrap().clone(),
+            );
 
-                            player
-                                .playback_handler
-                                .write()
-                                .unwrap()
-                                .replace(handler.clone());
+            let playback = player.playback.clone();
+            let receiver = player.receiver.clone();
 
-                            players.push((output.clone(), player.clone(), handler));
-                        }
-                    }
-                }
-            }
+            let output: AudioOutputFactory = player
+                .clone()
+                .try_into()
+                .expect("Failed to create audio output factory for UpnpPlayer");
+
+            let handler = PlaybackHandler::new(player.clone())
+                .with_playback(playback)
+                .with_output(Some(Arc::new(std::sync::Mutex::new(output.clone()))))
+                .with_receiver(receiver);
+
+            player
+                .playback_handler
+                .write()
+                .unwrap()
+                .replace(handler.clone());
+
+            players.push((output.clone(), player.clone(), handler));
         }
     }
 
