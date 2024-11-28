@@ -92,6 +92,44 @@ pub fn album_page_content(album: &ApiAlbum, versions: &[ApiAlbumVersion]) -> Mar
                 }
             }
         }
+        div sx-dir="row" {
+            button
+                sx-dir="row"
+                sx-width=(130)
+                sx-height=(40)
+                sx-background="#fff"
+                sx-border-radius=(5)
+                fx-click=(Action::PlayAlbum {
+                    album_id: album.album_id.clone(),
+                    api_source: album.api_source
+                })
+            {
+                @let icon_size = 12;
+                img
+                    sx-width=(icon_size)
+                    sx-height=(icon_size)
+                    src=(public_img!("play-button.svg"));
+                ("Play")
+            }
+            button
+                sx-dir="row"
+                sx-width=(130)
+                sx-height=(40)
+                sx-background="#fff"
+                sx-border-radius=(5)
+                fx-click=(Action::AddAlbumToQueue {
+                    album_id: album.album_id.clone(),
+                    api_source: album.api_source
+                })
+            {
+                @let icon_size = 20;
+                img
+                    sx-width=(icon_size)
+                    sx-height=(icon_size)
+                    src=(public_img!("more-options.svg"));
+                ("Options")
+            }
+        }
         div {
             @if let Some(version) = versions.first() {
                 table {
