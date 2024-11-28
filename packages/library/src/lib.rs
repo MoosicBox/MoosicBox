@@ -187,18 +187,18 @@ pub fn filter_albums<'a>(
     request: &'a AlbumsRequest,
 ) -> impl Iterator<Item = &'a LibraryAlbum> {
     let albums = albums.iter().filter(|album| {
-        !request.filters.as_ref().is_some_and(|x| {
+        request.filters.as_ref().is_none_or(|x| {
             x.artist_id
                 .as_ref()
-                .is_some_and(|id| &Id::Number(album.artist_id) != id)
+                .is_none_or(|id| &Id::Number(album.artist_id) == id)
         })
     });
 
     #[cfg(feature = "tidal")]
     let albums = albums.filter(|#[allow(unused)] album| {
-        !request.filters.as_ref().is_some_and(|x| {
-            x.tidal_artist_id.as_ref().is_some_and(|id| {
-                !album
+        request.filters.as_ref().is_none_or(|x| {
+            x.tidal_artist_id.as_ref().is_none_or(|id| {
+                album
                     .artist_sources
                     .iter()
                     .filter(|x| x.source == ApiSource::Tidal)
@@ -210,9 +210,9 @@ pub fn filter_albums<'a>(
 
     #[cfg(feature = "qobuz")]
     let albums = albums.filter(|#[allow(unused)] album| {
-        !request.filters.as_ref().is_some_and(|x| {
-            x.qobuz_artist_id.as_ref().is_some_and(|id| {
-                !album
+        request.filters.as_ref().is_none_or(|x| {
+            x.qobuz_artist_id.as_ref().is_none_or(|id| {
+                album
                     .artist_sources
                     .iter()
                     .filter(|x| x.source == ApiSource::Qobuz)
@@ -224,37 +224,37 @@ pub fn filter_albums<'a>(
 
     let albums = albums
         .filter(|album| {
-            !request.sources.as_ref().is_some_and(|s| {
-                !s.iter()
+            request.sources.as_ref().is_none_or(|s| {
+                s.iter()
                     .any(|source| album.versions.iter().any(|v| v.source == (*source).into()))
             })
         })
         .filter(|album| {
-            !request.filters.as_ref().is_some_and(|x| {
+            request.filters.as_ref().is_none_or(|x| {
                 x.album_type
                     .map(Into::into)
-                    .is_some_and(|t| album.album_type == t)
+                    .is_none_or(|t| album.album_type == t)
             })
         })
         .filter(|album| {
-            !request.filters.as_ref().is_some_and(|x| {
+            request.filters.as_ref().is_none_or(|x| {
                 x.name
                     .as_ref()
-                    .is_some_and(|s| !album.title.to_lowercase().contains(s))
+                    .is_none_or(|s| album.title.to_lowercase().contains(s))
             })
         })
         .filter(|album| {
-            !request.filters.as_ref().is_some_and(|x| {
+            request.filters.as_ref().is_none_or(|x| {
                 x.artist
                     .as_ref()
-                    .is_some_and(|s| !&album.artist.to_lowercase().contains(s))
+                    .is_none_or(|s| album.artist.to_lowercase().contains(s))
             })
         })
         .filter(|album| {
-            !request.filters.as_ref().is_some_and(|x| {
-                x.search.as_ref().is_some_and(|s| {
-                    !(album.title.to_lowercase().contains(s)
-                        || album.artist.to_lowercase().contains(s))
+            request.filters.as_ref().is_none_or(|x| {
+                x.search.as_ref().is_none_or(|s| {
+                    album.title.to_lowercase().contains(s)
+                        || album.artist.to_lowercase().contains(s)
                 })
             })
         });

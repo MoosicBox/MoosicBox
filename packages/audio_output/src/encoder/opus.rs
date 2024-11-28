@@ -76,7 +76,7 @@ impl OpusEncoder<'_> {
     }
 
     pub fn init_resampler(&mut self, spec: &SignalSpec, duration: Duration) -> &Self {
-        if !self.resample_rate.is_some_and(|r| r == spec.rate)
+        if self.resample_rate.is_none_or(|r| r != spec.rate)
             && self.output_rate != spec.rate as usize
         {
             log::debug!(

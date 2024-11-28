@@ -1607,9 +1607,9 @@ impl ContainerElement {
             log::debug!(
                 "resize_children: vertical scrollbar is visible, setting padding_right to {scrollbar_size}"
             );
-            if !self
+            if self
                 .padding_right
-                .is_some_and(|x| (x - scrollbar_size).abs() < 0.001)
+                .is_none_or(|x| (x - scrollbar_size).abs() >= 0.001)
             {
                 self.padding_right.replace(scrollbar_size);
                 log::debug!("resize_children: resized because vertical scrollbar is visible");
@@ -1623,9 +1623,9 @@ impl ContainerElement {
             log::debug!(
                 "resize_children: horizontal scrollbar is visible, setting padding_bottom to {scrollbar_size}"
             );
-            if !self
+            if self
                 .padding_bottom
-                .is_some_and(|x| (x - scrollbar_size).abs() < 0.001)
+                .is_none_or(|x| (x - scrollbar_size).abs() >= 0.001)
             {
                 self.padding_bottom.replace(scrollbar_size);
                 log::debug!("resize_children: resized because horizontal scrollbar is visible");

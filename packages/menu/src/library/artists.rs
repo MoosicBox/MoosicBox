@@ -29,16 +29,15 @@ pub fn filter_artists(artists: Vec<LibraryArtist>, request: &ArtistsRequest) -> 
     artists
         .into_iter()
         .filter(|artist| {
-            !request
+            request
                 .filters
                 .name
                 .as_ref()
-                .is_some_and(|s| !artist.title.to_lowercase().contains(s))
+                .is_none_or(|s| artist.title.to_lowercase().contains(s))
         })
         .filter(|artist| {
-            !request.filters.search.as_ref().is_some_and(|s| {
-                !(artist.title.to_lowercase().contains(s)
-                    || artist.title.to_lowercase().contains(s))
+            request.filters.search.as_ref().is_none_or(|s| {
+                artist.title.to_lowercase().contains(s) || artist.title.to_lowercase().contains(s)
             })
         })
         .collect()

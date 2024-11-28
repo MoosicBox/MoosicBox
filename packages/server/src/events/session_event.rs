@@ -16,9 +16,9 @@ pub async fn init() {
                 .read()
                 .await
                 .clone()
-                .ok_or(moosicbox_ws::WebsocketSendError::Unknown(
-                    "No ws server handle".into(),
-                ))
+                .ok_or_else(|| {
+                    moosicbox_ws::WebsocketSendError::Unknown("No ws server handle".into())
+                })
                 .map_err(|e| Box::new(e) as BoxErrorSend)?;
             for profile in PROFILES.names() {
                 if let Some(db) = PROFILES.get(&profile) {

@@ -255,8 +255,8 @@ fn create_map(
         let matches = dependencies
             .iter()
             .filter(|x| {
-                !x.features.as_ref().is_some_and(|f| {
-                    !f.iter()
+                x.features.as_ref().is_none_or(|f| {
+                    f.iter()
                         .any(|required| features.iter().any(|x| x == required))
                 })
             })
@@ -286,8 +286,8 @@ fn create_map(
         .iter()
         .filter(|(_k, v)| match v {
             ClippierEnv::Value(..) => true,
-            ClippierEnv::FilteredValue { features: f, .. } => !f.as_ref().is_some_and(|f| {
-                !f.iter()
+            ClippierEnv::FilteredValue { features: f, .. } => f.as_ref().is_none_or(|f| {
+                f.iter()
                     .any(|required| features.iter().any(|x| x == required))
             }),
         })
@@ -337,8 +337,8 @@ fn create_map(
     let ci_steps = ci_steps
         .into_iter()
         .filter(|x| {
-            !x.features.as_ref().is_some_and(|f| {
-                !f.iter()
+            x.features.as_ref().is_none_or(|f| {
+                f.iter()
                     .any(|required| features.iter().any(|x| x == required))
             })
         })
@@ -413,8 +413,8 @@ fn fetch_features(
             features
                 .keys()
                 .filter(|x| !x.starts_with('_'))
-                .filter(|x| !specific_features.as_ref().is_some_and(|s| !s.contains(x)))
-                .filter(|x| !skip_features.as_ref().is_some_and(|s| s.contains(x)))
+                .filter(|x| specific_features.as_ref().is_none_or(|s| s.contains(x)))
+                .filter(|x| skip_features.as_ref().is_none_or(|s| !s.contains(x)))
                 .skip(offset)
                 .take(max.map_or(feature_count, |x| std::cmp::min(feature_count, x as usize)))
                 .cloned()

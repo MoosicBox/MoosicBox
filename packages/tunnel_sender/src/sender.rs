@@ -835,8 +835,8 @@ impl TunnelSender {
     }
 
     fn does_range_overlap(range: &Range, packet_start: usize, packet_end: usize) -> bool {
-        !range.start.is_some_and(|start| start >= packet_end)
-            && !range.end.is_some_and(|end| end < packet_start)
+        range.start.is_none_or(|start| start < packet_end)
+            && range.end.is_none_or(|end| end >= packet_start)
     }
 
     fn send_binary(

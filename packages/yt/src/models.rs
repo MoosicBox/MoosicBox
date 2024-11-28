@@ -556,7 +556,7 @@ pub struct YtSearchResultList<T> {
     pub total: usize,
 }
 
-impl<'a, T> ToValueType<YtSearchResultList<T>> for &'a Value
+impl<T> ToValueType<YtSearchResultList<T>> for &Value
 where
     Value: AsModelResult<YtSearchResultList<T>, ParseError>,
 {

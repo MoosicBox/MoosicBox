@@ -1059,7 +1059,7 @@ pub async fn update_multi(
     connection: &mut SqliteConnection,
     table_name: &str,
     values: &[Vec<(&str, Box<dyn Expression>)>],
-    filters: Option<Vec<Box<dyn BooleanExpression>>>,
+    filters: Option<&[Box<dyn BooleanExpression>]>,
     mut limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
     let mut results = vec![];
@@ -1076,7 +1076,7 @@ pub async fn update_multi(
         let count = value.len();
         if pos + count >= (i16::MAX - 1) as usize {
             results.append(
-                &mut update_chunk(connection, table_name, &values[last_i..i], &filters, limit)
+                &mut update_chunk(connection, table_name, &values[last_i..i], filters, limit)
                     .await?,
             );
             last_i = i;
@@ -1096,7 +1096,7 @@ pub async fn update_multi(
 
     if i > last_i {
         results.append(
-            &mut update_chunk(connection, table_name, &values[last_i..], &filters, limit).await?,
+            &mut update_chunk(connection, table_name, &values[last_i..], filters, limit).await?,
         );
     }
 
@@ -1107,7 +1107,7 @@ async fn update_chunk(
     connection: &mut SqliteConnection,
     table_name: &str,
     values: &[Vec<(&str, Box<dyn Expression>)>],
-    filters: &Option<Vec<Box<dyn BooleanExpression>>>,
+    filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
     let first = values[0].as_slice();
@@ -1146,13 +1146,13 @@ async fn update_chunk(
         SET {set_clause}
         RETURNING *",
         build_update_where_clause(
-            filters.as_deref(),
+            filters,
             limit,
             limit
                 .map(|_| {
                     format!(
                         "SELECT CTID FROM {table_name} {}",
-                        build_where_clause(filters.as_deref(), &index),
+                        build_where_clause(filters, &index),
                     )
                 })
                 .as_deref(),

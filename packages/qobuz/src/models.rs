@@ -684,7 +684,7 @@ pub struct QobuzSearchResultList<T> {
     pub total: usize,
 }
 
-impl<'a, T> ToValueType<QobuzSearchResultList<T>> for &'a Value
+impl<T> ToValueType<QobuzSearchResultList<T>> for &Value
 where
     Value: AsModelResult<QobuzSearchResultList<T>, ParseError>,
 {

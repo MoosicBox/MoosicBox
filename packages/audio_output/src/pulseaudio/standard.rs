@@ -209,7 +209,7 @@ where
         let state = get_state();
         if state == expected_state {
             break Ok(());
-        } else if !last_state.is_some_and(|s| s == state) {
+        } else if last_state.is_none_or(|s| s != state) {
             failure_states
                 .iter()
                 .find(|s| **s == state)

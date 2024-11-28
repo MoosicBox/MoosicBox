@@ -509,8 +509,8 @@ impl EguiApp {
             let height = i.screen_rect.height();
             let current_width = *self.width.read().unwrap();
             let current_height = *self.height.read().unwrap();
-            if !current_width.is_some_and(|x| (x - width).abs() < 0.01)
-                || !current_height.is_some_and(|x| (x - height).abs() < 0.01)
+            if current_width.is_none_or(|x| (x - width).abs() >= 0.01)
+                || current_height.is_none_or(|x| (x - height).abs() >= 0.01)
             {
                 self.update_frame_size(width, height);
                 if let Err(e) = self.on_resize.send((width, height)) {
@@ -1657,7 +1657,7 @@ impl EguiApp {
 
                 let (_, (dist, prev_dist)) = listener.check();
 
-                if !prev_dist.is_some_and(|x| x < 2000.0) && dist < 2000.0 {
+                if prev_dist.is_none_or(|x| x >= 2000.0) && dist < 2000.0 {
                     let contains_image = {
                         matches!(
                             self.images.read().unwrap().get(source),

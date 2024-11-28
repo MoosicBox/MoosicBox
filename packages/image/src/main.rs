@@ -145,7 +145,7 @@ fn save_bytes_to_file(bytes: &[u8], path: &Path, start: Option<u64>) -> Result<(
     let file = std::fs::OpenOptions::new()
         .create(true)
         .write(true)
-        .truncate(!start.is_some_and(|start| start > 0))
+        .truncate(start.is_none_or(|start| start == 0))
         .open(path)?;
 
     let mut writer = std::io::BufWriter::new(file);

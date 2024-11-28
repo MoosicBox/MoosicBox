@@ -953,7 +953,7 @@ pub fn update_multi(
     connection: &Connection,
     table_name: &str,
     values: &[Vec<(&str, Box<dyn Expression>)>],
-    filters: &Option<Vec<Box<dyn BooleanExpression>>>,
+    filters: Option<&[Box<dyn BooleanExpression>]>,
     mut limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
     let mut results = vec![];
@@ -1008,7 +1008,7 @@ fn update_chunk(
     connection: &Connection,
     table_name: &str,
     values: &[Vec<(&str, Box<dyn Expression>)>],
-    filters: &Option<Vec<Box<dyn BooleanExpression>>>,
+    filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
     let first = values[0].as_slice();
@@ -1036,7 +1036,7 @@ fn update_chunk(
     let select_query = limit.map(|_| {
         format!(
             "SELECT rowid FROM {table_name} {}",
-            build_where_clause(filters.as_deref()),
+            build_where_clause(filters),
         )
     });
 
@@ -1046,7 +1046,7 @@ fn update_chunk(
         {}
         SET {set_clause}
         RETURNING *",
-        build_update_where_clause(filters.as_deref(), limit, select_query.as_deref()),
+        build_update_where_clause(filters, limit, select_query.as_deref()),
     );
 
     let all_values = values

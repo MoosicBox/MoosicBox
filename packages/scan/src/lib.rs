@@ -458,7 +458,7 @@ pub async fn remove_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), Db
 
     if locations
         .iter()
-        .all(|location| !location.path.as_ref().is_some_and(|p| p.as_str() == path))
+        .all(|location| location.path.as_ref().is_none_or(|p| p.as_str() != path))
     {
         return Ok(());
     }

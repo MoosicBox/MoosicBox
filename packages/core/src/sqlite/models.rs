@@ -91,7 +91,7 @@ where
     }
 }
 
-impl<'a, T, X> ToApi<T> for &'a X
+impl<T, X> ToApi<T> for &X
 where
     X: ToApi<T> + Clone,
 {

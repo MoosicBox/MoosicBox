@@ -375,23 +375,21 @@ impl TryFrom<maud::Markup> for ContainerElement {
 }
 
 fn visible_elements(elements: &[Element]) -> impl Iterator<Item = &Element> {
-    elements.iter().filter(|x| {
-        !x.container_element()
-            .is_some_and(|x| x.hidden == Some(true))
-    })
+    elements
+        .iter()
+        .filter(|x| x.container_element().is_none_or(|x| x.hidden != Some(true)))
 }
 
 fn visible_elements_mut(elements: &mut [Element]) -> impl Iterator<Item = &mut Element> {
-    elements.iter_mut().filter(|x| {
-        !x.container_element()
-            .is_some_and(|x| x.hidden == Some(true))
-    })
+    elements
+        .iter_mut()
+        .filter(|x| x.container_element().is_none_or(|x| x.hidden != Some(true)))
 }
 
 fn relative_positioned_elements(elements: &[Element]) -> impl Iterator<Item = &Element> {
     visible_elements(elements).filter(|x| {
-        !x.container_element()
-            .is_some_and(|x| x.position == Some(Position::Absolute))
+        x.container_element()
+            .is_none_or(|x| x.position != Some(Position::Absolute))
     })
 }
 
@@ -399,8 +397,8 @@ fn relative_positioned_elements_mut(
     elements: &mut [Element],
 ) -> impl Iterator<Item = &mut Element> {
     visible_elements_mut(elements).filter(|x| {
-        !x.container_element()
-            .is_some_and(|x| x.position == Some(Position::Absolute))
+        x.container_element()
+            .is_none_or(|x| x.position != Some(Position::Absolute))
     })
 }
 

@@ -55,7 +55,7 @@ pub async fn init(
         if let Err(err) = register_upnp_player(
             handle.clone(),
             #[cfg(feature = "tunnel")]
-            &tunnel_handle,
+            tunnel_handle.as_ref(),
             output,
         )
         .await
@@ -248,8 +248,8 @@ fn handle_upnp_playback_update(
 #[allow(unused)]
 pub async fn register_upnp_player(
     ws: crate::ws::server::WsServerHandle,
-    #[cfg(feature = "tunnel")] tunnel_handle: &Option<
-        moosicbox_tunnel_sender::sender::TunnelSenderHandle,
+    #[cfg(feature = "tunnel")] tunnel_handle: Option<
+        &moosicbox_tunnel_sender::sender::TunnelSenderHandle,
     >,
     audio_output: moosicbox_audio_output::AudioOutputFactory,
 ) -> Result<(), moosicbox_ws::WebsocketSendError> {
@@ -266,13 +266,9 @@ pub async fn register_upnp_player(
     }];
 
     let handle =
-        WS_SERVER_HANDLE
-            .read()
-            .await
-            .clone()
-            .ok_or(moosicbox_ws::WebsocketSendError::Unknown(
-                "No ws server handle".into(),
-            ))?;
+        WS_SERVER_HANDLE.read().await.clone().ok_or_else(|| {
+            moosicbox_ws::WebsocketSendError::Unknown("No ws server handle".into())
+        })?;
 
     let config_db = { CONFIG_DB.read().unwrap().clone().unwrap() };
     let players = moosicbox_ws::register_players(&config_db, &handle, &context, &payload).await?;

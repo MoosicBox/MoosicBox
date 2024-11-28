@@ -139,8 +139,8 @@ pub async fn init(
 
     #[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
     for profile in &profiles {
-        if !crate::db::get_profile_library_db_path(app_type, &profile.name)
-            .is_some_and(|x| x.is_file())
+        if crate::db::get_profile_library_db_path(app_type, &profile.name)
+            .is_none_or(|x| !x.is_file())
         {
             moosicbox_config::delete_profile(&config_db, &profile.name)
                 .await

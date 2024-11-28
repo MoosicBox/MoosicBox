@@ -593,7 +593,7 @@ pub struct TidalSearchResultList<T> {
     pub total: usize,
 }
 
-impl<'a, T> ToValueType<TidalSearchResultList<T>> for &'a Value
+impl<T> ToValueType<TidalSearchResultList<T>> for &Value
 where
     Value: AsModelResult<TidalSearchResultList<T>, ParseError>,
 {

@@ -93,7 +93,7 @@ pub fn save_bytes_to_file(
     let file = std::fs::OpenOptions::new()
         .create(true)
         .write(true)
-        .truncate(!start.is_some_and(|start| start > 0))
+        .truncate(start.is_none_or(|start| start == 0))
         .open(path)?;
 
     let mut writer = std::io::BufWriter::new(file);
@@ -226,7 +226,7 @@ pub async fn save_bytes_stream_to_file_with_progress_listener<
     let file = tokio::fs::OpenOptions::new()
         .create(true)
         .write(true)
-        .truncate(!start.is_some_and(|start| start > 0))
+        .truncate(start.is_none_or(|start| start == 0))
         .open(path)
         .await?;
 

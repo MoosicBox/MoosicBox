@@ -38,20 +38,16 @@ pub async fn init(
     moosicbox_audio_output::scan_outputs().await?;
 
     let handle =
-        WS_SERVER_HANDLE
-            .read()
-            .await
-            .clone()
-            .ok_or(moosicbox_ws::WebsocketSendError::Unknown(
-                "No ws server handle".into(),
-            ))?;
+        WS_SERVER_HANDLE.read().await.clone().ok_or_else(|| {
+            moosicbox_ws::WebsocketSendError::Unknown("No ws server handle".into())
+        })?;
 
     for audio_output in moosicbox_audio_output::output_factories().await {
         if let Err(err) = register_server_player(
             config_db,
             handle.clone(),
             #[cfg(feature = "tunnel")]
-            &tunnel_handle,
+            tunnel_handle.as_ref(),
             audio_output.clone(),
         )
         .await
@@ -203,8 +199,8 @@ fn handle_server_playback_update(
 pub async fn register_server_player(
     config_db: &ConfigDatabase,
     ws: crate::ws::server::WsServerHandle,
-    #[cfg(feature = "tunnel")] tunnel_handle: &Option<
-        moosicbox_tunnel_sender::sender::TunnelSenderHandle,
+    #[cfg(feature = "tunnel")] tunnel_handle: Option<
+        &moosicbox_tunnel_sender::sender::TunnelSenderHandle,
     >,
     audio_output: moosicbox_audio_output::AudioOutputFactory,
 ) -> Result<(), moosicbox_ws::WebsocketSendError> {
@@ -226,13 +222,9 @@ pub async fn register_server_player(
     };
 
     let handle =
-        WS_SERVER_HANDLE
-            .read()
-            .await
-            .clone()
-            .ok_or(moosicbox_ws::WebsocketSendError::Unknown(
-                "No ws server handle".into(),
-            ))?;
+        WS_SERVER_HANDLE.read().await.clone().ok_or_else(|| {
+            moosicbox_ws::WebsocketSendError::Unknown("No ws server handle".into())
+        })?;
 
     let connection =
         moosicbox_ws::register_connection(config_db, &handle, &context, &payload).await?;
@@ -241,9 +233,9 @@ pub async fn register_server_player(
         .players
         .iter()
         .find(|x| x.audio_output_id == audio_output.id)
-        .ok_or(moosicbox_ws::WebsocketSendError::Unknown(
-            "No player on connection".into(),
-        ))?;
+        .ok_or_else(|| {
+            moosicbox_ws::WebsocketSendError::Unknown("No player on connection".into())
+        })?;
 
     ws.add_player_action(player.id, handle_server_playback_update)
         .await;

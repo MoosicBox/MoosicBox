@@ -463,7 +463,7 @@ pub async fn get_or_fetch_track(
         + 'static,
 ) -> Result<TrackBytes, GetTrackBytesError> {
     log::debug!("get_or_fetch_track: start={start:?} end={end:?} size={size:?}");
-    if start.is_some_and(|x| x != 0) || end.is_some_and(|x| !size.is_some_and(|s| s == x)) {
+    if start.is_some_and(|x| x != 0) || end.is_some_and(|x| size.is_none_or(|s| s != x)) {
         log::debug!("get_or_fetch_track: Requested a specific range, eagerly fetching bytes");
         return fetch(start, end, size).await;
     }

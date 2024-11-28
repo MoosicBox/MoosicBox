@@ -789,13 +789,13 @@ impl AppState {
                     ApiPlaybackTarget::ConnectionOutput { .. } => false,
                 }) {
                     let different_session = {
-                        !existing
+                        existing
                             .player
                             .playback
                             .read()
                             .unwrap()
                             .as_ref()
-                            .is_some_and(|p| p.session_id == session_id)
+                            .is_none_or(|p| p.session_id != session_id)
                     };
 
                     let same_output =
