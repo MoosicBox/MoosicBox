@@ -64,6 +64,16 @@ impl StyleAction {
             target: ElementTarget::SelfTarget,
         }
     }
+
+    #[must_use]
+    pub const fn hide_self() -> Self {
+        Self::visibility_self(Visibility::Hidden)
+    }
+
+    #[must_use]
+    pub const fn show_self() -> Self {
+        Self::visibility_self(Visibility::Visible)
+    }
 }
 
 #[cfg(feature = "serde")]

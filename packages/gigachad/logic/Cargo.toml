@@ -1,0 +1,32 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["gui", "web-programming"]
+description = "GigaChad logic package"
+edition     = "2021"
+keywords    = ["gui", "logic", "web"]
+license     = "MPL-2.0"
+name        = "gigachad_logic"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+gigachad_actions            = { version = "0.1.0", path = "../actions", default-features = false }
+gigachad_transformer_models = { version = "0.1.0", path = "../transformer/models", default-features = false }
+moosicbox_assert            = { version = "0.1.0", path = "../../assert", default-features = false }
+
+log        = { workspace = true }
+serde      = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+
+[features]
+default = ["serde"]
+
+fail-on-warnings = []
+
+serde = [
+    "dep:serde",
+    "dep:serde_json",
+    "gigachad_actions/serde",
+    "gigachad_transformer_models/serde",
+]

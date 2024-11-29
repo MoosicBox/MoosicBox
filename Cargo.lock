@@ -3793,6 +3793,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "gigachad_logic"
+version = "0.1.0"
+dependencies = [
+ "gigachad_actions",
+ "gigachad_transformer_models",
+ "log",
+ "moosicbox_assert",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "gigachad_renderer"
 version = "0.1.0"
 dependencies = [
@@ -5816,6 +5828,7 @@ version = "0.1.0"
 dependencies = [
  "gigachad_actions",
  "gigachad_color",
+ "gigachad_logic",
  "gigachad_renderer",
  "gigachad_renderer_egui",
  "gigachad_renderer_fltk",
@@ -6043,6 +6056,7 @@ name = "moosicbox_app_native_ui"
 version = "0.1.0"
 dependencies = [
  "gigachad_actions",
+ "gigachad_logic",
  "gigachad_transformer_models",
  "log",
  "maud",

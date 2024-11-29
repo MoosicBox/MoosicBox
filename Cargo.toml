@@ -34,6 +34,7 @@ members = [
     "packages/gigachad",
     "packages/gigachad/actions",
     "packages/gigachad/color",
+    "packages/gigachad/logic",
     "packages/gigachad/renderer",
     "packages/gigachad/renderer/datastar",
     "packages/gigachad/renderer/egui",
