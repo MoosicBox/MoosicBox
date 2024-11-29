@@ -3,6 +3,9 @@
 
 use gigachad_transformer_models::Visibility;
 
+#[cfg(feature = "logic")]
+pub mod logic;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -43,28 +46,52 @@ pub enum ActionType {
     Custom {
         action: String,
     },
+    #[cfg(feature = "logic")]
+    Logic(logic::If),
 }
 
 impl ActionType {
     #[must_use]
-    pub fn visibility_str_id(visibility: Visibility, target: &str) -> Self {
+    pub fn set_visibility_str_id(visibility: Visibility, target: &str) -> Self {
         Self::Style {
             target: ElementTarget::StrId(target.to_string()),
             action: StyleAction::SetVisibility(visibility),
         }
     }
 
+    #[must_use]
+    pub fn hide_str_id(target: &str) -> Self {
+        Self::set_visibility_str_id(Visibility::Hidden, target)
+    }
+
+    #[must_use]
+    pub fn show_str_id(target: &str) -> Self {
+        Self::set_visibility_str_id(Visibility::Visible, target)
+    }
+
     #[cfg(feature = "id")]
     #[must_use]
-    pub const fn visibility_id(visibility: Visibility, target: usize) -> Self {
+    pub const fn set_visibility_id(visibility: Visibility, target: usize) -> Self {
         Self::Style {
             target: ElementTarget::Id(target),
             action: StyleAction::SetVisibility(visibility),
         }
     }
 
+    #[cfg(feature = "id")]
     #[must_use]
-    pub const fn visibility_self(visibility: Visibility) -> Self {
+    pub const fn hide_id(target: usize) -> Self {
+        Self::set_visibility_id(Visibility::Hidden, target)
+    }
+
+    #[cfg(feature = "id")]
+    #[must_use]
+    pub const fn show_id(target: usize) -> Self {
+        Self::set_visibility_id(Visibility::Visible, target)
+    }
+
+    #[must_use]
+    pub const fn set_visibility_self(visibility: Visibility) -> Self {
         Self::Style {
             target: ElementTarget::SelfTarget,
             action: StyleAction::SetVisibility(visibility),
@@ -73,12 +100,12 @@ impl ActionType {
 
     #[must_use]
     pub const fn hide_self() -> Self {
-        Self::visibility_self(Visibility::Hidden)
+        Self::set_visibility_self(Visibility::Hidden)
     }
 
     #[must_use]
     pub const fn show_self() -> Self {
-        Self::visibility_self(Visibility::Visible)
+        Self::set_visibility_self(Visibility::Visible)
     }
 }
 

@@ -1661,6 +1661,80 @@ impl EguiApp {
                 }
                 true
             }
+            ActionType::Logic(eval) => {
+                let calc_visibility =
+                    |calc_value: &gigachad_actions::logic::CalcValue| match calc_value {
+                        gigachad_actions::logic::CalcValue::GetVisibility { target } => {
+                            match target {
+                                gigachad_actions::ElementTarget::StrId(str_id) => container
+                                    .read()
+                                    .unwrap()
+                                    .find_element_by_str_id(str_id)
+                                    .and_then(|x| x.container_element())
+                                    .and_then(|element| {
+                                        visibilities
+                                            .read()
+                                            .unwrap()
+                                            .get(&element.id)
+                                            .copied()
+                                            .or(element.visibility)
+                                    })
+                                    .unwrap_or_default(),
+                                gigachad_actions::ElementTarget::Id(id) => visibilities
+                                    .write()
+                                    .unwrap()
+                                    .get(id)
+                                    .copied()
+                                    .unwrap_or_default(),
+                                gigachad_actions::ElementTarget::SelfTarget => visibilities
+                                    .write()
+                                    .unwrap()
+                                    .get(&id)
+                                    .copied()
+                                    .unwrap_or_default(),
+                            }
+                        }
+                    };
+
+                let success = match &eval.condition {
+                    gigachad_actions::logic::Condition::Eq(a, b) => match a {
+                        gigachad_actions::logic::Value::Calc(calc_value) => match b {
+                            gigachad_actions::logic::Value::Calc(b_calc_value) => {
+                                calc_visibility(calc_value) == calc_visibility(b_calc_value)
+                            }
+                            gigachad_actions::logic::Value::Visibility(visibility) => {
+                                *visibility == calc_visibility(calc_value)
+                            }
+                        },
+                        gigachad_actions::logic::Value::Visibility(visibility) => match b {
+                            gigachad_actions::logic::Value::Calc(calc_value) => {
+                                *visibility == calc_visibility(calc_value)
+                            }
+                            gigachad_actions::logic::Value::Visibility(b_visibility) => {
+                                visibility == b_visibility
+                            }
+                        },
+                    },
+                };
+
+                if success {
+                    for action in &eval.actions {
+                        if action.trigger == ActionTrigger::Immediate
+                            && !Self::handle_action(
+                                &action.action,
+                                id,
+                                container,
+                                visibilities,
+                                request_action,
+                            )
+                        {
+                            return false;
+                        }
+                    }
+                }
+
+                true
+            }
         }
     }
 

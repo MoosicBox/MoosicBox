@@ -3,7 +3,6 @@
 
 pub use gigachad_actions;
 pub use gigachad_color;
-pub use gigachad_logic;
 pub use gigachad_renderer;
 pub use gigachad_renderer_egui;
 pub use gigachad_renderer_fltk;

@@ -228,7 +228,18 @@ fn get_number(tag: &HTMLTag, name: &str) -> Result<Number, GetNumberError> {
 }
 
 fn parse_action(action: String) -> ActionType {
-    serde_json::from_str::<ActionType>(&action).unwrap_or(ActionType::Custom { action })
+    if let Ok(action) = serde_json::from_str::<ActionType>(&action) {
+        return action;
+    };
+
+    #[cfg(feature = "logic")]
+    if let Ok(action) =
+        serde_json::from_str::<gigachad_actions::logic::If>(&action).map(ActionType::Logic)
+    {
+        return action;
+    };
+
+    ActionType::Custom { action }
 }
 
 fn get_actions(tag: &HTMLTag) -> Vec<Action> {

@@ -19,10 +19,11 @@ serde      = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 
 [features]
-default = ["id", "serde"]
+default = ["id", "logic", "serde"]
 
 fail-on-warnings = []
 
-id = []
+id    = []
+logic = []
 
 serde = ["dep:serde", "dep:serde_json", "gigachad_transformer_models/serde"]

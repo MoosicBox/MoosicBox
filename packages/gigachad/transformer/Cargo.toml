@@ -33,14 +33,15 @@ pretty_assertions = { workspace = true }
 test-log          = { workspace = true }
 
 [features]
-default = ["calc", "canvas", "format", "html", "id", "maud"]
+default = ["calc", "canvas", "format", "html", "id", "logic", "maud"]
 
 fail-on-warnings = []
 
 canvas = []
 
-calc = ["dep:itertools", "gigachad_transformer_models/calc"]
-maud = ["dep:maud", "html"]
+calc  = ["dep:itertools", "gigachad_transformer_models/calc"]
+logic = ["gigachad_actions/logic"]
+maud  = ["dep:maud", "html"]
 
 html = ["dep:html-escape", "dep:tl", "gigachad_actions/serde"]
 simd = ["tl?/simd"]

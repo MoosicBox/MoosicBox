@@ -1,10 +1,8 @@
-#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
-#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
-
-use gigachad_actions::{Action, ElementTarget};
 use gigachad_transformer_models::Visibility;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+
+use crate::{Action, ElementTarget};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -113,6 +111,21 @@ pub const fn visible() -> Value {
 
 pub fn eq(a: impl Into<Value>, b: impl Into<Value>) -> Condition {
     Condition::Eq(a.into(), b.into())
+}
+
+#[must_use]
+pub fn get_visibility_str_id(str_id: impl Into<String>) -> CalcValue {
+    CalcValue::GetVisibility {
+        target: ElementTarget::StrId(str_id.into()),
+    }
+}
+
+#[cfg(feature = "id")]
+#[must_use]
+pub const fn get_visibility_id(id: usize) -> CalcValue {
+    CalcValue::GetVisibility {
+        target: ElementTarget::Id(id),
+    }
 }
 
 #[must_use]
