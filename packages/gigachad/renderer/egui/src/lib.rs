@@ -1637,6 +1637,7 @@ impl EguiApp {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     fn handle_action(
         action: &ActionType,
         id: usize,
@@ -1647,6 +1648,27 @@ impl EguiApp {
         match &action {
             ActionType::Style { target, action } => {
                 Self::handle_style_action(action, target, id, container, visibilities)
+            }
+            ActionType::Log { message, level } => {
+                match level {
+                    gigachad_actions::LogLevel::Error => {
+                        log::error!("{message}");
+                    }
+                    gigachad_actions::LogLevel::Warn => {
+                        log::warn!("{message}");
+                    }
+                    gigachad_actions::LogLevel::Info => {
+                        log::info!("{message}");
+                    }
+                    gigachad_actions::LogLevel::Debug => {
+                        log::debug!("{message}");
+                    }
+                    gigachad_actions::LogLevel::Trace => {
+                        log::trace!("{message}");
+                    }
+                }
+
+                true
             }
             ActionType::Custom { action } => {
                 if let Err(e) = request_action.send(action.clone()) {

@@ -36,12 +36,26 @@ pub struct Action {
     pub action: ActionType,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum LogLevel {
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ActionType {
     Style {
         target: ElementTarget,
         action: StyleAction,
+    },
+    Log {
+        message: String,
+        level: LogLevel,
     },
     Custom {
         action: String,
