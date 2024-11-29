@@ -1,7 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use maud::{html, Markup, PreEscaped};
-use moosicbox_core::sqlite::models::{ApiAlbum, ApiSource};
+use moosicbox_core::sqlite::models::{AlbumVersionQuality, ApiAlbum, ApiSource, TrackApiSource};
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_paging::Page;
 
@@ -35,10 +35,20 @@ pub fn album_cover_img(album: &ApiAlbum, size: u16) -> Markup {
 }
 
 #[must_use]
-pub fn album_page_immediate(album_id: &str, source: Option<ApiSource>) -> Markup {
-    let path = pre_escaped!(
-        "/albums?full=true&albumId={album_id}{}",
-        source.map_or_else(String::new, |x| format!("&source={x}"))
+pub fn album_page_immediate(
+    album_id: &str,
+    source: Option<ApiSource>,
+    version_source: Option<TrackApiSource>,
+    sample_rate: Option<u32>,
+    bit_depth: Option<u8>,
+) -> Markup {
+    let path = album_page_url(
+        album_id,
+        true,
+        source,
+        version_source,
+        sample_rate,
+        bit_depth,
     );
     html! {
         div hx-get=(path) hx-trigger="load" {
@@ -76,8 +86,22 @@ pub fn album_page_immediate(album_id: &str, source: Option<ApiSource>) -> Markup
     }
 }
 
+#[allow(clippy::too_many_lines)]
 #[must_use]
-pub fn album_page_content(album: &ApiAlbum, versions: &[ApiAlbumVersion]) -> Markup {
+pub fn album_page_content(
+    album: &ApiAlbum,
+    versions: &[ApiAlbumVersion],
+    selected_version: Option<&ApiAlbumVersion>,
+) -> Markup {
+    fn same_version(a: &AlbumVersionQuality, b: &AlbumVersionQuality) -> bool {
+        a.source == b.source && a.sample_rate == b.sample_rate && a.bit_depth == b.bit_depth
+    }
+
+    let selected_version = versions
+        .iter()
+        .find(|x| selected_version.is_some_and(|v| same_version(&(*x).into(), &v.into())))
+        .or_else(|| versions.first());
+
     html! {
         div sx-dir="row" {
             @let size = 200;
@@ -87,8 +111,26 @@ pub fn album_page_content(album: &ApiAlbum, versions: &[ApiAlbumVersion]) -> Mar
             div {
                 h1 { (album.title) }
                 h2 { (album.artist) }
-                @if let Some(version) = album.versions.first() {
-                    h3 { (version.source) }
+                div sx-dir="row" {
+                    @for version in &album.versions {
+                        @let selected = selected_version.is_some_and(|x| same_version(version, &x.into()));
+                        a href=(
+                            album_page_url(
+                                &album.album_id.to_string(),
+                                false,
+                                Some(album.api_source),
+                                Some(version.source),
+                                version.sample_rate,
+                                version.bit_depth,
+                            )
+                        ) {
+                            h3 {
+                                (if selected { "*" } else { "" })
+                                (version.source)
+                                (if selected { "*" } else { "" })
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -101,7 +143,10 @@ pub fn album_page_content(album: &ApiAlbum, versions: &[ApiAlbumVersion]) -> Mar
                 sx-border-radius=(5)
                 fx-click=(Action::PlayAlbum {
                     album_id: album.album_id.clone(),
-                    api_source: album.api_source
+                    api_source: album.api_source,
+                    version_source: selected_version.map(|x| x.source),
+                    sample_rate: selected_version.and_then(|x| x.sample_rate),
+                    bit_depth: selected_version.and_then(|x| x.bit_depth),
                 })
             {
                 @let icon_size = 12;
@@ -119,7 +164,10 @@ pub fn album_page_content(album: &ApiAlbum, versions: &[ApiAlbumVersion]) -> Mar
                 sx-border-radius=(5)
                 fx-click=(Action::AddAlbumToQueue {
                     album_id: album.album_id.clone(),
-                    api_source: album.api_source
+                    api_source: album.api_source,
+                    version_source: selected_version.map(|x| x.source),
+                    sample_rate: selected_version.and_then(|x| x.sample_rate),
+                    bit_depth: selected_version.and_then(|x| x.bit_depth),
                 })
             {
                 @let icon_size = 20;
@@ -130,8 +178,8 @@ pub fn album_page_content(album: &ApiAlbum, versions: &[ApiAlbumVersion]) -> Mar
                 ("Options")
             }
         }
-        div {
-            @if let Some(version) = versions.first() {
+        @if let Some(version) = selected_version {
+            div {
                 table {
                     thead {
                         tr{
@@ -158,8 +206,18 @@ pub fn album_page_content(album: &ApiAlbum, versions: &[ApiAlbumVersion]) -> Mar
 }
 
 #[must_use]
-pub fn album(state: &State, album_id: &str, source: Option<ApiSource>) -> Markup {
-    page(state, &album_page_immediate(album_id, source))
+pub fn album(
+    state: &State,
+    album_id: &str,
+    source: Option<ApiSource>,
+    version_source: Option<TrackApiSource>,
+    sample_rate: Option<u32>,
+    bit_depth: Option<u8>,
+) -> Markup {
+    page(
+        state,
+        &album_page_immediate(album_id, source, version_source, sample_rate, bit_depth),
+    )
 }
 
 #[must_use]
@@ -264,7 +322,10 @@ pub fn album_display(
                         sx-border-radius="100%"
                         fx-click=(Action::PlayAlbum {
                             album_id: album.album_id.clone(),
-                            api_source: album.api_source
+                            api_source: album.api_source,
+                            version_source: None,
+                            sample_rate: None,
+                            bit_depth: None,
                         })
                     {
                         img
@@ -286,7 +347,10 @@ pub fn album_display(
                         sx-border-radius="100%"
                         fx-click=(Action::AddAlbumToQueue {
                             album_id: album.album_id.clone(),
-                            api_source: album.api_source
+                            api_source: album.api_source,
+                            version_source: None,
+                            sample_rate: None,
+                            bit_depth: None,
                         })
                     {
                         img
@@ -309,10 +373,33 @@ pub fn album_display(
     }
 }
 
+#[must_use]
+pub fn album_page_url(
+    album_id: &str,
+    full: bool,
+    api_source: Option<ApiSource>,
+    version_source: Option<TrackApiSource>,
+    sample_rate: Option<u32>,
+    bit_depth: Option<u8>,
+) -> PreEscaped<String> {
+    pre_escaped!(
+        "/albums?albumId={album_id}{}{}{}{}{}",
+        if full { "&full=true" } else { "" },
+        api_source.map_or_else(String::new, |x| format!("&source={x}")),
+        version_source.map_or_else(String::new, |x| format!("&versionSource={x}")),
+        sample_rate.map_or_else(String::new, |x| format!("&sampleRate={x}")),
+        bit_depth.map_or_else(String::new, |x| format!("&bitDepth={x}")),
+    )
+}
+
 pub fn show_albums<'a>(albums: impl Iterator<Item = &'a ApiAlbum>, size: u16) -> Markup {
     html! {
         @for album in albums {
-            a href=(pre_escaped!("/albums?albumId={}&source={}", album.album_id, album.api_source)) sx-width=(size) sx-height=(size + 30) {
+            a
+                href=(album_page_url(&album.album_id.to_string(), false, None, None, None, None))
+                sx-width=(size)
+                sx-height=(size + 30)
+            {
                 (album_display(album, size, true, true))
             }
         }

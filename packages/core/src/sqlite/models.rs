@@ -175,6 +175,22 @@ impl Display for TrackApiSource {
     }
 }
 
+impl TryFrom<&String> for TrackApiSource {
+    type Error = strum::ParseError;
+
+    fn try_from(value: &String) -> Result<Self, Self::Error> {
+        TrackApiSource::from_str(value.as_str())
+    }
+}
+
+impl TryFrom<String> for TrackApiSource {
+    type Error = strum::ParseError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        TrackApiSource::from_str(value.as_str())
+    }
+}
+
 impl From<TrackApiSource> for ApiSource {
     fn from(value: TrackApiSource) -> Self {
         match value {
@@ -499,7 +515,7 @@ impl From<ApiArtist> for Artist {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct AlbumVersionQuality {

@@ -19,7 +19,7 @@ use moosicbox_app_native_lib::{
 };
 use moosicbox_app_native_ui::{state, Action};
 use moosicbox_app_state::AppStateError;
-use moosicbox_core::sqlite::models::{AlbumType, ApiAlbum, ApiArtist, ApiSource};
+use moosicbox_core::sqlite::models::{AlbumType, ApiAlbum, ApiArtist, ApiSource, TrackApiSource};
 use moosicbox_env_utils::{default_env_usize, option_env_i32, option_env_u16};
 use moosicbox_music_api::{profiles::PROFILES, MusicApi, SourceToMusicApi};
 use moosicbox_paging::Page;
@@ -231,6 +231,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .transpose()?
                     .unwrap_or_default();
 
+                let version_source: Option<TrackApiSource> = req
+                    .query
+                    .get("versionSource")
+                    .map(TryFrom::try_from)
+                    .transpose()?;
+
+                let sample_rate: Option<u32> = req
+                    .query
+                    .get("sampleRate")
+                    .map(|x| x.parse::<u32>())
+                    .transpose()?;
+
+                let bit_depth: Option<u8> = req
+                    .query
+                    .get("bitDepth")
+                    .map(|x| x.parse::<u8>())
+                    .transpose()?;
+
                 if req.query.get("full").map(String::as_str) == Some("true") {
                     let album_id = album_id.into();
                     let api = PROFILES.get(PROFILE).unwrap().get(source)?;
@@ -250,9 +268,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     log::debug!("versions: {versions:?}");
 
                     let container: ContainerElement =
-                        moosicbox_app_native_ui::albums::album_page_content(&album, &versions)
-                            .into_string()
-                            .try_into()?;
+                        moosicbox_app_native_ui::albums::album_page_content(
+                            &album,
+                            &versions,
+                            versions.iter().find(|v| {
+                                version_source.is_none_or(|x| v.source == x)
+                                    && bit_depth.is_none_or(|x| v.bit_depth.is_some_and(|b| b == x))
+                                    && sample_rate
+                                        .is_none_or(|x| v.sample_rate.is_some_and(|s| s == x))
+                            }),
+                        )
+                        .into_string()
+                        .try_into()?;
 
                     container
                 } else {
@@ -260,6 +287,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         &convert_state(&STATE).await,
                         album_id,
                         Some(source),
+                        version_source,
+                        sample_rate,
+                        bit_depth,
                     )
                     .into_string()
                     .try_into()?;
@@ -629,23 +659,36 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
                 Action::PlayAlbum {
                     album_id,
                     api_source,
+                    version_source,
+                    sample_rate,
+                    bit_depth,
                 }
                 | Action::AddAlbumToQueue {
                     album_id,
                     api_source,
+                    version_source,
+                    sample_rate,
+                    bit_depth,
                 } => {
                     let api = PROFILES
                         .get(PROFILE)
                         .unwrap()
                         .get(*api_source)
                         .map_err(|e| AppStateError::unknown(e.to_string()))?;
-                    let Some(version) = api
-                        .album_versions(album_id, Some(0), Some(1))
+                    let versions = api
+                        .album_versions(album_id, None, None)
                         .await
                         .map_err(|e| AppStateError::unknown(e.to_string()))?
-                        .clone()
-                        .into_iter()
-                        .next()
+                        .clone();
+                    let Some(version) = versions
+                        .iter()
+                        .find(|x| {
+                            version_source.is_none_or(|y| x.source == y)
+                                && sample_rate.is_none_or(|y| x.sample_rate.is_some_and(|x| x == y))
+                                && bit_depth.is_none_or(|y| x.bit_depth.is_some_and(|x| x == y))
+                        })
+                        .or_else(|| versions.first())
+                        .cloned()
                     else {
                         log::debug!("handle_action: no album tracks");
                         return Ok(());

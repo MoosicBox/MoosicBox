@@ -1,14 +1,14 @@
 #![allow(clippy::module_name_repetitions)]
 
 use moosicbox_core::{
-    sqlite::models::{ApiTrack, ToApi, TrackApiSource},
+    sqlite::models::{AlbumVersionQuality, ApiTrack, ToApi, TrackApiSource},
     types::AudioFormat,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::AlbumVersion;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiAlbumVersion {
@@ -18,6 +18,30 @@ pub struct ApiAlbumVersion {
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
     pub source: TrackApiSource,
+}
+
+impl From<&ApiAlbumVersion> for AlbumVersionQuality {
+    fn from(value: &ApiAlbumVersion) -> Self {
+        Self {
+            format: value.format,
+            bit_depth: value.bit_depth,
+            sample_rate: value.sample_rate,
+            channels: value.channels,
+            source: value.source,
+        }
+    }
+}
+
+impl From<ApiAlbumVersion> for AlbumVersionQuality {
+    fn from(value: ApiAlbumVersion) -> Self {
+        Self {
+            format: value.format,
+            bit_depth: value.bit_depth,
+            sample_rate: value.sample_rate,
+            channels: value.channels,
+            source: value.source,
+        }
+    }
 }
 
 impl From<ApiAlbumVersion> for AlbumVersion {

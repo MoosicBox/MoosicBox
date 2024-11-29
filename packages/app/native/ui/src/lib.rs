@@ -10,7 +10,7 @@ pub mod state;
 
 use albums::album_cover_img;
 use maud::{html, Markup};
-use moosicbox_core::sqlite::models::{ApiSource, ApiTrack, Id};
+use moosicbox_core::sqlite::models::{ApiSource, ApiTrack, Id, TrackApiSource};
 use moosicbox_session_models::{ApiSession, ApiUpdateSession};
 use serde::{Deserialize, Serialize};
 use state::State;
@@ -38,8 +38,20 @@ pub enum Action {
     TogglePlayback,
     PreviousTrack,
     NextTrack,
-    PlayAlbum { album_id: Id, api_source: ApiSource },
-    AddAlbumToQueue { album_id: Id, api_source: ApiSource },
+    PlayAlbum {
+        album_id: Id,
+        api_source: ApiSource,
+        version_source: Option<TrackApiSource>,
+        sample_rate: Option<u32>,
+        bit_depth: Option<u8>,
+    },
+    AddAlbumToQueue {
+        album_id: Id,
+        api_source: ApiSource,
+        version_source: Option<TrackApiSource>,
+        sample_rate: Option<u32>,
+        bit_depth: Option<u8>,
+    },
 }
 
 impl std::fmt::Display for Action {
