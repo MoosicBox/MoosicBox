@@ -1484,6 +1484,29 @@ impl EguiApp {
                                 true
                             });
                         }
+                        ActionTrigger::Change => {
+                            let action = fx_action.action.clone();
+                            let id = container.id;
+                            let visibilities = self.visibilities.clone();
+                            let response = response.clone();
+                            let container = self.container.clone();
+                            self.trigger_side_effect(move || {
+                                if response.changed() {
+                                    log::trace!("change action: {action}");
+                                    return Self::handle_action(
+                                        &action,
+                                        id,
+                                        &container,
+                                        &visibilities,
+                                        &request_action,
+                                    );
+                                }
+
+                                Self::unhandle_action(&action, id, &visibilities);
+
+                                true
+                            });
+                        }
                         ActionTrigger::Immediate => {}
                     }
                 }

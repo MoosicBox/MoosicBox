@@ -263,6 +263,12 @@ fn get_actions(tag: &HTMLTag) -> Vec<Action> {
             action: parse_action(html_escape::decode_html_entities(&action).to_string()),
         });
     }
+    if let Some(action) = get_tag_attr_value(tag, "fx-change") {
+        actions.push(Action {
+            trigger: ActionTrigger::Change,
+            action: parse_action(html_escape::decode_html_entities(&action).to_string()),
+        });
+    }
 
     actions
 }

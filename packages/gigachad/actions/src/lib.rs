@@ -24,6 +24,7 @@ pub enum ActionTrigger {
     Click,
     ClickOutside,
     Hover,
+    Change,
     #[default]
     Immediate,
 }
