@@ -1914,10 +1914,10 @@ impl EguiApp {
     }
 
     fn render_checkbox_input(ui: &mut Ui, input: &Input) -> Response {
-        let checked = match input {
-            Input::Checkbox { checked } => *checked,
-            _ => unreachable!(),
+        let Input::Checkbox { checked } = input else {
+            unreachable!();
         };
+        let checked = *checked;
 
         let id = ui.next_auto_id();
         let mut checked_value = ui
