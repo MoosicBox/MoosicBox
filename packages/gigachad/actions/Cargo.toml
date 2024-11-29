@@ -1,0 +1,28 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["gui", "web-programming"]
+description = "GigaChad actions package"
+edition     = "2021"
+keywords    = ["actions", "gui", "web"]
+license     = "MPL-2.0"
+name        = "gigachad_actions"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+gigachad_transformer_models = { version = "0.1.0", path = "../transformer/models", default-features = false }
+moosicbox_assert            = { version = "0.1.0", path = "../../assert", default-features = false }
+
+log        = { workspace = true }
+serde      = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+
+[features]
+default = ["id", "serde"]
+
+fail-on-warnings = []
+
+id = []
+
+serde = ["dep:serde", "dep:serde_json", "gigachad_transformer_models/serde"]

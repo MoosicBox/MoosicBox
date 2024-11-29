@@ -1,0 +1,26 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["gui", "web-programming"]
+description = "GigaChad transformer models package"
+edition     = "2021"
+keywords    = ["gui", "models", "web"]
+license     = "MPL-2.0"
+name        = "gigachad_transformer_models"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
+
+log   = { workspace = true }
+serde = { workspace = true, optional = true }
+
+[features]
+default = ["calc", "serde"]
+
+fail-on-warnings = []
+
+calc = []
+
+serde = ["dep:serde"]

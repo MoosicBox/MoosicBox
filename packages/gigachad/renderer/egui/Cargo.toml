@@ -14,6 +14,9 @@ version     = "0.1.0"
 ignored = ["gigachad_color", "image"]
 
 [dependencies]
+gigachad_actions = { version = "0.1.0", path = "../../actions", default-features = false, features = [
+    "id",
+] }
 gigachad_color = { version = "0.1.0", path = "../../color", default-features = false, features = [
     "egui",
 ] }

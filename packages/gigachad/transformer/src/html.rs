@@ -1,14 +1,18 @@
 use std::borrow::Cow;
 
+use gigachad_actions::{ActionType, StyleAction, StyleActionType};
 use gigachad_color::Color;
+use gigachad_transformer_models::{
+    AlignItems, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, Position, Route,
+    Visibility,
+};
 use serde_json::Value;
 pub use tl::ParseError;
 use tl::{Children, HTMLTag, Node, NodeHandle, Parser, ParserOptions};
 
 use crate::{
     parse::{parse_number, GetNumberError},
-    ActionType, AlignItems, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, Number,
-    Position, Route, StyleAction, StyleActionType, Visibility,
+    Number,
 };
 
 impl TryFrom<String> for crate::ContainerElement {
@@ -227,22 +231,18 @@ fn get_actions(tag: &HTMLTag) -> (Vec<ActionType>, Vec<StyleActionType>) {
     let mut actions = vec![];
     let mut style_actions = vec![];
     if let Some(action) = get_tag_attr_value(tag, "fx-click") {
-        if let Some(value) = action.strip_prefix("sx-visibility=") {
-            style_actions.push(StyleActionType::Click(StyleAction::SetVisibility(
-                parse_visibility(value),
-            )));
+        let action = html_escape::decode_html_entities(&action).to_string();
+        if let Ok(action) = serde_json::from_str::<StyleAction>(&action) {
+            style_actions.push(StyleActionType::Click(action));
         } else {
-            let action = html_escape::decode_html_entities(&action).to_string();
             actions.push(ActionType::Click { action });
         }
     }
     if let Some(action) = get_tag_attr_value(tag, "fx-hover") {
-        if let Some(value) = action.strip_prefix("sx-visibility=") {
-            style_actions.push(StyleActionType::Hover(StyleAction::SetVisibility(
-                parse_visibility(value),
-            )));
+        let action = html_escape::decode_html_entities(&action).to_string();
+        if let Ok(action) = serde_json::from_str::<StyleAction>(&action) {
+            style_actions.push(StyleActionType::Hover(action));
         } else {
-            let action = html_escape::decode_html_entities(&action).to_string();
             actions.push(ActionType::Hover { action });
         }
     }

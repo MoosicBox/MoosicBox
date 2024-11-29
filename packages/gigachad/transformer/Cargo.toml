@@ -11,7 +11,9 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
+gigachad_actions = { path = "../actions", default-features = false }
 gigachad_color = { path = "../color", default-features = false }
+gigachad_transformer_models = { path = "models", default-features = false }
 moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
 moosicbox_logging = { version = "0.1.0", path = "../../logging", default-features = false, features = [
     "macros",
@@ -37,10 +39,10 @@ fail-on-warnings = []
 
 canvas = []
 
-calc = ["dep:itertools"]
+calc = ["dep:itertools", "gigachad_transformer_models/calc"]
 maud = ["dep:maud", "html"]
 
-html = ["dep:html-escape", "dep:tl"]
+html = ["dep:html-escape", "dep:tl", "gigachad_actions/serde"]
 simd = ["tl?/simd"]
 
 format = ["dep:xml"]

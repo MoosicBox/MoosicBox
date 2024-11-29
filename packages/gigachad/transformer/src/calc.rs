@@ -1,11 +1,14 @@
 use std::sync::atomic::AtomicU16;
 
+use gigachad_transformer_models::{
+    JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition,
+};
 use itertools::Itertools;
 
 use crate::{
     absolute_positioned_elements_mut, calc_number, relative_positioned_elements,
-    relative_positioned_elements_mut, ContainerElement, Element, JustifyContent, LayoutDirection,
-    LayoutOverflow, LayoutPosition, Number, Position, TableIter, TableIterMut,
+    relative_positioned_elements_mut, ContainerElement, Element, Number, Position, TableIter,
+    TableIterMut,
 };
 
 static SCROLLBAR_SIZE: AtomicU16 = AtomicU16::new(16);
@@ -1791,8 +1794,8 @@ mod test {
 
     use crate::{
         calc::{get_scrollbar_size, Calc as _},
-        ContainerElement, Element, JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition,
-        Number, Position,
+        models::{JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition},
+        ContainerElement, Element, Number, Position,
     };
 
     #[test_log::test]

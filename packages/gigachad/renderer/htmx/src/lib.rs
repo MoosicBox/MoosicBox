@@ -14,7 +14,7 @@ use gigachad_renderer_html::{
     HeaderMap, HtmlRenderer,
 };
 use gigachad_router::Router;
-use gigachad_transformer::{ContainerElement, Route};
+use gigachad_transformer::{models::Route, ContainerElement};
 use tokio::runtime::Runtime;
 
 pub struct HtmxTagRenderer;

@@ -1,5 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 
+use gigachad_actions::StyleAction;
+use gigachad_transformer_models::Visibility;
 use maud::{html, Markup, PreEscaped};
 use moosicbox_core::sqlite::models::{AlbumVersionQuality, ApiAlbum, ApiSource, TrackApiSource};
 use moosicbox_menu_models::api::ApiAlbumVersion;
@@ -305,7 +307,7 @@ pub fn album_display(
                     sx-height=(size)
                     sx-position="absolute"
                     sx-visibility="hidden"
-                    fx-hover="sx-visibility=visible"
+                    fx-hover=(StyleAction::visibility_self(Visibility::Visible))
                 {
                     @let button_size = size / 4;
                     @let icon_size = size / 10;

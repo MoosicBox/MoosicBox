@@ -30,8 +30,10 @@ use gigachad_renderer::viewport::retained::{
     Viewport, ViewportListener, ViewportPosition, WidgetPosition,
 };
 use gigachad_transformer::{
-    calc::Calc as _, calc_number, ContainerElement, Element, HeaderSize, LayoutDirection,
-    LayoutOverflow,
+    calc::Calc as _,
+    calc_number,
+    models::{LayoutDirection, LayoutOverflow, LayoutPosition},
+    ContainerElement, Element, HeaderSize,
 };
 use thiserror::Error;
 use tokio::task::JoinHandle;
@@ -581,8 +583,8 @@ impl FltkRenderer {
             .calculated_position
             .as_ref()
             .and_then(|x| match x {
-                gigachad_transformer::LayoutPosition::Wrap { row, col } => Some((*row, *col)),
-                gigachad_transformer::LayoutPosition::Default => None,
+                LayoutPosition::Wrap { row, col } => Some((*row, *col)),
+                LayoutPosition::Default => None,
             })
             .unwrap_or((0, 0));
 
@@ -592,11 +594,11 @@ impl FltkRenderer {
                 .container_element()
                 .and_then(|x| {
                     x.calculated_position.as_ref().and_then(|x| match x {
-                        gigachad_transformer::LayoutPosition::Wrap { row, col } => {
+                        LayoutPosition::Wrap { row, col } => {
                             log::debug!("draw_elements: drawing row={row} col={col}");
                             Some((*row, *col))
                         }
-                        gigachad_transformer::LayoutPosition::Default => None,
+                        LayoutPosition::Default => None,
                     })
                 })
                 .unwrap_or((row, col));

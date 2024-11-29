@@ -6,8 +6,8 @@ use actix_web::http::header::HeaderMap;
 use gigachad_renderer::Color;
 use gigachad_router::ContainerElement;
 use gigachad_transformer::{
-    Calculation, Element, HeaderSize, Input, JustifyContent, LayoutDirection, LayoutOverflow,
-    Number,
+    models::{JustifyContent, LayoutDirection, LayoutOverflow},
+    Calculation, Element, HeaderSize, Input, Number,
 };
 
 pub trait HtmlTagRenderer {

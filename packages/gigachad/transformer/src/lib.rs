@@ -3,8 +3,15 @@
 
 use std::io::Write;
 
+use gigachad_actions::{ActionType, StyleActionType};
 use gigachad_color::Color;
+use gigachad_transformer_models::{
+    AlignItems, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, Position, Route,
+    Visibility,
+};
 use serde_json::Value;
+
+pub use gigachad_transformer_models as models;
 
 #[cfg(feature = "calc")]
 pub mod calc;
@@ -111,191 +118,6 @@ impl Default for Number {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub enum LayoutDirection {
-    Row,
-    #[default]
-    Column,
-}
-
-impl std::fmt::Display for LayoutDirection {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Row => f.write_str("Row"),
-            Self::Column => f.write_str("Column"),
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub enum LayoutOverflow {
-    Auto,
-    Scroll,
-    Show,
-    #[default]
-    Squash,
-    Wrap,
-}
-
-impl std::fmt::Display for LayoutOverflow {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{self:?}"))
-    }
-}
-
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub enum JustifyContent {
-    Start,
-    Center,
-    End,
-    SpaceBetween,
-    SpaceEvenly,
-    #[default]
-    Default,
-}
-
-impl std::fmt::Display for JustifyContent {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{self:?}"))
-    }
-}
-
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub enum AlignItems {
-    Center,
-    End,
-    #[default]
-    Default,
-}
-
-impl std::fmt::Display for AlignItems {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{self:?}"))
-    }
-}
-
-#[cfg(feature = "calc")]
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub enum LayoutPosition {
-    Wrap {
-        row: u32,
-        col: u32,
-    },
-    #[default]
-    Default,
-}
-
-#[cfg(feature = "calc")]
-impl LayoutPosition {
-    #[must_use]
-    pub const fn row(&self) -> Option<u32> {
-        match self {
-            Self::Wrap { row, .. } => Some(*row),
-            Self::Default => None,
-        }
-    }
-
-    #[must_use]
-    pub const fn column(&self) -> Option<u32> {
-        match self {
-            Self::Wrap { col, .. } => Some(*col),
-            Self::Default => None,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Route {
-    Get {
-        route: String,
-        trigger: Option<String>,
-    },
-    Post {
-        route: String,
-        trigger: Option<String>,
-    },
-}
-
-#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Cursor {
-    #[default]
-    Auto,
-    Pointer,
-    Text,
-    Crosshair,
-    Move,
-    NotAllowed,
-    NoDrop,
-    Grab,
-    Grabbing,
-    AllScroll,
-    ColResize,
-    RowResize,
-    NResize,
-    EResize,
-    SResize,
-    WResize,
-    NeResize,
-    NwResize,
-    SeResize,
-    SwResize,
-    EwResize,
-    NsResize,
-    NeswResize,
-    ZoomIn,
-    ZoomOut,
-}
-
-impl std::fmt::Display for Cursor {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{self:?}"))
-    }
-}
-
-#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Position {
-    #[default]
-    Static,
-    Relative,
-    Absolute,
-}
-
-impl std::fmt::Display for Position {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{self:?}"))
-    }
-}
-
-#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Visibility {
-    #[default]
-    Visible,
-    Hidden,
-}
-
-impl std::fmt::Display for Visibility {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{self:?}"))
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ActionType {
-    Click { action: String },
-    Hover { action: String },
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum StyleActionType {
-    Click(StyleAction),
-    Hover(StyleAction),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum StyleAction {
-    SetVisibility(Visibility),
-}
-
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ContainerElement {
     #[cfg(feature = "id")]
@@ -353,7 +175,7 @@ pub struct ContainerElement {
     #[cfg(feature = "calc")]
     pub calculated_y: Option<f32>,
     #[cfg(feature = "calc")]
-    pub calculated_position: Option<LayoutPosition>,
+    pub calculated_position: Option<gigachad_transformer_models::LayoutPosition>,
     #[cfg(feature = "calc")]
     pub calculated_border_top: Option<(Color, f32)>,
     #[cfg(feature = "calc")]
@@ -945,7 +767,9 @@ impl ContainerElement {
                 attrs.add_opt("dbg-padding-top", self.padding_top);
                 attrs.add_opt("dbg-padding-bottom", self.padding_bottom);
 
-                if let Some(LayoutPosition::Wrap { row, col }) = &self.calculated_position {
+                if let Some(gigachad_transformer_models::LayoutPosition::Wrap { row, col }) =
+                    &self.calculated_position
+                {
                     attrs.add("dbg-row", *row);
                     attrs.add("dbg-col", *col);
                 }

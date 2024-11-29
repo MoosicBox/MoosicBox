@@ -10,13 +10,18 @@ use async_trait::async_trait;
 use canvas::CanvasAction;
 use eframe::egui::{self, Color32, CursorIcon, Response, Ui, Widget};
 use flume::{Receiver, Sender};
+use gigachad_actions::{ActionType, StyleAction, StyleActionType};
 use gigachad_renderer::canvas::CanvasUpdate;
 use gigachad_renderer::viewport::immediate::{Pos, Viewport, ViewportListener};
 pub use gigachad_renderer::*;
 use gigachad_router::Router;
 use gigachad_transformer::{
-    calc::Calc, ActionType, ContainerElement, Cursor, Element, Input, JustifyContent,
-    LayoutDirection, Position, Route, StyleAction, StyleActionType, TableIter, Visibility,
+    calc::Calc,
+    models::{
+        AlignItems, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition,
+        Position, Route, Visibility,
+    },
+    ContainerElement, Element, Input, TableIter,
 };
 use itertools::Itertools;
 
@@ -763,8 +768,8 @@ impl EguiApp {
                                     let (pos_x, pos_y) = (cursor.left(), cursor.top());
                                     match (container.overflow_x, container.overflow_y) {
                                         (
-                                            gigachad_transformer::LayoutOverflow::Auto,
-                                            gigachad_transformer::LayoutOverflow::Auto,
+                                            LayoutOverflow::Auto,
+                                            LayoutOverflow::Auto,
                                         ) => {
                                             egui::ScrollArea::both()
                                                 .scroll_bar_visibility(
@@ -787,8 +792,8 @@ impl EguiApp {
                                                 }).inner
                                         }
                                         (
-                                            gigachad_transformer::LayoutOverflow::Scroll,
-                                            gigachad_transformer::LayoutOverflow::Scroll,
+                                            LayoutOverflow::Scroll,
+                                            LayoutOverflow::Scroll,
                                         ) => {
                                             egui::ScrollArea::both()
                                                 .scroll_bar_visibility(
@@ -811,8 +816,8 @@ impl EguiApp {
                                                 }).inner
                                         }
                                         (
-                                            gigachad_transformer::LayoutOverflow::Auto,
-                                            gigachad_transformer::LayoutOverflow::Scroll,
+                                            LayoutOverflow::Auto,
+                                            LayoutOverflow::Scroll,
                                         ) => {
                                             egui::ScrollArea::vertical()
                                                 .scroll_bar_visibility(
@@ -847,8 +852,8 @@ impl EguiApp {
                                                 }).inner
                                         }
                                         (
-                                            gigachad_transformer::LayoutOverflow::Scroll,
-                                            gigachad_transformer::LayoutOverflow::Auto,
+                                            LayoutOverflow::Scroll,
+                                            LayoutOverflow::Auto,
                                         ) => {
                                             egui::ScrollArea::vertical()
                                                 .scroll_bar_visibility(
@@ -882,7 +887,7 @@ impl EguiApp {
                                                     }
                                                 }).inner
                                         }
-                                        (gigachad_transformer::LayoutOverflow::Auto, _) => {
+                                        (LayoutOverflow::Auto, _) => {
                                             egui::ScrollArea::horizontal()
                                                 .scroll_bar_visibility(
                                                     egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
@@ -903,7 +908,7 @@ impl EguiApp {
                                                     }
                                                 }).inner
                                         }
-                                        (gigachad_transformer::LayoutOverflow::Scroll, _) => {
+                                        (LayoutOverflow::Scroll, _) => {
                                             egui::ScrollArea::horizontal()
                                                 .scroll_bar_visibility(
                                                     egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
@@ -924,7 +929,7 @@ impl EguiApp {
                                                     }
                                                 }).inner
                                         }
-                                        (_, gigachad_transformer::LayoutOverflow::Auto) => {
+                                        (_, LayoutOverflow::Auto) => {
                                             egui::ScrollArea::vertical()
                                                 .scroll_bar_visibility(
                                                     egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
@@ -945,7 +950,7 @@ impl EguiApp {
                                                     }
                                                 }).inner
                                         }
-                                        (_, gigachad_transformer::LayoutOverflow::Scroll) => {
+                                        (_, LayoutOverflow::Scroll) => {
                                             egui::ScrollArea::vertical()
                                                 .scroll_bar_visibility(
                                                     egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
@@ -1070,8 +1075,8 @@ impl EguiApp {
                     .filter_map(|x| x.container_element().map(|y| (x, y)))
                     .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
                     .filter_map(|(x, y)| match y {
-                        gigachad_transformer::LayoutPosition::Wrap { row, .. } => Some((*row, x)),
-                        gigachad_transformer::LayoutPosition::Default => {
+                        LayoutPosition::Wrap { row, .. } => Some((*row, x)),
+                        LayoutPosition::Default => {
                             self.handle_element_side_effects(
                                 ctx, None, x, viewport, rect, None, true,
                             );
@@ -1124,8 +1129,8 @@ impl EguiApp {
                     .filter_map(|x| x.container_element().map(|y| (x, y)))
                     .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
                     .filter_map(|(x, y)| match y {
-                        gigachad_transformer::LayoutPosition::Wrap { col, .. } => Some((*col, x)),
-                        gigachad_transformer::LayoutPosition::Default => {
+                        LayoutPosition::Wrap { col, .. } => Some((*col, x)),
+                        LayoutPosition::Default => {
                             self.handle_element_side_effects(
                                 ctx, None, x, viewport, rect, None, true,
                             );
@@ -1184,11 +1189,10 @@ impl EguiApp {
             JustifyContent::Center => {
                 ui.allocate_new_ui(
                     egui::UiBuilder::new().layout(match container.align_items {
-                        gigachad_transformer::AlignItems::Center => {
+                        AlignItems::Center => {
                             egui::Layout::centered_and_justified(egui::Direction::TopDown)
                         }
-                        gigachad_transformer::AlignItems::End
-                        | gigachad_transformer::AlignItems::Default => {
+                        AlignItems::End | AlignItems::Default => {
                             egui::Layout::top_down_justified(egui::Align::Center)
                         }
                     }),
@@ -1196,7 +1200,7 @@ impl EguiApp {
                         egui::Frame::none().show(ui, |ui| {
                             ui.set_width(container.contained_calculated_width());
                             ui.set_height(container.contained_calculated_height());
-                            if container.align_items == gigachad_transformer::AlignItems::End {
+                            if container.align_items == AlignItems::End {
                                 let rect = egui::Rect::from_min_size(
                                     ui.cursor().left_top(),
                                     egui::vec2(
@@ -1436,9 +1440,9 @@ impl EguiApp {
                                     && pointer.primary_released()
                                 {
                                     handled_click.store(true, std::sync::atomic::Ordering::SeqCst);
-                                    match action {
-                                        StyleAction::SetVisibility(visibility) => {
-                                            visibilities.write().unwrap().insert(id, visibility);
+                                    match &action {
+                                        StyleAction::SetVisibility { visibility, .. } => {
+                                            visibilities.write().unwrap().insert(id, *visibility);
 
                                             return true;
                                         }
@@ -1446,7 +1450,7 @@ impl EguiApp {
                                 }
 
                                 match action {
-                                    StyleAction::SetVisibility(_) => {
+                                    StyleAction::SetVisibility { .. } => {
                                         let contains =
                                             { visibilities.read().unwrap().contains_key(&id) };
                                         if contains {
@@ -1473,9 +1477,9 @@ impl EguiApp {
                                         viewport_rect,
                                     )
                                 {
-                                    match action {
-                                        StyleAction::SetVisibility(visibility) => {
-                                            visibilities.write().unwrap().insert(id, visibility);
+                                    match &action {
+                                        StyleAction::SetVisibility { visibility, .. } => {
+                                            visibilities.write().unwrap().insert(id, *visibility);
 
                                             return true;
                                         }
@@ -1483,7 +1487,7 @@ impl EguiApp {
                                 }
 
                                 match action {
-                                    StyleAction::SetVisibility(_) => {
+                                    StyleAction::SetVisibility { .. } => {
                                         let contains =
                                             { visibilities.read().unwrap().contains_key(&id) };
                                         if contains {
