@@ -169,6 +169,26 @@ pub enum TrackApiSource {
     Yt,
 }
 
+impl TrackApiSource {
+    pub fn all() -> &'static [TrackApiSource] {
+        static ALL: LazyLock<Vec<TrackApiSource>> = LazyLock::new(|| {
+            #[allow(unused_mut)]
+            let mut all = vec![TrackApiSource::Local];
+
+            #[cfg(feature = "tidal")]
+            all.push(TrackApiSource::Tidal);
+            #[cfg(feature = "qobuz")]
+            all.push(TrackApiSource::Qobuz);
+            #[cfg(feature = "yt")]
+            all.push(TrackApiSource::Yt);
+
+            all
+        });
+
+        &ALL
+    }
+}
+
 impl Display for TrackApiSource {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_ref())
