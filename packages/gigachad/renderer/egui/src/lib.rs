@@ -1842,7 +1842,7 @@ impl EguiApp {
         }
 
         let response = match element {
-            Element::Input(input) => Some(Self::render_input(ui, input)),
+            Element::Input { input, .. } => Some(Self::render_input(ui, input)),
             Element::Raw { value } => Some(ui.label(value)),
             Element::Image { source, element } => source
                 .as_ref()
