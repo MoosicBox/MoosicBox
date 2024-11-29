@@ -39,6 +39,23 @@ pub enum StyleAction {
 
 impl StyleAction {
     #[must_use]
+    pub fn visibility_str_id(visibility: Visibility, target: &str) -> Self {
+        Self::SetVisibility {
+            visibility,
+            target: ElementTarget::StrId(target.to_string()),
+        }
+    }
+
+    #[cfg(feature = "id")]
+    #[must_use]
+    pub const fn visibility_id(visibility: Visibility, target: usize) -> Self {
+        Self::SetVisibility {
+            visibility,
+            target: ElementTarget::Id(target),
+        }
+    }
+
+    #[must_use]
     pub const fn visibility_self(visibility: Visibility) -> Self {
         Self::SetVisibility {
             visibility,
