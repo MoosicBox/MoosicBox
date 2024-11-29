@@ -37,6 +37,15 @@ pub enum Condition {
     Eq(Value, Value),
 }
 
+impl Condition {
+    pub fn then(self, action: impl Into<Action>) -> If {
+        If {
+            condition: self,
+            action: action.into(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct If {
