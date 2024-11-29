@@ -18,12 +18,14 @@ pub enum ElementTarget {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ActionType {
     Click { action: String },
+    ClickOutside { action: String },
     Hover { action: String },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StyleActionType {
     Click(StyleAction),
+    ClickOutside(StyleAction),
     Hover(StyleAction),
 }
 

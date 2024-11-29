@@ -238,6 +238,14 @@ fn get_actions(tag: &HTMLTag) -> (Vec<ActionType>, Vec<StyleActionType>) {
             actions.push(ActionType::Click { action });
         }
     }
+    if let Some(action) = get_tag_attr_value(tag, "fx-click-outside") {
+        let action = html_escape::decode_html_entities(&action).to_string();
+        if let Ok(action) = serde_json::from_str::<StyleAction>(&action) {
+            style_actions.push(StyleActionType::ClickOutside(action));
+        } else {
+            actions.push(ActionType::ClickOutside { action });
+        }
+    }
     if let Some(action) = get_tag_attr_value(tag, "fx-hover") {
         let action = html_escape::decode_html_entities(&action).to_string();
         if let Ok(action) = serde_json::from_str::<StyleAction>(&action) {

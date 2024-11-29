@@ -1423,9 +1423,10 @@ impl EguiApp {
                 });
             }
             if container.is_visible() {
-                for action in &container.style_actions {
-                    match action {
-                        StyleActionType::Click(action) => {
+                for style_action in &container.style_actions {
+                    match style_action {
+                        StyleActionType::Click(action) | StyleActionType::ClickOutside(action) => {
+                            let inside = matches!(style_action, &StyleActionType::Click(..));
                             let handled_click = self.state.handled_click.clone();
                             let action = action.to_owned();
                             let id = container.id;
@@ -1438,6 +1439,7 @@ impl EguiApp {
                                     return false;
                                 }
                                 if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
+                                    == inside
                                     && pointer.primary_released()
                                 {
                                     handled_click.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1503,11 +1505,12 @@ impl EguiApp {
                         }
                     }
                 }
-                for action in &container.actions {
+                for fx_action in &container.actions {
                     let request_action = self.request_action.clone();
 
-                    match action {
-                        ActionType::Click { action } => {
+                    match fx_action {
+                        ActionType::Click { action } | ActionType::ClickOutside { action } => {
+                            let inside = matches!(fx_action, &ActionType::Click { .. });
                             let handled_click = self.state.handled_click.clone();
                             let action = action.to_owned();
                             let pointer = ctx.input(|x| x.pointer.clone());
@@ -1517,6 +1520,7 @@ impl EguiApp {
                                     return false;
                                 }
                                 if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
+                                    == inside
                                     && pointer.primary_released()
                                 {
                                     handled_click.store(true, std::sync::atomic::Ordering::SeqCst);
