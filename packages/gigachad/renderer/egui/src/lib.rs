@@ -1039,16 +1039,9 @@ impl EguiApp {
                 relative_container = Some((egui::Rect::from_min_size(pos, size), container));
             }
             Some(Position::Absolute) => {
-                let relative_rect = Self::get_render_rect(ui, container, relative_container);
+                let abs_rect = Self::get_render_rect(ui, container, relative_container);
 
-                return ui
-                    .allocate_new_ui(
-                        egui::UiBuilder::new().max_rect(relative_rect).layout(
-                            egui::Layout::centered_and_justified(egui::Direction::TopDown),
-                        ),
-                        |ui| inner(ui, relative_container),
-                    )
-                    .response;
+                return ui.put(abs_rect, |ui: &mut egui::Ui| inner(ui, relative_container));
             }
             Some(Position::Static) | None => {}
         }
