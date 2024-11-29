@@ -53,7 +53,7 @@ impl Condition {
     pub fn then(self, action: impl Into<Action>) -> If {
         If {
             condition: self,
-            action: action.into(),
+            actions: vec![action.into()],
         }
     }
 }
@@ -62,7 +62,15 @@ impl Condition {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct If {
     pub condition: Condition,
-    pub action: Action,
+    pub actions: Vec<Action>,
+}
+
+impl If {
+    #[must_use]
+    pub fn then(mut self, action: impl Into<Action>) -> Self {
+        self.actions.push(action.into());
+        self
+    }
 }
 
 #[cfg(feature = "serde")]
@@ -85,7 +93,7 @@ impl<'a> TryFrom<&'a str> for If {
 pub fn if_stmt(condition: Condition, action: impl Into<Action>) -> If {
     If {
         condition,
-        action: action.into(),
+        actions: vec![action.into()],
     }
 }
 
