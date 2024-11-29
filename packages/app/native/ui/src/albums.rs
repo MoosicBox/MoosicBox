@@ -1,6 +1,9 @@
 #![allow(clippy::module_name_repetitions)]
 
-use gigachad_actions::ActionType;
+use gigachad_actions::{
+    logic::{get_visibility_self, get_visibility_str_id},
+    ActionType,
+};
 use gigachad_transformer_models::Visibility;
 use maud::{html, Markup, PreEscaped};
 use moosicbox_core::sqlite::models::{AlbumVersionQuality, ApiAlbum, ApiSource, TrackApiSource};
@@ -413,7 +416,78 @@ pub fn albums_page_content() -> Markup {
     let size: u16 = 200;
 
     html! {
-        h1 sx-height=(36) { ("Albums") }
+        div sx-height=(36 + 40) sx-background="#080a0b" {
+            div sx-dir="row" sx-justify-content="start" {
+                h1 sx-width=(50) sx-height=(36) { ("Albums") }
+                @let button_size = 30;
+                @let icon_size = button_size - 10;
+                div sx-position="relative" sx-width=(button_size) sx-height=(button_size) {
+                    button
+                        sx-dir="row"
+                        sx-width=(button_size)
+                        sx-height=(button_size)
+                        sx-justify-content="center"
+                        sx-align-items="center"
+                        fx-click=(
+                            get_visibility_str_id("albums-menu")
+                                .eq(Visibility::Hidden)
+                                .then(ActionType::show_str_id("albums-menu"))
+                        )
+                    {
+                        img
+                            sx-width=(icon_size)
+                            sx-height=(icon_size)
+                            src=(public_img!("more-options-white.svg"));
+                    }
+                    div
+                        id="albums-menu"
+                        sx-width=(300)
+                        sx-position="absolute"
+                        sx-top="100%"
+                        sx-visibility="hidden"
+                        sx-background="#080a0b"
+                        sx-border-radius=(5)
+                        sx-dir="row"
+                        fx-click-outside=(
+                            get_visibility_self()
+                                .eq(Visibility::Visible)
+                                .then(ActionType::hide_self())
+                        )
+                    {
+                        div {
+                            div {
+                                button {
+                                    ("Album Artist")
+                                }
+                            }
+                            div sx-border-top="1, #222" {
+                                button {
+                                    ("Album Name")
+                                }
+                            }
+                            div sx-border-top="1, #222" {
+                                button {
+                                    ("Album Release Date")
+                                }
+                            }
+                            div sx-border-top="1, #222" {
+                                button {
+                                    ("Album Date Added")
+                                }
+                            }
+                        }
+                        div {
+                            @for source in TrackApiSource::all() {
+                                div sx-dir="row" {
+                                    (source.to_string()) input type="checkbox";
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            input type="text" placeholder="Filter...";
+        }
         div sx-dir="row" sx-overflow-x="wrap" sx-overflow-y="show" sx-justify-content="space-evenly" sx-gap=(15) {
             div
                 hx-get=(pre_escaped!("/albums-list-start?limit=100&size={size}"))
