@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use gigachad_actions::{ActionType, StyleAction, StyleActionType};
+use gigachad_actions::{Action, ActionTrigger, ActionType};
 use gigachad_color::Color;
 use gigachad_transformer_models::{
     AlignItems, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, Position, Route,
@@ -227,34 +227,33 @@ fn get_number(tag: &HTMLTag, name: &str) -> Result<Number, GetNumberError> {
     })
 }
 
-fn get_actions(tag: &HTMLTag) -> (Vec<ActionType>, Vec<StyleActionType>) {
+fn parse_action(action: String) -> ActionType {
+    serde_json::from_str::<ActionType>(&action).unwrap_or(ActionType::Custom { action })
+}
+
+fn get_actions(tag: &HTMLTag) -> Vec<Action> {
     let mut actions = vec![];
-    let mut style_actions = vec![];
+
     if let Some(action) = get_tag_attr_value(tag, "fx-click") {
-        let action = html_escape::decode_html_entities(&action).to_string();
-        if let Ok(action) = serde_json::from_str::<StyleAction>(&action) {
-            style_actions.push(StyleActionType::Click(action));
-        } else {
-            actions.push(ActionType::Click { action });
-        }
+        actions.push(Action {
+            trigger: ActionTrigger::Click,
+            action: parse_action(html_escape::decode_html_entities(&action).to_string()),
+        });
     }
     if let Some(action) = get_tag_attr_value(tag, "fx-click-outside") {
-        let action = html_escape::decode_html_entities(&action).to_string();
-        if let Ok(action) = serde_json::from_str::<StyleAction>(&action) {
-            style_actions.push(StyleActionType::ClickOutside(action));
-        } else {
-            actions.push(ActionType::ClickOutside { action });
-        }
+        actions.push(Action {
+            trigger: ActionTrigger::ClickOutside,
+            action: parse_action(html_escape::decode_html_entities(&action).to_string()),
+        });
     }
     if let Some(action) = get_tag_attr_value(tag, "fx-hover") {
-        let action = html_escape::decode_html_entities(&action).to_string();
-        if let Ok(action) = serde_json::from_str::<StyleAction>(&action) {
-            style_actions.push(StyleActionType::Hover(action));
-        } else {
-            actions.push(ActionType::Hover { action });
-        }
+        actions.push(Action {
+            trigger: ActionTrigger::Hover,
+            action: parse_action(html_escape::decode_html_entities(&action).to_string()),
+        });
     }
-    (actions, style_actions)
+
+    actions
 }
 
 fn parse_element(
@@ -265,8 +264,6 @@ fn parse_element(
     #[cfg(feature = "id")]
     static CURRENT_ID: std::sync::LazyLock<std::sync::Arc<std::sync::atomic::AtomicUsize>> =
         std::sync::LazyLock::new(|| std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(1)));
-
-    let (actions, style_actions) = get_actions(tag);
 
     #[allow(clippy::needless_update)]
     crate::ContainerElement {
@@ -298,8 +295,7 @@ fn parse_element(
         cursor: get_cursor(tag),
         position: get_position(tag),
         route: get_route(tag),
-        actions,
-        style_actions,
+        actions: get_actions(tag),
         ..Default::default()
     }
 }

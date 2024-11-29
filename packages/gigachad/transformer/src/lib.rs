@@ -3,7 +3,7 @@
 
 use std::io::Write;
 
-use gigachad_actions::{ActionType, StyleActionType};
+use gigachad_actions::Action;
 use gigachad_color::Color;
 use gigachad_transformer_models::{
     AlignItems, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, Position, Route,
@@ -148,8 +148,7 @@ pub struct ContainerElement {
     pub hidden: Option<bool>,
     pub visibility: Option<Visibility>,
     pub route: Option<Route>,
-    pub actions: Vec<ActionType>,
-    pub style_actions: Vec<StyleActionType>,
+    pub actions: Vec<Action>,
     #[cfg(feature = "calc")]
     pub margin_left: Option<f32>,
     #[cfg(feature = "calc")]

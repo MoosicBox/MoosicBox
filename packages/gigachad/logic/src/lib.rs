@@ -1,7 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use gigachad_actions::{ElementTarget, StyleAction};
+use gigachad_actions::{Action, ElementTarget};
 use gigachad_transformer_models::Visibility;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -41,7 +41,7 @@ pub enum Condition {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct If {
     pub condition: Condition,
-    pub action: StyleAction,
+    pub action: Action,
 }
 
 #[cfg(feature = "serde")]
@@ -61,8 +61,11 @@ impl<'a> TryFrom<&'a str> for If {
 }
 
 #[must_use]
-pub const fn if_stmt(condition: Condition, action: StyleAction) -> If {
-    If { condition, action }
+pub fn if_stmt(condition: Condition, action: impl Into<Action>) -> If {
+    If {
+        condition,
+        action: action.into(),
+    }
 }
 
 pub fn value(value: impl Into<Value>) -> Value {

@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use canvas::CanvasAction;
 use eframe::egui::{self, Color32, CursorIcon, Response, Ui, Widget};
 use flume::{Receiver, Sender};
-use gigachad_actions::{ActionType, StyleAction, StyleActionType};
+use gigachad_actions::{ActionTrigger, ActionType, ElementTarget, StyleAction};
 use gigachad_renderer::canvas::CanvasUpdate;
 use gigachad_renderer::viewport::immediate::{Pos, Viewport, ViewportListener};
 pub use gigachad_renderer::*;
@@ -1423,12 +1423,14 @@ impl EguiApp {
                 });
             }
             if container.is_visible() {
-                for style_action in &container.style_actions {
-                    match style_action {
-                        StyleActionType::Click(action) | StyleActionType::ClickOutside(action) => {
-                            let inside = matches!(style_action, &StyleActionType::Click(..));
+                for fx_action in &container.actions {
+                    let request_action = self.request_action.clone();
+
+                    match fx_action.trigger {
+                        ActionTrigger::Click | ActionTrigger::ClickOutside => {
+                            let inside = matches!(fx_action.trigger, ActionTrigger::Click);
                             let handled_click = self.state.handled_click.clone();
-                            let action = action.to_owned();
+                            let action = fx_action.action.clone();
                             let id = container.id;
                             let visibilities = self.visibilities.clone();
                             let pointer = ctx.input(|x| x.pointer.clone());
@@ -1442,32 +1444,25 @@ impl EguiApp {
                                     == inside
                                     && pointer.primary_released()
                                 {
+                                    log::trace!("click action: {action}");
                                     handled_click.store(true, std::sync::atomic::Ordering::SeqCst);
-                                    log::debug!("click action: {action}");
-                                    return Self::handle_style_action(
+                                    return Self::handle_action(
                                         &action,
                                         id,
                                         &container,
                                         &visibilities,
+                                        &request_action,
                                     );
                                 }
 
-                                match action {
-                                    StyleAction::SetVisibility { .. } => {
-                                        let contains =
-                                            { visibilities.read().unwrap().contains_key(&id) };
-                                        if contains {
-                                            visibilities.write().unwrap().remove(&id);
-                                        }
-                                    }
-                                }
+                                Self::unhandle_action(&action, id, &visibilities);
 
                                 true
                             });
                         }
-                        StyleActionType::Hover(action) => {
+                        ActionTrigger::Hover => {
                             let handled_hover = self.state.handled_hover.clone();
-                            let action = action.to_owned();
+                            let action = fx_action.action.clone();
                             let id = container.id;
                             let visibilities = self.visibilities.clone();
                             let response = response.clone();
@@ -1481,84 +1476,22 @@ impl EguiApp {
                                         viewport_rect,
                                     )
                                 {
-                                    log::debug!("hover action: {action}");
-                                    return Self::handle_style_action(
+                                    log::trace!("hover action: {action}");
+                                    return Self::handle_action(
                                         &action,
                                         id,
                                         &container,
                                         &visibilities,
+                                        &request_action,
                                     );
                                 }
 
-                                match action {
-                                    StyleAction::SetVisibility { .. } => {
-                                        let contains =
-                                            { visibilities.read().unwrap().contains_key(&id) };
-                                        if contains {
-                                            visibilities.write().unwrap().remove(&id);
-                                        }
-                                    }
-                                }
+                                Self::unhandle_action(&action, id, &visibilities);
 
                                 true
                             });
                         }
-                    }
-                }
-                for fx_action in &container.actions {
-                    let request_action = self.request_action.clone();
-
-                    match fx_action {
-                        ActionType::Click { action } | ActionType::ClickOutside { action } => {
-                            let inside = matches!(fx_action, &ActionType::Click { .. });
-                            let handled_click = self.state.handled_click.clone();
-                            let action = action.to_owned();
-                            let pointer = ctx.input(|x| x.pointer.clone());
-                            let response = response.clone();
-                            self.trigger_side_effect(move || {
-                                if handled_click.load(std::sync::atomic::Ordering::SeqCst) {
-                                    return false;
-                                }
-                                if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
-                                    == inside
-                                    && pointer.primary_released()
-                                {
-                                    handled_click.store(true, std::sync::atomic::Ordering::SeqCst);
-                                    if let Err(e) = request_action.send(action.clone()) {
-                                        moosicbox_assert::die_or_error!(
-                                            "Failed to request action: {action} ({e:?})"
-                                        );
-                                    }
-
-                                    return false;
-                                }
-
-                                true
-                            });
-                        }
-                        ActionType::Hover { action } => {
-                            let handled_hover = self.state.handled_hover.clone();
-                            let action = action.to_owned();
-                            let pointer = ctx.input(|x| x.pointer.clone());
-                            let response = response.clone();
-                            self.trigger_side_effect(move || {
-                                if handled_hover.load(std::sync::atomic::Ordering::SeqCst) {
-                                    return false;
-                                }
-                                if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
-                                {
-                                    if let Err(e) = request_action.send(action.clone()) {
-                                        moosicbox_assert::die_or_error!(
-                                            "Failed to request action: {action} ({e:?})"
-                                        );
-                                    }
-
-                                    return false;
-                                }
-
-                                true
-                            });
-                        }
+                        ActionTrigger::Immediate => {}
                     }
                 }
             }
@@ -1711,14 +1644,52 @@ impl EguiApp {
         }
     }
 
+    fn handle_action(
+        action: &ActionType,
+        id: usize,
+        container: &RwLock<ContainerElement>,
+        visibilities: &RwLock<HashMap<usize, Visibility>>,
+        request_action: &Sender<String>,
+    ) -> bool {
+        match &action {
+            ActionType::Style { target, action } => {
+                Self::handle_style_action(action, target, id, container, visibilities)
+            }
+            ActionType::Custom { action } => {
+                if let Err(e) = request_action.send(action.clone()) {
+                    moosicbox_assert::die_or_error!("Failed to request action: {action} ({e:?})");
+                }
+                true
+            }
+        }
+    }
+
+    fn unhandle_action(
+        action: &ActionType,
+        id: usize,
+        visibilities: &RwLock<HashMap<usize, Visibility>>,
+    ) {
+        if let ActionType::Style { action, .. } = &action {
+            match action {
+                StyleAction::SetVisibility { .. } => {
+                    let contains = { visibilities.read().unwrap().contains_key(&id) };
+                    if contains {
+                        visibilities.write().unwrap().remove(&id);
+                    }
+                }
+            }
+        }
+    }
+
     fn handle_style_action(
         action: &StyleAction,
+        target: &ElementTarget,
         id: usize,
         container: &RwLock<ContainerElement>,
         visibilities: &RwLock<HashMap<usize, Visibility>>,
     ) -> bool {
         match action {
-            StyleAction::SetVisibility { visibility, target } => {
+            StyleAction::SetVisibility(visibility) => {
                 match target {
                     gigachad_actions::ElementTarget::StrId(str_id) => {
                         if let Some(element) = container
