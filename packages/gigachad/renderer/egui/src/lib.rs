@@ -1432,6 +1432,7 @@ impl EguiApp {
                             let visibilities = self.visibilities.clone();
                             let pointer = ctx.input(|x| x.pointer.clone());
                             let response = response.clone();
+                            let container = self.container.clone();
                             self.trigger_side_effect(move || {
                                 if handled_click.load(std::sync::atomic::Ordering::SeqCst) {
                                     return false;
@@ -1440,13 +1441,13 @@ impl EguiApp {
                                     && pointer.primary_released()
                                 {
                                     handled_click.store(true, std::sync::atomic::Ordering::SeqCst);
-                                    match &action {
-                                        StyleAction::SetVisibility { visibility, .. } => {
-                                            visibilities.write().unwrap().insert(id, *visibility);
-
-                                            return true;
-                                        }
-                                    }
+                                    log::debug!("click action: {action}");
+                                    return Self::handle_style_action(
+                                        &action,
+                                        id,
+                                        &container,
+                                        &visibilities,
+                                    );
                                 }
 
                                 match action {
@@ -1469,6 +1470,7 @@ impl EguiApp {
                             let visibilities = self.visibilities.clone();
                             let response = response.clone();
                             let pointer = ctx.input(|x| x.pointer.clone());
+                            let container = self.container.clone();
                             self.trigger_side_effect(move || {
                                 if !handled_hover.load(std::sync::atomic::Ordering::SeqCst)
                                     && Self::rect_contains_mouse(
@@ -1477,13 +1479,13 @@ impl EguiApp {
                                         viewport_rect,
                                     )
                                 {
-                                    match &action {
-                                        StyleAction::SetVisibility { visibility, .. } => {
-                                            visibilities.write().unwrap().insert(id, *visibility);
-
-                                            return true;
-                                        }
-                                    }
+                                    log::debug!("hover action: {action}");
+                                    return Self::handle_style_action(
+                                        &action,
+                                        id,
+                                        &container,
+                                        &visibilities,
+                                    );
                                 }
 
                                 match action {
@@ -1702,6 +1704,43 @@ impl EguiApp {
             self.handle_container_side_effects(
                 ctx, ui, container, viewport, rect, response, recurse,
             );
+        }
+    }
+
+    fn handle_style_action(
+        action: &StyleAction,
+        id: usize,
+        container: &RwLock<ContainerElement>,
+        visibilities: &RwLock<HashMap<usize, Visibility>>,
+    ) -> bool {
+        match action {
+            StyleAction::SetVisibility { visibility, target } => {
+                match target {
+                    gigachad_actions::ElementTarget::StrId(str_id) => {
+                        if let Some(element) = container
+                            .read()
+                            .unwrap()
+                            .find_element_by_str_id(str_id)
+                            .and_then(|x| x.container_element())
+                        {
+                            visibilities
+                                .write()
+                                .unwrap()
+                                .insert(element.id, *visibility);
+                        } else {
+                            log::warn!("Could not find element with str id '{str_id}'");
+                        }
+                    }
+                    gigachad_actions::ElementTarget::Id(id) => {
+                        visibilities.write().unwrap().insert(*id, *visibility);
+                    }
+                    gigachad_actions::ElementTarget::SelfTarget => {
+                        visibilities.write().unwrap().insert(id, *visibility);
+                    }
+                }
+
+                true
+            }
         }
     }
 
