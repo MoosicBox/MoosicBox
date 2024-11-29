@@ -1432,6 +1432,9 @@ impl From<HeaderSize> for u8 {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Input {
+    Checkbox {
+        checked: Option<bool>,
+    },
     Text {
         value: Option<String>,
         placeholder: Option<String>,
@@ -1445,6 +1448,13 @@ pub enum Input {
 impl Input {
     fn display(&self, f: &mut dyn Write, _with_debug_attrs: bool) -> Result<(), std::io::Error> {
         match self {
+            Self::Checkbox { checked } => {
+                let attrs = Attrs::new().with_attr_opt("checked", checked.map(|x| x.to_string()));
+                f.write_fmt(format_args!(
+                    "<input type=\"checkbox\"{attrs} />",
+                    attrs = attrs.to_string_pad_left(),
+                ))?;
+            }
             Self::Text { value, placeholder } => {
                 let attrs = Attrs::new()
                     .with_attr_opt("value", value.to_owned())
@@ -1472,6 +1482,13 @@ impl Input {
 impl std::fmt::Display for Input {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Checkbox { checked } => {
+                let attrs = Attrs::new().with_attr_opt("checked", checked.map(|x| x.to_string()));
+                f.write_fmt(format_args!(
+                    "<input type=\"checkbox\"{attrs} />",
+                    attrs = attrs.to_string_pad_left(),
+                ))
+            }
             Self::Text { value, placeholder } => {
                 let attrs = Attrs::new()
                     .with_attr_opt("value", value.to_owned())

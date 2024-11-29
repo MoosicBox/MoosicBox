@@ -309,6 +309,11 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
     Some(match node {
         Node::Tag(tag) => match tag.name().as_utf8_str().to_lowercase().as_str() {
             "input" => match get_tag_attr_value_lower(tag, "type").as_deref() {
+                Some("checkbox") => crate::Element::Input(crate::Input::Checkbox {
+                    checked: get_tag_attr_value_lower(tag, "checked")
+                        .as_deref()
+                        .map(|x| matches!(x, "checked" | "true" | "")),
+                }),
                 Some("text") => crate::Element::Input(crate::Input::Text {
                     value: get_tag_attr_value_owned(tag, "value"),
                     placeholder: get_tag_attr_value_owned(tag, "placeholder"),

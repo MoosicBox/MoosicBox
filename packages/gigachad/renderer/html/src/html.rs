@@ -444,6 +444,12 @@ pub fn element_to_html(
             f.write_all(b"<")?;
             f.write_all(TAG_NAME)?;
             match input {
+                Input::Checkbox { checked } => {
+                    f.write_all(b" type=\"checkbox\"")?;
+                    if *checked == Some(true) {
+                        f.write_all(b" checked=\"checked\"")?;
+                    }
+                }
                 Input::Text { value, placeholder } => {
                     f.write_all(b" type=\"text\"")?;
                     if let Some(value) = value {

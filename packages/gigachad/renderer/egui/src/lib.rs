@@ -1827,8 +1827,15 @@ impl EguiApp {
     }
 
     fn render_input(ui: &mut Ui, input: &Input) -> Response {
-        let value = match input {
-            Input::Text { value, .. } | Input::Password { value, .. } => value,
+        match input {
+            Input::Text { .. } | Input::Password { .. } => Self::render_text_input(ui, input),
+            Input::Checkbox { .. } => Self::render_checkbox_input(ui, input),
+        }
+    }
+
+    fn render_text_input(ui: &mut Ui, input: &Input) -> Response {
+        let (Input::Text { value, .. } | Input::Password { value, .. }) = input else {
+            unreachable!()
         };
 
         let id = ui.next_auto_id();
@@ -1843,6 +1850,24 @@ impl EguiApp {
 
         let response = text_edit.ui(ui);
         ui.data_mut(|data| data.insert_temp(id, value_text));
+        response
+    }
+
+    fn render_checkbox_input(ui: &mut Ui, input: &Input) -> Response {
+        let checked = match input {
+            Input::Checkbox { checked } => *checked,
+            _ => unreachable!(),
+        };
+
+        let id = ui.next_auto_id();
+        let mut checked_value = ui
+            .data_mut(|data| data.remove_temp::<bool>(id))
+            .unwrap_or_else(|| checked.unwrap_or_default());
+
+        let checkbox = egui::Checkbox::without_text(&mut checked_value);
+
+        let response = checkbox.ui(ui);
+        ui.data_mut(|data| data.insert_temp(id, checked_value));
         response
     }
 
