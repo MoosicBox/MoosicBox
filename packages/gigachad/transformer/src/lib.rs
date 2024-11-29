@@ -588,7 +588,10 @@ pub enum Element {
     Span {
         element: ContainerElement,
     },
-    Input(Input),
+    Input {
+        input: Input,
+        element: ContainerElement,
+    },
     Button {
         element: ContainerElement,
     },
@@ -930,7 +933,7 @@ impl Element {
                 display_elements(&element.elements, f, with_debug_attrs)?;
                 f.write_fmt(format_args!("</span>"))?;
             }
-            Self::Input(input) => {
+            Self::Input { input, .. } => {
                 input.display(f, with_debug_attrs)?;
             }
             Self::Button { element } => {
@@ -1067,7 +1070,7 @@ impl Element {
             Self::Section { .. } => "Section",
             Self::Form { .. } => "Form",
             Self::Span { .. } => "Span",
-            Self::Input(_) => "Input",
+            Self::Input { .. } => "Input",
             Self::Button { .. } => "Button",
             Self::Image { .. } => "Image",
             Self::Anchor { .. } => "Anchor",
@@ -1102,6 +1105,7 @@ impl Element {
             | Self::Span { element }
             | Self::Button { element }
             | Self::Anchor { element, .. }
+            | Self::Input { element, .. }
             | Self::Heading { element, .. }
             | Self::UnorderedList { element }
             | Self::OrderedList { element }
@@ -1114,7 +1118,7 @@ impl Element {
             | Self::ListItem { element } => Some(element),
             #[cfg(feature = "canvas")]
             Self::Canvas { element } => Some(element),
-            Self::Raw { .. } | Self::Input(_) => None,
+            Self::Raw { .. } => None,
         }
     }
 
@@ -1131,6 +1135,7 @@ impl Element {
             | Self::Span { element }
             | Self::Button { element }
             | Self::Anchor { element, .. }
+            | Self::Input { element, .. }
             | Self::Heading { element, .. }
             | Self::UnorderedList { element }
             | Self::OrderedList { element }
@@ -1143,7 +1148,7 @@ impl Element {
             | Self::ListItem { element } => Some(element),
             #[cfg(feature = "canvas")]
             Self::Canvas { element } => Some(element),
-            Self::Raw { .. } | Self::Input(_) => None,
+            Self::Raw { .. } => None,
         }
     }
 

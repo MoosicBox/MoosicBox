@@ -439,7 +439,7 @@ pub fn element_to_html(
             f.write_all(b">")?;
             return Ok(());
         }
-        Element::Input(input) => {
+        Element::Input { input, .. } => {
             const TAG_NAME: &[u8] = b"input";
             f.write_all(b"<")?;
             f.write_all(TAG_NAME)?;
