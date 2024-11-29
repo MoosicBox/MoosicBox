@@ -12,11 +12,23 @@ pub enum CalcValue {
     GetVisibility { target: ElementTarget },
 }
 
+impl CalcValue {
+    pub fn eq(self, other: impl Into<Value>) -> Condition {
+        Condition::Eq(self.into(), other.into())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Value {
     Calc(CalcValue),
     Visibility(Visibility),
+}
+
+impl Value {
+    pub fn eq(self, other: impl Into<Self>) -> Condition {
+        Condition::Eq(self, other.into())
+    }
 }
 
 impl From<CalcValue> for Value {
