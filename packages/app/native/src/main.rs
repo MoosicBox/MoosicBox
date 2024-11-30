@@ -175,6 +175,15 @@ async fn handle_playback_update(update: ApiUpdateSession) {
     visualization::check_visualization_update().await;
 }
 
+fn parse_track_sources(value: &str) -> Result<Vec<TrackApiSource>, RouteError> {
+    value
+        .split(',')
+        .filter(|x| !x.is_empty())
+        .map(TryFrom::try_from)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_e| RouteError::RouteFailed)
+}
+
 static PROFILE: &str = "master";
 
 #[allow(clippy::too_many_lines)]
@@ -297,9 +306,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     container
                 }
             } else {
-                moosicbox_app_native_ui::albums::albums(&convert_state(&STATE).await)
-                    .into_string()
-                    .try_into()?
+                let filtered_sources = parse_track_sources(
+                    req.query
+                        .get("sources")
+                        .map(String::as_str)
+                        .unwrap_or_default(),
+                )?;
+
+                moosicbox_app_native_ui::albums::albums(
+                    &convert_state(&STATE).await,
+                    &filtered_sources,
+                )
+                .into_string()
+                .try_into()?
             })
         })
         .with_route_result("/albums-list-start", |req| async move {
@@ -766,11 +785,31 @@ async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteError> 
     } else {
         0
     };
+
+    let filtered_sources = parse_track_sources(
+        req.query
+            .get("sources")
+            .map(String::as_str)
+            .unwrap_or_default(),
+    )?;
+
     let response = reqwest::get(format!(
-        "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}",
+        "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}",
         std::env::var("MOOSICBOX_HOST")
             .as_deref()
-            .unwrap_or("http://localhost:8500")
+            .unwrap_or("http://localhost:8500"),
+        if filtered_sources.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "&sources={}",
+                filtered_sources
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        }
     ))
     .await?;
 
@@ -783,7 +822,7 @@ async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteError> 
 
     log::trace!("albums_list_start_route: albums={albums:?}");
 
-    moosicbox_app_native_ui::albums::albums_list_start(&albums, size)
+    moosicbox_app_native_ui::albums::albums_list_start(&albums, &filtered_sources, size)
         .into_string()
         .try_into()
         .map_err(|e| {
@@ -805,11 +844,31 @@ async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
         return Err(RouteError::MissingQueryParam("size"));
     };
     let size = size.parse::<u16>()?;
+
+    let filtered_sources = parse_track_sources(
+        req.query
+            .get("sources")
+            .map(String::as_str)
+            .unwrap_or_default(),
+    )?;
+
     let response = reqwest::get(format!(
-        "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}",
+        "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}",
         std::env::var("MOOSICBOX_HOST")
             .as_deref()
-            .unwrap_or("http://localhost:8500")
+            .unwrap_or("http://localhost:8500"),
+        if filtered_sources.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "&sources={}",
+                filtered_sources
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        }
     ))
     .await?;
 
