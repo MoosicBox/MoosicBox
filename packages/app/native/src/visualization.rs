@@ -45,7 +45,9 @@ static CANCEL_INTERVAL: LazyLock<RwLock<CancellationToken>> =
 #[allow(clippy::too_many_arguments)]
 async fn visualization_updated(
     cursor_width: f32,
+    cursor_height: f32,
     bar_width: f32,
+    bar_height: f32,
     gap: f32,
     visualization_width: f32,
     visualization_height: f32,
@@ -74,6 +76,7 @@ async fn visualization_updated(
         .as_secs_f32()
         * step_1_second;
     let cursor_x = visualization_width.mul_add(progress_percent, -(cursor_width / 2.0)) + delta;
+    let bar_y_offset = (visualization_height - bar_height) / 2.0;
 
     canvas_actions.push(canvas::CanvasAction::StrokeColor(Color::from_hex("222")));
 
@@ -83,9 +86,9 @@ async fn visualization_updated(
         #[allow(clippy::cast_precision_loss)]
         let x = (i as f32) * (bar_width + gap);
         let height = f32::from(*point);
-        let height = (height / 255.0) * visualization_height;
+        let height = (height / 255.0) * bar_height;
         let height = if height < 2.0 { 2.0 } else { height };
-        let y = (visualization_height - height) / 2.0;
+        let y = (bar_height - height) / 2.0 + bar_y_offset;
 
         if past && x >= cursor_x {
             past = false;
@@ -101,9 +104,10 @@ async fn visualization_updated(
 
     // draw cursor
     {
+        let cursor_y_offset = (visualization_height - cursor_height) / 2.0;
         let x = cursor_x;
-        let y = 0.0;
-        let height = visualization_height;
+        let y = cursor_y_offset;
+        let height = cursor_height;
         canvas_actions.push(canvas::CanvasAction::StrokeColor(Color::WHITE));
         canvas_actions.push(canvas::CanvasAction::FillRect(
             Pos(x, y),
@@ -156,7 +160,7 @@ pub async fn update_visualization(
 
     use tokio::sync::RwLock;
 
-    static CURSOR_WIDTH: f32 = 3.0;
+    static CURSOR_WIDTH: f32 = 2.0;
     static BAR_WIDTH: f32 = 1.0;
     static GAP: f32 = 2.0;
 
@@ -168,6 +172,8 @@ pub async fn update_visualization(
     let seek = track.seek;
     let duration = track.duration;
     let time = track.time;
+    let bar_height = visualization_height - 5.0;
+    let cursor_height = visualization_height;
 
     #[allow(clippy::cast_possible_truncation)]
     let progress_percent = (seek / duration) as f32;
@@ -183,7 +189,9 @@ pub async fn update_visualization(
         #[cfg(feature = "_canvas")]
         visualization_updated(
             CURSOR_WIDTH,
+            cursor_height,
             BAR_WIDTH,
+            bar_height,
             GAP,
             visualization_width,
             visualization_height,
@@ -236,7 +244,9 @@ pub async fn update_visualization(
     #[cfg(feature = "_canvas")]
     visualization_updated(
         CURSOR_WIDTH,
+        cursor_height,
         BAR_WIDTH,
+        bar_height,
         GAP,
         visualization_width,
         visualization_height,
