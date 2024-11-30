@@ -225,7 +225,7 @@ impl NativeAppBuilder {
 
                         moosicbox_task::spawn("egui navigation listener", {
                             let renderer = renderer.clone();
-                            let mut router = router.clone();
+                            let router = router.clone();
                             async move {
                                 while let Some(path) = renderer.wait_for_navigation().await {
                                     if let Err(e) = router.navigate_send(&path).await {
@@ -245,7 +245,7 @@ impl NativeAppBuilder {
                         let renderer = gigachad_renderer_fltk::FltkRenderer::new(action_tx);
                         moosicbox_task::spawn("fltk navigation listener", {
                             let renderer = renderer.clone();
-                            let mut router = router.clone();
+                            let router = router.clone();
                             async move {
                                 while let Some(path) = renderer.wait_for_navigation().await {
                                     if let Err(e) = router.navigate_send(&path).await {

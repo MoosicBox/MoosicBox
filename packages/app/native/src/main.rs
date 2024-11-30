@@ -494,7 +494,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         log::debug!("app_native: setting up routes");
 
         log::debug!("app_native: starting app");
-        let mut app = app
+        let app = app
             .start()
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
@@ -505,7 +505,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
 
         log::debug!("app_native: navigating to home");
-        app.router.navigate_spawn("/");
+        let _handle = app.router.navigate_spawn("/");
 
         #[cfg(feature = "bundled")]
         {
