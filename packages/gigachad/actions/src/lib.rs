@@ -54,6 +54,9 @@ pub enum ActionType {
         target: ElementTarget,
         action: StyleAction,
     },
+    Navigate {
+        url: String,
+    },
     Log {
         message: String,
         level: LogLevel,

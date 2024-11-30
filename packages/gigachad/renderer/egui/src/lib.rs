@@ -1429,6 +1429,7 @@ impl EguiApp {
                             let pointer = ctx.input(|x| x.pointer.clone());
                             let response = response.clone();
                             let container = self.container.clone();
+                            let sender = self.sender.clone();
                             self.trigger_side_effect(move || {
                                 if handled_click.load(std::sync::atomic::Ordering::SeqCst) {
                                     return false;
@@ -1442,6 +1443,7 @@ impl EguiApp {
                                     return Self::handle_action(
                                         &action,
                                         id,
+                                        &sender,
                                         &container,
                                         &visibilities,
                                         &request_action,
@@ -1461,6 +1463,7 @@ impl EguiApp {
                             let response = response.clone();
                             let pointer = ctx.input(|x| x.pointer.clone());
                             let container = self.container.clone();
+                            let sender = self.sender.clone();
                             self.trigger_side_effect(move || {
                                 if !handled_hover.load(std::sync::atomic::Ordering::SeqCst)
                                     && Self::rect_contains_mouse(
@@ -1473,6 +1476,7 @@ impl EguiApp {
                                     return Self::handle_action(
                                         &action,
                                         id,
+                                        &sender,
                                         &container,
                                         &visibilities,
                                         &request_action,
@@ -1490,12 +1494,14 @@ impl EguiApp {
                             let visibilities = self.visibilities.clone();
                             let response = response.clone();
                             let container = self.container.clone();
+                            let sender = self.sender.clone();
                             self.trigger_side_effect(move || {
                                 if response.changed() {
                                     log::trace!("change action: {action}");
                                     return Self::handle_action(
                                         &action,
                                         id,
+                                        &sender,
                                         &container,
                                         &visibilities,
                                         &request_action,
@@ -1664,6 +1670,7 @@ impl EguiApp {
     fn handle_action(
         action: &ActionType,
         id: usize,
+        sender: &Sender<String>,
         container: &RwLock<ContainerElement>,
         visibilities: &RwLock<HashMap<usize, Visibility>>,
         request_action: &Sender<String>,
@@ -1671,6 +1678,12 @@ impl EguiApp {
         match &action {
             ActionType::Style { target, action } => {
                 Self::handle_style_action(action, target, id, container, visibilities)
+            }
+            ActionType::Navigate { url } => {
+                if let Err(e) = sender.send(url.to_owned()) {
+                    log::error!("Failed to navigate via action: {e:?}");
+                }
+                true
             }
             ActionType::Log { message, level } => {
                 match level {
@@ -1761,6 +1774,7 @@ impl EguiApp {
                             && !Self::handle_action(
                                 &action.action,
                                 id,
+                                sender,
                                 container,
                                 visibilities,
                                 request_action,
