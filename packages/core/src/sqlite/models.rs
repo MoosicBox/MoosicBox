@@ -950,19 +950,34 @@ pub enum AlbumSort {
     DateAddedDesc,
 }
 
+impl Display for AlbumSort {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ArtistAsc => f.write_str("artist"),
+            Self::ArtistDesc => f.write_str("artist-desc"),
+            Self::NameAsc => f.write_str("name"),
+            Self::NameDesc => f.write_str("name-desc"),
+            Self::ReleaseDateAsc => f.write_str("release-date"),
+            Self::ReleaseDateDesc => f.write_str("release-date-desc"),
+            Self::DateAddedAsc => f.write_str("date-added"),
+            Self::DateAddedDesc => f.write_str("date-added-desc"),
+        }
+    }
+}
+
 impl FromStr for AlbumSort {
     type Err = ();
 
-    fn from_str(input: &str) -> Result<AlbumSort, Self::Err> {
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
         match input.to_lowercase().as_str() {
-            "artist-asc" | "artist" => Ok(AlbumSort::ArtistAsc),
-            "artist-desc" => Ok(AlbumSort::ArtistDesc),
-            "name-asc" | "name" => Ok(AlbumSort::NameAsc),
-            "name-desc" => Ok(AlbumSort::NameDesc),
-            "release-date-asc" | "release-date" => Ok(AlbumSort::ReleaseDateAsc),
-            "release-date-desc" => Ok(AlbumSort::ReleaseDateDesc),
-            "date-added-asc" | "date-added" => Ok(AlbumSort::DateAddedAsc),
-            "date-added-desc" => Ok(AlbumSort::DateAddedDesc),
+            "artist-asc" | "artist" => Ok(Self::ArtistAsc),
+            "artist-desc" => Ok(Self::ArtistDesc),
+            "name-asc" | "name" => Ok(Self::NameAsc),
+            "name-desc" => Ok(Self::NameDesc),
+            "release-date-asc" | "release-date" => Ok(Self::ReleaseDateAsc),
+            "release-date-desc" => Ok(Self::ReleaseDateDesc),
+            "date-added-asc" | "date-added" => Ok(Self::DateAddedAsc),
+            "date-added-desc" => Ok(Self::DateAddedDesc),
             _ => Err(()),
         }
     }
