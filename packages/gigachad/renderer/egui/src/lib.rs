@@ -3,7 +3,7 @@
 
 use std::{
     collections::{HashMap, VecDeque},
-    sync::{atomic::AtomicBool, Arc, LazyLock, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    sync::{Arc, LazyLock, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
 use async_trait::async_trait;
@@ -182,9 +182,9 @@ impl Renderer for EguiRenderer {
             .or(self.height.map(f32::from));
         elements.calc();
         *self.app.container.write().unwrap() = elements;
-        *self.app.images.write().unwrap() = HashMap::new();
-        *self.app.viewport_listeners.write().unwrap() = HashMap::new();
-        *self.app.route_requests.write().unwrap() = vec![];
+        self.app.images.write().unwrap().clear();
+        self.app.viewport_listeners.write().unwrap().clear();
+        self.app.route_requests.write().unwrap().clear();
         self.app.checkboxes.write().unwrap().clear();
 
         log::debug!("render: finished");
@@ -290,25 +290,9 @@ enum AppImage {
     Bytes(Arc<[u8]>),
 }
 
-#[derive(Debug, Default, Clone)]
-struct ActionState {
-    handled_click: Arc<AtomicBool>,
-    handled_hover: Arc<AtomicBool>,
-}
-
-impl ActionState {
-    fn reset(&self) {
-        self.handled_click
-            .store(false, std::sync::atomic::Ordering::SeqCst);
-        self.handled_hover
-            .store(false, std::sync::atomic::Ordering::SeqCst);
-    }
-}
-
 #[derive(Clone)]
 struct EguiApp {
     ctx: Arc<RwLock<Option<egui::Context>>>,
-    state: ActionState,
     width: Arc<RwLock<Option<f32>>>,
     height: Arc<RwLock<Option<f32>>>,
     container: Arc<RwLock<ContainerElement>>,
@@ -341,7 +325,6 @@ impl EguiApp {
     ) -> Self {
         Self {
             ctx: Arc::new(RwLock::new(None)),
-            state: ActionState::default(),
             width: Arc::new(RwLock::new(None)),
             height: Arc::new(RwLock::new(None)),
             container: Arc::new(RwLock::new(ContainerElement::default())),
@@ -1425,7 +1408,6 @@ impl EguiApp {
                     match fx_action.trigger {
                         ActionTrigger::Click | ActionTrigger::ClickOutside => {
                             let inside = matches!(fx_action.trigger, ActionTrigger::Click);
-                            let handled_click = self.state.handled_click.clone();
                             let action = fx_action.action.clone();
                             let id = container.id;
                             let visibilities = self.visibilities.clone();
@@ -1434,16 +1416,12 @@ impl EguiApp {
                             let container = self.container.clone();
                             let sender = self.sender.clone();
                             self.trigger_side_effect(move || {
-                                if handled_click.load(std::sync::atomic::Ordering::SeqCst) {
-                                    return false;
-                                }
                                 if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
                                     == inside
                                     && pointer.primary_released()
                                 {
                                     log::trace!("click action: {action}");
-                                    handled_click.store(true, std::sync::atomic::Ordering::SeqCst);
-                                    return Self::handle_action(
+                                    Self::handle_action(
                                         &action,
                                         id,
                                         &sender,
@@ -1451,6 +1429,7 @@ impl EguiApp {
                                         &visibilities,
                                         &request_action,
                                     );
+                                    return !inside;
                                 }
 
                                 Self::unhandle_action(&action, id, &visibilities);
@@ -1459,7 +1438,6 @@ impl EguiApp {
                             });
                         }
                         ActionTrigger::Hover => {
-                            let handled_hover = self.state.handled_hover.clone();
                             let action = fx_action.action.clone();
                             let id = container.id;
                             let visibilities = self.visibilities.clone();
@@ -1468,12 +1446,7 @@ impl EguiApp {
                             let container = self.container.clone();
                             let sender = self.sender.clone();
                             self.trigger_side_effect(move || {
-                                if !handled_hover.load(std::sync::atomic::Ordering::SeqCst)
-                                    && Self::rect_contains_mouse(
-                                        &pointer,
-                                        response.rect,
-                                        viewport_rect,
-                                    )
+                                if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
                                 {
                                     log::trace!("hover action: {action}");
                                     return Self::handle_action(
@@ -1552,14 +1525,10 @@ impl EguiApp {
 
             match element {
                 Element::Button { .. } => {
-                    let handled_hover = self.state.handled_hover.clone();
                     let response = response.clone();
                     let pointer = ctx.input(|x| x.pointer.clone());
                     let ctx = ctx.clone();
                     self.trigger_side_effect(move || {
-                        if handled_hover.load(std::sync::atomic::Ordering::SeqCst) {
-                            return false;
-                        }
                         if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect) {
                             ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
                         }
@@ -1570,17 +1539,13 @@ impl EguiApp {
                 Element::Anchor { href, .. } => {
                     let href = href.to_owned();
                     let sender = self.sender.clone();
-                    let handled_click = self.state.handled_click.clone();
-                    let handled_hover = self.state.handled_hover.clone();
                     let response = response.clone();
                     let pointer = ctx.input(|x| x.pointer.clone());
                     let ctx = ctx.clone();
                     self.trigger_side_effect(move || {
-                        if !handled_click.load(std::sync::atomic::Ordering::SeqCst)
-                            && Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
+                        if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
                             && pointer.primary_released()
                         {
-                            handled_click.store(true, std::sync::atomic::Ordering::SeqCst);
                             if let Some(href) = href.clone() {
                                 if let Err(e) = sender.send(href) {
                                     log::error!("Failed to send href event: {e:?}");
@@ -1588,9 +1553,7 @@ impl EguiApp {
                             }
                         }
 
-                        if !handled_hover.load(std::sync::atomic::Ordering::SeqCst)
-                            && Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
-                        {
+                        if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect) {
                             ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
                         }
 
@@ -1678,6 +1641,7 @@ impl EguiApp {
         visibilities: &RwLock<HashMap<usize, Visibility>>,
         request_action: &Sender<String>,
     ) -> bool {
+        log::trace!("handle_action: action={action}");
         match &action {
             ActionType::Style { target, action } => {
                 Self::handle_style_action(action, target, id, container, visibilities)
@@ -2132,8 +2096,6 @@ impl EguiApp {
 
     fn paint(&self, ctx: &egui::Context) {
         self.calc(ctx);
-
-        self.state.reset();
 
         let container = self.container.clone();
         let container: &ContainerElement = &container.read().unwrap();
