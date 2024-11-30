@@ -6,7 +6,9 @@ use gigachad_actions::{
 };
 use gigachad_transformer_models::Visibility;
 use maud::{html, Markup, PreEscaped};
-use moosicbox_core::sqlite::models::{AlbumVersionQuality, ApiAlbum, ApiSource, TrackApiSource};
+use moosicbox_core::sqlite::models::{
+    AlbumSort, AlbumVersionQuality, ApiAlbum, ApiSource, TrackApiSource,
+};
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_paging::Page;
 
@@ -229,10 +231,13 @@ pub fn album(
 pub fn albums_list_start(
     albums: &Page<ApiAlbum>,
     filtered_sources: &[TrackApiSource],
+    sort: AlbumSort,
     size: u16,
 ) -> Markup {
     static MAX_PARALLEL_REQUESTS: u32 = 6;
     static MIN_PAGE_THRESHOLD: u32 = 30;
+    let filtered_sources = filtered_sources_to_string(filtered_sources);
+    let sort = sort.to_string();
     let limit = albums.limit();
     let offset = albums.offset() + limit;
     let remaining = if albums.has_more() {
@@ -240,7 +245,16 @@ pub fn albums_list_start(
             || {
                 html! {
                     div
-                        hx-get=(pre_escaped!("/albums-list-start?offset={offset}&limit={limit}&size={size}{}", filtered_sources_to_query('&', filtered_sources)))
+                        hx-get=(pre_escaped!(
+                            "/albums-list-start{}",
+                            build_query('?', &[
+                                ("offset", &offset.to_string()),
+                                ("limit", &limit.to_string()),
+                                ("size", &size.to_string()),
+                                ("sources", &filtered_sources),
+                                ("sort", &sort),
+                            ])
+                        ))
                         hx-trigger="load"
                         sx-hidden=(true)
                     {}
@@ -253,7 +267,16 @@ pub fn albums_list_start(
                 html! {
                     @if limit < MIN_PAGE_THRESHOLD {
                         div
-                            hx-get=(pre_escaped!("/albums-list?offset={offset}&limit={remaining}&size={size}{}", filtered_sources_to_query('&', filtered_sources)))
+                            hx-get=(pre_escaped!(
+                                "/albums-list{}",
+                                build_query('?', &[
+                                    ("offset", &offset.to_string()),
+                                    ("limit", &remaining.to_string()),
+                                    ("size", &size.to_string()),
+                                    ("sources", &filtered_sources),
+                                    ("sort", &sort),
+                                ])
+                            ))
                             hx-trigger="load"
                             sx-hidden=(true)
                         {}
@@ -261,13 +284,31 @@ pub fn albums_list_start(
                         @for i in 0..MAX_PARALLEL_REQUESTS {
                             @if i == MAX_PARALLEL_REQUESTS - 1 {
                                 div
-                                    hx-get=(pre_escaped!("/albums-list?offset={}&limit={last}&size={size}{}", offset + i * limit, filtered_sources_to_query('&', filtered_sources)))
+                                    hx-get=(pre_escaped!(
+                                        "/albums-list{}",
+                                        build_query('?', &[
+                                            ("offset", &(offset + i * limit).to_string()),
+                                            ("limit", &last.to_string()),
+                                            ("size", &size.to_string()),
+                                            ("sources", &filtered_sources),
+                                            ("sort", &sort),
+                                        ])
+                                    ))
                                     hx-trigger="load"
                                     sx-hidden=(true)
                                 {}
                             } @else {
                                 div
-                                    hx-get=(pre_escaped!("/albums-list?offset={}&limit={limit}&size={size}{}", offset + i * limit, filtered_sources_to_query('&', filtered_sources)))
+                                    hx-get=(pre_escaped!(
+                                        "/albums-list{}",
+                                        build_query('?', &[
+                                            ("offset", &(offset + i * limit).to_string()),
+                                            ("limit", &limit.to_string()),
+                                            ("size", &size.to_string()),
+                                            ("sources", &filtered_sources),
+                                            ("sort", &sort),
+                                        ])
+                                    ))
                                     hx-trigger="load"
                                     sx-hidden=(true)
                                 {}
@@ -390,22 +431,38 @@ fn filtered_sources_to_string(filtered_sources: &[TrackApiSource]) -> String {
         .join(",")
 }
 
-fn filtered_sources_to_query(delimiter: char, filtered_sources: &[TrackApiSource]) -> String {
-    if filtered_sources.is_empty() {
-        String::new()
-    } else {
-        format!(
-            "{delimiter}sources={}",
-            filtered_sources_to_string(filtered_sources)
-        )
+fn build_query(start: char, values: &[(&str, &str)]) -> String {
+    let mut query = String::new();
+
+    for (key, value) in values {
+        if value.is_empty() {
+            continue;
+        }
+        if query.is_empty() {
+            query.push(start);
+        } else {
+            query.push('&');
+        }
+
+        query.push_str(key);
+        query.push('=');
+        query.push_str(value);
     }
+
+    query
 }
 
 #[must_use]
-pub fn albums_page_url(filtered_sources: &[TrackApiSource]) -> String {
+pub fn albums_page_url(filtered_sources: &[TrackApiSource], sort: AlbumSort) -> String {
     format!(
         "/albums{}",
-        filtered_sources_to_query('?', filtered_sources)
+        build_query(
+            '?',
+            &[
+                ("sort", &sort.to_string()),
+                ("sources", &filtered_sources_to_string(filtered_sources)),
+            ]
+        )
     )
 }
 
@@ -444,7 +501,7 @@ pub fn show_albums<'a>(albums: impl Iterator<Item = &'a ApiAlbum>, size: u16) ->
 
 #[allow(clippy::too_many_lines)]
 #[must_use]
-pub fn albums_page_content(filtered_sources: &[TrackApiSource]) -> Markup {
+pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort) -> Markup {
     let size: u16 = 200;
 
     html! {
@@ -488,22 +545,66 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource]) -> Markup {
                     {
                         div {
                             div {
-                                button {
+                                button
+                                    fx-click=(ActionType::Navigate {
+                                        url: albums_page_url(
+                                            filtered_sources,
+                                            if sort == AlbumSort::ArtistAsc {
+                                                AlbumSort::ArtistDesc
+                                            } else {
+                                                AlbumSort::ArtistAsc
+                                            }
+                                        )
+                                    })
+                                {
                                     ("Album Artist")
                                 }
                             }
                             div sx-border-top="1, #222" {
-                                button {
+                                button
+                                    fx-click=(ActionType::Navigate {
+                                        url: albums_page_url(
+                                            filtered_sources,
+                                            if sort == AlbumSort::NameAsc {
+                                                AlbumSort::NameDesc
+                                            } else {
+                                                AlbumSort::NameAsc
+                                            }
+                                        )
+                                    })
+                                {
                                     ("Album Name")
                                 }
                             }
                             div sx-border-top="1, #222" {
-                                button {
+                                button
+                                    fx-click=(ActionType::Navigate {
+                                        url: albums_page_url(
+                                            filtered_sources,
+                                            if sort == AlbumSort::ReleaseDateDesc {
+                                                AlbumSort::ReleaseDateAsc
+                                            } else {
+                                                AlbumSort::ReleaseDateDesc
+                                            }
+                                        )
+                                    })
+                                {
                                     ("Album Release Date")
                                 }
                             }
                             div sx-border-top="1, #222" {
-                                button {
+                                button
+                                    fx-click=(ActionType::Navigate {
+                                        url: albums_page_url(
+                                            filtered_sources,
+                                            if sort == AlbumSort::DateAddedDesc {
+                                                AlbumSort::DateAddedAsc
+                                            } else {
+                                                AlbumSort::DateAddedDesc
+                                            }
+                                        )
+                                    })
+                                {
                                     ("Album Date Added")
                                 }
                             }
@@ -519,7 +620,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource]) -> Markup {
                                                 filtered_sources.iter().filter(|x| *x != source).copied().collect::<Vec<_>>()
                                             } else {
                                                 [filtered_sources, &[*source]].concat()
-                                            })
+                                            }, sort)
                                         })
                                         type="checkbox"
                                         checked=(checked);
@@ -533,7 +634,15 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource]) -> Markup {
         }
         div sx-dir="row" sx-overflow-x="wrap" sx-overflow-y="show" sx-justify-content="space-evenly" sx-gap=(15) {
             div
-                hx-get=(pre_escaped!("/albums-list-start?limit=100&size={size}{}", filtered_sources_to_query('&', filtered_sources)))
+                hx-get=(pre_escaped!(
+                    "/albums-list-start{}",
+                    build_query('?', &[
+                        ("limit", "100"),
+                        ("size", &size.to_string()),
+                        ("sources", &filtered_sources_to_string(filtered_sources)),
+                        ("sort", &sort.to_string()),
+                    ])
+                ))
                 hx-trigger="load"
                 sx-dir="row"
                 sx-overflow-x="wrap"
@@ -552,6 +661,6 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource]) -> Markup {
 }
 
 #[must_use]
-pub fn albums(state: &State, filtered_sources: &[TrackApiSource]) -> Markup {
-    page(state, &albums_page_content(filtered_sources))
+pub fn albums(state: &State, filtered_sources: &[TrackApiSource], sort: AlbumSort) -> Markup {
+    page(state, &albums_page_content(filtered_sources, sort))
 }

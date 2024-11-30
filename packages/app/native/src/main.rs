@@ -9,6 +9,7 @@
 use std::{
     collections::HashMap,
     num::ParseIntError,
+    str::FromStr,
     sync::{Arc, LazyLock, OnceLock},
 };
 
@@ -19,7 +20,9 @@ use moosicbox_app_native_lib::{
 };
 use moosicbox_app_native_ui::{state, Action};
 use moosicbox_app_state::AppStateError;
-use moosicbox_core::sqlite::models::{AlbumType, ApiAlbum, ApiArtist, ApiSource, TrackApiSource};
+use moosicbox_core::sqlite::models::{
+    AlbumSort, AlbumType, ApiAlbum, ApiArtist, ApiSource, TrackApiSource,
+};
 use moosicbox_env_utils::{default_env_usize, option_env_i32, option_env_u16};
 use moosicbox_music_api::{profiles::PROFILES, MusicApi, SourceToMusicApi};
 use moosicbox_paging::Page;
@@ -312,10 +315,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .map(String::as_str)
                         .unwrap_or_default(),
                 )?;
+                let sort = req
+                    .query
+                    .get("sort")
+                    .map(String::as_str)
+                    .map(FromStr::from_str)
+                    .and_then(Result::ok)
+                    .unwrap_or(AlbumSort::NameAsc);
 
                 moosicbox_app_native_ui::albums::albums(
                     &convert_state(&STATE).await,
                     &filtered_sources,
+                    sort,
                 )
                 .into_string()
                 .try_into()?
@@ -793,8 +804,16 @@ async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteError> 
             .unwrap_or_default(),
     )?;
 
+    let sort = req
+        .query
+        .get("sort")
+        .map(String::as_str)
+        .map(FromStr::from_str)
+        .and_then(Result::ok)
+        .unwrap_or(AlbumSort::NameAsc);
+
     let response = reqwest::get(format!(
-        "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}",
+        "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}&sort={sort}",
         std::env::var("MOOSICBOX_HOST")
             .as_deref()
             .unwrap_or("http://localhost:8500"),
@@ -822,7 +841,7 @@ async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteError> 
 
     log::trace!("albums_list_start_route: albums={albums:?}");
 
-    moosicbox_app_native_ui::albums::albums_list_start(&albums, &filtered_sources, size)
+    moosicbox_app_native_ui::albums::albums_list_start(&albums, &filtered_sources, sort, size)
         .into_string()
         .try_into()
         .map_err(|e| {
@@ -852,8 +871,16 @@ async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
             .unwrap_or_default(),
     )?;
 
+    let sort = req
+        .query
+        .get("sort")
+        .map(String::as_str)
+        .map(FromStr::from_str)
+        .and_then(Result::ok)
+        .unwrap_or(AlbumSort::NameAsc);
+
     let response = reqwest::get(format!(
-        "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}",
+        "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}&sort={sort}",
         std::env::var("MOOSICBOX_HOST")
             .as_deref()
             .unwrap_or("http://localhost:8500"),
