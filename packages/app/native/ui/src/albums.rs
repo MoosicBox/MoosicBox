@@ -226,7 +226,11 @@ pub fn album(
 }
 
 #[must_use]
-pub fn albums_list_start(albums: &Page<ApiAlbum>, size: u16) -> Markup {
+pub fn albums_list_start(
+    albums: &Page<ApiAlbum>,
+    filtered_sources: &[TrackApiSource],
+    size: u16,
+) -> Markup {
     static MAX_PARALLEL_REQUESTS: u32 = 6;
     static MIN_PAGE_THRESHOLD: u32 = 30;
     let limit = albums.limit();
@@ -236,7 +240,7 @@ pub fn albums_list_start(albums: &Page<ApiAlbum>, size: u16) -> Markup {
             || {
                 html! {
                     div
-                        hx-get=(pre_escaped!("/albums-list-start?offset={offset}&limit={limit}&size={size}"))
+                        hx-get=(pre_escaped!("/albums-list-start?offset={offset}&limit={limit}&size={size}{}", filtered_sources_to_query('&', filtered_sources)))
                         hx-trigger="load"
                         sx-hidden=(true)
                     {}
@@ -249,7 +253,7 @@ pub fn albums_list_start(albums: &Page<ApiAlbum>, size: u16) -> Markup {
                 html! {
                     @if limit < MIN_PAGE_THRESHOLD {
                         div
-                            hx-get=(pre_escaped!("/albums-list?offset={offset}&limit={remaining}&size={size}"))
+                            hx-get=(pre_escaped!("/albums-list?offset={offset}&limit={remaining}&size={size}{}", filtered_sources_to_query('&', filtered_sources)))
                             hx-trigger="load"
                             sx-hidden=(true)
                         {}
@@ -257,13 +261,13 @@ pub fn albums_list_start(albums: &Page<ApiAlbum>, size: u16) -> Markup {
                         @for i in 0..MAX_PARALLEL_REQUESTS {
                             @if i == MAX_PARALLEL_REQUESTS - 1 {
                                 div
-                                    hx-get=(pre_escaped!("/albums-list?offset={}&limit={last}&size={size}", offset + i * limit))
+                                    hx-get=(pre_escaped!("/albums-list?offset={}&limit={last}&size={size}{}", offset + i * limit, filtered_sources_to_query('&', filtered_sources)))
                                     hx-trigger="load"
                                     sx-hidden=(true)
                                 {}
                             } @else {
                                 div
-                                    hx-get=(pre_escaped!("/albums-list?offset={}&limit={limit}&size={size}", offset + i * limit))
+                                    hx-get=(pre_escaped!("/albums-list?offset={}&limit={limit}&size={size}{}", offset + i * limit, filtered_sources_to_query('&', filtered_sources)))
                                     hx-trigger="load"
                                     sx-hidden=(true)
                                 {}
@@ -378,6 +382,33 @@ pub fn album_display(
     }
 }
 
+fn filtered_sources_to_string(filtered_sources: &[TrackApiSource]) -> String {
+    filtered_sources
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn filtered_sources_to_query(delimiter: char, filtered_sources: &[TrackApiSource]) -> String {
+    if filtered_sources.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "{delimiter}sources={}",
+            filtered_sources_to_string(filtered_sources)
+        )
+    }
+}
+
+#[must_use]
+pub fn albums_page_url(filtered_sources: &[TrackApiSource]) -> String {
+    format!(
+        "/albums{}",
+        filtered_sources_to_query('?', filtered_sources)
+    )
+}
+
 #[must_use]
 pub fn album_page_url(
     album_id: &str,
@@ -411,8 +442,9 @@ pub fn show_albums<'a>(albums: impl Iterator<Item = &'a ApiAlbum>, size: u16) ->
     }
 }
 
+#[allow(clippy::too_many_lines)]
 #[must_use]
-pub fn albums_page_content() -> Markup {
+pub fn albums_page_content(filtered_sources: &[TrackApiSource]) -> Markup {
     let size: u16 = 200;
 
     html! {
@@ -479,7 +511,18 @@ pub fn albums_page_content() -> Markup {
                         div {
                             @for source in TrackApiSource::all() {
                                 div sx-dir="row" {
-                                    (source.to_string()) input type="checkbox";
+                                    @let checked = filtered_sources.iter().any(|x| x == source);
+                                    (source.to_string())
+                                    input
+                                        fx-change=(ActionType::Navigate {
+                                            url: albums_page_url(&if checked {
+                                                filtered_sources.iter().filter(|x| *x != source).copied().collect::<Vec<_>>()
+                                            } else {
+                                                [filtered_sources, &[*source]].concat()
+                                            })
+                                        })
+                                        type="checkbox"
+                                        checked=(checked);
                                 }
                             }
                         }
@@ -490,7 +533,7 @@ pub fn albums_page_content() -> Markup {
         }
         div sx-dir="row" sx-overflow-x="wrap" sx-overflow-y="show" sx-justify-content="space-evenly" sx-gap=(15) {
             div
-                hx-get=(pre_escaped!("/albums-list-start?limit=100&size={size}"))
+                hx-get=(pre_escaped!("/albums-list-start?limit=100&size={size}{}", filtered_sources_to_query('&', filtered_sources)))
                 hx-trigger="load"
                 sx-dir="row"
                 sx-overflow-x="wrap"
@@ -509,6 +552,6 @@ pub fn albums_page_content() -> Markup {
 }
 
 #[must_use]
-pub fn albums(state: &State) -> Markup {
-    page(state, &albums_page_content())
+pub fn albums(state: &State, filtered_sources: &[TrackApiSource]) -> Markup {
+    page(state, &albums_page_content(filtered_sources))
 }
