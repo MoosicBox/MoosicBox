@@ -185,6 +185,7 @@ impl Renderer for EguiRenderer {
         *self.app.images.write().unwrap() = HashMap::new();
         *self.app.viewport_listeners.write().unwrap() = HashMap::new();
         *self.app.route_requests.write().unwrap() = vec![];
+        self.app.checkboxes.write().unwrap().clear();
 
         log::debug!("render: finished");
         if let Some(ctx) = &*self.app.ctx.read().unwrap() {
@@ -319,6 +320,7 @@ struct EguiApp {
     canvas_actions: Arc<RwLock<HashMap<String, Vec<CanvasAction>>>>,
     route_requests: Arc<RwLock<Vec<usize>>>,
     visibilities: Arc<RwLock<HashMap<usize, Visibility>>>,
+    checkboxes: Arc<RwLock<HashMap<egui::Id, bool>>>,
     router: Router,
     background: Option<Color32>,
     request_action: Sender<String>,
@@ -351,6 +353,7 @@ impl EguiApp {
             canvas_actions: Arc::new(RwLock::new(HashMap::new())),
             route_requests: Arc::new(RwLock::new(vec![])),
             visibilities: Arc::new(RwLock::new(HashMap::new())),
+            checkboxes: Arc::new(RwLock::new(HashMap::new())),
             router,
             background: None,
             request_action,
@@ -1879,7 +1882,7 @@ impl EguiApp {
         }
 
         let response = match element {
-            Element::Input { input, .. } => Some(Self::render_input(ui, input)),
+            Element::Input { input, .. } => Some(Self::render_input(ui, input, &self.checkboxes)),
             Element::Raw { value } => Some(ui.label(value)),
             Element::Image { source, element } => source
                 .as_ref()
@@ -1923,10 +1926,14 @@ impl EguiApp {
         }
     }
 
-    fn render_input(ui: &mut Ui, input: &Input) -> Response {
+    fn render_input(
+        ui: &mut Ui,
+        input: &Input,
+        checkboxes: &Arc<RwLock<HashMap<egui::Id, bool>>>,
+    ) -> Response {
         match input {
             Input::Text { .. } | Input::Password { .. } => Self::render_text_input(ui, input),
-            Input::Checkbox { .. } => Self::render_checkbox_input(ui, input),
+            Input::Checkbox { .. } => Self::render_checkbox_input(ui, input, checkboxes),
         }
     }
 
@@ -1950,21 +1957,41 @@ impl EguiApp {
         response
     }
 
-    fn render_checkbox_input(ui: &mut Ui, input: &Input) -> Response {
+    fn render_checkbox_input(
+        ui: &mut Ui,
+        input: &Input,
+        checkboxes: &Arc<RwLock<HashMap<egui::Id, bool>>>,
+    ) -> Response {
         let Input::Checkbox { checked } = input else {
             unreachable!();
         };
         let checked = *checked;
 
         let id = ui.next_auto_id();
+
+        let contains = { checkboxes.read().unwrap().contains_key(&id) };
+
         let mut checked_value = ui
-            .data_mut(|data| data.remove_temp::<bool>(id))
+            .data_mut(|data| {
+                let value = data.remove_temp::<bool>(id);
+
+                if !contains {
+                    return None;
+                }
+
+                value
+            })
             .unwrap_or_else(|| checked.unwrap_or_default());
 
         let checkbox = egui::Checkbox::without_text(&mut checked_value);
-
         let response = checkbox.ui(ui);
+
         ui.data_mut(|data| data.insert_temp(id, checked_value));
+
+        if response.changed() {
+            checkboxes.write().unwrap().insert(id, checked_value);
+        }
+
         response
     }
 
