@@ -7,23 +7,29 @@ use gigachad_actions::{
 use gigachad_transformer_models::Visibility;
 use maud::{html, Markup, PreEscaped};
 use moosicbox_core::sqlite::models::{
-    AlbumSort, AlbumVersionQuality, ApiAlbum, ApiSource, TrackApiSource,
+    AlbumSort, AlbumVersionQuality, ApiAlbum, ApiSource, ApiTrack, Id, TrackApiSource,
 };
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_paging::Page;
 
 use crate::{formatting::TimeFormat as _, page, pre_escaped, public_img, state::State, Action};
 
-pub fn album_cover_url(album: &ApiAlbum, width: u16, height: u16) -> String {
-    if album.contains_cover {
-        let api_source: ApiSource = album.album_source.into();
+#[must_use]
+pub fn album_cover_url(
+    album_id: &Id,
+    source: ApiSource,
+    contains_cover: bool,
+    width: u16,
+    height: u16,
+) -> String {
+    if contains_cover {
         format!(
             "{}/files/albums/{}/{width}x{height}?moosicboxProfile=master&source={}",
             std::env::var("MOOSICBOX_HOST")
                 .as_deref()
                 .unwrap_or("http://localhost:8500"),
-            album.album_id,
-            api_source,
+            album_id,
+            source,
         )
     } else {
         public_img!("album.svg").to_string()
@@ -31,13 +37,46 @@ pub fn album_cover_url(album: &ApiAlbum, width: u16, height: u16) -> String {
 }
 
 #[must_use]
-pub fn album_cover_img(album: &ApiAlbum, size: u16) -> Markup {
+pub fn album_cover_url_from_album(album: &ApiAlbum, width: u16, height: u16) -> String {
+    album_cover_url(
+        &album.album_id,
+        album.api_source,
+        album.contains_cover,
+        width,
+        height,
+    )
+}
+
+#[must_use]
+pub fn album_cover_url_from_track(track: &ApiTrack, width: u16, height: u16) -> String {
+    album_cover_url(
+        &track.album_id,
+        track.api_source,
+        track.contains_cover,
+        width,
+        height,
+    )
+}
+
+#[must_use]
+pub fn album_cover_img_from_album(album: &ApiAlbum, size: u16) -> Markup {
     #[allow(clippy::cast_sign_loss)]
     #[allow(clippy::cast_possible_truncation)]
     let request_size = (f64::from(size) * 1.33).round() as u16;
 
     html! {
-        img src=(PreEscaped(album_cover_url(album, request_size, request_size))) sx-width=(size) sx-height=(size);
+        img src=(PreEscaped(album_cover_url_from_album(album, request_size, request_size))) sx-width=(size) sx-height=(size);
+    }
+}
+
+#[must_use]
+pub fn album_cover_img_from_track(track: &ApiTrack, size: u16) -> Markup {
+    #[allow(clippy::cast_sign_loss)]
+    #[allow(clippy::cast_possible_truncation)]
+    let request_size = (f64::from(size) * 1.33).round() as u16;
+
+    html! {
+        img src=(PreEscaped(album_cover_url_from_track(track, request_size, request_size))) sx-width=(size) sx-height=(size);
     }
 }
 
@@ -113,7 +152,7 @@ pub fn album_page_content(
         div sx-dir="row" {
             @let size = 200;
             div sx-width=(size) sx-height=(size + 30) {
-                (album_cover_img(&album, size))
+                (album_cover_img_from_album(&album, size))
             }
             div {
                 h1 { (album.title) }
@@ -349,7 +388,7 @@ pub fn album_display(
     let album_cover = if show_media_controls {
         html! {
             div sx-width=(size) sx-height=(size) sx-position="relative" {
-                (album_cover_img(album, size))
+                (album_cover_img_from_album(album, size))
                 div
                     sx-width=(size)
                     sx-height=(size)
@@ -412,7 +451,7 @@ pub fn album_display(
             }
         }
     } else {
-        html! { (album_cover_img(album, size)) }
+        html! { (album_cover_img_from_album(album, size)) }
     };
 
     html! {

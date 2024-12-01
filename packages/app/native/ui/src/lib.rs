@@ -5,10 +5,11 @@
 pub mod albums;
 pub mod artists;
 pub mod formatting;
+pub mod play_queue;
 pub mod settings;
 pub mod state;
 
-use albums::album_cover_img;
+use albums::album_cover_img_from_album;
 use maud::{html, Markup};
 use moosicbox_core::sqlite::models::{ApiSource, ApiTrack, Id, TrackApiSource};
 use moosicbox_session_models::{ApiSession, ApiUpdateSession};
@@ -219,7 +220,7 @@ fn player_current_album(track: &ApiTrack, size: u16) -> Markup {
         div id="player-current-playing" sx-dir="row" {
             div sx-width=(size) sx-height=(size) {
                 a href=(pre_escaped!("/albums?albumId={}&source={}", track.album_id, track.api_source)) sx-width=(size) sx-height=(size) {
-                    (album_cover_img(&track.into(), size))
+                    (album_cover_img_from_album(&track.into(), size))
                 }
             }
             div {
