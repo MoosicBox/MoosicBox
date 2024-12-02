@@ -1,5 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 
+use gigachad_actions::{logic::get_visibility_self, ActionType};
+use gigachad_transformer_models::Visibility;
 use maud::{html, Markup};
 use moosicbox_core::sqlite::models::ApiTrack;
 
@@ -79,6 +81,11 @@ pub fn play_queue(state: &State) -> Markup {
             sx-position="absolute"
             sx-bottom=(170)
             sx-right=(0)
+            fx-click-outside=(
+                get_visibility_self()
+                    .eq(Visibility::Visible)
+                    .then(ActionType::hide_self())
+            )
         {
             h1 sx-height=(30) { ("Play queue") }
             div sx-overflow-y="auto" {
