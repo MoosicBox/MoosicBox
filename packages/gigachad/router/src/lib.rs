@@ -10,7 +10,7 @@ use std::{
 use flume::{Receiver, Sender};
 use futures::Future;
 use gigachad_renderer::View;
-pub use gigachad_transformer::ContainerElement;
+pub use gigachad_transformer::{ContainerElement, Element};
 use qstring::QString;
 use thiserror::Error;
 use tokio::task::JoinHandle;
