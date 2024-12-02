@@ -122,7 +122,9 @@ async fn set_current_session(session: ApiSession) {
         quality: None,
     };
 
-    for (id, markup) in moosicbox_app_native_ui::session_updated(&update, &session) {
+    let state = convert_state(&STATE).await;
+
+    for (id, markup) in moosicbox_app_native_ui::session_updated(&state, &update, &session) {
         let view = PartialView {
             target: id,
             container: markup.try_into().unwrap(),
@@ -155,7 +157,11 @@ async fn handle_playback_update(update: ApiUpdateSession) {
         "moosicbox_app: handle_playback_update: render partials",
         async move {
             if let Some(session) = STATE.get_current_session().await {
-                for (id, markup) in moosicbox_app_native_ui::session_updated(&update, &session) {
+                let state = convert_state(&STATE).await;
+
+                for (id, markup) in
+                    moosicbox_app_native_ui::session_updated(&state, &update, &session)
+                {
                     let view = PartialView {
                         target: id,
                         container: markup.try_into().unwrap(),

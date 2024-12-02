@@ -10,9 +10,12 @@ pub mod settings;
 pub mod state;
 
 use albums::album_cover_img_from_album;
+use gigachad_actions::{logic::get_visibility_str_id, ActionType};
+use gigachad_transformer_models::Visibility;
 use maud::{html, Markup};
 use moosicbox_core::sqlite::models::{ApiSource, ApiTrack, Id, TrackApiSource};
 use moosicbox_session_models::{ApiSession, ApiUpdateSession};
+use play_queue::play_queue;
 use serde::{Deserialize, Serialize};
 use state::State;
 
@@ -180,6 +183,12 @@ pub fn player(state: &State) -> Markup {
                     }
                     button sx-width=(size) sx-height=(size) {
                         img
+                            fx-click=(
+                                get_visibility_str_id("play-queue")
+                                    .eq(Visibility::Hidden)
+                                    .then(ActionType::show_str_id("play-queue"))
+                                    .or_else(ActionType::hide_str_id("play-queue"))
+                            )
                             sx-width=(size)
                             sx-height=(size)
                             src=(public_img!("playlist-white.svg"));
@@ -253,7 +262,11 @@ fn player_current_album_from_state(state: &State, size: u16) -> Markup {
 }
 
 #[must_use]
-pub fn session_updated(update: &ApiUpdateSession, session: &ApiSession) -> Vec<(String, Markup)> {
+pub fn session_updated(
+    state: &State,
+    update: &ApiUpdateSession,
+    session: &ApiSession,
+) -> Vec<(String, Markup)> {
     let mut partials = vec![];
 
     if update.position.is_some() || update.playlist.is_some() {
@@ -270,6 +283,8 @@ pub fn session_updated(update: &ApiUpdateSession, session: &ApiSession) -> Vec<(
                 player_current_album(track, CURRENT_ALBUM_SIZE),
             ));
         }
+
+        partials.push(("play-queue".to_string(), play_queue(state)));
     }
     if let Some(playing) = update.playing {
         log::debug!("session_updated: rendering play button");
@@ -329,6 +344,7 @@ pub fn page(state: &State, slot: &Markup) -> Markup {
                 (main(&slot))
             }
             (footer(state))
+            (play_queue(state))
         }
     }
 }
