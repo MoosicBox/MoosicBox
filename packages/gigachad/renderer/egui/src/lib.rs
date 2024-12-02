@@ -1750,6 +1750,21 @@ impl EguiApp {
                             return false;
                         }
                     }
+                } else {
+                    for action in &eval.else_actions {
+                        if action.trigger == ActionTrigger::Immediate
+                            && !Self::handle_action(
+                                &action.action,
+                                id,
+                                sender,
+                                container,
+                                visibilities,
+                                request_action,
+                            )
+                        {
+                            return false;
+                        }
+                    }
                 }
 
                 true

@@ -52,6 +52,15 @@ impl Condition {
         If {
             condition: self,
             actions: vec![action.into()],
+            else_actions: vec![],
+        }
+    }
+
+    pub fn or_else(self, action: impl Into<Action>) -> If {
+        If {
+            condition: self,
+            actions: vec![],
+            else_actions: vec![action.into()],
         }
     }
 }
@@ -61,12 +70,19 @@ impl Condition {
 pub struct If {
     pub condition: Condition,
     pub actions: Vec<Action>,
+    pub else_actions: Vec<Action>,
 }
 
 impl If {
     #[must_use]
     pub fn then(mut self, action: impl Into<Action>) -> Self {
         self.actions.push(action.into());
+        self
+    }
+
+    #[must_use]
+    pub fn or_else(mut self, action: impl Into<Action>) -> Self {
+        self.else_actions.push(action.into());
         self
     }
 }
@@ -92,6 +108,7 @@ pub fn if_stmt(condition: Condition, action: impl Into<Action>) -> If {
     If {
         condition,
         actions: vec![action.into()],
+        else_actions: vec![],
     }
 }
 
