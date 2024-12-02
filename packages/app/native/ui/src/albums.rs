@@ -97,7 +97,14 @@ pub fn album_page_immediate(
         bit_depth,
     );
     html! {
-        div hx-get=(path) hx-trigger="load" {
+        div
+            hx-get=(path)
+            hx-trigger="load"
+            sx-padding-left=(60)
+            sx-padding-right=(60)
+            sx-padding-top=(20)
+            sx-padding-bottom=(20)
+        {
             div sx-dir="row" {
                 @let size = 200;
                 div sx-width=(size) sx-height=(size + 30) {
@@ -149,99 +156,106 @@ pub fn album_page_content(
         .or_else(|| versions.first());
 
     html! {
-        div sx-dir="row" {
-            @let size = 200;
-            div sx-width=(size) sx-height=(size + 30) {
-                (album_cover_img_from_album(&album, size))
-            }
-            div {
-                h1 { (album.title) }
-                h2 { (album.artist) }
-                div sx-dir="row" {
-                    @for version in &album.versions {
-                        @let selected = selected_version.is_some_and(|x| same_version(version, &x.into()));
-                        a href=(
-                            album_page_url(
-                                &album.album_id.to_string(),
-                                false,
-                                Some(album.api_source),
-                                Some(version.source),
-                                version.sample_rate,
-                                version.bit_depth,
-                            )
-                        ) {
-                            h3 {
-                                (if selected { "*" } else { "" })
-                                (version.source)
-                                (if selected { "*" } else { "" })
+        div
+            sx-padding-left=(60)
+            sx-padding-right=(60)
+            sx-padding-top=(20)
+            sx-padding-bottom=(20)
+        {
+            div sx-dir="row" {
+                @let size = 200;
+                div sx-width=(size) sx-height=(size + 30) {
+                    (album_cover_img_from_album(&album, size))
+                }
+                div {
+                    h1 { (album.title) }
+                    h2 { (album.artist) }
+                    div sx-dir="row" {
+                        @for version in &album.versions {
+                            @let selected = selected_version.is_some_and(|x| same_version(version, &x.into()));
+                            a href=(
+                                album_page_url(
+                                    &album.album_id.to_string(),
+                                    false,
+                                    Some(album.api_source),
+                                    Some(version.source),
+                                    version.sample_rate,
+                                    version.bit_depth,
+                                )
+                            ) {
+                                h3 {
+                                    (if selected { "*" } else { "" })
+                                    (version.source)
+                                    (if selected { "*" } else { "" })
+                                }
                             }
                         }
                     }
                 }
             }
-        }
-        div sx-dir="row" {
-            button
-                sx-dir="row"
-                sx-width=(130)
-                sx-height=(40)
-                sx-background="#fff"
-                sx-border-radius=(5)
-                fx-click=(Action::PlayAlbum {
-                    album_id: album.album_id.clone(),
-                    api_source: album.api_source,
-                    version_source: selected_version.map(|x| x.source),
-                    sample_rate: selected_version.and_then(|x| x.sample_rate),
-                    bit_depth: selected_version.and_then(|x| x.bit_depth),
-                })
-            {
-                @let icon_size = 12;
-                img
-                    sx-width=(icon_size)
-                    sx-height=(icon_size)
-                    src=(public_img!("play-button.svg"));
-                ("Play")
+            div sx-dir="row" {
+                button
+                    sx-dir="row"
+                    sx-width=(130)
+                    sx-height=(40)
+                    sx-background="#fff"
+                    sx-border-radius=(5)
+                    fx-click=(Action::PlayAlbum {
+                        album_id: album.album_id.clone(),
+                        api_source: album.api_source,
+                        version_source: selected_version.map(|x| x.source),
+                        sample_rate: selected_version.and_then(|x| x.sample_rate),
+                        bit_depth: selected_version.and_then(|x| x.bit_depth),
+                    })
+                {
+                    @let icon_size = 12;
+                    img
+                        sx-width=(icon_size)
+                        sx-height=(icon_size)
+                        src=(public_img!("play-button.svg"));
+                    ("Play")
+                }
+                button
+                    sx-dir="row"
+                    sx-width=(130)
+                    sx-height=(40)
+                    sx-background="#fff"
+                    sx-border-radius=(5)
+                    fx-click=(Action::AddAlbumToQueue {
+                        album_id: album.album_id.clone(),
+                        api_source: album.api_source,
+                        version_source: selected_version.map(|x| x.source),
+                        sample_rate: selected_version.and_then(|x| x.sample_rate),
+                        bit_depth: selected_version.and_then(|x| x.bit_depth),
+                    })
+                {
+                    @let icon_size = 20;
+                    img
+                        sx-width=(icon_size)
+                        sx-height=(icon_size)
+                        src=(public_img!("more-options.svg"));
+                    ("Options")
+                }
             }
-            button
-                sx-dir="row"
-                sx-width=(130)
-                sx-height=(40)
-                sx-background="#fff"
-                sx-border-radius=(5)
-                fx-click=(Action::AddAlbumToQueue {
-                    album_id: album.album_id.clone(),
-                    api_source: album.api_source,
-                    version_source: selected_version.map(|x| x.source),
-                    sample_rate: selected_version.and_then(|x| x.sample_rate),
-                    bit_depth: selected_version.and_then(|x| x.bit_depth),
-                })
-            {
-                @let icon_size = 20;
-                img
-                    sx-width=(icon_size)
-                    sx-height=(icon_size)
-                    src=(public_img!("more-options.svg"));
-                ("Options")
-            }
-        }
-        @if let Some(version) = selected_version {
-            div {
-                table {
-                    thead {
-                        tr{
-                            th { ("#") }
-                            th { ("Title") }
-                            th { ("Artist") }
-                            th { ("Time") }
+            @if let Some(version) = selected_version {
+                div {
+                    table {
+                        thead {
+                            tr{
+                                th { ("#") }
+                                th { ("Title") }
+                                th { ("Artist") }
+                                th { ("Time") }
+                            }
                         }
-                    }
-                    tbody {
-                        @for track in &version.tracks {
-                            tr {
-                                td { (track.number) }
-                                td { (track.title) }
-                                td { a href=(pre_escaped!("/artists?artistId={}&source={}", track.artist_id, track.api_source)) { (track.artist) } }
-                                td { (track.duration.into_formatted()) }
+                        tbody {
+                            @for track in &version.tracks {
+                                tr {
+                                    td { (track.number) }
+                                    td { (track.title) }
+                                    td { a href=(pre_escaped!("/artists?artistId={}&source={}", track.artist_id, track.api_source)) { (track.artist) } }
+                                    td { (track.duration.into_formatted()) }
+                                }
                             }
                         }
                     }

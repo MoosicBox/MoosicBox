@@ -147,14 +147,14 @@ pub fn player(state: &State) -> Markup {
                 (player_current_album_from_state(state, 70))
                 div sx-dir="row" sx-justify-content="center" {
                     @let size = 36;
-                    button sx-width=(size) sx-height=(size) fx-click=(Action::PreviousTrack) {
+                    button sx-width=(size) sx-height=(size) sx-padding=(5) fx-click=(Action::PreviousTrack) {
                         img
                             sx-width=(size)
                             sx-height=(size)
                             src=(public_img!("previous-button-white.svg"));
                     }
                     (player_play_button_from_state(state))
-                    button sx-width=(size) sx-height=(size) fx-click=(Action::NextTrack) {
+                    button sx-width=(size) sx-height=(size) sx-padding=(5) fx-click=(Action::NextTrack) {
                         img
                             sx-width=(size)
                             sx-height=(size)
@@ -169,19 +169,19 @@ pub fn player(state: &State) -> Markup {
                             sx-height=(size)
                             src=(public_img!("audio-white.svg"));
                     }
-                    button sx-width=(size) sx-height=(size) {
+                    button sx-width=(size) sx-height=(size) sx-margin-left=(10) {
                         img
                             sx-width=(size)
                             sx-height=(size)
                             src=(public_img!("speaker-white.svg"));
                     }
-                    button sx-width=(size) sx-height=(size) {
+                    button sx-width=(size) sx-height=(size) sx-margin-left=(10) {
                         img
                             sx-width=(size)
                             sx-height=(size)
                             src=(public_img!("sessions-white.svg"));
                     }
-                    button sx-width=(size) sx-height=(size) {
+                    button sx-width=(size) sx-height=(size) sx-margin-left=(10) {
                         img
                             fx-click=(
                                 get_visibility_str_id("play-queue")
@@ -202,7 +202,7 @@ pub fn player(state: &State) -> Markup {
 fn player_play_button(playing: bool) -> Markup {
     html! {
         @let size = 28;
-        button id="player-play-button" sx-width=(size) sx-height=(size) fx-click=(Action::TogglePlayback) {
+        button id="player-play-button" sx-width=(size) sx-height=(size) sx-padding=(5) fx-click=(Action::TogglePlayback) {
             img
                 sx-width=(size)
                 sx-height=(size)
@@ -227,7 +227,7 @@ fn player_play_button_from_state(state: &State) -> Markup {
 fn player_current_album(track: &ApiTrack, size: u16) -> Markup {
     html! {
         div id="player-current-playing" sx-dir="row" {
-            div sx-width=(size) sx-height=(size) {
+            div sx-width=(size) sx-height=(size) sx-padding-left=(20) sx-padding-right=(20) {
                 a href=(pre_escaped!("/albums?albumId={}&source={}", track.album_id, track.api_source)) sx-width=(size) sx-height=(size) {
                     (album_cover_img_from_album(&track.into(), size))
                 }

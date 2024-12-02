@@ -76,6 +76,7 @@ pub fn play_queue(state: &State) -> Markup {
             id="play-queue"
             sx-width="calc(min(500, 30%))"
             sx-height="calc(100% - 200)"
+            sx-padding=(20)
             sx-visibility="hidden"
             sx-background="#282a2b"
             sx-border-top-left-radius=(10)
