@@ -212,7 +212,26 @@ impl Renderer for EguiRenderer {
         );
 
         let mut page = self.app.container.write().unwrap();
-        if page.replace_str_id_with_elements(view.container.elements, &view.target) {
+        let ids = view
+            .container
+            .elements
+            .as_slice()
+            .iter()
+            .filter_map(|x| x.container_element())
+            .map(|x| x.id)
+            .collect::<Vec<_>>();
+        if let Some(removed) =
+            page.replace_str_id_with_elements(view.container.elements, &view.target)
+        {
+            if let Some(container) = removed.container_element() {
+                let mut visibilities = self.app.visibilities.write().unwrap();
+                if let Some(visibility) = visibilities.remove(&container.id) {
+                    for id in ids {
+                        visibilities.insert(id, visibility);
+                    }
+                }
+                drop(visibilities);
+            }
             page.calc();
             drop(page);
             if let Some(ctx) = &*self.app.ctx.read().unwrap() {

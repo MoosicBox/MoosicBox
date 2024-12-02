@@ -494,9 +494,13 @@ impl ContainerElement {
     ///
     /// * If the `ContainerElement` is not properly attached to the tree
     #[cfg(feature = "id")]
-    pub fn replace_str_id_with_elements(&mut self, replacement: Vec<Element>, id: &str) -> bool {
+    pub fn replace_str_id_with_elements(
+        &mut self,
+        replacement: Vec<Element>,
+        id: &str,
+    ) -> Option<Element> {
         let Some(parent) = &mut self.find_parent_by_str_id_mut(id) else {
-            return false;
+            return None;
         };
 
         let index = parent
@@ -514,13 +518,13 @@ impl ContainerElement {
             })
             .unwrap_or_else(|| panic!("ContainerElement is not attached properly to tree"));
 
-        parent.elements.remove(index);
+        let element = parent.elements.remove(index);
 
         for (i, element) in replacement.into_iter().enumerate() {
             parent.elements.insert(index + i, element);
         }
 
-        true
+        Some(element)
     }
 
     /// # Panics
