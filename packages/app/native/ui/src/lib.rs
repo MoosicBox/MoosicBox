@@ -146,22 +146,44 @@ pub fn player(state: &State) -> Markup {
             div sx-height=(100) sx-dir="row" {
                 (player_current_album_from_state(state, 70))
                 div sx-dir="row" sx-justify-content="center" {
-                    @let size = 36;
-                    button sx-width=(size) sx-height=(size) sx-padding=(5) fx-click=(Action::PreviousTrack) {
+                    @let button_size = 40;
+                    button
+                        sx-width=(button_size)
+                        sx-height=(button_size)
+                        sx-margin=(5)
+                        sx-dir="row"
+                        sx-justify-content="center"
+                        sx-align-items="center"
+                        sx-background="#181a1b"
+                        sx-border-radius="100%"
+                        fx-click=(Action::PreviousTrack)
+                    {
+                        @let icon_size = 18;
                         img
-                            sx-width=(size)
-                            sx-height=(size)
+                            sx-width=(icon_size)
+                            sx-height=(icon_size)
                             src=(public_img!("previous-button-white.svg"));
                     }
                     (player_play_button_from_state(state))
-                    button sx-width=(size) sx-height=(size) sx-padding=(5) fx-click=(Action::NextTrack) {
+                    button
+                        sx-width=(button_size)
+                        sx-height=(button_size)
+                        sx-margin=(5)
+                        sx-dir="row"
+                        sx-justify-content="center"
+                        sx-align-items="center"
+                        sx-background="#181a1b"
+                        sx-border-radius="100%"
+                        fx-click=(Action::NextTrack)
+                    {
+                        @let icon_size = 18;
                         img
-                            sx-width=(size)
-                            sx-height=(size)
+                            sx-width=(icon_size)
+                            sx-height=(icon_size)
                             src=(public_img!("next-button-white.svg"));
                     }
                 }
-                div sx-dir="row" sx-justify-content="end" {
+                div sx-dir="row" sx-justify-content="end" sx-padding-right=(20) {
                     @let size = 25;
                     button sx-width=(size) sx-height=(size) {
                         img
@@ -201,11 +223,23 @@ pub fn player(state: &State) -> Markup {
 
 fn player_play_button(playing: bool) -> Markup {
     html! {
-        @let size = 28;
-        button id="player-play-button" sx-width=(size) sx-height=(size) sx-padding=(5) fx-click=(Action::TogglePlayback) {
+        @let button_size = 40;
+        button
+            id="player-play-button"
+            sx-width=(button_size)
+            sx-height=(button_size)
+            sx-margin=(5)
+            sx-dir="row"
+            sx-justify-content="center"
+            sx-align-items="center"
+            sx-background="#181a1b"
+            sx-border-radius="100%"
+            fx-click=(Action::TogglePlayback)
+        {
+            @let icon_size = 16;
             img
-                sx-width=(size)
-                sx-height=(size)
+                sx-width=(icon_size)
+                sx-height=(icon_size)
                 src=(
                     if playing {
                         public_img!("pause-button-white.svg")
