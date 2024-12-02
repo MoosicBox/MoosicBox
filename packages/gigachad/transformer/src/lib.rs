@@ -147,6 +147,14 @@ pub struct ContainerElement {
     pub border_top_right_radius: Option<Number>,
     pub border_bottom_left_radius: Option<Number>,
     pub border_bottom_right_radius: Option<Number>,
+    pub margin_left: Option<Number>,
+    pub margin_right: Option<Number>,
+    pub margin_top: Option<Number>,
+    pub margin_bottom: Option<Number>,
+    pub padding_left: Option<Number>,
+    pub padding_right: Option<Number>,
+    pub padding_top: Option<Number>,
+    pub padding_bottom: Option<Number>,
     pub state: Option<Value>,
     pub hidden: Option<bool>,
     pub visibility: Option<Visibility>,
@@ -168,6 +176,22 @@ pub struct ContainerElement {
     pub internal_padding_top: Option<f32>,
     #[cfg(feature = "calc")]
     pub internal_padding_bottom: Option<f32>,
+    #[cfg(feature = "calc")]
+    pub calculated_margin_left: Option<f32>,
+    #[cfg(feature = "calc")]
+    pub calculated_margin_right: Option<f32>,
+    #[cfg(feature = "calc")]
+    pub calculated_margin_top: Option<f32>,
+    #[cfg(feature = "calc")]
+    pub calculated_margin_bottom: Option<f32>,
+    #[cfg(feature = "calc")]
+    pub calculated_padding_left: Option<f32>,
+    #[cfg(feature = "calc")]
+    pub calculated_padding_right: Option<f32>,
+    #[cfg(feature = "calc")]
+    pub calculated_padding_top: Option<f32>,
+    #[cfg(feature = "calc")]
+    pub calculated_padding_bottom: Option<f32>,
     #[cfg(feature = "calc")]
     pub calculated_width: Option<f32>,
     #[cfg(feature = "calc")]

@@ -296,6 +296,34 @@ fn parse_element(
         .ok()
         .or_else(|| border_radius.clone());
 
+    let margin = get_number(tag, "sx-margin").ok();
+    let margin_left = get_number(tag, "sx-margin-left")
+        .ok()
+        .or_else(|| margin.clone());
+    let margin_right = get_number(tag, "sx-margin-right")
+        .ok()
+        .or_else(|| margin.clone());
+    let margin_top = get_number(tag, "sx-margin-top")
+        .ok()
+        .or_else(|| margin.clone());
+    let margin_bottom = get_number(tag, "sx-margin-bottom")
+        .ok()
+        .or_else(|| margin.clone());
+
+    let padding = get_number(tag, "sx-padding").ok();
+    let padding_left = get_number(tag, "sx-padding-left")
+        .ok()
+        .or_else(|| padding.clone());
+    let padding_right = get_number(tag, "sx-padding-right")
+        .ok()
+        .or_else(|| padding.clone());
+    let padding_top = get_number(tag, "sx-padding-top")
+        .ok()
+        .or_else(|| padding.clone());
+    let padding_bottom = get_number(tag, "sx-padding-bottom")
+        .ok()
+        .or_else(|| padding.clone());
+
     #[allow(clippy::needless_update)]
     crate::ContainerElement {
         #[cfg(feature = "id")]
@@ -311,6 +339,14 @@ fn parse_element(
         border_top_right_radius,
         border_bottom_left_radius,
         border_bottom_right_radius,
+        margin_left,
+        margin_right,
+        margin_top,
+        margin_bottom,
+        padding_left,
+        padding_right,
+        padding_top,
+        padding_bottom,
         state: get_state(tag, "state"),
         hidden: get_hidden(tag),
         visibility: get_visibility(tag),

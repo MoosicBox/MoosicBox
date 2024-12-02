@@ -758,11 +758,20 @@ impl EguiApp {
         }
 
         Some(Self::render_borders(ui, container, |ui| {
-            egui::Frame::none().inner_margin(egui::Margin {
-                    left: container.internal_margin_left.unwrap_or(0.0),
-                    right: container.internal_margin_right.unwrap_or(0.0),
-                    top: container.internal_margin_top.unwrap_or(0.0),
-                    bottom: container.internal_margin_bottom.unwrap_or(0.0),
+            egui::Frame::none()
+                .inner_margin(egui::Margin {
+                    left:
+                        container.internal_margin_left.unwrap_or(0.0)
+                        + container.calculated_margin_left.unwrap_or(0.0),
+                    right:
+                        container.internal_margin_right.unwrap_or(0.0)
+                        + container.calculated_margin_right.unwrap_or(0.0),
+                    top:
+                        container.internal_margin_top.unwrap_or(0.0)
+                        + container.calculated_margin_top.unwrap_or(0.0),
+                    bottom:
+                        container.internal_margin_bottom.unwrap_or(0.0)
+                        + container.calculated_margin_bottom.unwrap_or(0.0),
                 })
                 .show(ui, {
                     move |ui| {
@@ -1243,7 +1252,12 @@ impl EguiApp {
             container,
             relative_container,
             |ui, relative_container| {
-                let mut frame = egui::Frame::none();
+                let mut frame = egui::Frame::none().inner_margin(egui::Margin {
+                    left: container.calculated_padding_left.unwrap_or(0.0),
+                    right: container.calculated_padding_right.unwrap_or(0.0),
+                    top: container.calculated_padding_top.unwrap_or(0.0),
+                    bottom: container.calculated_padding_bottom.unwrap_or(0.0),
+                });
 
                 if let Some(background) = container.background {
                     frame = frame.fill(background.into());
@@ -1269,10 +1283,10 @@ impl EguiApp {
                     .show(ui, {
                         |ui| {
                             if let Some(width) = container.calculated_width {
-                                ui.set_width(width);
+                                ui.set_width(width - container.horizontal_padding().unwrap_or(0.0));
                             }
                             if let Some(height) = container.calculated_height {
-                                ui.set_height(height);
+                                ui.set_height(height - container.vertical_padding().unwrap_or(0.0));
 
                                 if vscroll {
                                     if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {

@@ -378,6 +378,8 @@ impl ContainerElement {
             );
         };
 
+        self.calc_margin(container_width, container_height);
+        self.calc_padding(container_width, container_height);
         self.calc_borders(container_width, container_height);
 
         let (Some(container_width), Some(container_height)) = (
@@ -467,6 +469,36 @@ impl ContainerElement {
             }
 
             log::debug!("handle_overflow: attempt {}", attempt + 1);
+        }
+    }
+
+    fn calc_margin(&mut self, container_width: f32, container_height: f32) {
+        if let Some(size) = &self.margin_top {
+            self.calculated_margin_top = Some(calc_number(size, container_height));
+        }
+        if let Some(size) = &self.margin_bottom {
+            self.calculated_margin_bottom = Some(calc_number(size, container_height));
+        }
+        if let Some(size) = &self.margin_left {
+            self.calculated_margin_left = Some(calc_number(size, container_width));
+        }
+        if let Some(size) = &self.margin_right {
+            self.calculated_margin_right = Some(calc_number(size, container_width));
+        }
+    }
+
+    fn calc_padding(&mut self, container_width: f32, container_height: f32) {
+        if let Some(size) = &self.padding_top {
+            self.calculated_padding_top = Some(calc_number(size, container_height));
+        }
+        if let Some(size) = &self.padding_bottom {
+            self.calculated_padding_bottom = Some(calc_number(size, container_height));
+        }
+        if let Some(size) = &self.padding_left {
+            self.calculated_padding_left = Some(calc_number(size, container_width));
+        }
+        if let Some(size) = &self.padding_right {
+            self.calculated_padding_right = Some(calc_number(size, container_width));
         }
     }
 
@@ -582,8 +614,16 @@ impl ContainerElement {
             }
         }
         match direction {
-            LayoutDirection::Row => self.calculated_width.unwrap_or(0.0),
-            LayoutDirection::Column => self.calculated_height.unwrap_or(0.0),
+            LayoutDirection::Row => {
+                self.calculated_width.unwrap_or(0.0)
+                    + self.horizontal_margin().unwrap_or(0.0)
+                    + self.horizontal_padding().unwrap_or(0.0)
+            }
+            LayoutDirection::Column => {
+                self.calculated_height.unwrap_or(0.0)
+                    + self.vertical_margin().unwrap_or(0.0)
+                    + self.vertical_padding().unwrap_or(0.0)
+            }
         }
     }
 
@@ -1030,6 +1070,13 @@ impl ContainerElement {
                 continue;
             };
 
+            let width = width
+                + element.horizontal_margin().unwrap_or(0.0)
+                + element.horizontal_padding().unwrap_or(0.0);
+            let height = height
+                + element.vertical_margin().unwrap_or(0.0)
+                + element.vertical_padding().unwrap_or(0.0);
+
             if let LayoutPosition::Wrap { row, col } = position {
                 if self.justify_content == JustifyContent::SpaceEvenly || *col > 0 {
                     let hmargin = if *col == 0 {
@@ -1338,9 +1385,11 @@ impl ContainerElement {
                         .map(|x| {
                             len += 1;
                             log::trace!("contained_calculated_width: element:\n{x}");
-                            x.container_element()
-                                .and_then(|x| x.calculated_width)
-                                .unwrap_or(0.0)
+                            x.container_element().map_or(0.0, |x| {
+                                x.calculated_width.unwrap_or(0.0)
+                                    + x.horizontal_margin().unwrap_or(0.0)
+                                    + x.horizontal_padding().unwrap_or(0.0)
+                            })
                         })
                         .sum();
 
@@ -1369,9 +1418,11 @@ impl ContainerElement {
                         .map(|x| {
                             len += 1;
                             log::trace!("contained_calculated_width: element:\n{x}");
-                            x.container_element()
-                                .and_then(|x| x.calculated_width)
-                                .unwrap_or(0.0)
+                            x.container_element().map_or(0.0, |x| {
+                                x.calculated_width.unwrap_or(0.0)
+                                    + x.horizontal_margin().unwrap_or(0.0)
+                                    + x.horizontal_padding().unwrap_or(0.0)
+                            })
                         })
                         .max_by(order_float)
                         .unwrap_or(0.0);
@@ -1403,9 +1454,11 @@ impl ContainerElement {
                 .map(|(_, elements)| {
                     elements
                         .map(|x| {
-                            x.container_element()
-                                .and_then(|x| x.calculated_height)
-                                .unwrap_or(0.0)
+                            x.container_element().map_or(0.0, |x| {
+                                x.calculated_height.unwrap_or(0.0)
+                                    + x.vertical_margin().unwrap_or(0.0)
+                                    + x.vertical_padding().unwrap_or(0.0)
+                            })
                         })
                         .max_by(order_float)
                         .unwrap_or(0.0)
@@ -1425,9 +1478,11 @@ impl ContainerElement {
                 .map(|(_, elements)| {
                     elements
                         .map(|x| {
-                            x.container_element()
-                                .and_then(|x| x.calculated_height)
-                                .unwrap_or(0.0)
+                            x.container_element().map_or(0.0, |x| {
+                                x.calculated_height.unwrap_or(0.0)
+                                    + x.vertical_margin().unwrap_or(0.0)
+                                    + x.vertical_padding().unwrap_or(0.0)
+                            })
                         })
                         .max_by(order_float)
                         .unwrap_or(0.0)
@@ -1460,10 +1515,10 @@ impl ContainerElement {
     #[must_use]
     pub fn horizontal_margin(&self) -> Option<f32> {
         let mut margin = None;
-        if let Some(margin_left) = self.internal_margin_left {
+        if let Some(margin_left) = self.calculated_margin_left {
             margin = Some(margin_left);
         }
-        if let Some(margin_right) = self.internal_margin_right {
+        if let Some(margin_right) = self.calculated_margin_right {
             margin.replace(margin.map_or(margin_right, |x| x + margin_right));
         }
         margin
@@ -1472,10 +1527,46 @@ impl ContainerElement {
     #[must_use]
     pub fn vertical_margin(&self) -> Option<f32> {
         let mut margin = None;
+        if let Some(margin_top) = self.calculated_margin_top {
+            margin = Some(margin_top);
+        }
+        if let Some(margin_bottom) = self.calculated_margin_bottom {
+            margin.replace(margin.map_or(margin_bottom, |x| x + margin_bottom));
+        }
+        margin
+    }
+
+    #[must_use]
+    pub(crate) fn internal_horizontal_margin(&self) -> Option<f32> {
+        let mut margin = None;
+        if let Some(margin_left) = self.internal_margin_left {
+            margin = Some(margin_left);
+        }
+        if let Some(margin_right) = self.internal_margin_right {
+            margin.replace(margin.map_or(margin_right, |x| x + margin_right));
+        }
+        if let Some(margin_left) = self.calculated_margin_left {
+            margin.replace(margin.map_or(margin_left, |x| x + margin_left));
+        }
+        if let Some(margin_right) = self.calculated_margin_right {
+            margin.replace(margin.map_or(margin_right, |x| x + margin_right));
+        }
+        margin
+    }
+
+    #[must_use]
+    pub(crate) fn internal_vertical_margin(&self) -> Option<f32> {
+        let mut margin = None;
         if let Some(margin_top) = self.internal_margin_top {
             margin = Some(margin_top);
         }
         if let Some(margin_bottom) = self.internal_margin_bottom {
+            margin.replace(margin.map_or(margin_bottom, |x| x + margin_bottom));
+        }
+        if let Some(margin_top) = self.calculated_margin_top {
+            margin.replace(margin.map_or(margin_top, |x| x + margin_top));
+        }
+        if let Some(margin_bottom) = self.calculated_margin_bottom {
             margin.replace(margin.map_or(margin_bottom, |x| x + margin_bottom));
         }
         margin
@@ -1484,10 +1575,10 @@ impl ContainerElement {
     #[must_use]
     pub fn horizontal_padding(&self) -> Option<f32> {
         let mut padding = None;
-        if let Some(padding_left) = self.internal_padding_left {
+        if let Some(padding_left) = self.calculated_padding_left {
             padding = Some(padding_left);
         }
-        if let Some(padding_right) = self.internal_padding_right {
+        if let Some(padding_right) = self.calculated_padding_right {
             padding.replace(padding.map_or(padding_right, |x| x + padding_right));
         }
         padding
@@ -1496,10 +1587,46 @@ impl ContainerElement {
     #[must_use]
     pub fn vertical_padding(&self) -> Option<f32> {
         let mut padding = None;
+        if let Some(padding_top) = self.calculated_padding_top {
+            padding = Some(padding_top);
+        }
+        if let Some(padding_bottom) = self.calculated_padding_bottom {
+            padding.replace(padding.map_or(padding_bottom, |x| x + padding_bottom));
+        }
+        padding
+    }
+
+    #[must_use]
+    pub(crate) fn internal_horizontal_padding(&self) -> Option<f32> {
+        let mut padding = None;
+        if let Some(padding_left) = self.internal_padding_left {
+            padding = Some(padding_left);
+        }
+        if let Some(padding_right) = self.internal_padding_right {
+            padding.replace(padding.map_or(padding_right, |x| x + padding_right));
+        }
+        if let Some(padding_left) = self.calculated_padding_left {
+            padding.replace(padding.map_or(padding_left, |x| x + padding_left));
+        }
+        if let Some(padding_right) = self.calculated_padding_right {
+            padding.replace(padding.map_or(padding_right, |x| x + padding_right));
+        }
+        padding
+    }
+
+    #[must_use]
+    pub(crate) fn internal_vertical_padding(&self) -> Option<f32> {
+        let mut padding = None;
         if let Some(padding_top) = self.internal_padding_top {
             padding = Some(padding_top);
         }
         if let Some(padding_bottom) = self.internal_padding_bottom {
+            padding.replace(padding.map_or(padding_bottom, |x| x + padding_bottom));
+        }
+        if let Some(padding_top) = self.calculated_padding_top {
+            padding.replace(padding.map_or(padding_top, |x| x + padding_top));
+        }
+        if let Some(padding_bottom) = self.calculated_padding_bottom {
             padding.replace(padding.map_or(padding_bottom, |x| x + padding_bottom));
         }
         padding
@@ -1532,6 +1659,15 @@ impl ContainerElement {
     #[must_use]
     pub fn calculated_width_minus_padding(&self) -> Option<f32> {
         self.calculated_width.map(|x| {
+            let x = self.internal_horizontal_padding().map_or(x, |padding| {
+                let x = x - padding;
+                if x < 0.0 {
+                    0.0
+                } else {
+                    x
+                }
+            });
+
             let x = self.horizontal_padding().map_or(x, |padding| {
                 let x = x - padding;
                 if x < 0.0 {
@@ -1555,6 +1691,15 @@ impl ContainerElement {
     #[must_use]
     pub fn calculated_height_minus_padding(&self) -> Option<f32> {
         self.calculated_height.map(|x| {
+            let x = self.internal_vertical_padding().map_or(x, |padding| {
+                let x = x - padding;
+                if x < 0.0 {
+                    0.0
+                } else {
+                    x
+                }
+            });
+
             let x = self.vertical_padding().map_or(x, |padding| {
                 let x = x - padding;
                 if x < 0.0 {
@@ -1578,7 +1723,7 @@ impl ContainerElement {
     #[must_use]
     pub fn calculated_width_plus_margin(&self) -> Option<f32> {
         self.calculated_width.map(|x| {
-            self.horizontal_margin().map_or(x, |margin| {
+            self.internal_horizontal_margin().map_or(x, |margin| {
                 let x = x + margin;
                 if x < 0.0 {
                     0.0
@@ -1592,7 +1737,7 @@ impl ContainerElement {
     #[must_use]
     pub fn calculated_height_plus_margin(&self) -> Option<f32> {
         self.calculated_height.map(|x| {
-            self.vertical_margin().map_or(x, |margin| {
+            self.internal_vertical_margin().map_or(x, |margin| {
                 let x = x + margin;
                 if x < 0.0 {
                     0.0
@@ -7304,6 +7449,57 @@ mod test {
                             internal_margin_left: None,
                             internal_margin_right: None,
                             calculated_x: Some(30.0),
+                            ..container.elements[1].container_element().unwrap().clone()
+                        }
+                    }
+                ],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_includes_horizontal_margins_in_content_width() {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(30)),
+                        margin_left: Some(Number::Integer(35)),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(100.0),
+            calculated_height: Some(50.0),
+            direction: LayoutDirection::Row,
+            justify_content: JustifyContent::Start,
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(30.0),
+                            calculated_margin_left: Some(35.0),
+                            calculated_x: Some(0.0),
+                            ..container.elements[0].container_element().unwrap().clone()
+                        }
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_x: Some(65.0),
                             ..container.elements[1].container_element().unwrap().clone()
                         }
                     }
