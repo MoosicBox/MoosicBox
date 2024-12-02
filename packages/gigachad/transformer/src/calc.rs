@@ -706,26 +706,51 @@ impl ContainerElement {
 
         for element in elements {
             if let Some(container) = element.container_element_mut() {
+                container.calc_margin(container_width, container_height);
+                container.calc_padding(container_width, container_height);
+
                 match direction {
                     LayoutDirection::Row => {
                         let height = container
                             .height
                             .as_ref()
                             .map_or(container_height, |x| calc_number(x, container_height));
-                        container.calculated_height.replace(height);
+                        let height = height
+                            - container.vertical_padding().unwrap_or(0.0)
+                            - container.vertical_margin().unwrap_or(0.0);
+                        container.calculated_height.replace(if height < 0.0 {
+                            0.0
+                        } else {
+                            height
+                        });
+
+                        let width = evenly_split_remaining_size
+                            - container.horizontal_padding().unwrap_or(0.0)
+                            - container.horizontal_margin().unwrap_or(0.0);
                         container
                             .calculated_width
-                            .replace(evenly_split_remaining_size);
+                            .replace(if width < 0.0 { 0.0 } else { width });
                     }
                     LayoutDirection::Column => {
                         let width = container
                             .width
                             .as_ref()
                             .map_or(container_width, |x| calc_number(x, container_width));
-                        container.calculated_width.replace(width);
+                        let width = width
+                            - container.horizontal_padding().unwrap_or(0.0)
+                            - container.horizontal_margin().unwrap_or(0.0);
                         container
-                            .calculated_height
-                            .replace(evenly_split_remaining_size);
+                            .calculated_width
+                            .replace(if width < 0.0 { 0.0 } else { width });
+
+                        let height = evenly_split_remaining_size
+                            - container.vertical_padding().unwrap_or(0.0)
+                            - container.vertical_margin().unwrap_or(0.0);
+                        container.calculated_height.replace(if height < 0.0 {
+                            0.0
+                        } else {
+                            height
+                        });
                     }
                 }
             }
@@ -932,6 +957,9 @@ impl ContainerElement {
         else {
             moosicbox_assert::die_or_panic!("position_children: missing width and/or height");
         };
+
+        let container_width = container_width - self.horizontal_padding().unwrap_or(0.0);
+        let container_height = container_height - self.vertical_padding().unwrap_or(0.0);
 
         let mut x = 0.0;
         let mut y = 0.0;
@@ -7479,7 +7507,6 @@ mod test {
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             direction: LayoutDirection::Row,
-            justify_content: JustifyContent::Start,
             ..Default::default()
         };
         container.calc();
@@ -7500,6 +7527,148 @@ mod test {
                         element: ContainerElement {
                             calculated_width: Some(20.0),
                             calculated_x: Some(65.0),
+                            ..container.elements[1].container_element().unwrap().clone()
+                        }
+                    }
+                ],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_includes_horizontal_padding_in_content_width() {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(30)),
+                        padding_right: Some(Number::Integer(35)),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(100.0),
+            calculated_height: Some(50.0),
+            direction: LayoutDirection::Row,
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(30.0),
+                            calculated_padding_right: Some(35.0),
+                            calculated_x: Some(0.0),
+                            ..container.elements[0].container_element().unwrap().clone()
+                        }
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_x: Some(65.0),
+                            ..container.elements[1].container_element().unwrap().clone()
+                        }
+                    }
+                ],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_includes_horizontal_padding_in_auto_calculated_content_width() {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement::default(),
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        padding_right: Some(Number::Integer(35)),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(100.0),
+            calculated_height: Some(50.0),
+            direction: LayoutDirection::Row,
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(50.0),
+                            calculated_x: Some(0.0),
+                            ..container.elements[0].container_element().unwrap().clone()
+                        }
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(15.0),
+                            calculated_padding_right: Some(35.0),
+                            calculated_x: Some(50.0),
+                            ..container.elements[1].container_element().unwrap().clone()
+                        }
+                    }
+                ],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_includes_horizontal_margin_in_auto_calculated_content_width() {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement::default(),
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        margin_right: Some(Number::Integer(35)),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(100.0),
+            calculated_height: Some(50.0),
+            direction: LayoutDirection::Row,
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(50.0),
+                            calculated_x: Some(0.0),
+                            ..container.elements[0].container_element().unwrap().clone()
+                        }
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(15.0),
+                            calculated_margin_right: Some(35.0),
+                            calculated_x: Some(50.0),
                             ..container.elements[1].container_element().unwrap().clone()
                         }
                     }
