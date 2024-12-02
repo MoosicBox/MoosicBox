@@ -22,6 +22,7 @@ use gigachad_renderer::{canvas::CanvasUpdate, Color, PartialView, RenderRunner, 
 use gigachad_router::{ContainerElement, Router};
 use html::{container_element_to_html_response, HtmlTagRenderer};
 use moosicbox_app_native_image::image;
+use moosicbox_env_utils::default_env_u16;
 use tokio::runtime::{Handle, Runtime};
 
 pub mod html;
@@ -209,7 +210,9 @@ impl RenderRunner for HtmlRenderRunner {
             let mut http_server = actix_web::HttpServer::new(app);
 
             let addr = "0.0.0.0";
-            let service_port = 8343;
+            let service_port = default_env_u16!("PORT", 8343);
+
+            log::info!("Server started on {addr}:{service_port}");
 
             http_server = http_server
                 .bind((addr, service_port))

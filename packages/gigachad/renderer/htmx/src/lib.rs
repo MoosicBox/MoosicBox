@@ -10,11 +10,11 @@ use async_trait::async_trait;
 use flume::Sender;
 use gigachad_renderer::{canvas::CanvasUpdate, Color, PartialView, RenderRunner, Renderer, View};
 use gigachad_renderer_html::{
-    html::{element_style_to_html, write_attr, HtmlTagRenderer},
+    html::{element_classes_to_html, element_style_to_html, write_attr, HtmlTagRenderer},
     HeaderMap, HtmlRenderer,
 };
 use gigachad_router::Router;
-use gigachad_transformer::{models::Route, ContainerElement};
+use gigachad_transformer::{models::Route, ContainerElement, Element};
 use tokio::runtime::Runtime;
 
 pub struct HtmxTagRenderer;
@@ -23,9 +23,10 @@ impl HtmlTagRenderer for HtmxTagRenderer {
     fn element_attrs_to_html(
         &self,
         f: &mut dyn Write,
-        element: &ContainerElement,
+        element: &Element,
+        is_flex_child: bool,
     ) -> Result<(), std::io::Error> {
-        if let Some(route) = &element.route {
+        if let Some(route) = element.container_element().and_then(|x| x.route.as_ref()) {
             match route {
                 Route::Get { route, trigger } => {
                     write_attr(f, b"hx-swap", b"outerHTML")?;
@@ -44,7 +45,8 @@ impl HtmlTagRenderer for HtmxTagRenderer {
             }
         }
 
-        element_style_to_html(f, element)?;
+        element_style_to_html(f, element, is_flex_child)?;
+        element_classes_to_html(f, element)?;
 
         Ok(())
     }
@@ -64,7 +66,18 @@ impl HtmlTagRenderer for HtmxTagRenderer {
                         ></script>
                         <style>
                             body {{
-                                margin: 0;{background}
+                                margin: 0;{background};
+                                overflow: hidden;
+                            }}
+
+                            .remove-button-styles {{
+                                background: none;
+                                color: inherit;
+                                border: none;
+                                padding: 0;
+                                font: inherit;
+                                cursor: pointer;
+                                outline: inherit;
                             }}
                         </style>
                     </head>

@@ -10,10 +10,10 @@ use async_trait::async_trait;
 use flume::Sender;
 use gigachad_renderer::{canvas::CanvasUpdate, Color, PartialView, RenderRunner, Renderer, View};
 use gigachad_renderer_html::{
-    html::{element_style_to_html, HtmlTagRenderer},
+    html::{element_classes_to_html, element_style_to_html, HtmlTagRenderer},
     HeaderMap, HtmlRenderer,
 };
-use gigachad_router::{ContainerElement, Router};
+use gigachad_router::{ContainerElement, Element, Router};
 use tokio::runtime::Runtime;
 
 pub struct DatastarTagRenderer;
@@ -22,9 +22,11 @@ impl HtmlTagRenderer for DatastarTagRenderer {
     fn element_attrs_to_html(
         &self,
         f: &mut dyn Write,
-        element: &ContainerElement,
+        element: &Element,
+        is_flex_child: bool,
     ) -> Result<(), std::io::Error> {
-        element_style_to_html(f, element)?;
+        element_style_to_html(f, element, is_flex_child)?;
+        element_classes_to_html(f, element)?;
 
         Ok(())
     }
@@ -49,7 +51,18 @@ impl HtmlTagRenderer for DatastarTagRenderer {
                         ></script>
                         <style>
                             body {{
-                                margin: 0;{background}
+                                margin: 0;{background};
+                                overflow: hidden;
+                            }}
+
+                            .remove-button-styles {{
+                                background: none;
+                                color: inherit;
+                                border: none;
+                                padding: 0;
+                                font: inherit;
+                                cursor: pointer;
+                                outline: inherit;
                             }}
                         </style>
                     </head>
