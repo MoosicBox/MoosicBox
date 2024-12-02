@@ -19,7 +19,7 @@ use gigachad_transformer::{
     calc::Calc,
     models::{
         AlignItems, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition,
-        Position, Route, Visibility,
+        Position, Route, SwapTarget, Visibility,
     },
     ContainerElement, Element, Input, TableIter,
 };
@@ -433,51 +433,40 @@ impl EguiApp {
                     let ctx = self.ctx.clone();
                     moosicbox_task::spawn("renderer: ProcessRoute", async move {
                         match route {
-                            Route::Get { route, trigger } | Route::Post { route, trigger } => {
+                            Route::Get {
+                                route,
+                                trigger,
+                                swap,
+                            }
+                            | Route::Post {
+                                route,
+                                trigger,
+                                swap,
+                            } => {
                                 if trigger.as_deref() == Some("load") {
                                     match router.navigate(&route).await {
                                         Ok(result) => {
-                                            let ids = {
-                                                let ids = result
-                                                    .immediate
-                                                    .elements
-                                                    .iter()
-                                                    .filter_map(|x| x.container_element())
-                                                    .map(|x| x.id)
-                                                    .collect_vec();
-                                                log::debug!("ProcessRoute: replacing container_id={container_id} with {} elements", result.immediate.elements.len());
-                                                let mut page = container.write().unwrap();
-                                                if page.replace_id_with_elements(
-                                                    result.immediate.elements,
-                                                    container_id,
-                                                ) {
-                                                    page.calc();
-                                                    drop(page);
-                                                    if let Some(ctx) = &*ctx.read().unwrap() {
-                                                        ctx.request_repaint();
-                                                    }
-                                                } else {
-                                                    log::warn!("Unable to find element with id {container_id}");
-                                                }
-                                                ids
+                                            let Some(ctx) = ctx.read().unwrap().clone() else {
+                                                moosicbox_assert::die_or_panic!(
+                                                    "Context was not set"
+                                                )
                                             };
-                                            {
-                                                if let Some(future) = result.future {
-                                                    let elements = future.await;
-                                                    let mut page = container.write().unwrap();
-                                                    if page.replace_ids_with_elements(
-                                                        elements.elements,
-                                                        &ids,
-                                                    ) {
-                                                        page.calc();
-                                                        drop(page);
-                                                        if let Some(ctx) = &*ctx.read().unwrap() {
-                                                            ctx.request_repaint();
-                                                        }
-                                                    } else {
-                                                        log::warn!("Unable to find element with ids {ids:?}");
-                                                    }
-                                                }
+                                            Self::swap_elements(
+                                                &swap,
+                                                &ctx,
+                                                &container,
+                                                container_id,
+                                                result.immediate,
+                                            );
+                                            if let Some(future) = result.future {
+                                                let result = future.await;
+                                                Self::swap_elements(
+                                                    &swap,
+                                                    &ctx,
+                                                    &container,
+                                                    container_id,
+                                                    result,
+                                                );
                                             }
                                         }
                                         Err(e) => {
@@ -488,6 +477,41 @@ impl EguiApp {
                             }
                         }
                     });
+                }
+            }
+        }
+    }
+
+    fn swap_elements(
+        swap: &SwapTarget,
+        ctx: &egui::Context,
+        container: &Arc<RwLock<ContainerElement>>,
+        container_id: usize,
+        result: ContainerElement,
+    ) {
+        log::debug!(
+            "ProcessRoute: replacing container_id={container_id} with {} elements",
+            result.elements.len()
+        );
+        let mut page = container.write().unwrap();
+        match swap {
+            SwapTarget::This => {
+                if page.replace_id_with_elements(result.elements, container_id) {
+                    page.calc();
+                    drop(page);
+                    ctx.request_repaint();
+                } else {
+                    log::warn!("Unable to find element with id {container_id}");
+                }
+            }
+            SwapTarget::Children => {
+                if let Some(container) = page.find_container_element_by_id_mut(container_id) {
+                    container.elements = result.elements;
+                    page.calc();
+                    drop(page);
+                    ctx.request_repaint();
+                } else {
+                    log::warn!("Unable to find element with id {container_id}");
                 }
             }
         }

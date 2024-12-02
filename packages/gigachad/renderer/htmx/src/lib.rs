@@ -28,14 +28,37 @@ impl HtmlTagRenderer for HtmxTagRenderer {
     ) -> Result<(), std::io::Error> {
         if let Some(route) = element.container_element().and_then(|x| x.route.as_ref()) {
             match route {
-                Route::Get { route, trigger } => {
-                    write_attr(f, b"hx-swap", b"outerHTML")?;
+                Route::Get {
+                    route,
+                    trigger,
+                    swap,
+                } => {
+                    match swap {
+                        gigachad_transformer::models::SwapTarget::This => {
+                            write_attr(f, b"hx-swap", b"outerHTML")?;
+                        }
+                        gigachad_transformer::models::SwapTarget::Children => {
+                            write_attr(f, b"hx-swap", b"innerHTML")?;
+                        }
+                    }
                     write_attr(f, b"hx-get", route.as_bytes())?;
                     if let Some(trigger) = trigger {
                         write_attr(f, b"hx-trigger", trigger.as_bytes())?;
                     }
                 }
-                Route::Post { route, trigger } => {
+                Route::Post {
+                    route,
+                    trigger,
+                    swap,
+                } => {
+                    match swap {
+                        gigachad_transformer::models::SwapTarget::This => {
+                            write_attr(f, b"hx-swap", b"outerHTML")?;
+                        }
+                        gigachad_transformer::models::SwapTarget::Children => {
+                            write_attr(f, b"hx-swap", b"innerHTML")?;
+                        }
+                    }
                     write_attr(f, b"hx-swap", b"outerHTML")?;
                     write_attr(f, b"hx-post", route.as_bytes())?;
                     if let Some(trigger) = trigger {

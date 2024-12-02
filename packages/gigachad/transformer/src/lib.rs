@@ -738,13 +738,23 @@ impl ContainerElement {
 
         if let Some(route) = &self.route {
             match route {
-                Route::Get { route, trigger } => {
+                Route::Get {
+                    route,
+                    trigger,
+                    swap,
+                } => {
                     attrs.add("hx-get", route);
                     attrs.add_opt("hx-trigger", trigger.clone());
+                    attrs.add("hx-swap", swap);
                 }
-                Route::Post { route, trigger } => {
+                Route::Post {
+                    route,
+                    trigger,
+                    swap,
+                } => {
                     attrs.add("hx-post", route);
                     attrs.add_opt("hx-trigger", trigger.clone());
+                    attrs.add("hx-swap", swap);
                 }
             }
         }

@@ -107,6 +107,23 @@ impl LayoutPosition {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum SwapTarget {
+    #[default]
+    This,
+    Children,
+}
+
+impl std::fmt::Display for SwapTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::This => f.write_str("self"),
+            Self::Children => f.write_str("children"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
@@ -114,10 +131,12 @@ pub enum Route {
     Get {
         route: String,
         trigger: Option<String>,
+        swap: SwapTarget,
     },
     Post {
         route: String,
         trigger: Option<String>,
+        swap: SwapTarget,
     },
 }
 

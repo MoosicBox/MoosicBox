@@ -4,7 +4,7 @@ use gigachad_actions::{Action, ActionTrigger, ActionType};
 use gigachad_color::Color;
 use gigachad_transformer_models::{
     AlignItems, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, Position, Route,
-    Visibility,
+    SwapTarget, Visibility,
 };
 use serde_json::Value;
 pub use tl::ParseError;
@@ -129,17 +129,33 @@ fn get_visibility(tag: &HTMLTag) -> Option<Visibility> {
         .map(parse_visibility)
 }
 
+fn parse_swap(value: &str) -> SwapTarget {
+    match value {
+        "this" | "self" => SwapTarget::This,
+        "children" => SwapTarget::Children,
+        _ => SwapTarget::default(),
+    }
+}
+
+fn get_swap(tag: &HTMLTag) -> Option<SwapTarget> {
+    get_tag_attr_value_lower(tag, "hx-swap")
+        .as_deref()
+        .map(parse_swap)
+}
+
 fn get_route(tag: &HTMLTag) -> Option<Route> {
     #[allow(clippy::option_if_let_else, clippy::manual_map)]
     if let Some(get) = get_tag_attr_value(tag, "hx-get") {
         Some(Route::Get {
             route: get.to_string(),
             trigger: get_tag_attr_value_owned(tag, "hx-trigger"),
+            swap: get_swap(tag).unwrap_or_default(),
         })
     } else if let Some(post) = get_tag_attr_value(tag, "hx-post") {
         Some(Route::Post {
             route: post.to_string(),
             trigger: get_tag_attr_value_owned(tag, "hx-trigger"),
+            swap: get_swap(tag).unwrap_or_default(),
         })
     } else {
         None
