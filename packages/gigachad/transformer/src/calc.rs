@@ -348,6 +348,7 @@ impl Calc for ContainerElement {
 }
 
 impl ContainerElement {
+    #[allow(clippy::too_many_lines)]
     fn calc_inner(&mut self, relative_size: Option<(f32, f32)>) {
         static MAX_HANDLE_OVERFLOW: usize = 100;
 
@@ -420,6 +421,21 @@ impl ContainerElement {
 
         if let Some((width, height)) = relative_size {
             for element in self.absolute_positioned_elements_mut() {
+                if let Some(container) = element.container_element() {
+                    if match direction {
+                        LayoutDirection::Row => container.width.is_some(),
+                        LayoutDirection::Column => container.height.is_some(),
+                    } {
+                        Self::calc_sized_element_sizes(
+                            relative_size,
+                            std::iter::once(&mut *element),
+                            direction,
+                            width,
+                            height,
+                        );
+                    }
+                }
+
                 if let Some(container) = element.container_element_mut() {
                     if container.width.is_none() {
                         container.calculated_width = Some(width);
@@ -7143,6 +7159,62 @@ mod test {
                             left: Some(Number::Integer(30)),
                             calculated_width: Some(100.0),
                             calculated_height: Some(50.0),
+                            calculated_x: Some(30.0),
+                            calculated_y: Some(0.0),
+                            position: Some(Position::Absolute),
+                            ..Default::default()
+                        },
+                    }
+                ],
+                ..container
+            }
+        );
+    }
+    #[test_log::test]
+    fn calc_can_calc_absolute_positioned_element_with_explicit_sizes() {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement::default(),
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(30)),
+                        height: Some(Number::Integer(20)),
+                        left: Some(Number::Integer(30)),
+                        position: Some(Position::Absolute),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(100.0),
+            calculated_height: Some(50.0),
+            position: Some(Position::Relative),
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(100.0),
+                            calculated_height: Some(50.0),
+                            calculated_x: Some(0.0),
+                            calculated_y: Some(0.0),
+                            calculated_position: Some(LayoutPosition::Default),
+                            ..Default::default()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            left: Some(Number::Integer(30)),
+                            width: Some(Number::Integer(30)),
+                            height: Some(Number::Integer(20)),
+                            calculated_width: Some(30.0),
+                            calculated_height: Some(20.0),
                             calculated_x: Some(30.0),
                             calculated_y: Some(0.0),
                             position: Some(Position::Absolute),
