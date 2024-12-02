@@ -483,8 +483,17 @@ impl ContainerElement {
         if let Some((color, size)) = &self.border_right {
             self.calculated_border_right = Some((*color, calc_number(size, container_width)));
         }
-        if let Some(radius) = &self.border_radius {
-            self.calculated_border_radius = Some(calc_number(radius, container_width));
+        if let Some(radius) = &self.border_top_left_radius {
+            self.calculated_border_top_left_radius = Some(calc_number(radius, container_width));
+        }
+        if let Some(radius) = &self.border_top_right_radius {
+            self.calculated_border_top_right_radius = Some(calc_number(radius, container_width));
+        }
+        if let Some(radius) = &self.border_bottom_left_radius {
+            self.calculated_border_bottom_left_radius = Some(calc_number(radius, container_width));
+        }
+        if let Some(radius) = &self.border_bottom_right_radius {
+            self.calculated_border_bottom_right_radius = Some(calc_number(radius, container_width));
         }
     }
 

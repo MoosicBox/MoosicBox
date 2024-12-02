@@ -1248,12 +1248,20 @@ impl EguiApp {
                 if let Some(background) = container.background {
                     frame = frame.fill(background.into());
                 }
-                if let Some(radius) = container.calculated_border_radius {
+                if container.calculated_border_top_left_radius.is_some()
+                    || container.calculated_border_top_right_radius.is_some()
+                    || container.calculated_border_bottom_left_radius.is_some()
+                    || container.calculated_border_bottom_right_radius.is_some()
+                {
                     frame = frame.rounding(egui::Rounding {
-                        nw: radius,
-                        ne: radius,
-                        sw: radius,
-                        se: radius,
+                        nw: container.calculated_border_top_left_radius.unwrap_or(0.0),
+                        ne: container.calculated_border_top_right_radius.unwrap_or(0.0),
+                        sw: container
+                            .calculated_border_bottom_left_radius
+                            .unwrap_or(0.0),
+                        se: container
+                            .calculated_border_bottom_right_radius
+                            .unwrap_or(0.0),
                     });
                 }
 

@@ -143,7 +143,10 @@ pub struct ContainerElement {
     pub border_right: Option<(Color, Number)>,
     pub border_bottom: Option<(Color, Number)>,
     pub border_left: Option<(Color, Number)>,
-    pub border_radius: Option<Number>,
+    pub border_top_left_radius: Option<Number>,
+    pub border_top_right_radius: Option<Number>,
+    pub border_bottom_left_radius: Option<Number>,
+    pub border_bottom_right_radius: Option<Number>,
     pub state: Option<Value>,
     pub hidden: Option<bool>,
     pub visibility: Option<Visibility>,
@@ -184,7 +187,13 @@ pub struct ContainerElement {
     #[cfg(feature = "calc")]
     pub calculated_border_left: Option<(Color, f32)>,
     #[cfg(feature = "calc")]
-    pub calculated_border_radius: Option<f32>,
+    pub calculated_border_top_left_radius: Option<f32>,
+    #[cfg(feature = "calc")]
+    pub calculated_border_top_right_radius: Option<f32>,
+    #[cfg(feature = "calc")]
+    pub calculated_border_bottom_left_radius: Option<f32>,
+    #[cfg(feature = "calc")]
+    pub calculated_border_bottom_right_radius: Option<f32>,
 }
 
 #[cfg(feature = "maud")]

@@ -282,6 +282,20 @@ fn parse_element(
     static CURRENT_ID: std::sync::LazyLock<std::sync::Arc<std::sync::atomic::AtomicUsize>> =
         std::sync::LazyLock::new(|| std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(1)));
 
+    let border_radius = get_number(tag, "sx-border-radius").ok();
+    let border_top_left_radius = get_number(tag, "sx-border-top-left-radius")
+        .ok()
+        .or_else(|| border_radius.clone());
+    let border_top_right_radius = get_number(tag, "sx-border-top-right-radius")
+        .ok()
+        .or_else(|| border_radius.clone());
+    let border_bottom_left_radius = get_number(tag, "sx-border-bottom-left-radius")
+        .ok()
+        .or_else(|| border_radius.clone());
+    let border_bottom_right_radius = get_number(tag, "sx-border-bottom-right-radius")
+        .ok()
+        .or_else(|| border_radius.clone());
+
     #[allow(clippy::needless_update)]
     crate::ContainerElement {
         #[cfg(feature = "id")]
@@ -293,7 +307,10 @@ fn parse_element(
         border_right: get_border(tag, "sx-border-right"),
         border_bottom: get_border(tag, "sx-border-bottom"),
         border_left: get_border(tag, "sx-border-left"),
-        border_radius: get_number(tag, "sx-border-radius").ok(),
+        border_top_left_radius,
+        border_top_right_radius,
+        border_bottom_left_radius,
+        border_bottom_right_radius,
         state: get_state(tag, "state"),
         hidden: get_hidden(tag),
         visibility: get_visibility(tag),
