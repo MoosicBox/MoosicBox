@@ -1,6 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use maud::{html, Markup};
+use maud::{html, Markup, PreEscaped};
 use moosicbox_core::sqlite::models::{AlbumType, ApiAlbum, ApiArtist, ApiSource, Id};
 
 use crate::{
@@ -8,6 +8,11 @@ use crate::{
     page, pre_escaped, public_img,
     state::State,
 };
+
+#[must_use]
+pub fn artist_page_url(artist_id: &str) -> PreEscaped<String> {
+    pre_escaped!("/artists?artistId={artist_id}")
+}
 
 fn artist_cover_url(artist: &ApiArtist, width: u16, height: u16) -> String {
     if artist.contains_cover {
@@ -99,7 +104,7 @@ pub fn artists_page_content(artists: &[ApiArtist]) -> Markup {
     html! {
         div sx-dir="row" sx-overflow-x="wrap" sx-overflow-y="show" sx-justify-content="space-evenly" sx-gap=(15) {
             @for artist in artists {
-                a href={"/artists?artistId="(artist.artist_id)} sx-width=(size) sx-height=(size + 30) {
+                a href=(artist_page_url(&artist.artist_id.to_string())) sx-width=(size) sx-height=(size + 30) {
                     div sx-width=(size) sx-height=(size + 30) {
                         img src=(artist_cover_url(artist, request_size, request_size)) sx-width=(size) sx-height=(size);
                         (artist.title)
