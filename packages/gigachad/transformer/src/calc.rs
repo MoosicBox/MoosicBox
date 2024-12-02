@@ -394,7 +394,7 @@ impl ContainerElement {
         let relative_size = self.get_relative_position().or(relative_size);
 
         let (sized_elements, unsized_elements): (Vec<_>, Vec<_>) =
-            self.visible_elements_mut().partition(|x| {
+            self.relative_positioned_elements_mut().partition(|x| {
                 x.container_element().is_some_and(|x| match direction {
                     LayoutDirection::Row => x.width.is_some(),
                     LayoutDirection::Column => x.height.is_some(),
