@@ -797,14 +797,22 @@ impl ContainerElement {
                 attrs.add_opt("dbg-y", self.calculated_y);
                 attrs.add_opt("dbg-width", self.calculated_width);
                 attrs.add_opt("dbg-height", self.calculated_height);
-                attrs.add_opt("dbg-margin-left", self.internal_margin_left);
-                attrs.add_opt("dbg-margin-right", self.internal_margin_right);
-                attrs.add_opt("dbg-margin-top", self.internal_margin_top);
-                attrs.add_opt("dbg-margin-bottom", self.internal_margin_bottom);
-                attrs.add_opt("dbg-padding-left", self.internal_padding_left);
-                attrs.add_opt("dbg-padding-right", self.internal_padding_right);
-                attrs.add_opt("dbg-padding-top", self.internal_padding_top);
-                attrs.add_opt("dbg-padding-bottom", self.internal_padding_bottom);
+                attrs.add_opt("dbg-margin-left", self.calculated_margin_left);
+                attrs.add_opt("dbg-margin-right", self.calculated_margin_right);
+                attrs.add_opt("dbg-margin-top", self.calculated_margin_top);
+                attrs.add_opt("dbg-margin-bottom", self.calculated_margin_bottom);
+                attrs.add_opt("dbg-padding-left", self.calculated_padding_left);
+                attrs.add_opt("dbg-padding-right", self.calculated_padding_right);
+                attrs.add_opt("dbg-padding-top", self.calculated_padding_top);
+                attrs.add_opt("dbg-padding-bottom", self.calculated_padding_bottom);
+                attrs.add_opt("dbg-internal-margin-left", self.internal_margin_left);
+                attrs.add_opt("dbg-internal-margin-right", self.internal_margin_right);
+                attrs.add_opt("dbg-internal-margin-top", self.internal_margin_top);
+                attrs.add_opt("dbg-internal-margin-bottom", self.internal_margin_bottom);
+                attrs.add_opt("dbg-internal-padding-left", self.internal_padding_left);
+                attrs.add_opt("dbg-internal-padding-right", self.internal_padding_right);
+                attrs.add_opt("dbg-internal-padding-top", self.internal_padding_top);
+                attrs.add_opt("dbg-internal-padding-bottom", self.internal_padding_bottom);
 
                 if let Some(gigachad_transformer_models::LayoutPosition::Wrap { row, col }) =
                     &self.calculated_position
