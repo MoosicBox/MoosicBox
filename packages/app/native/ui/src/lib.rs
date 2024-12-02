@@ -323,7 +323,7 @@ pub fn downloads(state: &State) -> Markup {
 #[must_use]
 pub fn page(state: &State, slot: &Markup) -> Markup {
     html! {
-        div state=(state) id="root" class="dark" sx-width="100%" sx-height="100%" {
+        div state=(state) id="root" class="dark" sx-width="100%" sx-height="100%" sx-position="relative" {
             section class="navigation-bar-and-main-content" sx-dir="row" sx-height=(pre_escaped!("calc(100% - {}px)", FOOTER_HEIGHT)) {
                 (sidebar_navigation())
                 (main(&slot))
