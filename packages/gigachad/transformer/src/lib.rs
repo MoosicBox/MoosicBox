@@ -153,21 +153,21 @@ pub struct ContainerElement {
     pub route: Option<Route>,
     pub actions: Vec<Action>,
     #[cfg(feature = "calc")]
-    pub margin_left: Option<f32>,
+    pub internal_margin_left: Option<f32>,
     #[cfg(feature = "calc")]
-    pub margin_right: Option<f32>,
+    pub internal_margin_right: Option<f32>,
     #[cfg(feature = "calc")]
-    pub margin_top: Option<f32>,
+    pub internal_margin_top: Option<f32>,
     #[cfg(feature = "calc")]
-    pub margin_bottom: Option<f32>,
+    pub internal_margin_bottom: Option<f32>,
     #[cfg(feature = "calc")]
-    pub padding_left: Option<f32>,
+    pub internal_padding_left: Option<f32>,
     #[cfg(feature = "calc")]
-    pub padding_right: Option<f32>,
+    pub internal_padding_right: Option<f32>,
     #[cfg(feature = "calc")]
-    pub padding_top: Option<f32>,
+    pub internal_padding_top: Option<f32>,
     #[cfg(feature = "calc")]
-    pub padding_bottom: Option<f32>,
+    pub internal_padding_bottom: Option<f32>,
     #[cfg(feature = "calc")]
     pub calculated_width: Option<f32>,
     #[cfg(feature = "calc")]
@@ -773,14 +773,14 @@ impl ContainerElement {
                 attrs.add_opt("dbg-y", self.calculated_y);
                 attrs.add_opt("dbg-width", self.calculated_width);
                 attrs.add_opt("dbg-height", self.calculated_height);
-                attrs.add_opt("dbg-margin-left", self.margin_left);
-                attrs.add_opt("dbg-margin-right", self.margin_right);
-                attrs.add_opt("dbg-margin-top", self.margin_top);
-                attrs.add_opt("dbg-margin-bottom", self.margin_bottom);
-                attrs.add_opt("dbg-padding-left", self.padding_left);
-                attrs.add_opt("dbg-padding-right", self.padding_right);
-                attrs.add_opt("dbg-padding-top", self.padding_top);
-                attrs.add_opt("dbg-padding-bottom", self.padding_bottom);
+                attrs.add_opt("dbg-margin-left", self.internal_margin_left);
+                attrs.add_opt("dbg-margin-right", self.internal_margin_right);
+                attrs.add_opt("dbg-margin-top", self.internal_margin_top);
+                attrs.add_opt("dbg-margin-bottom", self.internal_margin_bottom);
+                attrs.add_opt("dbg-padding-left", self.internal_padding_left);
+                attrs.add_opt("dbg-padding-right", self.internal_padding_right);
+                attrs.add_opt("dbg-padding-top", self.internal_padding_top);
+                attrs.add_opt("dbg-padding-bottom", self.internal_padding_bottom);
 
                 if let Some(gigachad_transformer_models::LayoutPosition::Wrap { row, col }) =
                     &self.calculated_position

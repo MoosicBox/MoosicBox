@@ -360,15 +360,15 @@ impl ContainerElement {
             return;
         }
 
-        self.margin_left = None;
-        self.margin_right = None;
-        self.margin_top = None;
-        self.margin_bottom = None;
+        self.internal_margin_left = None;
+        self.internal_margin_right = None;
+        self.internal_margin_top = None;
+        self.internal_margin_bottom = None;
 
-        self.padding_left = None;
-        self.padding_right = None;
-        self.padding_top = None;
-        self.padding_bottom = None;
+        self.internal_padding_left = None;
+        self.internal_padding_right = None;
+        self.internal_padding_top = None;
+        self.internal_padding_bottom = None;
 
         let (Some(container_width), Some(container_height)) =
             (self.calculated_width, self.calculated_height)
@@ -837,35 +837,35 @@ impl ContainerElement {
     }
 
     pub fn increase_margin_left(&mut self, value: f32) -> f32 {
-        increase_opt(&mut self.margin_left, value)
+        increase_opt(&mut self.internal_margin_left, value)
     }
 
     pub fn increase_margin_right(&mut self, value: f32) -> f32 {
-        increase_opt(&mut self.margin_right, value)
+        increase_opt(&mut self.internal_margin_right, value)
     }
 
     pub fn increase_margin_top(&mut self, value: f32) -> f32 {
-        increase_opt(&mut self.margin_top, value)
+        increase_opt(&mut self.internal_margin_top, value)
     }
 
     pub fn increase_margin_bottom(&mut self, value: f32) -> f32 {
-        increase_opt(&mut self.margin_bottom, value)
+        increase_opt(&mut self.internal_margin_bottom, value)
     }
 
     pub fn increase_padding_left(&mut self, value: f32) -> f32 {
-        increase_opt(&mut self.padding_left, value)
+        increase_opt(&mut self.internal_padding_left, value)
     }
 
     pub fn increase_padding_right(&mut self, value: f32) -> f32 {
-        increase_opt(&mut self.padding_right, value)
+        increase_opt(&mut self.internal_padding_right, value)
     }
 
     pub fn increase_padding_top(&mut self, value: f32) -> f32 {
-        increase_opt(&mut self.padding_top, value)
+        increase_opt(&mut self.internal_padding_top, value)
     }
 
     pub fn increase_padding_bottom(&mut self, value: f32) -> f32 {
-        increase_opt(&mut self.padding_bottom, value)
+        increase_opt(&mut self.internal_padding_bottom, value)
     }
 
     /// # Panics
@@ -1016,8 +1016,8 @@ impl ContainerElement {
         for element in relative_positioned_elements_mut(&mut self.elements)
             .filter_map(|x| x.container_element_mut())
         {
-            element.margin_left.take();
-            element.margin_top.take();
+            element.internal_margin_left.take();
+            element.internal_margin_top.take();
 
             log::trace!("position_children: x={x} y={y} child={element:?}");
 
@@ -1041,7 +1041,7 @@ impl ContainerElement {
                         if self.direction == LayoutDirection::Row || *row == 0 {
                             x += margin;
                         }
-                        element.margin_left.replace(margin);
+                        element.internal_margin_left.replace(margin);
                     }
                 }
                 if self.justify_content == JustifyContent::SpaceEvenly || *row > 0 {
@@ -1054,7 +1054,7 @@ impl ContainerElement {
                         if self.direction == LayoutDirection::Column || *col == 0 {
                             y += margin;
                         }
-                        element.margin_top.replace(margin);
+                        element.internal_margin_top.replace(margin);
                     }
                 }
             }
@@ -1460,10 +1460,10 @@ impl ContainerElement {
     #[must_use]
     pub fn horizontal_margin(&self) -> Option<f32> {
         let mut margin = None;
-        if let Some(margin_left) = self.margin_left {
+        if let Some(margin_left) = self.internal_margin_left {
             margin = Some(margin_left);
         }
-        if let Some(margin_right) = self.margin_right {
+        if let Some(margin_right) = self.internal_margin_right {
             margin.replace(margin.map_or(margin_right, |x| x + margin_right));
         }
         margin
@@ -1472,10 +1472,10 @@ impl ContainerElement {
     #[must_use]
     pub fn vertical_margin(&self) -> Option<f32> {
         let mut margin = None;
-        if let Some(margin_top) = self.margin_top {
+        if let Some(margin_top) = self.internal_margin_top {
             margin = Some(margin_top);
         }
-        if let Some(margin_bottom) = self.margin_bottom {
+        if let Some(margin_bottom) = self.internal_margin_bottom {
             margin.replace(margin.map_or(margin_bottom, |x| x + margin_bottom));
         }
         margin
@@ -1484,10 +1484,10 @@ impl ContainerElement {
     #[must_use]
     pub fn horizontal_padding(&self) -> Option<f32> {
         let mut padding = None;
-        if let Some(padding_left) = self.padding_left {
+        if let Some(padding_left) = self.internal_padding_left {
             padding = Some(padding_left);
         }
-        if let Some(padding_right) = self.padding_right {
+        if let Some(padding_right) = self.internal_padding_right {
             padding.replace(padding.map_or(padding_right, |x| x + padding_right));
         }
         padding
@@ -1496,10 +1496,10 @@ impl ContainerElement {
     #[must_use]
     pub fn vertical_padding(&self) -> Option<f32> {
         let mut padding = None;
-        if let Some(padding_top) = self.padding_top {
+        if let Some(padding_top) = self.internal_padding_top {
             padding = Some(padding_top);
         }
-        if let Some(padding_bottom) = self.padding_bottom {
+        if let Some(padding_bottom) = self.internal_padding_bottom {
             padding.replace(padding.map_or(padding_bottom, |x| x + padding_bottom));
         }
         padding
@@ -1647,10 +1647,10 @@ impl ContainerElement {
                 "resize_children: vertical scrollbar is visible, setting padding_right to {scrollbar_size}"
             );
             if self
-                .padding_right
+                .internal_padding_right
                 .is_none_or(|x| (x - scrollbar_size).abs() >= 0.001)
             {
-                self.padding_right.replace(scrollbar_size);
+                self.internal_padding_right.replace(scrollbar_size);
                 log::debug!("resize_children: resized because vertical scrollbar is visible");
                 resized = true;
             }
@@ -1663,10 +1663,10 @@ impl ContainerElement {
                 "resize_children: horizontal scrollbar is visible, setting padding_bottom to {scrollbar_size}"
             );
             if self
-                .padding_bottom
+                .internal_padding_bottom
                 .is_none_or(|x| (x - scrollbar_size).abs() >= 0.001)
             {
-                self.padding_bottom.replace(scrollbar_size);
+                self.internal_padding_bottom.replace(scrollbar_size);
                 log::debug!("resize_children: resized because horizontal scrollbar is visible");
                 resized = true;
             }
@@ -7256,7 +7256,7 @@ mod test {
         assert_eq!(
             container.clone(),
             ContainerElement {
-                padding_left: Some((100.0 - 30.0) / 2.0),
+                internal_padding_left: Some((100.0 - 30.0) / 2.0),
                 ..container
             }
         );
@@ -7293,16 +7293,16 @@ mod test {
                 elements: vec![
                     Element::Div {
                         element: ContainerElement {
-                            margin_left: None,
-                            margin_right: None,
+                            internal_margin_left: None,
+                            internal_margin_right: None,
                             calculated_x: Some(0.0),
                             ..container.elements[0].container_element().unwrap().clone()
                         }
                     },
                     Element::Div {
                         element: ContainerElement {
-                            margin_left: None,
-                            margin_right: None,
+                            internal_margin_left: None,
+                            internal_margin_right: None,
                             calculated_x: Some(30.0),
                             ..container.elements[1].container_element().unwrap().clone()
                         }

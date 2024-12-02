@@ -759,10 +759,10 @@ impl EguiApp {
 
         Some(Self::render_borders(ui, container, |ui| {
             egui::Frame::none().inner_margin(egui::Margin {
-                    left: container.margin_left.unwrap_or(0.0),
-                    right: container.margin_right.unwrap_or(0.0),
-                    top: container.margin_top.unwrap_or(0.0),
-                    bottom: container.margin_bottom.unwrap_or(0.0),
+                    left: container.internal_margin_left.unwrap_or(0.0),
+                    right: container.internal_margin_right.unwrap_or(0.0),
+                    top: container.internal_margin_top.unwrap_or(0.0),
+                    bottom: container.internal_margin_bottom.unwrap_or(0.0),
                 })
                 .show(ui, {
                     move |ui| {
