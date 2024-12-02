@@ -50,21 +50,17 @@ static RENDERER: OnceLock<Arc<RwLock<Box<dyn Renderer>>>> = OnceLock::new();
 async fn convert_state(app_state: &moosicbox_app_state::AppState) -> state::State {
     let mut state = state::State::default();
 
-    let session_id = *app_state.current_session_id.read().await;
-    if let Some(session_id) = session_id {
-        let binding = app_state.current_sessions.read().await;
-        let session = binding.iter().find(|x| x.session_id == session_id);
-        if let Some(session) = session {
-            state.player.playback = Some(state::PlaybackState {
-                session_id,
-                playing: session.playing,
-                position: session.position.unwrap_or(0),
-                seek: session.seek.unwrap_or(0.0),
-                tracks: session.playlist.tracks.clone(),
-            });
-        }
-        drop(binding);
+    let session = app_state.get_current_session_ref().await;
+    if let Some(session) = &session {
+        state.player.playback = Some(state::PlaybackState {
+            session_id: session.session_id,
+            playing: session.playing,
+            position: session.position.unwrap_or(0),
+            seek: session.seek.unwrap_or(0.0),
+            tracks: session.playlist.tracks.clone(),
+        });
     }
+    drop(session);
 
     state
 }
