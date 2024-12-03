@@ -102,7 +102,17 @@ pub fn artists_page_content(artists: &[ApiArtist]) -> Markup {
     let request_size = (f64::from(size) * 1.33).round() as u16;
 
     html! {
-        div sx-dir="row" sx-overflow-x="wrap" sx-overflow-y="show" sx-justify-content="space-evenly" sx-gap=(15) {
+        div
+            sx-dir="row"
+            sx-overflow-x="wrap"
+            sx-overflow-y="show"
+            sx-justify-content="space-evenly"
+            sx-gap=(15)
+            sx-padding-left=(30)
+            sx-padding-right=(30)
+            sx-padding-top=(15)
+            sx-padding-bottom=(15)
+        {
             @for artist in artists {
                 a href=(artist_page_url(&artist.artist_id.to_string())) sx-width=(size) sx-height=(size + 30) {
                     div sx-width=(size) sx-height=(size + 30) {

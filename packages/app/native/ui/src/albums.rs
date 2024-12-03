@@ -558,155 +558,167 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
     let size: u16 = 200;
 
     html! {
-        div sx-height=(36 + 40) sx-background="#080a0b" {
-            div sx-dir="row" sx-justify-content="start" {
-                h1 sx-width=(50) sx-height=(36) { ("Albums") }
-                @let button_size = 30;
-                @let icon_size = button_size - 10;
-                div sx-position="relative" sx-width=(button_size) sx-height=(button_size) {
-                    button
-                        sx-dir="row"
-                        sx-width=(button_size)
-                        sx-height=(button_size)
-                        sx-justify-content="center"
-                        sx-align-items="center"
-                        fx-click=(
-                            get_visibility_str_id("albums-menu")
-                                .eq(Visibility::Hidden)
-                                .then(ActionType::show_str_id("albums-menu"))
-                        )
-                    {
-                        img
-                            sx-width=(icon_size)
-                            sx-height=(icon_size)
-                            src=(public_img!("more-options-white.svg"));
-                    }
-                    div
-                        id="albums-menu"
-                        sx-width=(300)
-                        sx-position="absolute"
-                        sx-top="100%"
-                        sx-visibility="hidden"
-                        sx-background="#080a0b"
-                        sx-border-radius=(5)
-                        sx-dir="row"
-                        fx-click-outside=(
-                            get_visibility_self()
-                                .eq(Visibility::Visible)
-                                .then(ActionType::hide_self())
-                        )
-                    {
-                        div {
-                            div {
-                                button
-                                    fx-click=(ActionType::Navigate {
-                                        url: albums_page_url(
-                                            filtered_sources,
-                                            if sort == AlbumSort::ArtistAsc {
-                                                AlbumSort::ArtistDesc
-                                            } else {
-                                                AlbumSort::ArtistAsc
-                                            }
-                                        )
-                                    })
-                                {
-                                    ("Album Artist")
-                                }
-                            }
-                            div sx-border-top="1, #222" {
-                                button
-                                    fx-click=(ActionType::Navigate {
-                                        url: albums_page_url(
-                                            filtered_sources,
-                                            if sort == AlbumSort::NameAsc {
-                                                AlbumSort::NameDesc
-                                            } else {
-                                                AlbumSort::NameAsc
-                                            }
-                                        )
-                                    })
-                                {
-                                    ("Album Name")
-                                }
-                            }
-                            div sx-border-top="1, #222" {
-                                button
-                                    fx-click=(ActionType::Navigate {
-                                        url: albums_page_url(
-                                            filtered_sources,
-                                            if sort == AlbumSort::ReleaseDateDesc {
-                                                AlbumSort::ReleaseDateAsc
-                                            } else {
-                                                AlbumSort::ReleaseDateDesc
-                                            }
-                                        )
-                                    })
-                                {
-                                    ("Album Release Date")
-                                }
-                            }
-                            div sx-border-top="1, #222" {
-                                button
-                                    fx-click=(ActionType::Navigate {
-                                        url: albums_page_url(
-                                            filtered_sources,
-                                            if sort == AlbumSort::DateAddedDesc {
-                                                AlbumSort::DateAddedAsc
-                                            } else {
-                                                AlbumSort::DateAddedDesc
-                                            }
-                                        )
-                                    })
-                                {
-                                    ("Album Date Added")
-                                }
-                            }
+        div
+            sx-height=(36 + 40)
+            sx-background="#080a0b"
+        {
+            div
+                sx-padding-left=(30)
+                sx-padding-right=(30)
+                sx-padding-top=(15)
+            {
+                div sx-dir="row" sx-justify-content="start" {
+                    h1 sx-width=(50) sx-height=(36) { ("Albums") }
+                    @let button_size = 30;
+                    @let icon_size = button_size - 10;
+                    div sx-position="relative" sx-width=(button_size) sx-height=(button_size) {
+                        button
+                            sx-dir="row"
+                            sx-width=(button_size)
+                            sx-height=(button_size)
+                            sx-justify-content="center"
+                            sx-align-items="center"
+                            fx-click=(
+                                get_visibility_str_id("albums-menu")
+                                    .eq(Visibility::Hidden)
+                                    .then(ActionType::show_str_id("albums-menu"))
+                            )
+                        {
+                            img
+                                sx-width=(icon_size)
+                                sx-height=(icon_size)
+                                src=(public_img!("more-options-white.svg"));
                         }
-                        div {
-                            @for source in TrackApiSource::all() {
-                                div sx-dir="row" {
-                                    @let checked = filtered_sources.iter().any(|x| x == source);
-                                    (source.to_string())
-                                    input
-                                        fx-change=(ActionType::Navigate {
-                                            url: albums_page_url(&if checked {
-                                                filtered_sources.iter().filter(|x| *x != source).copied().collect::<Vec<_>>()
-                                            } else {
-                                                [filtered_sources, &[*source]].concat()
-                                            }, sort)
+                        div
+                            id="albums-menu"
+                            sx-width=(300)
+                            sx-position="absolute"
+                            sx-top="100%"
+                            sx-visibility="hidden"
+                            sx-background="#080a0b"
+                            sx-border-radius=(5)
+                            sx-dir="row"
+                            fx-click-outside=(
+                                get_visibility_self()
+                                    .eq(Visibility::Visible)
+                                    .then(ActionType::hide_self())
+                            )
+                        {
+                            div {
+                                div {
+                                    button
+                                        fx-click=(ActionType::Navigate {
+                                            url: albums_page_url(
+                                                filtered_sources,
+                                                if sort == AlbumSort::ArtistAsc {
+                                                    AlbumSort::ArtistDesc
+                                                } else {
+                                                    AlbumSort::ArtistAsc
+                                                }
+                                            )
                                         })
-                                        type="checkbox"
-                                        checked=(checked);
+                                    {
+                                        ("Album Artist")
+                                    }
+                                }
+                                div sx-border-top="1, #222" {
+                                    button
+                                        fx-click=(ActionType::Navigate {
+                                            url: albums_page_url(
+                                                filtered_sources,
+                                                if sort == AlbumSort::NameAsc {
+                                                    AlbumSort::NameDesc
+                                                } else {
+                                                    AlbumSort::NameAsc
+                                                }
+                                            )
+                                        })
+                                    {
+                                        ("Album Name")
+                                    }
+                                }
+                                div sx-border-top="1, #222" {
+                                    button
+                                        fx-click=(ActionType::Navigate {
+                                            url: albums_page_url(
+                                                filtered_sources,
+                                                if sort == AlbumSort::ReleaseDateDesc {
+                                                    AlbumSort::ReleaseDateAsc
+                                                } else {
+                                                    AlbumSort::ReleaseDateDesc
+                                                }
+                                            )
+                                        })
+                                    {
+                                        ("Album Release Date")
+                                    }
+                                }
+                                div sx-border-top="1, #222" {
+                                    button
+                                        fx-click=(ActionType::Navigate {
+                                            url: albums_page_url(
+                                                filtered_sources,
+                                                if sort == AlbumSort::DateAddedDesc {
+                                                    AlbumSort::DateAddedAsc
+                                                } else {
+                                                    AlbumSort::DateAddedDesc
+                                                }
+                                            )
+                                        })
+                                    {
+                                        ("Album Date Added")
+                                    }
+                                }
+                            }
+                            div {
+                                @for source in TrackApiSource::all() {
+                                    div sx-dir="row" {
+                                        @let checked = filtered_sources.iter().any(|x| x == source);
+                                        (source.to_string())
+                                        input
+                                            fx-change=(ActionType::Navigate {
+                                                url: albums_page_url(&if checked {
+                                                    filtered_sources.iter().filter(|x| *x != source).copied().collect::<Vec<_>>()
+                                                } else {
+                                                    [filtered_sources, &[*source]].concat()
+                                                }, sort)
+                                            })
+                                            type="checkbox"
+                                            checked=(checked);
+                                    }
                                 }
                             }
                         }
                     }
                 }
+                input type="text" placeholder="Filter...";
             }
-            input type="text" placeholder="Filter...";
         }
-        div sx-dir="row" sx-overflow-x="wrap" sx-overflow-y="show" sx-justify-content="space-evenly" sx-gap=(15) {
-            div
-                hx-get=(pre_escaped!(
-                    "/albums-list-start{}",
-                    build_query('?', &[
-                        ("limit", "100"),
-                        ("size", &size.to_string()),
-                        ("sources", &filtered_sources_to_string(filtered_sources)),
-                        ("sort", &sort.to_string()),
-                    ])
-                ))
-                hx-trigger="load"
-                sx-dir="row"
-                sx-overflow-x="wrap"
-                sx-overflow-y="show"
-                sx-justify-content="space-evenly"
-                sx-gap=(15)
-            {
-                @for _ in 0..100 {
-                    div sx-width=(size) sx-height=(size + 30) {
-                        img src=(public_img!("album.svg")) sx-width=(size) sx-height=(size);
-                    }
+        div
+            hx-get=(pre_escaped!(
+                "/albums-list-start{}",
+                build_query('?', &[
+                    ("limit", "100"),
+                    ("size", &size.to_string()),
+                    ("sources", &filtered_sources_to_string(filtered_sources)),
+                    ("sort", &sort.to_string()),
+                ])
+            ))
+            hx-trigger="load"
+            hx-swap="children"
+            sx-dir="row"
+            sx-overflow-x="wrap"
+            sx-overflow-y="show"
+            sx-justify-content="space-evenly"
+            sx-gap=(15)
+            sx-padding-left=(30)
+            sx-padding-right=(30)
+            sx-padding-top=(15)
+            sx-padding-bottom=(15)
+        {
+            @for _ in 0..100 {
+                div sx-width=(size) sx-height=(size + 30) {
+                    img src=(public_img!("album.svg")) sx-width=(size) sx-height=(size);
                 }
             }
         }
