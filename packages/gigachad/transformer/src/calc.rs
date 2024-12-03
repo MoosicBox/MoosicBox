@@ -348,7 +348,7 @@ impl Calc for ContainerElement {
 }
 
 impl ContainerElement {
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn calc_inner(&mut self, relative_size: Option<(f32, f32)>) {
         static MAX_HANDLE_OVERFLOW: usize = 100;
 
@@ -378,6 +378,15 @@ impl ContainerElement {
             );
         };
 
+        moosicbox_assert::assert!(
+            container_width >= 0.0,
+            "container_width ({container_width}) must be >= 0.0"
+        );
+        moosicbox_assert::assert!(
+            container_height >= 0.0,
+            "container_height ({container_height}) must be >= 0.0"
+        );
+
         self.calc_margin(container_width, container_height);
         self.calc_padding(container_width, container_height);
         self.calc_borders(container_width, container_height);
@@ -396,13 +405,51 @@ impl ContainerElement {
         let direction = self.direction;
         let relative_size = self.get_relative_position().or(relative_size);
 
-        let (sized_elements, unsized_elements): (Vec<_>, Vec<_>) =
+        let (mut sized_elements, mut unsized_elements): (Vec<_>, Vec<_>) =
             self.relative_positioned_elements_mut().partition(|x| {
                 x.container_element().is_some_and(|x| match direction {
                     LayoutDirection::Row => x.width.is_some(),
                     LayoutDirection::Column => x.height.is_some(),
                 })
             });
+
+        Self::calc_child_margins_and_padding(
+            &mut sized_elements,
+            container_width,
+            container_height,
+        );
+        Self::calc_child_margins_and_padding(
+            &mut unsized_elements,
+            container_width,
+            container_height,
+        );
+
+        let padding_and_margins = sized_elements
+            .iter()
+            .chain(unsized_elements.iter())
+            .map(|x| &**x)
+            .filter_map(Element::container_element)
+            .map(|x| match direction {
+                LayoutDirection::Row => {
+                    x.horizontal_padding().unwrap_or(0.0) + x.horizontal_margin().unwrap_or(0.0)
+                }
+                LayoutDirection::Column => {
+                    x.vertical_padding().unwrap_or(0.0) + x.vertical_margin().unwrap_or(0.0)
+                }
+            })
+            .sum::<f32>();
+
+        let mut container_width = container_width;
+        let mut container_height = container_height;
+
+        match direction {
+            LayoutDirection::Row => {
+                container_width -= padding_and_margins;
+            }
+            LayoutDirection::Column => {
+                container_height -= padding_and_margins;
+            }
+        }
 
         let remainder = Self::calc_sized_element_sizes(
             relative_size,
@@ -614,15 +661,20 @@ impl ContainerElement {
             }
         }
         match direction {
-            LayoutDirection::Row => {
-                self.calculated_width.unwrap_or(0.0)
-                    + self.horizontal_margin().unwrap_or(0.0)
-                    + self.horizontal_padding().unwrap_or(0.0)
-            }
-            LayoutDirection::Column => {
-                self.calculated_height.unwrap_or(0.0)
-                    + self.vertical_margin().unwrap_or(0.0)
-                    + self.vertical_padding().unwrap_or(0.0)
+            LayoutDirection::Row => self.calculated_width.unwrap_or(0.0),
+            LayoutDirection::Column => self.calculated_height.unwrap_or(0.0),
+        }
+    }
+
+    fn calc_child_margins_and_padding(
+        elements: &mut Vec<&mut Element>,
+        container_width: f32,
+        container_height: f32,
+    ) {
+        for element in &mut *elements {
+            if let Some(container) = element.container_element_mut() {
+                container.calc_margin(container_width, container_height);
+                container.calc_padding(container_width, container_height);
             }
         }
     }
@@ -659,8 +711,8 @@ impl ContainerElement {
             self.calculated_height_minus_padding(),
         ) else {
             moosicbox_assert::die_or_panic!(
-                    "calc_unsized_element_size requires calculated_width and calculated_height to be set"
-                );
+                "calc_unsized_element_size requires calculated_width and calculated_height to be set"
+            );
         };
         Self::calc_unsized_element_sizes(
             relative_size,
@@ -684,9 +736,19 @@ impl ContainerElement {
         if elements.peek().is_none() {
             return;
         }
-        let elements = elements.collect_vec();
+        let mut elements = elements.collect_vec();
         #[allow(clippy::cast_precision_loss)]
         let evenly_split_remaining_size = remainder / (elements.len() as f32);
+
+        moosicbox_assert::assert!(
+            container_width >= 0.0,
+            "container_width ({container_width}) must be >= 0.0"
+        );
+        moosicbox_assert::assert!(
+            container_height >= 0.0,
+            "container_height ({container_height}) must be >= 0.0"
+        );
+        moosicbox_assert::assert!(remainder >= 0.0, "remainder ({remainder}) must be >= 0.0");
 
         moosicbox_logging::debug_or_trace!(
             (
@@ -704,57 +766,44 @@ impl ContainerElement {
             )
         );
 
-        for element in elements {
-            if let Some(container) = element.container_element_mut() {
-                container.calc_margin(container_width, container_height);
-                container.calc_padding(container_width, container_height);
+        for container in elements
+            .iter_mut()
+            .map(|x| &mut **x)
+            .filter_map(Element::container_element_mut)
+        {
+            match direction {
+                LayoutDirection::Row => {
+                    let height = container
+                        .height
+                        .as_ref()
+                        .map_or(container_height, |x| calc_number(x, container_height));
+                    container
+                        .calculated_height
+                        .replace(if height < 0.0 { 0.0 } else { height });
 
-                match direction {
-                    LayoutDirection::Row => {
-                        let height = container
-                            .height
-                            .as_ref()
-                            .map_or(container_height, |x| calc_number(x, container_height));
-                        let height = height
-                            - container.vertical_padding().unwrap_or(0.0)
-                            - container.vertical_margin().unwrap_or(0.0);
-                        container.calculated_height.replace(if height < 0.0 {
-                            0.0
-                        } else {
-                            height
-                        });
+                    let width = evenly_split_remaining_size;
+                    container
+                        .calculated_width
+                        .replace(if width < 0.0 { 0.0 } else { width });
+                }
+                LayoutDirection::Column => {
+                    let width = container
+                        .width
+                        .as_ref()
+                        .map_or(container_width, |x| calc_number(x, container_width));
+                    container
+                        .calculated_width
+                        .replace(if width < 0.0 { 0.0 } else { width });
 
-                        let width = evenly_split_remaining_size
-                            - container.horizontal_padding().unwrap_or(0.0)
-                            - container.horizontal_margin().unwrap_or(0.0);
-                        container
-                            .calculated_width
-                            .replace(if width < 0.0 { 0.0 } else { width });
-                    }
-                    LayoutDirection::Column => {
-                        let width = container
-                            .width
-                            .as_ref()
-                            .map_or(container_width, |x| calc_number(x, container_width));
-                        let width = width
-                            - container.horizontal_padding().unwrap_or(0.0)
-                            - container.horizontal_margin().unwrap_or(0.0);
-                        container
-                            .calculated_width
-                            .replace(if width < 0.0 { 0.0 } else { width });
-
-                        let height = evenly_split_remaining_size
-                            - container.vertical_padding().unwrap_or(0.0)
-                            - container.vertical_margin().unwrap_or(0.0);
-                        container.calculated_height.replace(if height < 0.0 {
-                            0.0
-                        } else {
-                            height
-                        });
-                    }
+                    let height = evenly_split_remaining_size;
+                    container
+                        .calculated_height
+                        .replace(if height < 0.0 { 0.0 } else { height });
                 }
             }
+        }
 
+        for element in elements {
             element.calc_inner(relative_size);
         }
     }
@@ -781,114 +830,117 @@ impl ContainerElement {
 
         let relative_size = self.get_relative_position().or(relative_size);
 
-        for element in self.relative_positioned_elements_mut() {
-            log::trace!("handle_overflow: processing child element\n{element}");
+        for container in self
+            .relative_positioned_elements_mut()
+            .inspect(|element| {
+                log::trace!("handle_overflow: processing child element\n{element}");
+            })
+            .filter_map(Element::container_element_mut)
+        {
             // TODO:
             // need to handle non container elements that have a width/height that is the split
             // remainder of the container width/height
-            if let Some(element) = element.container_element_mut() {
-                element.handle_overflow(relative_size);
-                let width = element.calculated_width_minus_padding().unwrap_or(0.0);
-                let height = element.calculated_height_minus_padding().unwrap_or(0.0);
+            container.handle_overflow(relative_size);
+            let width = container.calculated_width_minus_padding().unwrap_or(0.0);
+            let height = container.calculated_height_minus_padding().unwrap_or(0.0);
 
-                let mut current_row = row;
-                let mut current_col = col;
+            let mut current_row = row;
+            let mut current_col = col;
 
-                match overflow {
-                    LayoutOverflow::Auto
-                    | LayoutOverflow::Scroll
-                    | LayoutOverflow::Show
-                    | LayoutOverflow::Squash => {
-                        match direction {
-                            LayoutDirection::Row => {
-                                x += width;
-                            }
-                            LayoutDirection::Column => {
-                                y += height;
-                            }
+            match overflow {
+                LayoutOverflow::Auto
+                | LayoutOverflow::Scroll
+                | LayoutOverflow::Show
+                | LayoutOverflow::Squash => {
+                    match direction {
+                        LayoutDirection::Row => {
+                            x += width;
                         }
-
-                        element
-                            .calculated_position
-                            .replace(LayoutPosition::default());
+                        LayoutDirection::Column => {
+                            y += height;
+                        }
                     }
-                    LayoutOverflow::Wrap => {
-                        match direction {
-                            LayoutDirection::Row => {
-                                let next_row = x > 0.0 && x + width > container_width;
-                                log::trace!(
+
+                    container
+                        .calculated_position
+                        .replace(LayoutPosition::default());
+                }
+                LayoutOverflow::Wrap => {
+                    match direction {
+                        LayoutDirection::Row => {
+                            let next_row = x > 0.0 && x + width > container_width;
+                            log::trace!(
                                 "handle_overflow: {x} > 0.0 && {x} + {width} > {container_width} = {next_row}"
                             );
-                                if next_row {
-                                    x = 0.0;
-                                    y += max_height;
-                                    max_height = 0.0;
-                                    row += 1;
-                                    col = 0;
-                                    current_row = row;
-                                    current_col = col;
-                                }
-                                x += width;
-                                if let Some(gap) = gap_x {
-                                    x += gap;
-                                }
-                                col += 1;
+                            if next_row {
+                                x = 0.0;
+                                y += max_height;
+                                max_height = 0.0;
+                                row += 1;
+                                col = 0;
+                                current_row = row;
+                                current_col = col;
                             }
-                            LayoutDirection::Column => {
-                                let next_col = y > 0.0 && y + height > container_height;
-                                log::trace!(
+                            x += width;
+                            if let Some(gap) = gap_x {
+                                x += gap;
+                            }
+                            col += 1;
+                        }
+                        LayoutDirection::Column => {
+                            let next_col = y > 0.0 && y + height > container_height;
+                            log::trace!(
                                 "handle_overflow: {y} > 0.0 && {y} + {height} > {container_height} = {next_col}"
                             );
-                                if next_col {
-                                    y = 0.0;
-                                    x += max_width;
-                                    max_width = 0.0;
-                                    col += 1;
-                                    row = 0;
-                                    current_row = row;
-                                    current_col = col;
-                                }
-                                y += height;
-                                if let Some(gap) = gap_y {
-                                    y += gap;
-                                }
-                                row += 1;
+                            if next_col {
+                                y = 0.0;
+                                x += max_width;
+                                max_width = 0.0;
+                                col += 1;
+                                row = 0;
+                                current_row = row;
+                                current_col = col;
                             }
-                        }
-
-                        let updated = if let Some(LayoutPosition::Wrap {
-                            row: old_row,
-                            col: old_col,
-                        }) = element.calculated_position
-                        {
-                            if current_row != old_row || current_col != old_col {
-                                log::debug!("handle_overflow: layout_shifted because current_row != old_row || current_col != old_col ({current_row} != {old_row} || {current_col} != {old_col})");
-                                layout_shifted = true;
-                                true
-                            } else {
-                                false
+                            y += height;
+                            if let Some(gap) = gap_y {
+                                y += gap;
                             }
-                        } else {
-                            true
-                        };
-
-                        if updated {
-                            log::debug!("handle_overflow: setting element row/col ({current_row}, {current_col})");
-                            element.calculated_position.replace(LayoutPosition::Wrap {
-                                row: current_row,
-                                col: current_col,
-                            });
+                            row += 1;
                         }
                     }
-                }
 
-                max_height = if max_height > height {
-                    max_height
-                } else {
-                    height
-                };
-                max_width = if max_width > width { max_width } else { width };
+                    let updated = if let Some(LayoutPosition::Wrap {
+                        row: old_row,
+                        col: old_col,
+                    }) = container.calculated_position
+                    {
+                        if current_row != old_row || current_col != old_col {
+                            log::debug!("handle_overflow: layout_shifted because current_row != old_row || current_col != old_col ({current_row} != {old_row} || {current_col} != {old_col})");
+                            layout_shifted = true;
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        true
+                    };
+
+                    if updated {
+                        log::debug!("handle_overflow: setting element row/col ({current_row}, {current_col})");
+                        container.calculated_position.replace(LayoutPosition::Wrap {
+                            row: current_row,
+                            col: current_col,
+                        });
+                    }
+                }
             }
+
+            max_height = if max_height > height {
+                max_height
+            } else {
+                height
+            };
+            max_width = if max_width > width { max_width } else { width };
         }
 
         if self.resize_children() {
@@ -957,9 +1009,6 @@ impl ContainerElement {
         else {
             moosicbox_assert::die_or_panic!("position_children: missing width and/or height");
         };
-
-        let container_width = container_width - self.horizontal_padding().unwrap_or(0.0);
-        let container_height = container_height - self.vertical_padding().unwrap_or(0.0);
 
         let mut x = 0.0;
         let mut y = 0.0;
@@ -1090,20 +1139,13 @@ impl ContainerElement {
             log::trace!("position_children: x={x} y={y} child={element:?}");
 
             let (Some(width), Some(height), Some(position)) = (
-                element.calculated_width,
-                element.calculated_height,
+                element.bounding_calculated_width(),
+                element.bounding_calculated_height(),
                 element.calculated_position.as_ref(),
             ) else {
                 moosicbox_assert::die_or_warn!("position_children: missing width, height, and/or position. continuing on to next element");
                 continue;
             };
-
-            let width = width
-                + element.horizontal_margin().unwrap_or(0.0)
-                + element.horizontal_padding().unwrap_or(0.0);
-            let height = height
-                + element.vertical_margin().unwrap_or(0.0)
-                + element.vertical_padding().unwrap_or(0.0);
 
             if let LayoutPosition::Wrap { row, col } = position {
                 if self.justify_content == JustifyContent::SpaceEvenly || *col > 0 {
@@ -1413,11 +1455,9 @@ impl ContainerElement {
                         .map(|x| {
                             len += 1;
                             log::trace!("contained_calculated_width: element:\n{x}");
-                            x.container_element().map_or(0.0, |x| {
-                                x.calculated_width.unwrap_or(0.0)
-                                    + x.horizontal_margin().unwrap_or(0.0)
-                                    + x.horizontal_padding().unwrap_or(0.0)
-                            })
+                            x.container_element()
+                                .and_then(Self::bounding_calculated_width)
+                                .unwrap_or(0.0)
                         })
                         .sum();
 
@@ -1446,11 +1486,9 @@ impl ContainerElement {
                         .map(|x| {
                             len += 1;
                             log::trace!("contained_calculated_width: element:\n{x}");
-                            x.container_element().map_or(0.0, |x| {
-                                x.calculated_width.unwrap_or(0.0)
-                                    + x.horizontal_margin().unwrap_or(0.0)
-                                    + x.horizontal_padding().unwrap_or(0.0)
-                            })
+                            x.container_element()
+                                .and_then(Self::bounding_calculated_width)
+                                .unwrap_or(0.0)
                         })
                         .max_by(order_float)
                         .unwrap_or(0.0);
@@ -1482,11 +1520,9 @@ impl ContainerElement {
                 .map(|(_, elements)| {
                     elements
                         .map(|x| {
-                            x.container_element().map_or(0.0, |x| {
-                                x.calculated_height.unwrap_or(0.0)
-                                    + x.vertical_margin().unwrap_or(0.0)
-                                    + x.vertical_padding().unwrap_or(0.0)
-                            })
+                            x.container_element()
+                                .and_then(Self::bounding_calculated_height)
+                                .unwrap_or(0.0)
                         })
                         .max_by(order_float)
                         .unwrap_or(0.0)
@@ -1506,11 +1542,9 @@ impl ContainerElement {
                 .map(|(_, elements)| {
                     elements
                         .map(|x| {
-                            x.container_element().map_or(0.0, |x| {
-                                x.calculated_height.unwrap_or(0.0)
-                                    + x.vertical_margin().unwrap_or(0.0)
-                                    + x.vertical_padding().unwrap_or(0.0)
-                            })
+                            x.container_element()
+                                .and_then(Self::bounding_calculated_height)
+                                .unwrap_or(0.0)
                         })
                         .max_by(order_float)
                         .unwrap_or(0.0)
@@ -1573,12 +1607,6 @@ impl ContainerElement {
         if let Some(margin_right) = self.internal_margin_right {
             margin.replace(margin.map_or(margin_right, |x| x + margin_right));
         }
-        if let Some(margin_left) = self.calculated_margin_left {
-            margin.replace(margin.map_or(margin_left, |x| x + margin_left));
-        }
-        if let Some(margin_right) = self.calculated_margin_right {
-            margin.replace(margin.map_or(margin_right, |x| x + margin_right));
-        }
         margin
     }
 
@@ -1589,12 +1617,6 @@ impl ContainerElement {
             margin = Some(margin_top);
         }
         if let Some(margin_bottom) = self.internal_margin_bottom {
-            margin.replace(margin.map_or(margin_bottom, |x| x + margin_bottom));
-        }
-        if let Some(margin_top) = self.calculated_margin_top {
-            margin.replace(margin.map_or(margin_top, |x| x + margin_top));
-        }
-        if let Some(margin_bottom) = self.calculated_margin_bottom {
             margin.replace(margin.map_or(margin_bottom, |x| x + margin_bottom));
         }
         margin
@@ -1633,12 +1655,6 @@ impl ContainerElement {
         if let Some(padding_right) = self.internal_padding_right {
             padding.replace(padding.map_or(padding_right, |x| x + padding_right));
         }
-        if let Some(padding_left) = self.calculated_padding_left {
-            padding.replace(padding.map_or(padding_left, |x| x + padding_left));
-        }
-        if let Some(padding_right) = self.calculated_padding_right {
-            padding.replace(padding.map_or(padding_right, |x| x + padding_right));
-        }
         padding
     }
 
@@ -1649,12 +1665,6 @@ impl ContainerElement {
             padding = Some(padding_top);
         }
         if let Some(padding_bottom) = self.internal_padding_bottom {
-            padding.replace(padding.map_or(padding_bottom, |x| x + padding_bottom));
-        }
-        if let Some(padding_top) = self.calculated_padding_top {
-            padding.replace(padding.map_or(padding_top, |x| x + padding_top));
-        }
-        if let Some(padding_bottom) = self.calculated_padding_bottom {
             padding.replace(padding.map_or(padding_bottom, |x| x + padding_bottom));
         }
         padding
@@ -1696,15 +1706,6 @@ impl ContainerElement {
                 }
             });
 
-            let x = self.horizontal_padding().map_or(x, |padding| {
-                let x = x - padding;
-                if x < 0.0 {
-                    0.0
-                } else {
-                    x
-                }
-            });
-
             self.horizontal_borders().map_or(x, |borders| {
                 let x = x - borders;
                 if x < 0.0 {
@@ -1720,15 +1721,6 @@ impl ContainerElement {
     pub fn calculated_height_minus_padding(&self) -> Option<f32> {
         self.calculated_height.map(|x| {
             let x = self.internal_vertical_padding().map_or(x, |padding| {
-                let x = x - padding;
-                if x < 0.0 {
-                    0.0
-                } else {
-                    x
-                }
-            });
-
-            let x = self.vertical_padding().map_or(x, |padding| {
                 let x = x - padding;
                 if x < 0.0 {
                     0.0
@@ -1773,6 +1765,22 @@ impl ContainerElement {
                     x
                 }
             })
+        })
+    }
+
+    #[must_use]
+    pub fn bounding_calculated_width(&self) -> Option<f32> {
+        self.calculated_width.map(|width| {
+            width
+                + self.horizontal_padding().unwrap_or(0.0)
+                + self.horizontal_margin().unwrap_or(0.0)
+        })
+    }
+
+    #[must_use]
+    pub fn bounding_calculated_height(&self) -> Option<f32> {
+        self.calculated_height.map(|height| {
+            height + self.vertical_padding().unwrap_or(0.0) + self.vertical_margin().unwrap_or(0.0)
         })
     }
 
@@ -1850,13 +1858,16 @@ impl ContainerElement {
             match self.overflow_x {
                 LayoutOverflow::Auto | LayoutOverflow::Scroll => {}
                 LayoutOverflow::Show => {
-                    if self.width.is_none() {
+                    if self.width.is_none()
+                        && (self.calculated_width.unwrap() - contained_calculated_width).abs()
+                            > 0.001
+                    {
+                        log::debug!("resize_children: resized because contained_calculated_width changed from {} to {contained_calculated_width}", self.calculated_width.unwrap());
                         self.calculated_width.replace(contained_calculated_width);
-                        log::debug!("resize_children: resized because calculated_width was None");
                         resized = true;
                     }
                 }
-                LayoutOverflow::Squash | LayoutOverflow::Wrap => {
+                LayoutOverflow::Wrap | LayoutOverflow::Squash => {
                     let contained_sized_width = self.contained_sized_width(false).unwrap_or(0.0);
                     log::debug!("resize_children: contained_sized_width={contained_sized_width}");
                     #[allow(clippy::cast_precision_loss)]
@@ -1907,13 +1918,16 @@ impl ContainerElement {
             match self.overflow_y {
                 LayoutOverflow::Auto | LayoutOverflow::Scroll => {}
                 LayoutOverflow::Show => {
-                    if self.height.is_none() {
+                    if self.height.is_none()
+                        && (self.calculated_height.unwrap() - contained_calculated_height).abs()
+                            > 0.001
+                    {
+                        log::debug!("resize_children: resized because contained_calculated_height changed from {} to {contained_calculated_height}", self.calculated_height.unwrap());
                         self.calculated_height.replace(contained_calculated_height);
-                        log::debug!("resize_children: resized because calculated_height was None");
                         resized = true;
                     }
                 }
-                LayoutOverflow::Squash | LayoutOverflow::Wrap => {
+                LayoutOverflow::Wrap | LayoutOverflow::Squash => {
                     let contained_sized_height = self.contained_sized_height(false).unwrap_or(0.0);
                     log::debug!("resize_children: contained_sized_height={contained_sized_height}");
                     #[allow(clippy::cast_precision_loss)]
@@ -3780,6 +3794,122 @@ mod test {
     }
 
     #[test_log::test]
+    fn handles_justify_content_space_evenly_with_padding_and_wraps_elements_properly() {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::Integer(20)),
+                        calculated_width: Some(20.0),
+                        calculated_height: Some(20.0),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(75.0),
+            calculated_height: Some(40.0),
+            calculated_padding_left: Some(20.0),
+            calculated_padding_right: Some(20.0),
+            direction: LayoutDirection::Row,
+            overflow_x: LayoutOverflow::Wrap,
+            justify_content: JustifyContent::SpaceEvenly,
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(20.0),
+                            calculated_x: Some(3.75),
+                            calculated_y: Some(0.0),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                            ..container.elements[0].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(20.0),
+                            calculated_x: Some(20.0 + 3.75 + 3.75),
+                            calculated_y: Some(0.0),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                            ..container.elements[1].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(20.0),
+                            calculated_x: Some(40.0 + 3.75 + 3.75 + 3.75),
+                            calculated_y: Some(0.0),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 2 }),
+                            ..container.elements[2].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(20.0),
+                            calculated_x: Some(3.75),
+                            calculated_y: Some(20.0),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                            ..container.elements[3].container_element().unwrap().clone()
+                        },
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(20.0),
+                            calculated_height: Some(20.0),
+                            calculated_x: Some(20.0 + 3.75 + 3.75),
+                            calculated_y: Some(20.0),
+                            calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
+                            ..container.elements[4].container_element().unwrap().clone()
+                        },
+                    },
+                ],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
     fn handles_justify_content_space_evenly_and_wraps_elements_properly_with_hidden_div() {
         let mut container = ContainerElement {
             elements: vec![
@@ -4312,45 +4442,30 @@ mod test {
                         Element::Div {
                             element: ContainerElement {
                                 width: Some(Number::Integer(25)),
-                                calculated_width: Some(25.0),
-                                calculated_height: Some(40.0),
-                                calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
                                 ..Default::default()
                             },
                         },
                         Element::Div {
                             element: ContainerElement {
                                 width: Some(Number::Integer(25)),
-                                calculated_width: Some(25.0),
-                                calculated_height: Some(40.0),
-                                calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
                                 ..Default::default()
                             },
                         },
                         Element::Div {
                             element: ContainerElement {
                                 width: Some(Number::Integer(25)),
-                                calculated_width: Some(25.0),
-                                calculated_height: Some(40.0),
-                                calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
                                 ..Default::default()
                             },
                         },
                         Element::Div {
                             element: ContainerElement {
                                 width: Some(Number::Integer(25)),
-                                calculated_width: Some(25.0),
-                                calculated_height: Some(40.0),
-                                calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
                                 ..Default::default()
                             },
                         },
                         Element::Div {
                             element: ContainerElement {
                                 width: Some(Number::Integer(25)),
-                                calculated_width: Some(25.0),
-                                calculated_height: Some(40.0),
-                                calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
                                 ..Default::default()
                             },
                         },
@@ -7595,7 +7710,7 @@ mod test {
                 },
                 Element::Div {
                     element: ContainerElement {
-                        padding_right: Some(Number::Integer(35)),
+                        padding_right: Some(Number::Integer(30)),
                         ..Default::default()
                     },
                 },
@@ -7613,16 +7728,16 @@ mod test {
                 elements: vec![
                     Element::Div {
                         element: ContainerElement {
-                            calculated_width: Some(50.0),
+                            calculated_width: Some(35.0),
                             calculated_x: Some(0.0),
                             ..container.elements[0].container_element().unwrap().clone()
                         }
                     },
                     Element::Div {
                         element: ContainerElement {
-                            calculated_width: Some(15.0),
-                            calculated_padding_right: Some(35.0),
-                            calculated_x: Some(50.0),
+                            calculated_width: Some(35.0),
+                            calculated_padding_right: Some(30.0),
+                            calculated_x: Some(35.0),
                             ..container.elements[1].container_element().unwrap().clone()
                         }
                     }
@@ -7641,7 +7756,7 @@ mod test {
                 },
                 Element::Div {
                     element: ContainerElement {
-                        margin_right: Some(Number::Integer(35)),
+                        margin_right: Some(Number::Integer(30)),
                         ..Default::default()
                     },
                 },
@@ -7659,16 +7774,163 @@ mod test {
                 elements: vec![
                     Element::Div {
                         element: ContainerElement {
-                            calculated_width: Some(50.0),
+                            calculated_width: Some(35.0),
                             calculated_x: Some(0.0),
                             ..container.elements[0].container_element().unwrap().clone()
                         }
                     },
                     Element::Div {
                         element: ContainerElement {
-                            calculated_width: Some(15.0),
-                            calculated_margin_right: Some(35.0),
-                            calculated_x: Some(50.0),
+                            calculated_width: Some(35.0),
+                            calculated_margin_right: Some(30.0),
+                            calculated_x: Some(35.0),
+                            ..container.elements[1].container_element().unwrap().clone()
+                        }
+                    }
+                ],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_calculates_sized_widths_based_on_the_container_width_minus_all_its_childrens_padding() {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::IntegerPercent(50)),
+                        padding_right: Some(Number::Integer(20)),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::IntegerPercent(50)),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(100.0),
+            calculated_height: Some(50.0),
+            direction: LayoutDirection::Row,
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(40.0),
+                            calculated_padding_right: Some(20.0),
+                            calculated_x: Some(0.0),
+                            ..container.elements[0].container_element().unwrap().clone()
+                        }
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(40.0),
+                            calculated_x: Some(60.0),
+                            ..container.elements[1].container_element().unwrap().clone()
+                        }
+                    }
+                ],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_calculates_unsized_widths_based_on_the_container_width_minus_all_its_childrens_padding()
+    {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::IntegerPercent(50)),
+                        padding_right: Some(Number::Integer(20)),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement::default(),
+                },
+            ],
+            calculated_width: Some(100.0),
+            calculated_height: Some(50.0),
+            direction: LayoutDirection::Row,
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(40.0),
+                            calculated_padding_right: Some(20.0),
+                            calculated_x: Some(0.0),
+                            ..container.elements[0].container_element().unwrap().clone()
+                        }
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(40.0),
+                            calculated_x: Some(60.0),
+                            ..container.elements[1].container_element().unwrap().clone()
+                        }
+                    }
+                ],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_calculates_unsized_widths_based_on_the_container_width_minus_second_childs_padding() {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement {
+                        width: Some(Number::IntegerPercent(50)),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        padding_right: Some(Number::Integer(20)),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(100.0),
+            calculated_height: Some(50.0),
+            direction: LayoutDirection::Row,
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(40.0),
+                            calculated_x: Some(0.0),
+                            ..container.elements[0].container_element().unwrap().clone()
+                        }
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(40.0),
+                            calculated_padding_right: Some(20.0),
+                            calculated_x: Some(40.0),
                             ..container.elements[1].container_element().unwrap().clone()
                         }
                     }
