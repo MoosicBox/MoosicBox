@@ -52,6 +52,7 @@ jobs:
                   if [ -n "$(git status --porcelain)" ]; then
                       echo "Found upgrades"
                       echo "upgraded=true" >> "$GITHUB_OUTPUT"
+                      pnpm sst install
                   else
                       echo "No upgrades"
                       echo "upgraded=false" >> "$GITHUB_OUTPUT"
