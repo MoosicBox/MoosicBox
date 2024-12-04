@@ -273,6 +273,96 @@ pub fn element_style_to_html(
         }
     }
 
+    if let Some(margin_left) = &container.margin_left {
+        if !printed_start {
+            printed_start = true;
+            f.write_all(b" style=\"")?;
+        }
+        write_css_attr(
+            f,
+            b"margin-left",
+            number_to_css_string(margin_left).as_bytes(),
+        )?;
+    }
+    if let Some(margin_right) = &container.margin_right {
+        if !printed_start {
+            printed_start = true;
+            f.write_all(b" style=\"")?;
+        }
+        write_css_attr(
+            f,
+            b"margin-right",
+            number_to_css_string(margin_right).as_bytes(),
+        )?;
+    }
+    if let Some(margin_top) = &container.margin_top {
+        if !printed_start {
+            printed_start = true;
+            f.write_all(b" style=\"")?;
+        }
+        write_css_attr(
+            f,
+            b"margin-top",
+            number_to_css_string(margin_top).as_bytes(),
+        )?;
+    }
+    if let Some(margin_bottom) = &container.margin_bottom {
+        if !printed_start {
+            printed_start = true;
+            f.write_all(b" style=\"")?;
+        }
+        write_css_attr(
+            f,
+            b"margin-bottom",
+            number_to_css_string(margin_bottom).as_bytes(),
+        )?;
+    }
+
+    if let Some(padding_left) = &container.padding_left {
+        if !printed_start {
+            printed_start = true;
+            f.write_all(b" style=\"")?;
+        }
+        write_css_attr(
+            f,
+            b"padding-left",
+            number_to_css_string(padding_left).as_bytes(),
+        )?;
+    }
+    if let Some(padding_right) = &container.padding_right {
+        if !printed_start {
+            printed_start = true;
+            f.write_all(b" style=\"")?;
+        }
+        write_css_attr(
+            f,
+            b"padding-right",
+            number_to_css_string(padding_right).as_bytes(),
+        )?;
+    }
+    if let Some(padding_top) = &container.padding_top {
+        if !printed_start {
+            printed_start = true;
+            f.write_all(b" style=\"")?;
+        }
+        write_css_attr(
+            f,
+            b"padding-top",
+            number_to_css_string(padding_top).as_bytes(),
+        )?;
+    }
+    if let Some(padding_bottom) = &container.padding_bottom {
+        if !printed_start {
+            printed_start = true;
+            f.write_all(b" style=\"")?;
+        }
+        write_css_attr(
+            f,
+            b"padding-bottom",
+            number_to_css_string(padding_bottom).as_bytes(),
+        )?;
+    }
+
     if let Some(left) = &container.left {
         if !printed_start {
             printed_start = true;
