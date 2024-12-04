@@ -13,6 +13,8 @@ use crate::{
 
 static SCROLLBAR_SIZE: AtomicU16 = AtomicU16::new(16);
 
+static EPSILON: f32 = 0.001;
+
 pub fn get_scrollbar_size() -> u16 {
     SCROLLBAR_SIZE.load(std::sync::atomic::Ordering::SeqCst)
 }
@@ -1829,7 +1831,7 @@ impl ContainerElement {
             );
             if self
                 .internal_padding_right
-                .is_none_or(|x| (x - scrollbar_size).abs() >= 0.001)
+                .is_none_or(|x| (x - scrollbar_size).abs() >= EPSILON)
             {
                 self.internal_padding_right.replace(scrollbar_size);
                 log::debug!("resize_children: resized because vertical scrollbar is visible");
@@ -1845,7 +1847,7 @@ impl ContainerElement {
             );
             if self
                 .internal_padding_bottom
-                .is_none_or(|x| (x - scrollbar_size).abs() >= 0.001)
+                .is_none_or(|x| (x - scrollbar_size).abs() >= EPSILON)
             {
                 self.internal_padding_bottom.replace(scrollbar_size);
                 log::debug!("resize_children: resized because horizontal scrollbar is visible");
@@ -1860,7 +1862,7 @@ impl ContainerElement {
                 LayoutOverflow::Show => {
                     if self.width.is_none()
                         && (self.calculated_width.unwrap() - contained_calculated_width).abs()
-                            > 0.001
+                            > EPSILON
                     {
                         log::debug!("resize_children: resized because contained_calculated_width changed from {} to {contained_calculated_width}", self.calculated_width.unwrap());
                         self.calculated_width.replace(contained_calculated_width);
@@ -1920,7 +1922,7 @@ impl ContainerElement {
                 LayoutOverflow::Show => {
                     if self.height.is_none()
                         && (self.calculated_height.unwrap() - contained_calculated_height).abs()
-                            > 0.001
+                            > EPSILON
                     {
                         log::debug!("resize_children: resized because contained_calculated_height changed from {} to {contained_calculated_height}", self.calculated_height.unwrap());
                         self.calculated_height.replace(contained_calculated_height);
@@ -2005,7 +2007,7 @@ mod test {
     use pretty_assertions::{assert_eq, assert_ne};
 
     use crate::{
-        calc::{get_scrollbar_size, Calc as _},
+        calc::{get_scrollbar_size, Calc as _, EPSILON},
         models::{JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition},
         ContainerElement, Element, Number, Position,
     };
@@ -2318,7 +2320,7 @@ mod test {
         assert_ne!(width, None);
         let width = width.unwrap();
         assert_eq!(
-            (width - expected).abs() < 0.0001,
+            (width - expected).abs() < EPSILON,
             true,
             "width expected to be {expected} (actual={width})"
         );
@@ -2413,7 +2415,7 @@ mod test {
         assert_ne!(height, None);
         let height = height.unwrap();
         assert_eq!(
-            (height - expected).abs() < 0.0001,
+            (height - expected).abs() < EPSILON,
             true,
             "height expected to be {expected} (actual={height})"
         );
@@ -2506,7 +2508,7 @@ mod test {
         let expected = 50.0;
 
         assert_eq!(
-            (width - expected).abs() < 0.0001,
+            (width - expected).abs() < EPSILON,
             true,
             "width expected to be {expected} (actual={width})"
         );
@@ -2555,7 +2557,7 @@ mod test {
         let expected = 80.0;
 
         assert_eq!(
-            (height - expected).abs() < 0.0001,
+            (height - expected).abs() < EPSILON,
             true,
             "height expected to be {expected} (actual={height})"
         );
@@ -2604,7 +2606,7 @@ mod test {
         let expected = 50.0;
 
         assert_eq!(
-            (width - expected).abs() < 0.0001,
+            (width - expected).abs() < EPSILON,
             true,
             "width expected to be {expected} (actual={width})"
         );
@@ -2653,7 +2655,7 @@ mod test {
         let expected = 80.0;
 
         assert_eq!(
-            (height - expected).abs() < 0.0001,
+            (height - expected).abs() < EPSILON,
             true,
             "height expected to be {expected} (actual={height})"
         );
@@ -2701,7 +2703,7 @@ mod test {
         let expected = 50.0 - f32::from(get_scrollbar_size());
 
         assert_eq!(
-            (width - expected).abs() < 0.0001,
+            (width - expected).abs() < EPSILON,
             true,
             "width expected to be {expected} (actual={width})"
         );
@@ -2831,7 +2833,7 @@ mod test {
         let expected = 25.0;
 
         assert_eq!(
-            (width - expected).abs() < 0.0001,
+            (width - expected).abs() < EPSILON,
             true,
             "width expected to be {expected} (actual={width})"
         );
@@ -4625,7 +4627,7 @@ mod test {
         let expected = 80.0;
 
         assert_eq!(
-            (height - expected).abs() < 0.0001,
+            (height - expected).abs() < EPSILON,
             true,
             "height expected to be {expected} (actual={height})"
         );
@@ -4681,7 +4683,7 @@ mod test {
         let expected = 80.0;
 
         assert_eq!(
-            (height - expected).abs() < 0.0001,
+            (height - expected).abs() < EPSILON,
             true,
             "height expected to be {expected} (actual={height})"
         );
