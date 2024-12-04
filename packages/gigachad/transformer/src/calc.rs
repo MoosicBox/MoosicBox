@@ -1855,7 +1855,7 @@ impl ContainerElement {
             }
         }
 
-        if width < contained_calculated_width {
+        if width < contained_calculated_width - EPSILON {
             log::debug!("resize_children: width < contained_calculated_width (width={width} contained_calculated_width={contained_calculated_width})");
             match self.overflow_x {
                 LayoutOverflow::Auto | LayoutOverflow::Scroll => {}
@@ -1915,7 +1915,7 @@ impl ContainerElement {
                 }
             }
         }
-        if height < contained_calculated_height {
+        if height < contained_calculated_height - EPSILON {
             log::debug!("resize_children: height < contained_calculated_height (height={height} contained_calculated_height={contained_calculated_height})");
             match self.overflow_y {
                 LayoutOverflow::Auto | LayoutOverflow::Scroll => {}
