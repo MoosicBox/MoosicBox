@@ -139,13 +139,13 @@ chrono = { version = "0.4.38", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = { version = "4.5.21", features = ["derive"] }
+clap = { version = "4.5.22", features = ["derive"] }
 color-hex = "0.2.0"
 console-subscriber = "0.4.1"
 cpal = "0.15.3"
 debounce = "0.2.2"
 derive_more = "1.0.0"
-diesel = { version = "2.2.5", default-features = false }
+diesel = { version = "2.2.6", default-features = false }
 diesel_migrations = { version = "2.2.0", default-features = false }
 dotenv = "0.15"
 dyn-clone = "1.0.17"
@@ -256,10 +256,10 @@ tauri-plugin = { version = "2.0.3", features = ["build"] }
 tauri-plugin-dialog = "2.0.4"
 tauri-plugin-notification = "2.0.1"
 test-log = "0.2.16"
-thiserror = "2.0.3"
+thiserror = "2.0.4"
 throttle = "0.1.0"
 tl = "0.7.8"
-tokio = { version = "1.41.1" }
+tokio = { version = "1.42.0" }
 tokio-postgres = { version = "0.7.12", features = ["with-chrono-0_4"] }
 tokio-stream = "0.1.16"
 tokio-tungstenite = { version = "0.24.0", features = ["native-tls-vendored"] }
