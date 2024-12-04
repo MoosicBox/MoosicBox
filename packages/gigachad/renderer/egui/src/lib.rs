@@ -755,8 +755,8 @@ impl EguiApp {
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &ContainerElement)>,
     ) -> Option<Response> {
-        if container.is_hidden() {
-            log::debug!("render_container: container is hidden. skipping render");
+        if container.is_hidden() || Self::container_hidden(render_context, container) {
+            log::trace!("render_container: container is hidden. skipping render");
             self.handle_container_side_effects(
                 render_context,
                 ctx,
@@ -768,35 +768,6 @@ impl EguiApp {
                 true,
             );
             return None;
-        }
-
-        if Self::container_hidden(render_context, container) {
-            let response = ui
-                .allocate_new_ui(
-                    egui::UiBuilder::new().max_rect(Self::get_render_rect(
-                        ui,
-                        container,
-                        relative_container,
-                    )),
-                    |ui| {
-                        ui.set_width(container.calculated_width.unwrap());
-                        ui.set_height(container.calculated_height.unwrap());
-                    },
-                )
-                .response;
-
-            self.handle_container_side_effects(
-                render_context,
-                ctx,
-                None,
-                container,
-                viewport,
-                rect,
-                Some(&response),
-                true,
-            );
-
-            return Some(response);
         }
 
         Some(Self::render_borders(ui, container, |ui| {
