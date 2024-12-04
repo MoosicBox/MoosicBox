@@ -16,6 +16,7 @@ pub enum ElementTarget {
     #[cfg(feature = "id")]
     Id(usize),
     SelfTarget,
+    LastChild,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -125,6 +126,99 @@ impl ActionType {
     pub const fn show_self() -> Self {
         Self::set_visibility_self(Visibility::Visible)
     }
+
+    #[must_use]
+    pub const fn set_visibility_last_child(visibility: Visibility) -> Self {
+        Self::Style {
+            target: ElementTarget::LastChild,
+            action: StyleAction::SetVisibility(visibility),
+        }
+    }
+
+    #[must_use]
+    pub const fn hide_last_child() -> Self {
+        Self::set_visibility_last_child(Visibility::Hidden)
+    }
+
+    #[must_use]
+    pub const fn show_last_child() -> Self {
+        Self::set_visibility_last_child(Visibility::Visible)
+    }
+
+    #[must_use]
+    pub fn set_display_str_id(display: bool, target: &str) -> Self {
+        Self::Style {
+            target: ElementTarget::StrId(target.to_string()),
+            action: StyleAction::SetDisplay(display),
+        }
+    }
+
+    #[must_use]
+    pub fn no_display_str_id(target: &str) -> Self {
+        Self::set_display_str_id(false, target)
+    }
+
+    #[must_use]
+    pub fn display_str_id(target: &str) -> Self {
+        Self::set_display_str_id(true, target)
+    }
+
+    #[cfg(feature = "id")]
+    #[must_use]
+    pub const fn set_display_id(display: bool, target: usize) -> Self {
+        Self::Style {
+            target: ElementTarget::Id(target),
+            action: StyleAction::SetDisplay(display),
+        }
+    }
+
+    #[cfg(feature = "id")]
+    #[must_use]
+    pub const fn no_display_id(target: usize) -> Self {
+        Self::set_display_id(false, target)
+    }
+
+    #[cfg(feature = "id")]
+    #[must_use]
+    pub const fn display_id(target: usize) -> Self {
+        Self::set_display_id(true, target)
+    }
+
+    #[must_use]
+    pub const fn set_display_self(display: bool) -> Self {
+        Self::Style {
+            target: ElementTarget::SelfTarget,
+            action: StyleAction::SetDisplay(display),
+        }
+    }
+
+    #[must_use]
+    pub const fn no_display_self() -> Self {
+        Self::set_display_self(false)
+    }
+
+    #[must_use]
+    pub const fn display_self() -> Self {
+        Self::set_display_self(true)
+    }
+
+    #[must_use]
+    pub const fn set_display_last_child(display: bool) -> Self {
+        Self::Style {
+            target: ElementTarget::LastChild,
+            action: StyleAction::SetDisplay(display),
+        }
+    }
+
+    #[must_use]
+    pub const fn no_display_last_child() -> Self {
+        Self::set_display_last_child(false)
+    }
+
+    #[must_use]
+    pub const fn display_last_child() -> Self {
+        Self::set_display_last_child(true)
+    }
 }
 
 impl From<ActionType> for Action {
@@ -156,6 +250,7 @@ impl<'a> TryFrom<&'a str> for ActionType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum StyleAction {
     SetVisibility(Visibility),
+    SetDisplay(bool),
 }
 
 #[cfg(feature = "serde")]

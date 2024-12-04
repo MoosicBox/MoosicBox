@@ -309,6 +309,17 @@ enum AppImage {
     Bytes(Arc<[u8]>),
 }
 
+struct RenderContext<'a> {
+    container: &'a ContainerElement,
+    viewport_listeners: &'a mut HashMap<usize, ViewportListener>,
+    images: &'a mut HashMap<String, AppImage>,
+    canvas_actions: &'a mut HashMap<String, Vec<CanvasAction>>,
+    route_requests: &'a mut Vec<usize>,
+    visibilities: &'a mut HashMap<usize, Visibility>,
+    displays: &'a mut HashMap<usize, bool>,
+    checkboxes: &'a mut HashMap<egui::Id, bool>,
+}
+
 #[derive(Clone)]
 struct EguiApp {
     ctx: Arc<RwLock<Option<egui::Context>>>,
@@ -323,6 +334,7 @@ struct EguiApp {
     canvas_actions: Arc<RwLock<HashMap<String, Vec<CanvasAction>>>>,
     route_requests: Arc<RwLock<Vec<usize>>>,
     visibilities: Arc<RwLock<HashMap<usize, Visibility>>>,
+    displays: Arc<RwLock<HashMap<usize, bool>>>,
     checkboxes: Arc<RwLock<HashMap<egui::Id, bool>>>,
     router: Router,
     background: Option<Color32>,
@@ -331,7 +343,7 @@ struct EguiApp {
     side_effects: Arc<Mutex<VecDeque<Handler>>>,
 }
 
-type Handler = Box<dyn Fn() -> bool + Send + Sync>;
+type Handler = Box<dyn Fn(&mut RenderContext) -> bool + Send + Sync>;
 
 impl EguiApp {
     fn new(
@@ -355,6 +367,7 @@ impl EguiApp {
             canvas_actions: Arc::new(RwLock::new(HashMap::new())),
             route_requests: Arc::new(RwLock::new(vec![])),
             visibilities: Arc::new(RwLock::new(HashMap::new())),
+            displays: Arc::new(RwLock::new(HashMap::new())),
             checkboxes: Arc::new(RwLock::new(HashMap::new())),
             router,
             background: None,
@@ -485,7 +498,7 @@ impl EguiApp {
     fn swap_elements(
         swap: &SwapTarget,
         ctx: &egui::Context,
-        container: &Arc<RwLock<ContainerElement>>,
+        container: &RwLock<ContainerElement>,
         container_id: usize,
         result: ContainerElement,
     ) {
@@ -537,7 +550,7 @@ impl EguiApp {
         self.height.write().unwrap().replace(height);
     }
 
-    fn calc(&self, ctx: &egui::Context) {
+    fn check_frame_resize(&self, ctx: &egui::Context) {
         ctx.input(move |i| {
             let width = i.screen_rect.width();
             let height = i.screen_rect.height();
@@ -667,11 +680,10 @@ impl EguiApp {
         }
     }
 
-    fn container_hidden(&self, container: &ContainerElement) -> bool {
+    fn container_hidden(render_context: &mut RenderContext, container: &ContainerElement) -> bool {
         if container.visibility == Some(Visibility::Hidden) {
-            self.visibilities
-                .read()
-                .unwrap()
+            render_context
+                .visibilities
                 .get(&container.id)
                 .copied()
                 .unwrap_or(Visibility::Hidden)
@@ -681,8 +693,10 @@ impl EguiApp {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn handle_scroll_child_out_of_view(
         &self,
+        render_context: &mut RenderContext,
         ctx: &egui::Context,
         ui: &mut Ui,
         container: &ContainerElement,
@@ -708,6 +722,7 @@ impl EguiApp {
                     render_rect.min.y
                 );
                 self.handle_container_side_effects(
+                    render_context,
                     ctx,
                     Some(ui),
                     container,
@@ -732,6 +747,7 @@ impl EguiApp {
     #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
     fn render_container(
         &self,
+        render_context: &mut RenderContext,
         ctx: &egui::Context,
         ui: &mut Ui,
         container: &ContainerElement,
@@ -742,6 +758,7 @@ impl EguiApp {
         if container.is_hidden() {
             log::debug!("render_container: container is hidden. skipping render");
             self.handle_container_side_effects(
+                render_context,
                 ctx,
                 Some(ui),
                 container,
@@ -753,7 +770,7 @@ impl EguiApp {
             return None;
         }
 
-        if self.container_hidden(container) {
+        if Self::container_hidden(render_context, container) {
             let response = ui
                 .allocate_new_ui(
                     egui::UiBuilder::new().max_rect(Self::get_render_rect(
@@ -769,6 +786,7 @@ impl EguiApp {
                 .response;
 
             self.handle_container_side_effects(
+                render_context,
                 ctx,
                 None,
                 container,
@@ -818,7 +836,7 @@ impl EguiApp {
                                                         let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
                                                         let viewport = Some(&viewport);
                                                         self.render_container_contents(
-                                                            ctx,
+                                                            render_context,ctx,
                                                             ui,
                                                             container,
                                                             viewport,
@@ -842,7 +860,7 @@ impl EguiApp {
                                                         let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
                                                         let viewport = Some(&viewport);
                                                         self.render_container_contents(
-                                                            ctx,
+                                                            render_context,ctx,
                                                             ui,
                                                             container,
                                                             viewport,
@@ -876,7 +894,7 @@ impl EguiApp {
                                                                     let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
                                                                     let viewport = Some(&viewport);
                                                                     self.render_container_contents(
-                                                                        ctx,
+                                                                        render_context,ctx,
                                                                         ui,
                                                                         container,
                                                                         viewport,
@@ -912,7 +930,7 @@ impl EguiApp {
                                                                 let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
                                                                 let viewport = Some(&viewport);
                                                                     self.render_container_contents(
-                                                                        ctx,
+                                                                        render_context,ctx,
                                                                         ui,
                                                                         container,
                                                                         viewport,
@@ -935,7 +953,7 @@ impl EguiApp {
                                                         let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
                                                         let viewport = Some(&viewport);
                                                         self.render_container_contents(
-                                                            ctx,
+                                                            render_context,ctx,
                                                             ui,
                                                             container,
                                                             viewport,
@@ -956,7 +974,7 @@ impl EguiApp {
                                                         let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
                                                         let viewport = Some(&viewport);
                                                         self.render_container_contents(
-                                                            ctx,
+                                                            render_context,ctx,
                                                             ui,
                                                             container,
                                                             viewport,
@@ -977,7 +995,7 @@ impl EguiApp {
                                                         let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
                                                         let viewport = Some(&viewport);
                                                         self.render_container_contents(
-                                                            ctx,
+                                                            render_context,ctx,
                                                             ui,
                                                             container,
                                                             viewport,
@@ -998,7 +1016,7 @@ impl EguiApp {
                                                         let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
                                                         let viewport = Some(&viewport);
                                                         self.render_container_contents(
-                                                            ctx,
+                                                            render_context,ctx,
                                                             ui,
                                                             container,
                                                             viewport,
@@ -1011,7 +1029,7 @@ impl EguiApp {
                                         }
                                         (_, _) => {
                                             self.render_container_contents(
-                                                ctx,
+                                                render_context,ctx,
                                                 ui,
                                                 container,
                                                 viewport,
@@ -1090,6 +1108,7 @@ impl EguiApp {
     #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
     fn render_direction<'a>(
         &self,
+        render_context: &mut RenderContext,
         ctx: &egui::Context,
         ui: &mut Ui,
         container: &'a ContainerElement,
@@ -1098,6 +1117,22 @@ impl EguiApp {
         relative_container: Option<(egui::Rect, &'a ContainerElement)>,
         vscroll: bool,
     ) -> Response {
+        for element in container.elements.iter().filter(|x| {
+            x.container_element()
+                .is_some_and(|y| y.calculated_position == Some(LayoutPosition::Default))
+        }) {
+            self.handle_element_side_effects(
+                render_context,
+                ctx,
+                None,
+                element,
+                viewport,
+                rect,
+                None,
+                true,
+            );
+        }
+
         match container.direction {
             LayoutDirection::Row => {
                 let rows = container
@@ -1105,13 +1140,10 @@ impl EguiApp {
                     .iter()
                     .filter_map(|x| x.container_element().map(|y| (x, y)))
                     .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
-                    .filter_map(|(x, y)| match y {
-                        LayoutPosition::Wrap { row, .. } => Some((*row, x)),
-                        LayoutPosition::Default => {
-                            self.handle_element_side_effects(
-                                ctx, None, x, viewport, rect, None, true,
-                            );
-                            None
+                    .filter_map({
+                        |(x, y)| match y {
+                            LayoutPosition::Wrap { row, .. } => Some((*row, x)),
+                            LayoutPosition::Default => None,
                         }
                     })
                     .chunk_by(|(row, _element)| *row);
@@ -1124,8 +1156,10 @@ impl EguiApp {
                 if rows.peek().is_some() {
                     ui.vertical(move |ui| {
                         for row in rows {
+                            let render_context = &mut *render_context;
                             ui.horizontal(move |ui| {
                                 self.render_elements_ref(
+                                    render_context,
                                     ctx,
                                     ui,
                                     &row,
@@ -1141,6 +1175,7 @@ impl EguiApp {
                 } else {
                     ui.horizontal(move |ui| {
                         self.render_elements(
+                            render_context,
                             ctx,
                             ui,
                             &container.elements,
@@ -1161,12 +1196,7 @@ impl EguiApp {
                     .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
                     .filter_map(|(x, y)| match y {
                         LayoutPosition::Wrap { col, .. } => Some((*col, x)),
-                        LayoutPosition::Default => {
-                            self.handle_element_side_effects(
-                                ctx, None, x, viewport, rect, None, true,
-                            );
-                            None
-                        }
+                        LayoutPosition::Default => None,
                     })
                     .chunk_by(|(col, _element)| *col);
 
@@ -1178,8 +1208,10 @@ impl EguiApp {
                 if cols.peek().is_some() {
                     ui.horizontal(move |ui| {
                         for col in cols {
+                            let render_context = &mut *render_context;
                             ui.vertical(move |ui| {
                                 self.render_elements_ref(
+                                    render_context,
                                     ctx,
                                     ui,
                                     &col,
@@ -1195,6 +1227,7 @@ impl EguiApp {
                 } else {
                     ui.vertical(move |ui| {
                         self.render_elements(
+                            render_context,
                             ctx,
                             ui,
                             &container.elements,
@@ -1263,6 +1296,7 @@ impl EguiApp {
     #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     fn render_container_contents<'a>(
         &self,
+        render_context: &mut RenderContext,
         ctx: &egui::Context,
         ui: &mut Ui,
         container: &'a ContainerElement,
@@ -1306,23 +1340,21 @@ impl EguiApp {
                 frame
                     .show(ui, {
                         |ui| {
-                            if let Some(width) = container.calculated_width {
-                                ui.set_width(width - container.horizontal_padding().unwrap_or(0.0));
-                            }
-                            if let Some(height) = container.calculated_height {
-                                ui.set_height(height - container.vertical_padding().unwrap_or(0.0));
+                            let width = container.calculated_width.unwrap();
+                            let height = container.calculated_height.unwrap();
 
-                                if vscroll {
-                                    if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
-                                        let rect =
-                                            egui::Rect::from_pos(egui::emath::pos2(0.0, height));
-                                        ui.scroll_to_rect(rect, Some(egui::Align::TOP));
-                                    }
-                                    if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
-                                        let rect =
-                                            egui::Rect::from_pos(egui::emath::pos2(0.0, -height));
-                                        ui.scroll_to_rect(rect, Some(egui::Align::TOP));
-                                    }
+                            ui.set_width(width);
+                            ui.set_height(height);
+
+                            if vscroll {
+                                if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
+                                    let rect = egui::Rect::from_pos(egui::emath::pos2(0.0, height));
+                                    ui.scroll_to_rect(rect, Some(egui::Align::TOP));
+                                }
+                                if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
+                                    let rect =
+                                        egui::Rect::from_pos(egui::emath::pos2(0.0, -height));
+                                    ui.scroll_to_rect(rect, Some(egui::Align::TOP));
                                 }
                             }
 
@@ -1332,6 +1364,7 @@ impl EguiApp {
                                 relative_container,
                                 move |ui, relative_container| {
                                     self.render_direction(
+                                        render_context,
                                         ctx,
                                         ui,
                                         container,
@@ -1352,6 +1385,7 @@ impl EguiApp {
     #[allow(clippy::too_many_arguments)]
     fn render_elements(
         &self,
+        render_context: &mut RenderContext,
         ctx: &egui::Context,
         ui: &mut Ui,
         elements: &[Element],
@@ -1363,6 +1397,7 @@ impl EguiApp {
         log::trace!("render_elements: {} elements", elements.len());
         for element in elements {
             self.render_element(
+                render_context,
                 ctx,
                 ui,
                 element,
@@ -1377,6 +1412,7 @@ impl EguiApp {
     #[allow(clippy::too_many_arguments)]
     fn render_elements_ref(
         &self,
+        render_context: &mut RenderContext,
         ctx: &egui::Context,
         ui: &mut Ui,
         elements: &[&Element],
@@ -1388,6 +1424,7 @@ impl EguiApp {
         log::trace!("render_elements_ref: {} elements", elements.len());
         for element in elements {
             self.render_element(
+                render_context,
                 ctx,
                 ui,
                 element,
@@ -1415,6 +1452,7 @@ impl EguiApp {
     #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
     fn handle_container_side_effects(
         &self,
+        render_context: &mut RenderContext,
         ctx: &egui::Context,
         ui: Option<&Ui>,
         container: &ContainerElement,
@@ -1425,9 +1463,8 @@ impl EguiApp {
     ) {
         if let Some(route) = &container.route {
             let processed_route = {
-                self.route_requests
-                    .read()
-                    .unwrap()
+                render_context
+                    .route_requests
                     .iter()
                     .any(|x| *x == container.id)
             };
@@ -1436,7 +1473,7 @@ impl EguiApp {
                     "processing route route={route:?} container_id={}",
                     container.id
                 );
-                self.route_requests.write().unwrap().push(container.id);
+                render_context.route_requests.push(container.id);
                 if let Err(e) = self.event.send(AppEvent::ProcessRoute {
                     route: route.to_owned(),
                     container_id: container.id,
@@ -1456,7 +1493,7 @@ impl EguiApp {
                 let ctx = ctx.clone();
                 let pointer = ctx.input(|x| x.pointer.clone());
                 let response = response.clone();
-                self.trigger_side_effect(move || {
+                self.trigger_side_effect(move |_render_context| {
                     if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect) {
                         ctx.output_mut(|x| {
                             x.cursor_icon = cursor_to_cursor_icon(cursor);
@@ -1475,12 +1512,10 @@ impl EguiApp {
                             let inside = matches!(fx_action.trigger, ActionTrigger::Click);
                             let action = fx_action.action.clone();
                             let id = container.id;
-                            let visibilities = self.visibilities.clone();
                             let pointer = ctx.input(|x| x.pointer.clone());
                             let response = response.clone();
-                            let container = self.container.clone();
                             let sender = self.sender.clone();
-                            self.trigger_side_effect(move || {
+                            self.trigger_side_effect(move |render_context| {
                                 if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
                                     == inside
                                     && pointer.primary_released()
@@ -1488,16 +1523,15 @@ impl EguiApp {
                                     log::trace!("click action: {action}");
                                     Self::handle_action(
                                         &action,
+                                        render_context,
                                         id,
                                         &sender,
-                                        &container,
-                                        &visibilities,
                                         &request_action,
                                     );
                                     return !inside;
                                 }
 
-                                Self::unhandle_action(&action, id, &visibilities);
+                                Self::unhandle_action(&action, render_context, id);
 
                                 true
                             });
@@ -1505,26 +1539,23 @@ impl EguiApp {
                         ActionTrigger::Hover => {
                             let action = fx_action.action.clone();
                             let id = container.id;
-                            let visibilities = self.visibilities.clone();
                             let response = response.clone();
                             let pointer = ctx.input(|x| x.pointer.clone());
-                            let container = self.container.clone();
                             let sender = self.sender.clone();
-                            self.trigger_side_effect(move || {
+                            self.trigger_side_effect(move |render_context| {
                                 if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
                                 {
                                     log::trace!("hover action: {action}");
                                     return Self::handle_action(
                                         &action,
+                                        render_context,
                                         id,
                                         &sender,
-                                        &container,
-                                        &visibilities,
                                         &request_action,
                                     );
                                 }
 
-                                Self::unhandle_action(&action, id, &visibilities);
+                                Self::unhandle_action(&action, render_context, id);
 
                                 true
                             });
@@ -1532,24 +1563,21 @@ impl EguiApp {
                         ActionTrigger::Change => {
                             let action = fx_action.action.clone();
                             let id = container.id;
-                            let visibilities = self.visibilities.clone();
                             let response = response.clone();
-                            let container = self.container.clone();
                             let sender = self.sender.clone();
-                            self.trigger_side_effect(move || {
+                            self.trigger_side_effect(move |render_context| {
                                 if response.changed() {
                                     log::trace!("change action: {action}");
                                     return Self::handle_action(
                                         &action,
+                                        render_context,
                                         id,
                                         &sender,
-                                        &container,
-                                        &visibilities,
                                         &request_action,
                                     );
                                 }
 
-                                Self::unhandle_action(&action, id, &visibilities);
+                                Self::unhandle_action(&action, render_context, id);
 
                                 true
                             });
@@ -1563,7 +1591,14 @@ impl EguiApp {
         if recurse {
             for element in &container.elements {
                 self.handle_element_side_effects(
-                    ctx, ui, element, viewport, rect, response, recurse,
+                    render_context,
+                    ctx,
+                    ui,
+                    element,
+                    viewport,
+                    rect,
+                    response,
+                    recurse,
                 );
             }
         }
@@ -1572,6 +1607,7 @@ impl EguiApp {
     #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
     fn handle_element_side_effects(
         &self,
+        render_context: &mut RenderContext,
         ctx: &egui::Context,
         ui: Option<&Ui>,
         element: &Element,
@@ -1593,7 +1629,7 @@ impl EguiApp {
                     let response = response.clone();
                     let pointer = ctx.input(|x| x.pointer.clone());
                     let ctx = ctx.clone();
-                    self.trigger_side_effect(move || {
+                    self.trigger_side_effect(move |_render_context| {
                         if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect) {
                             ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
                         }
@@ -1607,7 +1643,7 @@ impl EguiApp {
                     let response = response.clone();
                     let pointer = ctx.input(|x| x.pointer.clone());
                     let ctx = ctx.clone();
-                    self.trigger_side_effect(move || {
+                    self.trigger_side_effect(move |_render_context| {
                         if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
                             && pointer.primary_released()
                         {
@@ -1635,18 +1671,19 @@ impl EguiApp {
                 element,
             } = element
             {
-                let listeners: &mut HashMap<_, _> = &mut self.viewport_listeners.write().unwrap();
-
                 let pos = ui.cursor().left_top();
-                let listener = listeners.entry(element.id).or_insert_with(|| {
-                    ViewportListener::new(
-                        viewport.cloned(),
-                        0.0,
-                        0.0,
-                        element.calculated_width.unwrap(),
-                        element.calculated_height.unwrap(),
-                    )
-                });
+                let listener = render_context
+                    .viewport_listeners
+                    .entry(element.id)
+                    .or_insert_with(|| {
+                        ViewportListener::new(
+                            viewport.cloned(),
+                            0.0,
+                            0.0,
+                            element.calculated_width.unwrap(),
+                            element.calculated_height.unwrap(),
+                        )
+                    });
                 listener.viewport = viewport.cloned();
                 listener.pos.x = pos.x + viewport.map_or(0.0, |x| x.viewport.x);
                 listener.pos.y = pos.y + viewport.map_or(0.0, |x| x.viewport.y);
@@ -1654,18 +1691,11 @@ impl EguiApp {
                 let (_, (dist, prev_dist)) = listener.check();
 
                 if prev_dist.is_none_or(|x| x >= 2000.0) && dist < 2000.0 {
-                    let contains_image = {
-                        matches!(
-                            self.images.read().unwrap().get(source),
-                            Some(AppImage::Bytes(_))
-                        )
-                    };
+                    let contains_image =
+                        { matches!(render_context.images.get(source), Some(AppImage::Bytes(_))) };
                     if !contains_image {
                         let loading_image = {
-                            matches!(
-                                self.images.read().unwrap().get(source),
-                                Some(AppImage::Loading)
-                            )
+                            matches!(render_context.images.get(source), Some(AppImage::Loading))
                         };
 
                         if !loading_image {
@@ -1674,9 +1704,8 @@ impl EguiApp {
                                 listener.pos.x,
                                 listener.pos.y
                             );
-                            self.images
-                                .write()
-                                .unwrap()
+                            render_context
+                                .images
                                 .insert(source.clone(), AppImage::Loading);
 
                             if let Err(e) = self.event.send(AppEvent::LoadImage {
@@ -1692,7 +1721,14 @@ impl EguiApp {
 
         if let Some(container) = element.container_element() {
             self.handle_container_side_effects(
-                ctx, ui, container, viewport, rect, response, recurse,
+                render_context,
+                ctx,
+                ui,
+                container,
+                viewport,
+                rect,
+                response,
+                recurse,
             );
         }
     }
@@ -1700,17 +1736,21 @@ impl EguiApp {
     #[allow(clippy::too_many_lines)]
     fn handle_action(
         action: &ActionType,
+        render_context: &mut RenderContext,
         id: usize,
         sender: &Sender<String>,
-        container: &RwLock<ContainerElement>,
-        visibilities: &RwLock<HashMap<usize, Visibility>>,
         request_action: &Sender<String>,
     ) -> bool {
         log::trace!("handle_action: action={action}");
         match &action {
-            ActionType::Style { target, action } => {
-                Self::handle_style_action(action, target, id, container, visibilities)
-            }
+            ActionType::Style { target, action } => Self::handle_style_action(
+                action,
+                target,
+                id,
+                render_context.container,
+                render_context.visibilities,
+                render_context.displays,
+            ),
             ActionType::Navigate { url } => {
                 if let Err(e) = sender.send(url.to_owned()) {
                     log::error!("Failed to navigate via action: {e:?}");
@@ -1745,57 +1785,34 @@ impl EguiApp {
                 true
             }
             ActionType::Logic(eval) => {
-                let calc_visibility =
-                    |calc_value: &gigachad_actions::logic::CalcValue| match calc_value {
-                        gigachad_actions::logic::CalcValue::GetVisibility { target } => {
-                            match target {
-                                gigachad_actions::ElementTarget::StrId(str_id) => container
-                                    .read()
-                                    .unwrap()
-                                    .find_element_by_str_id(str_id)
-                                    .and_then(|x| x.container_element())
-                                    .and_then(|element| {
-                                        visibilities
-                                            .read()
-                                            .unwrap()
-                                            .get(&element.id)
-                                            .copied()
-                                            .or(element.visibility)
-                                    })
-                                    .unwrap_or_default(),
-                                gigachad_actions::ElementTarget::Id(id) => visibilities
-                                    .write()
-                                    .unwrap()
-                                    .get(id)
-                                    .copied()
-                                    .unwrap_or_default(),
-                                gigachad_actions::ElementTarget::SelfTarget => visibilities
-                                    .write()
-                                    .unwrap()
-                                    .get(&id)
-                                    .copied()
-                                    .unwrap_or_default(),
-                            }
-                        }
-                    };
+                use gigachad_actions::logic::{CalcValue, Condition, Value};
+
+                let calc_visibility = |calc_value: &CalcValue| match calc_value {
+                    CalcValue::GetVisibility { target } => {
+                        Self::map_element_target(target, id, render_context.container, |element| {
+                            render_context
+                                .visibilities
+                                .get(&element.id)
+                                .copied()
+                                .unwrap_or_default()
+                        })
+                        .unwrap_or_default()
+                    }
+                };
 
                 let success = match &eval.condition {
-                    gigachad_actions::logic::Condition::Eq(a, b) => match a {
-                        gigachad_actions::logic::Value::Calc(calc_value) => match b {
-                            gigachad_actions::logic::Value::Calc(b_calc_value) => {
+                    Condition::Eq(a, b) => match a {
+                        Value::Calc(calc_value) => match b {
+                            Value::Calc(b_calc_value) => {
                                 calc_visibility(calc_value) == calc_visibility(b_calc_value)
                             }
-                            gigachad_actions::logic::Value::Visibility(visibility) => {
+                            Value::Visibility(visibility) => {
                                 *visibility == calc_visibility(calc_value)
                             }
                         },
-                        gigachad_actions::logic::Value::Visibility(visibility) => match b {
-                            gigachad_actions::logic::Value::Calc(calc_value) => {
-                                *visibility == calc_visibility(calc_value)
-                            }
-                            gigachad_actions::logic::Value::Visibility(b_visibility) => {
-                                visibility == b_visibility
-                            }
+                        Value::Visibility(visibility) => match b {
+                            Value::Calc(calc_value) => *visibility == calc_visibility(calc_value),
+                            Value::Visibility(b_visibility) => visibility == b_visibility,
                         },
                     },
                 };
@@ -1805,10 +1822,9 @@ impl EguiApp {
                         if action.trigger == ActionTrigger::Immediate
                             && !Self::handle_action(
                                 &action.action,
+                                render_context,
                                 id,
                                 sender,
-                                container,
-                                visibilities,
                                 request_action,
                             )
                         {
@@ -1820,10 +1836,9 @@ impl EguiApp {
                         if action.trigger == ActionTrigger::Immediate
                             && !Self::handle_action(
                                 &action.action,
+                                render_context,
                                 id,
                                 sender,
-                                container,
-                                visibilities,
                                 request_action,
                             )
                         {
@@ -1837,54 +1852,139 @@ impl EguiApp {
         }
     }
 
-    fn unhandle_action(
-        action: &ActionType,
-        id: usize,
-        visibilities: &RwLock<HashMap<usize, Visibility>>,
-    ) {
-        if let ActionType::Style { action, .. } = &action {
+    fn unhandle_action(action: &ActionType, render_context: &mut RenderContext, id: usize) {
+        if let ActionType::Style { action, target } = &action {
             match action {
                 StyleAction::SetVisibility { .. } => {
-                    let contains = { visibilities.read().unwrap().contains_key(&id) };
-                    if contains {
-                        visibilities.write().unwrap().remove(&id);
+                    if let Some(id) =
+                        Self::get_element_target_id(target, id, render_context.container)
+                    {
+                        if render_context.visibilities.contains_key(&id) {
+                            render_context.visibilities.remove(&id);
+                        }
+                    }
+                }
+                StyleAction::SetDisplay { .. } => {
+                    if let Some(id) =
+                        Self::get_element_target_id(target, id, render_context.container)
+                    {
+                        if render_context.displays.contains_key(&id) {
+                            render_context.displays.remove(&id);
+                        }
                     }
                 }
             }
         }
     }
 
+    fn map_element_target<R>(
+        target: &ElementTarget,
+        self_id: usize,
+        container: &ContainerElement,
+        func: impl Fn(&ContainerElement) -> R,
+    ) -> Option<R> {
+        match target {
+            ElementTarget::StrId(str_id) => {
+                if let Some(element) = container.find_container_element_by_str_id(str_id) {
+                    return Some(func(element));
+                }
+
+                log::warn!("Could not find element with str id '{str_id}'");
+            }
+            ElementTarget::Id(id) => {
+                if let Some(element) = container.find_container_element_by_id(self_id) {
+                    return Some(func(element));
+                }
+
+                log::warn!("Could not find element with id '{id}'");
+            }
+            ElementTarget::SelfTarget => {
+                if let Some(element) = container.find_container_element_by_id(self_id) {
+                    return Some(func(element));
+                }
+
+                log::warn!("Could not find element with id '{self_id}'");
+            }
+            ElementTarget::LastChild => {
+                if let Some(element) =
+                    container
+                        .find_container_element_by_id(self_id)
+                        .and_then(|x| {
+                            x.elements
+                                .iter()
+                                .filter_map(Element::container_element)
+                                .last()
+                        })
+                {
+                    return Some(func(element));
+                }
+
+                log::warn!("Could not find element last child for id '{self_id}'");
+            }
+        }
+
+        None
+    }
+
+    fn get_element_target_id(
+        target: &ElementTarget,
+        self_id: usize,
+        container: &ContainerElement,
+    ) -> Option<usize> {
+        match target {
+            ElementTarget::StrId(str_id) => {
+                if let Some(element) = container.find_container_element_by_str_id(str_id) {
+                    return Some(element.id);
+                }
+
+                log::warn!("Could not find element with str id '{str_id}'");
+            }
+            ElementTarget::Id(id) => {
+                return Some(*id);
+            }
+            ElementTarget::SelfTarget => {
+                return Some(self_id);
+            }
+            ElementTarget::LastChild => {
+                if let Some(element) =
+                    container
+                        .find_container_element_by_id(self_id)
+                        .and_then(|x| {
+                            x.elements
+                                .iter()
+                                .filter_map(Element::container_element)
+                                .last()
+                        })
+                {
+                    return Some(element.id);
+                }
+
+                log::warn!("Could not find element last child for id '{self_id}'");
+            }
+        }
+
+        None
+    }
+
     fn handle_style_action(
         action: &StyleAction,
         target: &ElementTarget,
         id: usize,
-        container: &RwLock<ContainerElement>,
-        visibilities: &RwLock<HashMap<usize, Visibility>>,
+        container: &ContainerElement,
+        visibilities: &mut HashMap<usize, Visibility>,
+        displays: &mut HashMap<usize, bool>,
     ) -> bool {
         match action {
             StyleAction::SetVisibility(visibility) => {
-                match target {
-                    gigachad_actions::ElementTarget::StrId(str_id) => {
-                        if let Some(element) = container
-                            .read()
-                            .unwrap()
-                            .find_element_by_str_id(str_id)
-                            .and_then(|x| x.container_element())
-                        {
-                            visibilities
-                                .write()
-                                .unwrap()
-                                .insert(element.id, *visibility);
-                        } else {
-                            log::warn!("Could not find element with str id '{str_id}'");
-                        }
-                    }
-                    gigachad_actions::ElementTarget::Id(id) => {
-                        visibilities.write().unwrap().insert(*id, *visibility);
-                    }
-                    gigachad_actions::ElementTarget::SelfTarget => {
-                        visibilities.write().unwrap().insert(id, *visibility);
-                    }
+                if let Some(id) = Self::get_element_target_id(target, id, container) {
+                    visibilities.insert(id, *visibility);
+                }
+
+                true
+            }
+            StyleAction::SetDisplay(display) => {
+                if let Some(id) = Self::get_element_target_id(target, id, container) {
+                    displays.insert(id, *display);
                 }
 
                 true
@@ -1895,6 +1995,7 @@ impl EguiApp {
     #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     fn render_element(
         &self,
+        render_context: &mut RenderContext,
         ctx: &egui::Context,
         ui: &mut Ui,
         element: &Element,
@@ -1906,13 +2007,22 @@ impl EguiApp {
         log::trace!("render_element: rect={rect:?}");
 
         if let Element::Table { .. } = element {
-            self.render_table(ctx, ui, element, viewport, rect, relative_container);
+            self.render_table(
+                render_context,
+                ctx,
+                ui,
+                element,
+                viewport,
+                rect,
+                relative_container,
+            );
             return;
         }
 
         if let Some(container) = element.container_element() {
             if scroll_child
                 && self.handle_scroll_child_out_of_view(
+                    render_context,
                     ctx,
                     ui,
                     container,
@@ -1926,20 +2036,23 @@ impl EguiApp {
         }
 
         let response = match element {
-            Element::Input { input, .. } => Some(Self::render_input(ui, input, &self.checkboxes)),
+            Element::Input { input, .. } => {
+                Some(Self::render_input(ui, input, render_context.checkboxes))
+            }
             Element::Raw { value } => Some(ui.label(value)),
             Element::Image { source, element } => source
                 .as_ref()
-                .map(|source| self.render_image(ui, source, element)),
-            Element::Canvas { element } => element
-                .str_id
-                .as_ref()
-                .map_or_else(|| None, |str_id| self.render_canvas(ui, str_id, element)),
+                .map(|source| Self::render_image(render_context, ui, source, element)),
+            Element::Canvas { element } => element.str_id.as_ref().map_or_else(
+                || None,
+                |str_id| Self::render_canvas(render_context, ui, str_id, element),
+            ),
             _ => None,
         };
 
         if let Some(response) = response {
             self.handle_element_side_effects(
+                render_context,
                 ctx,
                 Some(ui),
                 element,
@@ -1952,11 +2065,18 @@ impl EguiApp {
         }
 
         if let Some(container) = element.container_element() {
-            if let Some(response) =
-                self.render_container(ctx, ui, container, viewport, rect, relative_container)
-            {
-                if !self.container_hidden(container) {
+            if let Some(response) = self.render_container(
+                render_context,
+                ctx,
+                ui,
+                container,
+                viewport,
+                rect,
+                relative_container,
+            ) {
+                if !Self::container_hidden(render_context, container) {
                     self.handle_element_side_effects(
+                        render_context,
                         ctx,
                         Some(ui),
                         element,
@@ -1973,7 +2093,7 @@ impl EguiApp {
     fn render_input(
         ui: &mut Ui,
         input: &Input,
-        checkboxes: &Arc<RwLock<HashMap<egui::Id, bool>>>,
+        checkboxes: &mut HashMap<egui::Id, bool>,
     ) -> Response {
         match input {
             Input::Text { .. } | Input::Password { .. } => Self::render_text_input(ui, input),
@@ -2004,7 +2124,7 @@ impl EguiApp {
     fn render_checkbox_input(
         ui: &mut Ui,
         input: &Input,
-        checkboxes: &Arc<RwLock<HashMap<egui::Id, bool>>>,
+        checkboxes: &mut HashMap<egui::Id, bool>,
     ) -> Response {
         let Input::Checkbox { checked } = input else {
             unreachable!();
@@ -2013,7 +2133,7 @@ impl EguiApp {
 
         let id = ui.next_auto_id();
 
-        let contains = { checkboxes.read().unwrap().contains_key(&id) };
+        let contains = { checkboxes.contains_key(&id) };
 
         let mut checked_value = ui
             .data_mut(|data| {
@@ -2033,19 +2153,24 @@ impl EguiApp {
         ui.data_mut(|data| data.insert_temp(id, checked_value));
 
         if response.changed() {
-            checkboxes.write().unwrap().insert(id, checked_value);
+            checkboxes.insert(id, checked_value);
         }
 
         response
     }
 
-    fn render_image(&self, ui: &mut Ui, source: &str, container: &ContainerElement) -> Response {
+    fn render_image(
+        render_context: &mut RenderContext,
+        ui: &mut Ui,
+        source: &str,
+        container: &ContainerElement,
+    ) -> Response {
         egui::Frame::none()
             .show(ui, |ui| {
                 ui.set_width(container.calculated_width.unwrap());
                 ui.set_height(container.calculated_height.unwrap());
 
-                let Some(AppImage::Bytes(bytes)) = self.images.read().unwrap().get(source).cloned()
+                let Some(AppImage::Bytes(bytes)) = render_context.images.get(source).cloned()
                 else {
                     return;
                 };
@@ -2065,12 +2190,12 @@ impl EguiApp {
     }
 
     fn render_canvas(
-        &self,
+        render_context: &mut RenderContext,
         ui: &mut Ui,
         str_id: &str,
         container: &ContainerElement,
     ) -> Option<Response> {
-        self.canvas_actions.read().unwrap().get(str_id).map_or_else(
+        render_context.canvas_actions.get(str_id).map_or_else(
             || None,
             |actions| {
                 let (response, painter) = ui.allocate_painter(
@@ -2134,6 +2259,7 @@ impl EguiApp {
     #[allow(clippy::too_many_arguments)]
     fn render_table(
         &self,
+        render_context: &mut RenderContext,
         ctx: &egui::Context,
         ui: &mut Ui,
         element: &Element,
@@ -2150,7 +2276,15 @@ impl EguiApp {
                 for heading in headings {
                     for th in heading {
                         egui::Frame::none().show(ui, |ui| {
-                            self.render_container(ctx, ui, th, viewport, rect, relative_container);
+                            self.render_container(
+                                render_context,
+                                ctx,
+                                ui,
+                                th,
+                                viewport,
+                                rect,
+                                relative_container,
+                            );
                         });
                     }
                     ui.end_row();
@@ -2159,7 +2293,15 @@ impl EguiApp {
             for row in rows {
                 for td in row {
                     egui::Frame::none().show(ui, |ui| {
-                        self.render_container(ctx, ui, td, viewport, rect, relative_container);
+                        self.render_container(
+                            render_context,
+                            ctx,
+                            ui,
+                            td,
+                            viewport,
+                            rect,
+                            relative_container,
+                        );
                     });
                 }
                 ui.end_row();
@@ -2167,7 +2309,10 @@ impl EguiApp {
         });
     }
 
-    fn trigger_side_effect(&self, handler: impl Fn() -> bool + Send + Sync + 'static) {
+    fn trigger_side_effect(
+        &self,
+        handler: impl Fn(&mut RenderContext) -> bool + Send + Sync + 'static,
+    ) {
         self.side_effects
             .lock()
             .unwrap()
@@ -2175,50 +2320,86 @@ impl EguiApp {
     }
 
     fn paint(&self, ctx: &egui::Context) {
-        self.calc(ctx);
+        self.check_frame_resize(ctx);
 
-        let container = self.container.clone();
-        let container: &ContainerElement = &container.read().unwrap();
+        let container = self.container.write().unwrap();
+        let mut viewport_listeners = self.viewport_listeners.write().unwrap();
+        let mut images = self.images.write().unwrap();
+        let mut canvas_actions = self.canvas_actions.write().unwrap();
+        let mut route_requests = self.route_requests.write().unwrap();
+        let mut visibilities = self.visibilities.write().unwrap();
+        let mut displays = self.displays.write().unwrap();
+        let mut checkboxes = self.checkboxes.write().unwrap();
 
-        ctx.memory_mut(|x| {
-            x.options.line_scroll_speed = 100.0;
-        });
+        {
+            let mut render_context = RenderContext {
+                container: &container,
+                viewport_listeners: &mut viewport_listeners,
+                images: &mut images,
+                canvas_actions: &mut canvas_actions,
+                route_requests: &mut route_requests,
+                visibilities: &mut visibilities,
+                displays: &mut displays,
+                checkboxes: &mut checkboxes,
+            };
 
-        ctx.style_mut(|style| {
-            style.spacing.window_margin.left = 0.0;
-            style.spacing.window_margin.right = 0.0;
-            style.spacing.window_margin.top = 0.0;
-            style.spacing.window_margin.bottom = 0.0;
-            style.spacing.item_spacing = egui::emath::Vec2::splat(0.0);
-            #[cfg(all(debug_assertions, feature = "debug"))]
-            {
-                style.debug.debug_on_hover = true;
-            }
-        });
-
-        egui::CentralPanel::default()
-            .frame(egui::Frame::none())
-            .show(ctx, |ui| {
-                egui::Frame::none()
-                    .fill(
-                        self.background
-                            .unwrap_or_else(|| Color32::from_hex("#181a1b").unwrap()),
-                    )
-                    .show(ui, |ui| {
-                        self.render_container(ctx, ui, container, None, None, None);
-                    });
+            ctx.memory_mut(|x| {
+                x.options.line_scroll_speed = 100.0;
             });
 
-        let mut handlers_count = 0;
+            ctx.style_mut(|style| {
+                style.spacing.window_margin.left = 0.0;
+                style.spacing.window_margin.right = 0.0;
+                style.spacing.window_margin.top = 0.0;
+                style.spacing.window_margin.bottom = 0.0;
+                style.spacing.item_spacing = egui::emath::Vec2::splat(0.0);
+                #[cfg(all(debug_assertions, feature = "debug"))]
+                {
+                    style.debug.debug_on_hover = true;
+                }
+            });
 
-        for handler in self.side_effects.lock().unwrap().drain(..) {
-            handlers_count += 1;
-            if !handler() {
-                break;
+            egui::CentralPanel::default()
+                .frame(egui::Frame::none())
+                .show(ctx, |ui| {
+                    egui::Frame::none()
+                        .fill(
+                            self.background
+                                .unwrap_or_else(|| Color32::from_hex("#181a1b").unwrap()),
+                        )
+                        .show(ui, |ui| {
+                            self.render_container(
+                                &mut render_context,
+                                ctx,
+                                ui,
+                                &container,
+                                None,
+                                None,
+                                None,
+                            );
+                        });
+                });
+
+            let mut handlers_count = 0;
+
+            for handler in self.side_effects.lock().unwrap().drain(..) {
+                handlers_count += 1;
+                if !handler(&mut render_context) {
+                    break;
+                }
             }
+
+            log::trace!("paint: {handlers_count} handler(s) on render");
         }
 
-        log::trace!("paint: {handlers_count} handler(s) on render");
+        drop(container);
+        drop(viewport_listeners);
+        drop(images);
+        drop(canvas_actions);
+        drop(route_requests);
+        drop(visibilities);
+        drop(displays);
+        drop(checkboxes);
     }
 }
 
