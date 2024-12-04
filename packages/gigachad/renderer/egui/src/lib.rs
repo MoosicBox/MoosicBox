@@ -1765,6 +1765,7 @@ impl EguiApp {
                                 .visibilities
                                 .get(&element.id)
                                 .copied()
+                                .or(element.visibility)
                                 .unwrap_or_default()
                         })
                         .unwrap_or_default()
