@@ -27,8 +27,8 @@ use itertools::Itertools;
 
 #[derive(Clone)]
 pub struct EguiRenderer {
-    width: Option<u16>,
-    height: Option<u16>,
+    width: Option<f32>,
+    height: Option<f32>,
     x: Option<i32>,
     y: Option<i32>,
     app: EguiApp,
@@ -61,8 +61,8 @@ impl EguiRenderer {
 }
 
 pub struct EguiRenderRunner {
-    width: u16,
-    height: u16,
+    width: f32,
+    height: f32,
     x: Option<i32>,
     y: Option<i32>,
     app: EguiApp,
@@ -73,8 +73,8 @@ impl RenderRunner for EguiRenderRunner {
     ///
     /// Will error if egui fails to run the event loop.
     fn run(&mut self) -> Result<(), Box<dyn std::error::Error + Send>> {
-        let mut viewport = egui::ViewportBuilder::default()
-            .with_inner_size([f32::from(self.width), f32::from(self.height)]);
+        let mut viewport =
+            egui::ViewportBuilder::default().with_inner_size([self.width, self.height]);
 
         #[allow(clippy::cast_precision_loss)]
         if let (Some(x), Some(y)) = (self.x, self.y) {
@@ -119,8 +119,8 @@ impl Renderer for EguiRenderer {
     /// Will error if egui app fails to start
     async fn init(
         &mut self,
-        width: u16,
-        height: u16,
+        width: f32,
+        height: f32,
         x: Option<i32>,
         y: Option<i32>,
         background: Option<Color>,

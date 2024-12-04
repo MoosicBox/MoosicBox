@@ -1178,8 +1178,8 @@ impl Renderer for FltkRenderer {
     /// Will error if FLTK app fails to start
     async fn init(
         &mut self,
-        width: u16,
-        height: u16,
+        width: f32,
+        height: f32,
         x: Option<i32>,
         y: Option<i32>,
         background: Option<Color>,
@@ -1187,15 +1187,18 @@ impl Renderer for FltkRenderer {
         let app = app::App::default();
         self.app.replace(app);
 
+        #[allow(clippy::cast_possible_truncation)]
         let mut window = Window::default()
-            .with_size(i32::from(width), i32::from(height))
+            .with_size(width.round() as i32, height.round() as i32)
             .with_label("MoosicBox");
 
         self.window.replace(window.clone());
+        #[allow(clippy::cast_possible_truncation)]
         self.width
-            .store(i32::from(width), std::sync::atomic::Ordering::SeqCst);
+            .store(width.round() as i32, std::sync::atomic::Ordering::SeqCst);
+        #[allow(clippy::cast_possible_truncation)]
         self.height
-            .store(i32::from(height), std::sync::atomic::Ordering::SeqCst);
+            .store(height.round() as i32, std::sync::atomic::Ordering::SeqCst);
 
         if let Some(background) = background {
             app::set_background_color(background.r, background.g, background.b);

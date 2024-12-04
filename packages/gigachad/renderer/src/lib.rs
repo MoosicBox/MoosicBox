@@ -82,8 +82,8 @@ pub trait Renderer: Send + Sync {
     /// Will error if `Renderer` implementation app fails to start
     async fn init(
         &mut self,
-        width: u16,
-        height: u16,
+        width: f32,
+        height: f32,
         x: Option<i32>,
         y: Option<i32>,
         background: Option<Color>,

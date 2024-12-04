@@ -109,8 +109,8 @@ impl Renderer for DatastarRenderer {
     /// Will error if Datastar app fails to start
     async fn init(
         &mut self,
-        width: u16,
-        height: u16,
+        width: f32,
+        height: f32,
         x: Option<i32>,
         y: Option<i32>,
         background: Option<Color>,

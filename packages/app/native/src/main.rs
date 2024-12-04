@@ -23,7 +23,7 @@ use moosicbox_app_state::AppStateError;
 use moosicbox_core::sqlite::models::{
     AlbumSort, AlbumType, ApiAlbum, ApiArtist, ApiSource, TrackApiSource,
 };
-use moosicbox_env_utils::{default_env_usize, option_env_i32, option_env_u16};
+use moosicbox_env_utils::{default_env_usize, option_env_f32, option_env_i32};
 use moosicbox_music_api::{profiles::PROFILES, MusicApi, SourceToMusicApi};
 use moosicbox_paging::Page;
 use moosicbox_player::Playback;
@@ -444,8 +444,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             })
         })
         .with_size(
-            option_env_u16("WINDOW_WIDTH").unwrap().unwrap_or(1000),
-            option_env_u16("WINDOW_HEIGHT").unwrap().unwrap_or(600),
+            option_env_f32("WINDOW_WIDTH").unwrap().unwrap_or(1000.0),
+            option_env_f32("WINDOW_HEIGHT").unwrap().unwrap_or(600.0),
         );
 
     #[cfg(feature = "_calculated_canvas")]

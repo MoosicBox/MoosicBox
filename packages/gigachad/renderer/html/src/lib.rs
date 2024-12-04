@@ -33,8 +33,8 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {}
 
 #[derive(Clone)]
 pub struct HtmlRenderer {
-    width: Option<u16>,
-    height: Option<u16>,
+    width: Option<f32>,
+    height: Option<f32>,
     x: Option<i32>,
     y: Option<i32>,
     app: HtmlApp,
@@ -238,8 +238,8 @@ impl Renderer for HtmlRenderer {
     /// Will error if html app fails to start
     async fn init(
         &mut self,
-        width: u16,
-        height: u16,
+        width: f32,
+        height: f32,
         x: Option<i32>,
         y: Option<i32>,
         background: Option<Color>,

@@ -27,8 +27,8 @@ pub struct NativeAppBuilder {
     x: Option<i32>,
     y: Option<i32>,
     background: Option<Color>,
-    width: Option<u16>,
-    height: Option<u16>,
+    width: Option<f32>,
+    height: Option<f32>,
     router: Option<Router>,
     renderer: Option<Box<dyn Renderer>>,
     runtime_handle: Option<tokio::runtime::Handle>,
@@ -74,19 +74,19 @@ impl NativeAppBuilder {
     }
 
     #[must_use]
-    pub fn with_width(mut self, width: u16) -> Self {
+    pub fn with_width(mut self, width: f32) -> Self {
         self.width.replace(width);
         self
     }
 
     #[must_use]
-    pub fn with_height(mut self, height: u16) -> Self {
+    pub fn with_height(mut self, height: f32) -> Self {
         self.height.replace(height);
         self
     }
 
     #[must_use]
-    pub fn with_size(self, width: u16, height: u16) -> Self {
+    pub fn with_size(self, width: f32, height: f32) -> Self {
         self.with_width(width).with_height(height)
     }
 
@@ -336,8 +336,8 @@ pub struct NativeApp {
     x: Option<i32>,
     y: Option<i32>,
     background: Option<Color>,
-    width: Option<u16>,
-    height: Option<u16>,
+    width: Option<f32>,
+    height: Option<f32>,
     pub router: Router,
     pub renderer: Arc<RwLock<Box<dyn Renderer>>>,
     runtime_handle: Option<tokio::runtime::Handle>,
@@ -350,8 +350,8 @@ impl NativeApp {
             .write()
             .await
             .init(
-                self.width.unwrap_or(800),
-                self.height.unwrap_or(600),
+                self.width.unwrap_or(800.0),
+                self.height.unwrap_or(600.0),
                 self.x,
                 self.y,
                 self.background,
