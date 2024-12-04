@@ -86,7 +86,7 @@ importers:
         version: 7.18.0(eslint@8.57.1)(typescript@5.7.2)
       '@vitest/coverage-v8':
         specifier: ^1.6.0
-        version: 1.6.0(vitest@1.6.0(@types/node@22.10.1)(@vitest/ui@1.6.0)(jsdom@24.1.3))
+        version: 1.6.0(vitest@1.6.0)
       '@vitest/ui':
         specifier: ^1.6.0
         version: 1.6.0(vitest@1.6.0)
@@ -121,8 +121,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.3.41
-        version: 3.3.41
+        specifier: ^3.3.44
+        version: 3.3.44
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
@@ -3497,33 +3497,33 @@ packages:
   sprintf-js@1.0.3:
     resolution: {integrity: sha512-D9cPgkvLlV3t3IzL0D0YLvGA9Ahk4PcvVwUbN0dSGr1aP0Nrt4AEnTUbuGvquEC0mA64Gqt1fzirlRs5ibXx8g==}
 
-  sst-darwin-arm64@3.3.41:
-    resolution: {integrity: sha512-tR1Na95x1VHY8n9LbRzH+MLDcLCBfesGtA5lg+TXNbr2yllP0VkdhdeEnEfK9nFBhig7B4+fPRUxVVdDOPLcoQ==}
+  sst-darwin-arm64@3.3.44:
+    resolution: {integrity: sha512-l6j6fXw6mR1d2c6H3bqeTs1ZqFTbTGszFpJtvIoBEb4v18Qz4zl0sHvDNMpa+GkaDKzeM1CQv5zpWEmiVElXDg==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.3.41:
-    resolution: {integrity: sha512-gdg0wzbhG3s3e+JRrIEi1YPgATSHnt56+tsBnT32TaMJt3q1ijw8+i0068oKEh3wvCBIIfsvMf18VkGi3XKe9g==}
+  sst-darwin-x64@3.3.44:
+    resolution: {integrity: sha512-wa60uQ498gM7ICy6oLGGt/54Kf+7V94I7otYOI9uAE3U9I+JJ2EXcYPa2wEhxgZyyiKoE0fll2nT4iz7DtgRSg==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.3.41:
-    resolution: {integrity: sha512-cFcjiX7bbD3WdIvgdfiYeZCee3nSXcCXc+HT37jvKHwhtNVJRBZaF8XdK9MkzOOmaie7zEiQKjZqVO3VN6EAHQ==}
+  sst-linux-arm64@3.3.44:
+    resolution: {integrity: sha512-q4izvkO6fwxAuuD8W8oyo9n0czWwWj3iPP45qeUlWULKOd1FzajEf5y/HjyuGyEiQBsTaGy3Kn8VwFFDIeFbuw==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.3.41:
-    resolution: {integrity: sha512-RPiqmdkpZ3L9P+coqtfFchMx3DcYDJEZ/XnMSOq9QFIPq+5DYlzD9XRNTmeribQKtMvvnHn/x27BH4r0WU4Rbw==}
+  sst-linux-x64@3.3.44:
+    resolution: {integrity: sha512-doI08tGhW14ap6x2d73Vp+a+0At/YojAPzdeExVvpiaKlofO33fQFN00D5Vfx9N9FeSLXmG7MQnr8FiYG2FqJQ==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.3.41:
-    resolution: {integrity: sha512-FygjCCUsCk0K9biXN1TUEEfdtCmFeWuWud3dmaVU7DBAS+2KLkaGQxtYz0UFPbGQDDZcJPrla3CtcrWRnsYhVQ==}
+  sst-linux-x86@3.3.44:
+    resolution: {integrity: sha512-mqmPQHcw3k7r9f/Z3Bl7ObttRT7akwp61TsfilAO+7WOehjAqZFwZ7SKP6+i5TM/CDO/SzgiHB3xUPnzG/nDfw==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.3.41:
-    resolution: {integrity: sha512-SWz6sBnqlNzRSJgE6CBHJkvb2DCw8DYny6MEjvKRI0Wf8sHm9l+ZQ4R/ShsF5p1oE1g2PWTnIZLIHO7rGX7SvQ==}
+  sst@3.3.44:
+    resolution: {integrity: sha512-FiPSpSYr3V+w1RJ0ByvUdPDdBi+LHu/OLyjcfQ5HfAVd7mAFB2sLVOkxAshuqtAn/KBluJ0iYKaro05mkfs+9w==}
     hasBin: true
     peerDependencies:
       hono: 4.x
@@ -4036,8 +4036,8 @@ packages:
     resolution: {integrity: sha512-QaKxh0eNIi2mE9p2vEdzfagOKHCcj1pJ56EEHGQOVxp8r9/iszLUUV7v89x9O1p/T+NlTM5W7jW6+cz4Fq1YVg==}
     engines: {node: '>=18'}
 
-  whatwg-url@14.0.0:
-    resolution: {integrity: sha512-1lfMEm2IEr7RIV+f4lUNPOqfFL+pO+Xw3fJSqmjX9AbXcXcYOkCe1P6+9VBZB6n94af16NfZf+sSk0JCBZC9aw==}
+  whatwg-url@14.1.0:
+    resolution: {integrity: sha512-jlf/foYIKywAt3x/XWKZ/3rz8OSJPiWktjmk891alJUEjiVxKX9LEO92qH3hv4aJ0mN3MWPvGMCy8jQi95xK4w==}
     engines: {node: '>=18'}
 
   which-boxed-primitive@1.1.0:
@@ -5742,7 +5742,7 @@ snapshots:
 
   '@ungap/structured-clone@1.2.0': {}
 
-  '@vitest/coverage-v8@1.6.0(vitest@1.6.0(@types/node@22.10.1)(@vitest/ui@1.6.0)(jsdom@24.1.3))':
+  '@vitest/coverage-v8@1.6.0(vitest@1.6.0)':
     dependencies:
       '@ampproject/remapping': 2.3.0
       '@bcoe/v8-coverage': 0.2.3
@@ -6353,7 +6353,7 @@ snapshots:
   data-urls@5.0.0:
     dependencies:
       whatwg-mimetype: 4.0.0
-      whatwg-url: 14.0.0
+      whatwg-url: 14.1.0
 
   data-view-buffer@1.0.1:
     dependencies:
@@ -7449,7 +7449,7 @@ snapshots:
       webidl-conversions: 7.0.0
       whatwg-encoding: 3.1.1
       whatwg-mimetype: 4.0.0
-      whatwg-url: 14.0.0
+      whatwg-url: 14.1.0
       ws: 8.18.0
       xml-name-validator: 5.0.0
     transitivePeerDependencies:
@@ -8644,32 +8644,32 @@ snapshots:
 
   sprintf-js@1.0.3: {}
 
-  sst-darwin-arm64@3.3.41:
+  sst-darwin-arm64@3.3.44:
     optional: true
 
-  sst-darwin-x64@3.3.41:
+  sst-darwin-x64@3.3.44:
     optional: true
 
-  sst-linux-arm64@3.3.41:
+  sst-linux-arm64@3.3.44:
     optional: true
 
-  sst-linux-x64@3.3.41:
+  sst-linux-x64@3.3.44:
     optional: true
 
-  sst-linux-x86@3.3.41:
+  sst-linux-x86@3.3.44:
     optional: true
 
-  sst@3.3.41:
+  sst@3.3.44:
     dependencies:
       aws4fetch: 1.0.20
       jose: 5.2.3
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.3.41
-      sst-darwin-x64: 3.3.41
-      sst-linux-arm64: 3.3.41
-      sst-linux-x64: 3.3.41
-      sst-linux-x86: 3.3.41
+      sst-darwin-arm64: 3.3.44
+      sst-darwin-x64: 3.3.44
+      sst-linux-arm64: 3.3.44
+      sst-linux-x64: 3.3.44
+      sst-linux-x86: 3.3.44
 
   stack-utils@2.0.6:
     dependencies:
@@ -9202,7 +9202,7 @@ snapshots:
 
   whatwg-mimetype@4.0.0: {}
 
-  whatwg-url@14.0.0:
+  whatwg-url@14.1.0:
     dependencies:
       tr46: 5.0.0
       webidl-conversions: 7.0.0
