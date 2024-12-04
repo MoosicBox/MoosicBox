@@ -354,10 +354,8 @@ impl ContainerElement {
     fn calc_inner(&mut self, relative_size: Option<(f32, f32)>) {
         static MAX_HANDLE_OVERFLOW: usize = 100;
 
-        moosicbox_logging::debug_or_trace!(
-            ("calc_inner"),
-            ("calc_inner: processing self\n{self:?}")
-        );
+        log::trace!("calc_inner: processing self\n{self:?}");
+
         if self.hidden == Some(true) {
             return;
         }
@@ -1138,8 +1136,6 @@ impl ContainerElement {
             element.internal_margin_left.take();
             element.internal_margin_top.take();
 
-            log::trace!("position_children: x={x} y={y} child={element:?}");
-
             let (Some(width), Some(height), Some(position)) = (
                 element.bounding_calculated_width(),
                 element.bounding_calculated_height(),
@@ -1148,6 +1144,10 @@ impl ContainerElement {
                 moosicbox_assert::die_or_warn!("position_children: missing width, height, and/or position. continuing on to next element");
                 continue;
             };
+
+            log::trace!(
+                "position_children: x={x} y={y} width={width} height={height} position={position:?} child={element:?}"
+            );
 
             if let LayoutPosition::Wrap { row, col } = position {
                 if self.justify_content == JustifyContent::SpaceEvenly || *col > 0 {
