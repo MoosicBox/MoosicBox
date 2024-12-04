@@ -401,14 +401,18 @@ pub fn album_display(
 
     let album_cover = if show_media_controls {
         html! {
-            div sx-width=(size) sx-height=(size) sx-position="relative" {
+            div
+                sx-width=(size)
+                sx-height=(size)
+                sx-position="relative"
+                fx-hover=(ActionType::show_last_child())
+            {
                 (album_cover_img_from_album(album, size))
                 div
                     sx-width=(size)
                     sx-height=(size)
                     sx-position="absolute"
                     sx-visibility="hidden"
-                    fx-hover=(ActionType::show_self())
                 {
                     @let button_size = size / 4;
                     @let icon_size = size / 10;
