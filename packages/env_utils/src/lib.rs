@@ -292,6 +292,22 @@ pub fn option_env_u16(name: &str) -> Result<Option<u16>, OptionEnvUsizeError> {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum OptionEnvF32Error {
+    #[error(transparent)]
+    ParseFloat(#[from] std::num::ParseFloatError),
+}
+
+/// # Errors
+///
+/// * If encounters an invalid digit in the `&str`
+pub fn option_env_f32(name: &str) -> Result<Option<f32>, OptionEnvF32Error> {
+    match std::env::var(name) {
+        Ok(value) => Ok(Some(value.parse::<f32>()?)),
+        Err(_) => Ok(None),
+    }
+}
+
 #[macro_export]
 macro_rules! option_env_u16 {
     ($name:expr $(,)?) => {
