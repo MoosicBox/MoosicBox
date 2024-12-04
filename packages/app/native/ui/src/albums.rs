@@ -111,26 +111,26 @@ pub fn album_page_immediate(
                     img src=(public_img!("album.svg")) sx-width=(size) sx-height=(size);
                 }
                 div {
-                    h1 { ("loading...") }
-                    h2 { ("loading...") }
+                    h1 { "loading..." }
+                    h2 { "loading..." }
                 }
             }
             div {
                 table {
                     thead {
                         tr{
-                            th { ("#") }
-                            th { ("Title") }
-                            th { ("Artist") }
-                            th { ("Time") }
+                            th { "#" }
+                            th { "Title" }
+                            th { "Artist" }
+                            th { "Time" }
                         }
                     }
                     tbody {
                         tr {
-                            td { ("loading...") }
-                            td { ("loading...") }
-                            td { a { ("loading...") } }
-                            td { ("loading...") }
+                            td { "loading..." }
+                            td { "loading..." }
+                            td { a { "loading..." } }
+                            td { "loading..." }
                         }
                     }
                 }
@@ -213,7 +213,7 @@ pub fn album_page_content(
                         sx-width=(icon_size)
                         sx-height=(icon_size)
                         src=(public_img!("play-button.svg"));
-                    ("Play")
+                    "Play"
                 }
                 button
                     sx-dir="row"
@@ -234,7 +234,7 @@ pub fn album_page_content(
                         sx-width=(icon_size)
                         sx-height=(icon_size)
                         src=(public_img!("more-options.svg"));
-                    ("Options")
+                    "Options"
                 }
             }
             @if let Some(version) = selected_version {
@@ -242,10 +242,10 @@ pub fn album_page_content(
                     table {
                         thead {
                             tr{
-                                th { ("#") }
-                                th { ("Title") }
-                                th { ("Artist") }
-                                th { ("Time") }
+                                th { "#" }
+                                th { "Title" }
+                                th { "Artist" }
+                                th { "Time" }
                             }
                         }
                         tbody {
@@ -572,7 +572,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                 sx-padding-top=(15)
             {
                 div sx-dir="row" sx-justify-content="start" {
-                    h1 sx-width=(50) sx-height=(36) { ("Albums") }
+                    h1 sx-width=(50) sx-height=(36) { "Albums" }
                     @let button_size = 30;
                     @let icon_size = button_size - 10;
                     div sx-position="relative" sx-width=(button_size) sx-height=(button_size) {
@@ -622,7 +622,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                             )
                                         })
                                     {
-                                        ("Album Artist")
+                                        "Album Artist"
                                     }
                                 }
                                 div sx-border-top="1, #222" {
@@ -638,7 +638,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                             )
                                         })
                                     {
-                                        ("Album Name")
+                                        "Album Name"
                                     }
                                 }
                                 div sx-border-top="1, #222" {
@@ -654,7 +654,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                             )
                                         })
                                     {
-                                        ("Album Release Date")
+                                        "Album Release Date"
                                     }
                                 }
                                 div sx-border-top="1, #222" {
@@ -670,7 +670,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                             )
                                         })
                                     {
-                                        ("Album Date Added")
+                                        "Album Date Added"
                                     }
                                 }
                             }

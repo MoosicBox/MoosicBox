@@ -90,7 +90,7 @@ pub fn play_queue(state: &State) -> Markup {
                     .then(ActionType::hide_self())
             )
         {
-            h1 sx-height=(30) { ("Play queue") }
+            h1 sx-height=(30) { "Play queue" }
             div sx-overflow-y="auto" {
                 @for track in history {
                     (render_play_queue_item(track, true))
@@ -98,7 +98,7 @@ pub fn play_queue(state: &State) -> Markup {
                 ({
                     future.peek().map_or_else(|| html!(), |track| html! {
                         div sx-dir="row" {
-                            ("Playing from: ")
+                            "Playing from: "
                             a href=(
                                 crate::albums::album_page_url(
                                     &track.album_id.to_string(),

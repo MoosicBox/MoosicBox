@@ -86,7 +86,7 @@ pub fn sidebar_navigation() -> Markup {
                             src=(public_img!("icon128.png"));
 
                         h1 class="navigation-bar-header-home-link-text" {
-                            ("MoosicBox")
+                            "MoosicBox"
                         }
                     }
                     @let size = 22;
@@ -107,27 +107,27 @@ pub fn sidebar_navigation() -> Markup {
                 ul {
                     li {
                         a href="/" {
-                            ("Home")
+                            "Home"
                         }
                     }
                     li {
                         a href="/downloads" {
-                            ("Downloads")
+                            "Downloads"
                         }
                     }
                 }
                 h1 class="my-collection-header" {
-                    ("My Collection")
+                    "My Collection"
                 }
                 ul {
                     li {
                         a href="/albums" {
-                            ("Albums")
+                            "Albums"
                         }
                     }
                     li {
                         a href="/artists" {
-                            ("Artists")
+                            "Artists"
                         }
                     }
                 }
@@ -354,7 +354,7 @@ pub fn home(state: &State) -> Markup {
     page(
         state,
         &html! {
-            ("home")
+            "home"
         },
     )
 }
@@ -364,7 +364,7 @@ pub fn downloads(state: &State) -> Markup {
     page(
         state,
         &html! {
-            ("downloads")
+            "downloads"
         },
     )
 }
