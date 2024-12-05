@@ -62,10 +62,12 @@ pub fn play_queue(state: &State) -> Markup {
         .filter(|(i, _)| *i < position as usize)
         .map(|(_, x)| x);
 
+    let current = queue.get(position as usize);
+
     let mut future = queue
         .iter()
         .enumerate()
-        .filter(|(i, _)| *i >= position as usize)
+        .filter(|(i, _)| *i > position as usize)
         .map(|(_, x)| x)
         .peekable();
 
@@ -95,25 +97,27 @@ pub fn play_queue(state: &State) -> Markup {
                 @for track in history {
                     (render_play_queue_item(track, true))
                 }
-                ({
-                    future.peek().map_or_else(|| html!(), |track| html! {
-                        div sx-dir="row" {
-                            "Playing from: "
-                            a href=(
-                                crate::albums::album_page_url(
-                                    &track.album_id.to_string(),
-                                    false,
-                                    Some(track.api_source),
-                                    Some(track.track_source),
-                                    track.sample_rate,
-                                    track.bit_depth
-                                )
-                            ) {
-                                (track.album)
-                            }
+                @if let Some(track) = current {
+                    div sx-dir="row" {
+                        "Playing from: "
+                        a href=(
+                            crate::albums::album_page_url(
+                                &track.album_id.to_string(),
+                                false,
+                                Some(track.api_source),
+                                Some(track.track_source),
+                                track.sample_rate,
+                                track.bit_depth
+                            )
+                        ) {
+                            (track.album)
                         }
-                    })
-                })
+                    }
+                    (render_play_queue_item(track, false))
+                }
+                @if future.peek().is_some() {
+                    div sx-dir="row" { "Next up:" }
+                }
                 @for track in future {
                     (render_play_queue_item(track, false))
                 }
