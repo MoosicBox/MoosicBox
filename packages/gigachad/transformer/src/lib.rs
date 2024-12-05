@@ -132,6 +132,7 @@ pub struct ContainerElement {
     pub width: Option<Number>,
     pub height: Option<Number>,
     pub gap: Option<Number>,
+    pub opacity: Option<Number>,
     pub left: Option<Number>,
     pub right: Option<Number>,
     pub top: Option<Number>,
@@ -218,6 +219,8 @@ pub struct ContainerElement {
     pub calculated_border_bottom_left_radius: Option<f32>,
     #[cfg(feature = "calc")]
     pub calculated_border_bottom_right_radius: Option<f32>,
+    #[cfg(feature = "calc")]
+    pub calculated_opacity: Option<f32>,
 }
 
 #[cfg(feature = "maud")]

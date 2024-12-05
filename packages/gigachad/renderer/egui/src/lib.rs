@@ -770,8 +770,12 @@ impl EguiApp {
             return None;
         }
 
+        if let Some(opacity) = container.calculated_opacity {
+            ui.set_opacity(opacity);
+        }
+
         Some(Self::render_borders(ui, container, |ui| {
-            egui::Frame::none()
+            let response = egui::Frame::none()
                 .inner_margin(egui::Margin {
                     left:
                         container.internal_margin_left.unwrap_or(0.0)
@@ -1014,7 +1018,11 @@ impl EguiApp {
                             })
                         })
                     }
-                }).inner.inner.inner
+                }).inner.inner.inner;
+
+            ui.set_opacity(1.0);
+
+            response
         }))
     }
 

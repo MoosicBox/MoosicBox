@@ -390,6 +390,7 @@ impl ContainerElement {
         self.calc_margin(container_width, container_height);
         self.calc_padding(container_width, container_height);
         self.calc_borders(container_width, container_height);
+        self.calc_opacity();
 
         let (Some(container_width), Some(container_height)) = (
             self.calculated_width_minus_padding(),
@@ -573,6 +574,12 @@ impl ContainerElement {
         }
         if let Some(radius) = &self.border_bottom_right_radius {
             self.calculated_border_bottom_right_radius = Some(calc_number(radius, container_width));
+        }
+    }
+
+    fn calc_opacity(&mut self) {
+        if let Some(opacity) = &self.opacity {
+            self.calculated_opacity = Some(calc_number(opacity, 1.0));
         }
     }
 

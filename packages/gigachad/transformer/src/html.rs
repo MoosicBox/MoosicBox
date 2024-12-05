@@ -378,6 +378,7 @@ fn parse_element(
         top: get_number(tag, "sx-top").ok(),
         bottom: get_number(tag, "sx-bottom").ok(),
         gap: get_number(tag, "sx-gap").ok(),
+        opacity: get_number(tag, "sx-opacity").ok(),
         cursor: get_cursor(tag),
         position: get_position(tag),
         route: get_route(tag),
