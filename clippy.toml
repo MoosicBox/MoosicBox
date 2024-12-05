@@ -1,5 +1,6 @@
 allowed-duplicate-crates = [
     "audiopus_sys",
+    "aws-smithy-json",
     "base64",
     "bitflags",
     "brotli-decompressor",
