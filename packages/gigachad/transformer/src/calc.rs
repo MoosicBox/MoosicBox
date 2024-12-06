@@ -8195,4 +8195,131 @@ mod test {
             }
         );
     }
+
+    #[test_log::test]
+    fn calc_child_padding_does_not_add_to_parent_container() {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement {
+                        padding_right: Some(Number::Integer(20)),
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement::default(),
+                },
+                Element::Div {
+                    element: ContainerElement::default(),
+                },
+            ],
+            calculated_width: Some(110.0),
+            calculated_height: Some(50.0),
+            direction: LayoutDirection::Row,
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(30.0),
+                            calculated_padding_right: Some(20.0),
+                            calculated_x: Some(0.0),
+                            ..container.elements[0].container_element().unwrap().clone()
+                        }
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(30.0),
+                            calculated_x: Some(50.0),
+                            ..container.elements[1].container_element().unwrap().clone()
+                        }
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(30.0),
+                            calculated_x: Some(80.0),
+                            ..container.elements[2].container_element().unwrap().clone()
+                        }
+                    }
+                ],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_nested_child_padding_does_not_offset_unsized_container_siblings() {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement {
+                        elements: vec![Element::Div {
+                            element: ContainerElement {
+                                padding_right: Some(Number::Integer(20)),
+                                ..Default::default()
+                            },
+                        }],
+                        ..Default::default()
+                    },
+                },
+                Element::Div {
+                    element: ContainerElement::default(),
+                },
+                Element::Div {
+                    element: ContainerElement::default(),
+                },
+            ],
+            calculated_width: Some(90.0),
+            calculated_height: Some(50.0),
+            direction: LayoutDirection::Row,
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            elements: vec![Element::Div {
+                                element: ContainerElement {
+                                    calculated_width: Some(10.0),
+                                    calculated_padding_right: Some(20.0),
+                                    calculated_x: Some(0.0),
+                                    ..container.elements[0].container_element().unwrap().elements[0]
+                                        .container_element()
+                                        .unwrap()
+                                        .clone()
+                                }
+                            },],
+                            calculated_width: Some(30.0),
+                            calculated_x: Some(0.0),
+                            ..container.elements[0].container_element().unwrap().clone()
+                        }
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(30.0),
+                            calculated_x: Some(30.0),
+                            ..container.elements[1].container_element().unwrap().clone()
+                        }
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(30.0),
+                            calculated_x: Some(60.0),
+                            ..container.elements[2].container_element().unwrap().clone()
+                        }
+                    }
+                ],
+                ..container
+            }
+        );
+    }
 }
