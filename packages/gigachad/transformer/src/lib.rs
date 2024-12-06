@@ -361,6 +361,12 @@ impl ContainerElement {
         }
     }
 
+    #[cfg(feature = "id")]
+    #[must_use]
+    pub fn find_element_by_id(&self, id: usize) -> Option<&Element> {
+        self.elements.iter().find_map(|x| x.find_element_by_id(id))
+    }
+
     #[must_use]
     pub fn find_element_by_str_id(&self, str_id: &str) -> Option<&Element> {
         self.elements
@@ -1208,6 +1214,21 @@ impl Element {
             Self::Canvas { element } => Some(element),
             Self::Raw { .. } => None,
         }
+    }
+
+    #[cfg(feature = "id")]
+    #[must_use]
+    pub fn find_element_by_id(&self, id: usize) -> Option<&Self> {
+        self.container_element().and_then(|container| {
+            if container.id == id {
+                Some(self)
+            } else {
+                container
+                    .elements
+                    .iter()
+                    .find_map(|x| x.find_element_by_id(id))
+            }
+        })
     }
 
     #[must_use]
