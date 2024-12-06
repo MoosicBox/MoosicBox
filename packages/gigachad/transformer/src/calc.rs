@@ -433,7 +433,7 @@ impl ContainerElement {
                     element.calc_inner(relative_size);
                 }
 
-                let unsized_elements_len = elements
+                let unsized_elements_count = elements
                     .iter()
                     .filter(|x| {
                         !x.container_element().is_some_and(|x| match direction {
@@ -443,7 +443,7 @@ impl ContainerElement {
                     })
                     .count();
 
-                if unsized_elements_len == 0 {
+                if unsized_elements_count == 0 {
                     log::trace!("calc_inner: no unsized elements to size");
                     return;
                 }
@@ -456,7 +456,7 @@ impl ContainerElement {
                 });
 
                 #[allow(clippy::cast_precision_loss)]
-                let evenly_split_remaining_size = remainder / (unsized_elements_len as f32);
+                let evenly_split_remaining_size = remainder / (unsized_elements_count as f32);
 
                 log::debug!(
                     "calc_inner: setting {} to evenly_split_remaining_size={evenly_split_remaining_size}",
@@ -467,10 +467,12 @@ impl ContainerElement {
                     if let Some(container) = element.container_element_mut() {
                         match direction {
                             LayoutDirection::Row => {
-                                let height = container
-                                    .height
-                                    .as_ref()
-                                    .map_or(container_height, |x| calc_number(x, container_height));
+                                let height =
+                                    container.height.as_ref().map_or(container_height, |x| {
+                                        calc_number(x, container_height)
+                                    }) - container
+                                        .padding_and_margins(LayoutDirection::Column)
+                                        .unwrap_or(0.0);
                                 container.calculated_height.replace(if height < 0.0 {
                                     0.0
                                 } else {
@@ -485,10 +487,12 @@ impl ContainerElement {
                                 });
                             }
                             LayoutDirection::Column => {
-                                let width = container
-                                    .width
-                                    .as_ref()
-                                    .map_or(container_width, |x| calc_number(x, container_width));
+                                let width =
+                                    container.width.as_ref().map_or(container_width, |x| {
+                                        calc_number(x, container_width)
+                                    }) - container
+                                        .padding_and_margins(LayoutDirection::Row)
+                                        .unwrap_or(0.0);
                                 container.calculated_width.replace(if width < 0.0 {
                                     0.0
                                 } else {
@@ -512,30 +516,32 @@ impl ContainerElement {
 
         if let Some((width, height)) = relative_size {
             for element in self.absolute_positioned_elements_mut() {
-                if let Some(container) = element.container_element() {
+                if let Some(container) = element.container_element_mut() {
                     if match direction {
                         LayoutDirection::Row => container.width.is_some(),
                         LayoutDirection::Column => container.height.is_some(),
                     } {
                         Self::calc_sized_element_sizes(
-                            relative_size,
-                            std::iter::once(&mut *element),
+                            std::iter::once(element),
                             direction,
                             width,
                             height,
                         );
                     }
                 }
+            }
 
-                if let Some(container) = element.container_element_mut() {
-                    if container.width.is_none() {
-                        container.calculated_width = Some(width);
-                    }
-                    if container.height.is_none() {
-                        container.calculated_height = Some(height);
-                    }
-                    container.calc_inner(relative_size);
+            for container in self
+                .absolute_positioned_elements_mut()
+                .filter_map(Element::container_element_mut)
+            {
+                if container.width.is_none() {
+                    container.calculated_width = Some(width);
                 }
+                if container.height.is_none() {
+                    container.calculated_height = Some(height);
+                }
+                container.calc_inner(relative_size);
             }
         }
 
@@ -852,7 +858,6 @@ impl ContainerElement {
     }
 
     fn calc_sized_element_sizes<'a>(
-        relative_size: Option<(f32, f32)>,
         elements: impl Iterator<Item = &'a mut Element>,
         direction: LayoutDirection,
         container_width: f32,
@@ -865,25 +870,12 @@ impl ContainerElement {
             LayoutDirection::Column => container_height,
         };
 
-        Self::calc_element_sizes_by_rowcol(
-            relative_size,
-            elements,
-            direction,
-            container_width,
-            container_height,
-            |elements, container_width, container_height| {
-                log::trace!("calc_sized_element_sizes: container_width={container_width} container_height={container_height}");
-                for element in elements {
-                    if let Some(container) = element.container_element_mut() {
-                        remainder -= container.calc_sized_element_size(
-                            direction,
-                            container_width,
-                            container_height,
-                        );
-                    }
-                }
-            },
-        );
+        for element in elements {
+            if let Some(container) = element.container_element_mut() {
+                remainder -=
+                    container.calc_sized_element_size(direction, container_width, container_height);
+            }
+        }
 
         remainder
     }
@@ -930,80 +922,69 @@ impl ContainerElement {
         );
         moosicbox_assert::assert!(remainder >= 0.0, "remainder ({remainder}) must be >= 0.0");
 
-        Self::calc_element_sizes_by_rowcol(
-            relative_size,
-            elements,
-            direction,
-            container_width,
-            container_height,
-            |elements, container_width, container_height| {
-                #[allow(clippy::cast_precision_loss)]
-                let evenly_split_remaining_size = remainder / (elements.len() as f32);
+        let mut elements = elements.collect_vec();
 
-                moosicbox_logging::debug_or_trace!(
-                    (
-                        "calc_unsized_element_sizes: setting {} to evenly_split_remaining_size={evenly_split_remaining_size}",
-                        if direction == LayoutDirection::Row { "width"}  else { "height" },
-                    ),
-                    (
-                        "calc_unsized_element_sizes: setting {} to evenly_split_remaining_size={evenly_split_remaining_size}{}",
-                        if direction == LayoutDirection::Row { "width"}  else { "height" },
-                        if elements.is_empty(){
-                            String::new()
+        #[allow(clippy::cast_precision_loss)]
+        let evenly_split_remaining_size = remainder / (elements.len() as f32);
+
+        moosicbox_logging::debug_or_trace!(
+            (
+                "calc_unsized_element_sizes: setting {} to evenly_split_remaining_size={evenly_split_remaining_size}",
+                if direction == LayoutDirection::Row { "width"}  else { "height" },
+            ),
+            (
+                "calc_unsized_element_sizes: setting {} to evenly_split_remaining_size={evenly_split_remaining_size}{}",
+                if direction == LayoutDirection::Row { "width"}  else { "height" },
+                if elements.is_empty(){
+                    String::new()
+                } else {
+                    format!("\n{}", elements.iter().map(|x| format!("{x}")).collect_vec().join("\n"))
+                }
+            )
+        );
+
+        for element in &mut *elements {
+            if let Some(container) = element.container_element_mut() {
+                match direction {
+                    LayoutDirection::Row => {
+                        let height = container
+                            .height
+                            .as_ref()
+                            .map_or(container_height, |x| calc_number(x, container_height));
+                        container.calculated_height.replace(if height < 0.0 {
+                            0.0
                         } else {
-                            format!("\n{}", elements.iter().map(|x| format!("{x}")).collect_vec().join("\n"))
-                        }
-                    )
-                );
+                            height
+                        });
 
-                for element in &mut **elements {
-                    if let Some(container) = element.container_element_mut() {
-                        match direction {
-                            LayoutDirection::Row => {
-                                let height = container
-                                    .height
-                                    .as_ref()
-                                    .map_or(container_height, |x| calc_number(x, container_height));
-                                container.calculated_height.replace(if height < 0.0 {
-                                    0.0
-                                } else {
-                                    height
-                                });
+                        let width = evenly_split_remaining_size;
+                        container
+                            .calculated_width
+                            .replace(if width < 0.0 { 0.0 } else { width });
+                    }
+                    LayoutDirection::Column => {
+                        let width = container
+                            .width
+                            .as_ref()
+                            .map_or(container_width, |x| calc_number(x, container_width));
+                        container
+                            .calculated_width
+                            .replace(if width < 0.0 { 0.0 } else { width });
 
-                                let width = evenly_split_remaining_size;
-                                container.calculated_width.replace(if width < 0.0 {
-                                    0.0
-                                } else {
-                                    width
-                                });
-                            }
-                            LayoutDirection::Column => {
-                                let width = container
-                                    .width
-                                    .as_ref()
-                                    .map_or(container_width, |x| calc_number(x, container_width));
-                                container.calculated_width.replace(if width < 0.0 {
-                                    0.0
-                                } else {
-                                    width
-                                });
-
-                                let height = evenly_split_remaining_size;
-                                container.calculated_height.replace(if height < 0.0 {
-                                    0.0
-                                } else {
-                                    height
-                                });
-                            }
-                        }
+                        let height = evenly_split_remaining_size;
+                        container.calculated_height.replace(if height < 0.0 {
+                            0.0
+                        } else {
+                            height
+                        });
                     }
                 }
+            }
+        }
 
-                for element in elements {
-                    element.calc_inner(relative_size);
-                }
-            },
-        );
+        for element in elements {
+            element.calc_inner(relative_size);
+        }
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
@@ -8161,6 +8142,51 @@ mod test {
                             calculated_width: Some(40.0),
                             calculated_padding_right: Some(20.0),
                             calculated_x: Some(40.0),
+                            ..container.elements[1].container_element().unwrap().clone()
+                        }
+                    }
+                ],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_horizontal_padding_on_vertical_sibling_doesnt_affect_size_of_other_sibling() {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Div {
+                    element: ContainerElement::default(),
+                },
+                Element::Div {
+                    element: ContainerElement {
+                        padding_right: Some(Number::Integer(20)),
+                        ..Default::default()
+                    },
+                },
+            ],
+            calculated_width: Some(100.0),
+            calculated_height: Some(50.0),
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(100.0),
+                            calculated_x: Some(0.0),
+                            ..container.elements[0].container_element().unwrap().clone()
+                        }
+                    },
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(80.0),
+                            calculated_padding_right: Some(20.0),
+                            calculated_x: Some(0.0),
                             ..container.elements[1].container_element().unwrap().clone()
                         }
                     }
