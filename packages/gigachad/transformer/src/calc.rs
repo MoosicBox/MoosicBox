@@ -1898,6 +1898,24 @@ impl ContainerElement {
                 }
             });
 
+            let x = self.horizontal_padding().map_or(x, |padding| {
+                let x = x - padding;
+                if x < 0.0 {
+                    0.0
+                } else {
+                    x
+                }
+            });
+
+            let x = self.horizontal_margin().map_or(x, |margin| {
+                let x = x - margin;
+                if x < 0.0 {
+                    0.0
+                } else {
+                    x
+                }
+            });
+
             self.horizontal_borders().map_or(x, |borders| {
                 let x = x - borders;
                 if x < 0.0 {
@@ -1914,6 +1932,24 @@ impl ContainerElement {
         self.calculated_height.map(|x| {
             let x = self.internal_vertical_padding().map_or(x, |padding| {
                 let x = x - padding;
+                if x < 0.0 {
+                    0.0
+                } else {
+                    x
+                }
+            });
+
+            let x = self.vertical_padding().map_or(x, |padding| {
+                let x = x - padding;
+                if x < 0.0 {
+                    0.0
+                } else {
+                    x
+                }
+            });
+
+            let x = self.vertical_margin().map_or(x, |margin| {
+                let x = x - margin;
                 if x < 0.0 {
                     0.0
                 } else {
