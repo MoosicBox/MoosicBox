@@ -28,9 +28,7 @@ export default function scanStatusBannerFunc() {
                             <div class="scan-status-banner-scan-task">
                                 {task.scanned.toLocaleString()} of{' '}
                                 {task.total.toLocaleString()} track
-                                {task.total === 1
-                                    ? ''
-                                    : 's'} scanned
+                                {task.total === 1 ? '' : 's'} scanned
                                 <button
                                     class="remove-button-styles"
                                     onClick={() => hideTask(task.task)}
