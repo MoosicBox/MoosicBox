@@ -158,6 +158,7 @@ pub struct ContainerElement {
     pub padding_bottom: Option<Number>,
     pub state: Option<Value>,
     pub hidden: Option<bool>,
+    pub debug: Option<bool>,
     pub visibility: Option<Visibility>,
     pub route: Option<Route>,
     pub actions: Vec<Action>,

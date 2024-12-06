@@ -107,8 +107,8 @@ fn get_state(tag: &HTMLTag, name: &str) -> Option<Value> {
         .and_then(|x| serde_json::from_str(x).ok())
 }
 
-fn get_hidden(tag: &HTMLTag) -> Option<bool> {
-    match get_tag_attr_value_lower(tag, "sx-hidden").as_deref() {
+fn get_bool(tag: &HTMLTag, name: &str) -> Option<bool> {
+    match get_tag_attr_value_lower(tag, name).as_deref() {
         Some("true" | "") => Some(true),
         Some("false") => Some(false),
         _ => None,
@@ -364,7 +364,7 @@ fn parse_element(
         padding_top,
         padding_bottom,
         state: get_state(tag, "state"),
-        hidden: get_hidden(tag),
+        hidden: get_bool(tag, "sx-hidden"),
         visibility: get_visibility(tag),
         overflow_x: get_overflow(tag, "sx-overflow-x"),
         overflow_y: get_overflow(tag, "sx-overflow-y"),
@@ -379,6 +379,7 @@ fn parse_element(
         bottom: get_number(tag, "sx-bottom").ok(),
         gap: get_number(tag, "sx-gap").ok(),
         opacity: get_number(tag, "sx-opacity").ok(),
+        debug: get_bool(tag, "debug"),
         cursor: get_cursor(tag),
         position: get_position(tag),
         route: get_route(tag),

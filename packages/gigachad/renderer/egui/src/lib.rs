@@ -755,6 +755,11 @@ impl EguiApp {
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &ContainerElement)>,
     ) -> Option<Response> {
+        if container.debug == Some(true) {
+            if let Some(element) = render_context.container.find_element_by_id(container.id) {
+                log::info!("render_container: DEBUG {element}");
+            }
+        }
         if container.is_hidden() || Self::container_hidden(render_context, container) {
             log::trace!("render_container: container is hidden. skipping render");
             self.handle_container_side_effects(
