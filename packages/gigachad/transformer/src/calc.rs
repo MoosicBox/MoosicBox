@@ -397,54 +397,119 @@ impl ContainerElement {
         let direction = self.direction;
         let relative_size = self.get_relative_position().or(relative_size);
 
-        let padding_and_margins = self.child_padding_and_margins(self.direction);
-
-        let (mut sized_elements, mut unsized_elements): (Vec<_>, Vec<_>) =
-            self.relative_positioned_elements_mut().partition(|x| {
-                x.container_element().is_some_and(|x| match direction {
-                    LayoutDirection::Row => x.width.is_some(),
-                    LayoutDirection::Column => x.height.is_some(),
-                })
-            });
-
         Self::calc_child_margins_and_padding(
-            &mut sized_elements,
-            container_width,
-            container_height,
-        );
-        Self::calc_child_margins_and_padding(
-            &mut unsized_elements,
+            self.relative_positioned_elements_mut(),
             container_width,
             container_height,
         );
 
-        let mut container_width = container_width;
-        let mut container_height = container_height;
-
-        match direction {
-            LayoutDirection::Row => {
-                container_width -= padding_and_margins;
-            }
-            LayoutDirection::Column => {
-                container_height -= padding_and_margins;
-            }
-        }
-
-        let remainder = Self::calc_sized_element_sizes(
+        Self::calc_element_sizes_by_rowcol(
             relative_size,
-            sized_elements.into_iter(),
+            self.relative_positioned_elements_mut(),
             direction,
             container_width,
             container_height,
-        );
+            |elements, container_width, container_height| {
+                let sized_elements = elements.iter_mut().filter(|x| {
+                    x.container_element().is_some_and(|x| match direction {
+                        LayoutDirection::Row => x.width.is_some(),
+                        LayoutDirection::Column => x.height.is_some(),
+                    })
+                });
 
-        Self::calc_unsized_element_sizes(
-            relative_size,
-            unsized_elements.into_iter(),
-            direction,
-            container_width,
-            container_height,
-            remainder,
+                let mut remainder = match direction {
+                    LayoutDirection::Row => container_width,
+                    LayoutDirection::Column => container_height,
+                };
+
+                log::trace!("calc_inner: container_width={container_width} container_height={container_height}");
+                for element in sized_elements {
+                    if let Some(container) = element.container_element_mut() {
+                        remainder -= container.calc_sized_element_size(
+                            direction,
+                            container_width,
+                            container_height,
+                        );
+                    }
+
+                    element.calc_inner(relative_size);
+                }
+
+                let unsized_elements_len = elements
+                    .iter()
+                    .filter(|x| {
+                        !x.container_element().is_some_and(|x| match direction {
+                            LayoutDirection::Row => x.width.is_some(),
+                            LayoutDirection::Column => x.height.is_some(),
+                        })
+                    })
+                    .count();
+
+                if unsized_elements_len == 0 {
+                    log::trace!("calc_inner: no unsized elements to size");
+                    return;
+                }
+
+                let unsized_elements = elements.iter_mut().filter(|x| {
+                    !x.container_element().is_some_and(|x| match direction {
+                        LayoutDirection::Row => x.width.is_some(),
+                        LayoutDirection::Column => x.height.is_some(),
+                    })
+                });
+
+                #[allow(clippy::cast_precision_loss)]
+                let evenly_split_remaining_size = remainder / (unsized_elements_len as f32);
+
+                log::debug!(
+                    "calc_inner: setting {} to evenly_split_remaining_size={evenly_split_remaining_size}",
+                    if direction == LayoutDirection::Row { "width"}  else { "height" },
+                );
+
+                for element in unsized_elements {
+                    if let Some(container) = element.container_element_mut() {
+                        match direction {
+                            LayoutDirection::Row => {
+                                let height = container
+                                    .height
+                                    .as_ref()
+                                    .map_or(container_height, |x| calc_number(x, container_height));
+                                container.calculated_height.replace(if height < 0.0 {
+                                    0.0
+                                } else {
+                                    height
+                                });
+
+                                let width = evenly_split_remaining_size;
+                                container.calculated_width.replace(if width < 0.0 {
+                                    0.0
+                                } else {
+                                    width
+                                });
+                            }
+                            LayoutDirection::Column => {
+                                let width = container
+                                    .width
+                                    .as_ref()
+                                    .map_or(container_width, |x| calc_number(x, container_width));
+                                container.calculated_width.replace(if width < 0.0 {
+                                    0.0
+                                } else {
+                                    width
+                                });
+
+                                let height = evenly_split_remaining_size;
+                                container.calculated_height.replace(if height < 0.0 {
+                                    0.0
+                                } else {
+                                    height
+                                });
+                            }
+                        }
+                    }
+
+                    element.calc_inner(relative_size);
+                }
+            },
         );
 
         if let Some((width, height)) = relative_size {
@@ -523,20 +588,6 @@ impl ContainerElement {
         }
 
         padding_and_margins
-    }
-
-    fn child_padding_and_margins(&self, direction: LayoutDirection) -> f32 {
-        self.relative_positioned_elements()
-            .filter_map(Element::container_element)
-            .map(|x| match direction {
-                LayoutDirection::Row => {
-                    x.horizontal_padding().unwrap_or(0.0) + x.horizontal_margin().unwrap_or(0.0)
-                }
-                LayoutDirection::Column => {
-                    x.vertical_padding().unwrap_or(0.0) + x.vertical_margin().unwrap_or(0.0)
-                }
-            })
-            .sum::<f32>()
     }
 
     fn calc_margin(&mut self, container_width: f32, container_height: f32) {
@@ -692,41 +743,16 @@ impl ContainerElement {
         }
     }
 
-    fn calc_child_margins_and_padding(
-        elements: &mut Vec<&mut Element>,
+    fn calc_child_margins_and_padding<'a>(
+        elements: impl Iterator<Item = &'a mut Element>,
         container_width: f32,
         container_height: f32,
     ) {
-        for element in &mut *elements {
+        for element in elements {
             if let Some(container) = element.container_element_mut() {
                 container.calc_margin(container_width, container_height);
                 container.calc_padding(container_width, container_height);
             }
-        }
-    }
-
-    fn calc_element_sizes<'a>(
-        elements: impl Iterator<Item = &'a mut Element>,
-        direction: LayoutDirection,
-        padding_and_margins: f32,
-        mut container_width: f32,
-        mut container_height: f32,
-        mut func: impl FnMut(&mut Element, f32, f32),
-    ) {
-        match direction {
-            LayoutDirection::Row => {
-                log::trace!("calc_element_sizes: container_width -= {padding_and_margins}");
-                container_width -= padding_and_margins;
-            }
-            LayoutDirection::Column => {
-                log::trace!("calc_element_sizes: container_height -= {padding_and_margins}");
-                container_height -= padding_and_margins;
-            }
-        }
-
-        log::trace!("calc_element_sizes: container_width={container_width} container_height={container_height}");
-        for element in elements {
-            func(element, container_width, container_height);
         }
     }
 
@@ -736,8 +762,7 @@ impl ContainerElement {
         direction: LayoutDirection,
         container_width: f32,
         container_height: f32,
-        mut rowcol: impl FnMut(&mut Vec<&mut Element>) -> f32,
-        mut func: impl FnMut(&mut Element, f32, f32, f32),
+        mut func: impl FnMut(&mut Vec<&mut Element>, f32, f32),
     ) {
         let mut rowcol_index = 0;
         let mut padding_and_margins = 0.0;
@@ -765,19 +790,23 @@ impl ContainerElement {
                     continue;
                 }
 
-                let output = rowcol(&mut buf);
+                let mut container_width = container_width;
+                let mut container_height = container_height;
 
-                #[allow(clippy::iter_with_drain)]
-                Self::calc_element_sizes(
-                    buf.drain(..),
-                    direction,
-                    padding_and_margins,
-                    container_width,
-                    container_height,
-                    |element, container_width, container_height| {
-                        func(element, container_width, container_height, output);
-                    },
-                );
+                match direction {
+                    LayoutDirection::Row => {
+                        log::trace!("calc_element_sizes_by_rowcol: container_width -= {padding_and_margins}");
+                        container_width -= padding_and_margins;
+                    }
+                    LayoutDirection::Column => {
+                        log::trace!(
+                            "calc_element_sizes_by_rowcol: container_height -= {padding_and_margins}"
+                        );
+                        container_height -= padding_and_margins;
+                    }
+                }
+
+                func(&mut buf, container_width, container_height);
 
                 rowcol_index = current_rowcol_index;
 
@@ -802,19 +831,26 @@ impl ContainerElement {
             return;
         }
 
-        log::trace!("calc_element_sizes_by_rowcol: processing last buf");
-        let output = rowcol(&mut buf);
+        let mut container_width = container_width;
+        let mut container_height = container_height;
 
-        Self::calc_element_sizes(
-            buf.into_iter(),
-            direction,
-            padding_and_margins,
-            container_width,
-            container_height,
-            |element, container_width, container_height| {
-                func(element, container_width, container_height, output);
-            },
-        );
+        match direction {
+            LayoutDirection::Row => {
+                log::trace!(
+                    "calc_element_sizes_by_rowcol: container_width -= {padding_and_margins}"
+                );
+                container_width -= padding_and_margins;
+            }
+            LayoutDirection::Column => {
+                log::trace!(
+                    "calc_element_sizes_by_rowcol: container_height -= {padding_and_margins}"
+                );
+                container_height -= padding_and_margins;
+            }
+        }
+
+        log::trace!("calc_element_sizes_by_rowcol: processing last buf");
+        func(&mut buf, container_width, container_height);
     }
 
     fn calc_sized_element_sizes<'a>(
@@ -837,14 +873,16 @@ impl ContainerElement {
             direction,
             container_width,
             container_height,
-            |_| 0.0,
-            |element, container_width, container_height, _| {
-                if let Some(container) = element.container_element_mut() {
-                    remainder -= container.calc_sized_element_size(
-                        direction,
-                        container_width,
-                        container_height,
-                    );
+            |elements, container_width, container_height| {
+                log::trace!("calc_sized_element_sizes: container_width={container_width} container_height={container_height}");
+                for element in elements {
+                    if let Some(container) = element.container_element_mut() {
+                        remainder -= container.calc_sized_element_size(
+                            direction,
+                            container_width,
+                            container_height,
+                        );
+                    }
                 }
             },
         );
@@ -900,7 +938,7 @@ impl ContainerElement {
             direction,
             container_width,
             container_height,
-            |elements| {
+            |elements, container_width, container_height| {
                 #[allow(clippy::cast_precision_loss)]
                 let evenly_split_remaining_size = remainder / (elements.len() as f32);
 
@@ -920,50 +958,52 @@ impl ContainerElement {
                     )
                 );
 
-                evenly_split_remaining_size
-            },
-            |element, container_width, container_height, evenly_split_remaining_size| {
-                if let Some(container) = element.container_element_mut() {
-                    match direction {
-                        LayoutDirection::Row => {
-                            let height = container
-                                .height
-                                .as_ref()
-                                .map_or(container_height, |x| calc_number(x, container_height));
-                            container.calculated_height.replace(if height < 0.0 {
-                                0.0
-                            } else {
-                                height
-                            });
+                for element in &mut **elements {
+                    if let Some(container) = element.container_element_mut() {
+                        match direction {
+                            LayoutDirection::Row => {
+                                let height = container
+                                    .height
+                                    .as_ref()
+                                    .map_or(container_height, |x| calc_number(x, container_height));
+                                container.calculated_height.replace(if height < 0.0 {
+                                    0.0
+                                } else {
+                                    height
+                                });
 
-                            let width = evenly_split_remaining_size;
-                            container.calculated_width.replace(if width < 0.0 {
-                                0.0
-                            } else {
-                                width
-                            });
-                        }
-                        LayoutDirection::Column => {
-                            let width = container
-                                .width
-                                .as_ref()
-                                .map_or(container_width, |x| calc_number(x, container_width));
-                            container.calculated_width.replace(if width < 0.0 {
-                                0.0
-                            } else {
-                                width
-                            });
+                                let width = evenly_split_remaining_size;
+                                container.calculated_width.replace(if width < 0.0 {
+                                    0.0
+                                } else {
+                                    width
+                                });
+                            }
+                            LayoutDirection::Column => {
+                                let width = container
+                                    .width
+                                    .as_ref()
+                                    .map_or(container_width, |x| calc_number(x, container_width));
+                                container.calculated_width.replace(if width < 0.0 {
+                                    0.0
+                                } else {
+                                    width
+                                });
 
-                            let height = evenly_split_remaining_size;
-                            container.calculated_height.replace(if height < 0.0 {
-                                0.0
-                            } else {
-                                height
-                            });
+                                let height = evenly_split_remaining_size;
+                                container.calculated_height.replace(if height < 0.0 {
+                                    0.0
+                                } else {
+                                    height
+                                });
+                            }
                         }
                     }
                 }
-                element.calc_inner(relative_size);
+
+                for element in elements {
+                    element.calc_inner(relative_size);
+                }
             },
         );
     }
@@ -1898,24 +1938,6 @@ impl ContainerElement {
                 }
             });
 
-            let x = self.horizontal_padding().map_or(x, |padding| {
-                let x = x - padding;
-                if x < 0.0 {
-                    0.0
-                } else {
-                    x
-                }
-            });
-
-            let x = self.horizontal_margin().map_or(x, |margin| {
-                let x = x - margin;
-                if x < 0.0 {
-                    0.0
-                } else {
-                    x
-                }
-            });
-
             self.horizontal_borders().map_or(x, |borders| {
                 let x = x - borders;
                 if x < 0.0 {
@@ -1932,24 +1954,6 @@ impl ContainerElement {
         self.calculated_height.map(|x| {
             let x = self.internal_vertical_padding().map_or(x, |padding| {
                 let x = x - padding;
-                if x < 0.0 {
-                    0.0
-                } else {
-                    x
-                }
-            });
-
-            let x = self.vertical_padding().map_or(x, |padding| {
-                let x = x - padding;
-                if x < 0.0 {
-                    0.0
-                } else {
-                    x
-                }
-            });
-
-            let x = self.vertical_margin().map_or(x, |margin| {
-                let x = x - margin;
                 if x < 0.0 {
                     0.0
                 } else {
