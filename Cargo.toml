@@ -139,7 +139,7 @@ chrono = { version = "0.4.38", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = { version = "4.5.22", features = ["derive"] }
+clap = { version = "4.5.23", features = ["derive"] }
 color-hex = "0.2.0"
 console-subscriber = "0.4.1"
 cpal = "0.15.3"
