@@ -1563,6 +1563,36 @@ impl ContainerElement {
         }
     }
 
+    pub fn iter_row(&self, row: u32) -> impl Iterator<Item = &Element> {
+        Self::elements_iter_row(self.relative_positioned_elements(), row)
+    }
+
+    pub fn iter_column(&self, column: u32) -> impl Iterator<Item = &Element> {
+        Self::elements_iter_column(self.relative_positioned_elements(), column)
+    }
+
+    pub fn elements_iter_row<'a>(
+        elements: impl Iterator<Item = &'a Element>,
+        row: u32,
+    ) -> impl Iterator<Item = &'a Element> {
+        elements.filter(move |x| {
+            x.container_element()
+                .and_then(|x| x.calculated_position.as_ref())
+                .is_some_and(|x| x.row().is_some_and(|x| x == row))
+        })
+    }
+
+    pub fn elements_iter_column<'a>(
+        elements: impl Iterator<Item = &'a Element>,
+        column: u32,
+    ) -> impl Iterator<Item = &'a Element> {
+        elements.filter(move |x| {
+            x.container_element()
+                .and_then(|x| x.calculated_position.as_ref())
+                .is_some_and(|x| x.column().is_some_and(|x| x == column))
+        })
+    }
+
     pub fn rows(&self) -> u32 {
         self.relative_positioned_elements()
             .filter_map(|x| x.container_element())
