@@ -459,7 +459,7 @@ impl ContainerElement {
                 let evenly_split_remaining_size = remainder / (unsized_elements_count as f32);
 
                 log::debug!(
-                    "calc_inner: setting {} to evenly_split_remaining_size={evenly_split_remaining_size}",
+                    "calc_inner: setting {} to evenly_split_remaining_size={evenly_split_remaining_size} unsized_elements_count={unsized_elements_count}",
                     if direction == LayoutDirection::Row { "width"}  else { "height" },
                 );
 
@@ -821,13 +821,10 @@ impl ContainerElement {
                 }
 
                 log::trace!("calc_element_sizes_by_rowcol: next rowcol_index={rowcol_index} padding_and_margins={padding_and_margins}");
-
-                element.calc_inner(relative_size);
-
-                buf.push(element);
-            } else {
-                element.calc_inner(relative_size);
             }
+
+            element.calc_inner(relative_size);
+            buf.push(element);
         }
 
         if buf.is_empty() {
@@ -8315,6 +8312,42 @@ mod test {
                             calculated_width: Some(30.0),
                             calculated_x: Some(60.0),
                             ..container.elements[2].container_element().unwrap().clone()
+                        }
+                    }
+                ],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_horizontal_sibling_left_raw_still_divides_the_unsized_width() {
+        let mut container = ContainerElement {
+            elements: vec![
+                Element::Raw {
+                    value: "test".to_string(),
+                },
+                Element::Div {
+                    element: ContainerElement::default(),
+                },
+            ],
+            calculated_width: Some(100.0),
+            calculated_height: Some(50.0),
+            direction: LayoutDirection::Row,
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![
+                    container.elements[0].clone(),
+                    Element::Div {
+                        element: ContainerElement {
+                            calculated_width: Some(50.0),
+                            calculated_x: Some(0.0),
+                            ..container.elements[1].container_element().unwrap().clone()
                         }
                     }
                 ],
