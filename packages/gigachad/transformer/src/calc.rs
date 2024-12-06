@@ -252,60 +252,21 @@ impl Element {
             .calculated_height
             .replace(heading_height.unwrap_or(0.0) + body_height);
 
-        {
-            for element in relative_positioned_elements_mut(&mut container.elements) {
-                match element {
-                    Self::THead { element } => {
-                        if element.width.is_none() {
-                            element.calculated_width.replace(container_width);
-                        }
-                        if element.height.is_none() {
-                            element
-                                .calculated_height
-                                .replace(heading_height.unwrap_or(0.0));
-                        }
-
-                        for element in relative_positioned_elements_mut(&mut element.elements)
-                            .filter_map(|x| x.container_element_mut())
-                        {
-                            if element.width.is_none() {
-                                element.calculated_width.replace(container_width);
-                            }
-                            if element.height.is_none() {
-                                element.calculated_height.replace(
-                                    relative_positioned_elements(&element.elements)
-                                        .filter_map(|x| x.container_element())
-                                        .find_map(|x| x.calculated_height)
-                                        .unwrap_or(0.0),
-                                );
-                            }
-                        }
+        for element in relative_positioned_elements_mut(&mut container.elements) {
+            match element {
+                Self::THead { element } => {
+                    if element.width.is_none() {
+                        element.calculated_width.replace(container_width);
                     }
-                    Self::TBody { element } => {
-                        if element.width.is_none() {
-                            element.calculated_width.replace(container_width);
-                        }
-                        if element.height.is_none() {
-                            element.calculated_height.replace(body_height);
-                        }
-
-                        for element in relative_positioned_elements_mut(&mut element.elements)
-                            .filter_map(|x| x.container_element_mut())
-                        {
-                            if element.width.is_none() {
-                                element.calculated_width.replace(container_width);
-                            }
-                            if element.height.is_none() {
-                                element.calculated_height.replace(
-                                    relative_positioned_elements(&element.elements)
-                                        .filter_map(|x| x.container_element())
-                                        .find_map(|x| x.calculated_height)
-                                        .unwrap_or(0.0),
-                                );
-                            }
-                        }
+                    if element.height.is_none() {
+                        element
+                            .calculated_height
+                            .replace(heading_height.unwrap_or(0.0));
                     }
-                    Self::TR { element } => {
+
+                    for element in relative_positioned_elements_mut(&mut element.elements)
+                        .filter_map(|x| x.container_element_mut())
+                    {
                         if element.width.is_none() {
                             element.calculated_width.replace(container_width);
                         }
@@ -318,9 +279,46 @@ impl Element {
                             );
                         }
                     }
-                    _ => {
-                        panic!("Invalid table element: {element}");
+                }
+                Self::TBody { element } => {
+                    if element.width.is_none() {
+                        element.calculated_width.replace(container_width);
                     }
+                    if element.height.is_none() {
+                        element.calculated_height.replace(body_height);
+                    }
+
+                    for element in relative_positioned_elements_mut(&mut element.elements)
+                        .filter_map(|x| x.container_element_mut())
+                    {
+                        if element.width.is_none() {
+                            element.calculated_width.replace(container_width);
+                        }
+                        if element.height.is_none() {
+                            element.calculated_height.replace(
+                                relative_positioned_elements(&element.elements)
+                                    .filter_map(|x| x.container_element())
+                                    .find_map(|x| x.calculated_height)
+                                    .unwrap_or(0.0),
+                            );
+                        }
+                    }
+                }
+                Self::TR { element } => {
+                    if element.width.is_none() {
+                        element.calculated_width.replace(container_width);
+                    }
+                    if element.height.is_none() {
+                        element.calculated_height.replace(
+                            relative_positioned_elements(&element.elements)
+                                .filter_map(|x| x.container_element())
+                                .find_map(|x| x.calculated_height)
+                                .unwrap_or(0.0),
+                        );
+                    }
+                }
+                _ => {
+                    panic!("Invalid table element: {element}");
                 }
             }
         }
