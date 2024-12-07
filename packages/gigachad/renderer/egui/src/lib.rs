@@ -90,6 +90,8 @@ impl RenderRunner for EguiRenderRunner {
             ..Default::default()
         };
 
+        #[cfg(feature = "profiling-tracing")]
+        tracing_subscriber::fmt::init();
         #[cfg(feature = "profiling-puffin")]
         start_puffin_server();
 

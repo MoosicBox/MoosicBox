@@ -3858,6 +3858,8 @@ dependencies = [
  "puffin",
  "puffin_http",
  "reqwest",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -3952,6 +3954,7 @@ dependencies = [
  "test-log",
  "thiserror 2.0.4",
  "tl",
+ "tracing",
  "xml",
 ]
 
@@ -6001,6 +6004,7 @@ dependencies = [
 name = "moosicbox_app_native"
 version = "0.1.0"
 dependencies = [
+ "console-subscriber",
  "flume",
  "log",
  "moosicbox_app_native_bundled",
@@ -8950,6 +8954,7 @@ checksum = "afbdc74edc00b6f6a218ca6a5364d6226a259d4b8ea1af4a0ea063f27e179f4d"
 dependencies = [
  "profiling-procmacros",
  "puffin",
+ "tracing",
 ]
 
 [[package]]

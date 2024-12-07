@@ -193,7 +193,18 @@ static PROFILE: &str = "master";
 
 #[allow(clippy::too_many_lines)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    moosicbox_logging::init(None)?;
+    if cfg!(feature = "profiling-tracing") {
+        // no global tracing defined here
+    } else if std::env::var("TOKIO_CONSOLE") == Ok("1".to_string()) {
+        console_subscriber::init();
+    } else {
+        #[cfg(target_os = "android")]
+        let filename = None;
+        #[cfg(not(target_os = "android"))]
+        let filename = Some("moosicbox_app_native.log");
+
+        moosicbox_logging::init(filename).expect("Failed to initialize FreeLog");
+    }
 
     moosicbox_player::on_playback_event(on_playback_event);
 

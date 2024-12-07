@@ -28,6 +28,7 @@ profiling   = { workspace = true, optional = true }
 serde_json  = { workspace = true }
 thiserror   = { workspace = true }
 tl          = { workspace = true, optional = true }
+tracing     = { workspace = true, optional = true }
 xml         = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -46,6 +47,12 @@ profiling-puffin = [
     "profiling",
     "profiling/profile-with-puffin",
     "profiling/puffin",
+]
+profiling-tracing = [
+    "dep:tracing",
+    "profiling",
+    "profiling/profile-with-tracing",
+    "profiling/tracing",
 ]
 
 calc  = ["dep:bumpalo", "dep:itertools", "gigachad_transformer_models/calc"]

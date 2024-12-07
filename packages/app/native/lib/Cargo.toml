@@ -47,4 +47,8 @@ profiling-puffin = [
     "gigachad_renderer/profiling-puffin",
     "gigachad_renderer_egui?/profiling-puffin",
 ]
+profiling-tracing = [
+    "gigachad_renderer/profiling-tracing",
+    "gigachad_renderer_egui?/profiling-tracing",
+]
 unsafe = ["gigachad_renderer_fltk?/unsafe"]
