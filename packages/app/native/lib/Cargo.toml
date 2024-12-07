@@ -51,4 +51,8 @@ profiling-tracing = [
     "gigachad_renderer/profiling-tracing",
     "gigachad_renderer_egui?/profiling-tracing",
 ]
+profiling-tracy = [
+    "gigachad_renderer/profiling-tracy",
+    "gigachad_renderer_egui?/profiling-tracy",
+]
 unsafe = ["gigachad_renderer_fltk?/unsafe"]

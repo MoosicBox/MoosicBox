@@ -37,6 +37,7 @@ canvas = ["gigachad_transformer/canvas"]
 
 profiling-puffin  = ["gigachad_transformer/profiling-puffin"]
 profiling-tracing = ["gigachad_transformer/profiling-tracing"]
+profiling-tracy   = ["gigachad_transformer/profiling-tracy"]
 
 viewport           = []
 viewport-immediate = ["viewport"]

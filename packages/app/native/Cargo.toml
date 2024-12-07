@@ -100,6 +100,7 @@ debug             = ["moosicbox_app_native_lib/debug"]
 format            = ["moosicbox_app_native_lib/format"]
 profiling-puffin  = ["moosicbox_app_native_lib/profiling-puffin"]
 profiling-tracing = ["moosicbox_app_native_lib/profiling-tracing"]
+profiling-tracy   = ["moosicbox_app_native_lib/profiling-tracy"]
 unsafe            = ["moosicbox_app_native_lib/unsafe"]
 
 all-formats = ["aac", "flac", "mp3", "opus"]

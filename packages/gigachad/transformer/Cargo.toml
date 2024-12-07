@@ -54,6 +54,7 @@ profiling-tracing = [
     "profiling/profile-with-tracing",
     "profiling/tracing",
 ]
+profiling-tracy = ["profiling", "profiling/profile-with-tracy"]
 
 calc  = ["dep:bumpalo", "dep:itertools", "gigachad_transformer_models/calc"]
 logic = ["gigachad_actions/logic"]
