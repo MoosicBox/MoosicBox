@@ -121,8 +121,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.3.50
-        version: 3.3.50
+        specifier: ^3.3.54
+        version: 3.3.54
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
@@ -1938,6 +1938,10 @@ packages:
     resolution: {integrity: sha512-2QF/g9/zTaPDc3BjNcVTGoBbXBgYfMTTceLaYcFJ/W9kggFUkhxD/hMEeuLKbugyef9SqAx8cpgwlIP/jinUTA==}
     engines: {node: '>=4'}
 
+  dunder-proto@1.0.0:
+    resolution: {integrity: sha512-9+Sj30DIu+4KvHqMfLUGLFYL2PkURSYMVXJyXe92nFRvlYq5hBjLEhblKB+vkd/WVlUYMWigiY07T91Fkk0+4A==}
+    engines: {node: '>= 0.4'}
+
   duplexify@3.7.1:
     resolution: {integrity: sha512-07z8uv2wMyS51kKhD1KsdXJg5WQ6t93RneqRxUHnskXVtlYYkLqM0gqStQZ3pj073g687jPCHrqNfCzawLYh5g==}
 
@@ -1980,8 +1984,8 @@ packages:
     resolution: {integrity: sha512-vlmniQ0WNPwXqA0BnmwV3Ng7HxiGlh6r5U6JcTMNx8OilcAGqVJBHJcPjqOMaczU9fRuRK5Px2BdVyPRnKMMVQ==}
     engines: {node: '>= 0.4'}
 
-  es-define-property@1.0.0:
-    resolution: {integrity: sha512-jxayLKShrEqqzJ0eumQbVhTYQM27CfT1T35+gCgDFoL82JLsXqTJ76zv6A0YLOgEnLUMvLzsDsGIrl8NFpT2gQ==}
+  es-define-property@1.0.1:
+    resolution: {integrity: sha512-e3nRfgfUZ4rNGL232gUgX06QNyyez04KdjFrF+LTRoOXmrOgFKDg4BCdsjW8EnT69eqdYGmRpJwiPVYNrCaW3g==}
     engines: {node: '>= 0.4'}
 
   es-errors@1.3.0:
@@ -2307,8 +2311,8 @@ packages:
   get-func-name@2.0.2:
     resolution: {integrity: sha512-8vXOvuE167CtIc3OyItco7N/dpRtBbYOsPsXCz7X/PMnlGjYjSGuZJgM1Y7mmew7BKf9BqvLX2tnOVy1BBUsxQ==}
 
-  get-intrinsic@1.2.4:
-    resolution: {integrity: sha512-5uYhsJH8VJBTv7oslg4BznJYhDoRI6waYCxMmCdnTrcCrHA/fCFKoTFz2JKKE0HdDFUF7/oQuhzumXJK7paBRQ==}
+  get-intrinsic@1.2.5:
+    resolution: {integrity: sha512-Y4+pKa7XeRUPWFNvOOYHkRYrfzW07oraURSvjDmRVOJ748OrVmeXtpE4+GCEHncjCjkTxPNRt8kEbxDhsn6VTg==}
     engines: {node: '>= 0.4'}
 
   get-stream@8.0.1:
@@ -2374,8 +2378,8 @@ packages:
   has-property-descriptors@1.0.2:
     resolution: {integrity: sha512-55JNKuIW+vq4Ke1BjOTjM2YctQIvCT7GFzHwmfZPGo5wnrgkid0YQtnAleFSqumZm4az3n2BS+erby5ipJdgrg==}
 
-  has-proto@1.1.0:
-    resolution: {integrity: sha512-QLdzI9IIO1Jg7f9GT1gXpPpXArAn6cS31R1eEZqz08Gc+uQ8/XiqHWt17Fiw+2p6oTTIq5GXEpQkAlA88YRl/Q==}
+  has-proto@1.2.0:
+    resolution: {integrity: sha512-KIL7eQPfHQRC8+XluaIw7BHUwwqL19bQn4hzNgdr+1wXoU0KKj6rufu47lhY7KbJR2C6T6+PfyN0Ea7wkSS+qQ==}
     engines: {node: '>= 0.4'}
 
   has-symbols@1.1.0:
@@ -3310,8 +3314,8 @@ packages:
     resolution: {integrity: sha512-6tDA8g98We0zd0GvVeMT9arEOnTw9qM03L9cJXaCjrip1OO764RDBLBfrB4cwzNGDj5OA5ioymC9GkizgWJDUg==}
     engines: {node: '>=8'}
 
-  reflect.getprototypeof@1.0.7:
-    resolution: {integrity: sha512-bMvFGIUKlc/eSfXNX+aZ+EL95/EgZzuwA0OBPTbZZDEJw/0AkentjMuM1oiRfwHrshqk4RzdgiTg5CcDalXN5g==}
+  reflect.getprototypeof@1.0.8:
+    resolution: {integrity: sha512-B5dj6usc5dkk8uFliwjwDHM8To5/QwdKz9JcBZ8Ic4G1f0YmeeJTtE/ZTdgRFPAfxZFiUaPhZ1Jcs4qeagItGQ==}
     engines: {node: '>= 0.4'}
 
   regenerator-runtime@0.14.1:
@@ -3553,33 +3557,33 @@ packages:
   sprintf-js@1.0.3:
     resolution: {integrity: sha512-D9cPgkvLlV3t3IzL0D0YLvGA9Ahk4PcvVwUbN0dSGr1aP0Nrt4AEnTUbuGvquEC0mA64Gqt1fzirlRs5ibXx8g==}
 
-  sst-darwin-arm64@3.3.50:
-    resolution: {integrity: sha512-fCvsjaWgeMIx5JFWhJwXpJ3GCaro+iOBAhsDFyFf6IuekOUdWyCddUF0+7WpxxxfIsmtoljro8m6sU6pl8xCGQ==}
+  sst-darwin-arm64@3.3.54:
+    resolution: {integrity: sha512-f0Czmm8rhLTZUeVEO1bwQ8HYpfPEaFGVRq2fpbSeIQWW+dihmuIzoAhta5EXZlarhM2WBlf1ih0+aefOzPBZ3w==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.3.50:
-    resolution: {integrity: sha512-d002gfGTG0iPePRwDtQFEXn0BhJqM5xHbQCPcKja9zcmILaJYFE9IyZDZ52NxnlvckaA8wsLoT4wHIe0klWPAA==}
+  sst-darwin-x64@3.3.54:
+    resolution: {integrity: sha512-NZM1VX1AnRoqOnfsOaZPBy4am86QjY8q+khJ31q4n62yAe0aiRyXpTCc6m/soAba5YCw1Ngm83MoYJUJVavNOA==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.3.50:
-    resolution: {integrity: sha512-odspMqy90immi7PcaeY5C2O8TSkqd50CuCyuXP8f5sqpwQ8xOUVg3hThLZq1rvbMLrQbpHVD0u2+oCH3p3TxKg==}
+  sst-linux-arm64@3.3.54:
+    resolution: {integrity: sha512-+l1LGdZawPCdp++A9nZoDIDsm2xQowIONKQTq3QYD3TgvJDa0WnqY0mLhE33lQbheArbzj17vlaxlenwoFiWWg==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.3.50:
-    resolution: {integrity: sha512-oAoNke16ArxFPaKerkT6Tla1vA2lQTA1UjxLAKmEZ0oTkiYfk8OBYj3s+7NWZKpdgacJx5yVJyxMmPoITb7Ykg==}
+  sst-linux-x64@3.3.54:
+    resolution: {integrity: sha512-m6jihP/+9Wf71vq2fvwmNrCoB3lkgEwk8FBgB9qGe52/jrwkLXgbhaANT5M0sbqrl/PAoaW3iUi3GJdgC3PD3g==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.3.50:
-    resolution: {integrity: sha512-UDYCx0MTKxwjsEOgDFYqCMF5/H1QlLT2tR3MRbX+Q2mPBfmBfPzKna7tJOerh5gPLEjhpOOb+7KGGx/hNLaFCw==}
+  sst-linux-x86@3.3.54:
+    resolution: {integrity: sha512-VpXvm9J64F8A20dhu5188I7if9WFk0gW/ZWYSHoWux6IQSTXfrHI7+0vbVZeH+DSTFes4OfJKCZu0mTNjWpu4w==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.3.50:
-    resolution: {integrity: sha512-xlN+cE5yuIiS6Yk8Md0IAxVo5QqPNDtG6NIqJJvjSY6VjtzHmDiLTOfun5LhcrW7sHbT7Ya+IXddO8z73FCuYQ==}
+  sst@3.3.54:
+    resolution: {integrity: sha512-5A4iD+nbgbMZ89f2UPqpFdRFmmAqQg4qPvTboIT30ZgOMSUaG0dy+ce9m6xBAwC3tu8erqoH9PNj2lOHNHmjpg==}
     hasBin: true
     peerDependencies:
       hono: 4.x
@@ -6082,7 +6086,7 @@ snapshots:
       define-properties: 1.2.1
       es-abstract: 1.23.5
       es-object-atoms: 1.0.0
-      get-intrinsic: 1.2.4
+      get-intrinsic: 1.2.5
       is-string: 1.1.0
 
   array-iterate@2.0.1: {}
@@ -6119,7 +6123,7 @@ snapshots:
       define-properties: 1.2.1
       es-abstract: 1.23.5
       es-errors: 1.3.0
-      get-intrinsic: 1.2.4
+      get-intrinsic: 1.2.5
       is-array-buffer: 3.0.4
       is-shared-array-buffer: 1.0.3
 
@@ -6360,8 +6364,8 @@ snapshots:
   call-bind@1.0.8:
     dependencies:
       call-bind-apply-helpers: 1.0.0
-      es-define-property: 1.0.0
-      get-intrinsic: 1.2.4
+      es-define-property: 1.0.1
+      get-intrinsic: 1.2.5
       set-function-length: 1.2.2
 
   callsites@3.1.0: {}
@@ -6541,7 +6545,7 @@ snapshots:
 
   define-data-property@1.1.4:
     dependencies:
-      es-define-property: 1.0.0
+      es-define-property: 1.0.1
       es-errors: 1.3.0
       gopd: 1.2.0
 
@@ -6594,6 +6598,12 @@ snapshots:
 
   dset@3.1.4: {}
 
+  dunder-proto@1.0.0:
+    dependencies:
+      call-bind-apply-helpers: 1.0.0
+      es-errors: 1.3.0
+      gopd: 1.2.0
+
   duplexify@3.7.1:
     dependencies:
       end-of-stream: 1.4.4
@@ -6645,18 +6655,18 @@ snapshots:
       data-view-buffer: 1.0.1
       data-view-byte-length: 1.0.1
       data-view-byte-offset: 1.0.0
-      es-define-property: 1.0.0
+      es-define-property: 1.0.1
       es-errors: 1.3.0
       es-object-atoms: 1.0.0
       es-set-tostringtag: 2.0.3
       es-to-primitive: 1.3.0
       function.prototype.name: 1.1.6
-      get-intrinsic: 1.2.4
+      get-intrinsic: 1.2.5
       get-symbol-description: 1.0.2
       globalthis: 1.0.4
       gopd: 1.2.0
       has-property-descriptors: 1.0.2
-      has-proto: 1.1.0
+      has-proto: 1.2.0
       has-symbols: 1.1.0
       hasown: 2.0.2
       internal-slot: 1.0.7
@@ -6685,9 +6695,7 @@ snapshots:
       unbox-primitive: 1.0.2
       which-typed-array: 1.1.16
 
-  es-define-property@1.0.0:
-    dependencies:
-      get-intrinsic: 1.2.4
+  es-define-property@1.0.1: {}
 
   es-errors@1.3.0: {}
 
@@ -6699,7 +6707,7 @@ snapshots:
 
   es-set-tostringtag@2.0.3:
     dependencies:
-      get-intrinsic: 1.2.4
+      get-intrinsic: 1.2.5
       has-tostringtag: 1.0.2
       hasown: 2.0.2
 
@@ -7107,11 +7115,14 @@ snapshots:
 
   get-func-name@2.0.2: {}
 
-  get-intrinsic@1.2.4:
+  get-intrinsic@1.2.5:
     dependencies:
+      call-bind-apply-helpers: 1.0.0
+      dunder-proto: 1.0.0
+      es-define-property: 1.0.1
       es-errors: 1.3.0
       function-bind: 1.1.2
-      has-proto: 1.1.0
+      gopd: 1.2.0
       has-symbols: 1.1.0
       hasown: 2.0.2
 
@@ -7121,7 +7132,7 @@ snapshots:
     dependencies:
       call-bind: 1.0.8
       es-errors: 1.3.0
-      get-intrinsic: 1.2.4
+      get-intrinsic: 1.2.5
 
   github-slugger@2.0.0: {}
 
@@ -7176,11 +7187,11 @@ snapshots:
 
   has-property-descriptors@1.0.2:
     dependencies:
-      es-define-property: 1.0.0
+      es-define-property: 1.0.1
 
-  has-proto@1.1.0:
+  has-proto@1.2.0:
     dependencies:
-      call-bind: 1.0.8
+      dunder-proto: 1.0.0
 
   has-symbols@1.1.0: {}
 
@@ -7363,7 +7374,7 @@ snapshots:
   is-array-buffer@3.0.4:
     dependencies:
       call-bind: 1.0.8
-      get-intrinsic: 1.2.4
+      get-intrinsic: 1.2.5
 
   is-arrayish@0.3.2:
     optional: true
@@ -7473,7 +7484,7 @@ snapshots:
   is-weakset@2.0.3:
     dependencies:
       call-bind: 1.0.8
-      get-intrinsic: 1.2.4
+      get-intrinsic: 1.2.5
 
   is-what@4.1.16: {}
 
@@ -8386,13 +8397,14 @@ snapshots:
       indent-string: 4.0.0
       strip-indent: 3.0.0
 
-  reflect.getprototypeof@1.0.7:
+  reflect.getprototypeof@1.0.8:
     dependencies:
       call-bind: 1.0.8
       define-properties: 1.2.1
+      dunder-proto: 1.0.0
       es-abstract: 1.23.5
       es-errors: 1.3.0
-      get-intrinsic: 1.2.4
+      get-intrinsic: 1.2.5
       gopd: 1.2.0
       which-builtin-type: 1.2.0
 
@@ -8574,7 +8586,7 @@ snapshots:
   safe-array-concat@1.1.2:
     dependencies:
       call-bind: 1.0.8
-      get-intrinsic: 1.2.4
+      get-intrinsic: 1.2.5
       has-symbols: 1.1.0
       isarray: 2.0.5
 
@@ -8636,7 +8648,7 @@ snapshots:
       define-data-property: 1.1.4
       es-errors: 1.3.0
       function-bind: 1.1.2
-      get-intrinsic: 1.2.4
+      get-intrinsic: 1.2.5
       gopd: 1.2.0
       has-property-descriptors: 1.0.2
 
@@ -8695,7 +8707,7 @@ snapshots:
     dependencies:
       call-bind: 1.0.8
       es-errors: 1.3.0
-      get-intrinsic: 1.2.4
+      get-intrinsic: 1.2.5
       object-inspect: 1.13.3
 
   siginfo@2.0.0: {}
@@ -8743,32 +8755,32 @@ snapshots:
 
   sprintf-js@1.0.3: {}
 
-  sst-darwin-arm64@3.3.50:
+  sst-darwin-arm64@3.3.54:
     optional: true
 
-  sst-darwin-x64@3.3.50:
+  sst-darwin-x64@3.3.54:
     optional: true
 
-  sst-linux-arm64@3.3.50:
+  sst-linux-arm64@3.3.54:
     optional: true
 
-  sst-linux-x64@3.3.50:
+  sst-linux-x64@3.3.54:
     optional: true
 
-  sst-linux-x86@3.3.50:
+  sst-linux-x86@3.3.54:
     optional: true
 
-  sst@3.3.50:
+  sst@3.3.54:
     dependencies:
       aws4fetch: 1.0.20
       jose: 5.2.3
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.3.50
-      sst-darwin-x64: 3.3.50
-      sst-linux-arm64: 3.3.50
-      sst-linux-x64: 3.3.50
-      sst-linux-x86: 3.3.50
+      sst-darwin-arm64: 3.3.54
+      sst-darwin-x64: 3.3.54
+      sst-linux-arm64: 3.3.54
+      sst-linux-x64: 3.3.54
+      sst-linux-x86: 3.3.54
 
   stack-utils@2.0.6:
     dependencies:
@@ -8953,7 +8965,7 @@ snapshots:
       call-bind: 1.0.8
       for-each: 0.3.3
       gopd: 1.2.0
-      has-proto: 1.1.0
+      has-proto: 1.2.0
       is-typed-array: 1.1.13
 
   typed-array-byte-offset@1.0.3:
@@ -8962,9 +8974,9 @@ snapshots:
       call-bind: 1.0.8
       for-each: 0.3.3
       gopd: 1.2.0
-      has-proto: 1.1.0
+      has-proto: 1.2.0
       is-typed-array: 1.1.13
-      reflect.getprototypeof: 1.0.7
+      reflect.getprototypeof: 1.0.8
 
   typed-array-length@1.0.7:
     dependencies:
@@ -8973,7 +8985,7 @@ snapshots:
       gopd: 1.2.0
       is-typed-array: 1.1.13
       possible-typed-array-names: 1.0.0
-      reflect.getprototypeof: 1.0.7
+      reflect.getprototypeof: 1.0.8
 
   typedarray@0.0.6:
     optional: true
