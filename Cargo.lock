@@ -3871,7 +3871,6 @@ dependencies = [
  "puffin",
  "puffin_http",
  "reqwest",
- "tracing",
  "tracing-subscriber",
  "tracy-client",
 ]
@@ -3968,7 +3967,6 @@ dependencies = [
  "test-log",
  "thiserror 2.0.4",
  "tl",
- "tracing",
  "xml",
 ]
 
