@@ -35,6 +35,8 @@ maud = ["dep:maud", "gigachad_transformer/maud"]
 
 canvas = ["gigachad_transformer/canvas"]
 
+profiling-puffin = ["gigachad_transformer/profiling-puffin"]
+
 viewport           = []
 viewport-immediate = ["viewport"]
 viewport-retained  = ["viewport"]

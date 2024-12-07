@@ -41,6 +41,10 @@ fltk      = ["dep:gigachad_renderer_fltk"]
 html      = ["dep:gigachad_renderer_html"]
 htmx      = ["dep:gigachad_renderer_htmx"]
 
-debug  = ["gigachad_renderer_egui?/debug", "gigachad_renderer_fltk?/debug"]
+debug = ["gigachad_renderer_egui?/debug", "gigachad_renderer_fltk?/debug"]
 format = ["gigachad_renderer_fltk?/format", "gigachad_router/format"]
+profiling-puffin = [
+    "gigachad_renderer/profiling-puffin",
+    "gigachad_renderer_egui?/profiling-puffin",
+]
 unsafe = ["gigachad_renderer_fltk?/unsafe"]

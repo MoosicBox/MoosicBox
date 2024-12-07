@@ -68,6 +68,7 @@ pub struct EguiRenderRunner {
     app: EguiApp,
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl RenderRunner for EguiRenderRunner {
     /// # Errors
     ///
@@ -89,6 +90,9 @@ impl RenderRunner for EguiRenderRunner {
             ..Default::default()
         };
 
+        #[cfg(feature = "profiling-puffin")]
+        start_puffin_server();
+
         log::debug!("run: starting");
         if let Err(e) = eframe::run_native(
             "MoosicBox",
@@ -108,6 +112,7 @@ impl RenderRunner for EguiRenderRunner {
     }
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 #[async_trait]
 impl Renderer for EguiRenderer {
     /// # Panics
@@ -495,6 +500,7 @@ impl EguiApp {
         }
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn swap_elements(
         swap: &SwapTarget,
         ctx: &egui::Context,
@@ -530,6 +536,7 @@ impl EguiApp {
         }
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn update_frame_size(&self, width: f32, height: f32) {
         *self.viewport_listeners.write().unwrap() = HashMap::new();
 
@@ -550,6 +557,7 @@ impl EguiApp {
         self.height.write().unwrap().replace(height);
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn check_frame_resize(&self, ctx: &egui::Context) {
         ctx.input(move |i| {
             let width = i.screen_rect.width();
@@ -569,6 +577,7 @@ impl EguiApp {
         });
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn get_scroll_container(
         rect: egui::Rect,
         pos_x: f32,
@@ -601,6 +610,7 @@ impl EguiApp {
         viewport
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_horizontal_borders(
         ui: &mut Ui,
         container: &ContainerElement,
@@ -628,6 +638,7 @@ impl EguiApp {
         .inner
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_vertical_borders(
         ui: &mut Ui,
         container: &ContainerElement,
@@ -655,6 +666,7 @@ impl EguiApp {
         .inner
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_borders(
         ui: &mut Ui,
         container: &ContainerElement,
@@ -680,6 +692,7 @@ impl EguiApp {
         }
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn container_hidden(render_context: &mut RenderContext, container: &ContainerElement) -> bool {
         if container.visibility == Some(Visibility::Hidden) {
             render_context
@@ -693,6 +706,7 @@ impl EguiApp {
         }
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     #[allow(clippy::too_many_arguments)]
     fn handle_scroll_child_out_of_view(
         &self,
@@ -744,6 +758,7 @@ impl EguiApp {
         false
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
     fn render_container(
         &self,
@@ -1031,6 +1046,7 @@ impl EguiApp {
         }))
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn get_render_rect(
         ui: &Ui,
         container: &ContainerElement,
@@ -1063,6 +1079,7 @@ impl EguiApp {
         )
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_position<'a>(
         ui: &mut Ui,
         container: &'a ContainerElement,
@@ -1089,6 +1106,7 @@ impl EguiApp {
         inner(ui, relative_container)
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
     fn render_direction<'a>(
         &self,
@@ -1227,6 +1245,7 @@ impl EguiApp {
         }
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_layout<'a>(
         ui: &mut Ui,
         container: &'a ContainerElement,
@@ -1277,6 +1296,7 @@ impl EguiApp {
         }
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     fn render_container_contents<'a>(
         &self,
@@ -1366,6 +1386,7 @@ impl EguiApp {
         )
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     #[allow(clippy::too_many_arguments)]
     fn render_elements(
         &self,
@@ -1393,6 +1414,7 @@ impl EguiApp {
         }
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     #[allow(clippy::too_many_arguments)]
     fn render_elements_ref(
         &self,
@@ -1420,6 +1442,7 @@ impl EguiApp {
         }
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn rect_contains_mouse(
         pointer: &egui::PointerState,
         rect: egui::Rect,
@@ -1433,6 +1456,7 @@ impl EguiApp {
         })
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
     fn handle_container_side_effects(
         &self,
@@ -1446,6 +1470,8 @@ impl EguiApp {
         recurse: bool,
     ) {
         if let Some(route) = &container.route {
+            #[cfg(feature = "profiling")]
+            profiling::scope!("route side effects");
             let processed_route = {
                 render_context
                     .route_requests
@@ -1474,6 +1500,8 @@ impl EguiApp {
             });
 
             if let Some(cursor) = container.cursor {
+                #[cfg(feature = "profiling")]
+                profiling::scope!("cursor side effects");
                 let ctx = ctx.clone();
                 let pointer = ctx.input(|x| x.pointer.clone());
                 let response = response.clone();
@@ -1493,6 +1521,8 @@ impl EguiApp {
 
                     match fx_action.trigger {
                         ActionTrigger::Click | ActionTrigger::ClickOutside => {
+                            #[cfg(feature = "profiling")]
+                            profiling::scope!("click/clickOutside side effects");
                             let inside = matches!(fx_action.trigger, ActionTrigger::Click);
                             let action = fx_action.action.clone();
                             let id = container.id;
@@ -1521,6 +1551,8 @@ impl EguiApp {
                             });
                         }
                         ActionTrigger::Hover => {
+                            #[cfg(feature = "profiling")]
+                            profiling::scope!("hover side effects");
                             let action = fx_action.action.clone();
                             let id = container.id;
                             let response = response.clone();
@@ -1545,6 +1577,8 @@ impl EguiApp {
                             });
                         }
                         ActionTrigger::Change => {
+                            #[cfg(feature = "profiling")]
+                            profiling::scope!("change side effects");
                             let action = fx_action.action.clone();
                             let id = container.id;
                             let response = response.clone();
@@ -1588,6 +1622,7 @@ impl EguiApp {
         }
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
     fn handle_element_side_effects(
         &self,
@@ -1602,6 +1637,8 @@ impl EguiApp {
     ) {
         log::trace!("handle_element_side_effects");
         if let Some(response) = response {
+            #[cfg(feature = "profiling")]
+            profiling::scope!("button and anchor side effects");
             let viewport_rect = rect.map(|rect| {
                 let (offset_x, offset_y) =
                     viewport.map_or((0.0, 0.0), |viewport| (viewport.pos.x, viewport.pos.y));
@@ -1610,6 +1647,8 @@ impl EguiApp {
 
             match element {
                 Element::Button { .. } => {
+                    #[cfg(feature = "profiling")]
+                    profiling::scope!("button side effects");
                     let response = response.clone();
                     let pointer = ctx.input(|x| x.pointer.clone());
                     let ctx = ctx.clone();
@@ -1622,6 +1661,8 @@ impl EguiApp {
                     });
                 }
                 Element::Anchor { href, .. } => {
+                    #[cfg(feature = "profiling")]
+                    profiling::scope!("anchor side effects");
                     let href = href.to_owned();
                     let sender = self.sender.clone();
                     let response = response.clone();
@@ -1655,6 +1696,8 @@ impl EguiApp {
                 element,
             } = element
             {
+                #[cfg(feature = "profiling")]
+                profiling::scope!("image side effects");
                 let pos = ui.cursor().left_top();
                 let listener = render_context
                     .viewport_listeners
@@ -1717,6 +1760,7 @@ impl EguiApp {
         }
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     #[allow(clippy::too_many_lines)]
     fn handle_action(
         action: &ActionType,
@@ -1837,6 +1881,7 @@ impl EguiApp {
         }
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn unhandle_action(action: &ActionType, render_context: &mut RenderContext, id: usize) {
         if let ActionType::Style { action, target } = &action {
             match action {
@@ -1862,6 +1907,7 @@ impl EguiApp {
         }
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn map_element_target<R>(
         target: &ElementTarget,
         self_id: usize,
@@ -1911,6 +1957,7 @@ impl EguiApp {
         None
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn get_element_target_id(
         target: &ElementTarget,
         self_id: usize,
@@ -1951,6 +1998,7 @@ impl EguiApp {
         None
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn handle_style_action(
         action: &StyleAction,
         target: &ElementTarget,
@@ -1977,6 +2025,7 @@ impl EguiApp {
         }
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     fn render_element(
         &self,
@@ -2075,6 +2124,7 @@ impl EguiApp {
         }
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_input(
         ui: &mut Ui,
         input: &Input,
@@ -2086,6 +2136,7 @@ impl EguiApp {
         }
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_text_input(ui: &mut Ui, input: &Input) -> Response {
         let (Input::Text { value, .. } | Input::Password { value, .. }) = input else {
             unreachable!()
@@ -2106,6 +2157,7 @@ impl EguiApp {
         response
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_checkbox_input(
         ui: &mut Ui,
         input: &Input,
@@ -2144,6 +2196,7 @@ impl EguiApp {
         response
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_image(
         render_context: &mut RenderContext,
         ui: &mut Ui,
@@ -2174,6 +2227,7 @@ impl EguiApp {
             .response
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_canvas(
         render_context: &mut RenderContext,
         ui: &mut Ui,
@@ -2242,6 +2296,7 @@ impl EguiApp {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_table(
         &self,
         render_context: &mut RenderContext,
@@ -2294,6 +2349,7 @@ impl EguiApp {
         });
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn trigger_side_effect(
         &self,
         handler: impl Fn(&mut RenderContext) -> bool + Send + Sync + 'static,
@@ -2304,6 +2360,7 @@ impl EguiApp {
             .push_back(Box::new(handler));
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn paint(&self, ctx: &egui::Context) {
         self.check_frame_resize(ctx);
 
@@ -2385,6 +2442,9 @@ impl EguiApp {
         drop(visibilities);
         drop(displays);
         drop(checkboxes);
+
+        #[cfg(feature = "profiling")]
+        profiling::finish_frame!();
     }
 }
 
@@ -2421,5 +2481,28 @@ const fn cursor_to_cursor_icon(cursor: Cursor) -> CursorIcon {
         Cursor::NeswResize => CursorIcon::ResizeNwSe,
         Cursor::ZoomIn => CursorIcon::ZoomIn,
         Cursor::ZoomOut => CursorIcon::ZoomOut,
+    }
+}
+
+#[cfg(feature = "profiling-puffin")]
+fn start_puffin_server() {
+    puffin::set_scopes_on(true);
+
+    match puffin_http::Server::new("127.0.0.1:8585") {
+        Ok(puffin_server) => {
+            log::info!("Run:  cargo install puffin_viewer && puffin_viewer --url 127.0.0.1:8585");
+
+            std::process::Command::new("puffin_viewer")
+                .arg("--url")
+                .arg("127.0.0.1:8585")
+                .spawn()
+                .ok();
+
+            #[allow(clippy::mem_forget)]
+            std::mem::forget(puffin_server);
+        }
+        Err(err) => {
+            log::error!("Failed to start puffin server: {err}");
+        }
     }
 }

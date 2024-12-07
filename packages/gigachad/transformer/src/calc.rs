@@ -354,6 +354,7 @@ impl Calc for ContainerElement {
     }
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl ContainerElement {
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn calc_inner(&mut self, arena: &Bump, relative_size: Option<(f32, f32)>) {

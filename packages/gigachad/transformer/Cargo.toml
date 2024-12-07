@@ -24,6 +24,7 @@ html-escape = { workspace = true, optional = true }
 itertools   = { workspace = true, optional = true }
 log         = { workspace = true }
 maud        = { workspace = true, optional = true }
+profiling   = { workspace = true, optional = true }
 serde_json  = { workspace = true }
 thiserror   = { workspace = true }
 tl          = { workspace = true, optional = true }
@@ -39,6 +40,13 @@ default = ["calc", "canvas", "format", "html", "id", "logic", "maud"]
 fail-on-warnings = []
 
 canvas = []
+
+profiling = ["dep:profiling"]
+profiling-puffin = [
+    "profiling",
+    "profiling/profile-with-puffin",
+    "profiling/puffin",
+]
 
 calc  = ["dep:bumpalo", "dep:itertools", "gigachad_transformer_models/calc"]
 logic = ["gigachad_actions/logic"]

@@ -95,9 +95,10 @@ bundled = ["all-sources", "dep:moosicbox_app_native_bundled"]
 
 windows-console = []
 
-debug  = ["moosicbox_app_native_lib/debug"]
-format = ["moosicbox_app_native_lib/format"]
-unsafe = ["moosicbox_app_native_lib/unsafe"]
+debug            = ["moosicbox_app_native_lib/debug"]
+format           = ["moosicbox_app_native_lib/format"]
+profiling-puffin = ["moosicbox_app_native_lib/profiling-puffin"]
+unsafe           = ["moosicbox_app_native_lib/unsafe"]
 
 all-formats = ["aac", "flac", "mp3", "opus"]
 
