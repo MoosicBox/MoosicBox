@@ -778,6 +778,12 @@ impl ContainerElement {
         container_height: f32,
         mut func: impl FnMut(&mut Vec<&mut Element>, f32, f32),
     ) {
+        let mut elements = elements.peekable();
+
+        if elements.peek().is_none() {
+            return;
+        }
+
         let mut rowcol_index = 0;
         let mut padding_and_margins = 0.0;
         let buf = arena.alloc(vec![]);
