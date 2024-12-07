@@ -1,5 +1,6 @@
 use std::sync::atomic::AtomicU16;
 
+use bumpalo::Bump;
 use gigachad_transformer_models::{
     JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition,
 };
@@ -29,12 +30,13 @@ pub trait Calc {
 
 impl Calc for Element {
     fn calc(&mut self) {
-        self.calc_inner(None);
+        let arena = Bump::new();
+        self.calc_inner(&arena, None);
     }
 }
 
 impl Element {
-    fn calc_inner(&mut self, relative_size: Option<(f32, f32)>) {
+    fn calc_inner(&mut self, arena: &Bump, relative_size: Option<(f32, f32)>) {
         if self
             .container_element()
             .is_some_and(ContainerElement::is_hidden)
@@ -43,14 +45,14 @@ impl Element {
         }
 
         if let Self::Table { .. } = self {
-            self.calc_table(relative_size);
+            self.calc_table(arena, relative_size);
         } else if let Some(container) = self.container_element_mut() {
-            container.calc_inner(relative_size);
+            container.calc_inner(arena, relative_size);
         }
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    fn calc_table(&mut self, relative_size: Option<(f32, f32)>) {
+    fn calc_table(&mut self, arena: &Bump, relative_size: Option<(f32, f32)>) {
         fn size_cells<'a>(
             iter: impl Iterator<Item = &'a mut ContainerElement>,
             col_sizes: &mut Vec<Option<f32>>,
@@ -166,7 +168,11 @@ impl Element {
                                 x.calc_sized_element_width(container_width);
                             } else if x.calculated_width.is_none() {
                                 x.calculated_width = Some(evenly_split_size);
-                                x.calc_unsized_element_size(relative_size, evenly_split_size);
+                                x.calc_unsized_element_size(
+                                    arena,
+                                    relative_size,
+                                    evenly_split_size,
+                                );
                             }
                             x
                         });
@@ -188,7 +194,7 @@ impl Element {
                             x.calc_sized_element_width(container_width);
                         } else if x.calculated_width.is_none() {
                             x.calculated_width = Some(evenly_split_size);
-                            x.calc_unsized_element_size(relative_size, evenly_split_size);
+                            x.calc_unsized_element_size(arena, relative_size, evenly_split_size);
                         }
                         x
                     });
@@ -328,14 +334,14 @@ impl Element {
         if let Some(headings) = headings {
             for heading in headings {
                 for th in heading {
-                    th.calc_inner(relative_size);
+                    th.calc_inner(arena, relative_size);
                 }
             }
         }
 
         for row in rows {
             for td in row {
-                td.calc_inner(relative_size);
+                td.calc_inner(arena, relative_size);
             }
         }
     }
@@ -343,13 +349,14 @@ impl Element {
 
 impl Calc for ContainerElement {
     fn calc(&mut self) {
-        self.calc_inner(None);
+        let arena = Bump::new();
+        self.calc_inner(&arena, None);
     }
 }
 
 impl ContainerElement {
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    fn calc_inner(&mut self, relative_size: Option<(f32, f32)>) {
+    fn calc_inner(&mut self, arena: &Bump, relative_size: Option<(f32, f32)>) {
         static MAX_HANDLE_OVERFLOW: usize = 100;
 
         log::trace!("calc_inner: processing self\n{self:?}");
@@ -402,6 +409,7 @@ impl ContainerElement {
         );
 
         Self::calc_element_sizes_by_rowcol(
+            arena,
             relative_size,
             self.relative_positioned_elements_mut(),
             direction,
@@ -430,7 +438,7 @@ impl ContainerElement {
                         );
                     }
 
-                    element.calc_inner(relative_size);
+                    element.calc_inner(arena, relative_size);
                 }
 
                 let unsized_elements_count = elements
@@ -509,7 +517,7 @@ impl ContainerElement {
                         }
                     }
 
-                    element.calc_inner(relative_size);
+                    element.calc_inner(arena, relative_size);
                 }
             },
         );
@@ -541,7 +549,7 @@ impl ContainerElement {
                 if container.height.is_none() {
                     container.calculated_height = Some(height);
                 }
-                container.calc_inner(relative_size);
+                container.calc_inner(arena, relative_size);
             }
         }
 
@@ -761,6 +769,7 @@ impl ContainerElement {
     }
 
     fn calc_element_sizes_by_rowcol<'a>(
+        arena: &Bump,
         relative_size: Option<(f32, f32)>,
         elements: impl Iterator<Item = &'a mut Element>,
         direction: LayoutDirection,
@@ -770,7 +779,7 @@ impl ContainerElement {
     ) {
         let mut rowcol_index = 0;
         let mut padding_and_margins = 0.0;
-        let mut buf = vec![];
+        let buf = arena.alloc(vec![]);
 
         for element in elements {
             log::trace!("calc_element_sizes_by_rowcol: element={element}");
@@ -810,7 +819,7 @@ impl ContainerElement {
                     }
                 }
 
-                func(&mut buf, container_width, container_height);
+                func(buf, container_width, container_height);
 
                 rowcol_index = current_rowcol_index;
 
@@ -823,7 +832,7 @@ impl ContainerElement {
                 log::trace!("calc_element_sizes_by_rowcol: next rowcol_index={rowcol_index} padding_and_margins={padding_and_margins}");
             }
 
-            element.calc_inner(relative_size);
+            element.calc_inner(arena, relative_size);
             buf.push(element);
         }
 
@@ -851,7 +860,7 @@ impl ContainerElement {
         }
 
         log::trace!("calc_element_sizes_by_rowcol: processing last buf");
-        func(&mut buf, container_width, container_height);
+        func(buf, container_width, container_height);
     }
 
     fn calc_sized_element_sizes<'a>(
@@ -877,7 +886,12 @@ impl ContainerElement {
         remainder
     }
 
-    fn calc_unsized_element_size(&mut self, relative_size: Option<(f32, f32)>, remainder: f32) {
+    fn calc_unsized_element_size(
+        &mut self,
+        arena: &Bump,
+        relative_size: Option<(f32, f32)>,
+        remainder: f32,
+    ) {
         let (Some(container_width), Some(container_height)) = (
             self.calculated_width_minus_padding(),
             self.calculated_height_minus_padding(),
@@ -887,6 +901,7 @@ impl ContainerElement {
             );
         };
         Self::calc_unsized_element_sizes(
+            arena,
             relative_size,
             relative_positioned_elements_mut(&mut self.elements),
             self.direction,
@@ -897,6 +912,7 @@ impl ContainerElement {
     }
 
     fn calc_unsized_element_sizes<'a>(
+        arena: &Bump,
         relative_size: Option<(f32, f32)>,
         elements: impl Iterator<Item = &'a mut Element>,
         direction: LayoutDirection,
@@ -980,7 +996,7 @@ impl ContainerElement {
         }
 
         for element in elements {
-            element.calc_inner(relative_size);
+            element.calc_inner(arena, relative_size);
         }
     }
 
@@ -2398,7 +2414,7 @@ mod test {
     }
 
     #[test_log::test]
-    fn calc_inner_calcs_contained_height_correctly() {
+    fn calc_calcs_contained_height_correctly() {
         let mut container = ContainerElement {
             elements: vec![
                 Element::Div {
@@ -2426,7 +2442,7 @@ mod test {
             overflow_y: LayoutOverflow::default(),
             ..Default::default()
         };
-        container.calc_inner(None);
+        container.calc();
 
         assert_eq!(
             container.clone(),

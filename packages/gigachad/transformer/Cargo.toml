@@ -19,6 +19,7 @@ moosicbox_logging = { version = "0.1.0", path = "../../logging", default-feature
     "macros",
 ] }
 
+bumpalo     = { workspace = true, optional = true }
 html-escape = { workspace = true, optional = true }
 itertools   = { workspace = true, optional = true }
 log         = { workspace = true }
@@ -39,7 +40,7 @@ fail-on-warnings = []
 
 canvas = []
 
-calc  = ["dep:itertools", "gigachad_transformer_models/calc"]
+calc  = ["dep:bumpalo", "dep:itertools", "gigachad_transformer_models/calc"]
 logic = ["gigachad_actions/logic"]
 maud  = ["dep:maud", "html"]
 

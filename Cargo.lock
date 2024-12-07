@@ -3924,6 +3924,7 @@ dependencies = [
 name = "gigachad_transformer"
 version = "0.1.0"
 dependencies = [
+ "bumpalo",
  "gigachad_actions",
  "gigachad_color",
  "gigachad_transformer_models",
