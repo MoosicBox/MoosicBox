@@ -86,7 +86,7 @@ importers:
         version: 7.18.0(eslint@8.57.1)(typescript@5.7.2)
       '@vitest/coverage-v8':
         specifier: ^1.6.0
-        version: 1.6.0(vitest@1.6.0(@types/node@22.10.1)(@vitest/ui@1.6.0)(jsdom@24.1.3))
+        version: 1.6.0(vitest@1.6.0)
       '@vitest/ui':
         specifier: ^1.6.0
         version: 1.6.0(vitest@1.6.0)
@@ -121,8 +121,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.3.54
-        version: 3.3.54
+        specifier: ^3.3.55
+        version: 3.3.55
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
@@ -1490,8 +1490,8 @@ packages:
     engines: {node: '>=0.4.0'}
     hasBin: true
 
-  agent-base@7.1.1:
-    resolution: {integrity: sha512-H0TSyFNDMomMNJQBn8wFV5YC/2eJ+VXECwOadZJT554xP6cODZHPX3H9QMQECxvrgiSOP1pHjy1sMWQVYJOUOA==}
+  agent-base@7.1.2:
+    resolution: {integrity: sha512-JVzqkCNRT+VfqzzgPWDPnwvDheSAUdiMUn3NoLXpDJF5lRqeJqyC9iGsAxIOAW+mzIdq+uP1TvcX6bMtrH0agg==}
     engines: {node: '>= 14'}
 
   ajv@6.12.6:
@@ -2460,8 +2460,8 @@ packages:
     resolution: {integrity: sha512-T1gkAiYYDWYx3V5Bmyu7HcfcvL7mUrTWiM6yOfa3PIphViJ/gFPbvidQ+veqSOHci/PxBcDabeUNCzpOODJZig==}
     engines: {node: '>= 14'}
 
-  https-proxy-agent@7.0.5:
-    resolution: {integrity: sha512-1e4Wqeblerz+tMKPIq2EMGiiWW1dIjZOksyHWSUm1rmuvw/how9hBHZ38lAGj5ID4Ik6EdkOw7NmWPy6LAwalw==}
+  https-proxy-agent@7.0.6:
+    resolution: {integrity: sha512-vK9P5/iUfdl95AI+JVyUuIcVtd4ofvtrOr3HNtM2yxC9bnMbEdp3x01OhQNnjb8IJYi38VlTE3mBXwcfvywuSw==}
     engines: {node: '>= 14'}
 
   human-signals@5.0.0:
@@ -3557,33 +3557,33 @@ packages:
   sprintf-js@1.0.3:
     resolution: {integrity: sha512-D9cPgkvLlV3t3IzL0D0YLvGA9Ahk4PcvVwUbN0dSGr1aP0Nrt4AEnTUbuGvquEC0mA64Gqt1fzirlRs5ibXx8g==}
 
-  sst-darwin-arm64@3.3.54:
-    resolution: {integrity: sha512-f0Czmm8rhLTZUeVEO1bwQ8HYpfPEaFGVRq2fpbSeIQWW+dihmuIzoAhta5EXZlarhM2WBlf1ih0+aefOzPBZ3w==}
+  sst-darwin-arm64@3.3.55:
+    resolution: {integrity: sha512-e8O0b2Fx2moO5wT2VYC93kZfTswVLr47J6XRa2lI9NRjbt5+SKN7iKkdD7+BRaiCRwkIoTvTk1XfznbBh7UOSA==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.3.54:
-    resolution: {integrity: sha512-NZM1VX1AnRoqOnfsOaZPBy4am86QjY8q+khJ31q4n62yAe0aiRyXpTCc6m/soAba5YCw1Ngm83MoYJUJVavNOA==}
+  sst-darwin-x64@3.3.55:
+    resolution: {integrity: sha512-uAN3UNyZpLowhNSbIga45Z+8YuC/ZxC8kBg2aLt92IikFjUCkymb+FklCln2Z2XUzVWnMwjt1ISFsds+WnSz0A==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.3.54:
-    resolution: {integrity: sha512-+l1LGdZawPCdp++A9nZoDIDsm2xQowIONKQTq3QYD3TgvJDa0WnqY0mLhE33lQbheArbzj17vlaxlenwoFiWWg==}
+  sst-linux-arm64@3.3.55:
+    resolution: {integrity: sha512-krsx3MT7xuhpbqhtDc1WK+UQ0IjZCEps2Z67NZUblBXqwOrbZx8cOAr4D100AWnAjGbfh1RAdWHHOy2aZ4Nheg==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.3.54:
-    resolution: {integrity: sha512-m6jihP/+9Wf71vq2fvwmNrCoB3lkgEwk8FBgB9qGe52/jrwkLXgbhaANT5M0sbqrl/PAoaW3iUi3GJdgC3PD3g==}
+  sst-linux-x64@3.3.55:
+    resolution: {integrity: sha512-ggQnSt/pHtPWR87YQKimS3M2i9LD87EJXcLgcuMStoaDXHfNgvXbJXSllR3onnkikrtzuvaXzLtZ3/9r7hn8XA==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.3.54:
-    resolution: {integrity: sha512-VpXvm9J64F8A20dhu5188I7if9WFk0gW/ZWYSHoWux6IQSTXfrHI7+0vbVZeH+DSTFes4OfJKCZu0mTNjWpu4w==}
+  sst-linux-x86@3.3.55:
+    resolution: {integrity: sha512-HFbXiS2uKF3sY2BJXzmcDu4B1UhX+palV72iAEmRbFSwlwa1qX8lW4viDPu4J3FHevNxK0o1eDZA/YI4g2U37Q==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.3.54:
-    resolution: {integrity: sha512-5A4iD+nbgbMZ89f2UPqpFdRFmmAqQg4qPvTboIT30ZgOMSUaG0dy+ce9m6xBAwC3tu8erqoH9PNj2lOHNHmjpg==}
+  sst@3.3.55:
+    resolution: {integrity: sha512-am/Axu4Pmz5wfZKSKBcvTcHbM1lkznApInKD9sb6vXhL5eAf67shCeNAUeCJvQ+c7fAXzjZ42/qMjP/bCkMbug==}
     hasBin: true
     peerDependencies:
       hono: 4.x
@@ -5908,7 +5908,7 @@ snapshots:
 
   '@ungap/structured-clone@1.2.0': {}
 
-  '@vitest/coverage-v8@1.6.0(vitest@1.6.0(@types/node@22.10.1)(@vitest/ui@1.6.0)(jsdom@24.1.3))':
+  '@vitest/coverage-v8@1.6.0(vitest@1.6.0)':
     dependencies:
       '@ampproject/remapping': 2.3.0
       '@bcoe/v8-coverage': 0.2.3
@@ -6027,7 +6027,7 @@ snapshots:
 
   acorn@8.14.0: {}
 
-  agent-base@7.1.1:
+  agent-base@7.1.2:
     dependencies:
       debug: 4.4.0
     transitivePeerDependencies:
@@ -7324,14 +7324,14 @@ snapshots:
 
   http-proxy-agent@7.0.2:
     dependencies:
-      agent-base: 7.1.1
+      agent-base: 7.1.2
       debug: 4.4.0
     transitivePeerDependencies:
       - supports-color
 
-  https-proxy-agent@7.0.5:
+  https-proxy-agent@7.0.6:
     dependencies:
-      agent-base: 7.1.1
+      agent-base: 7.1.2
       debug: 4.4.0
     transitivePeerDependencies:
       - supports-color
@@ -7590,7 +7590,7 @@ snapshots:
       form-data: 4.0.1
       html-encoding-sniffer: 4.0.0
       http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.5
+      https-proxy-agent: 7.0.6
       is-potential-custom-element-name: 1.0.1
       nwsapi: 2.2.16
       parse5: 7.2.1
@@ -8755,32 +8755,32 @@ snapshots:
 
   sprintf-js@1.0.3: {}
 
-  sst-darwin-arm64@3.3.54:
+  sst-darwin-arm64@3.3.55:
     optional: true
 
-  sst-darwin-x64@3.3.54:
+  sst-darwin-x64@3.3.55:
     optional: true
 
-  sst-linux-arm64@3.3.54:
+  sst-linux-arm64@3.3.55:
     optional: true
 
-  sst-linux-x64@3.3.54:
+  sst-linux-x64@3.3.55:
     optional: true
 
-  sst-linux-x86@3.3.54:
+  sst-linux-x86@3.3.55:
     optional: true
 
-  sst@3.3.54:
+  sst@3.3.55:
     dependencies:
       aws4fetch: 1.0.20
       jose: 5.2.3
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.3.54
-      sst-darwin-x64: 3.3.54
-      sst-linux-arm64: 3.3.54
-      sst-linux-x64: 3.3.54
-      sst-linux-x86: 3.3.54
+      sst-darwin-arm64: 3.3.55
+      sst-darwin-x64: 3.3.55
+      sst-linux-arm64: 3.3.55
+      sst-linux-x64: 3.3.55
+      sst-linux-x86: 3.3.55
 
   stack-utils@2.0.6:
     dependencies:
