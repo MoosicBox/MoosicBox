@@ -414,6 +414,8 @@ impl ContainerElement {
             LayoutDirection::Column => self.overflow_y == LayoutOverflow::Wrap,
         };
 
+        log::trace!("calc_inner: is_grid={is_grid}");
+
         if is_grid {
             Self::calc_element_sizes_by_rowcol(
                 arena,
@@ -439,11 +441,13 @@ impl ContainerElement {
                 match direction {
                     LayoutDirection::Row => {
                         if let Some(fluff) = element.padding_and_margins(LayoutDirection::Row) {
+                            log::trace!("calc_inner: container_width -= {fluff}");
                             container_width -= fluff;
                         }
                     }
                     LayoutDirection::Column => {
                         if let Some(fluff) = element.padding_and_margins(LayoutDirection::Column) {
+                            log::trace!("calc_inner: container_height -= {fluff}");
                             container_height -= fluff;
                         }
                     }
@@ -577,9 +581,9 @@ impl ContainerElement {
             let evenly_split_remaining_size = remainder / (unsized_elements_count as f32);
 
             log::debug!(
-                        "size_elements: setting {} to evenly_split_remaining_size={evenly_split_remaining_size} unsized_elements_count={unsized_elements_count}",
-                        if direction == LayoutDirection::Row { "width"}  else { "height" },
-                    );
+                "size_elements: setting {} to evenly_split_remaining_size={evenly_split_remaining_size} unsized_elements_count={unsized_elements_count}",
+                if direction == LayoutDirection::Row { "width"}  else { "height" },
+            );
 
             for container in unsized_elements
                 .map(|x| &mut **x)
@@ -587,42 +591,40 @@ impl ContainerElement {
             {
                 match direction {
                     LayoutDirection::Row => {
-                        let height = container
-                            .height
-                            .as_ref()
-                            .map_or(container_height, |x| calc_number(x, container_height))
+                        let container_height = container_height
                             - container
                                 .padding_and_margins(LayoutDirection::Column)
                                 .unwrap_or(0.0);
+                        let height = container
+                            .height
+                            .as_ref()
+                            .map_or(container_height, |x| calc_number(x, container_height));
                         container.calculated_height.replace(if height < 0.0 {
                             0.0
                         } else {
                             height
                         });
 
-                        let width = evenly_split_remaining_size;
                         container
                             .calculated_width
-                            .replace(if width < 0.0 { 0.0 } else { width });
+                            .replace(evenly_split_remaining_size);
                     }
                     LayoutDirection::Column => {
-                        let width = container
-                            .width
-                            .as_ref()
-                            .map_or(container_width, |x| calc_number(x, container_width))
+                        let container_width = container_width
                             - container
                                 .padding_and_margins(LayoutDirection::Row)
                                 .unwrap_or(0.0);
+                        let width = container
+                            .width
+                            .as_ref()
+                            .map_or(container_width, |x| calc_number(x, container_width));
                         container
                             .calculated_width
                             .replace(if width < 0.0 { 0.0 } else { width });
 
-                        let height = evenly_split_remaining_size;
-                        container.calculated_height.replace(if height < 0.0 {
-                            0.0
-                        } else {
-                            height
-                        });
+                        container
+                            .calculated_height
+                            .replace(evenly_split_remaining_size);
                     }
                 }
             }
@@ -2283,7 +2285,7 @@ mod test {
     use crate::{
         calc::{get_scrollbar_size, Calc as _, EPSILON},
         models::{JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition},
-        ContainerElement, Element, Number, Position,
+        ContainerElement, Element, Input, Number, Position,
     };
 
     #[test_log::test]
@@ -8483,6 +8485,42 @@ mod test {
                 elements: vec![Element::Div {
                     element: ContainerElement {
                         calculated_height: Some(20.0),
+                        calculated_y: Some(0.0),
+                        ..container.elements[0].container_element().unwrap().clone()
+                    }
+                }],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_calculates_width_minus_the_horizontal_padding_with_percentage_width() {
+        let mut container = ContainerElement {
+            elements: vec![Element::Div {
+                element: ContainerElement {
+                    width: Some(Number::IntegerPercent(50)),
+                    padding_left: Some(Number::Integer(10)),
+                    padding_right: Some(Number::Integer(20)),
+                    padding_top: Some(Number::Integer(15)),
+                    ..Default::default()
+                },
+            }],
+            calculated_width: Some(100.0),
+            calculated_height: Some(50.0),
+            height: Some(Number::Integer(50)),
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![Element::Div {
+                    element: ContainerElement {
+                        calculated_width: Some(35.0),
+                        calculated_height: Some(35.0),
+                        calculated_x: Some(0.0),
                         calculated_y: Some(0.0),
                         ..container.elements[0].container_element().unwrap().clone()
                     }
