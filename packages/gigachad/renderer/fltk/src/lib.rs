@@ -1294,9 +1294,7 @@ impl Renderer for FltkRenderer {
     /// # Errors
     ///
     /// Will error if FLTK fails to run the event loop.
-    async fn to_runner(
-        &mut self,
-    ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
+    async fn to_runner(&self) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
         let Some(app) = self.app else {
             moosicbox_assert::die_or_panic!("Cannot listen before app is started");
         };
@@ -1311,17 +1309,19 @@ impl Renderer for FltkRenderer {
     /// # Panics
     ///
     /// Will panic if elements `Mutex` is poisoned.
-    fn render(
-        &mut self,
+    async fn render(
+        &self,
         elements: View,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         log::debug!("render: {:?}", elements.immediate);
 
-        {
-            *self.elements.write().unwrap() = elements.immediate;
-        }
+        *self.elements.write().unwrap() = elements.immediate;
 
-        self.perform_render()
+        let renderer = self.clone();
+
+        moosicbox_task::spawn_blocking("fltk render", move || renderer.perform_render())
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)?
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)?;
 
         Ok(())
@@ -1334,8 +1334,8 @@ impl Renderer for FltkRenderer {
     /// # Panics
     ///
     /// Will panic if elements `Mutex` is poisoned.
-    fn render_partial(
-        &mut self,
+    async fn render_partial(
+        &self,
         view: PartialView,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         moosicbox_logging::debug_or_trace!(
@@ -1353,8 +1353,8 @@ impl Renderer for FltkRenderer {
     /// # Panics
     ///
     /// Will panic if elements `Mutex` is poisoned.
-    fn render_canvas(
-        &mut self,
+    async fn render_canvas(
+        &self,
         _update: CanvasUpdate,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         log::trace!("render_canvas");

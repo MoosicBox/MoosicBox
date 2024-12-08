@@ -256,9 +256,7 @@ impl Renderer for HtmlRenderer {
     /// # Errors
     ///
     /// Will error if html fails to run the event loop.
-    async fn to_runner(
-        &mut self,
-    ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
+    async fn to_runner(&self) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
         Ok(Box::new(HtmlRenderRunner {
             app: self.app.clone(),
             handle: self.runtime.handle().clone(),
@@ -268,8 +266,8 @@ impl Renderer for HtmlRenderer {
     /// # Errors
     ///
     /// Will error if html fails to render the elements.
-    fn render(
-        &mut self,
+    async fn render(
+        &self,
         elements: View,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         moosicbox_logging::debug_or_trace!(
@@ -289,8 +287,8 @@ impl Renderer for HtmlRenderer {
     /// # Panics
     ///
     /// Will panic if elements `Mutex` is poisoned.
-    fn render_partial(
-        &mut self,
+    async fn render_partial(
+        &self,
         view: PartialView,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         moosicbox_logging::debug_or_trace!(
@@ -308,8 +306,8 @@ impl Renderer for HtmlRenderer {
     /// # Panics
     ///
     /// Will panic if elements `Mutex` is poisoned.
-    fn render_canvas(
-        &mut self,
+    async fn render_canvas(
+        &self,
         _update: CanvasUpdate,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         log::trace!("render_canvas");

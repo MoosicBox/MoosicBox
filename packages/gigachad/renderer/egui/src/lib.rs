@@ -114,7 +114,6 @@ impl RenderRunner for EguiRenderRunner {
     }
 }
 
-#[cfg_attr(feature = "profiling", profiling::all_functions)]
 #[async_trait]
 impl Renderer for EguiRenderer {
     /// # Panics
@@ -154,9 +153,7 @@ impl Renderer for EguiRenderer {
     /// # Errors
     ///
     /// Will error if egui fails to run the event loop.
-    async fn to_runner(
-        &mut self,
-    ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
+    async fn to_runner(&self) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
         Ok(Box::new(EguiRenderRunner {
             width: self.width.unwrap(),
             height: self.height.unwrap(),
@@ -173,31 +170,36 @@ impl Renderer for EguiRenderer {
     /// # Panics
     ///
     /// Will panic if elements `Mutex` is poisoned.
-    fn render(&mut self, view: View) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-        moosicbox_logging::debug_or_trace!(
-            ("render: start"),
-            ("render: start {:?}", view.immediate)
-        );
-        let mut elements = view.immediate;
+    async fn render(&self, view: View) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        let app = self.app.clone();
+        let width = self.width.map(f32::from);
+        let height = self.height.map(f32::from);
 
-        elements.calculated_width = self.app.width.read().unwrap().or(self.width.map(f32::from));
-        elements.calculated_height = self
-            .app
-            .height
-            .read()
-            .unwrap()
-            .or(self.height.map(f32::from));
-        elements.calc();
-        *self.app.container.write().unwrap() = elements;
-        self.app.images.write().unwrap().clear();
-        self.app.viewport_listeners.write().unwrap().clear();
-        self.app.route_requests.write().unwrap().clear();
-        self.app.checkboxes.write().unwrap().clear();
+        moosicbox_task::spawn_blocking("egui render", move || {
+            moosicbox_logging::debug_or_trace!(
+                ("render: start"),
+                ("render: start {:?}", view.immediate)
+            );
+            let mut elements = view.immediate;
 
-        log::debug!("render: finished");
-        if let Some(ctx) = &*self.app.ctx.read().unwrap() {
-            ctx.request_repaint();
-        }
+            elements.calculated_width = app.width.read().unwrap().or(width);
+            elements.calculated_height = app.height.read().unwrap().or(height);
+            elements.calc();
+            *app.container.write().unwrap() = elements;
+            app.images.write().unwrap().clear();
+            app.viewport_listeners.write().unwrap().clear();
+            app.route_requests.write().unwrap().clear();
+            app.checkboxes.write().unwrap().clear();
+
+            log::debug!("render: finished");
+            if let Some(ctx) = &*app.ctx.read().unwrap() {
+                ctx.request_repaint();
+            }
+
+            Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
+        })
+        .await
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)??;
 
         Ok(())
     }
@@ -209,44 +211,52 @@ impl Renderer for EguiRenderer {
     /// # Panics
     ///
     /// Will panic if elements `Mutex` is poisoned.
-    fn render_partial(
-        &mut self,
+    async fn render_partial(
+        &self,
         view: PartialView,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-        moosicbox_logging::debug_or_trace!(
-            ("render_partial: start"),
-            ("render_partial: start {:?}", view)
-        );
+        let app = self.app.clone();
 
-        let mut page = self.app.container.write().unwrap();
-        let ids = view
-            .container
-            .elements
-            .as_slice()
-            .iter()
-            .filter_map(|x| x.container_element())
-            .map(|x| x.id)
-            .collect::<Vec<_>>();
-        if let Some(removed) =
-            page.replace_str_id_with_elements(view.container.elements, &view.target)
-        {
-            if let Some(container) = removed.container_element() {
-                let mut visibilities = self.app.visibilities.write().unwrap();
-                if let Some(visibility) = visibilities.remove(&container.id) {
-                    for id in ids {
-                        visibilities.insert(id, visibility);
+        moosicbox_task::spawn_blocking("egui render_partial", move || {
+            moosicbox_logging::debug_or_trace!(
+                ("render_partial: start"),
+                ("render_partial: start {:?}", view)
+            );
+
+            let mut page = app.container.write().unwrap();
+            let ids = view
+                .container
+                .elements
+                .as_slice()
+                .iter()
+                .filter_map(|x| x.container_element())
+                .map(|x| x.id)
+                .collect::<Vec<_>>();
+            if let Some(removed) =
+                page.replace_str_id_with_elements(view.container.elements, &view.target)
+            {
+                if let Some(container) = removed.container_element() {
+                    let mut visibilities = app.visibilities.write().unwrap();
+                    if let Some(visibility) = visibilities.remove(&container.id) {
+                        for id in ids {
+                            visibilities.insert(id, visibility);
+                        }
                     }
+                    drop(visibilities);
                 }
-                drop(visibilities);
+                page.calc();
+                drop(page);
+                if let Some(ctx) = &*app.ctx.read().unwrap() {
+                    ctx.request_repaint();
+                }
+            } else {
+                log::warn!("Unable to find element with id {}", view.target);
             }
-            page.calc();
-            drop(page);
-            if let Some(ctx) = &*self.app.ctx.read().unwrap() {
-                ctx.request_repaint();
-            }
-        } else {
-            log::warn!("Unable to find element with id {}", view.target);
-        }
+
+            Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
+        })
+        .await
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)??;
 
         Ok(())
     }
@@ -258,29 +268,38 @@ impl Renderer for EguiRenderer {
     /// # Panics
     ///
     /// Will panic if elements `Mutex` is poisoned.
-    fn render_canvas(
-        &mut self,
+    async fn render_canvas(
+        &self,
         mut update: CanvasUpdate,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-        log::trace!("render_canvas: start");
+        let app = self.app.clone();
 
-        let mut binding = self.app.canvas_actions.write().unwrap();
+        moosicbox_task::spawn_blocking("egui render_canvas", move || {
+            log::trace!("render_canvas: start");
 
-        let actions = binding
-            .entry(update.target)
-            .or_insert_with(|| Vec::with_capacity(update.canvas_actions.len()));
+            let mut binding = app.canvas_actions.write().unwrap();
 
-        actions.append(&mut update.canvas_actions);
+            let actions = binding
+                .entry(update.target)
+                .or_insert_with(|| Vec::with_capacity(update.canvas_actions.len()));
 
-        compact_canvas_actions(actions);
+            actions.append(&mut update.canvas_actions);
 
-        drop(binding);
+            compact_canvas_actions(actions);
 
-        if let Some(ctx) = &*self.app.ctx.read().unwrap() {
-            ctx.request_repaint();
-        }
+            drop(binding);
 
-        log::trace!("render_canvas: end");
+            if let Some(ctx) = &*app.ctx.read().unwrap() {
+                ctx.request_repaint();
+            }
+
+            log::trace!("render_canvas: end");
+
+            Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
+        })
+        .await
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)??;
+
         Ok(())
     }
 

@@ -379,7 +379,7 @@ impl NativeApp {
                 log::debug!("app_native_lib::start: router listening");
                 while let Some(element) = router.wait_for_navigation().await {
                     log::debug!("app_native_lib::start: router received element");
-                    renderer.write().await.render(element)?;
+                    renderer.read().await.render(element).await?;
                 }
                 Ok::<_, NativeAppError>(())
             }
@@ -394,7 +394,7 @@ impl NativeApp {
     pub async fn to_runner(self) -> Result<Box<dyn RenderRunner>, NativeAppError> {
         log::debug!("run: getting runner");
         self.renderer
-            .write()
+            .read()
             .await
             .to_runner()
             .await

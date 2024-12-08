@@ -155,42 +155,34 @@ impl Renderer for HtmxRenderer {
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         self.html_renderer
             .init(width, height, x, y, background)
-            .await?;
-
-        Ok(())
+            .await
     }
 
     /// # Errors
     ///
     /// Will error if htmx fails to run the event loop.
-    async fn to_runner(
-        &mut self,
-    ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
+    async fn to_runner(&self) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
         self.html_renderer.to_runner().await
     }
 
     /// # Errors
     ///
     /// Will error if htmx fails to render the elements.
-    fn render(
-        &mut self,
+    async fn render(
+        &self,
         elements: View,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-        self.html_renderer.render(elements)?;
-
-        Ok(())
+        self.html_renderer.render(elements).await
     }
 
     /// # Errors
     ///
     /// Will error if htmx fails to render the partial view.
-    fn render_partial(
-        &mut self,
+    async fn render_partial(
+        &self,
         view: PartialView,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-        self.html_renderer.render_partial(view)?;
-
-        Ok(())
+        self.html_renderer.render_partial(view).await
     }
 
     /// # Errors
@@ -200,20 +192,18 @@ impl Renderer for HtmxRenderer {
     /// # Panics
     ///
     /// Will panic if elements `Mutex` is poisoned.
-    fn render_canvas(
-        &mut self,
-        _update: CanvasUpdate,
+    async fn render_canvas(
+        &self,
+        update: CanvasUpdate,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-        log::trace!("render_canvas");
-
-        Ok(())
+        self.html_renderer.render_canvas(update).await
     }
 
     fn container(&self) -> RwLockReadGuard<ContainerElement> {
-        unimplemented!();
+        self.html_renderer.container()
     }
 
     fn container_mut(&self) -> RwLockWriteGuard<ContainerElement> {
-        unimplemented!();
+        self.html_renderer.container_mut()
     }
 }

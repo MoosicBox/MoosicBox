@@ -93,19 +93,19 @@ pub trait Renderer: Send + Sync {
     ///
     /// Will error if `Renderer` implementation fails to run.
     async fn to_runner(
-        &mut self,
+        &self,
     ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send + 'static>>;
 
     /// # Errors
     ///
     /// Will error if `Renderer` implementation fails to render the view.
-    fn render(&mut self, view: View) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
+    async fn render(&self, view: View) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
 
     /// # Errors
     ///
     /// Will error if `Renderer` implementation fails to render the partial elements.
-    fn render_partial(
-        &mut self,
+    async fn render_partial(
+        &self,
         partial: PartialView,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
 
@@ -113,8 +113,8 @@ pub trait Renderer: Send + Sync {
     ///
     /// Will error if `Renderer` implementation fails to render the canvas update.
     #[cfg(feature = "canvas")]
-    fn render_canvas(
-        &mut self,
+    async fn render_canvas(
+        &self,
         update: canvas::CanvasUpdate,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
 

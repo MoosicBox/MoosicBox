@@ -129,7 +129,13 @@ async fn set_current_session(session: ApiSession) {
             target: id,
             container: markup.try_into().unwrap(),
         };
-        let response = RENDERER.get().unwrap().write().await.render_partial(view);
+        let response = RENDERER
+            .get()
+            .unwrap()
+            .read()
+            .await
+            .render_partial(view)
+            .await;
         if let Err(e) = response {
             log::error!("Failed to render_partial: {e:?}");
         }
@@ -166,7 +172,13 @@ async fn handle_playback_update(update: ApiUpdateSession) {
                         target: id,
                         container: markup.try_into().unwrap(),
                     };
-                    let response = RENDERER.get().unwrap().write().await.render_partial(view);
+                    let response = RENDERER
+                        .get()
+                        .unwrap()
+                        .write()
+                        .await
+                        .render_partial(view)
+                        .await;
                     if let Err(e) = response {
                         log::error!("Failed to render_partial: {e:?}");
                     }
