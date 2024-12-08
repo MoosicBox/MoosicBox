@@ -417,7 +417,6 @@ impl ContainerElement {
         if is_grid {
             Self::calc_element_sizes_by_rowcol(
                 arena,
-                relative_size,
                 self.relative_positioned_elements_mut(),
                 direction,
                 container_width,
@@ -811,7 +810,6 @@ impl ContainerElement {
 
     fn calc_element_sizes_by_rowcol<'a>(
         arena: &Bump,
-        relative_size: Option<(f32, f32)>,
         elements: impl Iterator<Item = &'a mut Element>,
         direction: LayoutDirection,
         container_width: f32,
@@ -879,7 +877,6 @@ impl ContainerElement {
                 log::trace!("calc_element_sizes_by_rowcol: next rowcol_index={rowcol_index} padding_and_margins={padding_and_margins}");
             }
 
-            element.calc_inner(arena, relative_size);
             buf.push(element);
         }
 
