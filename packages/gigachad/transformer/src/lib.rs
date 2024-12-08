@@ -277,6 +277,7 @@ fn absolute_positioned_elements_mut(
     })
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl ContainerElement {
     #[must_use]
     pub fn is_visible(&self) -> bool {
@@ -692,6 +693,7 @@ struct Attrs {
     values: Vec<(String, String)>,
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Attrs {
     fn new() -> Self {
         Self::default()
@@ -742,6 +744,7 @@ impl Attrs {
     }
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl ContainerElement {
     fn attrs(&self, with_debug_attrs: bool) -> Attrs {
         let mut attrs = Attrs { values: vec![] };
@@ -851,6 +854,7 @@ impl ContainerElement {
     }
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl std::fmt::Display for Element {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(
@@ -879,6 +883,7 @@ fn display_elements(
 }
 
 impl Element {
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn display_to_string(
         &self,
         with_debug_attrs: bool,
@@ -927,6 +932,7 @@ impl Element {
         Ok(pretty.to_string())
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     #[allow(clippy::too_many_lines)]
     fn display(&self, f: &mut dyn Write, with_debug_attrs: bool) -> Result<(), std::io::Error> {
         match self {
@@ -1187,6 +1193,7 @@ impl Element {
         }
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     pub fn container_element_mut(&mut self) -> Option<&mut ContainerElement> {
         match self {
             Self::Div { element }
@@ -1217,6 +1224,7 @@ impl Element {
         }
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     #[cfg(feature = "id")]
     #[must_use]
     pub fn find_element_by_id(&self, id: usize) -> Option<&Self> {
@@ -1232,6 +1240,7 @@ impl Element {
         })
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     #[must_use]
     pub fn find_element_by_str_id(&self, str_id: &str) -> Option<&Self> {
         self.container_element().and_then(|container| {
@@ -1246,6 +1255,7 @@ impl Element {
         })
     }
 
+    #[cfg_attr(feature = "profiling", profiling::function)]
     #[must_use]
     pub fn find_element_by_str_id_mut(&mut self, str_id: &str) -> Option<&mut Self> {
         if let Some(container) = self.container_element() {
@@ -1277,6 +1287,7 @@ pub struct TableIterMut<'a> {
         Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'a mut ContainerElement> + 'a>> + 'a>,
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Element {
     /// # Panics
     ///
@@ -1529,6 +1540,7 @@ pub enum Input {
     },
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Input {
     fn display(&self, f: &mut dyn Write, _with_debug_attrs: bool) -> Result<(), std::io::Error> {
         match self {
@@ -1563,6 +1575,7 @@ impl Input {
     }
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl std::fmt::Display for Input {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
