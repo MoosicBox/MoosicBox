@@ -220,13 +220,7 @@ pub struct AppState {
     pub current_sessions: Arc<RwLock<Vec<ApiSession>>>,
     #[allow(clippy::type_complexity)]
     pub on_current_sessions_updated_listeners: Vec<
-        Arc<
-            Box<
-                dyn Fn(&[ApiSession]) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
-                    + Send
-                    + Sync,
-            >,
-        >,
+        Arc<Box<dyn Fn(&[ApiSession]) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>>,
     >,
     pub current_session_id: Arc<RwLock<Option<u64>>>,
     pub current_audio_zones: Arc<RwLock<Vec<ApiAudioZoneWithSession>>>,
@@ -239,9 +233,7 @@ pub struct AppState {
     pub on_before_handle_playback_update_listeners: Vec<
         Arc<
             Box<
-                dyn Fn(&ApiUpdateSession) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
-                    + Send
-                    + Sync,
+                dyn Fn(&ApiUpdateSession) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync,
             >,
         >,
     >,
@@ -249,70 +241,42 @@ pub struct AppState {
     pub on_after_handle_playback_update_listeners: Vec<
         Arc<
             Box<
-                dyn Fn(&ApiUpdateSession) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
-                    + Send
-                    + Sync,
+                dyn Fn(&ApiUpdateSession) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync,
             >,
         >,
     >,
     #[allow(clippy::type_complexity)]
     pub on_before_update_playlist_listeners:
-        Vec<Arc<Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync>>>,
+        Vec<Arc<Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>>>,
     #[allow(clippy::type_complexity)]
     pub on_after_update_playlist_listeners: Vec<
-        Arc<
-            Box<
-                dyn Fn(&ApiSession) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
-                    + Send
-                    + Sync,
-            >,
-        >,
+        Arc<Box<dyn Fn(&ApiSession) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>>,
     >,
     #[allow(clippy::type_complexity)]
     pub on_before_handle_ws_message_listeners: Vec<
         Arc<
-            Box<
-                dyn Fn(&OutboundPayload) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
-                    + Send
-                    + Sync,
-            >,
+            Box<dyn Fn(&OutboundPayload) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>,
         >,
     >,
     #[allow(clippy::type_complexity)]
     pub on_after_handle_ws_message_listeners: Vec<
         Arc<
-            Box<
-                dyn Fn(&OutboundPayload) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
-                    + Send
-                    + Sync,
-            >,
+            Box<dyn Fn(&OutboundPayload) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>,
         >,
     >,
     #[allow(clippy::type_complexity)]
     pub on_before_set_state_listeners: Vec<
-        Arc<
-            Box<
-                dyn Fn(&UpdateAppState) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
-                    + Send
-                    + Sync,
-            >,
-        >,
+        Arc<Box<dyn Fn(&UpdateAppState) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>>,
     >,
     #[allow(clippy::type_complexity)]
     pub on_after_set_state_listeners: Vec<
-        Arc<
-            Box<
-                dyn Fn(&UpdateAppState) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
-                    + Send
-                    + Sync,
-            >,
-        >,
+        Arc<Box<dyn Fn(&UpdateAppState) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>>,
     >,
 }
 
 impl AppState {
     #[must_use]
-    pub fn with_on_before_handle_playback_update_listener<F: Future<Output = ()> + Send + Sync>(
+    pub fn with_on_before_handle_playback_update_listener<F: Future<Output = ()> + Send>(
         mut self,
         listener: impl Fn(ApiUpdateSession) -> F + Send + Sync + 'static,
     ) -> Self {
@@ -327,7 +291,7 @@ impl AppState {
     }
 
     #[must_use]
-    pub fn with_on_after_handle_playback_update_listener<F: Future<Output = ()> + Send + Sync>(
+    pub fn with_on_after_handle_playback_update_listener<F: Future<Output = ()> + Send>(
         mut self,
         listener: impl Fn(ApiUpdateSession) -> F + Send + Sync + 'static,
     ) -> Self {
@@ -342,7 +306,7 @@ impl AppState {
     }
 
     #[must_use]
-    pub fn with_on_before_update_playlist_listener<F: Future<Output = ()> + Send + Sync>(
+    pub fn with_on_before_update_playlist_listener<F: Future<Output = ()> + Send>(
         mut self,
         listener: impl Fn() -> F + Send + Sync + 'static,
     ) -> Self {
@@ -356,7 +320,7 @@ impl AppState {
     }
 
     #[must_use]
-    pub fn with_on_after_update_playlist_listener<F: Future<Output = ()> + Send + Sync>(
+    pub fn with_on_after_update_playlist_listener<F: Future<Output = ()> + Send>(
         mut self,
         listener: impl Fn(ApiSession) -> F + Send + Sync + 'static,
     ) -> Self {
@@ -371,7 +335,7 @@ impl AppState {
     }
 
     #[must_use]
-    pub fn with_on_before_handle_ws_message_listener<F: Future<Output = ()> + Send + Sync>(
+    pub fn with_on_before_handle_ws_message_listener<F: Future<Output = ()> + Send>(
         mut self,
         listener: impl Fn(OutboundPayload) -> F + Send + Sync + 'static,
     ) -> Self {
@@ -386,7 +350,7 @@ impl AppState {
     }
 
     #[must_use]
-    pub fn with_on_after_handle_ws_message_listener<F: Future<Output = ()> + Send + Sync>(
+    pub fn with_on_after_handle_ws_message_listener<F: Future<Output = ()> + Send>(
         mut self,
         listener: impl Fn(OutboundPayload) -> F + Send + Sync + 'static,
     ) -> Self {
@@ -401,7 +365,7 @@ impl AppState {
     }
 
     #[must_use]
-    pub fn with_on_before_set_state_listener<F: Future<Output = ()> + Send + Sync>(
+    pub fn with_on_before_set_state_listener<F: Future<Output = ()> + Send>(
         mut self,
         listener: impl Fn(UpdateAppState) -> F + Send + Sync + 'static,
     ) -> Self {
@@ -416,7 +380,7 @@ impl AppState {
     }
 
     #[must_use]
-    pub fn with_on_after_set_state_listener<F: Future<Output = ()> + Send + Sync>(
+    pub fn with_on_after_set_state_listener<F: Future<Output = ()> + Send>(
         mut self,
         listener: impl Fn(UpdateAppState) -> F + Send + Sync + 'static,
     ) -> Self {
@@ -431,7 +395,7 @@ impl AppState {
     }
 
     #[must_use]
-    pub fn with_on_current_sessions_updated_listener<F: Future<Output = ()> + Send + Sync>(
+    pub fn with_on_current_sessions_updated_listener<F: Future<Output = ()> + Send>(
         mut self,
         listener: impl Fn(Vec<ApiSession>) -> F + Send + Sync + 'static,
     ) -> Self {
