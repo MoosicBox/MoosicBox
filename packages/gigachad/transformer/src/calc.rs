@@ -1491,16 +1491,19 @@ impl ContainerElement {
                     element.calculated_x = Some(calc_number(left, width));
                 }
                 if let Some(right) = &element.right {
-                    let a = calc_number(right, width);
-                    element.calculated_x = Some(width - a - element.calculated_width.unwrap());
+                    let offset = calc_number(right, width);
+                    let bounding_width = element.bounding_calculated_width().unwrap();
+                    element.calculated_x = Some(width - offset - bounding_width);
+                    log::trace!("position_children: absolute position right={right} calculated_x={} width={width} offset={offset} bounding_width={bounding_width}", element.calculated_x.unwrap());
                 }
                 if let Some(top) = &element.top {
                     element.calculated_y = Some(calc_number(top, height));
                 }
                 if let Some(bottom) = &element.bottom {
-                    element.calculated_y = Some(
-                        height - calc_number(bottom, height) - element.calculated_height.unwrap(),
-                    );
+                    let offset = calc_number(bottom, height);
+                    let bounding_height = element.bounding_calculated_height().unwrap();
+                    element.calculated_y = Some(height - offset - bounding_height);
+                    log::trace!("position_children: absolute position bottom={bottom} calculated_y={} height={height} offset={offset} bounding_height={bounding_height}", element.calculated_y.unwrap());
                 }
 
                 if element.calculated_x.is_none() {
@@ -8699,6 +8702,47 @@ mod test {
                         calculated_padding_left: Some(10.0),
                         calculated_padding_right: Some(20.0),
                         calculated_padding_top: Some(15.0),
+                        ..container.elements[0].container_element().unwrap().clone()
+                    }
+                }],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_uses_bounding_width_for_absolute_position_children_with_right_offset() {
+        let mut container = ContainerElement {
+            elements: vec![Element::Div {
+                element: ContainerElement {
+                    width: Some(Number::Calc(Calculation::Number(Box::new(
+                        Number::IntegerPercent(50),
+                    )))),
+                    padding_left: Some(Number::Integer(10)),
+                    padding_right: Some(Number::Integer(20)),
+                    right: Some(Number::Integer(5)),
+                    position: Some(Position::Absolute),
+                    ..Default::default()
+                },
+            }],
+            calculated_width: Some(100.0),
+            calculated_height: Some(50.0),
+            position: Some(Position::Relative),
+            ..Default::default()
+        };
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![Element::Div {
+                    element: ContainerElement {
+                        calculated_width: Some(35.0),
+                        calculated_height: Some(50.0),
+                        calculated_x: Some(100.0 - 35.0 - 10.0 - 20.0 - 5.0),
+                        calculated_y: Some(0.0),
+                        calculated_padding_left: Some(10.0),
+                        calculated_padding_right: Some(20.0),
                         ..container.elements[0].container_element().unwrap().clone()
                     }
                 }],
