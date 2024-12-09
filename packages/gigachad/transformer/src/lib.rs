@@ -746,6 +746,7 @@ impl Attrs {
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl ContainerElement {
+    #[allow(clippy::too_many_lines)]
     fn attrs(&self, with_debug_attrs: bool) -> Attrs {
         let mut attrs = Attrs { values: vec![] };
 
@@ -782,6 +783,33 @@ impl ContainerElement {
         if let Some(height) = &self.height {
             attrs.add("sx-height", height);
         }
+
+        if let Some(padding) = &self.padding_left {
+            attrs.add("sx-padding-left", padding);
+        }
+        if let Some(padding) = &self.padding_right {
+            attrs.add("sx-padding-right", padding);
+        }
+        if let Some(padding) = &self.padding_top {
+            attrs.add("sx-padding-top", padding);
+        }
+        if let Some(padding) = &self.padding_bottom {
+            attrs.add("sx-padding-bottom", padding);
+        }
+
+        if let Some(margin) = &self.margin_left {
+            attrs.add("sx-margin-left", margin);
+        }
+        if let Some(margin) = &self.margin_right {
+            attrs.add("sx-margin-right", margin);
+        }
+        if let Some(margin) = &self.margin_top {
+            attrs.add("sx-margin-top", margin);
+        }
+        if let Some(margin) = &self.margin_bottom {
+            attrs.add("sx-margin-bottom", margin);
+        }
+
         match self.overflow_x {
             LayoutOverflow::Auto => {
                 attrs.add("sx-overflow-x", "auto");
