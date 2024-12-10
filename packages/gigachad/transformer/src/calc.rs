@@ -824,6 +824,8 @@ impl ContainerElement {
                     .map_or(container_height, |x| calc_number(x, container_height));
                 self.calculated_width.replace(width);
                 self.calculated_height.replace(height);
+                log::trace!("calc_sized_element_size (Row): width={width} height={height}");
+                width
             }
             LayoutDirection::Column => {
                 let width = self
@@ -833,11 +835,9 @@ impl ContainerElement {
                 let height = calc_number(self.height.as_ref().unwrap(), container_height);
                 self.calculated_width.replace(width);
                 self.calculated_height.replace(height);
+                log::trace!("calc_sized_element_size (Column): width={width} height={height}");
+                height
             }
-        }
-        match direction {
-            LayoutDirection::Row => self.calculated_width.unwrap_or(0.0),
-            LayoutDirection::Column => self.calculated_height.unwrap_or(0.0),
         }
     }
 
