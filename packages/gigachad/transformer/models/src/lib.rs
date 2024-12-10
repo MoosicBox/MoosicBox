@@ -63,6 +63,7 @@ impl std::fmt::Display for JustifyContent {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum AlignItems {
+    Start,
     Center,
     End,
     #[default]

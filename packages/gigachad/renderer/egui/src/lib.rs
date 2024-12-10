@@ -1269,48 +1269,56 @@ impl EguiApp {
         relative_container: Option<(egui::Rect, &'a ContainerElement)>,
         inner: impl FnOnce(&mut Ui, Option<(egui::Rect, &'a ContainerElement)>) -> Response,
     ) -> Response {
-        match container.justify_content {
-            JustifyContent::Center => {
-                ui.allocate_new_ui(
-                    egui::UiBuilder::new().layout(match container.align_items {
-                        AlignItems::Center => {
-                            egui::Layout::centered_and_justified(egui::Direction::TopDown)
-                        }
-                        AlignItems::End | AlignItems::Default => {
+        if matches!(
+            container.justify_content,
+            JustifyContent::Start | JustifyContent::Default
+        ) && matches!(
+            container.align_items,
+            AlignItems::Default | AlignItems::Start
+        ) {
+            return inner(ui, relative_container);
+        }
+
+        let contained_calculated_width = container.contained_calculated_width();
+        let contained_calculated_height = container.contained_calculated_height();
+        if container.justify_content == JustifyContent::End {
+            ui.add_space(container.calculated_width.unwrap() - contained_calculated_width);
+        }
+        ui.allocate_new_ui(
+            egui::UiBuilder::new().layout(match container.align_items {
+                AlignItems::Center => {
+                    egui::Layout::centered_and_justified(egui::Direction::TopDown)
+                }
+                AlignItems::End | AlignItems::Default | AlignItems::Start => {
+                    match container.justify_content {
+                        JustifyContent::Center => {
                             egui::Layout::top_down_justified(egui::Align::Center)
                         }
-                    }),
-                    |ui| {
-                        egui::Frame::none().show(ui, |ui| {
-                            ui.set_width(container.contained_calculated_width());
-                            ui.set_height(container.contained_calculated_height());
-                            if container.align_items == AlignItems::End {
-                                let rect = egui::Rect::from_min_size(
-                                    ui.cursor().left_top(),
-                                    egui::vec2(
-                                        0.0,
-                                        container.calculated_height.unwrap()
-                                            - container.contained_calculated_height(),
-                                    ),
-                                );
-                                ui.advance_cursor_after_rect(rect);
-                            }
+                        JustifyContent::End => egui::Layout::top_down_justified(egui::Align::Max),
+                        _ => egui::Layout::top_down_justified(egui::Align::Min),
+                    }
+                }
+            }),
+            |ui| {
+                egui::Frame::none().show(ui, |ui| {
+                    ui.set_width(contained_calculated_width);
+                    ui.set_height(contained_calculated_height);
+                    if container.align_items == AlignItems::End {
+                        let rect = egui::Rect::from_min_size(
+                            ui.cursor().left_top(),
+                            egui::vec2(
+                                0.0,
+                                container.calculated_height.unwrap() - contained_calculated_height,
+                            ),
+                        );
+                        ui.advance_cursor_after_rect(rect);
+                    }
 
-                            inner(ui, relative_container)
-                        })
-                    },
-                )
-                .response
-            }
-            JustifyContent::End => {
-                ui.add_space(
-                    container.calculated_width.unwrap() - container.contained_calculated_width(),
-                );
-
-                inner(ui, relative_container)
-            }
-            _ => inner(ui, relative_container),
-        }
+                    inner(ui, relative_container)
+                })
+            },
+        )
+        .response
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
