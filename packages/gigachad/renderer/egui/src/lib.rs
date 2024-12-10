@@ -1075,12 +1075,12 @@ impl EguiApp {
                     .with_max_x(
                         relative_rect.min.x
                             + container.calculated_x.unwrap()
-                            + container.calculated_width.unwrap(),
+                            + container.bounding_calculated_width().unwrap(),
                     )
                     .with_max_y(
                         relative_rect.min.y
                             + container.calculated_y.unwrap()
-                            + container.calculated_height.unwrap(),
+                            + container.bounding_calculated_height().unwrap(),
                     );
             }
         }
