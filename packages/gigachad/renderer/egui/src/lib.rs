@@ -90,6 +90,8 @@ impl RenderRunner for EguiRenderRunner {
             viewport = viewport.with_position((x as f32, y as f32));
         }
 
+        gigachad_transformer::calc::set_scrollbar_size(0);
+
         let options = eframe::NativeOptions {
             viewport,
             centered: true,
