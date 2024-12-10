@@ -817,20 +817,6 @@ impl EguiApp {
 
         Some(Self::render_borders(ui, container, |ui| {
             let response = egui::Frame::none()
-                .inner_margin(egui::Margin {
-                    left:
-                        container.internal_margin_left.unwrap_or(0.0)
-                        + container.calculated_margin_left.unwrap_or(0.0),
-                    right:
-                        container.internal_margin_right.unwrap_or(0.0)
-                        + container.calculated_margin_right.unwrap_or(0.0),
-                    top:
-                        container.internal_margin_top.unwrap_or(0.0)
-                        + container.calculated_margin_top.unwrap_or(0.0),
-                    bottom:
-                        container.internal_margin_bottom.unwrap_or(0.0)
-                        + container.calculated_margin_bottom.unwrap_or(0.0),
-                })
                 .show(ui, {
                     move |ui| {
                         ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
@@ -1335,12 +1321,23 @@ impl EguiApp {
             container,
             relative_container,
             |ui, relative_container| {
-                let mut frame = egui::Frame::none().inner_margin(egui::Margin {
-                    left: container.calculated_padding_left.unwrap_or(0.0),
-                    right: container.calculated_padding_right.unwrap_or(0.0),
-                    top: container.calculated_padding_top.unwrap_or(0.0),
-                    bottom: container.calculated_padding_bottom.unwrap_or(0.0),
-                });
+                let mut frame = egui::Frame::none()
+                    .inner_margin(egui::Margin {
+                        left: container.calculated_padding_left.unwrap_or(0.0),
+                        right: container.calculated_padding_right.unwrap_or(0.0),
+                        top: container.calculated_padding_top.unwrap_or(0.0),
+                        bottom: container.calculated_padding_bottom.unwrap_or(0.0),
+                    })
+                    .outer_margin(egui::Margin {
+                        left: container.internal_margin_left.unwrap_or(0.0)
+                            + container.calculated_margin_left.unwrap_or(0.0),
+                        right: container.internal_margin_right.unwrap_or(0.0)
+                            + container.calculated_margin_right.unwrap_or(0.0),
+                        top: container.internal_margin_top.unwrap_or(0.0)
+                            + container.calculated_margin_top.unwrap_or(0.0),
+                        bottom: container.internal_margin_bottom.unwrap_or(0.0)
+                            + container.calculated_margin_bottom.unwrap_or(0.0),
+                    });
 
                 if let Some(background) = container.background {
                     frame = frame.fill(background.into());
