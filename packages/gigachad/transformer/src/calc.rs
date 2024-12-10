@@ -836,6 +836,10 @@ impl ContainerElement {
     ) -> f32 {
         match direction {
             LayoutDirection::Row => {
+                let container_height = container_height
+                    - self
+                        .padding_and_margins(LayoutDirection::Column)
+                        .unwrap_or(0.0);
                 let width = calc_number(self.width.as_ref().unwrap(), container_width);
                 let height = self
                     .height
@@ -847,6 +851,10 @@ impl ContainerElement {
                 width
             }
             LayoutDirection::Column => {
+                let container_width = container_width
+                    - self
+                        .padding_and_margins(LayoutDirection::Row)
+                        .unwrap_or(0.0);
                 let width = self
                     .width
                     .as_ref()
@@ -8744,7 +8752,7 @@ mod test {
             div sx-width="100%" sx-height="100%" sx-position="relative" {
                 section sx-dir="row" sx-height=("calc(100% - 140px)") {
                     aside sx-width="calc(max(240, min(280, 15%)))" {}
-                    main class="main-content" sx-overflow-y="auto" {
+                    main sx-overflow-y="auto" {
                         div sx-height=(76) {
                             div
                                 sx-padding-left=(30)
@@ -8867,9 +8875,9 @@ mod test {
             ContainerElement {
                 elements: vec![Element::Div {
                     element: ContainerElement {
-                        calculated_width: Some(1600.0 * 0.3),
+                        calculated_width: Some((1600.0 - 40.0) * 0.3),
                         calculated_height: Some(800.0),
-                        calculated_x: Some(1080.0),
+                        calculated_x: Some(1092.0),
                         calculated_y: Some(0.0),
                         calculated_padding_left: Some(20.0),
                         calculated_padding_right: Some(20.0),
@@ -8908,7 +8916,7 @@ mod test {
                 elements: vec![Element::Div {
                     element: ContainerElement {
                         calculated_width: Some(1600.0 * 0.3),
-                        calculated_height: Some(760.0),
+                        calculated_height: Some(1000.0 - 200.0 - 40.0),
                         calculated_x: Some(0.0),
                         calculated_y: Some(30.0),
                         calculated_padding_top: Some(20.0),
@@ -8948,9 +8956,9 @@ mod test {
             ContainerElement {
                 elements: vec![Element::Div {
                     element: ContainerElement {
-                        calculated_width: Some(1600.0 * 0.3),
-                        calculated_height: Some(760.0),
-                        calculated_x: Some(1080.0),
+                        calculated_width: Some((1600.0 - 40.0) * 0.3),
+                        calculated_height: Some(1000.0 - 200.0 - 40.0),
+                        calculated_x: Some(1092.0),
                         calculated_y: Some(30.0),
                         calculated_padding_left: Some(20.0),
                         calculated_padding_right: Some(20.0),
@@ -8971,7 +8979,7 @@ mod test {
             div sx-width="100%" sx-height="100%" sx-position="relative" {
                 section sx-dir="row" sx-height=("calc(100% - 140px)") {
                     aside sx-width="calc(max(240, min(280, 15%)))" {}
-                    main class="main-content" sx-overflow-y="auto" {}
+                    main sx-overflow-y="auto" {}
                 }
                 div
                     sx-width="calc(min(500, 30%))"
@@ -8998,9 +9006,9 @@ mod test {
         assert_eq!(
             container.clone(),
             ContainerElement {
-                calculated_width: Some(1600.0 * 0.3),
-                calculated_height: Some(760.0),
-                calculated_x: Some(1080.0),
+                calculated_width: Some((1600.0 - 40.0) * 0.3),
+                calculated_height: Some(1000.0 - 200.0 - 40.0),
+                calculated_x: Some(1092.0),
                 calculated_y: Some(30.0),
                 calculated_padding_left: Some(20.0),
                 calculated_padding_right: Some(20.0),
@@ -9017,7 +9025,7 @@ mod test {
             div sx-width="100%" sx-height="100%" sx-position="relative" {
                 section sx-dir="row" sx-height=("calc(100% - 140px)") {
                     aside sx-width="calc(max(240, min(280, 15%)))" {}
-                    main class="main-content" sx-overflow-y="auto" {
+                    main sx-overflow-y="auto" {
                         div
                             sx-dir="row"
                             sx-overflow-x="wrap"
@@ -9075,6 +9083,181 @@ mod test {
                 calculated_padding_top: Some(15.0),
                 calculated_padding_bottom: Some(15.0),
                 ..container.clone()
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_calculates_horizontal_padding_on_sized_element_correctly() {
+        let mut container: ContainerElement = html! {
+            div sx-width="100%" sx-height="100%" sx-position="relative" {
+                section sx-dir="row" sx-height=("calc(100% - 140)") {
+                    aside sx-width="calc(max(240, min(280, 15%)))" sx-padding=(20) {}
+                    main sx-overflow-y="auto" {}
+                }
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(1600.0);
+        container.calculated_height = Some(1000.0);
+
+        container.calc();
+
+        let main = container.elements[0].container_element().unwrap().elements[0]
+            .container_element()
+            .unwrap()
+            .elements[1]
+            .container_element()
+            .unwrap();
+
+        assert_eq!(
+            main.clone(),
+            ContainerElement {
+                calculated_width: Some(1320.0),
+                calculated_height: Some(860.0),
+                calculated_x: Some(280.0),
+                calculated_y: Some(0.0),
+                ..main.clone()
+            }
+        );
+
+        let aside = container.elements[0].container_element().unwrap().elements[0]
+            .container_element()
+            .unwrap()
+            .elements[0]
+            .container_element()
+            .unwrap();
+
+        assert_eq!(
+            aside.clone(),
+            ContainerElement {
+                calculated_width: Some(240.0),
+                calculated_x: Some(0.0),
+                calculated_y: Some(0.0),
+                calculated_padding_left: Some(20.0),
+                calculated_padding_right: Some(20.0),
+                ..aside.clone()
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_calculates_vertical_padding_on_sized_element_correctly() {
+        let mut container: ContainerElement = html! {
+            div sx-width="100%" sx-height="100%" sx-position="relative" {
+                section sx-dir="row" sx-height=("calc(100% - 140)") {
+                    aside sx-width="calc(max(240, min(280, 15%)))" sx-padding=(20) {
+                        div {
+                            div {}
+                            ul { li {} li {} }
+                        }
+                    }
+                    main sx-overflow-y="auto" {}
+                }
+                footer sx-height=(140) {}
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(1600.0);
+        container.calculated_height = Some(1000.0);
+
+        container.calc();
+
+        let main = container.elements[0].container_element().unwrap().elements[0]
+            .container_element()
+            .unwrap()
+            .elements[1]
+            .container_element()
+            .unwrap();
+
+        assert_eq!(
+            main.clone(),
+            ContainerElement {
+                calculated_width: Some(1320.0),
+                calculated_height: Some(860.0),
+                calculated_x: Some(280.0),
+                calculated_y: Some(0.0),
+                ..main.clone()
+            }
+        );
+
+        let aside = container.elements[0].container_element().unwrap().elements[0]
+            .container_element()
+            .unwrap()
+            .elements[0]
+            .container_element()
+            .unwrap();
+
+        assert_eq!(
+            aside.clone(),
+            ContainerElement {
+                elements: vec![Element::Div {
+                    element: ContainerElement {
+                        elements: vec![
+                            Element::Div {
+                                element: ContainerElement {
+                                    calculated_height: Some(410.0),
+                                    ..aside.elements[0].container_element().unwrap().elements[0]
+                                        .container_element()
+                                        .unwrap()
+                                        .clone()
+                                }
+                            },
+                            Element::UnorderedList {
+                                element: ContainerElement {
+                                    elements: vec![
+                                        Element::ListItem {
+                                            element: ContainerElement {
+                                                calculated_height: Some(205.0),
+                                                ..aside.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            }
+                                        },
+                                        Element::ListItem {
+                                            element: ContainerElement {
+                                                calculated_height: Some(205.0),
+                                                ..aside.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[1]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            }
+                                        }
+                                    ],
+                                    calculated_height: Some(410.0),
+                                    ..aside.elements[0].container_element().unwrap().elements[1]
+                                        .container_element()
+                                        .unwrap()
+                                        .clone()
+                                }
+                            }
+                        ],
+                        ..aside.elements[0].container_element().unwrap().clone()
+                    }
+                }],
+                calculated_height: Some(820.0),
+                calculated_x: Some(0.0),
+                calculated_y: Some(0.0),
+                calculated_padding_top: Some(20.0),
+                calculated_padding_bottom: Some(20.0),
+                ..aside.clone()
             }
         );
     }
