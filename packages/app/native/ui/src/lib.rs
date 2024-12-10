@@ -19,7 +19,10 @@ use play_queue::play_queue;
 use serde::{Deserialize, Serialize};
 use state::State;
 
-static FOOTER_HEIGHT: u16 = 100 + 32 + 5 + 5 + 3;
+static VIZ_HEIGHT: u16 = 35;
+static VIZ_PADDING: u16 = 5;
+static FOOTER_BORDER_SIZE: u16 = 3;
+static FOOTER_HEIGHT: u16 = 100 + VIZ_HEIGHT + VIZ_PADDING * 2 + FOOTER_BORDER_SIZE;
 static CURRENT_ALBUM_SIZE: u16 = 70;
 
 #[macro_export]
@@ -141,8 +144,8 @@ pub fn sidebar_navigation() -> Markup {
 #[must_use]
 pub fn player(state: &State) -> Markup {
     html! {
-        div sx-height=(FOOTER_HEIGHT) sx-border-top="3, #222" {
-            div sx-height=(32) sx-padding-top=(5) sx-padding-bottom=(5) sx-dir="row" {
+        div sx-height=(FOOTER_HEIGHT) sx-border-top={(FOOTER_BORDER_SIZE)", #222"} {
+            div sx-height=(VIZ_HEIGHT) sx-padding-y=(5) sx-dir="row" {
                 canvas id="visualization" sx-cursor="pointer" {}
             }
             div sx-height=(100) sx-dir="row" {
@@ -263,7 +266,7 @@ fn player_play_button_from_state(state: &State) -> Markup {
 fn player_current_album(track: &ApiTrack, size: u16) -> Markup {
     html! {
         div id="player-current-playing" sx-dir="row" sx-align-items="center" {
-            div sx-width=(size) sx-height=(size) sx-padding-left=(20) sx-padding-right=(20) {
+            div sx-width=(size) sx-height=(size) sx-padding-x=(20) {
                 a href=(pre_escaped!("/albums?albumId={}&source={}", track.album_id, track.api_source)) sx-width=(size) sx-height=(size) {
                     (album_cover_img_from_album(&track.into(), size))
                 }

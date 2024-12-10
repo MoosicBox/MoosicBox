@@ -100,10 +100,8 @@ pub fn album_page_immediate(
         div
             hx-get=(path)
             hx-trigger="load"
-            sx-padding-left=(60)
-            sx-padding-right=(60)
-            sx-padding-top=(20)
-            sx-padding-bottom=(20)
+            sx-padding-x=(60)
+            sx-padding-y=(20)
         {
             div sx-dir="row" {
                 @let size = 200;
@@ -157,10 +155,8 @@ pub fn album_page_content(
 
     html! {
         div
-            sx-padding-left=(60)
-            sx-padding-right=(60)
-            sx-padding-top=(20)
-            sx-padding-bottom=(20)
+            sx-padding-x=(60)
+            sx-padding-y=(20)
         {
             div sx-dir="row" {
                 @let size = 200;
@@ -567,8 +563,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
             sx-background="#080a0b"
         {
             div
-                sx-padding-left=(30)
-                sx-padding-right=(30)
+                sx-padding-x=(30)
                 sx-padding-top=(15)
             {
                 div sx-dir="row" sx-justify-content="start" {
@@ -715,10 +710,8 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
             sx-overflow-y="show"
             sx-justify-content="space-evenly"
             sx-gap=(15)
-            sx-padding-left=(30)
-            sx-padding-right=(30)
-            sx-padding-top=(15)
-            sx-padding-bottom=(15)
+            sx-padding-x=(30)
+            sx-padding-y=(15)
         {
             @for _ in 0..100 {
                 div sx-width=(size) sx-height=(size + 30) {
