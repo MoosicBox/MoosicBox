@@ -119,8 +119,8 @@ impl Element {
             };
 
             let (Some(container_width), Some(container_height)) = (
-                container.calculated_width_minus_padding(),
-                container.calculated_height_minus_padding(),
+                container.calculated_width_minus_borders(),
+                container.calculated_height_minus_borders(),
             ) else {
                 moosicbox_assert::die_or_panic!(
                     "calc_table requires calculated_width and calculated_height to be set"
@@ -470,7 +470,7 @@ impl ContainerElement {
                 );
             }
 
-            log::debug!("handle_overflow: attempt {}", attempt + 1);
+            log::trace!("handle_overflow: attempt {}", attempt + 1);
         }
     }
 
@@ -552,7 +552,7 @@ impl ContainerElement {
 
     #[allow(clippy::too_many_lines)]
     fn size_elements(
-        elements: &mut Vec<&mut Element>,
+        elements: &mut [&mut Element],
         direction: LayoutDirection,
         container_width: f32,
         container_height: f32,
@@ -625,44 +625,47 @@ impl ContainerElement {
                 .map(|x| &mut **x)
                 .filter_map(Element::container_element_mut)
             {
-                match direction {
-                    LayoutDirection::Row => {
-                        let container_height = container_height
-                            - container
-                                .padding_and_margins(LayoutDirection::Column)
-                                .unwrap_or(0.0);
-                        let height = container
-                            .height
-                            .as_ref()
-                            .map_or(container_height, |x| calc_number(x, container_height));
-                        container.calculated_height.replace(if height < 0.0 {
-                            0.0
-                        } else {
-                            height
-                        });
+                container.size_unsized_element(
+                    container_width,
+                    container_height,
+                    direction,
+                    evenly_split_remaining_size,
+                );
+            }
+        }
+    }
 
-                        container
-                            .calculated_width
-                            .replace(evenly_split_remaining_size);
-                    }
-                    LayoutDirection::Column => {
-                        let container_width = container_width
-                            - container
-                                .padding_and_margins(LayoutDirection::Row)
-                                .unwrap_or(0.0);
-                        let width = container
-                            .width
-                            .as_ref()
-                            .map_or(container_width, |x| calc_number(x, container_width));
-                        container
-                            .calculated_width
-                            .replace(if width < 0.0 { 0.0 } else { width });
-
-                        container
-                            .calculated_height
-                            .replace(evenly_split_remaining_size);
-                    }
-                }
+    fn size_unsized_element(
+        &mut self,
+        container_width: f32,
+        container_height: f32,
+        direction: LayoutDirection,
+        size: f32,
+    ) {
+        match direction {
+            LayoutDirection::Row => {
+                let container_height = container_height
+                    - self
+                        .padding_and_margins(LayoutDirection::Column)
+                        .unwrap_or(0.0);
+                let height = self
+                    .height
+                    .as_ref()
+                    .map_or(container_height, |x| calc_number(x, container_height));
+                self.calculated_height.replace(height);
+                self.calculated_width.replace(size);
+            }
+            LayoutDirection::Column => {
+                let container_width = container_width
+                    - self
+                        .padding_and_margins(LayoutDirection::Row)
+                        .unwrap_or(0.0);
+                let width = self
+                    .width
+                    .as_ref()
+                    .map_or(container_width, |x| calc_number(x, container_width));
+                self.calculated_width.replace(width);
+                self.calculated_height.replace(size);
             }
         }
     }
@@ -675,6 +678,11 @@ impl ContainerElement {
                 if let Some(padding) = self.horizontal_padding() {
                     padding_and_margins = Some(padding);
                 }
+                if let Some(scrollbar_size) = self.scrollbar_right {
+                    padding_and_margins.replace(
+                        padding_and_margins.map_or(scrollbar_size, |x| x + scrollbar_size),
+                    );
+                }
                 if let Some(margins) = self.horizontal_margin() {
                     padding_and_margins
                         .replace(padding_and_margins.map_or(margins, |x| x + margins));
@@ -683,6 +691,11 @@ impl ContainerElement {
             LayoutDirection::Column => {
                 if let Some(padding) = self.vertical_padding() {
                     padding_and_margins = Some(padding);
+                }
+                if let Some(scrollbar_size) = self.scrollbar_bottom {
+                    padding_and_margins.replace(
+                        padding_and_margins.map_or(scrollbar_size, |x| x + scrollbar_size),
+                    );
                 }
                 if let Some(margins) = self.vertical_margin() {
                     padding_and_margins
@@ -866,7 +879,7 @@ impl ContainerElement {
         direction: LayoutDirection,
         container_width: f32,
         container_height: f32,
-        mut func: impl FnMut(&mut Vec<&mut Element>, f32, f32),
+        mut func: impl FnMut(&mut [&mut Element], f32, f32),
     ) {
         let mut elements = elements.peekable();
 
@@ -960,8 +973,8 @@ impl ContainerElement {
         remainder: f32,
     ) {
         let (Some(container_width), Some(container_height)) = (
-            self.calculated_width_minus_padding(),
-            self.calculated_height_minus_padding(),
+            self.calculated_width_minus_borders(),
+            self.calculated_height_minus_borders(),
         ) else {
             moosicbox_assert::die_or_panic!(
                 "calc_unsized_element_size requires calculated_width and calculated_height to be set"
@@ -1031,32 +1044,20 @@ impl ContainerElement {
                             .height
                             .as_ref()
                             .map_or(container_height, |x| calc_number(x, container_height));
-                        container.calculated_height.replace(if height < 0.0 {
-                            0.0
-                        } else {
-                            height
-                        });
+                        container.calculated_height.replace(height);
 
                         let width = evenly_split_remaining_size;
-                        container
-                            .calculated_width
-                            .replace(if width < 0.0 { 0.0 } else { width });
+                        container.calculated_width.replace(width);
                     }
                     LayoutDirection::Column => {
                         let width = container
                             .width
                             .as_ref()
                             .map_or(container_width, |x| calc_number(x, container_width));
-                        container
-                            .calculated_width
-                            .replace(if width < 0.0 { 0.0 } else { width });
+                        container.calculated_width.replace(width);
 
                         let height = evenly_split_remaining_size;
-                        container.calculated_height.replace(if height < 0.0 {
-                            0.0
-                        } else {
-                            height
-                        });
+                        container.calculated_height.replace(height);
                     }
                 }
             }
@@ -1074,8 +1075,8 @@ impl ContainerElement {
 
         let direction = self.direction;
         let overflow = self.overflow_x;
-        let container_width = self.calculated_width_minus_padding().unwrap_or(0.0);
-        let container_height = self.calculated_height_minus_padding().unwrap_or(0.0);
+        let container_width = self.calculated_width_minus_borders().unwrap_or(0.0);
+        let container_height = self.calculated_height_minus_borders().unwrap_or(0.0);
 
         let mut x = 0.0;
         let mut y = 0.0;
@@ -1100,8 +1101,8 @@ impl ContainerElement {
             // need to handle non container elements that have a width/height that is the split
             // remainder of the container width/height
             container.handle_overflow(relative_size);
-            let width = container.calculated_width_minus_padding().unwrap_or(0.0);
-            let height = container.calculated_height_minus_padding().unwrap_or(0.0);
+            let width = container.calculated_width_minus_borders().unwrap_or(0.0);
+            let height = container.calculated_height_minus_borders().unwrap_or(0.0);
 
             let mut current_row = row;
             let mut current_col = col;
@@ -1383,10 +1384,10 @@ impl ContainerElement {
         }
 
         if child_horizontal_offset > 0.0 {
-            self.increase_padding_left(child_horizontal_offset);
+            self.internal_padding_left = Some(child_horizontal_offset);
         }
         if child_vertical_offset > 0.0 {
-            self.increase_padding_top(child_vertical_offset);
+            self.internal_padding_top = Some(child_vertical_offset);
         }
 
         for element in relative_positioned_elements_mut(&mut self.elements)
@@ -1941,30 +1942,6 @@ impl ContainerElement {
     }
 
     #[must_use]
-    pub(crate) fn internal_horizontal_padding(&self) -> Option<f32> {
-        let mut padding = None;
-        if let Some(padding_left) = self.internal_padding_left {
-            padding = Some(padding_left);
-        }
-        if let Some(padding_right) = self.internal_padding_right {
-            padding.replace(padding.map_or(padding_right, |x| x + padding_right));
-        }
-        padding
-    }
-
-    #[must_use]
-    pub(crate) fn internal_vertical_padding(&self) -> Option<f32> {
-        let mut padding = None;
-        if let Some(padding_top) = self.internal_padding_top {
-            padding = Some(padding_top);
-        }
-        if let Some(padding_bottom) = self.internal_padding_bottom {
-            padding.replace(padding.map_or(padding_bottom, |x| x + padding_bottom));
-        }
-        padding
-    }
-
-    #[must_use]
     pub fn horizontal_borders(&self) -> Option<f32> {
         let mut borders = None;
         if let Some((_, border_left)) = self.calculated_border_left {
@@ -1989,17 +1966,8 @@ impl ContainerElement {
     }
 
     #[must_use]
-    pub fn calculated_width_minus_padding(&self) -> Option<f32> {
+    pub fn calculated_width_minus_borders(&self) -> Option<f32> {
         self.calculated_width.map(|x| {
-            let x = self.internal_horizontal_padding().map_or(x, |padding| {
-                let x = x - padding;
-                if x < 0.0 {
-                    0.0
-                } else {
-                    x
-                }
-            });
-
             self.horizontal_borders().map_or(x, |borders| {
                 let x = x - borders;
                 if x < 0.0 {
@@ -2012,17 +1980,8 @@ impl ContainerElement {
     }
 
     #[must_use]
-    pub fn calculated_height_minus_padding(&self) -> Option<f32> {
+    pub fn calculated_height_minus_borders(&self) -> Option<f32> {
         self.calculated_height.map(|x| {
-            let x = self.internal_vertical_padding().map_or(x, |padding| {
-                let x = x - padding;
-                if x < 0.0 {
-                    0.0
-                } else {
-                    x
-                }
-            });
-
             self.vertical_borders().map_or(x, |borders| {
                 let x = x - borders;
                 if x < 0.0 {
@@ -2067,6 +2026,7 @@ impl ContainerElement {
         self.calculated_width.map(|width| {
             width
                 + self.horizontal_padding().unwrap_or(0.0)
+                + self.scrollbar_right.unwrap_or(0.0)
                 + self.horizontal_margin().unwrap_or(0.0)
         })
     }
@@ -2074,7 +2034,10 @@ impl ContainerElement {
     #[must_use]
     pub fn bounding_calculated_height(&self) -> Option<f32> {
         self.calculated_height.map(|height| {
-            height + self.vertical_padding().unwrap_or(0.0) + self.vertical_margin().unwrap_or(0.0)
+            height
+                + self.vertical_padding().unwrap_or(0.0)
+                + self.scrollbar_bottom.unwrap_or(0.0)
+                + self.vertical_margin().unwrap_or(0.0)
         })
     }
 
@@ -2090,9 +2053,10 @@ impl ContainerElement {
             log::trace!("resize_children: no children");
             return false;
         }
-        let (Some(width), Some(height)) = (
-            self.calculated_width_minus_padding(),
-            self.calculated_height_minus_padding(),
+
+        let (Some(mut width), Some(mut height)) = (
+            self.calculated_width_minus_borders(),
+            self.calculated_height_minus_borders(),
         ) else {
             moosicbox_assert::die_or_panic!(
                 "ContainerElement missing calculated_width and/or calculated_height: {self:?}"
@@ -2113,38 +2077,48 @@ impl ContainerElement {
             self.height,
         );
 
-        let scrollbar_size = f32::from(get_scrollbar_size());
-
         if self.overflow_y == LayoutOverflow::Scroll
             || contained_calculated_height > height && self.overflow_y == LayoutOverflow::Auto
         {
-            log::debug!(
-                "resize_children: vertical scrollbar is visible, setting padding_right to {scrollbar_size}"
-            );
-            if self
-                .internal_padding_right
-                .is_none_or(|x| (x - scrollbar_size).abs() >= EPSILON)
-            {
-                self.internal_padding_right.replace(scrollbar_size);
-                log::debug!("resize_children: resized because vertical scrollbar is visible");
+            let scrollbar_size = f32::from(get_scrollbar_size());
+
+            if self.scrollbar_right.is_none() {
+                self.scrollbar_right.replace(scrollbar_size);
+                self.calculated_width = Some(self.calculated_width.unwrap() - scrollbar_size);
+                width = self.calculated_width_minus_borders().unwrap();
+                log::debug!("resize_children: resized because vertical scrollbar is now visible and affected children elements, setting scrollbar_right to {scrollbar_size}");
                 resized = true;
             }
+        } else if let Some(scrollbar_size) = self.scrollbar_right {
+            self.scrollbar_right.take();
+            self.calculated_width = Some(self.calculated_width.unwrap() + scrollbar_size);
+            width = self.calculated_width_minus_borders().unwrap();
+            log::debug!(
+                "resize_children: resized because vertical scrollbar is not visible anymore and affected children elements"
+            );
+            resized = true;
         }
 
         if self.overflow_x == LayoutOverflow::Scroll
             || contained_calculated_width > width && self.overflow_x == LayoutOverflow::Auto
         {
-            log::debug!(
-                "resize_children: horizontal scrollbar is visible, setting padding_bottom to {scrollbar_size}"
-            );
-            if self
-                .internal_padding_bottom
-                .is_none_or(|x| (x - scrollbar_size).abs() >= EPSILON)
-            {
-                self.internal_padding_bottom.replace(scrollbar_size);
-                log::debug!("resize_children: resized because horizontal scrollbar is visible");
+            let scrollbar_size = f32::from(get_scrollbar_size());
+
+            if self.scrollbar_bottom.is_none() {
+                self.scrollbar_bottom.replace(scrollbar_size);
+                self.calculated_height = Some(self.calculated_height.unwrap() - scrollbar_size);
+                height = self.calculated_height_minus_borders().unwrap();
+                log::debug!("resize_children: resized because horizontal scrollbar is now visible and affected children elements, setting scrollbar_bottom to {scrollbar_size}");
                 resized = true;
             }
+        } else if let Some(scrollbar_size) = self.scrollbar_bottom {
+            self.scrollbar_bottom.take();
+            self.calculated_height = Some(self.calculated_height.unwrap() + scrollbar_size);
+            height = self.calculated_height_minus_borders().unwrap();
+            log::debug!(
+                "resize_children: resized because horizontal scrollbar is not visible anymore and affected children elements"
+            );
+            resized = true;
         }
 
         if width < contained_calculated_width - EPSILON {
@@ -2163,31 +2137,30 @@ impl ContainerElement {
                 }
                 LayoutOverflow::Wrap | LayoutOverflow::Squash => {
                     let contained_sized_width = self.contained_sized_width(false).unwrap_or(0.0);
-                    log::debug!("resize_children: contained_sized_width={contained_sized_width}");
                     #[allow(clippy::cast_precision_loss)]
                     let evenly_split_remaining_size = if width > contained_sized_width {
                         (width - contained_sized_width) / (self.columns() as f32)
                     } else {
                         0.0
                     };
+                    log::debug!("resize_children: width={width} contained_sized_width={contained_sized_width} evenly_split_remaining_size={evenly_split_remaining_size}");
 
                     for element in self
                         .relative_positioned_elements_mut()
                         .filter_map(|x| x.container_element_mut())
                         .filter(|x| x.width.is_none())
                     {
+                        let element_width = evenly_split_remaining_size
+                            - element.horizontal_padding().unwrap_or(0.0);
+
                         if let Some(existing) = element.calculated_width {
-                            if (existing - evenly_split_remaining_size).abs() > 0.01 {
-                                element
-                                    .calculated_width
-                                    .replace(evenly_split_remaining_size);
+                            if (existing - element_width).abs() > 0.01 {
+                                element.calculated_width.replace(element_width);
                                 resized = true;
-                                log::debug!("resize_children: resized because child calculated_width was different ({existing} != {evenly_split_remaining_size})");
+                                log::debug!("resize_children: resized because child calculated_width was different ({existing} != {element_width})");
                             }
                         } else {
-                            element
-                                .calculated_width
-                                .replace(evenly_split_remaining_size);
+                            element.calculated_width.replace(element_width);
                             resized = true;
                             log::debug!(
                                 "resize_children: resized because child calculated_width was None"
@@ -2223,31 +2196,30 @@ impl ContainerElement {
                 }
                 LayoutOverflow::Wrap | LayoutOverflow::Squash => {
                     let contained_sized_height = self.contained_sized_height(false).unwrap_or(0.0);
-                    log::debug!("resize_children: contained_sized_height={contained_sized_height}");
                     #[allow(clippy::cast_precision_loss)]
                     let evenly_split_remaining_size = if height > contained_sized_height {
                         (height - contained_sized_height) / (self.rows() as f32)
                     } else {
                         0.0
                     };
+                    log::debug!("resize_children: height={height} contained_sized_height={contained_sized_height} evenly_split_remaining_size={evenly_split_remaining_size}");
 
                     for element in self
                         .relative_positioned_elements_mut()
                         .filter_map(|x| x.container_element_mut())
                         .filter(|x| x.height.is_none())
                     {
+                        let element_height =
+                            evenly_split_remaining_size - element.vertical_padding().unwrap_or(0.0);
+
                         if let Some(existing) = element.calculated_height {
-                            if (existing - evenly_split_remaining_size).abs() > 0.01 {
-                                element
-                                    .calculated_height
-                                    .replace(evenly_split_remaining_size);
+                            if (existing - element_height).abs() > 0.01 {
+                                element.calculated_height.replace(element_height);
                                 resized = true;
-                                log::debug!("resize_children: resized because child calculated_height was different ({existing} != {evenly_split_remaining_size})");
+                                log::debug!("resize_children: resized because child calculated_height was different ({existing} != {element_height})");
                             }
                         } else {
-                            element
-                                .calculated_height
-                                .replace(evenly_split_remaining_size);
+                            element.calculated_height.replace(element_height);
                             resized = true;
                             log::debug!(
                                 "resize_children: resized because child calculated_height was None"
@@ -3216,7 +3188,7 @@ mod test {
                         },
                     },
                 ],
-                calculated_width: Some(50.0),
+                calculated_width: Some(50.0 - f32::from(get_scrollbar_size())),
                 calculated_height: Some(40.0),
                 ..container
             }
@@ -3332,7 +3304,7 @@ mod test {
                         },
                     },
                 ],
-                calculated_width: Some(75.0),
+                calculated_width: Some(75.0 - f32::from(get_scrollbar_size())),
                 calculated_height: Some(40.0),
                 ..container
             }
@@ -4877,7 +4849,7 @@ mod test {
                         ..container.elements[0].container_element().unwrap().clone()
                     }
                 }],
-                calculated_width: Some(75.0),
+                calculated_width: Some(75.0 - f32::from(get_scrollbar_size())),
                 calculated_height: Some(40.0),
                 ..container
             }
@@ -9034,6 +9006,74 @@ mod test {
                 calculated_padding_right: Some(20.0),
                 calculated_padding_top: Some(20.0),
                 calculated_padding_bottom: Some(20.0),
+                ..container.clone()
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_calculates_resized_wrapped_content_with_scrollbar_and_padding_correctly() {
+        let mut container: ContainerElement = html! {
+            div sx-width="100%" sx-height="100%" sx-position="relative" {
+                section sx-dir="row" sx-height=("calc(100% - 140px)") {
+                    aside sx-width="calc(max(240, min(280, 15%)))" {}
+                    main class="main-content" sx-overflow-y="auto" {
+                        div
+                            sx-dir="row"
+                            sx-overflow-x="wrap"
+                            sx-overflow-y="show"
+                            sx-justify-content="space-evenly"
+                            sx-gap=(15)
+                            sx-padding-left=(30)
+                            sx-padding-right=(30)
+                            sx-padding-top=(15)
+                            sx-padding-bottom=(15)
+                        {
+                            @for _ in 0..19 {
+                                div sx-width=(200) sx-height=(200 + 30) {}
+                            }
+                        }
+                    }
+                }
+                div
+                    sx-width="calc(min(500, 30%))"
+                    sx-height="calc(100% - 200)"
+                    sx-padding=(20)
+                    sx-position="absolute"
+                    sx-bottom=(170)
+                    sx-right=(0)
+                {}
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(1600.0);
+        container.calculated_height = Some(1000.0);
+
+        container.calc();
+
+        let container = container.elements[0].container_element().unwrap().elements[0]
+            .container_element()
+            .unwrap()
+            .elements[1]
+            .container_element()
+            .unwrap()
+            .elements[0]
+            .container_element()
+            .unwrap();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                calculated_width: Some(1360.0 - 30.0 - 30.0 - f32::from(get_scrollbar_size())),
+                calculated_height: Some(920.0),
+                calculated_x: Some(0.0),
+                calculated_y: Some(0.0),
+                calculated_padding_left: Some(30.0),
+                calculated_padding_right: Some(30.0),
+                calculated_padding_top: Some(15.0),
+                calculated_padding_bottom: Some(15.0),
                 ..container.clone()
             }
         );

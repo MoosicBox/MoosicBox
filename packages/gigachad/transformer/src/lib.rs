@@ -222,6 +222,10 @@ pub struct ContainerElement {
     pub calculated_border_bottom_right_radius: Option<f32>,
     #[cfg(feature = "calc")]
     pub calculated_opacity: Option<f32>,
+    #[cfg(feature = "calc")]
+    pub scrollbar_right: Option<f32>,
+    #[cfg(feature = "calc")]
+    pub scrollbar_bottom: Option<f32>,
 }
 
 #[cfg(any(test, feature = "maud"))]
