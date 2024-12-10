@@ -1419,7 +1419,7 @@ impl EguiApp {
                             #[cfg(feature = "debug")]
                             if let Some(pos) = pos {
                                 let painter = ui.painter();
-                                let text = format!("({width}, {height})");
+                                let text = format!("({}, {}, {width}, {height})", pos.x, pos.y);
                                 let galley = painter.layout_no_wrap(
                                     text.clone(),
                                     egui::FontId::default(),
