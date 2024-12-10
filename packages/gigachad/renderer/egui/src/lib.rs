@@ -25,6 +25,14 @@ use gigachad_transformer::{
 };
 use itertools::Itertools;
 
+#[cfg(feature = "debug")]
+static DEBUG: LazyLock<RwLock<bool>> = LazyLock::new(|| {
+    RwLock::new(
+        std::env::var("DEBUG_RENDERER")
+            .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str())),
+    )
+});
+
 #[derive(Clone)]
 pub struct EguiRenderer {
     width: Option<f32>,
@@ -1368,6 +1376,16 @@ impl EguiApp {
                             ui.set_width(width);
                             ui.set_height(height);
 
+                            #[cfg(feature = "debug")]
+                            let debug = *DEBUG.read().unwrap();
+
+                            #[cfg(feature = "debug")]
+                            let pos = if debug {
+                                Some(ui.cursor().left_top())
+                            } else {
+                                None
+                            };
+
                             if vscroll {
                                 if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
                                     let rect = egui::Rect::from_pos(egui::emath::pos2(0.0, height));
@@ -1380,7 +1398,7 @@ impl EguiApp {
                                 }
                             }
 
-                            Self::render_layout(
+                            let response = Self::render_layout(
                                 ui,
                                 container,
                                 relative_container,
@@ -1396,7 +1414,34 @@ impl EguiApp {
                                         vscroll,
                                     )
                                 },
-                            )
+                            );
+
+                            #[cfg(feature = "debug")]
+                            if let Some(pos) = pos {
+                                let painter = ui.painter();
+                                let text = format!("({width}, {height})");
+                                let galley = painter.layout_no_wrap(
+                                    text.clone(),
+                                    egui::FontId::default(),
+                                    Color32::WHITE,
+                                );
+                                let rect = egui::Align2::LEFT_TOP.anchor_size(pos, galley.size());
+                                let frame_rect = rect.expand(2.0);
+                                painter.add(egui::Shape::rect_filled(
+                                    frame_rect,
+                                    0.0,
+                                    Color32::WHITE,
+                                ));
+                                ui.painter().text(
+                                    pos,
+                                    egui::Align2::LEFT_TOP,
+                                    text,
+                                    egui::FontId::default(),
+                                    Color32::RED,
+                                );
+                            }
+
+                            response
                         }
                     })
                     .response
@@ -2390,6 +2435,18 @@ impl EguiApp {
         let mut visibilities = self.visibilities.write().unwrap();
         let mut displays = self.displays.write().unwrap();
         let mut checkboxes = self.checkboxes.write().unwrap();
+
+        #[cfg(feature = "debug")]
+        if ctx.input(|i| i.key_pressed(egui::Key::F3)) {
+            let value = {
+                let mut handle = DEBUG.write().unwrap();
+                let value = *handle;
+                let value = !value;
+                *handle = value;
+                value
+            };
+            log::debug!("Set DEBUG to {value}");
+        }
 
         {
             let mut render_context = RenderContext {
