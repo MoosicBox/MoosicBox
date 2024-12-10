@@ -8991,4 +8991,51 @@ mod test {
             }
         );
     }
+
+    #[test_log::test]
+    fn calc_calculates_horizontal_and_vertical_position_from_right_for_nested_absolute_position_with_padding(
+    ) {
+        let mut container: ContainerElement = html! {
+            div sx-width="100%" sx-height="100%" sx-position="relative" {
+                section sx-dir="row" sx-height=("calc(100% - 140px)") {
+                    aside sx-width="calc(max(240, min(280, 15%)))" {}
+                    main class="main-content" sx-overflow-y="auto" {}
+                }
+                div
+                    sx-width="calc(min(500, 30%))"
+                    sx-height="calc(100% - 200)"
+                    sx-padding=(20)
+                    sx-position="absolute"
+                    sx-bottom=(170)
+                    sx-right=(0)
+                {}
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(1600.0);
+        container.calculated_height = Some(1000.0);
+
+        container.calc();
+
+        let container = container.elements[0].container_element().unwrap().elements[1]
+            .container_element()
+            .unwrap();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                calculated_width: Some(1600.0 * 0.3),
+                calculated_height: Some(760.0),
+                calculated_x: Some(1080.0),
+                calculated_y: Some(30.0),
+                calculated_padding_left: Some(20.0),
+                calculated_padding_right: Some(20.0),
+                calculated_padding_top: Some(20.0),
+                calculated_padding_bottom: Some(20.0),
+                ..container.clone()
+            }
+        );
+    }
 }
