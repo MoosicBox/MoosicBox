@@ -78,7 +78,6 @@ pub fn play_queue(state: &State) -> Markup {
             id="play-queue"
             sx-width="calc(min(500, 30%))"
             sx-height="calc(100% - 200)"
-            sx-padding=(20)
             sx-visibility="hidden"
             sx-background="#282a2b"
             sx-border-top-left-radius=(10)
@@ -92,34 +91,36 @@ pub fn play_queue(state: &State) -> Markup {
                     .then(ActionType::hide_self())
             )
         {
-            h1 sx-height=(30) { "Play queue" }
-            div sx-overflow-y="auto" {
-                @for track in history {
-                    (render_play_queue_item(track, true))
-                }
-                @if let Some(track) = current {
-                    div sx-dir="row" {
-                        "Playing from: "
-                        a href=(
-                            crate::albums::album_page_url(
-                                &track.album_id.to_string(),
-                                false,
-                                Some(track.api_source),
-                                Some(track.track_source),
-                                track.sample_rate,
-                                track.bit_depth
-                            )
-                        ) {
-                            (track.album)
-                        }
+            div sx-padding=(20) {
+                h1 sx-height=(30) { "Play queue" }
+                div sx-overflow-y="auto" {
+                    @for track in history {
+                        (render_play_queue_item(track, true))
                     }
-                    (render_play_queue_item(track, false))
-                }
-                @if future.peek().is_some() {
-                    div sx-dir="row" { "Next up:" }
-                }
-                @for track in future {
-                    (render_play_queue_item(track, false))
+                    @if let Some(track) = current {
+                        div sx-dir="row" {
+                            "Playing from: "
+                            a href=(
+                                crate::albums::album_page_url(
+                                    &track.album_id.to_string(),
+                                    false,
+                                    Some(track.api_source),
+                                    Some(track.track_source),
+                                    track.sample_rate,
+                                    track.bit_depth
+                                )
+                            ) {
+                                (track.album)
+                            }
+                        }
+                        (render_play_queue_item(track, false))
+                    }
+                    @if future.peek().is_some() {
+                        div sx-dir="row" { "Next up:" }
+                    }
+                    @for track in future {
+                        (render_play_queue_item(track, false))
+                    }
                 }
             }
         }

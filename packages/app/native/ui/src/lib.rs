@@ -19,7 +19,7 @@ use play_queue::play_queue;
 use serde::{Deserialize, Serialize};
 use state::State;
 
-static FOOTER_HEIGHT: u16 = 140;
+static FOOTER_HEIGHT: u16 = 100 + 32 + 5 + 5 + 3;
 static CURRENT_ALBUM_SIZE: u16 = 70;
 
 #[macro_export]
@@ -76,13 +76,14 @@ impl<'a> TryFrom<&'a str> for Action {
 pub fn sidebar_navigation() -> Markup {
     html! {
         aside sx-width="calc(max(240, min(280, 15%)))" sx-background="#080a0b" {
-            div class="navigation-bar" {
-                div class="navigation-bar-header" sx-dir="row" {
-                    a href="/" sx-dir="row" {
-                        @let size = 36;
+            div class="navigation-bar" sx-padding=(20) {
+                @let size = 36;
+                div class="navigation-bar-header" sx-dir="row" sx-align-items="center" sx-height=(size) {
+                    @let icon_size = 36;
+                    a href="/" sx-dir="row" sx-height=(icon_size) {
                         img
-                            sx-width=(size)
-                            sx-height=(size)
+                            sx-width=(icon_size)
+                            sx-height=(icon_size)
                             src=(public_img!("icon128.png"));
 
                         h1 class="navigation-bar-header-home-link-text" {
@@ -90,18 +91,19 @@ pub fn sidebar_navigation() -> Markup {
                         }
                     }
                     @let size = 22;
-                    a href="/settings" sx-dir="row" sx-width=(size + 10) {
-                        img
-                            sx-width=(size)
-                            sx-height=(size)
-                            src=(public_img!("settings-gear-white.svg"));
-                    }
-                    @let size = 22;
-                    div sx-width=(size + 10) {
-                        img
-                            sx-width=(size)
-                            sx-height=(size)
-                            src=(public_img!("chevron-left-white.svg"));
+                    div sx-dir="row" sx-justify-content="end" sx-align-items="center" sx-height=(size) {
+                        a href="/settings" sx-dir="row" sx-width=(size + 10) {
+                            img
+                                sx-width=(size)
+                                sx-height=(size)
+                                src=(public_img!("settings-gear-white.svg"));
+                        }
+                        div sx-width=(size + 10) {
+                            img
+                                sx-width=(size)
+                                sx-height=(size)
+                                src=(public_img!("chevron-left-white.svg"));
+                        }
                     }
                 }
                 ul {
@@ -145,7 +147,7 @@ pub fn player(state: &State) -> Markup {
             }
             div sx-height=(100) sx-dir="row" {
                 (player_current_album_from_state(state, 70))
-                div sx-dir="row" sx-justify-content="center" {
+                div sx-dir="row" sx-justify-content="center" sx-align-items="center" {
                     @let button_size = 40;
                     button
                         sx-width=(button_size)
@@ -183,7 +185,7 @@ pub fn player(state: &State) -> Markup {
                             src=(public_img!("next-button-white.svg"));
                     }
                 }
-                div sx-dir="row" sx-justify-content="end" sx-padding-right=(20) {
+                div sx-dir="row" sx-justify-content="end" sx-align-items="center" sx-padding-right=(20) {
                     @let size = 25;
                     button sx-width=(size) sx-height=(size) {
                         img
@@ -260,7 +262,7 @@ fn player_play_button_from_state(state: &State) -> Markup {
 
 fn player_current_album(track: &ApiTrack, size: u16) -> Markup {
     html! {
-        div id="player-current-playing" sx-dir="row" {
+        div id="player-current-playing" sx-dir="row" sx-align-items="center" {
             div sx-width=(size) sx-height=(size) sx-padding-left=(20) sx-padding-right=(20) {
                 a href=(pre_escaped!("/albums?albumId={}&source={}", track.album_id, track.api_source)) sx-width=(size) sx-height=(size) {
                     (album_cover_img_from_album(&track.into(), size))
@@ -373,7 +375,7 @@ pub fn downloads(state: &State) -> Markup {
 pub fn page(state: &State, slot: &Markup) -> Markup {
     html! {
         div state=(state) id="root" class="dark" sx-width="100%" sx-height="100%" sx-position="relative" {
-            section class="navigation-bar-and-main-content" sx-dir="row" sx-height=(pre_escaped!("calc(100% - {}px)", FOOTER_HEIGHT)) {
+            section class="navigation-bar-and-main-content" sx-dir="row" sx-height=(pre_escaped!("calc(100% - {})", FOOTER_HEIGHT)) {
                 (sidebar_navigation())
                 (main(&slot))
             }
