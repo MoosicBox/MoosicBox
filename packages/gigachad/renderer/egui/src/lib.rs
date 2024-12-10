@@ -1426,12 +1426,7 @@ impl EguiApp {
                                     Color32::WHITE,
                                 );
                                 let rect = egui::Align2::LEFT_TOP.anchor_size(pos, galley.size());
-                                let frame_rect = rect.expand(2.0);
-                                painter.add(egui::Shape::rect_filled(
-                                    frame_rect,
-                                    0.0,
-                                    Color32::WHITE,
-                                ));
+                                painter.add(egui::Shape::rect_filled(rect, 0.0, Color32::WHITE));
                                 ui.painter().text(
                                     pos,
                                     egui::Align2::LEFT_TOP,
