@@ -313,32 +313,36 @@ fn parse_element(
         .or_else(|| border_radius.clone());
 
     let margin = get_number(tag, "sx-margin").ok();
+    let margin_x = get_number(tag, "sx-margin-x").ok();
+    let margin_y = get_number(tag, "sx-margin-y").ok();
     let margin_left = get_number(tag, "sx-margin-left")
         .ok()
-        .or_else(|| margin.clone());
+        .or_else(|| margin_x.clone().or_else(|| margin.clone()));
     let margin_right = get_number(tag, "sx-margin-right")
         .ok()
-        .or_else(|| margin.clone());
+        .or_else(|| margin_x.clone().or_else(|| margin.clone()));
     let margin_top = get_number(tag, "sx-margin-top")
         .ok()
-        .or_else(|| margin.clone());
+        .or_else(|| margin_y.clone().or_else(|| margin.clone()));
     let margin_bottom = get_number(tag, "sx-margin-bottom")
         .ok()
-        .or_else(|| margin.clone());
+        .or_else(|| margin_y.clone().or_else(|| margin.clone()));
 
     let padding = get_number(tag, "sx-padding").ok();
+    let padding_x = get_number(tag, "sx-padding-x").ok();
+    let padding_y = get_number(tag, "sx-padding-y").ok();
     let padding_left = get_number(tag, "sx-padding-left")
         .ok()
-        .or_else(|| padding.clone());
+        .or_else(|| padding_x.clone().or_else(|| padding.clone()));
     let padding_right = get_number(tag, "sx-padding-right")
         .ok()
-        .or_else(|| padding.clone());
+        .or_else(|| padding_x.clone().or_else(|| padding.clone()));
     let padding_top = get_number(tag, "sx-padding-top")
         .ok()
-        .or_else(|| padding.clone());
+        .or_else(|| padding_y.clone().or_else(|| padding.clone()));
     let padding_bottom = get_number(tag, "sx-padding-bottom")
         .ok()
-        .or_else(|| padding.clone());
+        .or_else(|| padding_y.clone().or_else(|| padding.clone()));
 
     #[allow(clippy::needless_update)]
     crate::ContainerElement {
