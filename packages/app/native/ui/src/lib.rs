@@ -140,7 +140,7 @@ pub fn sidebar_navigation() -> Markup {
 pub fn player(state: &State) -> Markup {
     html! {
         div sx-height=(FOOTER_HEIGHT) sx-border-top="3, #222" {
-            div sx-height=(40) sx-dir="row" {
+            div sx-height=(32) sx-padding-top=(5) sx-padding-bottom=(5) sx-dir="row" {
                 canvas id="visualization" sx-cursor="pointer" {}
             }
             div sx-height=(100) sx-dir="row" {
