@@ -483,6 +483,12 @@ impl ContainerElement {
         container_width: f32,
         container_height: f32,
     ) {
+        let mut elements = elements.peekable();
+
+        if elements.peek().is_none() {
+            return;
+        }
+
         let is_grid = match direction {
             LayoutDirection::Row => overflow_x == LayoutOverflow::Wrap,
             LayoutDirection::Column => overflow_y == LayoutOverflow::Wrap,
