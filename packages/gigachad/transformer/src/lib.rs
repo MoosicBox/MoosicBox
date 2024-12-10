@@ -15,7 +15,7 @@ pub use gigachad_transformer_models as models;
 
 #[cfg(feature = "calc")]
 pub mod calc;
-#[cfg(feature = "html")]
+#[cfg(any(test, feature = "html"))]
 pub mod html;
 pub mod parse;
 
@@ -224,7 +224,7 @@ pub struct ContainerElement {
     pub calculated_opacity: Option<f32>,
 }
 
-#[cfg(feature = "maud")]
+#[cfg(any(test, feature = "maud"))]
 impl TryFrom<maud::Markup> for ContainerElement {
     type Error = tl::ParseError;
 

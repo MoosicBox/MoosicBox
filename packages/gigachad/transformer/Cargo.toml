@@ -31,8 +31,14 @@ tl          = { workspace = true, optional = true }
 xml         = { workspace = true, optional = true }
 
 [dev-dependencies]
+gigachad_actions = { path = "../actions", default-features = false, features = [
+    "serde",
+] }
+html-escape = { workspace = true }
+maud = { workspace = true }
 pretty_assertions = { workspace = true }
-test-log          = { workspace = true }
+test-log = { workspace = true }
+tl = { workspace = true }
 
 [features]
 default = ["calc", "canvas", "format", "html", "id", "logic", "maud"]

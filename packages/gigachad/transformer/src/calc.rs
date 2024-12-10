@@ -2296,13 +2296,21 @@ fn increase_opt(opt: &mut Option<f32>, value: f32) -> f32 {
 
 #[cfg(test)]
 mod test {
+    use maud::html;
     use pretty_assertions::{assert_eq, assert_ne};
 
     use crate::{
         calc::{get_scrollbar_size, Calc as _, EPSILON},
         models::{JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition},
-        Calculation, ContainerElement, Element, Number, Position,
+        Calculation, ContainerElement, Element, HeaderSize, Number, Position,
     };
+
+    #[macro_export]
+    macro_rules! pre_escaped {
+        ($($message:tt)+) => {
+            maud::PreEscaped(format!($($message)*))
+        };
+    }
 
     #[test_log::test]
     fn calc_can_calc_single_element_size() {
@@ -8749,6 +8757,233 @@ mod test {
                         calculated_y: Some(0.0),
                         calculated_padding_left: Some(10.0),
                         calculated_padding_right: Some(20.0),
+                        ..container.elements[0].container_element().unwrap().clone()
+                    }
+                }],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_calculates_width_minus_the_horizontal_padding_for_nested_children_with_calc_parent_sizes(
+    ) {
+        let mut container: ContainerElement = html! {
+            div sx-width="100%" sx-height="100%" sx-position="relative" {
+                section sx-dir="row" sx-height=("calc(100% - 140px)") {
+                    aside sx-width="calc(max(240, min(280, 15%)))" {}
+                    main class="main-content" sx-overflow-y="auto" {
+                        div sx-height=(76) {
+                            div
+                                sx-padding-left=(30)
+                                sx-padding-right=(30)
+                                sx-padding-top=(15)
+                            {
+                                div sx-dir="row" sx-justify-content="start" {
+                                    h1 sx-width=(50) sx-height=(36) { "Albums" }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(1600.0);
+        container.calculated_height = Some(1000.0);
+
+        container.calc();
+
+        let container = container.elements[0].container_element().unwrap().elements[0]
+            .container_element()
+            .unwrap()
+            .elements[1]
+            .container_element()
+            .unwrap();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![Element::Div {
+                    element: ContainerElement {
+                        elements: vec![Element::Div {
+                            element: ContainerElement {
+                                elements: vec![Element::Div {
+                                    element: ContainerElement {
+                                        elements: vec![Element::Heading {
+                                            size: HeaderSize::H1,
+                                            element: ContainerElement {
+                                                calculated_width: Some(50.0),
+                                                calculated_height: Some(36.0),
+                                                ..container.elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .elements[0]
+                                                    .container_element()
+                                                    .unwrap()
+                                                    .clone()
+                                            }
+                                        }],
+                                        ..container.elements[0]
+                                            .container_element()
+                                            .unwrap()
+                                            .elements[0]
+                                            .container_element()
+                                            .unwrap()
+                                            .elements[0]
+                                            .container_element()
+                                            .unwrap()
+                                            .clone()
+                                    }
+                                }],
+                                calculated_width: Some(1300.0),
+                                calculated_height: Some(61.0),
+                                calculated_padding_left: Some(30.0),
+                                calculated_padding_right: Some(30.0),
+                                calculated_padding_top: Some(15.0),
+                                calculated_x: Some(0.0),
+                                calculated_y: Some(0.0),
+                                ..container.elements[0].container_element().unwrap().elements[0]
+                                    .container_element()
+                                    .unwrap()
+                                    .clone()
+                            }
+                        }],
+                        calculated_width: Some(1360.0),
+                        calculated_height: Some(76.0),
+                        calculated_x: Some(0.0),
+                        calculated_y: Some(0.0),
+                        ..container.elements[0].container_element().unwrap().clone()
+                    }
+                }],
+                ..container.clone()
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_calculates_horizontal_position_from_right_for_absolute_position_with_padding() {
+        let mut container: ContainerElement = html! {
+            div
+                sx-width="calc(min(500, 30%))"
+                sx-height="calc(100% - 200)"
+                sx-padding-left=(20)
+                sx-padding-right=(20)
+                sx-position="absolute"
+                sx-right=(0)
+            {}
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(1600.0);
+        container.calculated_height = Some(1000.0);
+        container.position = Some(Position::Relative);
+
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![Element::Div {
+                    element: ContainerElement {
+                        calculated_width: Some(1600.0 * 0.3),
+                        calculated_height: Some(800.0),
+                        calculated_x: Some(1080.0),
+                        calculated_y: Some(0.0),
+                        calculated_padding_left: Some(20.0),
+                        calculated_padding_right: Some(20.0),
+                        ..container.elements[0].container_element().unwrap().clone()
+                    }
+                }],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_calculates_vertical_position_from_right_for_absolute_position_with_padding() {
+        let mut container: ContainerElement = html! {
+            div
+                sx-width="calc(min(500, 30%))"
+                sx-height="calc(100% - 200)"
+                sx-padding-top=(20)
+                sx-padding-bottom=(20)
+                sx-position="absolute"
+                sx-bottom=(170)
+            {}
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(1600.0);
+        container.calculated_height = Some(1000.0);
+        container.position = Some(Position::Relative);
+
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![Element::Div {
+                    element: ContainerElement {
+                        calculated_width: Some(1600.0 * 0.3),
+                        calculated_height: Some(760.0),
+                        calculated_x: Some(0.0),
+                        calculated_y: Some(30.0),
+                        calculated_padding_top: Some(20.0),
+                        calculated_padding_bottom: Some(20.0),
+                        ..container.elements[0].container_element().unwrap().clone()
+                    }
+                }],
+                ..container
+            }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_calculates_horizontal_and_vertical_position_from_right_for_absolute_position_with_padding(
+    ) {
+        let mut container: ContainerElement = html! {
+            div
+                sx-width="calc(min(500, 30%))"
+                sx-height="calc(100% - 200)"
+                sx-padding=(20)
+                sx-position="absolute"
+                sx-bottom=(170)
+                sx-right=(0)
+            {}
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(1600.0);
+        container.calculated_height = Some(1000.0);
+        container.position = Some(Position::Relative);
+
+        container.calc();
+
+        assert_eq!(
+            container.clone(),
+            ContainerElement {
+                elements: vec![Element::Div {
+                    element: ContainerElement {
+                        calculated_width: Some(1600.0 * 0.3),
+                        calculated_height: Some(760.0),
+                        calculated_x: Some(1080.0),
+                        calculated_y: Some(30.0),
+                        calculated_padding_left: Some(20.0),
+                        calculated_padding_right: Some(20.0),
+                        calculated_padding_top: Some(20.0),
+                        calculated_padding_bottom: Some(20.0),
                         ..container.elements[0].container_element().unwrap().clone()
                     }
                 }],
