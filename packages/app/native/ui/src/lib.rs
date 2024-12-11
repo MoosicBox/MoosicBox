@@ -10,6 +10,7 @@ pub mod settings;
 pub mod state;
 
 use albums::album_cover_img_from_album;
+use formatting::TimeFormat;
 use gigachad_actions::{logic::get_visibility_str_id, ActionType};
 use gigachad_transformer_models::Visibility;
 use maud::{html, Markup};
@@ -150,42 +151,50 @@ pub fn player(state: &State) -> Markup {
             }
             div sx-height=(100) sx-dir="row" {
                 (player_current_album_from_state(state, 70))
-                div sx-dir="row" sx-justify-content="center" sx-align-items="center" {
+                div sx-align-items="center" {
                     @let button_size = 40;
-                    button
-                        sx-width=(button_size)
-                        sx-height=(button_size)
-                        sx-margin=(5)
-                        sx-dir="row"
-                        sx-justify-content="center"
-                        sx-align-items="center"
-                        sx-background="#181a1b"
-                        sx-border-radius="100%"
-                        fx-click=(Action::PreviousTrack)
-                    {
-                        @let icon_size = 18;
-                        img
-                            sx-width=(icon_size)
-                            sx-height=(icon_size)
-                            src=(public_img!("previous-button-white.svg"));
-                    }
-                    (player_play_button_from_state(state))
-                    button
-                        sx-width=(button_size)
-                        sx-height=(button_size)
-                        sx-margin=(5)
-                        sx-dir="row"
-                        sx-justify-content="center"
-                        sx-align-items="center"
-                        sx-background="#181a1b"
-                        sx-border-radius="100%"
-                        fx-click=(Action::NextTrack)
-                    {
-                        @let icon_size = 18;
-                        img
-                            sx-width=(icon_size)
-                            sx-height=(icon_size)
-                            src=(public_img!("next-button-white.svg"));
+                    @let progress_size = 20;
+                    div sx-height=(button_size + progress_size) {
+                        div sx-height=(button_size) sx-dir="row" sx-justify-content="center" sx-align-items="center" {
+                            button
+                                sx-width=(button_size)
+                                sx-height=(button_size)
+                                sx-margin-x=(5)
+                                sx-dir="row"
+                                sx-justify-content="center"
+                                sx-align-items="center"
+                                sx-background="#181a1b"
+                                sx-border-radius="100%"
+                                fx-click=(Action::PreviousTrack)
+                            {
+                                @let icon_size = 18;
+                                img
+                                    sx-width=(icon_size)
+                                    sx-height=(icon_size)
+                                    src=(public_img!("previous-button-white.svg"));
+                            }
+                            (player_play_button_from_state(state))
+                            button
+                                sx-width=(button_size)
+                                sx-height=(button_size)
+                                sx-margin-x=(5)
+                                sx-dir="row"
+                                sx-justify-content="center"
+                                sx-align-items="center"
+                                sx-background="#181a1b"
+                                sx-border-radius="100%"
+                                fx-click=(Action::NextTrack)
+                            {
+                                @let icon_size = 18;
+                                img
+                                    sx-width=(icon_size)
+                                    sx-height=(icon_size)
+                                    src=(public_img!("next-button-white.svg"));
+                            }
+                        }
+                        div sx-height=(progress_size) sx-margin-top=(10) {
+                            (player_current_progress_from_state(state))
+                        }
                     }
                 }
                 div sx-dir="row" sx-justify-content="end" sx-align-items="center" sx-padding-right=(20) {
@@ -233,7 +242,7 @@ fn player_play_button(playing: bool) -> Markup {
             id="player-play-button"
             sx-width=(button_size)
             sx-height=(button_size)
-            sx-margin=(5)
+            sx-margin-x=(5)
             sx-dir="row"
             sx-justify-content="center"
             sx-align-items="center"
@@ -302,6 +311,30 @@ fn player_current_album_from_state(state: &State, size: u16) -> Markup {
     }
 }
 
+fn player_current_progress(progress: f64, duration: f64) -> Markup {
+    html! {
+        div id="player-current-progress" sx-justify-content="center" sx-align-content="center" {
+            div sx-width=(70) {
+                (progress.into_formatted()) " // " (duration.into_formatted())
+            }
+        }
+    }
+}
+
+fn player_current_progress_from_state(state: &State) -> Markup {
+    if let Some(playback) = &state.player.playback {
+        let track: Option<&ApiTrack> = playback.tracks.get(playback.position as usize);
+
+        if let Some(track) = track {
+            return player_current_progress(playback.seek, track.duration);
+        }
+    }
+
+    html! {
+        div id="player-current-progress" {}
+    }
+}
+
 #[must_use]
 pub fn session_updated(
     state: &State,
@@ -333,6 +366,20 @@ pub fn session_updated(
             "player-play-button".to_string(),
             player_play_button(playing),
         ));
+    }
+    if let Some(seek) = update.seek {
+        let track: Option<&ApiTrack> = session
+            .playlist
+            .tracks
+            .get(session.position.unwrap_or(0) as usize);
+
+        if let Some(track) = track {
+            log::debug!("session_updated: rendering current progress");
+            partials.push((
+                "player-current-progress".to_string(),
+                player_current_progress(seek, track.duration),
+            ));
+        }
     }
 
     partials
