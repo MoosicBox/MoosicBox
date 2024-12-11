@@ -91,9 +91,9 @@ pub fn play_queue(state: &State) -> Markup {
                     .then(ActionType::hide_self())
             )
         {
-            div sx-padding=(20) {
-                h1 sx-height=(30) { "Play queue" }
-                div sx-overflow-y="auto" {
+            div sx-overflow-y="auto" {
+                div sx-padding=(20) {
+                    h1 sx-height=(30) { "Play queue" }
                     @for track in history {
                         (render_play_queue_item(track, true))
                     }
@@ -116,7 +116,7 @@ pub fn play_queue(state: &State) -> Markup {
                         (render_play_queue_item(track, false))
                     }
                     @if future.peek().is_some() {
-                        div sx-dir="row" { "Next up:" }
+                        div { "Next up:" }
                     }
                     @for track in future {
                         (render_play_queue_item(track, false))
