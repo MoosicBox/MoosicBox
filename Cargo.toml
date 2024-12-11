@@ -157,7 +157,7 @@ enum-as-inner = "0.6.1"
 env_logger = "0.11"
 fdk-aac = "0.7.0"
 flacenc = "0.4.0"
-fltk = "1.5.0"
+fltk = "1.5.1"
 fltk-sys = "1.5.0"
 flume = "0.11.1"
 free_log_client = { version = "0.4.1", default-features = false }
