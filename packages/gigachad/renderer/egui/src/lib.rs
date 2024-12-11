@@ -2508,6 +2508,63 @@ impl EguiApp {
         )
     }
 
+    fn apply_container_styles(
+        container: &ContainerElement,
+        mut frame: egui::Frame,
+        start: bool,
+        end: bool,
+    ) -> egui::Frame {
+        if let Some(background) = container.background {
+            frame = frame.fill(background.into());
+        }
+
+        if start && end {
+            if container.calculated_border_top_left_radius.is_some()
+                || container.calculated_border_top_right_radius.is_some()
+                || container.calculated_border_bottom_left_radius.is_some()
+                || container.calculated_border_bottom_right_radius.is_some()
+            {
+                frame = frame.rounding(egui::Rounding {
+                    nw: container.calculated_border_top_left_radius.unwrap_or(0.0),
+                    ne: container.calculated_border_top_right_radius.unwrap_or(0.0),
+                    sw: container
+                        .calculated_border_bottom_left_radius
+                        .unwrap_or(0.0),
+                    se: container
+                        .calculated_border_bottom_right_radius
+                        .unwrap_or(0.0),
+                });
+            }
+        } else if start {
+            if container.calculated_border_top_left_radius.is_some()
+                || container.calculated_border_bottom_left_radius.is_some()
+            {
+                frame = frame.rounding(egui::Rounding {
+                    nw: container.calculated_border_top_left_radius.unwrap_or(0.0),
+                    ne: 0.0,
+                    sw: container
+                        .calculated_border_bottom_left_radius
+                        .unwrap_or(0.0),
+                    se: 0.0,
+                });
+            }
+        } else if end
+            && (container.calculated_border_top_right_radius.is_some()
+                || container.calculated_border_bottom_right_radius.is_some())
+        {
+            frame = frame.rounding(egui::Rounding {
+                nw: 0.0,
+                ne: container.calculated_border_top_right_radius.unwrap_or(0.0),
+                sw: 0.0,
+                se: container
+                    .calculated_border_bottom_right_radius
+                    .unwrap_or(0.0),
+            });
+        }
+
+        frame
+    }
+
     #[allow(clippy::too_many_arguments)]
     #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_table(
@@ -2522,13 +2579,47 @@ impl EguiApp {
     ) {
         let TableIter { rows, headings } = element.table_iter();
 
+        let mut head_trs = element
+            .container_element()
+            .unwrap()
+            .elements
+            .iter()
+            .filter(|x| matches!(x, Element::THead { .. }))
+            .filter_map(|x| x.container_element())
+            .flat_map(|x| x.elements.iter())
+            .filter_map(|x| x.container_element());
+
+        let mut body_trs = element
+            .container_element()
+            .unwrap()
+            .elements
+            .iter()
+            .filter(|x| matches!(x, Element::TBody { .. }))
+            .filter_map(|x| x.container_element())
+            .flat_map(|x| x.elements.iter())
+            .filter_map(|x| x.container_element());
+
         let grid = egui::Grid::new(format!("grid-{}", element.container_element().unwrap().id));
 
         grid.show(ui, |ui| {
             if let Some(headings) = headings {
                 for heading in headings {
-                    for th in heading {
-                        egui::Frame::none().show(ui, |ui| {
+                    let tr = head_trs.next();
+                    let mut heading = heading.peekable();
+                    let mut first = true;
+                    while let Some(th) = heading.next() {
+                        let mut frame = egui::Frame::none();
+
+                        if let Some(tr) = tr {
+                            frame = Self::apply_container_styles(
+                                tr,
+                                frame,
+                                first,
+                                heading.peek().is_none(),
+                            );
+                        }
+
+                        frame.show(ui, |ui| {
                             self.render_container(
                                 render_context,
                                 ctx,
@@ -2539,25 +2630,43 @@ impl EguiApp {
                                 relative_container,
                             );
                         });
+                        first = false;
                     }
                     ui.end_row();
                 }
             }
             for row in rows {
-                for td in row {
-                    egui::Frame::none().show(ui, |ui| {
-                        self.render_container(
-                            render_context,
-                            ctx,
-                            ui,
-                            td,
-                            viewport,
-                            rect,
-                            relative_container,
-                        );
-                    });
+                let tr = body_trs.next();
+                {
+                    let mut row = row.peekable();
+                    let mut first = true;
+                    while let Some(td) = row.next() {
+                        let mut frame = egui::Frame::none();
+
+                        if let Some(tr) = tr {
+                            frame = Self::apply_container_styles(
+                                tr,
+                                frame,
+                                first,
+                                row.peek().is_none(),
+                            );
+                        }
+
+                        frame.show(ui, |ui| {
+                            self.render_container(
+                                render_context,
+                                ctx,
+                                ui,
+                                td,
+                                viewport,
+                                rect,
+                                relative_container,
+                            );
+                        });
+                        first = false;
+                    }
+                    ui.end_row();
                 }
-                ui.end_row();
             }
         });
     }
