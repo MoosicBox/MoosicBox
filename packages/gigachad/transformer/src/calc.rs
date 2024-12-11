@@ -259,6 +259,10 @@ impl Element {
             .replace(heading_height.unwrap_or(0.0) + body_height);
 
         for element in relative_positioned_elements_mut(&mut container.elements) {
+            if let Some(container) = element.container_element_mut() {
+                container.calc_borders(container_width, container_height);
+                container.calc_opacity();
+            }
             match element {
                 Self::THead { element } => {
                     if element.width.is_none() {
@@ -273,6 +277,8 @@ impl Element {
                     for element in relative_positioned_elements_mut(&mut element.elements)
                         .filter_map(|x| x.container_element_mut())
                     {
+                        element.calc_borders(container_width, container_height);
+                        element.calc_opacity();
                         if element.width.is_none() {
                             element.calculated_width.replace(container_width);
                         }
@@ -297,6 +303,8 @@ impl Element {
                     for element in relative_positioned_elements_mut(&mut element.elements)
                         .filter_map(|x| x.container_element_mut())
                     {
+                        element.calc_borders(container_width, container_height);
+                        element.calc_opacity();
                         if element.width.is_none() {
                             element.calculated_width.replace(container_width);
                         }
