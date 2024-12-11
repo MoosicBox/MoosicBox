@@ -111,6 +111,10 @@ panic    = "abort"
 inherits  = "release-lto-no-panic"
 opt-level = "z"
 
+[profile.fast]
+inherits  = "dev"
+opt-level = 0
+
 [workspace.package]
 edition = "2021"
 
