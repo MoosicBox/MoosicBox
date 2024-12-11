@@ -445,10 +445,12 @@ jobs:
                       ${{ steps.assets_dir.outputs.path }}/MoosicBox${{ matrix.release.tag && format('_{0}', matrix.release.tag) || '' }}.aab
 
             - name: Upload Assets
-              uses: softprops/action-gh-release@master
-              with:
-                  token: ${{ secrets.WORKFLOW_MANAGEMENT_TOKEN }}
-                  files: assets/*
+              uses: jakejarvis/backblaze-b2-action@master
+              env:
+                  SOURCE_DIR: './assets'
+                  B2_BUCKET: ${{ secrets.TAURI_APP_RELEASE_ASSETS_B2_BUCKET }}
+                  B2_APPKEY_ID: ${{ secrets.TAURI_APP_RELEASE_ASSETS_B2_APPKEY_ID }}
+                  B2_APPKEY: ${{ secrets.TAURI_APP_RELEASE_ASSETS_B2_APPKEY }}
 
     compress:
         permissions: write-all
@@ -551,7 +553,9 @@ jobs:
                   assets: ${{ steps.asset_names.outputs.output }}
 
             - name: Upload Assets
-              uses: softprops/action-gh-release@master
-              with:
-                  token: ${{ secrets.WORKFLOW_MANAGEMENT_TOKEN }}
-                  files: ${{ steps.asset_names.outputs.output }}
+              uses: jakejarvis/backblaze-b2-action@master
+              env:
+                  SOURCE_DIR: ${{ steps.asset_names.outputs.output }}
+                  B2_BUCKET: ${{ secrets.TAURI_APP_RELEASE_ASSETS_B2_BUCKET }}
+                  B2_APPKEY_ID: ${{ secrets.TAURI_APP_RELEASE_ASSETS_B2_APPKEY_ID }}
+                  B2_APPKEY: ${{ secrets.TAURI_APP_RELEASE_ASSETS_B2_APPKEY }}
