@@ -652,7 +652,9 @@ impl ContainerElement {
                     .height
                     .as_ref()
                     .map_or(container_height, |x| calc_number(x, container_height));
+                moosicbox_assert::assert!(height >= 0.0);
                 self.calculated_height.replace(height);
+                moosicbox_assert::assert!(size >= 0.0);
                 self.calculated_width.replace(size);
             }
             LayoutDirection::Column => {
@@ -664,7 +666,9 @@ impl ContainerElement {
                     .width
                     .as_ref()
                     .map_or(container_width, |x| calc_number(x, container_width));
+                moosicbox_assert::assert!(width >= 0.0);
                 self.calculated_width.replace(width);
+                moosicbox_assert::assert!(size >= 0.0);
                 self.calculated_height.replace(size);
             }
         }
@@ -783,6 +787,7 @@ impl ContainerElement {
                         log::trace!(
                             "calc_hardsized_elements: setting calculated_width={x} {element:?}"
                         );
+                        moosicbox_assert::assert!(*x >= 0.0);
                         element.calculated_width.replace(*x);
                     }
                     Number::Integer(x) => {
@@ -801,6 +806,7 @@ impl ContainerElement {
                         log::trace!(
                             "calc_hardsized_elements: setting calculated_height={x} {element:?}"
                         );
+                        moosicbox_assert::assert!(*x >= 0.0);
                         element.calculated_height.replace(*x);
                     }
                     Number::Integer(x) => {
@@ -818,6 +824,7 @@ impl ContainerElement {
 
     fn calc_sized_element_width(&mut self, container_width: f32) -> f32 {
         let width = calc_number(self.width.as_ref().unwrap(), container_width);
+        moosicbox_assert::assert!(width >= 0.0);
         self.calculated_width.replace(width);
         width
     }
@@ -845,7 +852,9 @@ impl ContainerElement {
                     .height
                     .as_ref()
                     .map_or(container_height, |x| calc_number(x, container_height));
+                moosicbox_assert::assert!(width >= 0.0);
                 self.calculated_width.replace(width);
+                moosicbox_assert::assert!(height >= 0.0);
                 self.calculated_height.replace(height);
                 log::trace!("calc_sized_element_size (Row): width={width} height={height}");
                 width
@@ -860,7 +869,9 @@ impl ContainerElement {
                     .as_ref()
                     .map_or(container_width, |x| calc_number(x, container_width));
                 let height = calc_number(self.height.as_ref().unwrap(), container_height);
+                moosicbox_assert::assert!(width >= 0.0);
                 self.calculated_width.replace(width);
+                moosicbox_assert::assert!(height >= 0.0);
                 self.calculated_height.replace(height);
                 log::trace!("calc_sized_element_size (Column): width={width} height={height}");
                 height
@@ -999,6 +1010,7 @@ impl ContainerElement {
         );
     }
 
+    #[allow(clippy::cognitive_complexity)]
     fn calc_unsized_element_sizes<'a>(
         arena: &Bump,
         relative_size: Option<(f32, f32)>,
@@ -1052,9 +1064,11 @@ impl ContainerElement {
                             .height
                             .as_ref()
                             .map_or(container_height, |x| calc_number(x, container_height));
+                        moosicbox_assert::assert!(height >= 0.0);
                         container.calculated_height.replace(height);
 
                         let width = evenly_split_remaining_size;
+                        moosicbox_assert::assert!(width >= 0.0);
                         container.calculated_width.replace(width);
                     }
                     LayoutDirection::Column => {
@@ -1062,9 +1076,11 @@ impl ContainerElement {
                             .width
                             .as_ref()
                             .map_or(container_width, |x| calc_number(x, container_width));
+                        moosicbox_assert::assert!(width >= 0.0);
                         container.calculated_width.replace(width);
 
                         let height = evenly_split_remaining_size;
+                        moosicbox_assert::assert!(height >= 0.0);
                         container.calculated_height.replace(height);
                     }
                 }
@@ -2092,14 +2108,18 @@ impl ContainerElement {
 
             if self.scrollbar_right.is_none() {
                 self.scrollbar_right.replace(scrollbar_size);
-                self.calculated_width = Some(self.calculated_width.unwrap() - scrollbar_size);
+                let new_width = self.calculated_width.unwrap() - scrollbar_size;
+                moosicbox_assert::assert!(new_width >= 0.0);
+                self.calculated_width = Some(new_width);
                 width = self.calculated_width_minus_borders().unwrap();
                 log::debug!("resize_children: resized because vertical scrollbar is now visible and affected children elements, setting scrollbar_right to {scrollbar_size}");
                 resized = true;
             }
         } else if let Some(scrollbar_size) = self.scrollbar_right {
             self.scrollbar_right.take();
-            self.calculated_width = Some(self.calculated_width.unwrap() + scrollbar_size);
+            let new_width = self.calculated_width.unwrap() + scrollbar_size;
+            moosicbox_assert::assert!(new_width >= 0.0);
+            self.calculated_width = Some(new_width);
             width = self.calculated_width_minus_borders().unwrap();
             log::debug!(
                 "resize_children: resized because vertical scrollbar is not visible anymore and affected children elements"
@@ -2114,14 +2134,18 @@ impl ContainerElement {
 
             if self.scrollbar_bottom.is_none() {
                 self.scrollbar_bottom.replace(scrollbar_size);
-                self.calculated_height = Some(self.calculated_height.unwrap() - scrollbar_size);
+                let new_height = self.calculated_height.unwrap() - scrollbar_size;
+                moosicbox_assert::assert!(new_height >= 0.0);
+                self.calculated_height = Some(new_height);
                 height = self.calculated_height_minus_borders().unwrap();
                 log::debug!("resize_children: resized because horizontal scrollbar is now visible and affected children elements, setting scrollbar_bottom to {scrollbar_size}");
                 resized = true;
             }
         } else if let Some(scrollbar_size) = self.scrollbar_bottom {
             self.scrollbar_bottom.take();
-            self.calculated_height = Some(self.calculated_height.unwrap() + scrollbar_size);
+            let new_height = self.calculated_height.unwrap() + scrollbar_size;
+            moosicbox_assert::assert!(new_height >= 0.0);
+            self.calculated_height = Some(new_height);
             height = self.calculated_height_minus_borders().unwrap();
             log::debug!(
                 "resize_children: resized because horizontal scrollbar is not visible anymore and affected children elements"
@@ -2139,6 +2163,7 @@ impl ContainerElement {
                             > EPSILON
                     {
                         log::debug!("resize_children: resized because contained_calculated_width changed from {} to {contained_calculated_width}", self.calculated_width.unwrap());
+                        moosicbox_assert::assert!(contained_calculated_width >= 0.0);
                         self.calculated_width.replace(contained_calculated_width);
                         resized = true;
                     }
@@ -2163,11 +2188,13 @@ impl ContainerElement {
 
                         if let Some(existing) = element.calculated_width {
                             if (existing - element_width).abs() > 0.01 {
+                                moosicbox_assert::assert!(element_width >= 0.0);
                                 element.calculated_width.replace(element_width);
                                 resized = true;
                                 log::debug!("resize_children: resized because child calculated_width was different ({existing} != {element_width})");
                             }
                         } else {
+                            moosicbox_assert::assert!(element_width >= 0.0);
                             element.calculated_width.replace(element_width);
                             resized = true;
                             log::debug!(
@@ -2198,6 +2225,7 @@ impl ContainerElement {
                             > EPSILON
                     {
                         log::debug!("resize_children: resized because contained_calculated_height changed from {} to {contained_calculated_height}", self.calculated_height.unwrap());
+                        moosicbox_assert::assert!(contained_calculated_height >= 0.0);
                         self.calculated_height.replace(contained_calculated_height);
                         resized = true;
                     }
@@ -2222,11 +2250,13 @@ impl ContainerElement {
 
                         if let Some(existing) = element.calculated_height {
                             if (existing - element_height).abs() > 0.01 {
+                                moosicbox_assert::assert!(element_height >= 0.0);
                                 element.calculated_height.replace(element_height);
                                 resized = true;
                                 log::debug!("resize_children: resized because child calculated_height was different ({existing} != {element_height})");
                             }
                         } else {
+                            moosicbox_assert::assert!(element_height >= 0.0);
                             element.calculated_height.replace(element_height);
                             resized = true;
                             log::debug!(
