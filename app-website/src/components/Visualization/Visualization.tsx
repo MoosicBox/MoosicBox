@@ -10,8 +10,6 @@ import './Visualization.css';
 import {
     currentSeek,
     currentTrackLength,
-    offNextTrack,
-    offPreviousTrack,
     offSeek,
     onSeek,
     playing as playerPlaying,
