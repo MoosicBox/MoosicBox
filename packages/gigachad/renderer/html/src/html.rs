@@ -4,7 +4,7 @@ use std::io::Write;
 
 use actix_web::http::header::HeaderMap;
 use gigachad_renderer::Color;
-use gigachad_router::ContainerElement;
+use gigachad_router::Container;
 use gigachad_transformer::{
     models::{JustifyContent, LayoutDirection, LayoutOverflow, Position, Visibility},
     Calculation, Element, HeaderSize, Input, Number,
@@ -17,11 +17,11 @@ pub trait HtmlTagRenderer {
     fn element_attrs_to_html(
         &self,
         f: &mut dyn Write,
-        element: &Element,
+        container: &Container,
         is_flex_child: bool,
     ) -> Result<(), std::io::Error> {
-        element_style_to_html(f, element, is_flex_child)?;
-        element_classes_to_html(f, element)?;
+        element_style_to_html(f, container, is_flex_child)?;
+        element_classes_to_html(f, container)?;
 
         Ok(())
     }
@@ -69,12 +69,12 @@ pub trait HtmlTagRenderer {
 /// * If any of the elements fail to be written as HTML
 pub fn elements_to_html(
     f: &mut dyn Write,
-    elements: &[Element],
+    containers: &[Container],
     tag_renderer: &dyn HtmlTagRenderer,
     is_flex_child: bool,
 ) -> Result<(), std::io::Error> {
-    for element in elements {
-        element_to_html(f, element, tag_renderer, is_flex_child)?;
+    for container in containers {
+        element_to_html(f, container, tag_renderer, is_flex_child)?;
     }
 
     Ok(())
@@ -161,7 +161,7 @@ pub fn calc_to_css_string(calc: &Calculation) -> String {
 }
 
 // TODO: handle vertical flex
-fn is_flex_container(container: &ContainerElement) -> bool {
+fn is_flex_container(container: &Container) -> bool {
     container.direction == LayoutDirection::Row
 }
 
@@ -171,13 +171,9 @@ fn is_flex_container(container: &ContainerElement) -> bool {
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub fn element_style_to_html(
     f: &mut dyn Write,
-    element: &Element,
+    container: &Container,
     is_flex_child: bool,
 ) -> Result<(), std::io::Error> {
-    let Some(container) = element.container_element() else {
-        return Ok(());
-    };
-
     let mut printed_start = false;
 
     // TODO: handle vertical flex
@@ -567,10 +563,13 @@ pub fn element_style_to_html(
 /// * If there were any IO errors writing the element style attribute
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::cognitive_complexity)]
-pub fn element_classes_to_html(f: &mut dyn Write, element: &Element) -> Result<(), std::io::Error> {
+pub fn element_classes_to_html(
+    f: &mut dyn Write,
+    container: &Container,
+) -> Result<(), std::io::Error> {
     let mut printed_start = false;
 
-    if let Element::Button { .. } = element {
+    if container.element == Element::Button {
         if !printed_start {
             printed_start = true;
             f.write_all(b" class=\"")?;
@@ -591,19 +590,16 @@ pub fn element_classes_to_html(f: &mut dyn Write, element: &Element) -> Result<(
 #[allow(clippy::too_many_lines)]
 pub fn element_to_html(
     f: &mut dyn Write,
-    element: &Element,
+    container: &Container,
     tag_renderer: &dyn HtmlTagRenderer,
     is_flex_child: bool,
 ) -> Result<(), std::io::Error> {
-    match element {
+    match &container.element {
         Element::Raw { value } => {
             f.write_all(value.as_bytes())?;
             return Ok(());
         }
-        Element::Image {
-            source,
-            element: container,
-        } => {
+        Element::Image { source } => {
             const TAG_NAME: &[u8] = b"img";
             f.write_all(b"<")?;
             f.write_all(TAG_NAME)?;
@@ -612,11 +608,11 @@ pub fn element_to_html(
                 f.write_all(source.as_bytes())?;
                 f.write_all(b"\"")?;
             }
-            tag_renderer.element_attrs_to_html(f, element, is_flex_child)?;
+            tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;
             f.write_all(b">")?;
             elements_to_html(
                 f,
-                &container.elements,
+                &container.children,
                 tag_renderer,
                 is_flex_container(container),
             )?;
@@ -625,10 +621,7 @@ pub fn element_to_html(
             f.write_all(b">")?;
             return Ok(());
         }
-        Element::Anchor {
-            element: container,
-            href,
-        } => {
+        Element::Anchor { href } => {
             const TAG_NAME: &[u8] = b"a";
             f.write_all(b"<")?;
             f.write_all(TAG_NAME)?;
@@ -637,11 +630,11 @@ pub fn element_to_html(
                 f.write_all(href.as_bytes())?;
                 f.write_all(b"\"")?;
             }
-            tag_renderer.element_attrs_to_html(f, element, is_flex_child)?;
+            tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;
             f.write_all(b">")?;
             elements_to_html(
                 f,
-                &container.elements,
+                &container.children,
                 tag_renderer,
                 is_flex_container(container),
             )?;
@@ -650,10 +643,7 @@ pub fn element_to_html(
             f.write_all(b">")?;
             return Ok(());
         }
-        Element::Heading {
-            element: container,
-            size,
-        } => {
+        Element::Heading { size } => {
             let tag_name = match size {
                 HeaderSize::H1 => b"h1",
                 HeaderSize::H2 => b"h2",
@@ -664,11 +654,11 @@ pub fn element_to_html(
             };
             f.write_all(b"<")?;
             f.write_all(tag_name)?;
-            tag_renderer.element_attrs_to_html(f, element, is_flex_child)?;
+            tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;
             f.write_all(b">")?;
             elements_to_html(
                 f,
-                &container.elements,
+                &container.children,
                 tag_renderer,
                 is_flex_container(container),
             )?;
@@ -677,7 +667,7 @@ pub fn element_to_html(
             f.write_all(b">")?;
             return Ok(());
         }
-        Element::Input { input, .. } => {
+        Element::Input { input } => {
             const TAG_NAME: &[u8] = b"input";
             f.write_all(b"<")?;
             f.write_all(TAG_NAME)?;
@@ -723,41 +713,39 @@ pub fn element_to_html(
         _ => {}
     }
 
-    let tag_name = match element {
-        Element::Div { .. } => Some("div"),
-        Element::Aside { .. } => Some("aside"),
-        Element::Main { .. } => Some("main"),
-        Element::Header { .. } => Some("header"),
-        Element::Footer { .. } => Some("footer"),
-        Element::Section { .. } => Some("section"),
-        Element::Form { .. } => Some("form"),
-        Element::Span { .. } => Some("span"),
-        Element::Button { .. } => Some("button"),
-        Element::UnorderedList { .. } => Some("ul"),
-        Element::OrderedList { .. } => Some("ol"),
-        Element::ListItem { .. } => Some("li"),
-        Element::Table { .. } => Some("table"),
-        Element::THead { .. } => Some("thead"),
-        Element::TH { .. } => Some("th"),
-        Element::TBody { .. } => Some("tbody"),
-        Element::TR { .. } => Some("tr"),
-        Element::TD { .. } => Some("td"),
+    let tag_name = match &container.element {
+        Element::Div => Some("div"),
+        Element::Aside => Some("aside"),
+        Element::Main => Some("main"),
+        Element::Header => Some("header"),
+        Element::Footer => Some("footer"),
+        Element::Section => Some("section"),
+        Element::Form => Some("form"),
+        Element::Span => Some("span"),
+        Element::Button => Some("button"),
+        Element::UnorderedList => Some("ul"),
+        Element::OrderedList => Some("ol"),
+        Element::ListItem => Some("li"),
+        Element::Table => Some("table"),
+        Element::THead => Some("thead"),
+        Element::TH => Some("th"),
+        Element::TBody => Some("tbody"),
+        Element::TR => Some("tr"),
+        Element::TD => Some("td"),
         _ => None,
     };
 
     if let Some(tag_name) = tag_name {
         f.write_all(b"<")?;
         f.write_all(tag_name.as_bytes())?;
-        tag_renderer.element_attrs_to_html(f, element, is_flex_child)?;
+        tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;
         f.write_all(b">")?;
-        if let Some(container) = element.container_element() {
-            elements_to_html(
-                f,
-                &container.elements,
-                tag_renderer,
-                is_flex_container(container),
-            )?;
-        }
+        elements_to_html(
+            f,
+            &container.children,
+            tag_renderer,
+            is_flex_container(container),
+        )?;
         f.write_all(b"</")?;
         f.write_all(tag_name.as_bytes())?;
         f.write_all(b">")?;
@@ -768,16 +756,16 @@ pub fn element_to_html(
 
 /// # Errors
 ///
-/// * If there were any IO errors writing the `ContainerElement` as HTML
+/// * If there were any IO errors writing the `Container` as HTML
 pub fn container_element_to_html(
-    container: &ContainerElement,
+    container: &Container,
     tag_renderer: &dyn HtmlTagRenderer,
 ) -> Result<String, std::io::Error> {
     let mut buffer = vec![];
 
     elements_to_html(
         &mut buffer,
-        &container.elements,
+        &container.children,
         tag_renderer,
         is_flex_container(container),
     )?;
@@ -789,11 +777,11 @@ pub fn container_element_to_html(
 
 /// # Errors
 ///
-/// * If there were any IO errors writing the `ContainerElement` as an HTML response
+/// * If there were any IO errors writing the `Container` as an HTML response
 #[allow(clippy::similar_names)]
 pub fn container_element_to_html_response(
     headers: &HeaderMap,
-    container: &ContainerElement,
+    container: &Container,
     background: Option<Color>,
     tag_renderer: &dyn HtmlTagRenderer,
 ) -> Result<String, std::io::Error> {

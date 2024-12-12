@@ -19,7 +19,7 @@ use actix_web::{
 use async_trait::async_trait;
 use flume::{Receiver, Sender};
 use gigachad_renderer::{canvas::CanvasUpdate, Color, PartialView, RenderRunner, Renderer, View};
-use gigachad_router::{ContainerElement, Router};
+use gigachad_router::{Container, Router};
 use html::{container_element_to_html_response, HtmlTagRenderer};
 use moosicbox_app_native_image::image;
 use moosicbox_env_utils::default_env_u16;
@@ -315,11 +315,11 @@ impl Renderer for HtmlRenderer {
         Ok(())
     }
 
-    fn container(&self) -> RwLockReadGuard<ContainerElement> {
+    fn container(&self) -> RwLockReadGuard<Container> {
         unimplemented!();
     }
 
-    fn container_mut(&self) -> RwLockWriteGuard<ContainerElement> {
+    fn container_mut(&self) -> RwLockWriteGuard<Container> {
         unimplemented!();
     }
 }

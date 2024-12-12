@@ -14,7 +14,7 @@ use gigachad_renderer_html::{
     HeaderMap, HtmlRenderer,
 };
 use gigachad_router::Router;
-use gigachad_transformer::{models::Route, ContainerElement, Element};
+use gigachad_transformer::{models::Route, Container};
 use tokio::runtime::Runtime;
 
 pub struct HtmxTagRenderer;
@@ -23,10 +23,10 @@ impl HtmlTagRenderer for HtmxTagRenderer {
     fn element_attrs_to_html(
         &self,
         f: &mut dyn Write,
-        element: &Element,
+        container: &Container,
         is_flex_child: bool,
     ) -> Result<(), std::io::Error> {
-        if let Some(route) = element.container_element().and_then(|x| x.route.as_ref()) {
+        if let Some(route) = &container.route {
             match route {
                 Route::Get {
                     route,
@@ -68,8 +68,8 @@ impl HtmlTagRenderer for HtmxTagRenderer {
             }
         }
 
-        element_style_to_html(f, element, is_flex_child)?;
-        element_classes_to_html(f, element)?;
+        element_style_to_html(f, container, is_flex_child)?;
+        element_classes_to_html(f, container)?;
 
         Ok(())
     }
@@ -199,11 +199,11 @@ impl Renderer for HtmxRenderer {
         self.html_renderer.render_canvas(update).await
     }
 
-    fn container(&self) -> RwLockReadGuard<ContainerElement> {
+    fn container(&self) -> RwLockReadGuard<Container> {
         self.html_renderer.container()
     }
 
-    fn container_mut(&self) -> RwLockWriteGuard<ContainerElement> {
+    fn container_mut(&self) -> RwLockWriteGuard<Container> {
         self.html_renderer.container_mut()
     }
 }

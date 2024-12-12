@@ -16,7 +16,7 @@ use std::{
 use flume::SendError;
 use moosicbox_app_native_lib::{
     renderer::{Color, PartialView, Renderer, View},
-    router::{ContainerElement, RouteRequest, Router},
+    router::{Container, RouteRequest, Router},
 };
 use moosicbox_app_native_ui::{state, Action};
 use moosicbox_app_state::AppStateError;
@@ -304,23 +304,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     log::debug!("versions: {versions:?}");
 
-                    let container: ContainerElement =
-                        moosicbox_app_native_ui::albums::album_page_content(
-                            &album,
-                            &versions,
-                            versions.iter().find(|v| {
-                                version_source.is_none_or(|x| v.source == x)
-                                    && bit_depth.is_none_or(|x| v.bit_depth.is_some_and(|b| b == x))
-                                    && sample_rate
-                                        .is_none_or(|x| v.sample_rate.is_some_and(|s| s == x))
-                            }),
-                        )
-                        .into_string()
-                        .try_into()?;
+                    let container: Container = moosicbox_app_native_ui::albums::album_page_content(
+                        &album,
+                        &versions,
+                        versions.iter().find(|v| {
+                            version_source.is_none_or(|x| v.source == x)
+                                && bit_depth.is_none_or(|x| v.bit_depth.is_some_and(|b| b == x))
+                                && sample_rate.is_none_or(|x| v.sample_rate.is_some_and(|s| s == x))
+                        }),
+                    )
+                    .into_string()
+                    .try_into()?;
 
                     container
                 } else {
-                    let container: ContainerElement = moosicbox_app_native_ui::albums::album(
+                    let container: Container = moosicbox_app_native_ui::albums::album(
                         &convert_state(&STATE).await,
                         album_id,
                         Some(source),
@@ -388,7 +386,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     log::debug!("artist: {artist:?}");
 
-                    let container: ContainerElement = moosicbox_app_native_ui::artists::artist(
+                    let container: Container = moosicbox_app_native_ui::artists::artist(
                         &convert_state(&STATE).await,
                         &artist,
                     )
@@ -478,9 +476,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             move |_, _| {
                 moosicbox_task::spawn_on("check_visualization_update", &handle, async move {
                     let binding = RENDERER.get().unwrap().read().await;
-                    let (width, height) = if let Some(visualization) = binding
-                        .container()
-                        .find_container_element_by_str_id("visualization")
+                    let (width, height) = if let Some(visualization) =
+                        binding.container().find_element_by_str_id("visualization")
                     {
                         (
                             visualization.calculated_width.unwrap(),

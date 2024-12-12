@@ -21,7 +21,7 @@ use gigachad_transformer::{
         AlignItems, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition,
         Position, Route, SwapTarget, Visibility,
     },
-    ContainerElement, Element, Input, TableIter,
+    Container, Element, Input, TableIter,
 };
 use itertools::Itertools;
 
@@ -236,24 +236,21 @@ impl Renderer for EguiRenderer {
             let mut page = app.container.write().unwrap();
             let ids = view
                 .container
-                .elements
+                .children
                 .as_slice()
                 .iter()
-                .filter_map(|x| x.container_element())
                 .map(|x| x.id)
                 .collect::<Vec<_>>();
             if let Some(removed) =
-                page.replace_str_id_with_elements(view.container.elements, &view.target)
+                page.replace_str_id_with_elements(view.container.children, &view.target)
             {
-                if let Some(container) = removed.container_element() {
-                    let mut visibilities = app.visibilities.write().unwrap();
-                    if let Some(visibility) = visibilities.remove(&container.id) {
-                        for id in ids {
-                            visibilities.insert(id, visibility);
-                        }
+                let mut visibilities = app.visibilities.write().unwrap();
+                if let Some(visibility) = visibilities.remove(&removed.id) {
+                    for id in ids {
+                        visibilities.insert(id, visibility);
                     }
-                    drop(visibilities);
                 }
+                drop(visibilities);
                 page.calc();
                 drop(page);
                 if let Some(ctx) = &*app.ctx.read().unwrap() {
@@ -313,11 +310,11 @@ impl Renderer for EguiRenderer {
         Ok(())
     }
 
-    fn container(&self) -> RwLockReadGuard<ContainerElement> {
+    fn container(&self) -> RwLockReadGuard<Container> {
         self.app.container.read().unwrap()
     }
 
-    fn container_mut(&self) -> RwLockWriteGuard<ContainerElement> {
+    fn container_mut(&self) -> RwLockWriteGuard<Container> {
         self.app.container.write().unwrap()
     }
 }
@@ -346,7 +343,7 @@ enum AppImage {
 }
 
 struct RenderContext<'a> {
-    container: &'a ContainerElement,
+    container: &'a Container,
     viewport_listeners: &'a mut HashMap<usize, ViewportListener>,
     images: &'a mut HashMap<String, AppImage>,
     canvas_actions: &'a mut HashMap<String, Vec<CanvasAction>>,
@@ -361,7 +358,7 @@ struct EguiApp {
     ctx: Arc<RwLock<Option<egui::Context>>>,
     width: Arc<RwLock<Option<f32>>>,
     height: Arc<RwLock<Option<f32>>>,
-    container: Arc<RwLock<ContainerElement>>,
+    container: Arc<RwLock<Container>>,
     sender: Sender<String>,
     event: Sender<AppEvent>,
     event_receiver: Receiver<AppEvent>,
@@ -394,7 +391,7 @@ impl EguiApp {
             ctx: Arc::new(RwLock::new(None)),
             width: Arc::new(RwLock::new(None)),
             height: Arc::new(RwLock::new(None)),
-            container: Arc::new(RwLock::new(ContainerElement::default())),
+            container: Arc::new(RwLock::new(Container::default())),
             sender,
             event,
             event_receiver,
@@ -535,18 +532,18 @@ impl EguiApp {
     fn swap_elements(
         swap: &SwapTarget,
         ctx: &egui::Context,
-        container: &RwLock<ContainerElement>,
+        container: &RwLock<Container>,
         container_id: usize,
-        result: ContainerElement,
+        result: Container,
     ) {
         log::debug!(
             "ProcessRoute: replacing container_id={container_id} with {} elements",
-            result.elements.len()
+            result.children.len()
         );
         let mut page = container.write().unwrap();
         match swap {
             SwapTarget::This => {
-                if page.replace_id_with_elements(result.elements, container_id) {
+                if page.replace_id_with_elements(result.children, container_id) {
                     page.calc();
                     drop(page);
                     ctx.request_repaint();
@@ -555,8 +552,8 @@ impl EguiApp {
                 }
             }
             SwapTarget::Children => {
-                if let Some(container) = page.find_container_element_by_id_mut(container_id) {
-                    container.elements = result.elements;
+                if let Some(container) = page.find_element_by_id_mut(container_id) {
+                    container.children = result.children;
                     page.calc();
                     drop(page);
                     ctx.request_repaint();
@@ -613,7 +610,7 @@ impl EguiApp {
         rect: egui::Rect,
         pos_x: f32,
         pos_y: f32,
-        element: &ContainerElement,
+        element: &Container,
         parent: Option<&Viewport>,
     ) -> Viewport {
         let viewport = Viewport {
@@ -644,7 +641,7 @@ impl EguiApp {
     #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_horizontal_borders(
         ui: &mut Ui,
-        container: &ContainerElement,
+        container: &Container,
         add_contents: impl FnOnce(&mut Ui) -> Response,
     ) -> Response {
         ui.horizontal(|ui| {
@@ -672,7 +669,7 @@ impl EguiApp {
     #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_vertical_borders(
         ui: &mut Ui,
-        container: &ContainerElement,
+        container: &Container,
         add_contents: impl FnOnce(&mut Ui) -> Response,
     ) -> Response {
         ui.vertical(|ui| {
@@ -700,7 +697,7 @@ impl EguiApp {
     #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_borders(
         ui: &mut Ui,
-        container: &ContainerElement,
+        container: &Container,
         add_contents: impl FnOnce(&mut Ui) -> Response,
     ) -> Response {
         if container.calculated_border_left.is_some() || container.calculated_border_right.is_some()
@@ -724,7 +721,7 @@ impl EguiApp {
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
-    fn container_hidden(render_context: &mut RenderContext, container: &ContainerElement) -> bool {
+    fn container_hidden(render_context: &mut RenderContext, container: &Container) -> bool {
         if container.visibility == Some(Visibility::Hidden) {
             render_context
                 .visibilities
@@ -744,10 +741,10 @@ impl EguiApp {
         render_context: &mut RenderContext,
         ctx: &egui::Context,
         ui: &mut Ui,
-        container: &ContainerElement,
+        container: &Container,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
-        relative_container: Option<(egui::Rect, &ContainerElement)>,
+        relative_container: Option<(egui::Rect, &Container)>,
     ) -> bool {
         if let Some(rect) = rect {
             let render_rect = Self::get_render_rect(ui, container, relative_container);
@@ -796,10 +793,10 @@ impl EguiApp {
         render_context: &mut RenderContext,
         ctx: &egui::Context,
         ui: &mut Ui,
-        container: &ContainerElement,
+        container: &Container,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
-        relative_container: Option<(egui::Rect, &ContainerElement)>,
+        relative_container: Option<(egui::Rect, &Container)>,
     ) -> Option<Response> {
         if container.debug == Some(true) {
             if let Some(element) = render_context.container.find_element_by_id(container.id) {
@@ -1080,8 +1077,8 @@ impl EguiApp {
     #[cfg_attr(feature = "profiling", profiling::function)]
     fn get_render_rect(
         ui: &Ui,
-        container: &ContainerElement,
-        relative_container: Option<(egui::Rect, &ContainerElement)>,
+        container: &Container,
+        relative_container: Option<(egui::Rect, &Container)>,
     ) -> egui::Rect {
         if container.position == Some(Position::Absolute) {
             if let Some((relative_rect, ..)) = relative_container {
@@ -1113,9 +1110,9 @@ impl EguiApp {
     #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_position<'a>(
         ui: &mut Ui,
-        container: &'a ContainerElement,
-        mut relative_container: Option<(egui::Rect, &'a ContainerElement)>,
-        inner: impl FnOnce(&mut Ui, Option<(egui::Rect, &'a ContainerElement)>) -> Response,
+        container: &'a Container,
+        mut relative_container: Option<(egui::Rect, &'a Container)>,
+        inner: impl FnOnce(&mut Ui, Option<(egui::Rect, &'a Container)>) -> Response,
     ) -> Response {
         match container.position {
             Some(Position::Relative) => {
@@ -1144,17 +1141,18 @@ impl EguiApp {
         render_context: &mut RenderContext,
         ctx: &egui::Context,
         ui: &mut Ui,
-        container: &'a ContainerElement,
+        container: &'a Container,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
-        relative_container: Option<(egui::Rect, &'a ContainerElement)>,
+        relative_container: Option<(egui::Rect, &'a Container)>,
         vscroll: bool,
     ) -> Response {
-        for element in container.elements.iter().filter(|x| {
-            x.container_element()
-                .is_some_and(|y| y.calculated_position == Some(LayoutPosition::Default))
-        }) {
-            self.handle_element_side_effects(
+        for element in container
+            .children
+            .iter()
+            .filter(|x| x.calculated_position == Some(LayoutPosition::Default))
+        {
+            self.handle_container_side_effects(
                 render_context,
                 ctx,
                 None,
@@ -1169,10 +1167,9 @@ impl EguiApp {
         match container.direction {
             LayoutDirection::Row => {
                 let rows = container
-                    .elements
+                    .children
                     .iter()
-                    .filter_map(|x| x.container_element().map(|y| (x, y)))
-                    .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
+                    .filter_map(|x| x.calculated_position.as_ref().map(|y| (x, y)))
                     .filter_map({
                         |(x, y)| match y {
                             LayoutPosition::Wrap { row, .. } => Some((*row, x)),
@@ -1211,7 +1208,7 @@ impl EguiApp {
                             render_context,
                             ctx,
                             ui,
-                            &container.elements,
+                            &container.children,
                             viewport,
                             rect,
                             relative_container,
@@ -1223,10 +1220,9 @@ impl EguiApp {
             }
             LayoutDirection::Column => {
                 let cols = container
-                    .elements
+                    .children
                     .iter()
-                    .filter_map(|x| x.container_element().map(|y| (x, y)))
-                    .filter_map(|(x, y)| y.calculated_position.as_ref().map(|y| (x, y)))
+                    .filter_map(|x| x.calculated_position.as_ref().map(|y| (x, y)))
                     .filter_map(|(x, y)| match y {
                         LayoutPosition::Wrap { col, .. } => Some((*col, x)),
                         LayoutPosition::Default => None,
@@ -1263,7 +1259,7 @@ impl EguiApp {
                             render_context,
                             ctx,
                             ui,
-                            &container.elements,
+                            &container.children,
                             viewport,
                             rect,
                             relative_container,
@@ -1279,9 +1275,9 @@ impl EguiApp {
     #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_layout<'a>(
         ui: &mut Ui,
-        container: &'a ContainerElement,
-        relative_container: Option<(egui::Rect, &'a ContainerElement)>,
-        inner: impl FnOnce(&mut Ui, Option<(egui::Rect, &'a ContainerElement)>) -> Response,
+        container: &'a Container,
+        relative_container: Option<(egui::Rect, &'a Container)>,
+        inner: impl FnOnce(&mut Ui, Option<(egui::Rect, &'a Container)>) -> Response,
     ) -> Response {
         if matches!(
             container.justify_content,
@@ -1342,10 +1338,10 @@ impl EguiApp {
         render_context: &mut RenderContext,
         ctx: &egui::Context,
         ui: &mut Ui,
-        container: &'a ContainerElement,
+        container: &'a Container,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
-        relative_container: Option<(egui::Rect, &'a ContainerElement)>,
+        relative_container: Option<(egui::Rect, &'a Container)>,
         vscroll: bool,
     ) -> Response {
         Self::render_position(
@@ -1606,10 +1602,10 @@ impl EguiApp {
         render_context: &mut RenderContext,
         ctx: &egui::Context,
         ui: &mut Ui,
-        elements: &[Element],
+        elements: &[Container],
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
-        relative_container: Option<(egui::Rect, &ContainerElement)>,
+        relative_container: Option<(egui::Rect, &Container)>,
         scroll_child: bool,
     ) {
         log::trace!("render_elements: {} elements", elements.len());
@@ -1634,10 +1630,10 @@ impl EguiApp {
         render_context: &mut RenderContext,
         ctx: &egui::Context,
         ui: &mut Ui,
-        elements: &[&Element],
+        elements: &[&Container],
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
-        relative_container: Option<(egui::Rect, &ContainerElement)>,
+        relative_container: Option<(egui::Rect, &Container)>,
         scroll_child: bool,
     ) {
         log::trace!("render_elements_ref: {} elements", elements.len());
@@ -1676,12 +1672,14 @@ impl EguiApp {
         render_context: &mut RenderContext,
         ctx: &egui::Context,
         ui: Option<&Ui>,
-        container: &ContainerElement,
+        container: &Container,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         response: Option<&Response>,
         recurse: bool,
     ) {
+        self.handle_element_side_effects(ctx, &container.element, viewport, rect, response);
+
         if let Some(route) = &container.route {
             #[cfg(feature = "profiling")]
             profiling::scope!("route side effects");
@@ -1819,13 +1817,68 @@ impl EguiApp {
             }
         }
 
+        if let Some(ui) = ui {
+            if let Element::Image {
+                source: Some(source),
+            } = &container.element
+            {
+                #[cfg(feature = "profiling")]
+                profiling::scope!("image side effects");
+                let pos = ui.cursor().left_top();
+                let listener = render_context
+                    .viewport_listeners
+                    .entry(container.id)
+                    .or_insert_with(|| {
+                        ViewportListener::new(
+                            viewport.cloned(),
+                            0.0,
+                            0.0,
+                            container.calculated_width.unwrap(),
+                            container.calculated_height.unwrap(),
+                        )
+                    });
+                listener.viewport = viewport.cloned();
+                listener.pos.x = pos.x + viewport.map_or(0.0, |x| x.viewport.x);
+                listener.pos.y = pos.y + viewport.map_or(0.0, |x| x.viewport.y);
+
+                let (_, (dist, prev_dist)) = listener.check();
+
+                if prev_dist.is_none_or(|x| x >= 2000.0) && dist < 2000.0 {
+                    let contains_image =
+                        { matches!(render_context.images.get(source), Some(AppImage::Bytes(_))) };
+                    if !contains_image {
+                        let loading_image = {
+                            matches!(render_context.images.get(source), Some(AppImage::Loading))
+                        };
+
+                        if !loading_image {
+                            log::debug!(
+                                "render_element: triggering LoadImage for source={source} ({}, {})",
+                                listener.pos.x,
+                                listener.pos.y
+                            );
+                            render_context
+                                .images
+                                .insert(source.clone(), AppImage::Loading);
+
+                            if let Err(e) = self.event.send(AppEvent::LoadImage {
+                                source: source.to_string(),
+                            }) {
+                                log::error!("Failed to send LoadImage event: {e:?}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if recurse {
-            for element in &container.elements {
-                self.handle_element_side_effects(
+            for container in &container.children {
+                self.handle_container_side_effects(
                     render_context,
                     ctx,
                     ui,
-                    element,
+                    container,
                     viewport,
                     rect,
                     response,
@@ -1839,14 +1892,11 @@ impl EguiApp {
     #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
     fn handle_element_side_effects(
         &self,
-        render_context: &mut RenderContext,
         ctx: &egui::Context,
-        ui: Option<&Ui>,
         element: &Element,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         response: Option<&Response>,
-        recurse: bool,
     ) {
         log::trace!("handle_element_side_effects");
         if let Some(response) = response {
@@ -1901,75 +1951,6 @@ impl EguiApp {
                 }
                 _ => {}
             }
-        }
-
-        if let Some(ui) = ui {
-            if let Element::Image {
-                source: Some(source),
-                element,
-            } = element
-            {
-                #[cfg(feature = "profiling")]
-                profiling::scope!("image side effects");
-                let pos = ui.cursor().left_top();
-                let listener = render_context
-                    .viewport_listeners
-                    .entry(element.id)
-                    .or_insert_with(|| {
-                        ViewportListener::new(
-                            viewport.cloned(),
-                            0.0,
-                            0.0,
-                            element.calculated_width.unwrap(),
-                            element.calculated_height.unwrap(),
-                        )
-                    });
-                listener.viewport = viewport.cloned();
-                listener.pos.x = pos.x + viewport.map_or(0.0, |x| x.viewport.x);
-                listener.pos.y = pos.y + viewport.map_or(0.0, |x| x.viewport.y);
-
-                let (_, (dist, prev_dist)) = listener.check();
-
-                if prev_dist.is_none_or(|x| x >= 2000.0) && dist < 2000.0 {
-                    let contains_image =
-                        { matches!(render_context.images.get(source), Some(AppImage::Bytes(_))) };
-                    if !contains_image {
-                        let loading_image = {
-                            matches!(render_context.images.get(source), Some(AppImage::Loading))
-                        };
-
-                        if !loading_image {
-                            log::debug!(
-                                "render_element: triggering LoadImage for source={source} ({}, {})",
-                                listener.pos.x,
-                                listener.pos.y
-                            );
-                            render_context
-                                .images
-                                .insert(source.clone(), AppImage::Loading);
-
-                            if let Err(e) = self.event.send(AppEvent::LoadImage {
-                                source: source.to_string(),
-                            }) {
-                                log::error!("Failed to send LoadImage event: {e:?}");
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if let Some(container) = element.container_element() {
-            self.handle_container_side_effects(
-                render_context,
-                ctx,
-                ui,
-                container,
-                viewport,
-                rect,
-                response,
-                recurse,
-            );
         }
     }
 
@@ -2124,41 +2105,35 @@ impl EguiApp {
     fn map_element_target<R>(
         target: &ElementTarget,
         self_id: usize,
-        container: &ContainerElement,
-        func: impl Fn(&ContainerElement) -> R,
+        container: &Container,
+        func: impl Fn(&Container) -> R,
     ) -> Option<R> {
         match target {
             ElementTarget::StrId(str_id) => {
-                if let Some(element) = container.find_container_element_by_str_id(str_id) {
+                if let Some(element) = container.find_element_by_str_id(str_id) {
                     return Some(func(element));
                 }
 
                 log::warn!("Could not find element with str id '{str_id}'");
             }
             ElementTarget::Id(id) => {
-                if let Some(element) = container.find_container_element_by_id(self_id) {
+                if let Some(element) = container.find_element_by_id(self_id) {
                     return Some(func(element));
                 }
 
                 log::warn!("Could not find element with id '{id}'");
             }
             ElementTarget::SelfTarget => {
-                if let Some(element) = container.find_container_element_by_id(self_id) {
+                if let Some(element) = container.find_element_by_id(self_id) {
                     return Some(func(element));
                 }
 
                 log::warn!("Could not find element with id '{self_id}'");
             }
             ElementTarget::LastChild => {
-                if let Some(element) =
-                    container
-                        .find_container_element_by_id(self_id)
-                        .and_then(|x| {
-                            x.elements
-                                .iter()
-                                .filter_map(Element::container_element)
-                                .last()
-                        })
+                if let Some(element) = container
+                    .find_element_by_id(self_id)
+                    .and_then(|x| x.children.iter().last())
                 {
                     return Some(func(element));
                 }
@@ -2174,11 +2149,11 @@ impl EguiApp {
     fn get_element_target_id(
         target: &ElementTarget,
         self_id: usize,
-        container: &ContainerElement,
+        container: &Container,
     ) -> Option<usize> {
         match target {
             ElementTarget::StrId(str_id) => {
-                if let Some(element) = container.find_container_element_by_str_id(str_id) {
+                if let Some(element) = container.find_element_by_str_id(str_id) {
                     return Some(element.id);
                 }
 
@@ -2191,15 +2166,9 @@ impl EguiApp {
                 return Some(self_id);
             }
             ElementTarget::LastChild => {
-                if let Some(element) =
-                    container
-                        .find_container_element_by_id(self_id)
-                        .and_then(|x| {
-                            x.elements
-                                .iter()
-                                .filter_map(Element::container_element)
-                                .last()
-                        })
+                if let Some(element) = container
+                    .find_element_by_id(self_id)
+                    .and_then(|x| x.children.iter().last())
                 {
                     return Some(element.id);
                 }
@@ -2216,7 +2185,7 @@ impl EguiApp {
         action: &StyleAction,
         target: &ElementTarget,
         id: usize,
-        container: &ContainerElement,
+        container: &Container,
         visibilities: &mut HashMap<usize, Visibility>,
         displays: &mut HashMap<usize, bool>,
     ) -> bool {
@@ -2245,15 +2214,15 @@ impl EguiApp {
         render_context: &mut RenderContext,
         ctx: &egui::Context,
         ui: &mut Ui,
-        element: &Element,
+        element: &Container,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
-        relative_container: Option<(egui::Rect, &ContainerElement)>,
+        relative_container: Option<(egui::Rect, &Container)>,
         scroll_child: bool,
     ) {
         log::trace!("render_element: rect={rect:?}");
 
-        if let Element::Table { .. } = element {
+        if element.element == Element::Table {
             self.render_table(
                 render_context,
                 ctx,
@@ -2266,31 +2235,29 @@ impl EguiApp {
             return;
         }
 
-        if let Some(container) = element.container_element() {
-            if scroll_child
-                && self.handle_scroll_child_out_of_view(
-                    render_context,
-                    ctx,
-                    ui,
-                    container,
-                    viewport,
-                    rect,
-                    relative_container,
-                )
-            {
-                return;
-            }
+        if scroll_child
+            && self.handle_scroll_child_out_of_view(
+                render_context,
+                ctx,
+                ui,
+                element,
+                viewport,
+                rect,
+                relative_container,
+            )
+        {
+            return;
         }
 
-        let response = match element {
-            Element::Input { input, .. } => {
+        let response = match &element.element {
+            Element::Input { input } => {
                 Some(Self::render_input(ui, input, render_context.checkboxes))
             }
             Element::Raw { value } => Some(ui.label(value)),
-            Element::Image { source, element } => source
+            Element::Image { source } => source
                 .as_ref()
                 .map(|source| Self::render_image(render_context, ui, source, element)),
-            Element::Canvas { element } => element.str_id.as_ref().map_or_else(
+            Element::Canvas => element.str_id.as_ref().map_or_else(
                 || None,
                 |str_id| Self::render_canvas(render_context, ui, str_id, element),
             ),
@@ -2298,7 +2265,7 @@ impl EguiApp {
         };
 
         if let Some(response) = response {
-            self.handle_element_side_effects(
+            self.handle_container_side_effects(
                 render_context,
                 ctx,
                 Some(ui),
@@ -2311,28 +2278,26 @@ impl EguiApp {
             return;
         }
 
-        if let Some(container) = element.container_element() {
-            if let Some(response) = self.render_container(
-                render_context,
-                ctx,
-                ui,
-                container,
-                viewport,
-                rect,
-                relative_container,
-            ) {
-                if !Self::container_hidden(render_context, container) {
-                    self.handle_element_side_effects(
-                        render_context,
-                        ctx,
-                        Some(ui),
-                        element,
-                        viewport,
-                        rect,
-                        Some(&response),
-                        false,
-                    );
-                }
+        if let Some(response) = self.render_container(
+            render_context,
+            ctx,
+            ui,
+            element,
+            viewport,
+            rect,
+            relative_container,
+        ) {
+            if !Self::container_hidden(render_context, element) {
+                self.handle_container_side_effects(
+                    render_context,
+                    ctx,
+                    Some(ui),
+                    element,
+                    viewport,
+                    rect,
+                    Some(&response),
+                    false,
+                );
             }
         }
     }
@@ -2414,7 +2379,7 @@ impl EguiApp {
         render_context: &mut RenderContext,
         ui: &mut Ui,
         source: &str,
-        container: &ContainerElement,
+        container: &Container,
     ) -> Response {
         egui::Frame::none()
             .show(ui, |ui| {
@@ -2445,7 +2410,7 @@ impl EguiApp {
         render_context: &mut RenderContext,
         ui: &mut Ui,
         str_id: &str,
-        container: &ContainerElement,
+        container: &Container,
     ) -> Option<Response> {
         render_context.canvas_actions.get(str_id).map_or_else(
             || None,
@@ -2509,7 +2474,7 @@ impl EguiApp {
     }
 
     fn apply_container_styles(
-        container: &ContainerElement,
+        container: &Container,
         mut frame: egui::Frame,
         start: bool,
         end: bool,
@@ -2572,34 +2537,26 @@ impl EguiApp {
         render_context: &mut RenderContext,
         ctx: &egui::Context,
         ui: &mut Ui,
-        element: &Element,
+        element: &Container,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
-        relative_container: Option<(egui::Rect, &ContainerElement)>,
+        relative_container: Option<(egui::Rect, &Container)>,
     ) {
         let TableIter { rows, headings } = element.table_iter();
 
         let mut head_trs = element
-            .container_element()
-            .unwrap()
-            .elements
+            .children
             .iter()
-            .filter(|x| matches!(x, Element::THead { .. }))
-            .filter_map(|x| x.container_element())
-            .flat_map(|x| x.elements.iter())
-            .filter_map(|x| x.container_element());
+            .filter(|x| matches!(x.element, Element::THead))
+            .flat_map(|x| x.children.iter());
 
         let mut body_trs = element
-            .container_element()
-            .unwrap()
-            .elements
+            .children
             .iter()
-            .filter(|x| matches!(x, Element::TBody { .. }))
-            .filter_map(|x| x.container_element())
-            .flat_map(|x| x.elements.iter())
-            .filter_map(|x| x.container_element());
+            .filter(|x| matches!(x.element, Element::TBody))
+            .flat_map(|x| x.children.iter());
 
-        let grid = egui::Grid::new(format!("grid-{}", element.container_element().unwrap().id));
+        let grid = egui::Grid::new(format!("grid-{}", element.id));
 
         grid.show(ui, |ui| {
             if let Some(headings) = headings {

@@ -119,11 +119,12 @@ impl Default for Number {
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct ContainerElement {
+pub struct Container {
     #[cfg(feature = "id")]
     pub id: usize,
     pub str_id: Option<String>,
-    pub elements: Vec<Element>,
+    pub element: Element,
+    pub children: Vec<Container>,
     pub direction: LayoutDirection,
     pub overflow_x: LayoutOverflow,
     pub overflow_y: LayoutOverflow,
@@ -229,7 +230,7 @@ pub struct ContainerElement {
 }
 
 #[cfg(any(test, feature = "maud"))]
-impl TryFrom<maud::Markup> for ContainerElement {
+impl TryFrom<maud::Markup> for Container {
     type Error = tl::ParseError;
 
     fn try_from(value: maud::Markup) -> Result<Self, Self::Error> {
@@ -237,52 +238,36 @@ impl TryFrom<maud::Markup> for ContainerElement {
     }
 }
 
-fn visible_elements(elements: &[Element]) -> impl Iterator<Item = &Element> {
-    elements
-        .iter()
-        .filter(|x| x.container_element().is_none_or(|x| x.hidden != Some(true)))
+fn visible_elements(elements: &[Container]) -> impl Iterator<Item = &Container> {
+    elements.iter().filter(|x| x.hidden != Some(true))
 }
 
-fn visible_elements_mut(elements: &mut [Element]) -> impl Iterator<Item = &mut Element> {
-    elements
-        .iter_mut()
-        .filter(|x| x.container_element().is_none_or(|x| x.hidden != Some(true)))
+fn visible_elements_mut(elements: &mut [Container]) -> impl Iterator<Item = &mut Container> {
+    elements.iter_mut().filter(|x| x.hidden != Some(true))
 }
 
-fn relative_positioned_elements(elements: &[Element]) -> impl Iterator<Item = &Element> {
-    visible_elements(elements).filter(|x| {
-        x.container_element()
-            .is_none_or(|x| x.position != Some(Position::Absolute))
-    })
+fn relative_positioned_elements(elements: &[Container]) -> impl Iterator<Item = &Container> {
+    visible_elements(elements).filter(|x| x.position != Some(Position::Absolute))
 }
 
 fn relative_positioned_elements_mut(
-    elements: &mut [Element],
-) -> impl Iterator<Item = &mut Element> {
-    visible_elements_mut(elements).filter(|x| {
-        x.container_element()
-            .is_none_or(|x| x.position != Some(Position::Absolute))
-    })
+    elements: &mut [Container],
+) -> impl Iterator<Item = &mut Container> {
+    visible_elements_mut(elements).filter(|x| x.position != Some(Position::Absolute))
 }
 
-fn absolute_positioned_elements(elements: &[Element]) -> impl Iterator<Item = &Element> {
-    visible_elements(elements).filter(|x| {
-        x.container_element()
-            .is_some_and(|x| x.position == Some(Position::Absolute))
-    })
+fn absolute_positioned_elements(elements: &[Container]) -> impl Iterator<Item = &Container> {
+    visible_elements(elements).filter(|x| x.position == Some(Position::Absolute))
 }
 
 fn absolute_positioned_elements_mut(
-    elements: &mut [Element],
-) -> impl Iterator<Item = &mut Element> {
-    visible_elements_mut(elements).filter(|x| {
-        x.container_element()
-            .is_some_and(|x| x.position == Some(Position::Absolute))
-    })
+    elements: &mut [Container],
+) -> impl Iterator<Item = &mut Container> {
+    visible_elements_mut(elements).filter(|x| x.position == Some(Position::Absolute))
 }
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
-impl ContainerElement {
+impl Container {
     #[must_use]
     pub fn is_visible(&self) -> bool {
         self.hidden != Some(true)
@@ -293,96 +278,66 @@ impl ContainerElement {
         self.hidden == Some(true)
     }
 
-    pub fn visible_elements(&self) -> impl Iterator<Item = &Element> {
-        visible_elements(&self.elements)
+    pub fn visible_elements(&self) -> impl Iterator<Item = &Self> {
+        visible_elements(&self.children)
     }
 
-    pub fn visible_elements_mut(&mut self) -> impl Iterator<Item = &mut Element> {
-        visible_elements_mut(&mut self.elements)
+    pub fn visible_elements_mut(&mut self) -> impl Iterator<Item = &mut Self> {
+        visible_elements_mut(&mut self.children)
     }
 
-    pub fn relative_positioned_elements(&self) -> impl Iterator<Item = &Element> {
-        relative_positioned_elements(&self.elements)
+    pub fn relative_positioned_elements(&self) -> impl Iterator<Item = &Self> {
+        relative_positioned_elements(&self.children)
     }
 
-    pub fn relative_positioned_elements_mut(&mut self) -> impl Iterator<Item = &mut Element> {
-        relative_positioned_elements_mut(&mut self.elements)
+    pub fn relative_positioned_elements_mut(&mut self) -> impl Iterator<Item = &mut Self> {
+        relative_positioned_elements_mut(&mut self.children)
     }
 
-    pub fn absolute_positioned_elements(&self) -> impl Iterator<Item = &Element> {
-        absolute_positioned_elements(&self.elements)
+    pub fn absolute_positioned_elements(&self) -> impl Iterator<Item = &Self> {
+        absolute_positioned_elements(&self.children)
     }
 
-    pub fn absolute_positioned_elements_mut(&mut self) -> impl Iterator<Item = &mut Element> {
-        absolute_positioned_elements_mut(&mut self.elements)
+    pub fn absolute_positioned_elements_mut(&mut self) -> impl Iterator<Item = &mut Self> {
+        absolute_positioned_elements_mut(&mut self.children)
     }
 
     #[cfg(feature = "id")]
     #[must_use]
-    pub fn find_container_element_by_id(&self, id: usize) -> Option<&Self> {
+    pub fn find_element_by_id(&self, id: usize) -> Option<&Self> {
         if self.id == id {
-            Some(self)
-        } else {
-            self.elements
-                .iter()
-                .filter_map(|x| x.container_element())
-                .find_map(|x| x.find_container_element_by_id(id))
+            return Some(self);
         }
+        self.children.iter().find_map(|x| x.find_element_by_id(id))
     }
 
     #[cfg(feature = "id")]
     #[must_use]
-    pub fn find_container_element_by_id_mut(&mut self, id: usize) -> Option<&mut Self> {
+    pub fn find_element_by_id_mut(&mut self, id: usize) -> Option<&mut Self> {
         if self.id == id {
-            Some(self)
-        } else {
-            self.elements
-                .iter_mut()
-                .filter_map(|x| x.container_element_mut())
-                .find_map(|x| x.find_container_element_by_id_mut(id))
+            return Some(self);
         }
+        self.children
+            .iter_mut()
+            .find_map(|x| x.find_element_by_id_mut(id))
     }
 
     #[must_use]
-    pub fn find_container_element_by_str_id(&self, str_id: &str) -> Option<&Self> {
-        if self.str_id.as_ref().is_some_and(|id| id == str_id) {
-            Some(self)
-        } else {
-            self.elements
-                .iter()
-                .filter_map(|x| x.container_element())
-                .find_map(|x| x.find_container_element_by_str_id(str_id))
+    pub fn find_element_by_str_id(&self, str_id: &str) -> Option<&Self> {
+        if self.str_id.as_ref().is_some_and(|x| x == str_id) {
+            return Some(self);
         }
-    }
-
-    #[must_use]
-    pub fn find_container_element_by_str_id_mut(&mut self, str_id: &str) -> Option<&mut Self> {
-        if self.str_id.as_ref().is_some_and(|id| id == str_id) {
-            Some(self)
-        } else {
-            self.elements
-                .iter_mut()
-                .filter_map(|x| x.container_element_mut())
-                .find_map(|x| x.find_container_element_by_str_id_mut(str_id))
-        }
-    }
-
-    #[cfg(feature = "id")]
-    #[must_use]
-    pub fn find_element_by_id(&self, id: usize) -> Option<&Element> {
-        self.elements.iter().find_map(|x| x.find_element_by_id(id))
-    }
-
-    #[must_use]
-    pub fn find_element_by_str_id(&self, str_id: &str) -> Option<&Element> {
-        self.elements
+        self.children
             .iter()
             .find_map(|x| x.find_element_by_str_id(str_id))
     }
 
     #[must_use]
-    pub fn find_element_by_str_id_mut(&mut self, str_id: &str) -> Option<&mut Element> {
-        self.elements
+    pub fn find_element_by_str_id_mut(&mut self, str_id: &str) -> Option<&mut Self> {
+        if self.str_id.as_ref().is_some_and(|x| x == str_id) {
+            return Some(self);
+        }
+        self.children
             .iter_mut()
             .find_map(|x| x.find_element_by_str_id_mut(str_id))
     }
@@ -390,58 +345,33 @@ impl ContainerElement {
     #[cfg(feature = "id")]
     #[must_use]
     pub fn find_parent<'a>(&self, root: &'a mut Self) -> Option<&'a Self> {
-        if root
-            .elements
-            .iter()
-            .filter_map(|x| x.container_element())
-            .any(|x| x.id == self.id)
-        {
+        if root.children.iter().any(|x| x.id == self.id) {
             Some(root)
         } else {
-            root.elements
+            root.children
                 .iter()
-                .filter_map(|x| x.container_element())
-                .find(|x| {
-                    x.elements
-                        .iter()
-                        .filter_map(|x| x.container_element())
-                        .any(|x| x.id == self.id)
-                })
+                .find(|x| x.children.iter().any(|x| x.id == self.id))
         }
     }
 
     #[cfg(feature = "id")]
     #[must_use]
     pub fn find_parent_by_id(&self, id: usize) -> Option<&Self> {
-        if self
-            .elements
-            .iter()
-            .filter_map(|x| x.container_element())
-            .any(|x| x.id == id)
-        {
+        if self.children.iter().any(|x| x.id == id) {
             Some(self)
         } else {
-            self.elements
-                .iter()
-                .filter_map(|x| x.container_element())
-                .find_map(|x| x.find_parent_by_id(id))
+            self.children.iter().find_map(|x| x.find_parent_by_id(id))
         }
     }
 
     #[cfg(feature = "id")]
     #[must_use]
     pub fn find_parent_by_id_mut(&mut self, id: usize) -> Option<&mut Self> {
-        if self
-            .elements
-            .iter()
-            .filter_map(|x| x.container_element())
-            .any(|x| x.id == id)
-        {
+        if self.children.iter().any(|x| x.id == id) {
             Some(self)
         } else {
-            self.elements
+            self.children
                 .iter_mut()
-                .filter_map(|x| x.container_element_mut())
                 .find_map(|x| x.find_parent_by_id_mut(id))
         }
     }
@@ -449,18 +379,16 @@ impl ContainerElement {
     #[must_use]
     pub fn find_parent_by_str_id_mut(&mut self, id: &str) -> Option<&mut Self> {
         if self
-            .elements
+            .children
             .iter()
-            .filter_map(|x| x.container_element())
             .filter_map(|x| x.str_id.as_ref())
             .map(String::as_str)
             .any(|x| x == id)
         {
             Some(self)
         } else {
-            self.elements
+            self.children
                 .iter_mut()
-                .filter_map(|x| x.container_element_mut())
                 .find_map(|x| x.find_parent_by_str_id_mut(id))
         }
     }
@@ -471,68 +399,48 @@ impl ContainerElement {
 
     /// # Panics
     ///
-    /// * If the `ContainerElement` is the root node
-    /// * If the `ContainerElement` is not properly attached to the tree
+    /// * If the `Container` is the root node
+    /// * If the `Container` is not properly attached to the tree
     #[cfg(feature = "id")]
-    pub fn replace_with_elements(&mut self, replacement: Vec<Element>, root: &mut Self) {
+    pub fn replace_with_elements(&mut self, replacement: Vec<Self>, root: &mut Self) {
         let Some(parent) = &mut root.find_parent_by_id_mut(self.id) else {
             panic!("Cannot replace the root node with multiple elements");
         };
 
         let index = parent
-            .elements
+            .children
             .iter()
             .enumerate()
-            .find_map(|(i, x)| {
-                if let Some(container) = x.container_element() {
-                    if container.id == self.id {
-                        Some(i)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            })
-            .unwrap_or_else(|| panic!("ContainerElement is not attached properly to tree"));
+            .find_map(|(i, x)| if x.id == self.id { Some(i) } else { None })
+            .unwrap_or_else(|| panic!("Container is not attached properly to tree"));
 
-        parent.elements.remove(index);
+        parent.children.remove(index);
 
         for (i, element) in replacement.into_iter().enumerate() {
-            parent.elements.insert(index + i, element);
+            parent.children.insert(index + i, element);
         }
     }
 
     /// # Panics
     ///
-    /// * If the `ContainerElement` is not properly attached to the tree
+    /// * If the `Container` is not properly attached to the tree
     #[cfg(feature = "id")]
-    pub fn replace_id_with_elements(&mut self, replacement: Vec<Element>, id: usize) -> bool {
+    pub fn replace_id_with_elements(&mut self, replacement: Vec<Self>, id: usize) -> bool {
         let Some(parent) = &mut self.find_parent_by_id_mut(id) else {
             return false;
         };
 
         let index = parent
-            .elements
+            .children
             .iter()
             .enumerate()
-            .find_map(|(i, x)| {
-                x.container_element().and_then(
-                    |container| {
-                        if container.id == id {
-                            Some(i)
-                        } else {
-                            None
-                        }
-                    },
-                )
-            })
-            .unwrap_or_else(|| panic!("ContainerElement is not attached properly to tree"));
+            .find_map(|(i, x)| if x.id == id { Some(i) } else { None })
+            .unwrap_or_else(|| panic!("Container is not attached properly to tree"));
 
-        parent.elements.remove(index);
+        parent.children.remove(index);
 
         for (i, element) in replacement.into_iter().enumerate() {
-            parent.elements.insert(index + i, element);
+            parent.children.insert(index + i, element);
         }
 
         true
@@ -540,36 +448,34 @@ impl ContainerElement {
 
     /// # Panics
     ///
-    /// * If the `ContainerElement` is not properly attached to the tree
+    /// * If the `Container` is not properly attached to the tree
     #[cfg(feature = "id")]
     pub fn replace_str_id_with_elements(
         &mut self,
-        replacement: Vec<Element>,
+        replacement: Vec<Self>,
         id: &str,
-    ) -> Option<Element> {
+    ) -> Option<Self> {
         let Some(parent) = &mut self.find_parent_by_str_id_mut(id) else {
             return None;
         };
 
         let index = parent
-            .elements
+            .children
             .iter()
             .enumerate()
             .find_map(|(i, x)| {
-                x.container_element().and_then(|container| {
-                    if container.str_id.as_ref().is_some_and(|x| x.as_str() == id) {
-                        Some(i)
-                    } else {
-                        None
-                    }
-                })
+                if x.str_id.as_ref().is_some_and(|x| x.as_str() == id) {
+                    Some(i)
+                } else {
+                    None
+                }
             })
-            .unwrap_or_else(|| panic!("ContainerElement is not attached properly to tree"));
+            .unwrap_or_else(|| panic!("Container is not attached properly to tree"));
 
-        let element = parent.elements.remove(index);
+        let element = parent.children.remove(index);
 
         for (i, element) in replacement.into_iter().enumerate() {
-            parent.elements.insert(index + i, element);
+            parent.children.insert(index + i, element);
         }
 
         Some(element)
@@ -577,119 +483,70 @@ impl ContainerElement {
 
     /// # Panics
     ///
-    /// * If the `ContainerElement` is not properly attached to the tree
+    /// * If the `Container` is not properly attached to the tree
     #[cfg(feature = "id")]
-    pub fn replace_ids_with_elements(&mut self, replacement: Vec<Element>, ids: &[usize]) -> bool {
+    pub fn replace_ids_with_elements(&mut self, replacement: Vec<Self>, ids: &[usize]) -> bool {
         let Some(parent) = &mut self.find_parent_by_id_mut(ids[0]) else {
             return false;
         };
 
         let index = parent
-            .elements
+            .children
             .iter()
             .enumerate()
-            .find_map(|(i, x)| {
-                x.container_element().and_then(|container| {
-                    if container.id == ids[0] {
-                        Some(i)
-                    } else {
-                        None
-                    }
-                })
-            })
-            .unwrap_or_else(|| panic!("ContainerElement is not attached properly to tree"));
+            .find_map(|(i, x)| if x.id == ids[0] { Some(i) } else { None })
+            .unwrap_or_else(|| panic!("Container is not attached properly to tree"));
 
         for _ in 0..ids.len() {
-            parent.elements.remove(index);
+            parent.children.remove(index);
         }
 
         for (i, element) in replacement.into_iter().enumerate() {
-            parent.elements.insert(index + i, element);
+            parent.children.insert(index + i, element);
         }
 
         true
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Default, Clone, Debug, PartialEq, Eq)]
 pub enum Element {
+    #[default]
+    Div,
     Raw {
         value: String,
     },
-    Div {
-        element: ContainerElement,
-    },
-    Aside {
-        element: ContainerElement,
-    },
-    Main {
-        element: ContainerElement,
-    },
-    Header {
-        element: ContainerElement,
-    },
-    Footer {
-        element: ContainerElement,
-    },
-    Section {
-        element: ContainerElement,
-    },
-    Form {
-        element: ContainerElement,
-    },
-    Span {
-        element: ContainerElement,
-    },
+    Aside,
+    Main,
+    Header,
+    Footer,
+    Section,
+    Form,
+    Span,
     Input {
         input: Input,
-        element: ContainerElement,
     },
-    Button {
-        element: ContainerElement,
-    },
+    Button,
     Image {
         source: Option<String>,
-        element: ContainerElement,
     },
     Anchor {
-        element: ContainerElement,
         href: Option<String>,
     },
     Heading {
-        element: ContainerElement,
         size: HeaderSize,
     },
-    UnorderedList {
-        element: ContainerElement,
-    },
-    OrderedList {
-        element: ContainerElement,
-    },
-    ListItem {
-        element: ContainerElement,
-    },
-    Table {
-        element: ContainerElement,
-    },
-    THead {
-        element: ContainerElement,
-    },
-    TH {
-        element: ContainerElement,
-    },
-    TBody {
-        element: ContainerElement,
-    },
-    TR {
-        element: ContainerElement,
-    },
-    TD {
-        element: ContainerElement,
-    },
+    UnorderedList,
+    OrderedList,
+    ListItem,
+    Table,
+    THead,
+    TH,
+    TBody,
+    TR,
+    TD,
     #[cfg(feature = "canvas")]
-    Canvas {
-        element: ContainerElement,
-    },
+    Canvas,
 }
 
 #[derive(Default)]
@@ -749,7 +606,7 @@ impl Attrs {
 }
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
-impl ContainerElement {
+impl Container {
     #[allow(clippy::too_many_lines)]
     fn attrs(&self, with_debug_attrs: bool) -> Attrs {
         let mut attrs = Attrs { values: vec![] };
@@ -884,37 +741,204 @@ impl ContainerElement {
     fn attrs_to_string_pad_left(&self, with_debug_attrs: bool) -> String {
         self.attrs(with_debug_attrs).to_string_pad_left()
     }
-}
 
-#[cfg_attr(feature = "profiling", profiling::all_functions)]
-impl std::fmt::Display for Element {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(
-            &self
-                .display_to_string(
-                    std::env::var("DEBUG_ATTRS")
-                        .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str())),
-                )
-                .unwrap(),
-        )?;
+    #[cfg_attr(feature = "profiling", profiling::function)]
+    #[allow(clippy::too_many_lines)]
+    fn display(&self, f: &mut dyn Write, with_debug_attrs: bool) -> Result<(), std::io::Error> {
+        match &self.element {
+            Element::Raw { value } => {
+                f.write_fmt(format_args!("{value}"))?;
+            }
+            Element::Div => {
+                f.write_fmt(format_args!(
+                    "<div{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</div>"))?;
+            }
+            Element::Aside => {
+                f.write_fmt(format_args!(
+                    "<aside{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</aside>"))?;
+            }
+
+            Element::Main => {
+                f.write_fmt(format_args!(
+                    "<main{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</main>"))?;
+            }
+            Element::Header => {
+                f.write_fmt(format_args!(
+                    "<header{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</header>"))?;
+            }
+            Element::Footer => {
+                f.write_fmt(format_args!(
+                    "<footer{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</footer>"))?;
+            }
+            Element::Section => {
+                f.write_fmt(format_args!(
+                    "<section{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</section>"))?;
+            }
+            Element::Form => {
+                f.write_fmt(format_args!(
+                    "<form{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</from>"))?;
+            }
+            Element::Span => {
+                f.write_fmt(format_args!(
+                    "<span{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</span>"))?;
+            }
+            Element::Input { input, .. } => {
+                input.display(f, with_debug_attrs)?;
+            }
+            Element::Button => {
+                f.write_fmt(format_args!(
+                    "<button{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</button>"))?;
+            }
+            Element::Image { source } => {
+                f.write_fmt(format_args!(
+                    "<img{src_attr}{attrs} />",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs),
+                    src_attr = Attrs::new()
+                        .with_attr_opt("src", source.to_owned())
+                        .to_string_pad_left()
+                ))?;
+            }
+            Element::Anchor { href } => {
+                f.write_fmt(format_args!(
+                    "<a{href_attr}{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs),
+                    href_attr = Attrs::new()
+                        .with_attr_opt("href", href.to_owned())
+                        .to_string_pad_left(),
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</a>"))?;
+            }
+            Element::Heading { size } => {
+                f.write_fmt(format_args!(
+                    "<{size}{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</{size}>"))?;
+            }
+            Element::UnorderedList => {
+                f.write_fmt(format_args!(
+                    "<ul{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</ul>"))?;
+            }
+            Element::OrderedList => {
+                f.write_fmt(format_args!(
+                    "<ol{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</ol>"))?;
+            }
+            Element::ListItem => {
+                f.write_fmt(format_args!(
+                    "<li{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</li>"))?;
+            }
+            Element::Table => {
+                f.write_fmt(format_args!(
+                    "<table{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</table>"))?;
+            }
+            Element::THead => {
+                f.write_fmt(format_args!(
+                    "<thead{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</thead>"))?;
+            }
+            Element::TH => {
+                f.write_fmt(format_args!(
+                    "<th{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</th>"))?;
+            }
+            Element::TBody => {
+                f.write_fmt(format_args!(
+                    "<tbody{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</tbody>"))?;
+            }
+            Element::TR => {
+                f.write_fmt(format_args!(
+                    "<tr{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</tr>"))?;
+            }
+            Element::TD => {
+                f.write_fmt(format_args!(
+                    "<td{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</td>"))?;
+            }
+            #[cfg(feature = "canvas")]
+            Element::Canvas => {
+                f.write_fmt(format_args!(
+                    "<canvas{attrs}>",
+                    attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                ))?;
+                display_elements(&self.children, f, with_debug_attrs)?;
+                f.write_fmt(format_args!("</canvas>"))?;
+            }
+        }
 
         Ok(())
     }
-}
 
-fn display_elements(
-    elements: &[Element],
-    f: &mut dyn Write,
-    with_debug_attrs: bool,
-) -> Result<(), std::io::Error> {
-    for element in elements {
-        element.display(f, with_debug_attrs)?;
-    }
-
-    Ok(())
-}
-
-impl Element {
     #[cfg_attr(feature = "profiling", profiling::function)]
     fn display_to_string(
         &self,
@@ -963,204 +987,37 @@ impl Element {
 
         Ok(pretty.to_string())
     }
+}
 
-    #[cfg_attr(feature = "profiling", profiling::function)]
-    #[allow(clippy::too_many_lines)]
-    fn display(&self, f: &mut dyn Write, with_debug_attrs: bool) -> Result<(), std::io::Error> {
-        match self {
-            Self::Raw { value } => {
-                f.write_fmt(format_args!("{value}"))?;
-            }
-            Self::Div { element } => {
-                f.write_fmt(format_args!(
-                    "<div{attrs}>",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
-                ))?;
-                display_elements(&element.elements, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</div>"))?;
-            }
-            Self::Aside { element } => {
-                f.write_fmt(format_args!(
-                    "<aside{attrs}>",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
-                ))?;
-                display_elements(&element.elements, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</aside>"))?;
-            }
-
-            Self::Main { element } => {
-                f.write_fmt(format_args!(
-                    "<main{attrs}>",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
-                ))?;
-                display_elements(&element.elements, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</main>"))?;
-            }
-            Self::Header { element } => {
-                f.write_fmt(format_args!(
-                    "<header{attrs}>",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
-                ))?;
-                display_elements(&element.elements, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</header>"))?;
-            }
-            Self::Footer { element } => {
-                f.write_fmt(format_args!(
-                    "<footer{attrs}>",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
-                ))?;
-                display_elements(&element.elements, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</footer>"))?;
-            }
-            Self::Section { element } => {
-                f.write_fmt(format_args!(
-                    "<section{attrs}>",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
-                ))?;
-                display_elements(&element.elements, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</section>"))?;
-            }
-            Self::Form { element } => {
-                f.write_fmt(format_args!(
-                    "<form{attrs}>",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
-                ))?;
-                display_elements(&element.elements, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</from>"))?;
-            }
-            Self::Span { element } => {
-                f.write_fmt(format_args!(
-                    "<span{attrs}>",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
-                ))?;
-                display_elements(&element.elements, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</span>"))?;
-            }
-            Self::Input { input, .. } => {
-                input.display(f, with_debug_attrs)?;
-            }
-            Self::Button { element } => {
-                f.write_fmt(format_args!(
-                    "<button{attrs}>",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
-                ))?;
-                display_elements(&element.elements, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</button>"))?;
-            }
-            Self::Image { source, element } => {
-                f.write_fmt(format_args!(
-                    "<img{src_attr}{attrs} />",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs),
-                    src_attr = Attrs::new()
-                        .with_attr_opt("src", source.to_owned())
-                        .to_string_pad_left()
-                ))?;
-            }
-            Self::Anchor { element, href } => {
-                f.write_fmt(format_args!(
-                    "<a{href_attr}{attrs}>",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs),
-                    href_attr = Attrs::new()
-                        .with_attr_opt("href", href.to_owned())
-                        .to_string_pad_left(),
-                ))?;
-                display_elements(&element.elements, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</a>"))?;
-            }
-            Self::Heading { element, size } => {
-                f.write_fmt(format_args!(
-                    "<{size}{attrs}>",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
-                ))?;
-                display_elements(&element.elements, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</{size}>"))?;
-            }
-            Self::UnorderedList { element } => {
-                f.write_fmt(format_args!(
-                    "<ul{attrs}>",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
-                ))?;
-                display_elements(&element.elements, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</ul>"))?;
-            }
-            Self::OrderedList { element } => {
-                f.write_fmt(format_args!(
-                    "<ol{attrs}>",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
-                ))?;
-                display_elements(&element.elements, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</ol>"))?;
-            }
-            Self::ListItem { element } => {
-                f.write_fmt(format_args!(
-                    "<li{attrs}>",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
-                ))?;
-                display_elements(&element.elements, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</li>"))?;
-            }
-            Self::Table { element } => {
-                f.write_fmt(format_args!(
-                    "<table{attrs}>",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
-                ))?;
-                display_elements(&element.elements, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</table>"))?;
-            }
-            Self::THead { element } => {
-                f.write_fmt(format_args!(
-                    "<thead{attrs}>",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
-                ))?;
-                display_elements(&element.elements, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</thead>"))?;
-            }
-            Self::TH { element } => {
-                f.write_fmt(format_args!(
-                    "<th{attrs}>",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
-                ))?;
-                display_elements(&element.elements, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</th>"))?;
-            }
-            Self::TBody { element } => {
-                f.write_fmt(format_args!(
-                    "<tbody{attrs}>",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
-                ))?;
-                display_elements(&element.elements, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</tbody>"))?;
-            }
-            Self::TR { element } => {
-                f.write_fmt(format_args!(
-                    "<tr{attrs}>",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
-                ))?;
-                display_elements(&element.elements, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</tr>"))?;
-            }
-            Self::TD { element } => {
-                f.write_fmt(format_args!(
-                    "<td{attrs}>",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
-                ))?;
-                display_elements(&element.elements, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</td>"))?;
-            }
-            #[cfg(feature = "canvas")]
-            Self::Canvas { element } => {
-                f.write_fmt(format_args!(
-                    "<canvas{attrs}>",
-                    attrs = element.attrs_to_string_pad_left(with_debug_attrs)
-                ))?;
-                display_elements(&element.elements, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</canvas>"))?;
-            }
-        }
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
+impl std::fmt::Display for Container {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(
+            &self
+                .display_to_string(
+                    std::env::var("DEBUG_ATTRS")
+                        .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str())),
+                )
+                .unwrap(),
+        )?;
 
         Ok(())
     }
+}
 
+fn display_elements(
+    elements: &[Container],
+    f: &mut dyn Write,
+    with_debug_attrs: bool,
+) -> Result<(), std::io::Error> {
+    for element in elements {
+        element.display(f, with_debug_attrs)?;
+    }
+
+    Ok(())
+}
+
+impl Element {
     #[must_use]
     pub const fn tag_display_str(&self) -> &'static str {
         match self {
@@ -1193,134 +1050,20 @@ impl Element {
     }
 }
 
-impl Element {
-    #[must_use]
-    pub const fn container_element(&self) -> Option<&ContainerElement> {
-        match self {
-            Self::Div { element }
-            | Self::Aside { element }
-            | Self::Main { element }
-            | Self::Header { element }
-            | Self::Footer { element }
-            | Self::Image { element, .. }
-            | Self::Section { element }
-            | Self::Form { element }
-            | Self::Span { element }
-            | Self::Button { element }
-            | Self::Anchor { element, .. }
-            | Self::Input { element, .. }
-            | Self::Heading { element, .. }
-            | Self::UnorderedList { element }
-            | Self::OrderedList { element }
-            | Self::Table { element }
-            | Self::THead { element }
-            | Self::TH { element }
-            | Self::TBody { element }
-            | Self::TR { element }
-            | Self::TD { element }
-            | Self::ListItem { element } => Some(element),
-            #[cfg(feature = "canvas")]
-            Self::Canvas { element } => Some(element),
-            Self::Raw { .. } => None,
-        }
-    }
-
-    #[cfg_attr(feature = "profiling", profiling::function)]
-    pub fn container_element_mut(&mut self) -> Option<&mut ContainerElement> {
-        match self {
-            Self::Div { element }
-            | Self::Aside { element }
-            | Self::Main { element }
-            | Self::Header { element }
-            | Self::Footer { element }
-            | Self::Image { element, .. }
-            | Self::Section { element }
-            | Self::Form { element }
-            | Self::Span { element }
-            | Self::Button { element }
-            | Self::Anchor { element, .. }
-            | Self::Input { element, .. }
-            | Self::Heading { element, .. }
-            | Self::UnorderedList { element }
-            | Self::OrderedList { element }
-            | Self::Table { element }
-            | Self::THead { element }
-            | Self::TH { element }
-            | Self::TBody { element }
-            | Self::TR { element }
-            | Self::TD { element }
-            | Self::ListItem { element } => Some(element),
-            #[cfg(feature = "canvas")]
-            Self::Canvas { element } => Some(element),
-            Self::Raw { .. } => None,
-        }
-    }
-
-    #[cfg_attr(feature = "profiling", profiling::function)]
-    #[cfg(feature = "id")]
-    #[must_use]
-    pub fn find_element_by_id(&self, id: usize) -> Option<&Self> {
-        self.container_element().and_then(|container| {
-            if container.id == id {
-                Some(self)
-            } else {
-                container
-                    .elements
-                    .iter()
-                    .find_map(|x| x.find_element_by_id(id))
-            }
-        })
-    }
-
-    #[cfg_attr(feature = "profiling", profiling::function)]
-    #[must_use]
-    pub fn find_element_by_str_id(&self, str_id: &str) -> Option<&Self> {
-        self.container_element().and_then(|container| {
-            if container.str_id.as_ref().is_some_and(|id| id == str_id) {
-                Some(self)
-            } else {
-                container
-                    .elements
-                    .iter()
-                    .find_map(|x| x.find_element_by_str_id(str_id))
-            }
-        })
-    }
-
-    #[cfg_attr(feature = "profiling", profiling::function)]
-    #[must_use]
-    pub fn find_element_by_str_id_mut(&mut self, str_id: &str) -> Option<&mut Self> {
-        if let Some(container) = self.container_element() {
-            if container.str_id.as_ref().is_some_and(|id| id == str_id) {
-                return Some(self);
-            } else if let Some(container) = self.container_element_mut() {
-                return container
-                    .elements
-                    .iter_mut()
-                    .find_map(|x| x.find_element_by_str_id_mut(str_id));
-            }
-        }
-
-        None
-    }
-}
-
 pub struct TableIter<'a> {
     pub headings:
-        Option<Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'a ContainerElement> + 'a>> + 'a>>,
-    pub rows: Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'a ContainerElement> + 'a>> + 'a>,
+        Option<Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'a Container> + 'a>> + 'a>>,
+    pub rows: Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'a Container> + 'a>> + 'a>,
 }
 
 pub struct TableIterMut<'a> {
-    pub headings: Option<
-        Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'a mut ContainerElement> + 'a>> + 'a>,
-    >,
-    pub rows:
-        Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'a mut ContainerElement> + 'a>> + 'a>,
+    pub headings:
+        Option<Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'a mut Container> + 'a>> + 'a>>,
+    pub rows: Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'a mut Container> + 'a>> + 'a>,
 }
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
-impl Element {
+impl Container {
     /// # Panics
     ///
     /// Will panic if `Element` is not a table
@@ -1329,66 +1072,41 @@ impl Element {
     where
         'a: 'b,
     {
-        let Self::Table { element: container } = self else {
-            panic!("Not a table");
-        };
+        moosicbox_assert::assert_or_panic!(self.element == Element::Table, "Not a table");
 
-        let mut rows_builder: Option<Vec<Box<dyn Iterator<Item = &'b ContainerElement>>>> = None;
-        let mut headings: Option<
-            Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'b ContainerElement>>>>,
-        > = None;
-        let mut rows: Box<
-            dyn Iterator<Item = Box<dyn Iterator<Item = &'b ContainerElement>>> + 'b,
-        > = Box::new(std::iter::empty());
+        let mut rows_builder: Option<Vec<Box<dyn Iterator<Item = &'b Self>>>> = None;
+        let mut headings: Option<Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'b Self>>>>> =
+            None;
+        let mut rows: Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'b Self>>> + 'b> =
+            Box::new(std::iter::empty());
 
-        for element in &container.elements {
-            match element {
-                Self::THead { element } => {
-                    headings = Some(Box::new(
-                        element
-                            .elements
-                            .iter()
-                            .filter_map(|x| x.container_element())
-                            .map(|x| {
-                                Box::new(x.elements.iter().filter_map(|x| x.container_element()))
-                                    as Box<dyn Iterator<Item = &ContainerElement>>
-                            }),
-                    )
-                        as Box<
-                            dyn Iterator<Item = Box<dyn Iterator<Item = &'b ContainerElement>>>
-                                + 'b,
-                        >);
+        for element in &self.children {
+            match &element.element {
+                Element::THead => {
+                    headings =
+                        Some(Box::new(element.children.iter().map(|x| {
+                            Box::new(x.children.iter()) as Box<dyn Iterator<Item = &Self>>
+                        }))
+                            as Box<
+                                dyn Iterator<Item = Box<dyn Iterator<Item = &'b Self>>> + 'b,
+                            >);
                 }
-                Self::TBody { element } => {
-                    rows = Box::new(
-                        element
-                            .elements
-                            .iter()
-                            .filter_map(|x| x.container_element())
-                            .map(|x| {
-                                Box::new(x.elements.iter().filter_map(|x| x.container_element()))
-                                    as Box<dyn Iterator<Item = &ContainerElement>>
-                            }),
-                    )
-                        as Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'b ContainerElement>>>>;
+                Element::TBody => {
+                    rows =
+                        Box::new(element.children.iter().map(|x| {
+                            Box::new(x.children.iter()) as Box<dyn Iterator<Item = &Self>>
+                        }))
+                            as Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'b Self>>>>;
                 }
-                Self::TR { element } => {
+                Element::TR => {
                     if let Some(builder) = &mut rows_builder {
-                        builder.push(Box::new(
-                            element
-                                .elements
-                                .iter()
-                                .filter_map(|x| x.container_element()),
-                        )
-                            as Box<dyn Iterator<Item = &'b ContainerElement>>);
+                        builder
+                            .push(Box::new(element.children.iter())
+                                as Box<dyn Iterator<Item = &'b Self>>);
                     } else {
-                        rows_builder.replace(vec![Box::new(
-                            element
-                                .elements
-                                .iter()
-                                .filter_map(|x| x.container_element()),
-                        )
-                            as Box<dyn Iterator<Item = &'b ContainerElement>>]);
+                        rows_builder
+                            .replace(vec![Box::new(element.children.iter())
+                                as Box<dyn Iterator<Item = &'b Self>>]);
                     }
                 }
                 _ => {
@@ -1426,89 +1144,48 @@ impl Element {
     where
         'a: 'b,
     {
-        let Self::Table { element: container } = self else {
-            panic!("Not a table");
-        };
+        moosicbox_assert::assert_or_panic!(self.element == Element::Table, "Not a table");
 
-        let mut rows_builder: Option<Vec<Box<dyn Iterator<Item = &'b mut ContainerElement>>>> =
-            None;
+        let mut rows_builder: Option<Vec<Box<dyn Iterator<Item = &'b mut Self>>>> = None;
         let mut headings: Option<
-            Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'b mut ContainerElement>>> + 'b>,
+            Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'b mut Self>>> + 'b>,
         > = None;
-        let mut rows: Box<
-            dyn Iterator<Item = Box<dyn Iterator<Item = &'b mut ContainerElement>>> + 'b,
-        > = Box::new(std::iter::empty());
+        let mut rows: Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'b mut Self>>> + 'b> =
+            Box::new(std::iter::empty());
 
-        for element in &mut container.elements {
+        for container in &mut self.children {
             if let Some(observer) = &mut observer {
-                match element {
-                    Self::THead { .. } | Self::TBody { .. } | Self::TR { .. } => {
-                        observer(element);
+                match container.element {
+                    Element::THead | Element::TBody | Element::TR => {
+                        observer(container);
                     }
                     _ => {}
                 }
             }
-            match element {
-                Self::THead { element } => {
-                    headings = Some(Box::new(
-                        element
-                            .elements
-                            .iter_mut()
-                            .filter_map(|x| x.container_element_mut())
-                            .map(|x| {
-                                Box::new(
-                                    x.elements
-                                        .iter_mut()
-                                        .filter_map(|x| x.container_element_mut()),
-                                )
-                                    as Box<dyn Iterator<Item = &mut ContainerElement>>
-                            }),
-                    )
-                        as Box<
-                            dyn Iterator<Item = Box<dyn Iterator<Item = &'b mut ContainerElement>>>
-                                + 'b,
-                        >);
+            match container.element {
+                Element::THead => {
+                    headings = Some(Box::new(container.children.iter_mut().map(|x| {
+                        Box::new(x.children.iter_mut()) as Box<dyn Iterator<Item = &mut Self>>
+                    }))
+                        as Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'b mut Self>>> + 'b>);
                 }
-                Self::TBody { element } => {
-                    rows = Box::new(
-                        element
-                            .elements
-                            .iter_mut()
-                            .filter_map(|x| x.container_element_mut())
-                            .map(|x| {
-                                Box::new(
-                                    x.elements
-                                        .iter_mut()
-                                        .filter_map(|x| x.container_element_mut()),
-                                )
-                                    as Box<dyn Iterator<Item = &mut ContainerElement>>
-                            }),
-                    )
-                        as Box<
-                            dyn Iterator<Item = Box<dyn Iterator<Item = &'b mut ContainerElement>>>,
-                        >;
+                Element::TBody => {
+                    rows = Box::new(container.children.iter_mut().map(|x| {
+                        Box::new(x.children.iter_mut()) as Box<dyn Iterator<Item = &mut Self>>
+                    }))
+                        as Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'b mut Self>>>>;
                 }
-                Self::TR { element } => {
+                Element::TR => {
                     if let Some(builder) = &mut rows_builder {
-                        builder.push(Box::new(
-                            element
-                                .elements
-                                .iter_mut()
-                                .filter_map(|x| x.container_element_mut()),
-                        )
-                            as Box<dyn Iterator<Item = &'b mut ContainerElement>>);
+                        builder.push(Box::new(container.children.iter_mut())
+                            as Box<dyn Iterator<Item = &'b mut Self>>);
                     } else {
-                        rows_builder.replace(vec![Box::new(
-                            element
-                                .elements
-                                .iter_mut()
-                                .filter_map(|x| x.container_element_mut()),
-                        )
-                            as Box<dyn Iterator<Item = &'b mut ContainerElement>>]);
+                        rows_builder.replace(vec![Box::new(container.children.iter_mut())
+                            as Box<dyn Iterator<Item = &'b mut Self>>]);
                     }
                 }
                 _ => {
-                    panic!("Invalid table element: {element}");
+                    panic!("Invalid table container: {container}");
                 }
             }
         }

@@ -13,7 +13,7 @@ use gigachad_renderer_html::{
     html::{element_classes_to_html, element_style_to_html, HtmlTagRenderer},
     HeaderMap, HtmlRenderer,
 };
-use gigachad_router::{ContainerElement, Element, Router};
+use gigachad_router::{Container, Router};
 use tokio::runtime::Runtime;
 
 pub struct DatastarTagRenderer;
@@ -22,11 +22,11 @@ impl HtmlTagRenderer for DatastarTagRenderer {
     fn element_attrs_to_html(
         &self,
         f: &mut dyn Write,
-        element: &Element,
+        container: &Container,
         is_flex_child: bool,
     ) -> Result<(), std::io::Error> {
-        element_style_to_html(f, element, is_flex_child)?;
-        element_classes_to_html(f, element)?;
+        element_style_to_html(f, container, is_flex_child)?;
+        element_classes_to_html(f, container)?;
 
         Ok(())
     }
@@ -163,11 +163,11 @@ impl Renderer for DatastarRenderer {
         self.html_renderer.render_canvas(update).await
     }
 
-    fn container(&self) -> RwLockReadGuard<ContainerElement> {
+    fn container(&self) -> RwLockReadGuard<Container> {
         self.html_renderer.container()
     }
 
-    fn container_mut(&self) -> RwLockWriteGuard<ContainerElement> {
+    fn container_mut(&self) -> RwLockWriteGuard<Container> {
         self.html_renderer.container_mut()
     }
 }

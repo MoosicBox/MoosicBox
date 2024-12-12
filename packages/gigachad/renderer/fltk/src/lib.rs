@@ -33,7 +33,7 @@ use gigachad_transformer::{
     calc::Calc as _,
     calc_number,
     models::{LayoutDirection, LayoutOverflow, LayoutPosition},
-    ContainerElement, Element, HeaderSize,
+    Container, Element, HeaderSize,
 };
 use thiserror::Error;
 use tokio::task::JoinHandle;
@@ -103,7 +103,7 @@ type JoinHandleAndCancelled = (JoinHandle<()>, Arc<AtomicBool>);
 pub struct FltkRenderer {
     app: Option<App>,
     window: Option<DoubleWindow>,
-    elements: Arc<RwLock<ContainerElement>>,
+    elements: Arc<RwLock<Container>>,
     root: Arc<RwLock<Option<group::Flex>>>,
     images: Arc<RwLock<Vec<RegisteredImage>>>,
     viewport_listeners: Arc<RwLock<Vec<ViewportListener>>>,
@@ -125,7 +125,7 @@ impl FltkRenderer {
         Self {
             app: None,
             window: None,
-            elements: Arc::new(RwLock::new(ContainerElement::default())),
+            elements: Arc::new(RwLock::new(Container::default())),
             root: Arc::new(RwLock::new(None)),
             images: Arc::new(RwLock::new(vec![])),
             viewport_listeners: Arc::new(RwLock::new(vec![])),
@@ -324,7 +324,7 @@ impl FltkRenderer {
             }
             window.begin();
             log::debug!("perform_render: begin");
-            let container: &mut ContainerElement = &mut self.elements.write().unwrap();
+            let container: &mut Container = &mut self.elements.write().unwrap();
 
             #[allow(clippy::cast_precision_loss)]
             let window_width = self.width.load(std::sync::atomic::Ordering::SeqCst) as f32;
@@ -348,10 +348,10 @@ impl FltkRenderer {
 
                 container.calc();
             } else {
-                log::debug!("perform_render: ContainerElement had same size, not recalculating");
+                log::debug!("perform_render: Container had same size, not recalculating");
             }
 
-            log::trace!("perform_render: initialized ContainerElement for rendering {container:?} window_width={window_width} window_height={window_height}");
+            log::trace!("perform_render: initialized Container for rendering {container:?} window_width={window_width} window_height={window_height}");
 
             {
                 log::debug!("perform_render: aborting any existing viewport_listener_join_handle");
@@ -386,7 +386,7 @@ impl FltkRenderer {
     fn draw_elements(
         &self,
         mut viewport: Cow<'_, Option<Viewport>>,
-        element: &ContainerElement,
+        element: &Container,
         depth: usize,
         context: Context,
         event_sender: Sender<AppEvent>,
@@ -588,18 +588,17 @@ impl FltkRenderer {
             })
             .unwrap_or((0, 0));
 
-        let len = element.elements.len();
-        for (i, element) in element.elements.iter().enumerate() {
+        let len = element.children.len();
+        for (i, element) in element.children.iter().enumerate() {
             let (current_row, current_col) = element
-                .container_element()
-                .and_then(|x| {
-                    x.calculated_position.as_ref().and_then(|x| match x {
-                        LayoutPosition::Wrap { row, col } => {
-                            log::debug!("draw_elements: drawing row={row} col={col}");
-                            Some((*row, *col))
-                        }
-                        LayoutPosition::Default => None,
-                    })
+                .calculated_position
+                .as_ref()
+                .and_then(|x| match x {
+                    LayoutPosition::Wrap { row, col } => {
+                        log::debug!("draw_elements: drawing row={row} col={col}");
+                        Some((*row, *col))
+                    }
+                    LayoutPosition::Default => None,
                 })
                 .unwrap_or((row, col));
 
@@ -644,10 +643,8 @@ impl FltkRenderer {
                 )? {
                     fixed_size(
                         direction,
-                        element.container_element().and_then(|x| x.calculated_width),
-                        element
-                            .container_element()
-                            .and_then(|x| x.calculated_height),
+                        element.calculated_width,
+                        element.calculated_height,
                         &mut flex,
                         &widget,
                     );
@@ -664,10 +661,8 @@ impl FltkRenderer {
             )? {
                 fixed_size(
                     direction,
-                    element.container_element().and_then(|x| x.calculated_width),
-                    element
-                        .container_element()
-                        .and_then(|x| x.calculated_height),
+                    element.calculated_width,
+                    element.calculated_height,
                     &mut flex,
                     &widget,
                 );
@@ -758,18 +753,18 @@ impl FltkRenderer {
     fn draw_element(
         &self,
         viewport: Cow<'_, Option<Viewport>>,
-        element: &Element,
+        container: &Container,
         index: usize,
         depth: usize,
         mut context: Context,
         event_sender: Sender<AppEvent>,
     ) -> Result<Option<widget::Widget>, FltkError> {
-        log::debug!("draw_element: element={element:?} index={index} depth={depth}");
+        log::debug!("draw_element: container={container:?} index={index} depth={depth}");
 
         let mut flex_element = None;
         let mut other_element: Option<widget::Widget> = None;
 
-        match element {
+        match &container.element {
             Element::Raw { value } => {
                 app::set_font_size(context.size);
                 #[allow(unused_mut)]
@@ -789,86 +784,86 @@ impl FltkRenderer {
 
                 other_element = Some(frame.as_base_widget());
             }
-            Element::Div { element } => {
-                context = context.with_container(element);
+            Element::Div => {
+                context = context.with_container(container);
                 flex_element =
-                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
-            Element::Aside { element } => {
-                context = context.with_container(element);
+            Element::Aside => {
+                context = context.with_container(container);
                 flex_element =
-                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
-            Element::Header { element } => {
-                context = context.with_container(element);
+            Element::Header => {
+                context = context.with_container(container);
                 flex_element =
-                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
-            Element::Footer { element } => {
-                context = context.with_container(element);
+            Element::Footer => {
+                context = context.with_container(container);
                 flex_element =
-                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
-            Element::Main { element } => {
-                context = context.with_container(element);
+            Element::Main => {
+                context = context.with_container(container);
                 flex_element =
-                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
-            Element::Section { element } => {
-                context = context.with_container(element);
+            Element::Section => {
+                context = context.with_container(container);
                 flex_element =
-                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
-            Element::Form { element } => {
-                context = context.with_container(element);
+            Element::Form => {
+                context = context.with_container(container);
                 flex_element =
-                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
-            Element::Span { element } => {
-                context = context.with_container(element);
+            Element::Span => {
+                context = context.with_container(container);
                 flex_element =
-                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
-            Element::Table { element } => {
-                context = context.with_container(element);
+            Element::Table => {
+                context = context.with_container(container);
                 flex_element =
-                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
-            Element::THead { element } => {
-                context = context.with_container(element);
+            Element::THead => {
+                context = context.with_container(container);
                 flex_element =
-                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
-            Element::TH { element } => {
-                context = context.with_container(element);
+            Element::TH => {
+                context = context.with_container(container);
                 flex_element =
-                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
-            Element::TBody { element } => {
-                context = context.with_container(element);
+            Element::TBody => {
+                context = context.with_container(container);
                 flex_element =
-                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
-            Element::TR { element } => {
-                context = context.with_container(element);
+            Element::TR => {
+                context = context.with_container(container);
                 flex_element =
-                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
-            Element::TD { element } => {
-                context = context.with_container(element);
+            Element::TD => {
+                context = context.with_container(container);
                 flex_element =
-                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
             Element::Canvas { .. } | Element::Input { .. } => {}
-            Element::Button { element } => {
-                context = context.with_container(element);
+            Element::Button => {
+                context = context.with_container(container);
                 flex_element =
-                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
-            Element::Image { source, element } => {
-                context = context.with_container(element);
-                let width = element.calculated_width;
-                let height = element.calculated_height;
+            Element::Image { source } => {
+                context = context.with_container(container);
+                let width = container.calculated_width;
+                let height = container.calculated_height;
                 let mut frame = Frame::default_fill();
 
                 #[cfg(feature = "debug")]
@@ -889,8 +884,8 @@ impl FltkRenderer {
                                 bytes,
                                 source: source.to_owned(),
                             },
-                            width: element.width.as_ref().map(|_| width.unwrap()),
-                            height: element.height.as_ref().map(|_| height.unwrap()),
+                            width: container.width.as_ref().map(|_| width.unwrap()),
+                            height: container.height.as_ref().map(|_| height.unwrap()),
                             frame: frame.clone(),
                         }) {
                             log::error!(
@@ -901,8 +896,8 @@ impl FltkRenderer {
                         if let Err(e) = event_sender.send(AppEvent::RegisterImage {
                             viewport: viewport.deref().clone(),
                             source: ImageSource::Url(source.to_owned()),
-                            width: element.width.as_ref().map(|_| width.unwrap()),
-                            height: element.height.as_ref().map(|_| height.unwrap()),
+                            width: container.width.as_ref().map(|_| width.unwrap()),
+                            height: container.height.as_ref().map(|_| height.unwrap()),
                             frame: frame.clone(),
                         }) {
                             log::error!(
@@ -931,14 +926,14 @@ impl FltkRenderer {
                                         if width.is_some() || height.is_some() {
                                             #[allow(clippy::cast_possible_truncation)]
                                             let width = calc_number(
-                                                element.width.as_ref().unwrap(),
+                                                container.width.as_ref().unwrap(),
                                                 context.width,
                                             )
                                             .round()
                                                 as i32;
                                             #[allow(clippy::cast_possible_truncation)]
                                             let height = calc_number(
-                                                element.height.as_ref().unwrap(),
+                                                container.height.as_ref().unwrap(),
                                                 context.height,
                                             )
                                             .round()
@@ -957,10 +952,10 @@ impl FltkRenderer {
 
                 other_element = Some(frame.as_base_widget());
             }
-            Element::Anchor { element, href } => {
-                context = context.with_container(element);
+            Element::Anchor { href } => {
+                context = context.with_container(container);
                 let mut elements =
-                    self.draw_elements(viewport, element, depth, context, event_sender.clone())?;
+                    self.draw_elements(viewport, container, depth, context, event_sender.clone())?;
                 if let Some(href) = href.to_owned() {
                     elements.handle(move |_, ev| match ev {
                         Event::Push => true,
@@ -977,8 +972,8 @@ impl FltkRenderer {
                 }
                 flex_element = Some(elements);
             }
-            Element::Heading { element, size } => {
-                context = context.with_container(element);
+            Element::Heading { size } => {
+                context = context.with_container(container);
                 context.size = match size {
                     HeaderSize::H1 => 36,
                     HeaderSize::H2 => 30,
@@ -988,17 +983,17 @@ impl FltkRenderer {
                     HeaderSize::H6 => 12,
                 };
                 flex_element =
-                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
-            Element::OrderedList { element } | Element::UnorderedList { element } => {
-                context = context.with_container(element);
+            Element::OrderedList | Element::UnorderedList => {
+                context = context.with_container(container);
                 flex_element =
-                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
-            Element::ListItem { element } => {
-                context = context.with_container(element);
+            Element::ListItem => {
+                context = context.with_container(container);
                 flex_element =
-                    Some(self.draw_elements(viewport, element, depth, context, event_sender)?);
+                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
         }
 
@@ -1007,26 +1002,24 @@ impl FltkRenderer {
             if *DEBUG.read().unwrap() && (depth == 1 || index > 0) {
                 let mut element_info = vec![];
 
-                let mut child = Some(element);
+                let mut child = Some(container);
 
-                while let Some(element) = child.take() {
-                    let element_name = element.tag_display_str();
+                while let Some(container) = child.take() {
+                    let element_name = container.element.tag_display_str();
                     let text = element_name.to_string();
                     let first = element_info.is_empty();
 
                     element_info.push(text);
 
-                    if let Some(container) = element.container_element() {
-                        let text = format!(
-                            "    ({}, {}, {}, {})",
-                            container.calculated_x.unwrap_or(0.0),
-                            container.calculated_y.unwrap_or(0.0),
-                            container.calculated_width.unwrap_or(0.0),
-                            container.calculated_height.unwrap_or(0.0),
-                        );
+                    let text = format!(
+                        "    ({}, {}, {}, {})",
+                        container.calculated_x.unwrap_or(0.0),
+                        container.calculated_y.unwrap_or(0.0),
+                        container.calculated_width.unwrap_or(0.0),
+                        container.calculated_height.unwrap_or(0.0),
+                    );
 
-                        element_info.push(text);
-                    }
+                    element_info.push(text);
 
                     if first {
                         let text = format!(
@@ -1040,9 +1033,7 @@ impl FltkRenderer {
                         element_info.push(text);
                     }
 
-                    if let Some(container) = element.container_element() {
-                        child = container.elements.first();
-                    }
+                    child = container.children.first();
                 }
 
                 flex_element.draw({
@@ -1362,11 +1353,11 @@ impl Renderer for FltkRenderer {
         Ok(())
     }
 
-    fn container(&self) -> RwLockReadGuard<ContainerElement> {
+    fn container(&self) -> RwLockReadGuard<Container> {
         self.elements.read().unwrap()
     }
 
-    fn container_mut(&self) -> RwLockWriteGuard<ContainerElement> {
+    fn container_mut(&self) -> RwLockWriteGuard<Container> {
         self.elements.write().unwrap()
     }
 }
@@ -1393,7 +1384,7 @@ impl Context {
         }
     }
 
-    fn with_container(mut self, container: &ContainerElement) -> Self {
+    fn with_container(mut self, container: &Container) -> Self {
         self.direction = container.direction;
         self.overflow_x = container.overflow_x;
         self.overflow_y = container.overflow_y;

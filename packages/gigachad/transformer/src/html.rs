@@ -15,7 +15,7 @@ use crate::{
     Number,
 };
 
-impl TryFrom<String> for crate::ContainerElement {
+impl TryFrom<String> for crate::Container {
     type Error = ParseError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
@@ -23,14 +23,14 @@ impl TryFrom<String> for crate::ContainerElement {
     }
 }
 
-impl<'a> TryFrom<&'a str> for crate::ContainerElement {
+impl<'a> TryFrom<&'a str> for crate::Container {
     type Error = ParseError;
 
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         let result = tl::parse(value, ParserOptions::new())?;
 
         Ok(Self {
-            elements: parse_children(result.children(), result.parser()),
+            children: parse_children(result.children(), result.parser()),
             ..Default::default()
         })
     }
@@ -39,13 +39,13 @@ impl<'a> TryFrom<&'a str> for crate::ContainerElement {
 fn parse_top_children(
     children: Option<Children<'_, '_>>,
     parser: &Parser<'_>,
-) -> Vec<crate::Element> {
+) -> Vec<crate::Container> {
     children.map_or_else(Vec::new, |children| {
         parse_children(&children.top().to_vec(), parser)
     })
 }
 
-fn parse_children(children: &[NodeHandle], parser: &Parser<'_>) -> Vec<crate::Element> {
+fn parse_children(children: &[NodeHandle], parser: &Parser<'_>) -> Vec<crate::Container> {
     let mut elements = vec![];
 
     for node in children {
@@ -289,11 +289,7 @@ fn get_actions(tag: &HTMLTag) -> Vec<Action> {
     actions
 }
 
-fn parse_element(
-    tag: &HTMLTag<'_>,
-    node: &Node<'_>,
-    parser: &Parser<'_>,
-) -> crate::ContainerElement {
+fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> crate::Container {
     #[cfg(feature = "id")]
     static CURRENT_ID: std::sync::LazyLock<std::sync::Arc<std::sync::atomic::AtomicUsize>> =
         std::sync::LazyLock::new(|| std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(1)));
@@ -345,7 +341,7 @@ fn parse_element(
         .or_else(|| padding_y.clone().or_else(|| padding.clone()));
 
     #[allow(clippy::needless_update)]
-    crate::ContainerElement {
+    crate::Container {
         #[cfg(feature = "id")]
         id: CURRENT_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
         str_id: get_tag_attr_value_owned(tag, "id"),
@@ -374,7 +370,7 @@ fn parse_element(
         overflow_y: get_overflow(tag, "sx-overflow-y"),
         justify_content: get_justify_content(tag, "sx-justify-content"),
         align_items: get_align_items(tag, "sx-align-items"),
-        elements: parse_top_children(node.children(), parser),
+        children: parse_top_children(node.children(), parser),
         width: get_number(tag, "sx-width").ok(),
         height: get_number(tag, "sx-height").ok(),
         left: get_number(tag, "sx-left").ok(),
@@ -393,132 +389,114 @@ fn parse_element(
 }
 
 #[allow(clippy::too_many_lines)]
-fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Element> {
-    Some(match node {
-        Node::Tag(tag) => match tag.name().as_utf8_str().to_lowercase().as_str() {
-            "input" => match get_tag_attr_value_lower(tag, "type").as_deref() {
-                Some("checkbox") => crate::Element::Input {
-                    input: crate::Input::Checkbox {
-                        checked: get_tag_attr_value_lower(tag, "checked")
-                            .as_deref()
-                            .map(|x| matches!(x, "checked" | "true" | "")),
-                    },
-                    element: parse_element(tag, node, parser),
+fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container> {
+    match node {
+        Node::Tag(tag) => {
+            let mut container = parse_element(tag, node, parser);
+
+            match tag.name().as_utf8_str().to_lowercase().as_str() {
+                "input" => match get_tag_attr_value_lower(tag, "type").as_deref() {
+                    Some("checkbox") => {
+                        container.element = crate::Element::Input {
+                            input: crate::Input::Checkbox {
+                                checked: get_tag_attr_value_lower(tag, "checked")
+                                    .as_deref()
+                                    .map(|x| matches!(x, "checked" | "true" | "")),
+                            },
+                        }
+                    }
+                    Some("text") => {
+                        container.element = crate::Element::Input {
+                            input: crate::Input::Text {
+                                value: get_tag_attr_value_owned(tag, "value"),
+                                placeholder: get_tag_attr_value_owned(tag, "placeholder"),
+                            },
+                        }
+                    }
+                    Some("password") => {
+                        container.element = crate::Element::Input {
+                            input: crate::Input::Password {
+                                value: get_tag_attr_value_owned(tag, "value"),
+                                placeholder: get_tag_attr_value_owned(tag, "placeholder"),
+                            },
+                        }
+                    }
+                    Some(_) | None => {
+                        return None;
+                    }
                 },
-                Some("text") => crate::Element::Input {
-                    input: crate::Input::Text {
-                        value: get_tag_attr_value_owned(tag, "value"),
-                        placeholder: get_tag_attr_value_owned(tag, "placeholder"),
-                    },
-                    element: parse_element(tag, node, parser),
-                },
-                Some("password") => crate::Element::Input {
-                    input: crate::Input::Password {
-                        value: get_tag_attr_value_owned(tag, "value"),
-                        placeholder: get_tag_attr_value_owned(tag, "placeholder"),
-                    },
-                    element: parse_element(tag, node, parser),
-                },
-                Some(_) | None => {
+                "main" => container.element = crate::Element::Main,
+                "header" => container.element = crate::Element::Header,
+                "footer" => container.element = crate::Element::Footer,
+                "aside" => container.element = crate::Element::Aside,
+                "div" => container.element = crate::Element::Div,
+                "section" => container.element = crate::Element::Section,
+                "form" => container.element = crate::Element::Form,
+                "button" => container.element = crate::Element::Button,
+                "img" => {
+                    container.element = crate::Element::Image {
+                        source: get_tag_attr_value_owned(tag, "src"),
+                    }
+                }
+                "a" => {
+                    container.element = crate::Element::Anchor {
+                        href: get_tag_attr_value_owned(tag, "href"),
+                    }
+                }
+                "h1" => {
+                    container.element = crate::Element::Heading {
+                        size: crate::HeaderSize::H1,
+                    }
+                }
+                "h2" => {
+                    container.element = crate::Element::Heading {
+                        size: crate::HeaderSize::H2,
+                    }
+                }
+                "h3" => {
+                    container.element = crate::Element::Heading {
+                        size: crate::HeaderSize::H3,
+                    }
+                }
+                "h4" => {
+                    container.element = crate::Element::Heading {
+                        size: crate::HeaderSize::H4,
+                    }
+                }
+                "h5" => {
+                    container.element = crate::Element::Heading {
+                        size: crate::HeaderSize::H5,
+                    }
+                }
+                "h6" => {
+                    container.element = crate::Element::Heading {
+                        size: crate::HeaderSize::H6,
+                    }
+                }
+                "ul" => container.element = crate::Element::UnorderedList,
+                "ol" => container.element = crate::Element::OrderedList,
+                "li" => container.element = crate::Element::ListItem,
+                "table" => container.element = crate::Element::Table,
+                "thead" => container.element = crate::Element::THead,
+                "th" => container.element = crate::Element::TH,
+                "tbody" => container.element = crate::Element::TBody,
+                "tr" => container.element = crate::Element::TR,
+                "td" => container.element = crate::Element::TD,
+                #[cfg(feature = "canvas")]
+                "canvas" => container.element = crate::Element::Canvas,
+                _ => {
                     return None;
                 }
-            },
-            "main" => crate::Element::Main {
-                element: parse_element(tag, node, parser),
-            },
-            "header" => crate::Element::Header {
-                element: parse_element(tag, node, parser),
-            },
-            "footer" => crate::Element::Footer {
-                element: parse_element(tag, node, parser),
-            },
-            "aside" => crate::Element::Aside {
-                element: parse_element(tag, node, parser),
-            },
-            "div" => crate::Element::Div {
-                element: parse_element(tag, node, parser),
-            },
-            "section" => crate::Element::Section {
-                element: parse_element(tag, node, parser),
-            },
-            "form" => crate::Element::Form {
-                element: parse_element(tag, node, parser),
-            },
-            "button" => crate::Element::Button {
-                element: parse_element(tag, node, parser),
-            },
-            "img" => crate::Element::Image {
-                source: get_tag_attr_value_owned(tag, "src"),
-                element: parse_element(tag, node, parser),
-            },
-            "a" => crate::Element::Anchor {
-                href: get_tag_attr_value_owned(tag, "href"),
-                element: parse_element(tag, node, parser),
-            },
-            "h1" => crate::Element::Heading {
-                size: crate::HeaderSize::H1,
-                element: parse_element(tag, node, parser),
-            },
-            "h2" => crate::Element::Heading {
-                size: crate::HeaderSize::H2,
-                element: parse_element(tag, node, parser),
-            },
-            "h3" => crate::Element::Heading {
-                size: crate::HeaderSize::H3,
-                element: parse_element(tag, node, parser),
-            },
-            "h4" => crate::Element::Heading {
-                size: crate::HeaderSize::H4,
-                element: parse_element(tag, node, parser),
-            },
-            "h5" => crate::Element::Heading {
-                size: crate::HeaderSize::H5,
-                element: parse_element(tag, node, parser),
-            },
-            "h6" => crate::Element::Heading {
-                size: crate::HeaderSize::H6,
-                element: parse_element(tag, node, parser),
-            },
-            "ul" => crate::Element::UnorderedList {
-                element: parse_element(tag, node, parser),
-            },
-            "ol" => crate::Element::OrderedList {
-                element: parse_element(tag, node, parser),
-            },
-            "li" => crate::Element::ListItem {
-                element: parse_element(tag, node, parser),
-            },
-            "table" => crate::Element::Table {
-                element: parse_element(tag, node, parser),
-            },
-            "thead" => crate::Element::THead {
-                element: parse_element(tag, node, parser),
-            },
-            "th" => crate::Element::TH {
-                element: parse_element(tag, node, parser),
-            },
-            "tbody" => crate::Element::TBody {
-                element: parse_element(tag, node, parser),
-            },
-            "tr" => crate::Element::TR {
-                element: parse_element(tag, node, parser),
-            },
-            "td" => crate::Element::TD {
-                element: parse_element(tag, node, parser),
-            },
-            #[cfg(feature = "canvas")]
-            "canvas" => crate::Element::Canvas {
-                element: parse_element(tag, node, parser),
-            },
-            _ => {
-                return None;
             }
-        },
-        Node::Raw(x) => crate::Element::Raw {
-            value: x.as_utf8_str().to_string(),
-        },
-        Node::Comment(_x) => {
-            return None;
+
+            Some(container)
         }
-    })
+        Node::Raw(x) => Some(crate::Container {
+            element: crate::Element::Raw {
+                value: x.as_utf8_str().to_string(),
+            },
+            ..crate::Container::default()
+        }),
+        Node::Comment(_x) => None,
+    }
 }

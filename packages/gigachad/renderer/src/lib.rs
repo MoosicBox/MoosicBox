@@ -14,18 +14,18 @@ use std::{
 
 use async_trait::async_trait;
 pub use gigachad_color::Color;
-use gigachad_transformer::{html::ParseError, ContainerElement};
+use gigachad_transformer::{html::ParseError, Container};
 
 #[derive(Default, Debug, Clone)]
 pub struct PartialView {
     pub target: String,
-    pub container: ContainerElement,
+    pub container: Container,
 }
 
 #[derive(Default)]
 pub struct View {
-    pub future: Option<Pin<Box<dyn Future<Output = ContainerElement> + Send>>>,
-    pub immediate: ContainerElement,
+    pub future: Option<Pin<Box<dyn Future<Output = Container> + Send>>>,
+    pub immediate: Container,
 }
 
 #[cfg(feature = "maud")]
@@ -59,8 +59,8 @@ impl TryFrom<String> for View {
     }
 }
 
-impl From<ContainerElement> for View {
-    fn from(value: ContainerElement) -> Self {
+impl From<Container> for View {
+    fn from(value: Container) -> Self {
         Self {
             future: None,
             immediate: value,
@@ -118,6 +118,6 @@ pub trait Renderer: Send + Sync {
         update: canvas::CanvasUpdate,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
 
-    fn container(&self) -> RwLockReadGuard<ContainerElement>;
-    fn container_mut(&self) -> RwLockWriteGuard<ContainerElement>;
+    fn container(&self) -> RwLockReadGuard<Container>;
+    fn container_mut(&self) -> RwLockWriteGuard<Container>;
 }
