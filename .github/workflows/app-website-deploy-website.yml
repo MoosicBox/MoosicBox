@@ -39,6 +39,6 @@ jobs:
               if: always()
               with:
                   name: log
-                  path: .sst/log
+                  path: app-website/.sst/log
                   if-no-files-found: error
                   retention-days: 90
