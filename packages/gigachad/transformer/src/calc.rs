@@ -115,7 +115,7 @@ impl Element {
 
         let (container_width, container_height) = {
             let Self::Table { element: container } = self else {
-                panic!("Not a table");
+                moosicbox_assert::die_or_panic!("Not a table");
             };
 
             let (Some(container_width), Some(container_height)) = (
@@ -251,7 +251,7 @@ impl Element {
         };
 
         let Self::Table { element: container } = self else {
-            panic!("Not a table");
+            moosicbox_assert::die_or_panic!("Not a table");
         };
 
         container
@@ -332,7 +332,7 @@ impl Element {
                     }
                 }
                 _ => {
-                    panic!("Invalid table element: {element}");
+                    moosicbox_assert::die_or_panic!("Invalid table element: {element}");
                 }
             }
         }
