@@ -105,7 +105,7 @@ impl Container {
 
         moosicbox_assert::assert_or_panic!(self.element == Element::Table, "Not a table");
 
-        moosicbox_logging::debug_or_trace!(("calc_table"), ("calc_table: {self:?}"));
+        moosicbox_logging::debug_or_trace!(("calc_table"), ("calc_table:\n{self}"));
 
         let (container_width, container_height) = {
             let (Some(container_width), Some(container_height)) = (
@@ -345,7 +345,7 @@ impl Container {
     fn calc_inner_container(&mut self, arena: &Bump, relative_size: Option<(f32, f32)>) {
         static MAX_HANDLE_OVERFLOW: usize = 100;
 
-        log::trace!("calc_inner_container: processing self\n{self:?}");
+        log::trace!("calc_inner_container: processing self\n{self}");
 
         if self.hidden == Some(true) {
             return;
@@ -748,14 +748,14 @@ impl Container {
                 match width {
                     Number::Real(x) => {
                         log::trace!(
-                            "calc_hardsized_children: setting calculated_width={x} {element:?}"
+                            "calc_hardsized_children: setting calculated_width={x}\n{element}"
                         );
                         moosicbox_assert::assert!(*x >= 0.0);
                         element.calculated_width.replace(*x);
                     }
                     Number::Integer(x) => {
                         log::trace!(
-                            "calc_hardsized_children: setting calculated_width={x} {element:?}"
+                            "calc_hardsized_children: setting calculated_width={x}\n{element}"
                         );
                         #[allow(clippy::cast_precision_loss)]
                         element.calculated_width.replace(*x as f32);
@@ -767,14 +767,14 @@ impl Container {
                 match height {
                     Number::Real(x) => {
                         log::trace!(
-                            "calc_hardsized_children: setting calculated_height={x} {element:?}"
+                            "calc_hardsized_children: setting calculated_height={x}\n{element}"
                         );
                         moosicbox_assert::assert!(*x >= 0.0);
                         element.calculated_height.replace(*x);
                     }
                     Number::Integer(x) => {
                         log::trace!(
-                            "calc_hardsized_children: setting calculated_height={x} {element:?}"
+                            "calc_hardsized_children: setting calculated_height={x}\n{element}"
                         );
                         #[allow(clippy::cast_precision_loss)]
                         element.calculated_height.replace(*x as f32);
@@ -1051,7 +1051,7 @@ impl Container {
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn handle_overflow(&mut self, relative_size: Option<(f32, f32)>) -> bool {
-        log::trace!("handle_overflow: processing self\n{self:?}");
+        log::trace!("handle_overflow: processing self\n{self}");
         let mut layout_shifted = false;
 
         let direction = self.direction;
@@ -1381,7 +1381,7 @@ impl Container {
             };
 
             log::trace!(
-                "position_children: x={x} y={y} width={width} height={height} position={position:?} child={element:?}"
+                "position_children: x={x} y={y} width={width} height={height} position={position:?} child=\n{element}"
             );
 
             if let LayoutPosition::Wrap { row, col } = position {
@@ -2244,6 +2244,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -2274,6 +2275,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -2329,6 +2331,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -2395,6 +2398,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -3776,6 +3780,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -4305,6 +4310,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -4919,6 +4925,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -4991,6 +4998,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         let remainder = 50.0f32 / 3_f32; // 16.66666
 
@@ -5092,6 +5100,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -5183,6 +5192,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -5277,6 +5287,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -5410,6 +5421,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -5554,6 +5566,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -5694,6 +5707,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -5814,6 +5828,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -5958,6 +5973,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6090,6 +6106,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6179,6 +6196,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6228,6 +6246,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6276,6 +6295,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6322,6 +6342,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6367,6 +6388,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6397,6 +6419,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6440,6 +6463,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6482,6 +6506,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6521,6 +6546,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6560,6 +6586,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6603,6 +6630,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6644,6 +6672,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6686,6 +6715,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6723,6 +6753,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6763,6 +6794,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6810,6 +6842,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6861,6 +6894,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6892,6 +6926,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6920,6 +6955,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6951,6 +6987,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -6992,6 +7029,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -7049,6 +7087,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -7099,6 +7138,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -7138,6 +7178,7 @@ mod test {
             ..Default::default()
         };
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -7186,6 +7227,7 @@ mod test {
         container.calculated_height = Some(1000.0);
 
         container.calc();
+        log::trace!("container:\n{}", container);
 
         let container = container.children[0].children[0].children[1].clone();
 
@@ -7247,6 +7289,7 @@ mod test {
         container.position = Some(Position::Relative);
 
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -7285,6 +7328,7 @@ mod test {
         container.position = Some(Position::Relative);
 
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -7324,6 +7368,7 @@ mod test {
         container.position = Some(Position::Relative);
 
         container.calc();
+        log::trace!("container:\n{}", container);
 
         assert_eq!(
             container.clone(),
@@ -7370,6 +7415,7 @@ mod test {
         container.calculated_height = Some(1000.0);
 
         container.calc();
+        log::trace!("container:\n{}", container);
 
         let container = container.children[0].children[1].clone();
 
@@ -7430,6 +7476,7 @@ mod test {
         container.calculated_height = Some(1000.0);
 
         container.calc();
+        log::trace!("container:\n{}", container);
 
         let container = container.children[0].children[0].children[1].children[0].clone();
 
@@ -7466,6 +7513,7 @@ mod test {
         container.calculated_height = Some(1000.0);
 
         container.calc();
+        log::trace!("container:\n{}", container);
 
         let main = container.children[0].children[0].children[1].clone();
 
@@ -7518,6 +7566,7 @@ mod test {
         container.calculated_height = Some(1000.0);
 
         container.calc();
+        log::trace!("container:\n{}", container);
 
         let main = container.children[0].children[0].children[1].clone();
 
