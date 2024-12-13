@@ -149,6 +149,19 @@ impl From<Color> for egui::Color32 {
     }
 }
 
+impl std::fmt::Display for Color {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(a) = self.a {
+            f.write_fmt(format_args!(
+                "#{:02X}{:02X}{:02X}{:02X}",
+                self.r, self.g, self.b, a
+            ))
+        } else {
+            f.write_fmt(format_args!("#{:02X}{:02X}{:02X}", self.r, self.g, self.b))
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use pretty_assertions::assert_eq;
@@ -178,6 +191,62 @@ mod test {
                 b: 3,
                 a: Some(4)
             }
+        );
+    }
+
+    #[test_log::test]
+    fn can_display_small_rgb_as_hex_string() {
+        assert_eq!(
+            Color {
+                r: 1,
+                g: 2,
+                b: 3,
+                a: None
+            }
+            .to_string(),
+            "#010203".to_string(),
+        );
+    }
+
+    #[test_log::test]
+    fn can_display_large_rgb_as_hex_string() {
+        assert_eq!(
+            Color {
+                r: 255,
+                g: 2,
+                b: 254,
+                a: None
+            }
+            .to_string(),
+            "#FF02FE".to_string(),
+        );
+    }
+
+    #[test_log::test]
+    fn can_display_small_rgba_as_hex_string() {
+        assert_eq!(
+            Color {
+                r: 1,
+                g: 2,
+                b: 3,
+                a: Some(4)
+            }
+            .to_string(),
+            "#01020304".to_string(),
+        );
+    }
+
+    #[test_log::test]
+    fn can_display_large_rgba_as_hex_string() {
+        assert_eq!(
+            Color {
+                r: 255,
+                g: 2,
+                b: 254,
+                a: Some(4)
+            }
+            .to_string(),
+            "#FF02FE04".to_string(),
         );
     }
 }
