@@ -246,11 +246,11 @@ fn get_position(tag: &HTMLTag) -> Option<Position> {
         })
 }
 
-fn get_number(tag: &HTMLTag, name: &str) -> Result<Number, GetNumberError> {
+fn get_number(tag: &HTMLTag, name: &str) -> Result<Option<Number>, GetNumberError> {
     Ok(if let Some(number) = get_tag_attr_value_owned(tag, name) {
-        parse_number(&number)?
+        Some(parse_number(&number)?)
     } else {
-        return Err(GetNumberError::Parse(String::new()));
+        None
     })
 }
 
@@ -305,50 +305,50 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
     static CURRENT_ID: std::sync::LazyLock<std::sync::Arc<std::sync::atomic::AtomicUsize>> =
         std::sync::LazyLock::new(|| std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(1)));
 
-    let border_radius = get_number(tag, "sx-border-radius").ok();
+    let border_radius = get_number(tag, "sx-border-radius").unwrap();
     let border_top_left_radius = get_number(tag, "sx-border-top-left-radius")
-        .ok()
+        .unwrap()
         .or_else(|| border_radius.clone());
     let border_top_right_radius = get_number(tag, "sx-border-top-right-radius")
-        .ok()
+        .unwrap()
         .or_else(|| border_radius.clone());
     let border_bottom_left_radius = get_number(tag, "sx-border-bottom-left-radius")
-        .ok()
+        .unwrap()
         .or_else(|| border_radius.clone());
     let border_bottom_right_radius = get_number(tag, "sx-border-bottom-right-radius")
-        .ok()
+        .unwrap()
         .or_else(|| border_radius.clone());
 
-    let margin = get_number(tag, "sx-margin").ok();
-    let margin_x = get_number(tag, "sx-margin-x").ok();
-    let margin_y = get_number(tag, "sx-margin-y").ok();
+    let margin = get_number(tag, "sx-margin").unwrap();
+    let margin_x = get_number(tag, "sx-margin-x").unwrap();
+    let margin_y = get_number(tag, "sx-margin-y").unwrap();
     let margin_left = get_number(tag, "sx-margin-left")
-        .ok()
+        .unwrap()
         .or_else(|| margin_x.clone().or_else(|| margin.clone()));
     let margin_right = get_number(tag, "sx-margin-right")
-        .ok()
+        .unwrap()
         .or_else(|| margin_x.clone().or_else(|| margin.clone()));
     let margin_top = get_number(tag, "sx-margin-top")
-        .ok()
+        .unwrap()
         .or_else(|| margin_y.clone().or_else(|| margin.clone()));
     let margin_bottom = get_number(tag, "sx-margin-bottom")
-        .ok()
+        .unwrap()
         .or_else(|| margin_y.clone().or_else(|| margin.clone()));
 
-    let padding = get_number(tag, "sx-padding").ok();
-    let padding_x = get_number(tag, "sx-padding-x").ok();
-    let padding_y = get_number(tag, "sx-padding-y").ok();
+    let padding = get_number(tag, "sx-padding").unwrap();
+    let padding_x = get_number(tag, "sx-padding-x").unwrap();
+    let padding_y = get_number(tag, "sx-padding-y").unwrap();
     let padding_left = get_number(tag, "sx-padding-left")
-        .ok()
+        .unwrap()
         .or_else(|| padding_x.clone().or_else(|| padding.clone()));
     let padding_right = get_number(tag, "sx-padding-right")
-        .ok()
+        .unwrap()
         .or_else(|| padding_x.clone().or_else(|| padding.clone()));
     let padding_top = get_number(tag, "sx-padding-top")
-        .ok()
+        .unwrap()
         .or_else(|| padding_y.clone().or_else(|| padding.clone()));
     let padding_bottom = get_number(tag, "sx-padding-bottom")
-        .ok()
+        .unwrap()
         .or_else(|| padding_y.clone().or_else(|| padding.clone()));
 
     #[allow(clippy::needless_update)]
@@ -382,14 +382,14 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
         justify_content: get_justify_content(tag, "sx-justify-content"),
         align_items: get_align_items(tag, "sx-align-items"),
         children: parse_top_children(node.children(), parser),
-        width: get_number(tag, "sx-width").ok(),
-        height: get_number(tag, "sx-height").ok(),
-        left: get_number(tag, "sx-left").ok(),
-        right: get_number(tag, "sx-right").ok(),
-        top: get_number(tag, "sx-top").ok(),
-        bottom: get_number(tag, "sx-bottom").ok(),
-        gap: get_number(tag, "sx-gap").ok(),
-        opacity: get_number(tag, "sx-opacity").ok(),
+        width: get_number(tag, "sx-width").unwrap(),
+        height: get_number(tag, "sx-height").unwrap(),
+        left: get_number(tag, "sx-left").unwrap(),
+        right: get_number(tag, "sx-right").unwrap(),
+        top: get_number(tag, "sx-top").unwrap(),
+        bottom: get_number(tag, "sx-bottom").unwrap(),
+        gap: get_number(tag, "sx-gap").unwrap(),
+        opacity: get_number(tag, "sx-opacity").unwrap(),
         debug: get_bool(tag, "debug"),
         cursor: get_cursor(tag),
         position: get_position(tag),
