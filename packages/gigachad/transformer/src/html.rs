@@ -195,6 +195,7 @@ fn get_justify_content(tag: &HTMLTag, name: &str) -> JustifyContent {
 
 fn get_align_items(tag: &HTMLTag, name: &str) -> AlignItems {
     match get_tag_attr_value_lower(tag, name).as_deref() {
+        Some("start") => AlignItems::Start,
         Some("center") => AlignItems::Center,
         Some("end") => AlignItems::End,
         _ => AlignItems::default(),
