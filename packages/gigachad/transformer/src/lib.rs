@@ -84,7 +84,7 @@ impl std::fmt::Display for Calculation {
             Self::Subtract(left, right) => f.write_fmt(format_args!("{left} - {right}")),
             Self::Multiply(left, right) => f.write_fmt(format_args!("{left} * {right}")),
             Self::Divide(left, right) => f.write_fmt(format_args!("{left} / {right}")),
-            Self::Grouping(value) => f.write_str(&value.to_string()),
+            Self::Grouping(value) => f.write_fmt(format_args!("({value})")),
             Self::Min(left, right) => f.write_fmt(format_args!("min({left}, {right})")),
             Self::Max(left, right) => f.write_fmt(format_args!("max({left}, {right})")),
         }
