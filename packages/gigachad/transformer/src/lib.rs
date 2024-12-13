@@ -963,7 +963,7 @@ impl Container {
                 f.write_fmt(format_args!("</span>"))?;
             }
             Element::Input { input, .. } => {
-                input.display(f, with_debug_attrs)?;
+                input.display(f, self.attrs(with_debug_attrs))?;
             }
             Element::Button => {
                 f.write_fmt(format_args!(
@@ -1399,17 +1399,17 @@ pub enum Input {
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Input {
-    fn display(&self, f: &mut dyn Write, _with_debug_attrs: bool) -> Result<(), std::io::Error> {
+    fn display(&self, f: &mut dyn Write, attrs: Attrs) -> Result<(), std::io::Error> {
         match self {
             Self::Checkbox { checked } => {
-                let attrs = Attrs::new().with_attr_opt("checked", checked.map(|x| x.to_string()));
+                let attrs = attrs.with_attr_opt("checked", checked.map(|x| x.to_string()));
                 f.write_fmt(format_args!(
                     "<input type=\"checkbox\"{attrs} />",
                     attrs = attrs.to_string_pad_left(),
                 ))?;
             }
             Self::Text { value, placeholder } => {
-                let attrs = Attrs::new()
+                let attrs = attrs
                     .with_attr_opt("value", value.to_owned())
                     .with_attr_opt("placeholder", placeholder.to_owned());
                 f.write_fmt(format_args!(
@@ -1418,7 +1418,7 @@ impl Input {
                 ))?;
             }
             Self::Password { value, placeholder } => {
-                let attrs = Attrs::new()
+                let attrs = attrs
                     .with_attr_opt("value", value.to_owned())
                     .with_attr_opt("placeholder", placeholder.to_owned());
                 f.write_fmt(format_args!(
