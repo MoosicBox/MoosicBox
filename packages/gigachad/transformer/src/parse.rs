@@ -189,11 +189,12 @@ pub fn parse_number(number: &str) -> Result<Number, GetNumberError> {
                     .map_err(|_| GetNumberError::Parse(number.to_string()))?,
             )
         } else {
-            Number::IntegerPercent(
-                number
-                    .parse::<u64>()
-                    .map_err(|_| GetNumberError::Parse(number.to_string()))?,
-            )
+            number
+                .parse::<i64>()
+                .ok()
+                .map(Number::IntegerPercent)
+                .or_else(|| number.parse::<f32>().ok().map(Number::RealPercent))
+                .ok_or_else(|| GetNumberError::Parse(number.to_string()))?
         }
     } else if number.contains('.') {
         let number = number.strip_suffix("px").unwrap_or(number);
@@ -204,11 +205,12 @@ pub fn parse_number(number: &str) -> Result<Number, GetNumberError> {
         )
     } else {
         let number = number.strip_suffix("px").unwrap_or(number);
-        Number::Integer(
-            number
-                .parse::<u64>()
-                .map_err(|_| GetNumberError::Parse(number.to_string()))?,
-        )
+        number
+            .parse::<i64>()
+            .ok()
+            .map(Number::Integer)
+            .or_else(|| number.parse::<f32>().ok().map(Number::Real))
+            .ok_or_else(|| GetNumberError::Parse(number.to_string()))?
     })
 }
 
