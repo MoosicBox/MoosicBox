@@ -59,7 +59,7 @@ fn parse_children(children: &[NodeHandle], parser: &Parser<'_>) -> Vec<crate::Co
     elements
 }
 
-fn get_tag_attr_value<'a>(tag: &'a HTMLTag, name: &'a str) -> Option<Cow<'a, str>> {
+fn get_tag_attr_value_undecoded<'a>(tag: &'a HTMLTag, name: &'a str) -> Option<Cow<'a, str>> {
     tag.attributes()
         .iter()
         .filter_map(|(k, v)| v.map(|v| (k, v)))
@@ -68,11 +68,17 @@ fn get_tag_attr_value<'a>(tag: &'a HTMLTag, name: &'a str) -> Option<Cow<'a, str
 }
 
 fn get_tag_attr_value_owned(tag: &HTMLTag, name: &str) -> Option<String> {
-    get_tag_attr_value(tag, name).map(|x| x.to_string())
+    get_tag_attr_value_undecoded(tag, name)
+        .as_deref()
+        .map(|x| html_escape::decode_html_entities(x))
+        .map(|x| x.to_string())
 }
 
 fn get_tag_attr_value_lower(tag: &HTMLTag, name: &str) -> Option<String> {
-    get_tag_attr_value(tag, name).map(|x| x.to_lowercase())
+    get_tag_attr_value_undecoded(tag, name)
+        .as_deref()
+        .map(|x| html_escape::decode_html_entities(x))
+        .map(|x| x.to_lowercase())
 }
 
 fn get_direction(tag: &HTMLTag) -> LayoutDirection {
@@ -84,13 +90,17 @@ fn get_direction(tag: &HTMLTag) -> LayoutDirection {
 }
 
 fn get_color(tag: &HTMLTag, name: &str) -> Option<Color> {
-    get_tag_attr_value(tag, name)
+    get_tag_attr_value_undecoded(tag, name)
+        .as_deref()
+        .map(|x| html_escape::decode_html_entities(x))
         .as_deref()
         .map(Color::from_hex)
 }
 
 fn get_border(tag: &HTMLTag, name: &str) -> Option<(Color, Number)> {
-    get_tag_attr_value(tag, name)
+    get_tag_attr_value_undecoded(tag, name)
+        .as_deref()
+        .map(|x| html_escape::decode_html_entities(x))
         .as_deref()
         .and_then(|x| x.split_once(','))
         .map(|(size, color)| (size.trim(), color.trim()))
@@ -100,9 +110,9 @@ fn get_border(tag: &HTMLTag, name: &str) -> Option<(Color, Number)> {
 }
 
 fn get_state(tag: &HTMLTag, name: &str) -> Option<Value> {
-    get_tag_attr_value(tag, name)
+    get_tag_attr_value_undecoded(tag, name)
         .as_deref()
-        .map(html_escape::decode_html_entities)
+        .map(|x| html_escape::decode_html_entities(x))
         .as_deref()
         .and_then(|x| serde_json::from_str(x).ok())
 }
@@ -145,15 +155,15 @@ fn get_swap(tag: &HTMLTag) -> Option<SwapTarget> {
 
 fn get_route(tag: &HTMLTag) -> Option<Route> {
     #[allow(clippy::option_if_let_else, clippy::manual_map)]
-    if let Some(get) = get_tag_attr_value(tag, "hx-get") {
+    if let Some(get) = get_tag_attr_value_owned(tag, "hx-get") {
         Some(Route::Get {
-            route: get.to_string(),
+            route: get,
             trigger: get_tag_attr_value_owned(tag, "hx-trigger"),
             swap: get_swap(tag).unwrap_or_default(),
         })
-    } else if let Some(post) = get_tag_attr_value(tag, "hx-post") {
+    } else if let Some(post) = get_tag_attr_value_owned(tag, "hx-post") {
         Some(Route::Post {
-            route: post.to_string(),
+            route: post,
             trigger: get_tag_attr_value_owned(tag, "hx-trigger"),
             swap: get_swap(tag).unwrap_or_default(),
         })
@@ -236,7 +246,7 @@ fn get_position(tag: &HTMLTag) -> Option<Position> {
 }
 
 fn get_number(tag: &HTMLTag, name: &str) -> Result<Number, GetNumberError> {
-    Ok(if let Some(number) = get_tag_attr_value(tag, name) {
+    Ok(if let Some(number) = get_tag_attr_value_owned(tag, name) {
         parse_number(&number)?
     } else {
         return Err(GetNumberError::Parse(String::new()));
@@ -261,28 +271,28 @@ fn parse_action(action: String) -> ActionType {
 fn get_actions(tag: &HTMLTag) -> Vec<Action> {
     let mut actions = vec![];
 
-    if let Some(action) = get_tag_attr_value(tag, "fx-click") {
+    if let Some(action) = get_tag_attr_value_owned(tag, "fx-click") {
         actions.push(Action {
             trigger: ActionTrigger::Click,
-            action: parse_action(html_escape::decode_html_entities(&action).to_string()),
+            action: parse_action(action),
         });
     }
-    if let Some(action) = get_tag_attr_value(tag, "fx-click-outside") {
+    if let Some(action) = get_tag_attr_value_owned(tag, "fx-click-outside") {
         actions.push(Action {
             trigger: ActionTrigger::ClickOutside,
-            action: parse_action(html_escape::decode_html_entities(&action).to_string()),
+            action: parse_action(action),
         });
     }
-    if let Some(action) = get_tag_attr_value(tag, "fx-hover") {
+    if let Some(action) = get_tag_attr_value_owned(tag, "fx-hover") {
         actions.push(Action {
             trigger: ActionTrigger::Hover,
-            action: parse_action(html_escape::decode_html_entities(&action).to_string()),
+            action: parse_action(action),
         });
     }
-    if let Some(action) = get_tag_attr_value(tag, "fx-change") {
+    if let Some(action) = get_tag_attr_value_owned(tag, "fx-change") {
         actions.push(Action {
             trigger: ActionTrigger::Change,
-            action: parse_action(html_escape::decode_html_entities(&action).to_string()),
+            action: parse_action(action),
         });
     }
 

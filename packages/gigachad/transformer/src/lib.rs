@@ -621,7 +621,9 @@ impl Attrs {
     fn add<K: Into<String>, V: std::fmt::Display>(&mut self, name: K, value: V) {
         self.values.push((
             name.into(),
-            html_escape::encode_quoted_attribute(value.to_string().as_str()).to_string(),
+            html_escape::encode_double_quoted_attribute(value.to_string().as_str())
+                .to_string()
+                .replace('\n', "&#10;"),
         ));
     }
 
@@ -629,7 +631,9 @@ impl Attrs {
         if let Some(value) = value {
             self.values.push((
                 name.into(),
-                html_escape::encode_quoted_attribute(value.to_string().as_str()).to_string(),
+                html_escape::encode_double_quoted_attribute(value.to_string().as_str())
+                    .to_string()
+                    .replace('\n', "&#10;"),
             ));
         }
     }
