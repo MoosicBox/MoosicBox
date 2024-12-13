@@ -22,7 +22,7 @@ moosicbox_logging = { version = "0.1.0", path = "../../logging", default-feature
 ] }
 
 bumpalo     = { workspace = true, optional = true }
-html-escape = { workspace = true, optional = true }
+html-escape = { workspace = true }
 itertools   = { workspace = true, optional = true }
 log         = { workspace = true }
 maud        = { workspace = true, optional = true }
@@ -36,7 +36,6 @@ xml         = { workspace = true, optional = true }
 gigachad_actions = { path = "../actions", default-features = false, features = [
     "serde",
 ] }
-html-escape = { workspace = true }
 maud = { workspace = true }
 pretty_assertions = { workspace = true }
 test-log = { workspace = true }
@@ -66,7 +65,7 @@ calc  = ["dep:bumpalo", "dep:itertools", "gigachad_transformer_models/calc"]
 logic = ["gigachad_actions/logic"]
 maud  = ["dep:maud", "html"]
 
-html = ["dep:html-escape", "dep:tl", "gigachad_actions/serde"]
+html = ["dep:tl", "gigachad_actions/serde"]
 simd = ["tl?/simd"]
 
 format = ["dep:xml"]

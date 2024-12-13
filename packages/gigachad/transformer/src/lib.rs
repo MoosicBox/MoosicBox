@@ -595,12 +595,18 @@ impl Attrs {
     }
 
     fn add<K: Into<String>, V: std::fmt::Display>(&mut self, name: K, value: V) {
-        self.values.push((name.into(), value.to_string()));
+        self.values.push((
+            name.into(),
+            html_escape::encode_quoted_attribute(value.to_string().as_str()).to_string(),
+        ));
     }
 
     fn add_opt<K: Into<String>, V: std::fmt::Display>(&mut self, name: K, value: Option<V>) {
         if let Some(value) = value {
-            self.values.push((name.into(), value.to_string()));
+            self.values.push((
+                name.into(),
+                html_escape::encode_quoted_attribute(value.to_string().as_str()).to_string(),
+            ));
         }
     }
 }
