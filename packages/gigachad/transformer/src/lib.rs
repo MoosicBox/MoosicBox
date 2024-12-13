@@ -611,6 +611,11 @@ impl Container {
     fn attrs(&self, with_debug_attrs: bool) -> Attrs {
         let mut attrs = Attrs { values: vec![] };
 
+        #[cfg(feature = "id")]
+        attrs.add("dbg-id", self.id);
+
+        attrs.add_opt("id", self.str_id.as_ref());
+
         if let Some(route) = &self.route {
             match route {
                 Route::Get {
@@ -634,41 +639,111 @@ impl Container {
             }
         }
 
-        if self.direction == LayoutDirection::Row {
-            attrs.add("sx-dir", "row");
+        if self.justify_content != JustifyContent::default() {
+            attrs.add("sx-justify-content", self.justify_content);
+        }
+        if self.align_items != AlignItems::default() {
+            attrs.add("sx-align-items", self.align_items);
         }
 
-        if let Some(width) = &self.width {
-            attrs.add("sx-width", width);
-        }
-        if let Some(height) = &self.height {
-            attrs.add("sx-height", height);
+        if self.direction != LayoutDirection::default() {
+            attrs.add("sx-dir", self.direction);
         }
 
-        if let Some(padding) = &self.padding_left {
-            attrs.add("sx-padding-left", padding);
-        }
-        if let Some(padding) = &self.padding_right {
-            attrs.add("sx-padding-right", padding);
-        }
-        if let Some(padding) = &self.padding_top {
-            attrs.add("sx-padding-top", padding);
-        }
-        if let Some(padding) = &self.padding_bottom {
-            attrs.add("sx-padding-bottom", padding);
-        }
+        attrs.add_opt("sx-position", self.position);
 
-        if let Some(margin) = &self.margin_left {
-            attrs.add("sx-margin-left", margin);
-        }
-        if let Some(margin) = &self.margin_right {
-            attrs.add("sx-margin-right", margin);
-        }
-        if let Some(margin) = &self.margin_top {
-            attrs.add("sx-margin-top", margin);
-        }
-        if let Some(margin) = &self.margin_bottom {
-            attrs.add("sx-margin-bottom", margin);
+        attrs.add_opt("sx-background", self.background);
+
+        attrs.add_opt("sx-width", self.width.as_ref());
+        attrs.add_opt("sx-height", self.height.as_ref());
+
+        attrs.add_opt("sx-gap", self.gap.as_ref());
+
+        attrs.add_opt("sx-opacity", self.opacity.as_ref());
+
+        attrs.add_opt("sx-left", self.left.as_ref());
+        attrs.add_opt("sx-right", self.right.as_ref());
+        attrs.add_opt("sx-top", self.top.as_ref());
+        attrs.add_opt("sx-bottom", self.bottom.as_ref());
+
+        attrs.add_opt("sx-cursor", self.cursor.as_ref());
+
+        attrs.add_opt("sx-padding-left", self.padding_left.as_ref());
+        attrs.add_opt("sx-padding-right", self.padding_right.as_ref());
+        attrs.add_opt("sx-padding-top", self.padding_top.as_ref());
+        attrs.add_opt("sx-padding-bottom", self.padding_bottom.as_ref());
+
+        attrs.add_opt("sx-margin-left", self.margin_left.as_ref());
+        attrs.add_opt("sx-margin-right", self.margin_right.as_ref());
+        attrs.add_opt("sx-margin-top", self.margin_top.as_ref());
+        attrs.add_opt("sx-margin-bottom", self.margin_bottom.as_ref());
+
+        attrs.add_opt("sx-hidden", self.hidden.as_ref());
+        attrs.add_opt("sx-visibility", self.visibility.as_ref());
+
+        attrs.add_opt("debug", self.debug.as_ref());
+
+        attrs.add_opt(
+            "sx-border-left",
+            self.border_left
+                .as_ref()
+                .map(|(color, size)| format!("{size}, {color}")),
+        );
+        attrs.add_opt(
+            "sx-border-right",
+            self.border_right
+                .as_ref()
+                .map(|(color, size)| format!("{size}, {color}")),
+        );
+        attrs.add_opt(
+            "sx-border-top",
+            self.border_top
+                .as_ref()
+                .map(|(color, size)| format!("{size}, {color}")),
+        );
+        attrs.add_opt(
+            "sx-border-bottom",
+            self.border_bottom
+                .as_ref()
+                .map(|(color, size)| format!("{size}, {color}")),
+        );
+        attrs.add_opt(
+            "sx-border-top-left-radius",
+            self.border_top_left_radius.as_ref(),
+        );
+        attrs.add_opt(
+            "sx-border-top-right-radius",
+            self.border_top_right_radius.as_ref(),
+        );
+        attrs.add_opt(
+            "sx-border-bottom-left-radius",
+            self.border_bottom_left_radius.as_ref(),
+        );
+        attrs.add_opt(
+            "sx-border-bottom-right-radius",
+            self.border_bottom_right_radius.as_ref(),
+        );
+
+        attrs.add_opt("state", self.state.as_ref());
+
+        for action in &self.actions {
+            match action.trigger {
+                gigachad_actions::ActionTrigger::Click => {
+                    attrs.add("fx-click", action.action.to_string());
+                }
+                gigachad_actions::ActionTrigger::ClickOutside => {
+                    attrs.add("fx-click-outside", action.action.to_string());
+                }
+                gigachad_actions::ActionTrigger::Hover => {
+                    attrs.add("fx-hover", action.action.to_string());
+                }
+                gigachad_actions::ActionTrigger::Change => {
+                    attrs.add("fx-change", action.action.to_string());
+                }
+                gigachad_actions::ActionTrigger::Immediate => {
+                    attrs.add("fx-immediate", action.action.to_string());
+                }
+            }
         }
 
         match self.overflow_x {
@@ -705,32 +780,71 @@ impl Container {
         if with_debug_attrs {
             #[cfg(feature = "calc")]
             {
-                attrs.add_opt("dbg-x", self.calculated_x);
-                attrs.add_opt("dbg-y", self.calculated_y);
-                attrs.add_opt("dbg-width", self.calculated_width);
-                attrs.add_opt("dbg-height", self.calculated_height);
-                attrs.add_opt("dbg-margin-left", self.calculated_margin_left);
-                attrs.add_opt("dbg-margin-right", self.calculated_margin_right);
-                attrs.add_opt("dbg-margin-top", self.calculated_margin_top);
-                attrs.add_opt("dbg-margin-bottom", self.calculated_margin_bottom);
-                attrs.add_opt("dbg-padding-left", self.calculated_padding_left);
-                attrs.add_opt("dbg-padding-right", self.calculated_padding_right);
-                attrs.add_opt("dbg-padding-top", self.calculated_padding_top);
-                attrs.add_opt("dbg-padding-bottom", self.calculated_padding_bottom);
-                attrs.add_opt("dbg-internal-margin-left", self.internal_margin_left);
-                attrs.add_opt("dbg-internal-margin-right", self.internal_margin_right);
-                attrs.add_opt("dbg-internal-margin-top", self.internal_margin_top);
-                attrs.add_opt("dbg-internal-margin-bottom", self.internal_margin_bottom);
-                attrs.add_opt("dbg-internal-padding-left", self.internal_padding_left);
-                attrs.add_opt("dbg-internal-padding-right", self.internal_padding_right);
-                attrs.add_opt("dbg-internal-padding-top", self.internal_padding_top);
-                attrs.add_opt("dbg-internal-padding-bottom", self.internal_padding_bottom);
+                attrs.add_opt("calc-x", self.calculated_x);
+                attrs.add_opt("calc-y", self.calculated_y);
+                attrs.add_opt("calc-width", self.calculated_width);
+                attrs.add_opt("calc-height", self.calculated_height);
+                attrs.add_opt("calc-margin-left", self.calculated_margin_left);
+                attrs.add_opt("calc-margin-right", self.calculated_margin_right);
+                attrs.add_opt("calc-margin-top", self.calculated_margin_top);
+                attrs.add_opt("calc-margin-bottom", self.calculated_margin_bottom);
+                attrs.add_opt("calc-padding-left", self.calculated_padding_left);
+                attrs.add_opt("calc-padding-right", self.calculated_padding_right);
+                attrs.add_opt("calc-padding-top", self.calculated_padding_top);
+                attrs.add_opt("calc-padding-bottom", self.calculated_padding_bottom);
+                attrs.add_opt("calc-internal-margin-left", self.internal_margin_left);
+                attrs.add_opt("calc-internal-margin-right", self.internal_margin_right);
+                attrs.add_opt("calc-internal-margin-top", self.internal_margin_top);
+                attrs.add_opt("calc-internal-margin-bottom", self.internal_margin_bottom);
+                attrs.add_opt("calc-internal-padding-left", self.internal_padding_left);
+                attrs.add_opt("calc-internal-padding-right", self.internal_padding_right);
+                attrs.add_opt("calc-internal-padding-top", self.internal_padding_top);
+                attrs.add_opt("calc-internal-padding-bottom", self.internal_padding_bottom);
+                attrs.add_opt(
+                    "calc-border-left",
+                    self.calculated_border_left
+                        .map(|(color, size)| format!("{size}, {color}")),
+                );
+                attrs.add_opt(
+                    "calc-border-right",
+                    self.calculated_border_right
+                        .map(|(color, size)| format!("{size}, {color}")),
+                );
+                attrs.add_opt(
+                    "calc-border-top",
+                    self.calculated_border_top
+                        .map(|(color, size)| format!("{size}, {color}")),
+                );
+                attrs.add_opt(
+                    "calc-border-bottom",
+                    self.calculated_border_bottom
+                        .map(|(color, size)| format!("{size}, {color}")),
+                );
+                attrs.add_opt(
+                    "calc-border-top-left-radius",
+                    self.calculated_border_top_left_radius,
+                );
+                attrs.add_opt(
+                    "calc-border-top-right-radius",
+                    self.calculated_border_top_right_radius,
+                );
+                attrs.add_opt(
+                    "calc-border-bottom-left-radius",
+                    self.calculated_border_bottom_left_radius,
+                );
+                attrs.add_opt(
+                    "calc-border-bottom-right-radius",
+                    self.calculated_border_bottom_right_radius,
+                );
+                attrs.add_opt("calc-opacity", self.calculated_opacity);
+                attrs.add_opt("calc-scrollbar-right", self.scrollbar_right);
+                attrs.add_opt("calc-scrollbar-bottom", self.scrollbar_bottom);
 
                 if let Some(gigachad_transformer_models::LayoutPosition::Wrap { row, col }) =
                     &self.calculated_position
                 {
-                    attrs.add("dbg-row", *row);
-                    attrs.add("dbg-col", *col);
+                    attrs.add("calc-row", *row);
+                    attrs.add("calc-col", *col);
                 }
             }
         }
