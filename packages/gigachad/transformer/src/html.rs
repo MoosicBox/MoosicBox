@@ -296,6 +296,12 @@ fn get_actions(tag: &HTMLTag) -> Vec<Action> {
             action: parse_action(action),
         });
     }
+    if let Some(action) = get_tag_attr_value_owned(tag, "fx-immediate") {
+        actions.push(Action {
+            trigger: ActionTrigger::Immediate,
+            action: parse_action(action),
+        });
+    }
 
     actions
 }
