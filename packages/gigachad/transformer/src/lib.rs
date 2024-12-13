@@ -91,13 +91,37 @@ impl std::fmt::Display for Calculation {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Number {
     Real(f32),
-    Integer(u64),
+    Integer(i64),
     RealPercent(f32),
-    IntegerPercent(u64),
+    IntegerPercent(i64),
     Calc(Calculation),
+}
+
+impl PartialEq for Number {
+    fn eq(&self, other: &Self) -> bool {
+        static EPSILON: f32 = 0.00001;
+        match (self, other) {
+            #[allow(clippy::cast_precision_loss)]
+            (Self::Real(float), Self::Integer(int))
+            | (Self::RealPercent(float), Self::IntegerPercent(int))
+            | (Self::Integer(int), Self::Real(float))
+            | (Self::IntegerPercent(int), Self::RealPercent(float)) => {
+                (*int as f32 - *float).abs() < EPSILON
+            }
+            (Self::Real(l), Self::Real(r)) | (Self::RealPercent(l), Self::RealPercent(r)) => {
+                l.is_infinite() && r.is_infinite()
+                    || l.is_nan() && r.is_nan()
+                    || (l - r).abs() < EPSILON
+            }
+            (Self::Integer(l), Self::Integer(r))
+            | (Self::IntegerPercent(l), Self::IntegerPercent(r)) => l == r,
+            (Self::Calc(l), Self::Calc(r)) => l == r,
+            _ => false,
+        }
+    }
 }
 
 impl std::fmt::Display for Number {
