@@ -14,10 +14,14 @@ pub enum GetNumberError {
 ///
 /// * If there is an unmatched ending ')'
 /// * If there is an unmatched ending '}'
-pub fn split_on_char(haystack: &str, needle: char) -> Result<Option<(&str, &str)>, GetNumberError> {
+pub fn split_on_char(
+    haystack: &str,
+    needle: char,
+    start: usize,
+) -> Result<Option<(&str, &str)>, GetNumberError> {
     let mut pop_stack = vec![];
 
-    for (i, char) in haystack.chars().enumerate() {
+    for (i, char) in haystack.chars().enumerate().skip(start) {
         if pop_stack.is_empty() && char == needle {
             let (a, b) = haystack.split_at(i);
             return Ok(Some((a, &b[1..])));
@@ -63,8 +67,9 @@ pub fn split_on_char(haystack: &str, needle: char) -> Result<Option<(&str, &str)
 pub fn split_on_char_trimmed(
     haystack: &str,
     needle: char,
+    start: usize,
 ) -> Result<Option<(&str, &str)>, GetNumberError> {
-    Ok(split_on_char(haystack, needle)?.map(|(x, y)| (x.trim(), y.trim())))
+    Ok(split_on_char(haystack, needle, start)?.map(|(x, y)| (x.trim(), y.trim())))
 }
 
 /// # Errors
@@ -72,7 +77,9 @@ pub fn split_on_char_trimmed(
 /// * If the input is not a grouping.
 /// * If the contents fails to parse.
 pub fn parse_grouping(calc: &str) -> Result<Calculation, GetNumberError> {
+    log::trace!("parse_grouping: '{calc}'");
     if let Some(contents) = calc.strip_prefix('(').and_then(|x| x.strip_suffix(')')) {
+        log::trace!("parse_grouping: contents='{contents}'");
         Ok(Calculation::Grouping(Box::new(parse_calculation(
             contents,
         )?)))
@@ -88,12 +95,15 @@ pub fn parse_grouping(calc: &str) -> Result<Calculation, GetNumberError> {
 /// * If the input is not a `min` function.
 /// * If the contents fails to parse.
 pub fn parse_min(calc: &str) -> Result<Calculation, GetNumberError> {
+    log::trace!("parse_min: '{calc}'");
     if let Some(contents) = calc
         .strip_prefix("min")
         .and_then(|x| x.trim_start().strip_prefix('('))
         .and_then(|x| x.strip_suffix(')'))
     {
-        if let Some((left, right)) = split_on_char_trimmed(contents, ',')? {
+        log::trace!("parse_min: contents='{contents}'");
+        if let Some((left, right)) = split_on_char_trimmed(contents, ',', 1)? {
+            log::trace!("parse_min: left='{left}' right='{right}'");
             return Ok(Calculation::Min(
                 Box::new(parse_calculation(left)?),
                 Box::new(parse_calculation(right)?),
@@ -111,12 +121,15 @@ pub fn parse_min(calc: &str) -> Result<Calculation, GetNumberError> {
 /// * If the input is not a `max` function.
 /// * If the contents fails to parse.
 pub fn parse_max(calc: &str) -> Result<Calculation, GetNumberError> {
+    log::trace!("parse_max: '{calc}'");
     if let Some(contents) = calc
         .strip_prefix("max")
         .and_then(|x| x.trim_start().strip_prefix('('))
         .and_then(|x| x.strip_suffix(')'))
     {
-        if let Some((left, right)) = split_on_char_trimmed(contents, ',')? {
+        log::trace!("parse_max: contents='{contents}'");
+        if let Some((left, right)) = split_on_char_trimmed(contents, ',', 1)? {
+            log::trace!("parse_max: left='{left}' right='{right}'");
             return Ok(Calculation::Max(
                 Box::new(parse_calculation(left)?),
                 Box::new(parse_calculation(right)?),
@@ -134,12 +147,14 @@ pub fn parse_max(calc: &str) -> Result<Calculation, GetNumberError> {
 /// * If the input is not a `calc` function.
 /// * If the contents fails to parse.
 pub fn parse_calc(calc: &str) -> Result<Number, GetNumberError> {
+    log::trace!("parse_calc: '{calc}'");
     if let Some(contents) = calc
         .strip_prefix("calc")
         .and_then(|x| x.trim().strip_prefix('('))
         .and_then(|x| x.strip_suffix(')'))
         .map(str::trim)
     {
+        log::trace!("parse_calc: contents='{contents}'");
         return Ok(Number::Calc(parse_calculation(contents)?));
     }
 
@@ -152,37 +167,68 @@ pub fn parse_calc(calc: &str) -> Result<Number, GetNumberError> {
 ///
 /// * If the `calc` fails to parse.
 pub fn parse_calculation(calc: &str) -> Result<Calculation, GetNumberError> {
-    Ok(
-        if let Some((left, right)) = split_on_char_trimmed(calc, '+')? {
-            Calculation::Add(
-                Box::new(parse_calculation(left)?),
-                Box::new(parse_calculation(right)?),
-            )
-        } else if let Some((left, right)) = split_on_char_trimmed(calc, '-')? {
-            Calculation::Subtract(
-                Box::new(parse_calculation(left)?),
-                Box::new(parse_calculation(right)?),
-            )
-        } else if let Some((left, right)) = split_on_char_trimmed(calc, '*')? {
-            Calculation::Multiply(
-                Box::new(parse_calculation(left)?),
-                Box::new(parse_calculation(right)?),
-            )
-        } else if let Some((left, right)) = split_on_char_trimmed(calc, '/')? {
-            Calculation::Divide(
-                Box::new(parse_calculation(left)?),
-                Box::new(parse_calculation(right)?),
-            )
-        } else if let Ok(min) = parse_min(calc) {
-            min
-        } else if let Ok(max) = parse_max(calc) {
-            max
-        } else if let Ok(grouping) = parse_grouping(calc) {
-            grouping
-        } else {
-            Calculation::Number(Box::new(parse_number(calc)?))
-        },
-    )
+    if let Ok(min) = parse_min(calc) {
+        return Ok(min);
+    }
+    if let Ok(max) = parse_max(calc) {
+        return Ok(max);
+    }
+    if let Ok(grouping) = parse_grouping(calc) {
+        return Ok(grouping);
+    }
+    if let Ok((left, right)) = parse_operation(calc, '*') {
+        return Ok(Calculation::Multiply(Box::new(left), Box::new(right)));
+    }
+    if let Ok((left, right)) = parse_operation(calc, '/') {
+        return Ok(Calculation::Divide(Box::new(left), Box::new(right)));
+    }
+    if let Ok((left, right)) = parse_signed_operation(calc, '+') {
+        return Ok(Calculation::Add(Box::new(left), Box::new(right)));
+    }
+    if let Ok((left, right)) = parse_signed_operation(calc, '-') {
+        return Ok(Calculation::Subtract(Box::new(left), Box::new(right)));
+    }
+
+    Ok(Calculation::Number(Box::new(parse_number(calc)?)))
+}
+
+fn parse_operation(
+    calc: &str,
+    operator: char,
+) -> Result<(Calculation, Calculation), GetNumberError> {
+    log::trace!("parse_operation: '{calc}' operator={operator}");
+    if let Some((left, right)) = split_on_char_trimmed(calc, operator, 0)? {
+        log::trace!("parse_operation: left='{left}' right='{right}'");
+        return Ok((parse_calculation(left)?, parse_calculation(right)?));
+    }
+
+    let message = format!("Invalid operation: '{calc}'");
+    log::trace!("parse_operation: failed='{message}'");
+    Err(GetNumberError::Parse(message))
+}
+
+fn parse_signed_operation(
+    calc: &str,
+    operator: char,
+) -> Result<(Calculation, Calculation), GetNumberError> {
+    log::trace!("parse_signed_operation: '{calc}' operator={operator}");
+    if let Some((left, right)) = split_on_char_trimmed(calc, operator, 0)? {
+        if left.is_empty() {
+            if let Some((left, right)) = split_on_char_trimmed(calc, operator, 1)? {
+                log::trace!("parse_signed_operation: left='{left}' right='{right}'");
+                if !left.is_empty() && !right.is_empty() {
+                    return Ok((parse_calculation(left)?, parse_calculation(right)?));
+                }
+            }
+        } else if !right.is_empty() {
+            log::trace!("parse_signed_operation: left='{left}' right='{right}'");
+            return Ok((parse_calculation(left)?, parse_calculation(right)?));
+        }
+    }
+
+    let message = format!("Invalid signed operation: '{calc}'");
+    log::trace!("parse_signed_operation: failed='{message}'");
+    Err(GetNumberError::Parse(message))
 }
 
 /// # Errors
@@ -248,18 +294,18 @@ mod test {
 
     #[test_log::test]
     fn split_on_char_returns_none_for_basic_floating_point_number() {
-        assert_eq!(split_on_char("123.5", '+').unwrap(), None);
+        assert_eq!(split_on_char("123.5", '+', 0).unwrap(), None);
     }
 
     #[test_log::test]
     fn split_on_char_returns_none_for_basic_integer_number() {
-        assert_eq!(split_on_char("123", '+').unwrap(), None);
+        assert_eq!(split_on_char("123", '+', 0).unwrap(), None);
     }
 
     #[test_log::test]
     fn split_on_char_returns_splits_on_plus_sign_with_floating_point_numbers() {
         assert_eq!(
-            split_on_char("123.5 + 131.2", '+').unwrap(),
+            split_on_char("123.5 + 131.2", '+', 0).unwrap(),
             Some(("123.5 ", " 131.2"))
         );
     }
@@ -267,7 +313,7 @@ mod test {
     #[test_log::test]
     fn split_on_char_returns_splits_on_plus_sign_with_integer_numbers() {
         assert_eq!(
-            split_on_char("123 + 131", '+').unwrap(),
+            split_on_char("123 + 131", '+', 0).unwrap(),
             Some(("123 ", " 131"))
         );
     }
@@ -275,7 +321,7 @@ mod test {
     #[test_log::test]
     fn split_on_char_trimmed_returns_splits_on_plus_sign_with_floating_point_numbers() {
         assert_eq!(
-            split_on_char_trimmed("123.5 + 131.2", '+').unwrap(),
+            split_on_char_trimmed("123.5 + 131.2", '+', 0).unwrap(),
             Some(("123.5", "131.2"))
         );
     }
@@ -283,7 +329,7 @@ mod test {
     #[test_log::test]
     fn split_on_char_trimmed_returns_splits_on_plus_sign_with_integer_numbers() {
         assert_eq!(
-            split_on_char_trimmed("123 + 131", '+').unwrap(),
+            split_on_char_trimmed("123 + 131", '+', 0).unwrap(),
             Some(("123", "131"))
         );
     }
@@ -291,7 +337,7 @@ mod test {
     #[test_log::test]
     fn split_on_char_trimmed_skips_char_in_parens_scope() {
         assert_eq!(
-            split_on_char_trimmed("(123 + 131) + 100", '+').unwrap(),
+            split_on_char_trimmed("(123 + 131) + 100", '+', 0).unwrap(),
             Some(("(123 + 131)", "100"))
         );
     }
@@ -299,7 +345,7 @@ mod test {
     #[test_log::test]
     fn split_on_char_trimmed_skips_char_in_nested_parens_scope() {
         assert_eq!(
-            split_on_char_trimmed("(123 + (131 * 99)) + 100", '+').unwrap(),
+            split_on_char_trimmed("(123 + (131 * 99)) + 100", '+', 0).unwrap(),
             Some(("(123 + (131 * 99))", "100"))
         );
     }
@@ -460,6 +506,94 @@ mod test {
                     )),
                 )))),
                 Box::new(Calculation::Number(Box::new(Number::Integer(100))))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_negative_number_on_left_and_subtract() {
+        assert_eq!(
+            parse_calculation("-123 - 10").unwrap(),
+            Calculation::Subtract(
+                Box::new(Calculation::Number(Box::new(Number::Integer(-123)))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(10))))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_negative_number_on_right_and_subtract() {
+        assert_eq!(
+            parse_calculation("123 - -10").unwrap(),
+            Calculation::Subtract(
+                Box::new(Calculation::Number(Box::new(Number::Integer(123)))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(-10))))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_positive_number_on_left_and_subtract() {
+        assert_eq!(
+            parse_calculation("+123 - 10").unwrap(),
+            Calculation::Subtract(
+                Box::new(Calculation::Number(Box::new(Number::Integer(123)))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(10))))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_positive_number_on_right_and_subtract() {
+        assert_eq!(
+            parse_calculation("123 - +10").unwrap(),
+            Calculation::Subtract(
+                Box::new(Calculation::Number(Box::new(Number::Integer(123)))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(10))))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_negative_number_on_left_and_add() {
+        assert_eq!(
+            parse_calculation("-123 + 10").unwrap(),
+            Calculation::Add(
+                Box::new(Calculation::Number(Box::new(Number::Integer(-123)))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(10))))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_negative_number_on_right_and_add() {
+        assert_eq!(
+            parse_calculation("123 + -10").unwrap(),
+            Calculation::Add(
+                Box::new(Calculation::Number(Box::new(Number::Integer(123)))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(-10))))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_positive_number_on_left_and_add() {
+        assert_eq!(
+            parse_calculation("+123 + 10").unwrap(),
+            Calculation::Add(
+                Box::new(Calculation::Number(Box::new(Number::Integer(123)))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(10))))
+            )
+        );
+    }
+
+    #[test_log::test]
+    fn parse_calculation_can_parse_positive_number_on_right_and_add() {
+        assert_eq!(
+            parse_calculation("123 + +10").unwrap(),
+            Calculation::Add(
+                Box::new(Calculation::Number(Box::new(Number::Integer(123)))),
+                Box::new(Calculation::Number(Box::new(Number::Integer(10))))
             )
         );
     }
