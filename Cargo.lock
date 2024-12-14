@@ -567,7 +567,7 @@ dependencies = [
  "serde",
  "tauri",
  "tauri-plugin",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
 ]
 
 [[package]]
@@ -1813,9 +1813,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.3"
+version = "1.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27f657647bcff5394bf56c7317665bbf790a137a50eaaa5c6bfbb9e27a518f2d"
+checksum = "9157bbaa6b165880c27a4293a474c91cdcf265cc68cc829bf10be0964a391caf"
 dependencies = [
  "jobserver",
  "libc",
@@ -3832,7 +3832,7 @@ dependencies = [
  "pretty_assertions",
  "quickcheck",
  "test-log",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
 ]
 
 [[package]]
@@ -3904,7 +3904,7 @@ dependencies = [
  "moosicbox_logging",
  "moosicbox_task",
  "reqwest",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
 ]
 
@@ -3955,7 +3955,7 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_task",
  "qstring",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
 ]
 
@@ -3979,7 +3979,7 @@ dependencies = [
  "quickcheck_macros",
  "serde_json",
  "test-log",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tl",
  "xml",
 ]
@@ -5959,7 +5959,7 @@ dependencies = [
  "moosicbox_files",
  "moosicbox_logging",
  "moosicbox_music_api",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
 ]
 
@@ -6016,7 +6016,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-notification",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
 ]
 
@@ -6065,7 +6065,7 @@ dependencies = [
  "reqwest",
  "serde_json",
  "strum",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "tokio-util",
 ]
@@ -6083,7 +6083,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "tauri",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
 ]
 
@@ -6110,7 +6110,7 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_task",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
 ]
 
@@ -6154,7 +6154,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "tokio-util",
 ]
@@ -6172,7 +6172,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "tauri",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
 ]
 
@@ -6189,7 +6189,7 @@ dependencies = [
  "moosicbox_env_utils",
  "moosicbox_logging",
  "moosicbox_task",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "tokio-tungstenite",
  "tokio-util",
@@ -6214,7 +6214,7 @@ dependencies = [
  "moosicbox_task",
  "pretty_assertions",
  "test-log",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "tokio-util",
 ]
@@ -6232,7 +6232,7 @@ dependencies = [
  "rangemap",
  "reqwest",
  "symphonia",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "tokio-util",
 ]
@@ -6248,7 +6248,7 @@ dependencies = [
  "mp3lame-encoder",
  "ogg",
  "opus",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
 ]
 
 [[package]]
@@ -6276,7 +6276,7 @@ dependencies = [
  "rb",
  "serde",
  "symphonia",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "utoipa",
 ]
@@ -6338,7 +6338,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "url",
  "utoipa",
  "uuid",
@@ -6368,7 +6368,7 @@ dependencies = [
  "nanoid",
  "rand 0.8.5",
  "serde",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "utoipa",
 ]
 
@@ -6387,7 +6387,7 @@ dependencies = [
  "strum_macros",
  "tantivy",
  "test-log",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "utoipa",
 ]
 
@@ -6407,7 +6407,7 @@ dependencies = [
  "rusqlite",
  "sqlx",
  "sqlx-postgres",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "tokio-postgres",
  "tokio-util",
@@ -6427,7 +6427,7 @@ dependencies = [
  "postgres-openssl",
  "rusqlite",
  "sqlx",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "tokio-postgres",
 ]
@@ -6463,7 +6463,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "test-log",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "tokio-util",
  "utoipa",
@@ -6476,7 +6476,7 @@ dependencies = [
  "log",
  "pretty_assertions",
  "test-log",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
 ]
 
 [[package]]
@@ -6510,7 +6510,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "symphonia",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -6529,7 +6529,7 @@ dependencies = [
  "moosicbox_task",
  "strum",
  "strum_macros",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "webp",
 ]
@@ -6544,7 +6544,7 @@ dependencies = [
  "rusqlite",
  "serde_json",
  "tantivy",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
 ]
 
 [[package]]
@@ -6574,7 +6574,7 @@ dependencies = [
  "serde_json",
  "strum",
  "strum_macros",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "utoipa",
 ]
@@ -6646,7 +6646,7 @@ dependencies = [
  "log",
  "moosicbox_config",
  "moosicbox_env_utils",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
 ]
 
 [[package]]
@@ -6661,7 +6661,7 @@ dependencies = [
  "moosicbox_async_service",
  "moosicbox_task",
  "strum_macros",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
 ]
 
 [[package]]
@@ -6684,7 +6684,7 @@ dependencies = [
  "moosicbox_tidal",
  "moosicbox_yt",
  "serde",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "utoipa",
 ]
@@ -6736,7 +6736,7 @@ dependencies = [
  "moosicbox_paging",
  "pretty_assertions",
  "test-log",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
 ]
 
@@ -6798,7 +6798,7 @@ dependencies = [
  "serde",
  "serde_json",
  "symphonia",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "tokio-util",
  "url",
@@ -6840,7 +6840,7 @@ dependencies = [
  "serde_json",
  "strum",
  "strum_macros",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "url",
  "utoipa",
@@ -6857,7 +6857,7 @@ dependencies = [
  "moosicbox_music_api",
  "moosicbox_paging",
  "reqwest",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
 ]
 
 [[package]]
@@ -6899,7 +6899,7 @@ dependencies = [
  "serde_json",
  "strum",
  "strum_macros",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "tokio-util",
  "utoipa",
@@ -6912,7 +6912,7 @@ dependencies = [
  "diesel",
  "diesel_migrations",
  "log",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
 ]
 
 [[package]]
@@ -6933,7 +6933,7 @@ dependencies = [
  "static_init",
  "tantivy",
  "test-log",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "utoipa",
 ]
@@ -6993,7 +6993,7 @@ dependencies = [
  "serde_json",
  "strum",
  "strum_macros",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "throttle",
  "tokio",
  "tokio-util",
@@ -7022,7 +7022,7 @@ dependencies = [
  "moosicbox_task",
  "serde",
  "serde_json",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "utoipa",
 ]
@@ -7053,7 +7053,7 @@ dependencies = [
  "moosicbox_task",
  "pin-project",
  "reqwest",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "tokio-util",
 ]
@@ -7092,7 +7092,7 @@ dependencies = [
  "serde_json",
  "strum",
  "strum_macros",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "url",
  "utoipa",
@@ -7111,7 +7111,7 @@ dependencies = [
  "serde_json",
  "strum",
  "strum_macros",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "tokio-util",
 ]
@@ -7149,7 +7149,7 @@ dependencies = [
  "serde-aux",
  "serde_json",
  "symphonia",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "tokio-tungstenite",
  "tokio-util",
@@ -7185,7 +7185,7 @@ dependencies = [
  "sha2",
  "strum",
  "strum_macros",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "tokio-util",
  "uuid",
@@ -7221,7 +7221,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "symphonia",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "tokio-util",
  "utoipa",
@@ -7245,7 +7245,7 @@ dependencies = [
  "serde_json",
  "strum",
  "strum_macros",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
 ]
 
 [[package]]
@@ -7273,7 +7273,7 @@ dependencies = [
  "serde_json",
  "strum",
  "strum_macros",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "url",
  "utoipa",
@@ -9187,7 +9187,7 @@ dependencies = [
  "rustc-hash 2.1.0",
  "rustls 0.23.20",
  "socket2",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "tracing",
 ]
@@ -9206,7 +9206,7 @@ dependencies = [
  "rustls 0.23.20",
  "rustls-pki-types",
  "slab",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tinyvec",
  "tracing",
  "web-time",
@@ -9922,9 +9922,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-pki-types"
-version = "1.10.0"
+version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16f1201b3c9a7ee8039bcadc17b7e605e2945b27eee7631788c1bd2b0643674b"
+checksum = "d2bf47e6ff922db3825eb750c4e2ff784c6ff8fb9e13046ef6a1d1c5401b0b37"
 dependencies = [
  "web-time",
 ]
@@ -10854,9 +10854,9 @@ dependencies = [
 
 [[package]]
 name = "static_init_macro"
-version = "1.0.3"
+version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b07d15a19b60c12b1a4d927f86bf124037e899c962017d8a198d59997cf12f1b"
+checksum = "1389c88ddd739ec6d3f8f83343764a0e944cd23cfbf126a9796a714b0b6edd6f"
 dependencies = [
  "cfg_aliases 0.1.1",
  "memchr",
@@ -11465,7 +11465,7 @@ dependencies = [
  "tauri-runtime",
  "tauri-runtime-wry",
  "tauri-utils",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "tokio",
  "tray-icon",
  "url",
@@ -11518,7 +11518,7 @@ dependencies = [
  "sha2",
  "syn 2.0.90",
  "tauri-utils",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "time",
  "url",
  "uuid",
@@ -11570,7 +11570,7 @@ dependencies = [
  "tauri",
  "tauri-plugin",
  "tauri-plugin-fs",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "url",
 ]
 
@@ -11591,7 +11591,7 @@ dependencies = [
  "tauri",
  "tauri-plugin",
  "tauri-utils",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "toml 0.8.19",
  "url",
  "uuid",
@@ -11611,7 +11611,7 @@ dependencies = [
  "serde_repr",
  "tauri",
  "tauri-plugin",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "time",
  "url",
 ]
@@ -11630,7 +11630,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tauri-utils",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "url",
  "windows 0.58.0",
 ]
@@ -11690,7 +11690,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "swift-rs",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "toml 0.8.19",
  "url",
  "urlpattern",
@@ -11797,11 +11797,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.6"
+version = "2.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fec2a1820ebd077e2b90c4df007bebf344cd394098a13c563957d0afc83ea47"
+checksum = "93605438cbd668185516ab499d589afb7ee1859ea3d5fc8f6b0755e1c7443767"
 dependencies = [
- "thiserror-impl 2.0.6",
+ "thiserror-impl 2.0.7",
 ]
 
 [[package]]
@@ -11817,9 +11817,9 @@ dependencies = [
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.6"
+version = "2.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d65750cab40f4ff1929fb1ba509e9914eb756131cef4210da8d5d700d26f6312"
+checksum = "e1d8749b4531af2117677a5fcd12b1348a3fe2b81e36e61ffeac5c4aa3273e36"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -14287,7 +14287,7 @@ dependencies = [
  "flate2",
  "indexmap 2.7.0",
  "memchr",
- "thiserror 2.0.6",
+ "thiserror 2.0.7",
  "zopfli",
 ]
 
