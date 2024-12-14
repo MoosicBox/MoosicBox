@@ -1169,6 +1169,35 @@ fn display_elements(
 
 impl Element {
     #[must_use]
+    pub const fn allows_children(&self) -> bool {
+        match self {
+            Self::Div
+            | Self::Aside
+            | Self::Main
+            | Self::Header
+            | Self::Footer
+            | Self::Section
+            | Self::Form
+            | Self::Span
+            | Self::Button
+            | Self::Anchor { .. }
+            | Self::Heading { .. }
+            | Self::UnorderedList
+            | Self::OrderedList
+            | Self::ListItem
+            | Self::Table
+            | Self::THead
+            | Self::TH
+            | Self::TBody
+            | Self::TR
+            | Self::TD => true,
+            Self::Input { .. } | Self::Raw { .. } | Self::Image { .. } => false,
+            #[cfg(feature = "canvas")]
+            Self::Canvas => false,
+        }
+    }
+
+    #[must_use]
     pub const fn tag_display_str(&self) -> &'static str {
         match self {
             Self::Raw { .. } => "Raw",
