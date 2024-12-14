@@ -1,8 +1,42 @@
 use gigachad_transformer_models::{AlignItems, JustifyContent, LayoutDirection, LayoutOverflow};
 use moosicbox_gen::{serde::JsonValue, xml::XmlString};
 use quickcheck::{Arbitrary, Gen};
+use strum::IntoEnumIterator;
 
-use crate::{Calculation, Container, Element, HeaderSize, Input, Number};
+use crate::{
+    Calculation, CalculationType, Container, Element, HeaderSize, Input, Number, NumberType,
+};
+
+fn one_of_calc(g: &mut Gen, types: &[CalculationType]) -> Calculation {
+    match *g.choose(types).unwrap() {
+        CalculationType::Number => Calculation::Number(Box::new(Number::arbitrary(g))),
+        CalculationType::Add => Calculation::Add(
+            Box::new(one_of_calc(g, &[CalculationType::Number])),
+            Box::new(one_of_calc(g, &[CalculationType::Number])),
+        ),
+        CalculationType::Subtract => Calculation::Subtract(
+            Box::new(one_of_calc(g, &[CalculationType::Number])),
+            Box::new(one_of_calc(g, &[CalculationType::Number])),
+        ),
+        CalculationType::Multiply => Calculation::Multiply(
+            Box::new(one_of_calc(g, &[CalculationType::Number])),
+            Box::new(one_of_calc(g, &[CalculationType::Number])),
+        ),
+        CalculationType::Divide => Calculation::Divide(
+            Box::new(one_of_calc(g, &[CalculationType::Number])),
+            Box::new(one_of_calc(g, &[CalculationType::Number])),
+        ),
+        CalculationType::Grouping => Calculation::Grouping(Box::new(Arbitrary::arbitrary(g))),
+        CalculationType::Min => Calculation::Min(
+            Box::new(Arbitrary::arbitrary(g)),
+            Box::new(Arbitrary::arbitrary(g)),
+        ),
+        CalculationType::Max => Calculation::Max(
+            Box::new(Arbitrary::arbitrary(g)),
+            Box::new(Arbitrary::arbitrary(g)),
+        ),
+    }
+}
 
 impl Arbitrary for Calculation {
     fn arbitrary(g: &mut Gen) -> Self {
@@ -10,49 +44,26 @@ impl Arbitrary for Calculation {
             return Self::Number(Box::new(Number::arbitrary(g)));
         }
 
-        let g = &mut half_g_max(g, 10);
+        one_of_calc(
+            &mut half_g_max(g, 10),
+            &CalculationType::iter().collect::<Vec<_>>(),
+        )
+    }
+}
 
-        match *g.choose(&(0..=7).collect::<Vec<_>>()).unwrap() {
-            0 => Self::Number(Box::new(Number::arbitrary(g))),
-            1 => Self::Add(
-                Box::new(Arbitrary::arbitrary(g)),
-                Box::new(Arbitrary::arbitrary(g)),
-            ),
-            2 => Self::Subtract(
-                Box::new(Arbitrary::arbitrary(g)),
-                Box::new(Arbitrary::arbitrary(g)),
-            ),
-            3 => Self::Multiply(
-                Box::new(Arbitrary::arbitrary(g)),
-                Box::new(Arbitrary::arbitrary(g)),
-            ),
-            4 => Self::Divide(
-                Box::new(Arbitrary::arbitrary(g)),
-                Box::new(Arbitrary::arbitrary(g)),
-            ),
-            5 => Self::Grouping(Box::new(Arbitrary::arbitrary(g))),
-            6 => Self::Min(
-                Box::new(Arbitrary::arbitrary(g)),
-                Box::new(Arbitrary::arbitrary(g)),
-            ),
-            7 => Self::Max(
-                Box::new(Arbitrary::arbitrary(g)),
-                Box::new(Arbitrary::arbitrary(g)),
-            ),
-            _ => unreachable!(),
-        }
+fn one_of_number(g: &mut Gen, types: &[NumberType]) -> Number {
+    match *g.choose(types).unwrap() {
+        NumberType::Real => Number::Real(Arbitrary::arbitrary(g)),
+        NumberType::Integer => Number::Integer(Arbitrary::arbitrary(g)),
+        NumberType::RealPercent => Number::RealPercent(Arbitrary::arbitrary(g)),
+        NumberType::IntegerPercent => Number::IntegerPercent(Arbitrary::arbitrary(g)),
+        NumberType::Calc => Number::Calc(Arbitrary::arbitrary(g)),
     }
 }
 
 impl Arbitrary for Number {
     fn arbitrary(g: &mut Gen) -> Self {
-        match *g.choose(&(0..=3).collect::<Vec<_>>()).unwrap() {
-            0 => Self::Real(f32::arbitrary(g)),
-            1 => Self::Integer(i64::arbitrary(g)),
-            2 => Self::RealPercent(f32::arbitrary(g)),
-            3 => Self::IntegerPercent(i64::arbitrary(g)),
-            _ => unreachable!(),
-        }
+        one_of_number(g, &NumberType::iter().collect::<Vec<_>>())
     }
 }
 

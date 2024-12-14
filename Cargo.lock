@@ -3980,6 +3980,7 @@ dependencies = [
  "quickcheck",
  "quickcheck_macros",
  "serde_json",
+ "strum",
  "test-log",
  "thiserror 2.0.7",
  "tl",

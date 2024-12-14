@@ -28,6 +28,7 @@ log         = { workspace = true }
 maud        = { workspace = true, optional = true }
 profiling   = { workspace = true, optional = true }
 serde_json  = { workspace = true }
+strum       = { workspace = true, features = ["derive"] }
 thiserror   = { workspace = true }
 tl          = { workspace = true, optional = true }
 xml         = { workspace = true, optional = true }

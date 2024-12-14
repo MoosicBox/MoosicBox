@@ -12,6 +12,7 @@ use gigachad_transformer_models::{
 use serde_json::Value;
 
 pub use gigachad_transformer_models as models;
+use strum::{EnumDiscriminants, EnumIter};
 
 #[cfg(feature = "calc")]
 pub mod calc;
@@ -35,7 +36,9 @@ pub fn calc_number(number: &Number, container: f32) -> f32 {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, EnumDiscriminants)]
+#[strum_discriminants(derive(EnumIter))]
+#[strum_discriminants(name(CalculationType))]
 pub enum Calculation {
     Number(Box<Number>),
     Add(Box<Calculation>, Box<Calculation>),
@@ -93,7 +96,9 @@ impl std::fmt::Display for Calculation {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, EnumDiscriminants)]
+#[strum_discriminants(derive(EnumIter))]
+#[strum_discriminants(name(NumberType))]
 pub enum Number {
     Real(f32),
     Integer(i64),
