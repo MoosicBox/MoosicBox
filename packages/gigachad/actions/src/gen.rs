@@ -1,4 +1,5 @@
 use gigachad_transformer_models::Visibility;
+use moosicbox_gen::xml::XmlString;
 use quickcheck::{Arbitrary, Gen};
 
 use crate::{Action, ActionTrigger, ActionType, ElementTarget, LogLevel, StyleAction};
@@ -27,7 +28,7 @@ impl Arbitrary for ElementTarget {
         #[cfg(not(feature = "id"))]
         let max = 2;
         match *g.choose(&(0..=max).collect::<Vec<_>>()).unwrap() {
-            0 => Self::StrId(String::arbitrary(g)),
+            0 => Self::StrId(XmlString::arbitrary(g).0),
             1 => Self::SelfTarget,
             2 => Self::LastChild,
             #[cfg(feature = "id")]
@@ -112,14 +113,14 @@ impl Arbitrary for ActionType {
                 action: StyleAction::arbitrary(g),
             },
             1 => Self::Navigate {
-                url: String::arbitrary(g),
+                url: XmlString::arbitrary(g).0,
             },
             2 => Self::Log {
-                message: String::arbitrary(g),
+                message: XmlString::arbitrary(g).0,
                 level: LogLevel::arbitrary(g),
             },
             3 => Self::Custom {
-                action: String::arbitrary(g),
+                action: XmlString::arbitrary(g).0,
             },
             #[cfg(feature = "logic")]
             4 => Self::Logic(crate::logic::If::arbitrary(g)),

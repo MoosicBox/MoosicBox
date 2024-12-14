@@ -1,3 +1,4 @@
+use moosicbox_gen::xml::XmlString;
 use quickcheck::{Arbitrary, Gen};
 
 use crate::{
@@ -101,13 +102,13 @@ impl Arbitrary for Route {
     fn arbitrary(g: &mut Gen) -> Self {
         match *g.choose(&(0..=1).collect::<Vec<_>>()).unwrap() {
             0 => Self::Get {
-                route: String::arbitrary(g),
-                trigger: Option::arbitrary(g),
+                route: XmlString::arbitrary(g).0,
+                trigger: Option::arbitrary(g).map(|x: XmlString| x.0),
                 swap: SwapTarget::arbitrary(g),
             },
             1 => Self::Post {
-                route: String::arbitrary(g),
-                trigger: Option::arbitrary(g),
+                route: XmlString::arbitrary(g).0,
+                trigger: Option::arbitrary(g).map(|x: XmlString| x.0),
                 swap: SwapTarget::arbitrary(g),
             },
             _ => unreachable!(),

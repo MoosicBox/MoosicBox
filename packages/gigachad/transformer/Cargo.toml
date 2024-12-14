@@ -44,6 +44,10 @@ gigachad_transformer_models = { path = "models", default-features = false, featu
     "gen",
 ] }
 maud = { workspace = true }
+moosicbox_gen = { path = "../../gen", default-features = false, features = [
+    "serde",
+    "xml",
+] }
 pretty_assertions = { workspace = true }
 quickcheck = { workspace = true }
 quickcheck_macros = { workspace = true }

@@ -1813,9 +1813,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.4"
+version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9157bbaa6b165880c27a4293a474c91cdcf265cc68cc829bf10be0964a391caf"
+checksum = "27f657647bcff5394bf56c7317665bbf790a137a50eaaa5c6bfbb9e27a518f2d"
 dependencies = [
  "jobserver",
  "libc",
@@ -3816,6 +3816,7 @@ dependencies = [
  "gigachad_transformer_models",
  "log",
  "moosicbox_assert",
+ "moosicbox_gen",
  "quickcheck",
  "serde",
  "serde_json",
@@ -3972,6 +3973,7 @@ dependencies = [
  "log",
  "maud",
  "moosicbox_assert",
+ "moosicbox_gen",
  "moosicbox_logging",
  "pretty_assertions",
  "profiling",
@@ -3990,6 +3992,7 @@ version = "0.1.0"
 dependencies = [
  "log",
  "moosicbox_assert",
+ "moosicbox_gen",
  "quickcheck",
  "serde",
 ]
@@ -5914,6 +5917,7 @@ dependencies = [
  "moosicbox_downloader",
  "moosicbox_env_utils",
  "moosicbox_files",
+ "moosicbox_gen",
  "moosicbox_image",
  "moosicbox_json_utils",
  "moosicbox_library",
@@ -9932,9 +9936,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-pki-types"
-version = "1.10.1"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2bf47e6ff922db3825eb750c4e2ff784c6ff8fb9e13046ef6a1d1c5401b0b37"
+checksum = "16f1201b3c9a7ee8039bcadc17b7e605e2945b27eee7631788c1bd2b0643674b"
 dependencies = [
  "web-time",
 ]
@@ -10864,9 +10868,9 @@ dependencies = [
 
 [[package]]
 name = "static_init_macro"
-version = "1.0.4"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1389c88ddd739ec6d3f8f83343764a0e944cd23cfbf126a9796a714b0b6edd6f"
+checksum = "b07d15a19b60c12b1a4d927f86bf124037e899c962017d8a198d59997cf12f1b"
 dependencies = [
  "cfg_aliases 0.1.1",
  "memchr",

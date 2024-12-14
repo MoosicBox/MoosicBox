@@ -1,16 +1,8 @@
 use gigachad_transformer_models::{AlignItems, JustifyContent, LayoutDirection, LayoutOverflow};
+use moosicbox_gen::{serde::JsonValue, xml::XmlString};
 use quickcheck::{Arbitrary, Gen};
 
 use crate::{Calculation, Container, Element, HeaderSize, Input, Number};
-
-#[derive(Clone, Debug)]
-struct JsonValue(serde_json::Value);
-
-impl Arbitrary for JsonValue {
-    fn arbitrary(g: &mut Gen) -> Self {
-        Self(serde_json::Value::String(String::arbitrary(g)))
-    }
-}
 
 impl Arbitrary for Calculation {
     fn arbitrary(g: &mut Gen) -> Self {
@@ -75,12 +67,12 @@ impl Arbitrary for Input {
     fn arbitrary(g: &mut Gen) -> Self {
         match *g.choose(&(0..=2).collect::<Vec<_>>()).unwrap() {
             0 => Self::Text {
-                value: Option::arbitrary(g),
-                placeholder: Option::arbitrary(g),
+                value: Option::arbitrary(g).map(|x: XmlString| x.0),
+                placeholder: Option::arbitrary(g).map(|x: XmlString| x.0),
             },
             1 => Self::Password {
-                value: Option::arbitrary(g),
-                placeholder: Option::arbitrary(g),
+                value: Option::arbitrary(g).map(|x: XmlString| x.0),
+                placeholder: Option::arbitrary(g).map(|x: XmlString| x.0),
             },
             2 => Self::Checkbox {
                 checked: Option::arbitrary(g),
@@ -99,7 +91,7 @@ impl Arbitrary for Element {
         match *g.choose(&(0..=max).collect::<Vec<_>>()).unwrap() {
             0 => Self::Div,
             1 => Self::Raw {
-                value: String::arbitrary(g),
+                value: XmlString::arbitrary(g).0,
             },
             2 => Self::Aside,
             3 => Self::Main,
@@ -113,10 +105,10 @@ impl Arbitrary for Element {
             },
             10 => Self::Button,
             11 => Self::Image {
-                source: Option::arbitrary(g),
+                source: Option::arbitrary(g).map(|x: XmlString| x.0),
             },
             12 => Self::Anchor {
-                href: Option::arbitrary(g),
+                href: Option::arbitrary(g).map(|x: XmlString| x.0),
             },
             13 => Self::Heading {
                 size: HeaderSize::arbitrary(g),
@@ -147,16 +139,16 @@ impl Arbitrary for Container {
         let smaller_g = &mut half_g_max(g, 10);
         let element = loop {
             let element = Element::arbitrary(g);
-            if matches!(element, Element::Raw { .. }) {
-                continue;
+            if !matches!(element, Element::Raw { .. }) {
+                break element;
             }
-            break element;
         };
         Self {
             #[cfg(feature = "id")]
             id: usize::arbitrary(g),
-            str_id: Option::arbitrary(g),
+            str_id: Option::arbitrary(g).map(|x: XmlString| x.0),
             element,
+            children: vec![],
             direction: LayoutDirection::arbitrary(g),
             overflow_x: LayoutOverflow::arbitrary(g),
             overflow_y: LayoutOverflow::arbitrary(g),
@@ -259,7 +251,6 @@ impl Arbitrary for Container {
             scrollbar_right: None,
             #[cfg(feature = "calc")]
             scrollbar_bottom: None,
-            ..Default::default()
         }
     }
 }
