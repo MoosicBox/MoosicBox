@@ -954,7 +954,7 @@ impl Container {
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
                 display_elements(&self.children, f, with_debug_attrs)?;
-                f.write_fmt(format_args!("</from>"))?;
+                f.write_fmt(format_args!("</form>"))?;
             }
             Element::Span => {
                 f.write_fmt(format_args!(
