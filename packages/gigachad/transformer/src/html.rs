@@ -102,7 +102,11 @@ fn get_border(tag: &HTMLTag, name: &str) -> Option<(Color, Number)> {
         .as_deref()
         .map(|x| html_escape::decode_html_entities(x))
         .as_deref()
-        .and_then(|x| x.split_once(','))
+        .and_then(|x| {
+            crate::parse::split_on_char_trimmed(x, ',', 0)
+                .ok()
+                .flatten()
+        })
         .map(|(size, color)| (size.trim(), color.trim()))
         .and_then(|(size, color)| parse_number(size).ok().map(|size| (size, color.trim())))
         .and_then(|(size, color)| Color::try_from_hex(color).ok().map(|color| (size, color)))
