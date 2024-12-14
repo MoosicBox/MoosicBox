@@ -179,7 +179,9 @@ pub fn parse_calculation(calc: &str) -> Result<Calculation, GetNumberError> {
 ///
 /// * If the input string is not a valid number.
 pub fn parse_number(number: &str) -> Result<Number, GetNumberError> {
-    Ok(if let Ok(calc) = parse_calc(number) {
+    static EPSILON: f32 = 0.00001;
+
+    let mut number = if let Ok(calc) = parse_calc(number) {
         calc
     } else if let Some((number, _)) = number.split_once('%') {
         if number.contains('.') {
@@ -211,7 +213,18 @@ pub fn parse_number(number: &str) -> Result<Number, GetNumberError> {
             .map(Number::Integer)
             .or_else(|| number.parse::<f32>().ok().map(Number::Real))
             .ok_or_else(|| GetNumberError::Parse(number.to_string()))?
-    })
+    };
+
+    match &mut number {
+        Number::Real(x) | Number::RealPercent(x) => {
+            if x.is_sign_negative() && x.abs() < EPSILON {
+                *x = 0.0;
+            }
+        }
+        Number::Integer(_) | Number::IntegerPercent(_) | Number::Calc(_) => {}
+    }
+
+    Ok(number)
 }
 
 #[cfg(test)]
