@@ -30,7 +30,9 @@ pub fn split_on_char(haystack: &str, needle: char) -> Result<Option<(&str, &str)
             '}' => {
                 moosicbox_assert::assert_or_err!(
                     pop_stack.first() == Some(&'}'),
-                    GetNumberError::Parse("Failed to find ending match to {".to_string()),
+                    GetNumberError::Parse(format!(
+                        "Failed to find ending match to '{{' in \"{haystack}\""
+                    )),
                 );
                 pop_stack.remove(0);
             }
@@ -40,7 +42,9 @@ pub fn split_on_char(haystack: &str, needle: char) -> Result<Option<(&str, &str)
             ')' => {
                 moosicbox_assert::assert_or_err!(
                     pop_stack.first() == Some(&')'),
-                    GetNumberError::Parse("Failed to find ending match to (".to_string()),
+                    GetNumberError::Parse(format!(
+                        "Failed to find ending match to '(' in \"{haystack}\""
+                    )),
                 );
                 if pop_stack.first() == Some(&')') {
                     pop_stack.remove(0);
@@ -73,9 +77,9 @@ pub fn parse_grouping(calc: &str) -> Result<Calculation, GetNumberError> {
             contents,
         )?)))
     } else {
-        Err(GetNumberError::Parse(
-            "Invalid grouping: '{calc}'".to_string(),
-        ))
+        let message = format!("Invalid grouping: '{calc}'");
+        log::trace!("parse_grouping: failed='{message}'");
+        Err(GetNumberError::Parse(message))
     }
 }
 
@@ -97,7 +101,9 @@ pub fn parse_min(calc: &str) -> Result<Calculation, GetNumberError> {
         }
     }
 
-    Err(GetNumberError::Parse("Invalid min: '{calc}'".to_string()))
+    let message = format!("Invalid min: '{calc}'");
+    log::trace!("parse_min: failed='{message}'");
+    Err(GetNumberError::Parse(message))
 }
 
 /// # Errors
@@ -118,7 +124,9 @@ pub fn parse_max(calc: &str) -> Result<Calculation, GetNumberError> {
         }
     }
 
-    Err(GetNumberError::Parse("Invalid max: '{calc}'".to_string()))
+    let message = format!("Invalid max: '{calc}'");
+    log::trace!("parse_max: failed='{message}'");
+    Err(GetNumberError::Parse(message))
 }
 
 /// # Errors
@@ -135,7 +143,9 @@ pub fn parse_calc(calc: &str) -> Result<Number, GetNumberError> {
         return Ok(Number::Calc(parse_calculation(contents)?));
     }
 
-    Err(GetNumberError::Parse("Invalid calc: '{calc}'".to_string()))
+    let message = format!("Invalid calc: '{calc}'");
+    log::trace!("parse_calc: failed='{message}'");
+    Err(GetNumberError::Parse(message))
 }
 
 /// # Errors
