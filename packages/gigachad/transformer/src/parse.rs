@@ -102,7 +102,7 @@ pub fn parse_min(calc: &str) -> Result<Calculation, GetNumberError> {
         .and_then(|x| x.strip_suffix(')'))
     {
         log::trace!("parse_min: contents='{contents}'");
-        if let Some((left, right)) = split_on_char_trimmed(contents, ',', 1)? {
+        if let Some((left, right)) = split_on_char_trimmed(contents, ',', 0)? {
             log::trace!("parse_min: left='{left}' right='{right}'");
             return Ok(Calculation::Min(
                 Box::new(parse_calculation(left)?),
@@ -128,7 +128,7 @@ pub fn parse_max(calc: &str) -> Result<Calculation, GetNumberError> {
         .and_then(|x| x.strip_suffix(')'))
     {
         log::trace!("parse_max: contents='{contents}'");
-        if let Some((left, right)) = split_on_char_trimmed(contents, ',', 1)? {
+        if let Some((left, right)) = split_on_char_trimmed(contents, ',', 0)? {
             log::trace!("parse_max: left='{left}' right='{right}'");
             return Ok(Calculation::Max(
                 Box::new(parse_calculation(left)?),
