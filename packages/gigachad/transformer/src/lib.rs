@@ -102,9 +102,10 @@ pub enum Number {
     Calc(Calculation),
 }
 
+static EPSILON: f32 = 0.00001;
+
 impl PartialEq for Number {
     fn eq(&self, other: &Self) -> bool {
-        static EPSILON: f32 = 0.00001;
         match (self, other) {
             #[allow(clippy::cast_precision_loss)]
             (Self::Real(float), Self::Integer(int))
@@ -129,10 +130,30 @@ impl PartialEq for Number {
 impl std::fmt::Display for Number {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Real(x) => f.write_fmt(format_args!("{x}")),
-            Self::Integer(x) => f.write_fmt(format_args!("{x}")),
-            Self::RealPercent(x) => f.write_fmt(format_args!("{x}%")),
-            Self::IntegerPercent(x) => f.write_fmt(format_args!("{x}%")),
+            Self::Real(x) => {
+                if x.abs() < EPSILON {
+                    return f.write_fmt(format_args!("0"));
+                }
+                f.write_fmt(format_args!("{x}"))
+            }
+            Self::Integer(x) => {
+                if *x == 0 {
+                    return f.write_fmt(format_args!("0"));
+                }
+                f.write_fmt(format_args!("{x}"))
+            }
+            Self::RealPercent(x) => {
+                if x.abs() < EPSILON {
+                    return f.write_fmt(format_args!("0%"));
+                }
+                f.write_fmt(format_args!("{x}%"))
+            }
+            Self::IntegerPercent(x) => {
+                if *x == 0 {
+                    return f.write_fmt(format_args!("0%"));
+                }
+                f.write_fmt(format_args!("{x}%"))
+            }
             Self::Calc(x) => f.write_fmt(format_args!("calc({x})")),
         }
     }
