@@ -534,10 +534,12 @@ mod test {
 
     use crate::Container;
 
-    #[quickcheck]
-    fn display_can_display_and_be_parsed_back_to_original_container(
-        mut container: Container,
-    ) -> bool {
+    fn clean_up_container(container: &mut Container) {
+        #[cfg(feature = "id")]
+        {
+            container.id = 0;
+        }
+
         let mut i = 0;
         let actions = container.actions.clone();
         container.actions.retain(|x| {
@@ -551,6 +553,17 @@ mod test {
             .actions
             .sort_by(|a, b| format!("{:?}", a.trigger).cmp(&format!("{:?}", b.trigger)));
 
+        for child in &mut container.children {
+            clean_up_container(child);
+        }
+    }
+
+    #[quickcheck]
+    fn display_can_display_and_be_parsed_back_to_original_container(
+        mut container: Container,
+    ) -> bool {
+        clean_up_container(&mut container);
+
         let markup = container.to_string();
 
         let re_parsed: Container = markup.clone().try_into().unwrap();
@@ -560,14 +573,7 @@ mod test {
             panic!("failed to get child from markup: {markup} ({container:?})");
         };
 
-        #[cfg(feature = "id")]
-        {
-            re_parsed.id = container.id;
-        }
-
-        re_parsed
-            .actions
-            .sort_by(|a, b| format!("{:?}", a.trigger).cmp(&format!("{:?}", b.trigger)));
+        clean_up_container(&mut re_parsed);
 
         if re_parsed != container {
             log::trace!("container:\n{container:?}");
@@ -575,6 +581,7 @@ mod test {
             log::trace!("after:\n{re_parsed}");
 
             std::thread::sleep(std::time::Duration::from_millis(10));
+            assert_eq!(re_parsed.to_string(), container.to_string());
             assert_eq!(re_parsed, container);
         }
 

@@ -143,12 +143,19 @@ impl Arbitrary for Container {
                 break element;
             }
         };
+
+        let children = if element.allows_children() {
+            Vec::arbitrary(smaller_g)
+        } else {
+            vec![]
+        };
+
         Self {
             #[cfg(feature = "id")]
             id: usize::arbitrary(g),
             str_id: Option::arbitrary(g).map(|x: XmlString| x.0),
             element,
-            children: vec![],
+            children,
             direction: LayoutDirection::arbitrary(g),
             overflow_x: LayoutOverflow::arbitrary(g),
             overflow_y: LayoutOverflow::arbitrary(g),
