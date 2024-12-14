@@ -51,7 +51,7 @@ macro_rules! assert_or_err {
         if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1"
             && !($evaluate)
         {
-            $crate::assert!($evaluate)
+            $crate::assert!($evaluate, "{:?}", $err)
         } else if !($evaluate) {
             return Err($err);
         }
