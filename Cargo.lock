@@ -6518,6 +6518,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_gen"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "moosicbox_assert",
+ "quickcheck",
+ "serde_json",
+]
+
+[[package]]
 name = "moosicbox_image"
 version = "0.1.0"
 dependencies = [

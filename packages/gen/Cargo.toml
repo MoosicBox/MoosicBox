@@ -1,0 +1,28 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools"]
+description = "MoosicBox arbitrary gen package"
+edition     = "2021"
+keywords    = ["arbitrary", "gen", "testing"]
+license     = "MPL-2.0"
+name        = "moosicbox_gen"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
+
+log        = { workspace = true }
+quickcheck = { workspace = true }
+serde_json = { workspace = true, optional = true }
+
+[dev-dependencies]
+
+[features]
+default = ["serde", "xml"]
+
+fail-on-warnings = []
+
+serde = ["dep:serde_json", "xml"]
+xml   = []

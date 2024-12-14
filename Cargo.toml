@@ -31,6 +31,7 @@ members = [
     "packages/downloader",
     "packages/env_utils",
     "packages/files",
+    "packages/gen",
     "packages/gigachad",
     "packages/gigachad/actions",
     "packages/gigachad/color",

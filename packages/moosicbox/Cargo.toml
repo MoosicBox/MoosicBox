@@ -36,6 +36,7 @@ moosicbox_database_connection = { version = "0.1.0", path = "../database_connect
 moosicbox_downloader          = { version = "0.1.0", path = "../downloader", default-features = false }
 moosicbox_env_utils           = { version = "0.1.0", path = "../env_utils", default-features = false }
 moosicbox_files               = { version = "0.1.0", path = "../files", default-features = false }
+moosicbox_gen                 = { version = "0.1.0", path = "../gen", default-features = false }
 moosicbox_image               = { version = "0.1.0", path = "../image", default-features = false }
 moosicbox_json_utils          = { version = "0.1.0", path = "../json_utils", default-features = false }
 moosicbox_library             = { version = "0.1.0", path = "../library", default-features = false }
