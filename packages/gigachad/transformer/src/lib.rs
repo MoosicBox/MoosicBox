@@ -1148,7 +1148,7 @@ impl std::fmt::Display for Container {
                     std::env::var("DEBUG_ATTRS")
                         .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str())),
                 )
-                .unwrap(),
+                .unwrap_or_else(|e| panic!("Failed to display container: {e:?} ({self:?})")),
         )?;
 
         Ok(())
