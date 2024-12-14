@@ -13,18 +13,21 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
 
-color-hex = { workspace = true }
-egui      = { workspace = true, optional = true }
-log       = { workspace = true }
-thiserror = { workspace = true }
+color-hex  = { workspace = true }
+egui       = { workspace = true, optional = true }
+log        = { workspace = true }
+quickcheck = { workspace = true, optional = true }
+thiserror  = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
 test-log          = { workspace = true }
 
 [features]
-default = ["egui"]
+default = ["egui", "gen"]
 
 egui = ["dep:egui"]
+
+gen = ["dep:quickcheck"]
 
 fail-on-warnings = []

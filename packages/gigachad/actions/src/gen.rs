@@ -1,0 +1,138 @@
+use gigachad_transformer_models::Visibility;
+use quickcheck::{Arbitrary, Gen};
+
+use crate::{Action, ActionTrigger, ActionType, ElementTarget, LogLevel, StyleAction};
+
+fn half_g_max(g: &Gen, max: usize) -> Gen {
+    Gen::new(std::cmp::min(max, g.size() / 2))
+}
+
+impl Arbitrary for ActionTrigger {
+    fn arbitrary(g: &mut Gen) -> Self {
+        *g.choose(&[
+            Self::Click,
+            Self::ClickOutside,
+            Self::Hover,
+            Self::Change,
+            Self::Immediate,
+        ])
+        .unwrap()
+    }
+}
+
+impl Arbitrary for ElementTarget {
+    fn arbitrary(g: &mut Gen) -> Self {
+        #[cfg(feature = "id")]
+        let max = 3;
+        #[cfg(not(feature = "id"))]
+        let max = 2;
+        match *g.choose(&(0..=max).collect::<Vec<_>>()).unwrap() {
+            0 => Self::StrId(String::arbitrary(g)),
+            1 => Self::SelfTarget,
+            2 => Self::LastChild,
+            #[cfg(feature = "id")]
+            3 => Self::Id(usize::arbitrary(g)),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl Arbitrary for StyleAction {
+    fn arbitrary(g: &mut Gen) -> Self {
+        match *g.choose(&(0..=1).collect::<Vec<_>>()).unwrap() {
+            0 => Self::SetVisibility(Visibility::arbitrary(g)),
+            1 => Self::SetDisplay(bool::arbitrary(g)),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl Arbitrary for LogLevel {
+    fn arbitrary(g: &mut Gen) -> Self {
+        *g.choose(&[
+            Self::Error,
+            Self::Warn,
+            Self::Info,
+            Self::Debug,
+            Self::Trace,
+        ])
+        .unwrap()
+    }
+}
+
+#[cfg(feature = "logic")]
+impl Arbitrary for crate::logic::CalcValue {
+    fn arbitrary(g: &mut Gen) -> Self {
+        Self::GetVisibility {
+            target: ElementTarget::arbitrary(g),
+        }
+    }
+}
+
+#[cfg(feature = "logic")]
+impl Arbitrary for crate::logic::Value {
+    fn arbitrary(g: &mut Gen) -> Self {
+        match *g.choose(&(0..=1).collect::<Vec<_>>()).unwrap() {
+            0 => Self::Calc(Arbitrary::arbitrary(g)),
+            1 => Self::Visibility(Arbitrary::arbitrary(g)),
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[cfg(feature = "logic")]
+impl Arbitrary for crate::logic::Condition {
+    fn arbitrary(g: &mut Gen) -> Self {
+        Self::Eq(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
+    }
+}
+
+#[cfg(feature = "logic")]
+impl Arbitrary for crate::logic::If {
+    fn arbitrary(g: &mut Gen) -> Self {
+        Self {
+            condition: Arbitrary::arbitrary(g),
+            actions: Arbitrary::arbitrary(g),
+            else_actions: Arbitrary::arbitrary(g),
+        }
+    }
+}
+
+impl Arbitrary for ActionType {
+    fn arbitrary(g: &mut Gen) -> Self {
+        let g = &mut half_g_max(g, 10);
+
+        #[cfg(feature = "logic")]
+        let max = 4;
+        #[cfg(not(feature = "logic"))]
+        let max = 3;
+        match *g.choose(&(0..=max).collect::<Vec<_>>()).unwrap() {
+            0 => Self::Style {
+                target: ElementTarget::arbitrary(g),
+                action: StyleAction::arbitrary(g),
+            },
+            1 => Self::Navigate {
+                url: String::arbitrary(g),
+            },
+            2 => Self::Log {
+                message: String::arbitrary(g),
+                level: LogLevel::arbitrary(g),
+            },
+            3 => Self::Custom {
+                action: String::arbitrary(g),
+            },
+            #[cfg(feature = "logic")]
+            4 => Self::Logic(crate::logic::If::arbitrary(g)),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl Arbitrary for Action {
+    fn arbitrary(g: &mut Gen) -> Self {
+        Self {
+            trigger: ActionTrigger::arbitrary(g),
+            action: ActionType::arbitrary(g),
+        }
+    }
+}

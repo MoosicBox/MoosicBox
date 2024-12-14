@@ -34,10 +34,19 @@ xml         = { workspace = true, optional = true }
 
 [dev-dependencies]
 gigachad_actions = { path = "../actions", default-features = false, features = [
+    "gen",
     "serde",
+] }
+gigachad_color = { path = "../color", default-features = false, features = [
+    "gen",
+] }
+gigachad_transformer_models = { path = "models", default-features = false, features = [
+    "gen",
 ] }
 maud = { workspace = true }
 pretty_assertions = { workspace = true }
+quickcheck = { workspace = true }
+quickcheck_macros = { workspace = true }
 test-log = { workspace = true }
 tl = { workspace = true }
 

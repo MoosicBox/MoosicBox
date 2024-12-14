@@ -520,144 +520,57 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
 }
 
 #[cfg(test)]
+#[allow(clippy::needless_pass_by_value, clippy::too_many_lines)]
 mod test {
-    use gigachad_actions::{Action, ActionTrigger, ActionType};
-    use gigachad_color::Color;
-    use gigachad_transformer_models::{
-        AlignItems, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, Position, Route,
-        SwapTarget, Visibility,
-    };
-    use maud::html;
     use pretty_assertions::assert_eq;
+    use quickcheck_macros::quickcheck;
 
-    use crate::{Container, Number};
+    use crate::Container;
 
-    #[test_log::test]
-    fn display_can_display_and_be_parsed_back_to_original_container() {
-        let container = Container {
-            #[cfg(feature = "id")]
-            id: 0,
-            str_id: Some("hey".to_string()),
-            element: crate::Element::TR,
-            children: vec![html!(main {}).try_into().unwrap()],
-            direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
-            overflow_y: LayoutOverflow::Scroll,
-            justify_content: JustifyContent::SpaceEvenly,
-            align_items: AlignItems::End,
-            width: Some(Number::Integer(11)),
-            height: Some(Number::Integer(12)),
-            gap: Some(Number::Integer(13)),
-            opacity: Some(Number::Integer(14)),
-            left: Some(Number::Integer(15)),
-            right: Some(Number::Integer(16)),
-            top: Some(Number::Integer(17)),
-            bottom: Some(Number::Integer(18)),
-            cursor: Some(Cursor::WResize),
-            position: Some(Position::Absolute),
-            background: Some(Color::WHITE),
-            border_top: Some((Color::WHITE, Number::Integer(19))),
-            border_right: Some((Color::WHITE, Number::Integer(20))),
-            border_bottom: Some((Color::WHITE, Number::Integer(21))),
-            border_left: Some((Color::WHITE, Number::Integer(22))),
-            border_top_left_radius: Some(Number::Integer(23)),
-            border_top_right_radius: Some(Number::Integer(24)),
-            border_bottom_left_radius: Some(Number::Integer(25)),
-            border_bottom_right_radius: Some(Number::Integer(26)),
-            margin_left: Some(Number::Integer(27)),
-            margin_right: Some(Number::Integer(28)),
-            margin_top: Some(Number::Integer(29)),
-            margin_bottom: Some(Number::Integer(30)),
-            padding_left: Some(Number::Integer(31)),
-            padding_right: Some(Number::Integer(32)),
-            padding_top: Some(Number::Integer(33)),
-            padding_bottom: Some(Number::Integer(34)),
-            state: Some(serde_json::Value::String("hey".to_string())),
-            hidden: Some(true),
-            debug: Some(true),
-            visibility: Some(Visibility::Visible),
-            route: Some(Route::Get {
-                route: "rounte".to_string(),
-                trigger: Some("load".to_string()),
-                swap: SwapTarget::Children,
-            }),
-            actions: vec![Action {
-                trigger: ActionTrigger::Hover,
-                action: ActionType::set_visibility_str_id(Visibility::Visible, "hey"),
-            }],
-            #[cfg(feature = "calc")]
-            internal_margin_left: None,
-            #[cfg(feature = "calc")]
-            internal_margin_right: None,
-            #[cfg(feature = "calc")]
-            internal_margin_top: None,
-            #[cfg(feature = "calc")]
-            internal_margin_bottom: None,
-            #[cfg(feature = "calc")]
-            internal_padding_left: None,
-            #[cfg(feature = "calc")]
-            internal_padding_right: None,
-            #[cfg(feature = "calc")]
-            internal_padding_top: None,
-            #[cfg(feature = "calc")]
-            internal_padding_bottom: None,
-            #[cfg(feature = "calc")]
-            calculated_margin_left: None,
-            #[cfg(feature = "calc")]
-            calculated_margin_right: None,
-            #[cfg(feature = "calc")]
-            calculated_margin_top: None,
-            #[cfg(feature = "calc")]
-            calculated_margin_bottom: None,
-            #[cfg(feature = "calc")]
-            calculated_padding_left: None,
-            #[cfg(feature = "calc")]
-            calculated_padding_right: None,
-            #[cfg(feature = "calc")]
-            calculated_padding_top: None,
-            #[cfg(feature = "calc")]
-            calculated_padding_bottom: None,
-            #[cfg(feature = "calc")]
-            calculated_width: None,
-            #[cfg(feature = "calc")]
-            calculated_height: None,
-            #[cfg(feature = "calc")]
-            calculated_x: None,
-            #[cfg(feature = "calc")]
-            calculated_y: None,
-            #[cfg(feature = "calc")]
-            calculated_position: None,
-            #[cfg(feature = "calc")]
-            calculated_border_top: None,
-            #[cfg(feature = "calc")]
-            calculated_border_right: None,
-            #[cfg(feature = "calc")]
-            calculated_border_bottom: None,
-            #[cfg(feature = "calc")]
-            calculated_border_left: None,
-            #[cfg(feature = "calc")]
-            calculated_border_top_left_radius: None,
-            #[cfg(feature = "calc")]
-            calculated_border_top_right_radius: None,
-            #[cfg(feature = "calc")]
-            calculated_border_bottom_left_radius: None,
-            #[cfg(feature = "calc")]
-            calculated_border_bottom_right_radius: None,
-            #[cfg(feature = "calc")]
-            calculated_opacity: None,
-            #[cfg(feature = "calc")]
-            scrollbar_right: None,
-            #[cfg(feature = "calc")]
-            scrollbar_bottom: None,
-        };
+    #[quickcheck]
+    fn display_can_display_and_be_parsed_back_to_original_container(
+        mut container: Container,
+    ) -> bool {
+        let mut i = 0;
+        let actions = container.actions.clone();
+        container.actions.retain(|x| {
+            i += 1;
+            actions
+                .iter()
+                .take(i - 1)
+                .all(|prev| prev.trigger != x.trigger)
+        });
+        container
+            .actions
+            .sort_by(|a, b| format!("{:?}", a.trigger).cmp(&format!("{:?}", b.trigger)));
 
         let markup = container.to_string();
 
-        log::trace!("markup:\n{markup}");
+        let re_parsed: Container = markup.clone().try_into().unwrap();
 
-        let re_parsed: Container = markup.try_into().unwrap();
-        let re_parsed = re_parsed.children[0].clone();
+        let Some(mut re_parsed) = re_parsed.children.first().cloned() else {
+            log::trace!("re_parsed: {re_parsed} ({re_parsed:?})");
+            panic!("failed to get child from markup: {markup} ({container:?})");
+        };
 
-        assert_eq!(re_parsed, container);
+        #[cfg(feature = "id")]
+        {
+            re_parsed.id = container.id;
+        }
+
+        re_parsed
+            .actions
+            .sort_by(|a, b| format!("{:?}", a.trigger).cmp(&format!("{:?}", b.trigger)));
+
+        if re_parsed != container {
+            log::trace!("container:\n{container:?}");
+            log::trace!("before:\n{container}");
+            log::trace!("after:\n{re_parsed}");
+
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            assert_eq!(re_parsed, container);
+        }
+
+        true
     }
 }

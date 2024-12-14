@@ -3087,6 +3087,16 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a19187fea3ac7e84da7dacf48de0c45d63c6a76f9490dae389aead16c243fce3"
+dependencies = [
+ "log",
+ "regex",
+]
+
+[[package]]
+name = "env_logger"
 version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e13fa619b91fb2381732789fc5de83b45675e882f66623b7d8cb4f643017018d"
@@ -3806,6 +3816,7 @@ dependencies = [
  "gigachad_transformer_models",
  "log",
  "moosicbox_assert",
+ "quickcheck",
  "serde",
  "serde_json",
 ]
@@ -3819,6 +3830,7 @@ dependencies = [
  "log",
  "moosicbox_assert",
  "pretty_assertions",
+ "quickcheck",
  "test-log",
  "thiserror 2.0.6",
 ]
@@ -3963,6 +3975,8 @@ dependencies = [
  "moosicbox_logging",
  "pretty_assertions",
  "profiling",
+ "quickcheck",
+ "quickcheck_macros",
  "serde_json",
  "test-log",
  "thiserror 2.0.6",
@@ -3976,6 +3990,7 @@ version = "0.1.0"
 dependencies = [
  "log",
  "moosicbox_assert",
+ "quickcheck",
  "serde",
 ]
 
@@ -9138,6 +9153,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "quickcheck"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "588f6378e4dd99458b60ec275b4477add41ce4fa9f64dcba6f15adccb19b50d6"
+dependencies = [
+ "env_logger 0.8.4",
+ "log",
+ "rand 0.8.5",
+]
+
+[[package]]
+name = "quickcheck_macros"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b22a693222d716a9587786f37ac3f6b4faedb5b80c23914e7303ff5a1d8016e9"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "quinn"
 version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11721,7 +11758,7 @@ version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3dffced63c2b5c7be278154d76b479f9f9920ed34e7574201407f0b14e2bbb93"
 dependencies = [
- "env_logger",
+ "env_logger 0.11.5",
  "test-log-macros",
  "tracing-subscriber",
 ]

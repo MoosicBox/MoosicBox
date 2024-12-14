@@ -15,6 +15,8 @@ pub use gigachad_transformer_models as models;
 
 #[cfg(feature = "calc")]
 pub mod calc;
+#[cfg(test)]
+pub mod gen;
 #[cfg(any(test, feature = "html"))]
 pub mod html;
 pub mod parse;

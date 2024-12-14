@@ -15,14 +15,22 @@ gigachad_transformer_models = { version = "0.1.0", path = "../transformer/models
 moosicbox_assert            = { version = "0.1.0", path = "../../assert", default-features = false }
 
 log        = { workspace = true }
+quickcheck = { workspace = true, optional = true }
 serde      = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 
+
+[dev-dependencies]
+gigachad_transformer_models = { version = "0.1.0", path = "../transformer/models", default-features = false, features = [
+    "gen",
+] }
+
 [features]
-default = ["id", "logic", "serde"]
+default = ["gen", "id", "logic", "serde"]
 
 fail-on-warnings = []
 
+gen   = ["dep:quickcheck", "gigachad_transformer_models/gen"]
 id    = []
 logic = []
 

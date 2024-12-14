@@ -4,6 +4,9 @@
 pub use color_hex::color_from_hex;
 use thiserror::Error;
 
+#[cfg(feature = "gen")]
+pub mod gen;
+
 #[derive(Debug, Error)]
 pub enum ParseHexError {
     #[error("Invalid character at index {0} '{1}'")]
