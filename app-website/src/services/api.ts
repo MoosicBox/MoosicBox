@@ -1714,8 +1714,8 @@ async function addAlbumToLibrary(
         source: albumId.tidalAlbumId
             ? 'TIDAL'
             : albumId.qobuzAlbumId
-                ? 'QOBUZ'
-                : undefined,
+              ? 'QOBUZ'
+              : undefined,
     });
 
     return await requestJson(`${con.apiUrl}/menu/album?${query}`, {
@@ -1737,8 +1737,8 @@ async function removeAlbumFromLibrary(
         source: albumId.tidalAlbumId
             ? 'TIDAL'
             : albumId.qobuzAlbumId
-                ? 'QOBUZ'
-                : undefined,
+              ? 'QOBUZ'
+              : undefined,
     });
 
     return await requestJson(`${con.apiUrl}/menu/album?${query}`, {
@@ -1760,8 +1760,8 @@ async function refavoriteAlbum(
         source: albumId.tidalAlbumId
             ? 'TIDAL'
             : albumId.qobuzAlbumId
-                ? 'QOBUZ'
-                : undefined,
+              ? 'QOBUZ'
+              : undefined,
     });
 
     return await requestJson(`${con.apiUrl}/menu/album/re-favorite?${query}`, {
