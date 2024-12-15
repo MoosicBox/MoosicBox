@@ -17,6 +17,7 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Echo text & binary messages received from the client, respond to ping messages, and monitor
 /// connection health to detect network issues and free up resources.
+#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::future_not_send)]
 pub async fn handle_ws(
     ws_server: WsServerHandle,
@@ -35,6 +36,9 @@ pub async fn handle_ws(
     let conn_id = ws_server.connect(profile, conn_tx).await;
 
     let close_reason = loop {
+        #[cfg(feature = "profiling")]
+        profiling::function_scope!("loop");
+
         // most of the futures we process need to be stack-pinned to work with select()
 
         let tick = interval.tick();
@@ -114,6 +118,9 @@ pub async fn handle_ws(
                 let _ = session.ping(b"").await;
             }
         };
+
+        #[cfg(feature = "profiling")]
+        profiling::finish_frame!();
     };
 
     ws_server.disconnect(conn_id).await;
@@ -122,6 +129,7 @@ pub async fn handle_ws(
     let _ = session.close(close_reason).await;
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 async fn process_text_msg(
     ws_server: &WsServerHandle,
     text: &str,

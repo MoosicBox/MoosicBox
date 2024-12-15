@@ -19,6 +19,7 @@ pub enum SetupTunnelError {
     IO(#[from] std::io::Error),
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::too_many_lines, clippy::module_name_repetitions)]
 pub async fn setup_tunnel(
     config_db: ConfigDatabase,

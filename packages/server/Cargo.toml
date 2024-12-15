@@ -16,10 +16,10 @@ path              = "src/main.rs"
 required-features = []
 
 [package.metadata.cargo-machete]
-ignored = ["strum"]
+ignored = ["strum", "tracy-client"]
 
 [package.metadata.cargo-udeps.ignore]
-normal = ["moosicbox_schema"]
+normal = ["moosicbox_schema", "tracy-client"]
 
 [dependencies]
 moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
@@ -144,6 +144,15 @@ tokio              = { workspace = true, features = ["macros", "rt", "time", "tr
 tokio-util         = { workspace = true }
 url                = { workspace = true }
 
+# Profiling
+profiling = { workspace = true, optional = true }
+puffin = { workspace = true, optional = true }
+puffin_http = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true }
+tracy-client = { workspace = true, default-features = false, optional = true, features = [
+    "enable",
+] }
+
 [features]
 default = [
     "all-apis",
@@ -155,6 +164,7 @@ default = [
     "postgres-openssl",
     "postgres-raw",
     "postgres-sqlx",
+    "profiling",
     "pulseaudio",
     "sqlite-sqlx",
     "static-token-auth",
@@ -381,3 +391,8 @@ openapi = [
     "moosicbox_upnp?/openapi",
     "moosicbox_yt?/openapi",
 ]
+
+profiling         = ["dep:profiling", "moosicbox_player/profiling"]
+profiling-puffin  = ["dep:puffin", "dep:puffin_http", "profiling"]
+profiling-tracing = ["dep:tracing-subscriber", "profiling"]
+profiling-tracy   = ["dep:tracy-client", "profiling"]

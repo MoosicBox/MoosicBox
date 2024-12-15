@@ -9,6 +9,7 @@ use utoipa::{openapi::OpenApi, OpenApi as _};
 #[openapi()]
 struct ApiDoc;
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 pub fn init() -> OpenApi {
     #[allow(unused)]
     fn nest_api(api: OpenApi, path: &str, mut nested: OpenApi) -> OpenApi {
@@ -70,6 +71,7 @@ pub fn init() -> OpenApi {
     api
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
 >(

@@ -36,6 +36,7 @@ pub enum InitError {
     UpnpDeviceScanner(#[from] UpnpDeviceScannerError),
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 pub async fn init(
     handle: crate::ws::server::WsServerHandle,
     #[cfg(feature = "tunnel")] tunnel_handle: Option<
@@ -69,6 +70,7 @@ pub async fn init(
     Ok(())
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 pub async fn load_upnp_players() -> Result<(), moosicbox_upnp::UpnpDeviceScannerError> {
     static SERVICE_ID: &str = "urn:upnp-org:serviceId:AVTransport";
 
@@ -128,6 +130,7 @@ pub async fn load_upnp_players() -> Result<(), moosicbox_upnp::UpnpDeviceScanner
     Ok(())
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::too_many_lines)]
 fn handle_upnp_playback_update(
     update: &moosicbox_session::models::UpdateSession,
@@ -247,6 +250,7 @@ fn handle_upnp_playback_update(
     })
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(unused)]
 pub async fn register_upnp_player(
     ws: crate::ws::server::WsServerHandle,

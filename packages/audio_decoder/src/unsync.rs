@@ -20,6 +20,7 @@ struct PlayTrackOptions {
 /// # Errors
 ///
 /// * If the audio fails to decode
+#[cfg_attr(feature = "profiling", profiling::function)]
 pub fn decode(
     mut reader: Box<dyn FormatReader>,
     track_num: Option<usize>,
@@ -72,6 +73,7 @@ pub fn decode(
     decode_track(reader, track_info, decode_opts)
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::similar_names)]
 fn decode_track(
     mut reader: Box<dyn FormatReader>,

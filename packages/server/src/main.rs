@@ -4,6 +4,7 @@
 use moosicbox_config::AppType;
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::too_many_lines)]
 fn main() -> std::io::Result<()> {
     if std::env::var("TOKIO_CONSOLE") == Ok("1".to_string()) {

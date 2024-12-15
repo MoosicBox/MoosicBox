@@ -13,6 +13,7 @@ use crate::{ws::server::WsServerHandle, CONFIG_DB};
 
 pub static PLAYBACK_EVENT_HANDLE: OnceLock<service::Handle> = OnceLock::new();
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 pub fn on_event(update: &UpdateSession, _current: &Playback) {
     let update = update.clone();
 
@@ -30,6 +31,7 @@ pub enum Command {
     UpdateSession { update: UpdateSession },
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Display for Command {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_ref())
@@ -42,6 +44,7 @@ pub mod service {
     moosicbox_async_service::async_service!(super::Command, super::Context<WsServerHandle>);
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 #[moosicbox_async_service::async_trait]
 impl service::Processor for service::Service {
     type Error = service::Error;

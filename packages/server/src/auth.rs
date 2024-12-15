@@ -49,6 +49,7 @@ pub struct StaticTokenAuthMiddleware<S> {
     token: String,
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl<S, B> Service<ServiceRequest> for StaticTokenAuthMiddleware<S>
 where
     S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = actix_web::Error>,
@@ -79,6 +80,7 @@ where
     }
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 fn is_header_authorized(req: &ServiceRequest, expected: &str) -> bool {
     if let Some(auth) = req.headers().get(http::header::AUTHORIZATION) {
         if let Ok(auth) = auth.to_str() {
@@ -100,6 +102,7 @@ fn is_header_authorized(req: &ServiceRequest, expected: &str) -> bool {
     false
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 fn is_query_authorized(req: &ServiceRequest, expected: &str) -> bool {
     let query: Vec<_> = QString::from(req.query_string()).into();
     let query: HashMap<_, _> = query.into_iter().collect();

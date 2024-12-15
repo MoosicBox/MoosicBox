@@ -18,6 +18,7 @@ pub async fn health_endpoint() -> Result<Json<Value>> {
     Ok(Json(json!({"healthy": true})))
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::future_not_send)]
 #[get("/ws")]
 pub async fn websocket(

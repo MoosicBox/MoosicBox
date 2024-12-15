@@ -2,6 +2,7 @@ use moosicbox_async_service::Arc;
 
 use crate::WS_SERVER_HANDLE;
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 pub async fn init() {
     let bytes_throttle = Arc::new(std::sync::Mutex::new(throttle::Throttle::new(
         std::time::Duration::from_millis(200),

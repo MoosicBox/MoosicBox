@@ -3,6 +3,7 @@ use moosicbox_session::events::BoxErrorSend;
 
 use crate::{CONFIG_DB, WS_SERVER_HANDLE};
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 pub async fn init() {
     moosicbox_session::events::on_players_updated_event({
         move || async move {

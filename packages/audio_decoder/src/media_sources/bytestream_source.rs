@@ -33,6 +33,7 @@ struct ByteStreamSourceFetcher {
     stream_abort: CancellationToken,
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl ByteStreamSourceFetcher {
     pub fn new(
         stream: ByteStreamType,
@@ -147,6 +148,7 @@ impl ByteStreamSource {
     }
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Read for ByteStreamSource {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if self.finished {
@@ -216,6 +218,7 @@ impl Read for ByteStreamSource {
     }
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Seek for ByteStreamSource {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         let seek_position: usize = match pos {

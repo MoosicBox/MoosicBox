@@ -37,6 +37,7 @@ static CONFIG_DB: LazyLock<std::sync::RwLock<Option<ConfigDatabase>>> =
 
 static SERVER_ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(
     clippy::too_many_lines,
     clippy::missing_panics_doc,
@@ -51,6 +52,11 @@ pub async fn run(
     #[cfg(feature = "upnp")] upnp_players: bool,
     on_startup: impl FnOnce() + Send,
 ) -> std::io::Result<()> {
+    #[cfg(feature = "profiling-tracing")]
+    tracing_subscriber::fmt::init();
+    #[cfg(feature = "profiling-puffin")]
+    start_puffin_server();
+
     #[cfg(feature = "sqlite")]
     let config_db_path = {
         let path = db::make_config_db_path(app_type).expect("Failed to get DB config path");
@@ -429,6 +435,9 @@ pub async fn run(
 
     on_startup();
 
+    #[cfg(feature = "profiling")]
+    profiling::finish_frame!();
+
     log::info!("MoosicBox Server started on {ip}:{service_port}");
 
     let config_db = config_database.clone();
@@ -632,4 +641,27 @@ pub async fn run(
     log::debug!("Server shut down");
 
     Ok(())
+}
+
+#[cfg(feature = "profiling-puffin")]
+fn start_puffin_server() {
+    puffin::set_scopes_on(true);
+
+    match puffin_http::Server::new("127.0.0.1:8586") {
+        Ok(puffin_server) => {
+            log::info!("Run: cargo install puffin_viewer && puffin_viewer --url 127.0.0.1:8586");
+
+            std::process::Command::new("puffin_viewer")
+                .arg("--url")
+                .arg("127.0.0.1:8586")
+                .spawn()
+                .ok();
+
+            #[allow(clippy::mem_forget)]
+            std::mem::forget(puffin_server);
+        }
+        Err(err) => {
+            log::error!("Failed to start puffin server: {err}");
+        }
+    }
 }

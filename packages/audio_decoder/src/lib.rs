@@ -66,6 +66,7 @@ pub struct AudioDecodeHandler {
     outputs: Vec<InnerType>,
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl AudioDecodeHandler {
     #[must_use]
     pub fn new() -> Self {
@@ -221,6 +222,7 @@ pub async fn decode_file_path_str_async(
 /// # Errors
 ///
 /// * If the audio fails to decode
+#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::too_many_arguments)]
 pub fn decode_file_path_str(
     path_str: &str,
@@ -288,6 +290,7 @@ pub async fn decode_media_source_async(
     .await?
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::too_many_arguments)]
 fn decode_media_source(
     media_source_stream: MediaSourceStream,
@@ -345,6 +348,7 @@ fn decode_media_source(
 /// # Errors
 ///
 /// * If the audio fails to decode
+#[cfg_attr(feature = "profiling", profiling::function)]
 pub fn decode(
     mut reader: Box<dyn FormatReader>,
     audio_output_handler: &mut AudioDecodeHandler,
@@ -439,6 +443,7 @@ pub fn decode(
     result
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::similar_names)]
 fn play_track(
     reader: &mut Box<dyn FormatReader>,

@@ -22,6 +22,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::ws::{ConnId, Msg, RoomId};
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 #[async_trait]
 impl WebsocketSender for WsServer {
     async fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
@@ -155,6 +156,7 @@ pub struct WsServer {
     token: CancellationToken,
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl WsServer {
     pub fn new(config_db: ConfigDatabase) -> (Self, WsServerHandle) {
         // create empty server
@@ -446,6 +448,7 @@ pub struct WsServerHandle {
     token: CancellationToken,
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 #[async_trait]
 impl WebsocketSender for WsServerHandle {
     async fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
@@ -487,6 +490,7 @@ impl WebsocketSender for WsServerHandle {
     }
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl WsServerHandle {
     #[cfg(feature = "player")]
     pub async fn add_player_action(&self, player_id: u64, action: PlayerAction) {

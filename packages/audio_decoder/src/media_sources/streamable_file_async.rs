@@ -23,6 +23,7 @@ pub struct StreamableFileAsync {
     receivers: Vec<(u128, Receiver<(usize, Vec<u8>)>)>,
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl StreamableFileAsync {
     /// # Panics
     ///
@@ -131,6 +132,7 @@ impl StreamableFileAsync {
     }
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Read for StreamableFileAsync {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         // If we are reading after the buffer,
@@ -185,6 +187,7 @@ impl Read for StreamableFileAsync {
     }
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Seek for StreamableFileAsync {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         let seek_position: usize = match pos {

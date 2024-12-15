@@ -21,6 +21,7 @@ bytes      = { workspace = true }
 flume      = { workspace = true }
 futures    = { workspace = true }
 log        = { workspace = true }
+profiling  = { workspace = true, optional = true }
 rangemap   = { workspace = true }
 reqwest    = { workspace = true }
 symphonia  = { workspace = true }
@@ -30,5 +31,7 @@ tokio-util = { workspace = true }
 
 [features]
 default = []
+
+profiling = ["dep:profiling"]
 
 fail-on-warnings = []

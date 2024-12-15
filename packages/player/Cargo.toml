@@ -39,6 +39,7 @@ flume            = { workspace = true }
 futures          = { workspace = true }
 local-ip-address = { workspace = true }
 log              = { workspace = true }
+profiling        = { workspace = true, optional = true }
 rand             = { workspace = true }
 regex            = { workspace = true }
 reqwest          = { workspace = true, features = ["json"] }
@@ -66,6 +67,8 @@ default = [
 ]
 
 fail-on-warnings = []
+
+profiling = ["dep:profiling", "moosicbox_audio_decoder/profiling"]
 
 api     = ["dep:actix-web", "moosicbox_music_api/api"]
 openapi = ["dep:utoipa", "moosicbox_core/openapi"]

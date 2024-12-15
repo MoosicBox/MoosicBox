@@ -224,6 +224,7 @@ pub struct PlaybackStatus {
 ///
 /// * If an HTTP request fails
 /// * If failed to fetch the track
+#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::too_many_lines, clippy::unused_async)]
 pub async fn get_track_url(
     track_id: &Id,
@@ -383,6 +384,7 @@ pub async fn get_track_url(
 /// # Errors
 ///
 /// * If the session playlist is missing
+#[cfg_attr(feature = "profiling", profiling::function)]
 pub async fn get_session_playlist_id_from_session_id(
     db: &LibraryDatabase,
     session_id: Option<u64>,
@@ -439,6 +441,7 @@ pub struct PlaybackHandler {
     receiver: Arc<tokio::sync::RwLock<Option<Receiver<()>>>>,
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl PlaybackHandler {
     pub fn new(player: impl Player + Sync + 'static) -> Self {
         Self::new_boxed(Box::new(player))
@@ -484,6 +487,7 @@ impl PlaybackHandler {
     }
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl PlaybackHandler {
     /// # Errors
     ///
@@ -1235,6 +1239,7 @@ pub trait Player: std::fmt::Debug + Send {
     fn get_source(&self) -> &PlayerSource;
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 fn same_active_track(position: Option<u16>, tracks: Option<&[Track]>, playback: &Playback) -> bool {
     match (position, tracks) {
         (None, None) => true,
@@ -1279,6 +1284,7 @@ pub fn on_playback_event(listener: PlaybackEventCallback) {
     PLAYBACK_EVENT_LISTENERS.write().unwrap().push(listener);
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
     let Some(playback_target) = current.playback_target.clone() else {
         return;
@@ -1379,6 +1385,7 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
     send_playback_event(&update, current);
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(unused, clippy::too_many_lines)]
 async fn track_to_playable_file(
     track: &Track,
@@ -1499,6 +1506,7 @@ async fn track_to_playable_file(
     })
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(unused)]
 async fn track_to_playable_stream(
     track: &Track,
@@ -1509,6 +1517,7 @@ async fn track_to_playable_stream(
     track_id_to_playable_stream(&track.id, track.api_source, quality, player_source, abort).await
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(unused)]
 async fn track_id_to_playable_stream(
     track_id: &Id,
@@ -1567,6 +1576,7 @@ async fn track_id_to_playable_stream(
     })
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(unused)]
 async fn track_or_id_to_playable(
     playback_type: PlaybackType,
@@ -1584,6 +1594,7 @@ async fn track_or_id_to_playable(
     })
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 async fn handle_retry<
     T,
     E: std::fmt::Debug + Into<PlayerError>,
@@ -1637,6 +1648,7 @@ async fn handle_retry<
 /// # Panics
 ///
 /// * If the `PLAYBACK_EVENT_LISTENERS` `RwLock` is poisoned
+#[cfg_attr(feature = "profiling", profiling::function)]
 pub fn send_playback_event(update: &UpdateSession, playback: &Playback) {
     for listener in PLAYBACK_EVENT_LISTENERS.read().unwrap().iter() {
         listener(update, playback);

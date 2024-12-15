@@ -24,6 +24,7 @@ pub struct StreamableFile {
     receivers: Vec<(u128, Receiver<(usize, Vec<u8>)>)>,
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl StreamableFile {
     /// # Panics
     ///
@@ -130,6 +131,7 @@ impl StreamableFile {
     }
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Read for StreamableFile {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         // If we are reading after the buffer,
@@ -181,6 +183,7 @@ impl Read for StreamableFile {
     }
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Seek for StreamableFile {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         let seek_position: usize = match pos {

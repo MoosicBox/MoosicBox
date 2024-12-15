@@ -9,6 +9,7 @@ use moosicbox_profiles::events::{
     on_profiles_updated_event, trigger_profiles_updated_event, BoxErrorSend,
 };
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 async fn add_profile(
     #[allow(unused)] app_type: AppType,
     profile: &str,
@@ -87,6 +88,7 @@ async fn add_profile(
     Ok(())
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::unused_async)]
 async fn remove_profile(
     #[allow(unused)] app_type: AppType,
@@ -107,6 +109,7 @@ async fn remove_profile(
     Ok(())
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 pub async fn init(
     #[allow(unused)] app_type: AppType,
     config_db: ConfigDatabase,

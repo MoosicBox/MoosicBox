@@ -3,6 +3,7 @@ use moosicbox_database::{config::ConfigDatabase, profiles::PROFILES};
 
 use crate::WS_SERVER_HANDLE;
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 pub async fn init(config_db: &ConfigDatabase) {
     let config_db = config_db.to_owned();
     moosicbox_audio_zone::events::on_audio_zones_updated_event({

@@ -29,6 +29,7 @@ pub enum InitError {
     AudioOutputScanner(#[from] AudioOutputScannerError),
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 pub async fn init(
     config_db: &ConfigDatabase,
     #[cfg(feature = "tunnel")] tunnel_handle: Option<
@@ -61,6 +62,7 @@ pub async fn init(
     Ok(())
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::too_many_lines)]
 fn handle_server_playback_update(
     update: &moosicbox_session::models::UpdateSession,
@@ -196,6 +198,7 @@ fn handle_server_playback_update(
     })
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 pub async fn register_server_player(
     config_db: &ConfigDatabase,
     ws: crate::ws::server::WsServerHandle,
