@@ -37,7 +37,6 @@ static CONFIG_DB: LazyLock<std::sync::RwLock<Option<ConfigDatabase>>> =
 
 static SERVER_ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
-#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(
     clippy::too_many_lines,
     clippy::missing_panics_doc,
@@ -434,9 +433,6 @@ pub async fn run(
     }
 
     on_startup();
-
-    #[cfg(feature = "profiling")]
-    profiling::finish_frame!();
 
     log::info!("MoosicBox Server started on {ip}:{service_port}");
 

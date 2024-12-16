@@ -23,7 +23,6 @@ pub struct StreamableFileAsync {
     receivers: Vec<(u128, Receiver<(usize, Vec<u8>)>)>,
 }
 
-#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl StreamableFileAsync {
     /// # Panics
     ///

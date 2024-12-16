@@ -11,7 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [package.metadata.cargo-machete]
-ignored = ["strum"]
+ignored = ["profiling", "strum"]
 
 [dependencies]
 moosicbox_assert        = { version = "0.1.0", path = "../assert", default-features = false }
@@ -39,6 +39,7 @@ futures-core        = { workspace = true }
 lazy_static         = { workspace = true, optional = true }
 log                 = { workspace = true }
 moosicbox_audiotags = { workspace = true }
+profiling           = { workspace = true, optional = true }
 regex               = { workspace = true }
 reqwest             = { workspace = true }
 serde               = { workspace = true, features = ["derive"] }
@@ -114,3 +115,5 @@ all-sources = ["qobuz", "tidal", "yt"]
 qobuz = ["moosicbox_core/qobuz"]
 tidal = ["moosicbox_core/tidal"]
 yt    = ["moosicbox_core/yt"]
+
+profiling = ["dep:profiling", "moosicbox_image?/profiling"]

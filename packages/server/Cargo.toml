@@ -392,7 +392,21 @@ openapi = [
     "moosicbox_yt?/openapi",
 ]
 
-profiling         = ["dep:profiling", "moosicbox_player/profiling"]
-profiling-puffin  = ["dep:puffin", "dep:puffin_http", "profiling"]
+profiling = [
+    "dep:profiling",
+    "moosicbox_files/profiling",
+    "moosicbox_player?/profiling",
+    "moosicbox_task/profiling",
+]
+profiling-puffin = [
+    "dep:puffin",
+    "dep:puffin_http",
+    "profiling",
+    "profiling/profile-with-puffin",
+]
 profiling-tracing = ["dep:tracing-subscriber", "profiling"]
-profiling-tracy   = ["dep:tracy-client", "profiling"]
+profiling-tracy = [
+    "dep:tracy-client",
+    "profiling",
+    "profiling/profile-with-tracy",
+]

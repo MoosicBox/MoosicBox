@@ -44,7 +44,6 @@ pub mod service {
     moosicbox_async_service::async_service!(super::Command, super::Context<WsServerHandle>);
 }
 
-#[cfg_attr(feature = "profiling", profiling::all_functions)]
 #[moosicbox_async_service::async_trait]
 impl service::Processor for service::Service {
     type Error = service::Error;

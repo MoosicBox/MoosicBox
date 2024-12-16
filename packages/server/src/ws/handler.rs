@@ -118,9 +118,6 @@ pub async fn handle_ws(
                 let _ = session.ping(b"").await;
             }
         };
-
-        #[cfg(feature = "profiling")]
-        profiling::finish_frame!();
     };
 
     ws_server.disconnect(conn_id).await;
@@ -129,7 +126,6 @@ pub async fn handle_ws(
     let _ = session.close(close_reason).await;
 }
 
-#[cfg_attr(feature = "profiling", profiling::function)]
 async fn process_text_msg(
     ws_server: &WsServerHandle,
     text: &str,

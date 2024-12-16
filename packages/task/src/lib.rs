@@ -57,6 +57,9 @@ where
     let future = {
         let name = name.to_owned();
         async move {
+            #[cfg(feature = "profiling")]
+            profiling::function_scope!(&name);
+
             let response = future.await;
             log::trace!("spawn_local finished: {name}");
 
@@ -80,6 +83,9 @@ where
     let future = {
         let name = name.to_owned();
         async move {
+            #[cfg(feature = "profiling")]
+            profiling::function_scope!(&name);
+
             let response = future.await;
             log::trace!("spawn_local finished: {name}");
 
@@ -161,6 +167,9 @@ where
     let function = {
         let name = name.to_owned();
         move || {
+            #[cfg(feature = "profiling")]
+            profiling::function_scope!(&name);
+
             let response = function();
             log::trace!("spawn_blocking finished: {name}");
 
@@ -188,6 +197,9 @@ where
     let function = {
         let name = name.to_owned();
         move || {
+            #[cfg(feature = "profiling")]
+            profiling::function_scope!(&name);
+
             let response = function();
             log::trace!("spawn_blocking finished: {name}");
 
@@ -215,6 +227,9 @@ where
     let future = {
         let name = name.to_owned();
         async move {
+            #[cfg(feature = "profiling")]
+            profiling::function_scope!(&name);
+
             let response = future.await;
             log::trace!("spawn_local finished: {name}");
 
@@ -242,6 +257,9 @@ where
     let future = {
         let name = name.to_owned();
         async move {
+            #[cfg(feature = "profiling")]
+            profiling::function_scope!(&name);
+
             let response = future.await;
             log::trace!("spawn_local finished: {name}");
 
@@ -284,6 +302,9 @@ where
     let future = {
         let name = name.to_owned();
         async move {
+            #[cfg(feature = "profiling")]
+            profiling::function_scope!(&name);
+
             let response = future.await;
             log::trace!("block_on finished: {name}");
 
@@ -308,6 +329,9 @@ where
     let future = {
         let name = name.to_owned();
         async move {
+            #[cfg(feature = "profiling")]
+            profiling::function_scope!(&name);
+
             let response = future.await;
             log::trace!("block_on finished: {name}");
 

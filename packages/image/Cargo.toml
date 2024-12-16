@@ -25,6 +25,7 @@ bytes = { workspace = true }
 clap = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
 log = { workspace = true }
+profiling = { workspace = true, optional = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
@@ -47,3 +48,5 @@ fail-on-warnings = []
 build-binary = ["dep:clap", "dep:tokio", "image"]
 image        = ["dep:image", "dep:tokio", "dep:webp"]
 libvips      = ["dep:libvips"]
+
+profiling = ["dep:profiling"]

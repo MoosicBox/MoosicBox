@@ -6510,6 +6510,7 @@ dependencies = [
  "moosicbox_music_api",
  "moosicbox_stream_utils",
  "moosicbox_task",
+ "profiling",
  "regex",
  "reqwest",
  "serde",
@@ -6543,6 +6544,7 @@ dependencies = [
  "libvips",
  "log",
  "moosicbox_task",
+ "profiling",
  "strum",
  "strum_macros",
  "thiserror 2.0.7",
@@ -7086,6 +7088,7 @@ version = "0.1.0"
 dependencies = [
  "futures",
  "log",
+ "profiling",
  "tokio",
 ]
 

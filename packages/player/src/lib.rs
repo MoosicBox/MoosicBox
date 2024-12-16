@@ -224,7 +224,6 @@ pub struct PlaybackStatus {
 ///
 /// * If an HTTP request fails
 /// * If failed to fetch the track
-#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::too_many_lines, clippy::unused_async)]
 pub async fn get_track_url(
     track_id: &Id,
@@ -487,7 +486,6 @@ impl PlaybackHandler {
     }
 }
 
-#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl PlaybackHandler {
     /// # Errors
     ///
@@ -1385,7 +1383,6 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
     send_playback_event(&update, current);
 }
 
-#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(unused, clippy::too_many_lines)]
 async fn track_to_playable_file(
     track: &Track,
@@ -1506,7 +1503,6 @@ async fn track_to_playable_file(
     })
 }
 
-#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(unused)]
 async fn track_to_playable_stream(
     track: &Track,
@@ -1517,7 +1513,6 @@ async fn track_to_playable_stream(
     track_id_to_playable_stream(&track.id, track.api_source, quality, player_source, abort).await
 }
 
-#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(unused)]
 async fn track_id_to_playable_stream(
     track_id: &Id,
@@ -1576,7 +1571,6 @@ async fn track_id_to_playable_stream(
     })
 }
 
-#[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(unused)]
 async fn track_or_id_to_playable(
     playback_type: PlaybackType,
@@ -1594,7 +1588,6 @@ async fn track_or_id_to_playable(
     })
 }
 
-#[cfg_attr(feature = "profiling", profiling::function)]
 async fn handle_retry<
     T,
     E: std::fmt::Debug + Into<PlayerError>,
