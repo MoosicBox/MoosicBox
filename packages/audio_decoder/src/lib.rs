@@ -467,6 +467,9 @@ fn play_track(
 
     // Decode and play the packets belonging to the selected track.
     let result = loop {
+        #[cfg(feature = "profiling")]
+        profiling::function_scope!("decoder loop");
+
         if audio_output_handler
             .cancellation_token
             .as_ref()
@@ -475,9 +478,14 @@ fn play_track(
             return Ok(2);
         }
         // Get the next packet from the format reader.
-        let packet = match reader.next_packet() {
-            Ok(packet) => packet,
-            Err(err) => break Err(DecodeError::Symphonia(err)),
+        let packet = {
+            #[cfg(feature = "profiling")]
+            profiling::function_scope!("read");
+
+            match reader.next_packet() {
+                Ok(packet) => packet,
+                Err(err) => break Err(DecodeError::Symphonia(err)),
+            }
         };
 
         // If the packet does not belong to the selected track, skip it.
@@ -485,13 +493,23 @@ fn play_track(
             continue;
         }
 
-        log::trace!("Decoding packet");
+        let decoded = {
+            #[cfg(feature = "profiling")]
+            profiling::function_scope!("decode");
+            log::trace!("Decoding packet");
+
+            decoder.decode(&packet)
+        };
+
         // Decode the packet into audio samples.
-        match decoder.decode(&packet) {
+        match decoded {
             Ok(decoded) => {
                 log::trace!("Decoded packet");
 
                 if audio_output_handler.contains_outputs_to_open() {
+                    #[cfg(feature = "profiling")]
+                    profiling::function_scope!("open audio output handler");
+
                     log::trace!("Getting audio spec");
                     // Get the audio buffer specification. This is a description of the decoded
                     // audio buffer's sample format and sample rate.
@@ -511,9 +529,24 @@ fn play_track(
                 // for the packet is >= the seeked position (0 if not seeking).
                 if ts >= play_opts.seek_ts {
                     log::trace!("Writing decoded to audio output");
-                    let mut buf = decoded.make_equivalent();
-                    decoded.convert(&mut buf);
-                    audio_output_handler.write(buf, &packet, &track)?;
+                    let mut buf = {
+                        #[cfg(feature = "profiling")]
+                        profiling::function_scope!("make_equivalent");
+
+                        decoded.make_equivalent()
+                    };
+                    {
+                        #[cfg(feature = "profiling")]
+                        profiling::function_scope!("convert");
+
+                        decoded.convert(&mut buf);
+                    }
+                    {
+                        #[cfg(feature = "profiling")]
+                        profiling::function_scope!("write");
+
+                        audio_output_handler.write(buf, &packet, &track)?;
+                    }
                     log::trace!("Wrote decoded to audio output");
                 } else {
                     log::trace!("Not to seeked position yet. Continuing decode");
