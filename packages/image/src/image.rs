@@ -7,6 +7,7 @@ use crate::Encoding;
 /// # Errors
 ///
 /// * If the image encoder fails to encode the resized image
+#[cfg_attr(feature = "profiling", profiling::function)]
 pub fn try_resize_local_file(
     width: u32,
     height: u32,
