@@ -3,7 +3,7 @@ os = "ubuntu"
 
 [[config.dependencies]]
 command  = 'sudo apt-get update && sudo apt-get install libvips-dev'
-features = ["libvips"]
+features = ["default", "libvips"]
 
 [[config]]
 cargo = "--bin image_helper"
@@ -12,4 +12,4 @@ os    = "ubuntu"
 
 [[config.dependencies]]
 command  = 'sudo apt-get update && sudo apt-get install libvips-dev'
-features = ["libvips"]
+features = ["default", "libvips"]
