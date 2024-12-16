@@ -45,7 +45,7 @@ where
                 broadcast,
                 except_id,
                 only_id,
-                message: Message::Text(value.to_string()),
+                message: Message::Text(value.to_string().into()),
             }))
     }
 }

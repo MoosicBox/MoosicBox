@@ -44,6 +44,7 @@ use tokio::select;
 use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::time::sleep;
+use tokio_tungstenite::tungstenite::protocol::frame::{Payload, Utf8Payload};
 use tokio_tungstenite::{
     connect_async,
     tungstenite::{Error, Message},
@@ -249,10 +250,10 @@ impl TunnelSender {
     ) -> Result<(), SendError<TunnelMessage>> {
         log::trace!("Message from tunnel ws server: {m:?}");
         tx.send(match m {
-            Message::Text(m) => TunnelMessage::Text(m),
-            Message::Binary(m) => TunnelMessage::Binary(Bytes::from(m)),
-            Message::Ping(m) => TunnelMessage::Ping(m),
-            Message::Pong(m) => TunnelMessage::Pong(m),
+            Message::Text(m) => TunnelMessage::Text(m.as_str().to_string()),
+            Message::Binary(m) => TunnelMessage::Binary(Bytes::from(m.as_slice().to_vec())),
+            Message::Ping(m) => TunnelMessage::Ping(m.as_slice().to_vec()),
+            Message::Pong(m) => TunnelMessage::Pong(m.as_slice().to_vec()),
             Message::Close(_m) => TunnelMessage::Close,
             Message::Frame(m) => TunnelMessage::Frame(m),
         })
@@ -416,13 +417,15 @@ impl TunnelSender {
                                                         text.len(),
                                                     );
                                                 }
-                                                serde_json::from_str(&text).and_then(|value: Value| {
+                                                serde_json::from_str(text.as_str()).and_then(|value: Value| {
                                                     serde_json::to_string(&TunnelWsResponse {
                                                         request_id: 0,
                                                         body: value,
                                                         exclude_connection_ids: ws.exclude_connection_ids,
                                                         to_connection_ids: ws.to_connection_ids,
-                                                    }).map(Message::Text)
+                                                    })
+                                                        .map(Utf8Payload::from)
+                                                        .map(Message::Text)
                                                 }).map_err(|e| {
                                                     log::error!("Serde error occurred: {e:?}");
                                                     tokio_tungstenite::tungstenite::Error::AlreadyClosed
@@ -433,7 +436,7 @@ impl TunnelSender {
                                         },
                                         TunnelResponseMessage::Ping => {
                                             log::trace!("Sending ping");
-                                            Ok(Message::Ping(vec![]))
+                                            Ok(Message::Ping(Payload::from(vec![])))
                                         }
                                     }
                                 })
@@ -555,7 +558,7 @@ impl TunnelSender {
                     broadcast: true,
                     except_id: None,
                     only_id: None,
-                    message: Message::Binary(bytes.into()),
+                    message: Message::Binary(Payload::from(bytes.into())),
                 }))
                 .map_err(|err| SendBytesError::Unknown(format!("Failed to send_bytes: {err:?}")))?;
         } else {
@@ -588,7 +591,7 @@ impl TunnelSender {
                     broadcast: true,
                     except_id: None,
                     only_id: None,
-                    message: Message::Text(message.into()),
+                    message: Message::Text(Utf8Payload::from(message.into())),
                 }))
                 .map_err(|err| {
                     SendMessageError::Unknown(format!("Failed to send_message: {err:?}"))
