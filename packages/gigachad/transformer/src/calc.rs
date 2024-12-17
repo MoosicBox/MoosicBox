@@ -406,7 +406,7 @@ impl Container {
             container_height,
         );
 
-        let relative_size = self.get_relative_position().or(relative_size);
+        let relative_size = self.get_relative_size().or(relative_size);
 
         for element in self.relative_positioned_elements_mut() {
             element.calc_inner(arena, relative_size);
@@ -1069,7 +1069,7 @@ impl Container {
         let gap_x = self.gap.as_ref().map(|x| calc_number(x, container_width));
         let gap_y = self.gap.as_ref().map(|x| calc_number(x, container_height));
 
-        let relative_size = self.get_relative_position().or(relative_size);
+        let relative_size = self.get_relative_size().or(relative_size);
 
         for container in self.relative_positioned_elements_mut().inspect(|element| {
             log::trace!("handle_overflow: processing child element\n{element}");
@@ -1226,7 +1226,7 @@ impl Container {
     ///
     /// * If size is not calculated
     #[must_use]
-    pub fn get_relative_position(&self) -> Option<(f32, f32)> {
+    pub fn get_relative_size(&self) -> Option<(f32, f32)> {
         if self.position == Some(Position::Relative) {
             Some((
                 self.calculated_width.unwrap(),
