@@ -174,7 +174,7 @@ futures-util = { version = "0.3.31", default-features = false, features = [
     "std",
 ] }
 hex = "0.4.3"
-home = "0.5.9"
+home = "0.5.11"
 hostname = "0.4.0"
 html-escape = "0.2.13"
 id3 = "1.16.0"

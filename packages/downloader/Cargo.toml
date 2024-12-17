@@ -39,7 +39,7 @@ async-recursion     = { workspace = true }
 async-trait         = { workspace = true }
 atomic_float        = { workspace = true }
 futures             = { workspace = true }
-hyper               = { version = "1.5.1" }
+hyper               = { version = "1.5.2" }
 id3                 = { workspace = true }
 lazy_static         = { workspace = true }
 log                 = { workspace = true }
