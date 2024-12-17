@@ -428,7 +428,7 @@ impl Container {
         }
     }
 
-    #[cfg(feature = "id")]
+    #[cfg(all(feature = "id", feature = "calc"))]
     #[must_use]
     pub fn find_relative_size_by_id(&self, id: usize) -> Option<(f32, f32)> {
         fn recurse(
@@ -449,7 +449,7 @@ impl Container {
         recurse(self, id, self.get_relative_size())
     }
 
-    #[cfg(feature = "id")]
+    #[cfg(all(feature = "id", feature = "calc"))]
     #[must_use]
     pub fn find_relative_size_by_str_id(&self, id: &str) -> Option<(f32, f32)> {
         fn recurse(
@@ -529,12 +529,6 @@ impl Container {
         id: usize,
         #[cfg(feature = "calc")] calc: bool,
     ) -> bool {
-        #[cfg(feature = "calc")]
-        use calc::Calc;
-
-        #[cfg(feature = "calc")]
-        let relative_size = self.find_relative_size_by_id(id);
-
         let Some(parent) = &mut self.find_element_by_id_mut(id) else {
             return false;
         };
@@ -547,16 +541,7 @@ impl Container {
 
         #[cfg(feature = "calc")]
         if calc {
-            parent.calc();
-        }
-
-        #[cfg(feature = "calc")]
-        if calc {
-            let parent = self.find_parent_by_id_mut(id).unwrap();
-            #[cfg(feature = "calc")]
-            if calc && parent.handle_overflow(relative_size) {
-                self.calc();
-            }
+            self.partial_calc(id);
         }
 
         true
@@ -572,13 +557,7 @@ impl Container {
         id: usize,
         #[cfg(feature = "calc")] calc: bool,
     ) -> bool {
-        #[cfg(feature = "calc")]
-        use calc::Calc;
-
-        #[cfg(feature = "calc")]
-        let relative_size = self.find_relative_size_by_id(id);
-
-        let Some(parent) = &mut self.find_parent_by_id_mut(id) else {
+        let Some(parent) = self.find_parent_by_id_mut(id) else {
             return false;
         };
 
@@ -597,14 +576,8 @@ impl Container {
 
         #[cfg(feature = "calc")]
         if calc {
-            parent.calc();
             let id = parent.id;
-
-            let parent = self.find_parent_by_id_mut(id).unwrap();
-            #[cfg(feature = "calc")]
-            if calc && parent.handle_overflow(relative_size) {
-                self.calc();
-            }
+            self.partial_calc(id);
         }
 
         true
@@ -620,12 +593,6 @@ impl Container {
         id: &str,
         #[cfg(feature = "calc")] calc: bool,
     ) -> Option<Self> {
-        #[cfg(feature = "calc")]
-        use calc::Calc;
-
-        #[cfg(feature = "calc")]
-        let relative_size = self.find_relative_size_by_str_id(id);
-
         let parent = self.find_parent_by_str_id_mut(id)?;
 
         let index = parent
@@ -649,14 +616,8 @@ impl Container {
 
         #[cfg(feature = "calc")]
         if calc {
-            parent.calc();
             let id = parent.id;
-
-            let parent = self.find_parent_by_id_mut(id).unwrap();
-            #[cfg(feature = "calc")]
-            if calc && parent.handle_overflow(relative_size) {
-                self.calc();
-            }
+            self.partial_calc(id);
         }
 
         Some(element)
@@ -665,9 +626,33 @@ impl Container {
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
+    #[cfg(all(feature = "id", feature = "calc"))]
+    pub fn partial_calc(&mut self, id: usize) {
+        use calc::Calc as _;
+
+        let relative_size = self.find_relative_size_by_id(id);
+
+        let Some(parent) = self.find_parent_by_id_mut(id) else {
+            return;
+        };
+
+        parent.calc();
+
+        let id = parent.id;
+
+        let parent = self.find_parent_by_id_mut(id).unwrap();
+
+        if parent.handle_overflow(relative_size) {
+            self.calc();
+        }
+    }
+
+    /// # Panics
+    ///
+    /// * If the `Container` is not properly attached to the tree
     #[cfg(feature = "id")]
     pub fn replace_ids_with_elements(&mut self, replacement: Vec<Self>, ids: &[usize]) -> bool {
-        let Some(parent) = &mut self.find_parent_by_id_mut(ids[0]) else {
+        let Some(parent) = self.find_parent_by_id_mut(ids[0]) else {
             return false;
         };
 
