@@ -3923,6 +3923,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "gigachad_renderer_vanilla_js"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "flume",
+ "gigachad_renderer",
+ "gigachad_renderer_html",
+ "gigachad_router",
+ "gigachad_transformer",
+ "log",
+ "tokio",
+]
+
+[[package]]
 name = "gigachad_router"
 version = "0.1.0"
 dependencies = [
@@ -6060,6 +6074,7 @@ dependencies = [
  "gigachad_renderer_fltk",
  "gigachad_renderer_html",
  "gigachad_renderer_htmx",
+ "gigachad_renderer_vanilla_js",
  "gigachad_router",
  "log",
  "moosicbox_assert",
