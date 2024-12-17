@@ -1050,7 +1050,7 @@ impl Container {
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    fn handle_overflow(&mut self, relative_size: Option<(f32, f32)>) -> bool {
+    pub fn handle_overflow(&mut self, relative_size: Option<(f32, f32)>) -> bool {
         log::trace!("handle_overflow: processing self\n{self}");
         let mut layout_shifted = false;
 
