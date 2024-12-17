@@ -428,6 +428,52 @@ impl Container {
         }
     }
 
+    #[cfg(feature = "id")]
+    #[must_use]
+    pub fn find_relative_size_by_id(&self, id: usize) -> Option<(f32, f32)> {
+        fn recurse(
+            element: &Container,
+            id: usize,
+            current: Option<(f32, f32)>,
+        ) -> Option<(f32, f32)> {
+            if element.children.iter().any(|x| x.id == id) {
+                element.get_relative_size().or(current)
+            } else {
+                element
+                    .children
+                    .iter()
+                    .find_map(|x| recurse(x, id, x.get_relative_size().or(current)))
+            }
+        }
+
+        recurse(self, id, self.get_relative_size())
+    }
+
+    #[cfg(feature = "id")]
+    #[must_use]
+    pub fn find_relative_size_by_str_id(&self, id: &str) -> Option<(f32, f32)> {
+        fn recurse(
+            element: &Container,
+            id: &str,
+            current: Option<(f32, f32)>,
+        ) -> Option<(f32, f32)> {
+            if element
+                .children
+                .iter()
+                .any(|x| x.str_id.as_ref().is_some_and(|x| x == id))
+            {
+                element.get_relative_size().or(current)
+            } else {
+                element
+                    .children
+                    .iter()
+                    .find_map(|x| recurse(x, id, x.get_relative_size().or(current)))
+            }
+        }
+
+        recurse(self, id, self.get_relative_size())
+    }
+
     #[must_use]
     pub fn find_parent_by_str_id_mut(&mut self, id: &str) -> Option<&mut Self> {
         if self
@@ -477,7 +523,61 @@ impl Container {
     ///
     /// * If the `Container` is not properly attached to the tree
     #[cfg(feature = "id")]
-    pub fn replace_id_with_elements(&mut self, replacement: Vec<Self>, id: usize) -> bool {
+    pub fn replace_id_children_with_elements(
+        &mut self,
+        replacement: Vec<Self>,
+        id: usize,
+        #[cfg(feature = "calc")] calc: bool,
+    ) -> bool {
+        #[cfg(feature = "calc")]
+        use calc::Calc;
+
+        #[cfg(feature = "calc")]
+        let relative_size = self.find_relative_size_by_id(id);
+
+        let Some(parent) = &mut self.find_element_by_id_mut(id) else {
+            return false;
+        };
+
+        parent.children.clear();
+
+        for element in replacement {
+            parent.children.push(element);
+        }
+
+        #[cfg(feature = "calc")]
+        if calc {
+            parent.calc();
+        }
+
+        #[cfg(feature = "calc")]
+        if calc {
+            let parent = self.find_parent_by_id_mut(id).unwrap();
+            #[cfg(feature = "calc")]
+            if calc && parent.handle_overflow(relative_size) {
+                self.calc();
+            }
+        }
+
+        true
+    }
+
+    /// # Panics
+    ///
+    /// * If the `Container` is not properly attached to the tree
+    #[cfg(feature = "id")]
+    pub fn replace_id_with_elements(
+        &mut self,
+        replacement: Vec<Self>,
+        id: usize,
+        #[cfg(feature = "calc")] calc: bool,
+    ) -> bool {
+        #[cfg(feature = "calc")]
+        use calc::Calc;
+
+        #[cfg(feature = "calc")]
+        let relative_size = self.find_relative_size_by_id(id);
+
         let Some(parent) = &mut self.find_parent_by_id_mut(id) else {
             return false;
         };
@@ -495,6 +595,18 @@ impl Container {
             parent.children.insert(index + i, element);
         }
 
+        #[cfg(feature = "calc")]
+        if calc {
+            parent.calc();
+            let id = parent.id;
+
+            let parent = self.find_parent_by_id_mut(id).unwrap();
+            #[cfg(feature = "calc")]
+            if calc && parent.handle_overflow(relative_size) {
+                self.calc();
+            }
+        }
+
         true
     }
 
@@ -506,10 +618,15 @@ impl Container {
         &mut self,
         replacement: Vec<Self>,
         id: &str,
+        #[cfg(feature = "calc")] calc: bool,
     ) -> Option<Self> {
-        let Some(parent) = &mut self.find_parent_by_str_id_mut(id) else {
-            return None;
-        };
+        #[cfg(feature = "calc")]
+        use calc::Calc;
+
+        #[cfg(feature = "calc")]
+        let relative_size = self.find_relative_size_by_str_id(id);
+
+        let parent = self.find_parent_by_str_id_mut(id)?;
 
         let index = parent
             .children
@@ -528,6 +645,18 @@ impl Container {
 
         for (i, element) in replacement.into_iter().enumerate() {
             parent.children.insert(index + i, element);
+        }
+
+        #[cfg(feature = "calc")]
+        if calc {
+            parent.calc();
+            let id = parent.id;
+
+            let parent = self.find_parent_by_id_mut(id).unwrap();
+            #[cfg(feature = "calc")]
+            if calc && parent.handle_overflow(relative_size) {
+                self.calc();
+            }
         }
 
         Some(element)

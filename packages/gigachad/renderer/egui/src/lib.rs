@@ -242,7 +242,7 @@ impl Renderer for EguiRenderer {
                 .map(|x| x.id)
                 .collect::<Vec<_>>();
             if let Some(removed) =
-                page.replace_str_id_with_elements(view.container.children, &view.target)
+                page.replace_str_id_with_elements(view.container.children, &view.target, true)
             {
                 let mut visibilities = app.visibilities.write().unwrap();
                 if let Some(visibility) = visibilities.remove(&removed.id) {
@@ -251,7 +251,6 @@ impl Renderer for EguiRenderer {
                     }
                 }
                 drop(visibilities);
-                page.calc();
                 drop(page);
                 if let Some(ctx) = &*app.ctx.read().unwrap() {
                     ctx.request_repaint();
@@ -543,8 +542,7 @@ impl EguiApp {
         let mut page = container.write().unwrap();
         match swap {
             SwapTarget::This => {
-                if page.replace_id_with_elements(result.children, container_id) {
-                    page.calc();
+                if page.replace_id_with_elements(result.children, container_id, true) {
                     drop(page);
                     ctx.request_repaint();
                 } else {
@@ -552,9 +550,7 @@ impl EguiApp {
                 }
             }
             SwapTarget::Children => {
-                if let Some(container) = page.find_element_by_id_mut(container_id) {
-                    container.children = result.children;
-                    page.calc();
+                if page.replace_id_children_with_elements(result.children, container_id, true) {
                     drop(page);
                     ctx.request_repaint();
                 } else {
