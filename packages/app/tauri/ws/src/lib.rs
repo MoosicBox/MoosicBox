@@ -134,8 +134,8 @@ impl WsClient {
     ) -> Result<(), SendError<WsMessage>> {
         log::trace!("Message from ws server: {m:?}");
         tx.send(match m {
-            Message::Text(m) => WsMessage::TextMessage(m.as_str().to_string()),
-            Message::Binary(m) => WsMessage::Message(Bytes::from(m.as_slice().to_vec())),
+            Message::Text(m) => WsMessage::TextMessage(m.to_string()),
+            Message::Binary(m) => WsMessage::Message(m),
             Message::Ping(_m) => WsMessage::Ping,
             Message::Pong(_m) => {
                 log::debug!("Received pong");

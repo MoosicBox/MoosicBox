@@ -44,7 +44,7 @@ use tokio::select;
 use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::time::sleep;
-use tokio_tungstenite::tungstenite::protocol::frame::{Payload, Utf8Payload};
+use tokio_tungstenite::tungstenite::Utf8Bytes;
 use tokio_tungstenite::{
     connect_async,
     tungstenite::{Error, Message},
@@ -250,10 +250,10 @@ impl TunnelSender {
     ) -> Result<(), SendError<TunnelMessage>> {
         log::trace!("Message from tunnel ws server: {m:?}");
         tx.send(match m {
-            Message::Text(m) => TunnelMessage::Text(m.as_str().to_string()),
-            Message::Binary(m) => TunnelMessage::Binary(Bytes::from(m.as_slice().to_vec())),
-            Message::Ping(m) => TunnelMessage::Ping(m.as_slice().to_vec()),
-            Message::Pong(m) => TunnelMessage::Pong(m.as_slice().to_vec()),
+            Message::Text(m) => TunnelMessage::Text(m.to_string()),
+            Message::Binary(m) => TunnelMessage::Binary(m),
+            Message::Ping(m) => TunnelMessage::Ping(m.to_vec()),
+            Message::Pong(m) => TunnelMessage::Pong(m.to_vec()),
             Message::Close(_m) => TunnelMessage::Close,
             Message::Frame(m) => TunnelMessage::Frame(m),
         })
@@ -424,7 +424,7 @@ impl TunnelSender {
                                                         exclude_connection_ids: ws.exclude_connection_ids,
                                                         to_connection_ids: ws.to_connection_ids,
                                                     })
-                                                        .map(Utf8Payload::from)
+                                                        .map(Utf8Bytes::from)
                                                         .map(Message::Text)
                                                 }).map_err(|e| {
                                                     log::error!("Serde error occurred: {e:?}");
@@ -436,7 +436,7 @@ impl TunnelSender {
                                         },
                                         TunnelResponseMessage::Ping => {
                                             log::trace!("Sending ping");
-                                            Ok(Message::Ping(Payload::from(vec![])))
+                                            Ok(Message::Ping(Bytes::new()))
                                         }
                                     }
                                 })
@@ -558,7 +558,7 @@ impl TunnelSender {
                     broadcast: true,
                     except_id: None,
                     only_id: None,
-                    message: Message::Binary(Payload::from(bytes.into())),
+                    message: Message::Binary(Bytes::from(bytes.into())),
                 }))
                 .map_err(|err| SendBytesError::Unknown(format!("Failed to send_bytes: {err:?}")))?;
         } else {
@@ -591,7 +591,7 @@ impl TunnelSender {
                     broadcast: true,
                     except_id: None,
                     only_id: None,
-                    message: Message::Text(Utf8Payload::from(message.into())),
+                    message: Message::Text(Utf8Bytes::from(message.into())),
                 }))
                 .map_err(|err| {
                     SendMessageError::Unknown(format!("Failed to send_message: {err:?}"))

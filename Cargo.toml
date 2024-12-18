@@ -136,7 +136,7 @@ async-trait = "0.1.83"
 atomic_float = "1.1.0"
 audiopus = "0.2.0"
 awc = "3.5.1"
-aws-config = "1.5.10"
+aws-config = "1.5.11"
 aws-sdk-apigatewaymanagement = "1.50.0"
 aws-sdk-ssm = "1.56.0"
 base64 = "0.22.1"
@@ -275,7 +275,7 @@ tl = "0.7.8"
 tokio = { version = "1.42.0" }
 tokio-postgres = { version = "0.7.12", features = ["with-chrono-0_4"] }
 tokio-stream = "0.1.17"
-tokio-tungstenite = { version = "0.25.0", features = ["native-tls-vendored"] }
+tokio-tungstenite = { version = "0.26.0", features = ["native-tls-vendored"] }
 tokio-util = "0.7.13"
 toml = "0.8.19"
 tracing = "0.1.41"
