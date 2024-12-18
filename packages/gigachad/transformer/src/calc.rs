@@ -1661,6 +1661,7 @@ impl Container {
         }
     }
 
+    #[must_use]
     pub fn contained_calculated_width(&self) -> f32 {
         log::trace!(
             "contained_calculated_width: direction={} element_count={} position={:?}",
@@ -1681,6 +1682,9 @@ impl Container {
                     })
                 })
                 .into_iter()
+                .inspect(|(row, _elements)| {
+                    log::trace!("contained_calculated_width: row={row:?}");
+                })
                 .map(|(row, elements)| {
                     let mut len = 0;
                     let sum = elements
@@ -1708,6 +1712,9 @@ impl Container {
                     })
                 })
                 .into_iter()
+                .inspect(|(col, _elements)| {
+                    log::trace!("contained_calculated_width: col={col:?}");
+                })
                 .map(|(col, elements)| {
                     let mut len = 0;
                     let max = elements
@@ -1730,6 +1737,7 @@ impl Container {
         }
     }
 
+    #[must_use]
     pub fn contained_calculated_height(&self) -> f32 {
         match self.direction {
             LayoutDirection::Row => self
@@ -1741,11 +1749,25 @@ impl Container {
                     })
                 })
                 .into_iter()
-                .map(|(_, elements)| {
-                    elements
+                .inspect(|(row, _elements)| {
+                    log::trace!("contained_calculated_height: row={row:?}");
+                })
+                .map(|(row, elements)| {
+                    let mut len = 0;
+                    let max = elements
+                        .inspect(|x| {
+                            len += 1;
+                            log::trace!("contained_calculated_height: element:\n{x}");
+                        })
                         .filter_map(Self::bounding_calculated_height)
                         .max_by(order_float)
-                        .unwrap_or(0.0)
+                        .unwrap_or(0.0);
+
+                    log::trace!(
+                        "contained_calculated_height: maxed row {row:?} with {len} children: {max}"
+                    );
+
+                    max
                 })
                 .sum(),
             LayoutDirection::Column => self
@@ -1757,11 +1779,24 @@ impl Container {
                     })
                 })
                 .into_iter()
-                .map(|(_, elements)| {
-                    elements
+                .inspect(|(col, _elements)| {
+                    log::trace!("contained_calculated_height: col={col:?}");
+                })
+                .map(|(col, elements)| {
+                    let mut len = 0;
+                    let sum = elements
+                        .inspect(|x| {
+                            len += 1;
+                            log::trace!("contained_calculated_height: element:\n{x}");
+                        })
                         .filter_map(Self::bounding_calculated_height)
-                        .max_by(order_float)
-                        .unwrap_or(0.0)
+                        .sum();
+
+                    log::trace!(
+                        "contained_calculated_height: summed col {col:?} with {len} children: {sum}"
+                    );
+
+                    sum
                 })
                 .max_by(order_float)
                 .unwrap_or(0.0),
