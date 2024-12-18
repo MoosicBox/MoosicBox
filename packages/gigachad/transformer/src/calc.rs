@@ -1784,19 +1784,20 @@ impl Container {
                 })
                 .map(|(col, elements)| {
                     let mut len = 0;
-                    let sum = elements
+                    let max = elements
                         .inspect(|x| {
                             len += 1;
                             log::trace!("contained_calculated_height: element:\n{x}");
                         })
                         .filter_map(Self::bounding_calculated_height)
-                        .sum();
+                        .max_by(order_float)
+                        .unwrap_or(0.0);
 
                     log::trace!(
-                        "contained_calculated_height: summed col {col:?} with {len} children: {sum}"
+                        "contained_calculated_height: maxed col {col:?} with {len} children: {max}"
                     );
 
-                    sum
+                    max
                 })
                 .max_by(order_float)
                 .unwrap_or(0.0),
