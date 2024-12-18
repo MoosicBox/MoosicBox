@@ -351,8 +351,6 @@ impl Calc for Container {
 impl Container {
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn calc_inner_container(&mut self, arena: &Bump, relative_size: Option<(f32, f32)>) {
-        static MAX_HANDLE_OVERFLOW: usize = 100;
-
         log::trace!("calc_inner_container: processing self\n{self}");
 
         if self.hidden == Some(true) {
@@ -447,6 +445,8 @@ impl Container {
             attempt += 1;
 
             {
+                static MAX_HANDLE_OVERFLOW: usize = 100;
+
                 fn truncated(mut value: String, len: usize) -> String {
                     value.truncate(len);
                     value
