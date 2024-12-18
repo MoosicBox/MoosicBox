@@ -55,8 +55,16 @@ impl Container {
             let sized_cols = iter.enumerate().map(|(i, x)| {
                 col_count += 1;
 
-                let width = x.contained_sized_width(true);
-                let height = x.contained_sized_height(true);
+                let width = x
+                    .width
+                    .as_ref()
+                    .and(x.calculated_width)
+                    .or_else(|| x.contained_sized_width(true));
+                let height = x
+                    .height
+                    .as_ref()
+                    .and(x.calculated_height)
+                    .or_else(|| x.contained_sized_height(true));
 
                 if i >= cols.len() {
                     cols.push(x);
@@ -152,7 +160,7 @@ impl Container {
                             if x.height.is_some() {
                                 x.calc_sized_element_height(container_height);
                             } else if x.calculated_height.is_none() {
-                                x.calculated_height = Some(25.0);
+                                x.calculated_height = Some(x.contained_calculated_height());
                             }
                             if x.width.is_some() {
                                 x.calc_sized_element_width(container_width);
@@ -178,7 +186,7 @@ impl Container {
                         if x.height.is_some() {
                             x.calc_sized_element_height(container_height);
                         } else if x.calculated_height.is_none() {
-                            x.calculated_height = Some(25.0);
+                            x.calculated_height = Some(x.contained_calculated_height());
                         }
                         if x.width.is_some() {
                             x.calc_sized_element_width(container_width);
@@ -4773,57 +4781,53 @@ mod test {
 
         assert_eq!(shifted, true);
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
-                        width: Some(Number::Integer(25)),
                         calculated_width: Some(25.0),
                         calculated_height: Some(row_height),
                         calculated_x: Some(0.0),
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                        ..Default::default()
+                        ..container.children[0].clone()
                     },
                     Container {
-                        width: Some(Number::Integer(25)),
                         calculated_width: Some(25.0),
                         calculated_height: Some(row_height),
                         calculated_x: Some(25.0),
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
-                        ..Default::default()
+                        ..container.children[1].clone()
                     },
                     Container {
-                        width: Some(Number::Integer(25)),
                         calculated_width: Some(25.0),
                         calculated_height: Some(row_height),
                         calculated_x: Some(0.0),
                         calculated_y: Some(row_height),
                         calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                        ..Default::default()
+                        ..container.children[2].clone()
                     },
                     Container {
-                        width: Some(Number::Integer(25)),
                         calculated_width: Some(25.0),
                         calculated_height: Some(row_height),
                         calculated_x: Some(25.0),
                         calculated_y: Some(row_height),
                         calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
-                        ..Default::default()
+                        ..container.children[3].clone()
                     },
                     Container {
-                        width: Some(Number::Integer(25)),
                         calculated_width: Some(25.0),
                         calculated_height: Some(row_height),
                         calculated_x: Some(0.0),
                         calculated_y: Some(row_height * 2.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
-                        ..Default::default()
+                        ..container.children[4].clone()
                     },
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -5909,74 +5913,29 @@ mod test {
 
     #[test_log::test]
     fn calc_can_calc_table_column_and_row_sizes_and_auto_size_raw_data() {
-        let mut container = Container {
-            children: vec![Container {
-                element: Element::Table,
-                children: vec![
-                    Container {
-                        element: Element::TR,
-                        children: vec![
-                            Container {
-                                element: Element::TD,
-                                children: vec![Container {
-                                    element: Element::Raw {
-                                        value: "test".to_string(),
-                                    },
-                                    ..Container::default()
-                                }],
-                                ..Container::default()
-                            },
-                            Container {
-                                element: Element::TD,
-                                children: vec![Container {
-                                    element: Element::Raw {
-                                        value: "test".to_string(),
-                                    },
-                                    ..Container::default()
-                                }],
-                                ..Container::default()
-                            },
-                        ],
-                        ..Default::default()
-                    },
-                    Container {
-                        element: Element::TR,
-                        children: vec![
-                            Container {
-                                element: Element::TD,
-                                children: vec![Container {
-                                    element: Element::Raw {
-                                        value: "test".to_string(),
-                                    },
-                                    ..Container::default()
-                                }],
-                                ..Container::default()
-                            },
-                            Container {
-                                element: Element::TD,
-                                children: vec![Container {
-                                    element: Element::Raw {
-                                        value: "test".to_string(),
-                                    },
-                                    ..Container::default()
-                                }],
-                                ..Container::default()
-                            },
-                        ],
-                        ..Default::default()
-                    },
-                ],
-                ..Default::default()
-            }],
-            calculated_width: Some(100.0),
-            calculated_height: Some(80.0),
-            ..Default::default()
-        };
+        let mut container: Container = html! {
+            table {
+                tr {
+                    td { "test" }
+                    td { "test" }
+                }
+                tr {
+                    td { "test" }
+                    td { "test" }
+                }
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(100.0);
+        container.calculated_height = Some(80.0);
+
         container.calc();
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     children: vec![
@@ -6033,6 +5992,7 @@ mod test {
                 }],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -7620,6 +7580,110 @@ mod test {
                 calculated_padding_bottom: Some(20.0),
                 ..aside
             }
+        );
+    }
+
+    #[test_log::test]
+    fn calc_calculates_table_td_height_correctly() {
+        let mut container: Container = html! {
+            table {
+                tr {
+                    td sx-height=(30) {}
+                }
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(50.0);
+        container.calculated_height = Some(100.0);
+
+        container.calc();
+        log::trace!("container:\n{}", container);
+
+        let td = container.children[0].children[0].children[0].clone();
+
+        assert_eq!(
+            td.clone().to_string(),
+            Container {
+                calculated_height: Some(30.0),
+                ..td
+            }
+            .to_string()
+        );
+    }
+
+    #[test_log::test]
+    fn calc_calculates_table_tr_height_correctly() {
+        let mut container: Container = html! {
+            table {
+                tr {
+                    td sx-height=(30) {}
+                }
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(50.0);
+        container.calculated_height = Some(100.0);
+
+        container.calc();
+        log::trace!("container:\n{}", container);
+
+        let tr = container.children[0].children[0].clone();
+
+        assert_eq!(
+            tr.clone().to_string(),
+            Container {
+                calculated_height: Some(30.0),
+                ..tr
+            }
+            .to_string()
+        );
+    }
+
+    #[test_log::test]
+    fn calc_calculates_table_height_correctly() {
+        let mut container: Container = html! {
+            table {
+                tr sx-height=(30) {
+                    td sx-height=(30) {}
+                    td sx-height=(30) {}
+                    td sx-height=(30) {}
+                }
+                tr sx-height=(30) {
+                    td sx-height=(30) {}
+                    td sx-height=(30) {}
+                    td sx-height=(30) {}
+                }
+                tr sx-height=(30) {
+                    td sx-height=(30) {}
+                    td sx-height=(30) {}
+                    td sx-height=(30) {}
+                }
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(50.0);
+        container.calculated_height = Some(100.0);
+
+        container.calc();
+        log::trace!("container:\n{}", container);
+
+        assert_eq!(
+            container.to_string(),
+            Container {
+                children: vec![Container {
+                    calculated_height: Some(90.0),
+                    ..container.children[0].clone()
+                }],
+                calculated_height: Some(100.0),
+                ..container.clone()
+            }
+            .to_string()
         );
     }
 }
