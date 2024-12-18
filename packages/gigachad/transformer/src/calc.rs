@@ -1833,22 +1833,48 @@ impl Container {
         })
     }
 
+    /// # Panics
+    ///
+    /// * If there are more rows than can fit in a u32
+    #[must_use]
     pub fn rows(&self) -> u32 {
-        self.relative_positioned_elements()
-            .filter_map(|x| x.calculated_position.as_ref())
-            .filter_map(LayoutPosition::row)
-            .max()
-            .unwrap_or(0)
-            + 1
+        if self.overflow_x != LayoutOverflow::Wrap && self.overflow_y != LayoutOverflow::Wrap {
+            match self.direction {
+                LayoutDirection::Row => 1,
+                LayoutDirection::Column => {
+                    u32::try_from(self.relative_positioned_elements().count()).unwrap()
+                }
+            }
+        } else {
+            self.relative_positioned_elements()
+                .filter_map(|x| x.calculated_position.as_ref())
+                .filter_map(LayoutPosition::row)
+                .max()
+                .unwrap_or(0)
+                + 1
+        }
     }
 
+    /// # Panics
+    ///
+    /// * If there are more columns than can fit in a u32
+    #[must_use]
     pub fn columns(&self) -> u32 {
-        self.relative_positioned_elements()
-            .filter_map(|x| x.calculated_position.as_ref())
-            .filter_map(LayoutPosition::column)
-            .max()
-            .unwrap_or(0)
-            + 1
+        if self.overflow_x != LayoutOverflow::Wrap && self.overflow_y != LayoutOverflow::Wrap {
+            match self.direction {
+                LayoutDirection::Row => {
+                    u32::try_from(self.relative_positioned_elements().count()).unwrap()
+                }
+                LayoutDirection::Column => 1,
+            }
+        } else {
+            self.relative_positioned_elements()
+                .filter_map(|x| x.calculated_position.as_ref())
+                .filter_map(LayoutPosition::column)
+                .max()
+                .unwrap_or(0)
+                + 1
+        }
     }
 
     #[must_use]
