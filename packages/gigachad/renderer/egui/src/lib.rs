@@ -92,20 +92,10 @@ impl RenderRunner for EguiRenderRunner {
 
         gigachad_transformer::calc::set_scrollbar_size(0);
 
-        let renderer = if cfg!(feature = "wgpu") {
-            #[cfg(feature = "wgpu")]
-            {
-                eframe::Renderer::Wgpu
-            }
-            #[cfg(not(feature = "wgpu"))]
-            {
-                eframe::Renderer::Glow
-            }
-        } else if cfg!(feature = "glow") {
-            eframe::Renderer::Glow
-        } else {
-            eframe::Renderer::Glow
-        };
+        #[cfg(feature = "wgpu")]
+        let renderer = eframe::Renderer::Wgpu;
+        #[cfg(not(feature = "wgpu"))]
+        let renderer = eframe::Renderer::Glow;
 
         let options = eframe::NativeOptions {
             viewport,
