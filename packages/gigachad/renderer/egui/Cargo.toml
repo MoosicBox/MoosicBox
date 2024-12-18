@@ -63,6 +63,7 @@ default = ["debug", "wgpu"]
 
 fail-on-warnings = []
 
+glow = ["eframe/glow"]
 wgpu = ["eframe/wgpu"]
 
 profiling         = ["dep:profiling"]

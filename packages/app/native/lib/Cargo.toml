@@ -46,6 +46,7 @@ maud = ["gigachad_renderer/maud"]
 
 datastar   = ["dep:gigachad_renderer_datastar"]
 egui       = ["dep:gigachad_renderer_egui"]
+egui-glow  = ["egui", "gigachad_renderer_egui/glow"]
 egui-wgpu  = ["egui", "gigachad_renderer_egui/wgpu"]
 fltk       = ["dep:gigachad_renderer_fltk"]
 html       = ["dep:gigachad_renderer_html"]
