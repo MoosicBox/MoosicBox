@@ -269,13 +269,13 @@ tauri-plugin = { version = "2.0.3", features = ["build"] }
 tauri-plugin-dialog = "2.2.0"
 tauri-plugin-notification = "2.2.0"
 test-log = "0.2.16"
-thiserror = "2.0.7"
+thiserror = "2.0.8"
 throttle = "0.1.0"
 tl = "0.7.8"
 tokio = { version = "1.42.0" }
 tokio-postgres = { version = "0.7.12", features = ["with-chrono-0_4"] }
 tokio-stream = "0.1.17"
-tokio-tungstenite = { version = "0.25.0", features = ["native-tls-vendored"] }
+tokio-tungstenite = { version = "0.26.0", features = ["native-tls-vendored"] }
 tokio-util = "0.7.13"
 toml = "0.8.19"
 tracing = "0.1.41"
