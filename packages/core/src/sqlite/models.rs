@@ -1168,6 +1168,16 @@ pub enum IdType {
     Track,
 }
 
+impl std::fmt::Display for IdType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            IdType::Artist => "artist",
+            IdType::Album => "album",
+            IdType::Track => "track",
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Id {
     String(String),
