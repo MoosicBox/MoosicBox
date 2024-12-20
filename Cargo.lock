@@ -6841,6 +6841,7 @@ version = "0.1.0"
 dependencies = [
  "arrayvec",
  "log",
+ "profiling",
  "rubato",
  "symphonia",
 ]

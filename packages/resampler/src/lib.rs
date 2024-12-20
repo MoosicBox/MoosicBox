@@ -14,6 +14,7 @@ pub struct Resampler<T> {
     pub spec: SignalSpec,
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl<T> Resampler<T>
 where
     T: Sample + ReversibleSample<f32>,
@@ -57,6 +58,7 @@ where
     }
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl<T> Resampler<T>
 where
     T: Sample + ReversibleSample<f32>,
@@ -139,6 +141,7 @@ where
     }
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 fn convert_samples<S>(input: &AudioBuffer<S>, output: &mut [Vec<f32>])
 where
     S: Sample + IntoSample<f32>,
@@ -149,6 +152,7 @@ where
     }
 }
 
+#[cfg_attr(feature = "profiling", profiling::function)]
 pub fn to_audio_buffer<S>(samples: &[S], spec: SignalSpec) -> AudioBuffer<S>
 where
     S: Sample,

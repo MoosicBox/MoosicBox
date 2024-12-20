@@ -13,6 +13,7 @@ version     = "0.1.0"
 [dependencies]
 arrayvec  = { workspace = true }
 log       = { workspace = true }
+profiling = { workspace = true, optional = true }
 rubato    = { workspace = true }
 symphonia = { workspace = true }
 
@@ -20,3 +21,5 @@ symphonia = { workspace = true }
 default = []
 
 fail-on-warnings = []
+
+profiling = ["dep:profiling"]

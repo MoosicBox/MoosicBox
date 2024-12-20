@@ -68,7 +68,11 @@ default = [
 
 fail-on-warnings = []
 
-profiling = ["dep:profiling", "moosicbox_audio_decoder/profiling"]
+profiling = [
+    "dep:profiling",
+    "moosicbox_audio_decoder/profiling",
+    "moosicbox_resampler/profiling",
+]
 
 api     = ["dep:actix-web", "moosicbox_music_api/api"]
 openapi = ["dep:utoipa", "moosicbox_core/openapi"]
