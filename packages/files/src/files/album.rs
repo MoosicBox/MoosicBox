@@ -146,11 +146,14 @@ async fn fetch_local_album_cover(
     source: ImageCoverSource,
     directory: Option<&String>,
 ) -> Result<String, FetchLocalAlbumCoverError> {
+    log::trace!("fetch_local_album_cover");
     match source {
         ImageCoverSource::LocalFilePath(cover) => {
             let cover_path = std::path::PathBuf::from(&cover);
+            log::trace!("fetch_local_album_cover: LocalFilePath cover_path={cover_path:?}");
 
             if Path::is_file(&cover_path) {
+                log::trace!("fetch_local_album_cover: is_file cover_path={cover_path:?}");
                 return Ok(cover_path.to_str().unwrap().to_string());
             }
 
@@ -158,6 +161,7 @@ async fn fetch_local_album_cover(
             let directory_path = std::path::PathBuf::from(directory);
 
             if let Some(path) = search_for_cover(directory_path, "cover", None, None).await? {
+                log::trace!("fetch_local_album_cover: found path={path:?}");
                 let artwork = path.to_str().unwrap().to_string();
 
                 log::debug!(
