@@ -31,10 +31,12 @@ pub struct TidalArtist {
 
 impl From<TidalArtist> for Artist {
     fn from(value: TidalArtist) -> Self {
+        let cover = artist_picture_url(value.picture.as_deref(), TidalArtistImageSize::Max);
+
         Self {
             id: value.id.into(),
             title: value.name,
-            cover: value.picture,
+            cover,
             api_source: ApiSource::Tidal,
             api_sources: ApiSources::default().with_source(ApiSource::Tidal, value.id.into()),
         }
