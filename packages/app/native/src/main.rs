@@ -197,8 +197,8 @@ fn parse_track_sources(value: &str) -> Result<Vec<TrackApiSource>, RouteError> {
         .split(',')
         .filter(|x| !x.is_empty())
         .map(TryFrom::try_from)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|_e| RouteError::RouteFailed)
+        .collect::<Result<Vec<_>, strum::ParseError>>()
+        .map_err(|e| RouteError::RouteFailed(e.into()))
 }
 
 static PROFILE: &str = "master";
@@ -292,7 +292,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let album = api
                         .album(&album_id)
                         .await?
-                        .ok_or(RouteError::RouteFailed)?
+                        .ok_or_else(|| {
+                            RouteError::RouteFailed(
+                                format!("No album for album_id={album_id}").into(),
+                            )
+                        })?
                         .into();
 
                     log::debug!("album: {album:?}");
@@ -378,8 +382,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .await?;
 
                     if !response.status().is_success() {
-                        log::debug!("Error: {} {}", response.status(), response.text().await?);
-                        return Err(RouteError::RouteFailed.into());
+                        let message =
+                            format!("Error: {} {}", response.status(), response.text().await?);
+                        log::error!("{message}");
+                        return Err(RouteError::RouteFailed(message.into()).into());
                     }
 
                     let artist: ApiArtist = response.json().await?;
@@ -404,8 +410,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .await?;
 
                     if !response.status().is_success() {
-                        log::debug!("Error: {} {}", response.status(), response.text().await?);
-                        return Err(RouteError::RouteFailed.into());
+                        let message =
+                            format!("Error: {} {}", response.status(), response.text().await?);
+                        log::error!("{message}");
+                        return Err(RouteError::RouteFailed(message.into()).into());
                     }
 
                     let artists: Vec<ApiArtist> = response.json().await?;
@@ -800,8 +808,8 @@ pub enum RouteError {
     ParseInt(#[from] ParseIntError),
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
-    #[error("Route failed")]
-    RouteFailed,
+    #[error("Route failed: {0:?}")]
+    RouteFailed(Box<dyn std::error::Error>),
 }
 
 async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteError> {
@@ -855,8 +863,9 @@ async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteError> 
     .await?;
 
     if !response.status().is_success() {
-        log::debug!("Error: {} {}", response.status(), response.text().await?);
-        return Err(RouteError::RouteFailed);
+        let message = format!("Error: {} {}", response.status(), response.text().await?);
+        log::error!("{message}");
+        return Err(RouteError::RouteFailed(message.into()));
     }
 
     let albums: Page<ApiAlbum> = response.json().await?;
@@ -922,8 +931,9 @@ async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
     .await?;
 
     if !response.status().is_success() {
-        log::debug!("Error: {} {}", response.status(), response.text().await?);
-        return Err(RouteError::RouteFailed);
+        let message = format!("Error: {} {}", response.status(), response.text().await?);
+        log::error!("{message}");
+        return Err(RouteError::RouteFailed(message.into()));
     }
 
     let albums: Page<ApiAlbum> = response.json().await?;
@@ -971,8 +981,9 @@ async fn artist_albums_list_route(req: RouteRequest) -> Result<View, RouteError>
     let response = reqwest::get(url).await?;
 
     if !response.status().is_success() {
-        log::debug!("Error: {} {}", response.status(), response.text().await?);
-        return Err(RouteError::RouteFailed);
+        let message = format!("Error: {} {}", response.status(), response.text().await?);
+        log::error!("{message}");
+        return Err(RouteError::RouteFailed(message.into()));
     }
 
     let albums: Page<ApiAlbum> = response.json().await?;
