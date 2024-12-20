@@ -651,6 +651,7 @@ impl From<QobuzRelease> for QobuzAlbum {
             maximum_bit_depth: value.maximum_bit_depth,
             image: value.image,
             title: value.title,
+            version: value.version,
             release_date_original: value.release_date_original,
             duration: value.duration,
             parental_warning: value.parental_warning,
