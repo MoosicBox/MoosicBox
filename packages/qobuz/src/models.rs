@@ -1,5 +1,6 @@
-use std::fmt::Display;
+use std::{fmt::Display, str::FromStr as _};
 
+use chrono::{DateTime, Utc};
 use moosicbox_core::sqlite::models::{
     Album, AlbumSource, ApiAlbum, ApiArtist, ApiSource, ApiSources, Artist, AsModelResult, Track,
     TrackApiSource,
@@ -652,13 +653,19 @@ impl From<QobuzRelease> for QobuzAlbum {
             image: value.image,
             title: value.title,
             version: value.version,
+            released_at: chrono::DateTime::from_str(&value.release_date_original)
+                .map(|x: DateTime<Utc>| x.timestamp_millis())
+                .unwrap_or(0),
             release_date_original: value.release_date_original,
             duration: value.duration,
             parental_warning: value.parental_warning,
             tracks_count: value.tracks_count,
             maximum_channel_count: value.maximum_bit_depth,
             maximum_sampling_rate: value.maximum_sampling_rate,
-            ..Default::default()
+            album_type: QobuzAlbumReleaseType::Album,
+            qobuz_id: 0,
+            popularity: 0,
+            genre: QobuzGenre::default(),
         }
     }
 }
