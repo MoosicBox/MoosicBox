@@ -2317,7 +2317,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     calculated_width: Some(100.0),
@@ -2329,6 +2329,7 @@ mod test {
                 }],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -2348,7 +2349,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     children: vec![
@@ -2379,6 +2380,7 @@ mod test {
                 },],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -2404,7 +2406,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -2446,6 +2448,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -2471,7 +2474,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -2512,6 +2515,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -2929,7 +2933,7 @@ mod test {
         let width = 50.0 - f32::from(get_scrollbar_size());
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -2959,6 +2963,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -3044,7 +3049,7 @@ mod test {
         while container.handle_overflow(None) {}
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -3076,6 +3081,7 @@ mod test {
                 calculated_height: Some(40.0),
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -3124,7 +3130,7 @@ mod test {
         while container.handle_overflow(None) {}
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -3172,6 +3178,7 @@ mod test {
                 calculated_height: Some(40.0),
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -3220,7 +3227,7 @@ mod test {
         while container.handle_overflow(None) {}
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -3268,6 +3275,7 @@ mod test {
                 calculated_height: Some(40.0),
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -3325,7 +3333,7 @@ mod test {
         while container.handle_overflow(None) {}
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -3372,6 +3380,7 @@ mod test {
                 calculated_height: Some(40.0),
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -3418,7 +3427,7 @@ mod test {
         while container.handle_overflow(None) {}
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -3506,6 +3515,7 @@ mod test {
                 calculated_height: Some(40.0),
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -3556,7 +3566,7 @@ mod test {
         while container.handle_overflow(None) {}
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -3604,6 +3614,7 @@ mod test {
                 calculated_height: Some(60.0),
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -3702,11 +3713,11 @@ mod test {
             ..container
         };
 
-        assert_eq!(actual, expected);
+        assert_eq!(actual.to_string(), expected.to_string());
 
         while actual.handle_overflow(None) {}
 
-        assert_eq!(actual, expected);
+        assert_eq!(actual.to_string(), expected.to_string());
     }
 
     #[test_log::test]
@@ -3754,7 +3765,7 @@ mod test {
         while container.handle_overflow(None) {}
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -3802,6 +3813,7 @@ mod test {
                 calculated_height: Some(40.0),
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -3853,7 +3865,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -3899,6 +3911,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -3956,7 +3969,7 @@ mod test {
         while container.handle_overflow(None) {}
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -4003,6 +4016,7 @@ mod test {
                 calculated_height: Some(40.0),
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -4049,7 +4063,7 @@ mod test {
         while container.handle_overflow(None) {}
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -4137,6 +4151,7 @@ mod test {
                 calculated_height: Some(40.0),
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -4187,7 +4202,7 @@ mod test {
         while container.handle_overflow(None) {}
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -4235,6 +4250,7 @@ mod test {
                 calculated_height: Some(60.0),
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -4333,11 +4349,11 @@ mod test {
             ..container
         };
 
-        assert_eq!(actual, expected);
+        assert_eq!(actual.to_string(), expected.to_string());
 
         while actual.handle_overflow(None) {}
 
-        assert_eq!(actual, expected);
+        assert_eq!(actual.to_string(), expected.to_string());
     }
 
     #[test_log::test]
@@ -4383,7 +4399,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     children: vec![
@@ -4435,6 +4451,7 @@ mod test {
                 calculated_height: Some(40.0),
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -4573,7 +4590,7 @@ mod test {
 
         assert_eq!(resized, true);
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     children: vec![
@@ -4600,6 +4617,7 @@ mod test {
                 direction: LayoutDirection::Row,
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -4640,7 +4658,7 @@ mod test {
 
         assert_eq!(resized, true);
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -4658,6 +4676,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -4698,7 +4717,7 @@ mod test {
 
         assert_eq!(resized, true);
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -4716,6 +4735,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -4756,7 +4776,7 @@ mod test {
 
         assert_eq!(shifted, true);
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -4789,6 +4809,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -4930,7 +4951,7 @@ mod test {
 
         assert_eq!(shifted, true);
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -4963,6 +4984,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -4994,7 +5016,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -5027,6 +5049,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -5069,7 +5092,7 @@ mod test {
         let remainder = 50.0f32 / 3_f32; // 16.66666
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -5126,6 +5149,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -5169,7 +5193,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -5229,6 +5253,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -5261,7 +5286,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -5322,6 +5347,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -5356,7 +5382,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -5418,6 +5444,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -5490,7 +5517,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     children: vec![
@@ -5563,6 +5590,7 @@ mod test {
                 }],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -5635,7 +5663,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     children: vec![
@@ -5708,6 +5736,7 @@ mod test {
                 }],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -5776,7 +5805,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     children: vec![
@@ -5845,6 +5874,7 @@ mod test {
                 }],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -5897,7 +5927,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     children: vec![
@@ -5970,6 +6000,7 @@ mod test {
                 }],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -6131,7 +6162,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     children: vec![Container {
@@ -6199,6 +6230,7 @@ mod test {
                 }],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -6221,7 +6253,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -6243,6 +6275,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -6271,7 +6304,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     children: vec![
@@ -6297,6 +6330,7 @@ mod test {
                 }],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -6320,7 +6354,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -6343,6 +6377,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
     #[test_log::test]
@@ -6367,7 +6402,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -6392,6 +6427,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -6413,11 +6449,12 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 internal_padding_left: Some((100.0 - 30.0) / 2.0),
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -6444,7 +6481,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -6462,6 +6499,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -6488,7 +6526,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -6505,6 +6543,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -6531,7 +6570,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -6548,6 +6587,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -6571,7 +6611,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -6588,6 +6628,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -6611,7 +6652,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -6628,6 +6669,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -6655,7 +6697,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -6672,6 +6714,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -6697,7 +6740,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -6714,6 +6757,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -6740,7 +6784,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -6757,6 +6801,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -6778,7 +6823,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -6795,6 +6840,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -6819,7 +6865,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -6841,6 +6887,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -6867,7 +6914,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     Container {
@@ -6895,6 +6942,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -6919,7 +6967,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![
                     container.children[0].clone(),
@@ -6931,6 +6979,7 @@ mod test {
                 ],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -6951,7 +7000,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     calculated_width: Some(70.0),
@@ -6960,6 +7009,7 @@ mod test {
                 }],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -6980,7 +7030,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     calculated_height: Some(20.0),
@@ -6989,6 +7039,7 @@ mod test {
                 }],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -7012,7 +7063,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     calculated_width: Some(35.0),
@@ -7023,6 +7074,7 @@ mod test {
                 }],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -7054,7 +7106,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     children: vec![Container {
@@ -7079,6 +7131,7 @@ mod test {
                 }],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -7112,7 +7165,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     children: vec![Container {
@@ -7137,6 +7190,7 @@ mod test {
                 }],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -7163,7 +7217,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     calculated_width: Some(70.0),
@@ -7177,6 +7231,7 @@ mod test {
                 }],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -7203,7 +7258,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     calculated_width: Some(35.0),
@@ -7216,6 +7271,7 @@ mod test {
                 }],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -7254,7 +7310,7 @@ mod test {
         let container = container.children[0].children[0].children[1].clone();
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     children: vec![Container {
@@ -7288,6 +7344,7 @@ mod test {
                 }],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -7314,7 +7371,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     calculated_width: Some((1600.0 - 40.0) * 0.3),
@@ -7327,6 +7384,7 @@ mod test {
                 }],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -7353,7 +7411,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     calculated_width: Some(1600.0 * 0.3),
@@ -7366,6 +7424,7 @@ mod test {
                 }],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -7393,7 +7452,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 children: vec![Container {
                     calculated_width: Some((1600.0 - 40.0) * 0.3),
@@ -7408,6 +7467,7 @@ mod test {
                 }],
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -7442,7 +7502,7 @@ mod test {
         let container = container.children[0].children[1].clone();
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 calculated_width: Some((1600.0 - 40.0) * 0.3),
                 calculated_height: Some(1000.0 - 200.0 - 40.0),
@@ -7454,6 +7514,7 @@ mod test {
                 calculated_padding_bottom: Some(20.0),
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -7503,7 +7564,7 @@ mod test {
         let container = container.children[0].children[0].children[1].children[0].clone();
 
         assert_eq!(
-            container.clone(),
+            container.clone().to_string(),
             Container {
                 calculated_width: Some(1360.0 - 30.0 - 30.0 - f32::from(get_scrollbar_size())),
                 calculated_height: Some(920.0),
@@ -7515,6 +7576,7 @@ mod test {
                 calculated_padding_bottom: Some(15.0),
                 ..container
             }
+            .to_string()
         );
     }
 
@@ -7540,7 +7602,7 @@ mod test {
         let main = container.children[0].children[0].children[1].clone();
 
         assert_eq!(
-            main.clone(),
+            main.clone().to_string(),
             Container {
                 calculated_width: Some(1320.0),
                 calculated_height: Some(860.0),
@@ -7548,12 +7610,13 @@ mod test {
                 calculated_y: Some(0.0),
                 ..main
             }
+            .to_string()
         );
 
         let aside = container.children[0].children[0].children[0].clone();
 
         assert_eq!(
-            aside.clone(),
+            aside.clone().to_string(),
             Container {
                 calculated_width: Some(240.0),
                 calculated_x: Some(0.0),
@@ -7562,6 +7625,7 @@ mod test {
                 calculated_padding_right: Some(20.0),
                 ..aside
             }
+            .to_string()
         );
     }
 
@@ -7593,7 +7657,7 @@ mod test {
         let main = container.children[0].children[0].children[1].clone();
 
         assert_eq!(
-            main.clone(),
+            main.clone().to_string(),
             Container {
                 calculated_width: Some(1320.0),
                 calculated_height: Some(860.0),
@@ -7601,12 +7665,13 @@ mod test {
                 calculated_y: Some(0.0),
                 ..main
             }
+            .to_string()
         );
 
         let aside = container.children[0].children[0].children[0].clone();
 
         assert_eq!(
-            aside.clone(),
+            aside.clone().to_string(),
             Container {
                 children: vec![Container {
                     children: vec![
@@ -7642,6 +7707,7 @@ mod test {
                 calculated_padding_bottom: Some(20.0),
                 ..aside
             }
+            .to_string()
         );
     }
 
