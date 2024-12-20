@@ -1284,10 +1284,12 @@ impl std::fmt::Display for Container {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(
             &self
-                .display_to_string(
+                .display_to_string(if cfg!(test) {
+                    true
+                } else {
                     std::env::var("DEBUG_ATTRS")
-                        .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str())),
-                )
+                        .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str()))
+                })
                 .unwrap_or_else(|e| panic!("Failed to display container: {e:?} ({self:?})")),
         )?;
 
