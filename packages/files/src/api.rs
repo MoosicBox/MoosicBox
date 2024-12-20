@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
     error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
@@ -5,7 +7,8 @@ use actix_web::{
     web::{self, Json},
     HttpRequest, HttpResponse, Result, Scope,
 };
-use futures::StreamExt;
+use bytes::{Bytes, BytesMut};
+use futures::{StreamExt, TryStreamExt as _};
 use moosicbox_core::{
     integer_range::{
         parse_id_ranges, parse_integer_ranges_to_ids, ParseIdsError, ParseIntegersError,
@@ -20,6 +23,8 @@ use moosicbox_music_api::{
 };
 use serde::Deserialize;
 use thiserror::Error;
+use tokio::io::AsyncWriteExt;
+use tokio_util::codec::{BytesCodec, FramedRead};
 
 use crate::files::{
     album::{get_album_cover, AlbumCoverError},
@@ -790,7 +795,7 @@ pub async fn artist_cover_endpoint(
 
     let path = get_artist_cover(&**api, &db, &artist, size).await?;
 
-    resize_image_path(&path, width, height)
+    resize_image_path(artist.id, IdType::Artist, source, &path, width, height)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to resize image: {e:?}")))
 }
@@ -953,7 +958,7 @@ pub async fn album_artwork_endpoint(
 
     let path = get_album_cover(&**api, &db, &album, size).await?;
 
-    resize_image_path(&path, width, height)
+    resize_image_path(album.id, IdType::Album, source, &path, width, height)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to resize image: {e:?}")))
 }
@@ -964,67 +969,131 @@ pub enum ResizeImageError {
     File(String, String),
     #[error("No image resize features enabled")]
     NoImageResizeFeaturesEnabled,
+    #[error("Invalid image extension")]
+    InvalidExtension,
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
+    #[error(transparent)]
+    IO(#[from] std::io::Error),
 }
 
 #[allow(unused, clippy::unused_async)]
 pub(crate) async fn resize_image_path(
+    id: Id,
+    id_type: IdType,
+    source: ApiSource,
     path: &str,
     width: u32,
     height: u32,
 ) -> Result<HttpResponse, ResizeImageError> {
+    use actix_web::http::header::{CacheControl, CacheDirective};
+
+    log::trace!("resize_image_path");
+
     #[allow(unused_mut)]
     let mut image_type = "webp";
 
-    #[cfg(feature = "libvips")]
-    {
-        use actix_web::http::header::{CacheControl, CacheDirective};
-        use log::error;
-        use moosicbox_image::libvips::{get_error, resize_local_file};
+    let extension = std::path::PathBuf::from_str(path)
+        .unwrap()
+        .extension()
+        .map_or_else(String::new, |x| format!(".{}", x.to_str().unwrap()));
 
-        image_type = "jpeg";
-        let resized = moosicbox_task::spawn_blocking("files: resize_image_path", {
-            let path = path.to_owned();
-            move || {
-                resize_local_file(width, height, &path).map_err(|e| {
-                    error!("{}", get_error());
-                    ResizeImageError::File(path, e.to_string())
-                })
-            }
-        })
-        .await??;
+    let cache_path = moosicbox_config::get_cache_dir_path()
+        .unwrap()
+        .join("covers")
+        .join(source.to_string())
+        .join(id_type.to_string())
+        .join(format!("{id}_{width}_{height}{extension}"));
 
-        let mut response = HttpResponse::Ok();
-        response.insert_header(CacheControl(vec![CacheDirective::MaxAge(86400u32 * 14)]));
-        response.content_type(format!("image/{image_type}"));
-        return Ok(response.body(resized));
-    }
-    #[cfg(feature = "image")]
-    {
-        use actix_web::http::header::{CacheControl, CacheDirective};
-        use moosicbox_image::{image::try_resize_local_file_async, Encoding};
-
-        let resized = if let Ok(Some(resized)) =
-            try_resize_local_file_async(width, height, path, Encoding::Webp, 80)
-                .await
-                .map_err(|e| ResizeImageError::File(path.to_string(), e.to_string()))
-        {
-            resized
-        } else {
-            image_type = "jpeg";
-            try_resize_local_file_async(width, height, path, Encoding::Jpeg, 80)
-                .await
-                .map_err(|e| ResizeImageError::File(path.to_string(), e.to_string()))?
-                .expect("Failed to resize to jpeg image")
+    if cache_path.is_file() {
+        log::debug!("resize_image_path: cache_path={cache_path:?} is_file=true");
+        let Some(image_type) = extension.strip_prefix(".") else {
+            return Err(ResizeImageError::InvalidExtension);
         };
+        let mut file = tokio::fs::File::open(&path).await?;
+
+        let framed_read = FramedRead::with_capacity(
+            file,
+            BytesCodec::new(),
+            usize::try_from(cache_path.metadata().unwrap().len()).unwrap(),
+        );
+
+        let stream = framed_read.map_ok(BytesMut::freeze).boxed();
 
         let mut response = HttpResponse::Ok();
         response.insert_header(CacheControl(vec![CacheDirective::MaxAge(86400u32 * 14)]));
         response.content_type(format!("image/{image_type}"));
-        return Ok(response.body(resized));
-    }
 
-    #[allow(unreachable_code)]
-    Err(ResizeImageError::NoImageResizeFeaturesEnabled)
+        return Ok(response.streaming(stream));
+    }
+    log::debug!("resize_image_path: cache_path={cache_path:?} is_file=false");
+
+    let resized: Bytes = if cfg!(feature = "libvips") {
+        #[cfg(feature = "libvips")]
+        {
+            use actix_web::http::header::{CacheControl, CacheDirective};
+            use moosicbox_image::libvips::{get_error, resize_local_file};
+
+            image_type = "jpeg";
+            moosicbox_task::spawn_blocking("files: resize_image_path", {
+                let path = path.to_owned();
+                move || {
+                    resize_local_file(width, height, &path).map_err(|e| {
+                        log::error!("{}", get_error());
+                        ResizeImageError::File(path, e.to_string())
+                    })
+                }
+            })
+            .await??
+        }
+        #[cfg(not(feature = "libvips"))]
+        {
+            #[allow(unreachable_code)]
+            return Err(ResizeImageError::NoImageResizeFeaturesEnabled);
+        }
+    } else if cfg!(feature = "image") {
+        #[cfg(feature = "image")]
+        {
+            use moosicbox_image::{image::try_resize_local_file_async, Encoding};
+
+            if let Ok(Some(resized)) =
+                try_resize_local_file_async(width, height, path, Encoding::Webp, 80)
+                    .await
+                    .map_err(|e| ResizeImageError::File(path.to_string(), e.to_string()))
+            {
+                resized
+            } else {
+                image_type = "jpeg";
+                try_resize_local_file_async(width, height, path, Encoding::Jpeg, 80)
+                    .await
+                    .map_err(|e| ResizeImageError::File(path.to_string(), e.to_string()))?
+                    .expect("Failed to resize to jpeg image")
+            }
+        }
+        #[cfg(not(feature = "image"))]
+        {
+            #[allow(unreachable_code)]
+            return Err(ResizeImageError::NoImageResizeFeaturesEnabled);
+        }
+    } else {
+        #[allow(unreachable_code)]
+        return Err(ResizeImageError::NoImageResizeFeaturesEnabled);
+    };
+
+    tokio::fs::create_dir_all(cache_path.parent().unwrap()).await?;
+
+    let mut file = tokio::fs::File::options()
+        .truncate(true)
+        .write(true)
+        .create_new(true)
+        .open(cache_path)
+        .await?;
+
+    file.write_all(&resized).await?;
+
+    let mut response = HttpResponse::Ok();
+    response.insert_header(CacheControl(vec![CacheDirective::MaxAge(86400u32 * 14)]));
+    response.content_type(format!("image/{image_type}"));
+
+    Ok(response.body(resized))
 }
