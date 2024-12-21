@@ -53,7 +53,7 @@
         "prettier": "^3.4.2",
         "prettier-plugin-astro": "^0.13.0",
         "solid-js": "^1.7.11",
-        "sst": "^3.4.26",
+        "sst": "^3.4.27",
         "typescript": "^5.7.2",
         "vite": "^5.4.11",
         "vitest": "^1.6.0"
@@ -61,7 +61,7 @@
     "dependencies": {
         "@astrojs/check": "^0.9.4",
         "@astrojs/node": "^9.0.0",
-        "@astrojs/solid-js": "^5.0.0",
+        "@astrojs/solid-js": "^5.0.1",
         "@aws-sdk/client-ssm": "^3.716.0",
         "@hotwired/turbo": "^8.0.12",
         "@nanostores/persistent": "^0.9.1",
@@ -69,7 +69,7 @@
         "@solid-primitives/scheduled": "^1.4.4",
         "@solid-primitives/storage": "^2.1.4",
         "@solid-primitives/utils": "^6.2.3",
-        "astro": "^5.1.0",
+        "astro": "^5.1.1",
         "astro-sst": "^2.45.2",
         "date-fns": "^3.6.0",
         "howler": "^2.2.4",
