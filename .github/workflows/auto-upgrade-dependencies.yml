@@ -3,7 +3,7 @@ name: Auto-upgrade Dependencies
 on:
     workflow_dispatch:
     schedule:
-        - cron: '0 2 * * *'
+        - cron: '0 6 * * *'
 
 env:
     CARGO_TERM_COLOR: always
@@ -199,5 +199,112 @@ jobs:
                   git checkout -b "$branch"
                   git add .
                   git commit --message "Upgrade Dependencies"
+                  echo "Pushing upgrades"
+                  git push origin "$branch"
+
+            - name: Upgrade incompatible
+              id: upgrade_incompatible
+              if: ${{ success() }}
+              shell: bash
+              run: |
+                  cargo upgrade --skip-git-dependencies --incompatible
+                  cargo update
+                  if [ -n "$(git status --porcelain)" ]; then
+                      echo "Found upgrades"
+                      echo "upgraded=true" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "No upgrades"
+                      echo "upgraded=false" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Clippy ${{ matrix.package.name }}
+              if: ${{ success() && steps.upgrade_incompatible.outputs.upgraded == 'true' }}
+              shell: bash
+              run: |
+                  (cd ${{ matrix.package.path }}; \
+                      while read -r feature; do \
+                          command="${{ matrix.package.env }} cargo clippy --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}"
+                          echo "RUNNING \`$command\`"
+                          if ${{ matrix.package.env }} cargo clippy \
+                              --no-default-features \
+                              --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}; then
+                              echo "SUCCESS \`$command\`";
+                          else
+                              >&2 echo "FAILED \`$command\`";
+                              return 1
+                          fi
+                      done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
+
+            - name: Build ${{ matrix.package.name }}
+              if: ${{ success() && steps.upgrade_incompatible.outputs.upgraded == 'true' }}
+              shell: bash
+              run: |
+                  (cd ${{ matrix.package.path }}; \
+                      while read -r feature; do \
+                          command="${{ matrix.package.env }} cargo build --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}"
+                          echo "RUNNING \`$command\`"
+                          if ${{ matrix.package.env }} cargo build \
+                              --no-default-features \
+                              --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}; then
+                              echo "SUCCESS \`$command\`";
+                          else
+                              >&2 echo "FAILED \`$command\`";
+                              return 1
+                          fi
+                      done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
+
+            - name: Run ${{ matrix.package.name }} tests
+              if: ${{ success() && steps.upgrade_incompatible.outputs.upgraded == 'true' }}
+              shell: bash
+              run: |
+                  (cd ${{ matrix.package.path }}; \
+                      while read -r feature; do \
+                          command="${{ matrix.package.env }} cargo test --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}"
+                          echo "RUNNING \`$command\`"
+                          if ${{ matrix.package.env }} cargo test \
+                              --no-default-features \
+                              --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}; then
+                              echo "SUCCESS \`$command\`";
+                          else
+                              >&2 echo "FAILED \`$command\`";
+                              return 1
+                          fi
+                      done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
+
+            - name: Format ${{ matrix.package.name }}
+              if: ${{ success() && steps.upgrade_incompatible.outputs.upgraded == 'true' }}
+              shell: bash
+              run: |
+                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo fmt)
+
+            - name: Install cargo-machete
+              if: ${{ success() && steps.upgrade_incompatible.outputs.upgraded == 'true' }}
+              shell: bash
+              run: |
+                  cargo install cargo-machete
+
+            - name: Validate ${{ matrix.package.name }} dependencies (machete)
+              if: ${{ success() && steps.upgrade_incompatible.outputs.upgraded == 'true' }}
+              shell: bash
+              run: |
+                  ${{ matrix.package.env }} cargo machete --with-metadata ${{ matrix.package.path }}
+
+            - name: Commit
+              if: ${{ steps.upgrade_incompatible.outputs.upgraded == 'true' && success() }}
+              shell: bash
+              run: |
+                  git add .
+                  git commit --message "Upgrade Incompatible Dependencies"
+                  echo "Pushing upgrades"
+                  git push origin master
+
+            - name: Commit
+              if: ${{ steps.upgrade_incompatible.outputs.upgraded == 'true' && failure() }}
+              shell: bash
+              run: |
+                  branch="$(date +"auto-upgrade-incompatible-%Y%m%d%H%M%S")"
+                  git checkout -b "$branch"
+                  git add .
+                  git commit --message "Upgrade Incompatible Dependencies"
                   echo "Pushing upgrades"
                   git push origin "$branch"
