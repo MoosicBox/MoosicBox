@@ -3,7 +3,7 @@ name: Tauri Auto-upgrade Node Dependencies
 on:
     workflow_dispatch:
     schedule:
-        - cron: '0 5 * * *'
+        - cron: '40 4 * * *'
 
 env:
     CARGO_TERM_COLOR: always
