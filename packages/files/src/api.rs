@@ -1010,7 +1010,7 @@ pub(crate) async fn resize_image_path(
         let Some(image_type) = extension.strip_prefix(".") else {
             return Err(ResizeImageError::InvalidExtension);
         };
-        let mut file = tokio::fs::File::open(&path).await?;
+        let mut file = tokio::fs::File::open(&cache_path).await?;
 
         let framed_read = FramedRead::with_capacity(
             file,
