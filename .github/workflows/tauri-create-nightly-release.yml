@@ -1,8 +1,8 @@
 name: Tauri Create Nightly MoosicBox App Release
 
 on:
-    schedule:
-        - cron: '0 5 * * *'
+    # schedule:
+    #     - cron: '0 5 * * *'
 
 jobs:
     create-nightly-release:
