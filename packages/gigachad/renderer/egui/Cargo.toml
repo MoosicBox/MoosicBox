@@ -66,6 +66,9 @@ fail-on-warnings = []
 glow = ["eframe/glow"]
 wgpu = ["eframe/wgpu"]
 
+wayland = ["eframe/wayland"]
+x11     = ["eframe/x11"]
+
 profiling         = ["dep:profiling"]
 profiling-puffin  = ["dep:puffin", "dep:puffin_http", "profiling"]
 profiling-tracing = ["dep:tracing-subscriber", "profiling"]

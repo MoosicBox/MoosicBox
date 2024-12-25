@@ -53,6 +53,9 @@ html       = ["dep:gigachad_renderer_html"]
 htmx       = ["dep:gigachad_renderer_htmx"]
 vanilla-js = ["dep:gigachad_renderer_vanilla_js"]
 
+wayland = ["gigachad_renderer_egui?/wayland"]
+x11     = ["gigachad_renderer_egui?/x11"]
+
 debug = ["gigachad_renderer_egui?/debug", "gigachad_renderer_fltk?/debug"]
 format = ["gigachad_renderer_fltk?/format", "gigachad_router/format"]
 profiling-puffin = [

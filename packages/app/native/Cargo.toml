@@ -95,6 +95,9 @@ html       = ["_canvas", "moosicbox_app_native_lib/html"]
 htmx       = ["_canvas", "moosicbox_app_native_lib/htmx"]
 vanilla-js = ["_canvas", "moosicbox_app_native_lib/vanilla-js"]
 
+wayland = ["moosicbox_app_native_lib/wayland"]
+x11     = ["moosicbox_app_native_lib/x11"]
+
 bundled = ["all-sources", "dep:moosicbox_app_native_bundled"]
 
 windows-console = []
