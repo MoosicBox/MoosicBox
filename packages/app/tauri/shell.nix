@@ -29,6 +29,12 @@ pkgs.mkShellNoCC {
     gst_all_1.gst-plugins-base
     gst_all_1.gst-plugins-good
     gst_all_1.gst-plugins-bad
+    xorg.libX11
+    xorg.libxcb
+    xorg.xcbutil
+    xorg.xcbutilimage
+    xorg.xcbutilkeysyms
+    xorg.xcbutilwm # contains xcb-ewmh among others
   ];
 
   shellHook = ''
@@ -36,6 +42,12 @@ pkgs.mkShellNoCC {
     export LD_LIBRARY_PATH=${pkgs.libxkbcommon}/lib:$LD_LIBRARY_PATH
     export LD_LIBRARY_PATH=${pkgs.amdvlk}/lib:$LD_LIBRARY_PATH
     export LD_LIBRARY_PATH=${pkgs.webkitgtk_4_1}/lib:$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH=${pkgs.xorg.libX11}/lib:$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH=${pkgs.xorg.libxcb}/lib:$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH=${pkgs.xorg.xcbutil}/lib:$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH=${pkgs.xorg.xcbutilimage}/lib:$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH=${pkgs.xorg.xcbutilkeysyms}/lib:$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH=${pkgs.xorg.xcbutilwm}/lib:$LD_LIBRARY_PATH
     export RUSTFLAGS="$RUSTFLAGS -C link-arg=-Wl,-rpath,"
     export RUSTFLAGS="$RUSTFLAGS:${pkgs.wayland}/lib"
     export RUSTFLAGS="$RUSTFLAGS:${pkgs.libxkbcommon}/lib"
