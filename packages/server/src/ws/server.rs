@@ -260,7 +260,7 @@ impl WsServer {
 
     /// Register new session and assign unique ID to this session
     fn connect(&mut self, profile: String, tx: mpsc::UnboundedSender<Msg>) -> ConnId {
-        log::info!("Someone joined");
+        log::debug!("Someone joined");
 
         // register session with random connection ID
         let id = thread_rng().gen::<usize>();
@@ -293,7 +293,7 @@ impl WsServer {
 
     /// Unregister connection from room map and invoke ws api disconnect.
     async fn disconnect(&mut self, conn_id: ConnId) -> Result<(), WebsocketDisconnectError> {
-        log::info!("Someone disconnected {conn_id}");
+        log::debug!("Someone disconnected {conn_id}");
         let count = self.visitor_count.fetch_sub(1, Ordering::SeqCst);
         log::debug!("Visitor count: {}", count - 1);
 

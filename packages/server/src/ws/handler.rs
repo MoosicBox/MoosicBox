@@ -25,7 +25,7 @@ pub async fn handle_ws(
     mut session: actix_ws::Session,
     mut msg_stream: actix_ws::MessageStream,
 ) {
-    log::info!("connected");
+    log::debug!("connected");
 
     let mut name = None;
     let mut last_heartbeat = Instant::now();

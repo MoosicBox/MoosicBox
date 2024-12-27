@@ -8,7 +8,6 @@ use std::{
 };
 
 use async_trait::async_trait;
-use log::{debug, info, trace};
 use moosicbox_audio_zone::models::CreateAudioZone;
 use moosicbox_core::sqlite::{db::DbError, models::ToApi};
 use moosicbox_database::{
@@ -96,7 +95,7 @@ pub enum WebsocketConnectError {
 }
 
 pub fn connect(_sender: &impl WebsocketSender, context: &WebsocketContext) -> Response {
-    info!("Connected {}", context.connection_id);
+    log::debug!("Connected {}", context.connection_id);
 
     Response {
         status_code: 200,
@@ -142,7 +141,7 @@ pub async fn disconnect(
 
     sender.send_all(&get_connections(db).await?).await?;
 
-    info!("Disconnected {}", context.connection_id);
+    log::debug!("Disconnected {}", context.connection_id);
 
     Ok(Response {
         status_code: 200,
@@ -204,9 +203,11 @@ pub async fn message(
     context: &WebsocketContext,
 ) -> Result<Response, WebsocketMessageError> {
     let message_type = message.as_ref().to_string();
-    debug!(
+    log::debug!(
         "Received message type {} from {}: {:?}",
-        message_type, context.connection_id, message
+        message_type,
+        context.connection_id,
+        message
     );
     let db = context.profile.as_ref().and_then(|x| PROFILES.get(x));
     match message {
@@ -269,7 +270,7 @@ pub async fn message(
             Ok(())
         }
         InboundPayload::Ping(_) => {
-            trace!("Ping");
+            log::trace!("Ping");
             Ok(())
         }
         InboundPayload::SetSeek(payload) => {
@@ -284,9 +285,10 @@ pub async fn message(
         }
     }?;
 
-    debug!(
+    log::debug!(
         "Successfully processed message type {} from {}",
-        message_type, context.connection_id
+        message_type,
+        context.connection_id
     );
     Ok(Response {
         status_code: 200,

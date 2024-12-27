@@ -29,7 +29,7 @@ pub async fn handle_ws(
     sender: bool,
     profile: Option<String>,
 ) -> Result<(), CommanderError> {
-    log::info!("Connected");
+    log::debug!("Connected");
 
     let mut last_heartbeat = Instant::now();
     let mut interval = interval(HEARTBEAT_INTERVAL);
@@ -39,7 +39,7 @@ pub async fn handle_ws(
     // unwrap: ws server is not dropped before the HTTP server
     let conn_id = ws_server.connect(&client_id, sender, conn_tx).await?;
 
-    log::info!("Connection id: {conn_id}");
+    log::debug!("Connection id: {conn_id}");
 
     let close_reason = loop {
         // most of the futures we process need to be stack-pinned to work with select()
