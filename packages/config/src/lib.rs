@@ -136,6 +136,15 @@ mod db_impl {
             return Ok(profile);
         }
 
+        if let Err(e) = moosicbox_profiles::events::trigger_profiles_updated_event(
+            vec![name.to_string()],
+            vec![],
+        )
+        .await
+        {
+            moosicbox_assert::die_or_error!("Failed to trigger profiles updated event: {e:?}");
+        }
+
         create_profile(db, name).await
     }
 
