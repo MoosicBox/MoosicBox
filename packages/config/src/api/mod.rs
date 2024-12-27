@@ -2,10 +2,11 @@ use actix_web::{
     dev::{ServiceFactory, ServiceRequest},
     error::ErrorInternalServerError,
     route,
-    web::Json,
+    web::{self, Json},
     Result, Scope,
 };
 use moosicbox_database::config::ConfigDatabase;
+use serde::Deserialize;
 
 use crate::api::models::ApiProfile;
 
@@ -16,7 +17,9 @@ pub fn bind_services<
 >(
     scope: Scope<T>,
 ) -> Scope<T> {
-    scope.service(get_profiles_endpoint)
+    scope
+        .service(get_profiles_endpoint)
+        .service(create_profile_endpoint)
 }
 
 #[cfg(feature = "openapi")]
@@ -25,6 +28,7 @@ pub fn bind_services<
     tags((name = "Config")),
     paths(
         get_profiles_endpoint,
+        create_profile_endpoint,
     ),
     components(schemas())
 )]
@@ -41,7 +45,7 @@ pub struct Api;
             (
                 status = 200,
                 description = "The list of MoosicBox profiles",
-                body = Value,
+                body = Vec<ApiProfile>,
             )
         )
     )
@@ -55,5 +59,42 @@ pub async fn get_profiles_endpoint(db: ConfigDatabase) -> Result<Json<Vec<ApiPro
             .into_iter()
             .map(Into::into)
             .collect::<Vec<ApiProfile>>(),
+    ))
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateProfileQuery {
+    name: String,
+}
+
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Config"],
+        post,
+        path = "/profiles",
+        description = "Create a new MoosicBox profile",
+        params(
+            ("name" = String, Query, description = "The name of the profile"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The created MoosicBox profile",
+                body = ApiProfile,
+            )
+        )
+    )
+)]
+#[route("/profiles", method = "POST")]
+pub async fn create_profile_endpoint(
+    query: web::Query<CreateProfileQuery>,
+    db: ConfigDatabase,
+) -> Result<Json<ApiProfile>> {
+    Ok(Json(
+        crate::db::upsert_profile(&db, &query.name)
+            .await
+            .map_err(ErrorInternalServerError)?
+            .into(),
     ))
 }
