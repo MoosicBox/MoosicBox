@@ -10,7 +10,8 @@ pkgs.mkShellNoCC {
   packages = with pkgs; [
     pkg-config
     gnumake
-    gcc
+    clang
+    stdenv
     libiconv
     autoconf
     automake
@@ -39,17 +40,19 @@ pkgs.mkShellNoCC {
   ];
 
   shellHook = ''
-    export LD_LIBRARY_PATH=${pkgs.wayland}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.libxkbcommon}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.amdvlk}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.webkitgtk_4_1}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.xorg.libX11}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.xorg.libxcb}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.xorg.xcbutil}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.xorg.xcbutilimage}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.xorg.xcbutilkeysyms}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.xorg.xcbutilwm}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.vulkan-loader}/lib:$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.wayland ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.libxkbcommon ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.amdvlk ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.webkitgtk_4_1 ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.xorg.libX11 ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.xorg.libxcb ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.xorg.xcbutil ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.xorg.xcbutilimage ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.xorg.xcbutilkeysyms ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.xorg.xcbutilwm ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.vulkan-loader ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.clang ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ]}"
     export RUSTFLAGS="$RUSTFLAGS -C link-arg=-Wl,-rpath,"
     export RUSTFLAGS="$RUSTFLAGS:${pkgs.wayland}/lib"
     export RUSTFLAGS="$RUSTFLAGS:${pkgs.libxkbcommon}/lib"
