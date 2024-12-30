@@ -38,6 +38,7 @@
         "@solidjs/meta": "^0.29.4",
         "@solidjs/testing-library": "^0.8.10",
         "@testing-library/jest-dom": "^5.17.0",
+        "@tsconfig/node18": "18.2.2",
         "@types/howler": "^2.2.12",
         "@types/testing-library__jest-dom": "^5.14.9",
         "@typescript-eslint/eslint-plugin": "^7.18.0",
