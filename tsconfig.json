@@ -22,6 +22,9 @@
         "**/*.ts"
     ],
     "exclude": [
+        "packages/**/*",
+        "app-website/**/*",
+        "marketing-website/**/*",
         "target/**/*"
     ]
 }

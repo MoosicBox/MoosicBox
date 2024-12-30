@@ -1,1 +1,4 @@
 sst-env.d.ts
+packages/**/*
+app-website/**/*
+marketing-website/**/*
