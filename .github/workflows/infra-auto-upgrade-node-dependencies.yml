@@ -1,9 +1,9 @@
-name: Tauri Auto-upgrade Node Dependencies
+name: Infra Auto-upgrade Node Dependencies
 
 on:
     workflow_dispatch:
     schedule:
-        - cron: '0 5 * * *'
+        - cron: '40 4 * * *'
 
 env:
     CARGO_TERM_COLOR: always
@@ -17,13 +17,6 @@ jobs:
             - uses: actions/checkout@v4
               with:
                   token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
-                  path: MoosicBox
-
-            - name: Copy Files
-              working-directory: MoosicBox/packages/app/tauri
-              shell: bash
-              run: |
-                  ./copy-files.sh
 
             - uses: pnpm/action-setup@v3
               name: Install pnpm
@@ -44,18 +37,12 @@ jobs:
                   restore-keys: |
                       ${{ matrix.os }}-pnpm-store-
 
-            - uses: dtolnay/rust-toolchain@stable
-
-            - name: Generate config
-              working-directory: MoosicBox/packages/app/tauri
-              run: cargo run --package moosicbox_app_create_config -- -o src/config.ts
-
             - name: pnpm install
-              working-directory: MoosicBox/packages/app/tauri
-              run: pnpm install
+              run: |
+                  pnpm install
+                  pnpm sst install
 
             - name: Upgrade
-              working-directory: MoosicBox/packages/app/tauri
               id: upgrade
               shell: bash
               run: |
@@ -63,6 +50,7 @@ jobs:
                   if [ -n "$(git status --porcelain)" ]; then
                       echo "Found upgrades"
                       echo "upgraded=true" >> "$GITHUB_OUTPUT"
+                      pnpm sst install
                   else
                       echo "No upgrades"
                       echo "upgraded=false" >> "$GITHUB_OUTPUT"
@@ -70,19 +58,16 @@ jobs:
 
             - name: Validate
               if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
-              working-directory: MoosicBox/packages/app/tauri
               shell: bash
-              run: |
-                  pnpm validate
+              run: pnpm validate
 
             - name: Commit
               if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
-              working-directory: MoosicBox/packages/app/tauri
               shell: bash
               run: |
                   git config user.name "MoosicBoxBot"
                   git config user.email "MoosicBoxBot@gmail.com"
                   git add .
-                  git commit --message "Upgrade Tauri App node dependencies"
+                  git commit --message "Upgrade infra node dependencies"
                   echo "Pushing upgrades"
                   git push origin master
