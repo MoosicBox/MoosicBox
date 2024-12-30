@@ -83,6 +83,6 @@ jobs:
                   git config user.name "MoosicBoxBot"
                   git config user.email "MoosicBoxBot@gmail.com"
                   git add .
-                  git commit --message "Upgrade Dependencies"
+                  git commit --message "Upgrade Tauri App node dependencies"
                   echo "Pushing upgrades"
                   git push origin master

@@ -185,7 +185,7 @@ jobs:
                   git config user.name "MoosicBoxBot"
                   git config user.email "MoosicBoxBot@gmail.com"
                   git add .
-                  git commit --message "Upgrade Dependencies"
+                  git commit --message "Upgrade Cargo Dependencies"
                   echo "Pushing upgrades"
                   git push origin master
 
@@ -198,7 +198,7 @@ jobs:
                   git config user.email "MoosicBoxBot@gmail.com"
                   git checkout -b "$branch"
                   git add .
-                  git commit --message "Upgrade Dependencies"
+                  git commit --message "Upgrade Cargo Dependencies"
                   echo "Pushing upgrades"
                   git push origin "$branch"
 
@@ -288,7 +288,7 @@ jobs:
               shell: bash
               run: |
                   git add .
-                  git commit --message "Upgrade Incompatible Dependencies"
+                  git commit --message "Upgrade Incompatible Cargo Dependencies"
                   echo "Pushing upgrades"
                   git push origin master
 
@@ -299,6 +299,6 @@ jobs:
                   branch="$(date +"auto-upgrade-incompatible-%Y%m%d%H%M%S")"
                   git checkout -b "$branch"
                   git add .
-                  git commit --message "Upgrade Incompatible Dependencies"
+                  git commit --message "Upgrade Incompatible Cargo Dependencies"
                   echo "Pushing upgrades"
                   git push origin "$branch"
