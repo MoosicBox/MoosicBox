@@ -4,6 +4,7 @@ import { clusterProvider } from './cluster';
 import { Input, Output, Resource } from '@pulumi/pulumi';
 import { registryAuth, repo } from './registry';
 import { certManagers } from './cert-manager';
+import { tunnelServerService } from './tunnel-server';
 
 const useSsl = process.env['LOAD_BALANCER_USE_SSL'] === 'true';
 
@@ -206,7 +207,7 @@ function createNodePort(dependsOn: Input<Input<Resource>[]>) {
 }
 
 export const image = createImage();
-export const loadBalancer = createLb(image, []);
+export const loadBalancer = createLb(image, [tunnelServerService]);
 export const issuer = createIssuer([certManagers]);
 export const certificate = createCertificate([issuer]);
 export const nodePort = createNodePort([loadBalancer]);

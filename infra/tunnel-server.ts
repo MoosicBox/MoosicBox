@@ -99,9 +99,9 @@ function createService(dependsOn: Input<Input<Resource>[]>) {
     });
 }
 
-const image = createImage();
-const tunnelServerDeployment = createDeployment(image, []);
-const tunnelServerService = createService([tunnelServerDeployment]);
+export const image = createImage();
+export const tunnelServerDeployment = createDeployment(image, []);
+export const tunnelServerService = createService([tunnelServerDeployment]);
 
 export const outputs = {
     serviceId: tunnelServerService.id,
