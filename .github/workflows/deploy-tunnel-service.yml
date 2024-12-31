@@ -1,4 +1,4 @@
-name: Deploy LoadBalancer
+name: Deploy Tunnel Service
 
 on:
     workflow_dispatch:
@@ -17,6 +17,14 @@ on:
                 default: 'true'
             force:
                 description: 'K8S Patch Force'
+                required: false
+                default: 'false'
+            refresh:
+                description: 'Pulumi refresh'
+                required: false
+                default: 'false'
+            delete_unreachable:
+                description: 'K8S Delete Unreachable'
                 required: false
                 default: 'false'
 
@@ -38,6 +46,24 @@ jobs:
                   version: 9
                   run_install: false
 
+            - name: Install SST
+              shell: bash
+              env:
+                  DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+                  PULUMI_K8S_DELETE_UNREACHABLE: ${{ github.event.inputs.delete_unreachable }}
+              run: |
+                  pnpm install
+                  pnpm sst install
+
+            - name: Refresh
+              if: ${{ github.event.inputs.refresh == 'true' }}
+              shell: bash
+              env:
+                  DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+                  PULUMI_K8S_DELETE_UNREACHABLE: ${{ github.event.inputs.delete_unreachable }}
+              run: |
+                  pnpm sst refresh --stage ${{ github.event.inputs.stage }} --verbose
+
             - name: Deploy
               shell: bash
               env:
@@ -46,11 +72,10 @@ jobs:
                   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
                   AWS_REGION: us-east-1
                   PULUMI_K8S_ENABLE_PATCH_FORCE: ${{ github.event.inputs.force }}
+                  PULUMI_K8S_DELETE_UNREACHABLE: ${{ github.event.inputs.delete_unreachable }}
                   EXTRA_CLUSTERS: ${{ github.event.inputs.extra_clusters }}
                   LOAD_BALANCER_USE_SSL: ${{ github.event.inputs.ssl }}
               run: |
-                  pnpm install
-                  pnpm sst install
                   pnpm sst deploy --stage ${{ github.event.inputs.stage }} --verbose
 
             - name: Upload log
