@@ -26,7 +26,7 @@ moosicbox_logging = { version = "0.1.0", path = "../logging", default-features =
 
 async-trait            = { workspace = true }
 log                    = { workspace = true }
-pingora                = { workspace = true }
+pingora                = { workspace = true, features = ["openssl"] }
 pingora-core           = { workspace = true }
 pingora-http           = { workspace = true }
 pingora-load-balancing = { workspace = true }

@@ -4,7 +4,7 @@
 use std::{collections::HashMap, path::Path};
 
 use moosicbox_load_balancer::{Router, PORT, SSL_CRT_PATH, SSL_KEY_PATH, SSL_PORT};
-use pingora::{prelude::*, tls::listeners::TlsSettings};
+use pingora::{listeners::tls::TlsSettings, prelude::*};
 use pingora_core::services::{background::GenBackgroundService, listening::Service};
 use pingora_load_balancing::{health_check::TcpHealthCheck, selection::RoundRobin, LoadBalancer};
 use pingora_proxy::{http_proxy_service, HttpProxy};
