@@ -48,14 +48,14 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.4.37
-        version: 3.4.37
+        specifier: ^3.4.39
+        version: 3.4.39
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
       yaml:
-        specifier: ^2.6.1
-        version: 2.6.1
+        specifier: ^2.7.0
+        version: 2.7.0
 
 packages:
 
@@ -1958,33 +1958,33 @@ packages:
     resolution: {integrity: sha512-MGrFH9Z4NP9Iyhqn16sDtBpRRNJ0Y2hNa6D65h736fVSaPCHr4DM4sWUNvVaSuC+0OBGhwsrydQwmgfg5LncqQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
-  sst-darwin-arm64@3.4.37:
-    resolution: {integrity: sha512-1cK3yeMX67nyVdRpWjML/KgtAzf3225WiPuVdFr75doCQQcyn5JluocyfbYTiTQ3GwhEMBV4mcZbPi1QiCmEgg==}
+  sst-darwin-arm64@3.4.39:
+    resolution: {integrity: sha512-7rr9V5WWNc/IN98nzoSOEc6POmQJDouiqKLEF7GSXhnbXk1uhOVNTnH1yyK77OkwSFQxzdoFKmB16zMHodDwEw==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.4.37:
-    resolution: {integrity: sha512-dPq46FvduXmM58ozF2jYKhpMLcAhN8rOjsSyfc0hqAIDw/TiyqZA+W/Iy4JXeaWBCQU5tyF/XuDGuKT/+xFQQA==}
+  sst-darwin-x64@3.4.39:
+    resolution: {integrity: sha512-ipnBwspPESoLGc4Brl4+REBHO/sKNiVPB6wI1ztiHor1oa+eQwnvMJO5NcJelL5iI4WHL+naklU7rBbi191Jqg==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.4.37:
-    resolution: {integrity: sha512-inAvaPi9XT9sRQrEq8rPBma+KJ8hxItvAIeYT5MvB3mCno9zpEBLD9qqZoaAA7Ivq8flcReVtA8xK3uj32pxkg==}
+  sst-linux-arm64@3.4.39:
+    resolution: {integrity: sha512-hwXnIzuB6bXRmVhBV7LGEMJLinFXDLvKuIIM+cPqgp/XQRf14ASdbYZsdoG+V2hR/ATjyz/D7ODbKFp3FgT5bQ==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.4.37:
-    resolution: {integrity: sha512-B0m/zMOlWfqZ9b2spgj8iH+6h1BrpYTmGK1Fyyiy0kFwl8qQQFq/vSlrp7IP4I7/S3dTh6Hag74Zq2ynzdZh3g==}
+  sst-linux-x64@3.4.39:
+    resolution: {integrity: sha512-1emGKGyz1+DjQtRjamPB++PhK3VvNDsQhvAYb+4VejLYx+c839pbAGr611pkNJwlMVtHadWzSG1POIcIOKVM8g==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.4.37:
-    resolution: {integrity: sha512-sWDO90Ig0ueESG0FceuRhCV9Uqg1V750aJIbzs+NfVRwlwe6qHybmzxuoQzPWwOCLgxLCg84U2SVau3sJqDFmQ==}
+  sst-linux-x86@3.4.39:
+    resolution: {integrity: sha512-8k1xS7ezRBLoQ2UbuNWZ6+5VAeNx/s+B5vLBYxpFzgM+RZBCT9XVuUHBKfwjacfUl1YC8u91Yt2PZ8o7oA5J/Q==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.4.37:
-    resolution: {integrity: sha512-fHofB5Cg3wIlXNhBNZhJV15grnWaldT00k2ZLfpGd7zrjygmdUjcCp+BmwHl8MHLvFF5FOeBL4ptFpZogfoDLg==}
+  sst@3.4.39:
+    resolution: {integrity: sha512-N4AoqUJh9xboKNVTzyc1cCZ4PMxw4vkqTnY2VaQtiM7x7sfAInAeQvP4L65GXD/Sz2EChXoCNqYKXBMTZXrXFg==}
     hasBin: true
     peerDependencies:
       hono: 4.x
@@ -2205,8 +2205,8 @@ packages:
   yallist@4.0.0:
     resolution: {integrity: sha512-3wdGidZyq5PB084XLES5TpOSRA3wjXAlIWMhum2kRcv/41Sn2emQ0dycQW4uZXLejwKvg6EsvbdlVL+FYEct7A==}
 
-  yaml@2.6.1:
-    resolution: {integrity: sha512-7r0XPzioN/Q9kXBro/XPnA6kznR73DHq+GXh5ON7ZozRO6aMjbmiBuKste2wslTFkC5d1dw0GooOCepZXJ2SAg==}
+  yaml@2.7.0:
+    resolution: {integrity: sha512-+hSoy/QHluxmC9kCIJyL/uyFmLmc+e5CFR5Wa+bpIhIj85LVb9ZH2nVnqrHoSvKogwODv0ClqZkmiSSaIH5LTA==}
     engines: {node: '>= 14'}
     hasBin: true
 
@@ -4462,32 +4462,32 @@ snapshots:
     dependencies:
       minipass: 7.1.2
 
-  sst-darwin-arm64@3.4.37:
+  sst-darwin-arm64@3.4.39:
     optional: true
 
-  sst-darwin-x64@3.4.37:
+  sst-darwin-x64@3.4.39:
     optional: true
 
-  sst-linux-arm64@3.4.37:
+  sst-linux-arm64@3.4.39:
     optional: true
 
-  sst-linux-x64@3.4.37:
+  sst-linux-x64@3.4.39:
     optional: true
 
-  sst-linux-x86@3.4.37:
+  sst-linux-x86@3.4.39:
     optional: true
 
-  sst@3.4.37:
+  sst@3.4.39:
     dependencies:
       aws4fetch: 1.0.20
       jose: 5.2.3
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.4.37
-      sst-darwin-x64: 3.4.37
-      sst-linux-arm64: 3.4.37
-      sst-linux-x64: 3.4.37
-      sst-linux-x86: 3.4.37
+      sst-darwin-arm64: 3.4.39
+      sst-darwin-x64: 3.4.39
+      sst-linux-arm64: 3.4.39
+      sst-linux-x64: 3.4.39
+      sst-linux-x86: 3.4.39
 
   string-width@4.2.3:
     dependencies:
@@ -4747,7 +4747,7 @@ snapshots:
 
   yallist@4.0.0: {}
 
-  yaml@2.6.1: {}
+  yaml@2.7.0: {}
 
   yargs-parser@21.1.1: {}
 
