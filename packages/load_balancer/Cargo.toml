@@ -26,11 +26,16 @@ moosicbox_logging = { version = "0.1.0", path = "../logging", default-features =
 
 async-trait            = { workspace = true }
 log                    = { workspace = true }
-pingora                = { workspace = true, features = ["openssl"] }
 pingora-core           = { workspace = true }
 pingora-http           = { workspace = true }
 pingora-load-balancing = { workspace = true }
 pingora-proxy          = { workspace = true }
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+pingora  = { workspace = true, features = ["openssl"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+pingora = { workspace = true }
 
 [features]
 fail-on-warnings = []
