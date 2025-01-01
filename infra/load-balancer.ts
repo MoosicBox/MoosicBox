@@ -208,7 +208,7 @@ function createNodePort(dependsOn: Input<Input<Resource>[]>) {
 
 export const image = createImage();
 export const loadBalancer = createLb(image, [tunnelServerService]);
-export const issuer = createIssuer([certManagers]);
+export const issuer = createIssuer(certManagers);
 export const certificate = createCertificate([issuer]);
 export const nodePort = createNodePort([loadBalancer]);
 export const ingress = createIngress([nodePort]);
