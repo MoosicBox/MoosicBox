@@ -2001,7 +2001,7 @@ name = "clippier"
 version = "0.1.0"
 dependencies = [
  "clap 4.5.23",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "log",
  "moosicbox_logging",
  "serde",
@@ -3843,7 +3843,7 @@ dependencies = [
  "gigachad_router",
  "gigachad_transformer",
  "image",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "log",
  "moosicbox_app_native_image",
  "moosicbox_assert",
@@ -3952,7 +3952,7 @@ dependencies = [
  "gigachad_color",
  "gigachad_transformer_models",
  "html-escape",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "log",
  "maud",
  "moosicbox_assert",
@@ -5073,6 +5073,15 @@ name = "itertools"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
 dependencies = [
  "either",
 ]
@@ -6798,7 +6807,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "futures",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "log",
  "md5",
  "moosicbox_assert",
@@ -6897,7 +6906,7 @@ name = "moosicbox_search"
 version = "0.1.0"
 dependencies = [
  "actix-web",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "log",
  "moosicbox_config",
  "moosicbox_core",
@@ -7058,7 +7067,7 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "futures",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "log",
  "moosicbox_assert",
  "moosicbox_core",
@@ -7183,7 +7192,7 @@ dependencies = [
  "async-trait",
  "flume",
  "futures",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "log",
  "moosicbox_assert",
  "moosicbox_async_service",
