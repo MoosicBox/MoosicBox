@@ -356,6 +356,11 @@ pub fn session_updated(
                 "player-current-playing".to_string(),
                 player_current_album(track, CURRENT_ALBUM_SIZE),
             ));
+            // log::debug!("session_updated: rendering current playing");
+            // partials.push((
+            //     "album-page-tracks".to_string(),
+            //     album_page_tracks_table_body(ApiAlbumVersion{}, Some(&Id::Number(9322))),
+            // ));
         }
 
         partials.push(("play-queue".to_string(), play_queue(state)));

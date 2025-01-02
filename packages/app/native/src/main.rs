@@ -287,6 +287,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .transpose()?;
 
                 if req.query.get("full").map(String::as_str) == Some("true") {
+                    let state = convert_state(&STATE).await;
                     let album_id = album_id.into();
                     let api = PROFILES.get(PROFILE).unwrap().get(source)?;
                     let album = api
@@ -309,6 +310,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     log::debug!("versions: {versions:?}");
 
                     let container: Container = moosicbox_app_native_ui::albums::album_page_content(
+                        &state,
                         &album,
                         &versions,
                         versions.iter().find(|v| {

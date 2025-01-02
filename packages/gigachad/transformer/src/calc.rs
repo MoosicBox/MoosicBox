@@ -7814,4 +7814,55 @@ mod test {
             .to_string()
         );
     }
+
+    #[test_log::test]
+    fn calc_calculates_table_sibling_element_height_correctly() {
+        let mut container: Container = html! {
+            div {}
+            table {
+                tr sx-height=(30) {
+                    td sx-height=(30) {}
+                    td sx-height=(30) {}
+                    td sx-height=(30) {}
+                }
+                tr sx-height=(30) {
+                    td sx-height=(30) {}
+                    td sx-height=(30) {}
+                    td sx-height=(30) {}
+                }
+                tr sx-height=(30) {
+                    td sx-height=(30) {}
+                    td sx-height=(30) {}
+                    td sx-height=(30) {}
+                }
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(50.0);
+        container.calculated_height = Some(100.0);
+
+        container.calc();
+        log::trace!("container:\n{}", container);
+
+        assert_eq!(
+            container.to_string(),
+            Container {
+                children: vec![
+                    Container {
+                        calculated_height: Some(10.0),
+                        ..container.children[0].clone()
+                    },
+                    Container {
+                        calculated_height: Some(90.0),
+                        ..container.children[1].clone()
+                    }
+                ],
+                calculated_height: Some(100.0),
+                ..container.clone()
+            }
+            .to_string()
+        );
+    }
 }

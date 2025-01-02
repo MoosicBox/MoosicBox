@@ -140,6 +140,7 @@ pub fn album_page_immediate(
 #[allow(clippy::too_many_lines)]
 #[must_use]
 pub fn album_page_content(
+    state: &State,
     album: &ApiAlbum,
     versions: &[ApiAlbumVersion],
     selected_version: Option<&ApiAlbumVersion>,
@@ -237,28 +238,60 @@ pub fn album_page_content(
                 div {
                     table {
                         thead {
-                            tr{
+                            tr {
                                 th { "#" }
                                 th { "Title" }
                                 th { "Artist" }
                                 th { "Time" }
                             }
                         }
-                        tbody {
-                            @for track in &version.tracks {
-                                tr {
-                                    td { (track.number) }
-                                    td { (track.title) }
-                                    td { a href=(pre_escaped!("/artists?artistId={}&source={}", track.artist_id, track.api_source)) { (track.artist) } }
-                                    td { (track.duration.into_formatted()) }
-                                }
-                            }
-                        }
+                        (album_page_tracks_table_body_from_state(state, &version))
                     }
                 }
             }
         }
     }
+}
+
+#[must_use]
+pub fn album_page_tracks_table_body(version: &ApiAlbumVersion, track_id: Option<&Id>) -> Markup {
+    html! {
+        tbody id="album-page-tracks" {
+            @for track in &version.tracks {
+                @let current_track = track_id.is_some_and(|x| x == &track.track_id);
+                tr
+                    sx-border-radius=[if current_track { Some(5) } else { None }]
+                    sx-background=[if current_track { Some("#333") } else { None }]
+                {
+                    td sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) {
+                        (track.number)
+                    }
+                    td sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) {
+                        (track.title)
+                    }
+                    td sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) {
+                        a href=(pre_escaped!("/artists?artistId={}&source={}", track.artist_id, track.api_source)) { (track.artist) }
+                    }
+                    td sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) {
+                        (track.duration.into_formatted())
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[must_use]
+pub fn album_page_tracks_table_body_from_state(state: &State, version: &ApiAlbumVersion) -> Markup {
+    if let Some(playback) = &state.player.playback {
+        let track: Option<&ApiTrack> = playback.tracks.get(playback.position as usize);
+
+        if let Some(track) = track {
+            return album_page_tracks_table_body(version, Some(&track.track_id));
+        }
+    }
+
+    album_page_tracks_table_body(version, None)
 }
 
 #[must_use]
