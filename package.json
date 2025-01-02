@@ -28,7 +28,7 @@
         "eslint-plugin-node": "^11.1.0",
         "prettier": "^3.4.2",
         "prettier-plugin-astro": "^0.13.0",
-        "sst": "^3.4.46",
+        "sst": "^3.4.49",
         "typescript": "^5.7.2",
         "yaml": "^2.7.0"
     }
