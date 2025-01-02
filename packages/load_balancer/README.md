@@ -8,4 +8,16 @@
     - (this should happen automatically)
 3. Profit
 
+### Tear down cluster
+
+```
+kubectl delete all --all
+
+kubectl get validatingwebhookconfiguration.admissionregistration.k8s.io
+kubectl delete validatingwebhookconfiguration.admissionregistration.k8s.io/<Junk Object>
+
+kubectl get mutatingwebhookconfiguration.admissionregistration.k8s.io
+kubectl delete mutatingwebhookconfiguration.admissionregistration.k8s.io/<Junk Object>
+```
+
 May need to manually `kubectl apply -f kubernetes/cert-manager.yaml`?
