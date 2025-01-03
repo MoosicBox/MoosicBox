@@ -381,7 +381,7 @@ pub struct AddScanPathQuery {
         description = "Enable a local scan path",
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
-            ("origin" = String, Query, description = "Local scan path to enable"),
+            ("path" = String, Query, description = "Local scan path to enable"),
         ),
         responses(
             (
@@ -434,7 +434,7 @@ pub struct RemoveScanPathQuery {
         description = "Disable a local scan path",
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
-            ("origin" = String, Query, description = "Local scan path to disable"),
+            ("path" = String, Query, description = "Local scan path to disable"),
         ),
         responses(
             (
