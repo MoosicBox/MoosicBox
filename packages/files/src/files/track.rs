@@ -471,10 +471,14 @@ pub async fn get_audio_bytes(
                             )
                             .await
                             {
-                                log::error!("Failed to encode to aac: {err:?}");
+                                log::error!(
+                                    "Failed to encode to {format} (source={}): {err:?}",
+                                    source.format()
+                                );
                             }
                         }
                         TrackSource::RemoteUrl { ref url, .. } => {
+                            let source_format = source.format();
                             let source: RemoteByteStreamMediaSource = RemoteByteStream::new(
                                 url.to_string(),
                                 size,
@@ -502,7 +506,9 @@ pub async fn get_audio_bytes(
                             )
                             .await
                             {
-                                log::error!("Failed to encode to aac: {err:?}");
+                                log::error!(
+                                    "Failed to encode to {format} (source={source_format}): {err:?}",
+                                );
                             }
                         }
                     }
