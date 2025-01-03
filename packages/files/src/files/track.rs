@@ -390,7 +390,7 @@ pub async fn get_audio_bytes(
                 let writer_id = writer.id;
                 #[allow(unused)]
                 let stream = writer.stream();
-                let same_format = source.format() == format;
+                let same_format = format == AudioFormat::Source || source.format() == format;
 
                 let track_bytes = if same_format {
                     match source {
