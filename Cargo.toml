@@ -132,7 +132,7 @@ actix-ws = "0.3.0"
 arrayvec = "0.7.6"
 async-once-cell = "0.5.4"
 async-recursion = "1.1.1"
-async-trait = "0.1.83"
+async-trait = "0.1.84"
 atomic_float = "1.1.0"
 audiopus = "0.2.0"
 awc = "3.5.1"
@@ -263,9 +263,9 @@ strum = "0.26.3"
 strum_macros = "0.26.4"
 symphonia = { version = "0.5.4", features = ["all"] }
 tantivy = "0.22.0"
-tauri = { version = "2.1.1", features = ["protocol-asset"] }
-tauri-build = { version = "2.0.3", features = [] }
-tauri-plugin = { version = "2.0.3", features = ["build"] }
+tauri = { version = "2.2.0", features = ["protocol-asset"] }
+tauri-build = { version = "2.0.4", features = [] }
+tauri-plugin = { version = "2.0.4", features = ["build"] }
 tauri-plugin-dialog = "2.2.0"
 tauri-plugin-notification = "2.2.0"
 test-log = "0.2.16"
