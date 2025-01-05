@@ -9,5 +9,9 @@ features = ["cpal", "default"]
 command  = "sudo apt-get update && sudo apt-get install pulseaudio"
 features = ["default", "pulseaudio", "pulseaudio-simple", "pulseaudio-standard"]
 
+[[config.dependencies]]
+command  = "sudo apt-get update && sudo apt-get install libsqlite3-dev"
+features = ["default", "sqlite", "sqlite-rusqlite", "sqlite-sqlx"]
+
 [env]
 STATIC_TOKEN = { value = "123", features = ["default", "static-token-auth"] }

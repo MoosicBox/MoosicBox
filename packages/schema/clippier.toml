@@ -1,0 +1,6 @@
+[[config]]
+os = "ubuntu"
+
+[[config.dependencies]]
+command  = "sudo apt-get update && sudo apt-get install libsqlite3-dev"
+features = ["default", "sqlite"]
