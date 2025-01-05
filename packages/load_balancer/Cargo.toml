@@ -32,7 +32,7 @@ pingora-load-balancing = { workspace = true }
 pingora-proxy          = { workspace = true }
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
-pingora  = { workspace = true, features = ["openssl"] }
+pingora = { workspace = true, features = ["openssl"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 pingora = { workspace = true }

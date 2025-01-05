@@ -14,6 +14,7 @@ use moosicbox_core::{
     sqlite::models::{ApiSource, ApiTrack, Id},
     types::PlaybackQuality,
 };
+use moosicbox_logging::free_log_client::DynLayer;
 use moosicbox_mdns::scanner::service::Commander;
 use moosicbox_player::{Playback, PlayerError};
 use moosicbox_session::models::{ApiSession, ApiUpdateSession, UpdateSession};
@@ -591,17 +592,20 @@ async fn handle_media_event(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 #[allow(clippy::too_many_lines)]
 pub fn run() {
-    if std::env::var("TOKIO_CONSOLE") == Ok("1".to_string()) {
-        console_subscriber::init();
-    } else {
-        #[cfg(target_os = "android")]
-        let filename = None;
-        #[cfg(not(target_os = "android"))]
-        let filename = Some("moosicbox_app.log");
+    let mut layers = vec![];
 
-        let layer = moosicbox_logging::init(filename).expect("Failed to initialize FreeLog");
-        LOG_LAYER.set(layer).expect("Failed to set LOG_LAYER");
+    if std::env::var("TOKIO_CONSOLE") == Ok("1".to_string()) {
+        layers.push(Box::new(console_subscriber::spawn()) as DynLayer);
     }
+
+    #[cfg(target_os = "android")]
+    let filename = None;
+    #[cfg(not(target_os = "android"))]
+    let filename = Some("moosicbox_app.log");
+
+    let layer =
+        moosicbox_logging::init(filename, Some(layers)).expect("Failed to initialize FreeLog");
+    LOG_LAYER.set(layer).expect("Failed to set LOG_LAYER");
 
     let tauri::async_runtime::RuntimeHandle::Tokio(tokio_handle) = tauri::async_runtime::handle();
 

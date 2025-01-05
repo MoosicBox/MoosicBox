@@ -3,17 +3,11 @@
 
 use moosicbox_config::AppType;
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
+use moosicbox_logging::free_log_client::DynLayer;
 
 #[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::too_many_lines)]
 fn main() -> std::io::Result<()> {
-    if std::env::var("TOKIO_CONSOLE") == Ok("1".to_string()) {
-        console_subscriber::init();
-    } else {
-        moosicbox_logging::init(Some("moosicbox_server.log"))
-            .expect("Failed to initialize FreeLog");
-    }
-
     let args: Vec<String> = std::env::args().collect();
 
     let addr = default_env("BIND_ADDR", "0.0.0.0");
@@ -41,15 +35,29 @@ fn main() -> std::io::Result<()> {
             .build()
             .unwrap()
     })
-    .block_on(moosicbox_server::run(
-        AppType::Server,
-        &addr,
-        service_port,
-        actix_workers,
-        #[cfg(feature = "player")]
-        true,
-        #[cfg(feature = "upnp")]
-        true,
-        || {},
-    ))
+    .block_on(async move {
+        let mut layers = vec![];
+
+        if std::env::var("TOKIO_CONSOLE") == Ok("1".to_string()) {
+            layers.push(Box::new(console_subscriber::spawn()) as DynLayer);
+        }
+
+        moosicbox_logging::init(Some("moosicbox_server.log"), Some(layers))
+            .expect("Failed to initialize FreeLog");
+
+        moosicbox_server::run(
+            AppType::Server,
+            &addr,
+            service_port,
+            actix_workers,
+            #[cfg(feature = "player")]
+            true,
+            #[cfg(feature = "upnp")]
+            true,
+            || {},
+        )
+        .await?;
+
+        Ok(())
+    })
 }

@@ -14,7 +14,7 @@ struct Args {
 }
 
 fn main() {
-    moosicbox_logging::init(None).expect("Failed to initialize FreeLog");
+    moosicbox_logging::init(None, None).expect("Failed to initialize FreeLog");
 
     let args = Args::parse();
 

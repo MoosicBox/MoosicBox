@@ -1,6 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use free_log_client::FreeLogLayer;
+use free_log_client::{DynLayer, FreeLogLayer};
 use moosicbox_config::make_config_dir_path;
 use moosicbox_env_utils::default_env;
 use thiserror::Error;
@@ -22,13 +22,20 @@ pub enum InitError {
 /// * If the logs failed to initialize
 /// * If failed to build the logs config
 /// * If Failed to build the file writer config
-pub fn init(filename: Option<&str>) -> Result<FreeLogLayer, InitError> {
+pub fn init(
+    filename: Option<&str>,
+    layers: Option<Vec<DynLayer>>,
+) -> Result<FreeLogLayer, InitError> {
     #[cfg(debug_assertions)]
     const DEFAULT_LOG_LEVEL: &str = "moosicbox=trace";
     #[cfg(not(debug_assertions))]
     const DEFAULT_LOG_LEVEL: &str = "moosicbox=info";
 
     let mut logs_config = free_log_client::LogsConfig::builder();
+
+    if let Some(layers) = layers {
+        logs_config = logs_config.with_layers(layers);
+    }
 
     if let Some(filename) = filename {
         if let Some(log_dir) = make_config_dir_path().map(|p| p.join("logs")) {

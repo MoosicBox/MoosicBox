@@ -3387,9 +3387,9 @@ dependencies = [
 
 [[package]]
 name = "free_log_client"
-version = "0.4.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea36e2fb879a217fbdab6443ee8005b2314dcb6afcc13864144fdf3d24c0b04b"
+checksum = "db6af4e00ca798b38580f356d769d86afdd361ead5bcba2c33874634753c3a3b"
 dependencies = [
  "free_log_models",
  "futures-util",
@@ -3398,7 +3398,7 @@ dependencies = [
  "serde_json",
  "strum",
  "strum_macros",
- "thiserror 1.0.69",
+ "thiserror 2.0.9",
  "tokio",
  "tracing",
  "tracing-log",

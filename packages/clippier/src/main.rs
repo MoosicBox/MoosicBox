@@ -56,7 +56,7 @@ enum Commands {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    moosicbox_logging::init(None).expect("Failed to initialize logging");
+    moosicbox_logging::init(None, None).expect("Failed to initialize logging");
 
     let args = Args::parse();
 

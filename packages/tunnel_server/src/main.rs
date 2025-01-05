@@ -10,6 +10,7 @@ use actix_cors::Cors;
 use actix_web::{http, middleware, App};
 use api::health_endpoint;
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
+use moosicbox_logging::free_log_client::DynLayer;
 use moosicbox_tunnel_server::CANCELLATION_TOKEN;
 use std::{env, sync::LazyLock};
 use tokio::try_join;
@@ -19,13 +20,6 @@ static WS_SERVER_HANDLE: LazyLock<tokio::sync::RwLock<Option<ws::server::service
 
 #[allow(clippy::too_many_lines)]
 fn main() -> Result<(), std::io::Error> {
-    if std::env::var("TOKIO_CONSOLE") == Ok("1".to_string()) {
-        console_subscriber::init();
-    } else {
-        moosicbox_logging::init(Some("moosicbox_tunnel_server.log"))
-            .expect("Failed to initialize FreeLog");
-    }
-
     let service_port = {
         let args: Vec<String> = env::args().collect();
 
@@ -49,6 +43,15 @@ fn main() -> Result<(), std::io::Error> {
             .unwrap()
     })
     .block_on(async move {
+        let mut layers = vec![];
+
+        if std::env::var("TOKIO_CONSOLE") == Ok("1".to_string()) {
+            layers.push(Box::new(console_subscriber::spawn()) as DynLayer);
+        }
+
+        moosicbox_logging::init(Some("moosicbox_tunnel_server.log"), Some(layers))
+            .expect("Failed to initialize FreeLog");
+
         db::init().await.expect("Failed to init postgres DB");
 
         let ws_server = ws::server::WsServer::new();

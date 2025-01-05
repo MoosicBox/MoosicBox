@@ -166,7 +166,7 @@ flacenc = "0.4.0"
 fltk = "1.5.1"
 fltk-sys = "1.5.0"
 flume = "0.11.1"
-free_log_client = { version = "0.4.1", default-features = false }
+free_log_client = { version = "0.5.0", default-features = false }
 futures = "0.3"
 futures-channel = "0.3.31"
 futures-core = "0.3.31"

@@ -24,6 +24,7 @@ use moosicbox_core::sqlite::models::{
     AlbumSort, AlbumType, ApiAlbum, ApiArtist, ApiSource, TrackApiSource,
 };
 use moosicbox_env_utils::{default_env_usize, option_env_f32, option_env_i32};
+use moosicbox_logging::free_log_client::DynLayer;
 use moosicbox_music_api::{profiles::PROFILES, MusicApi, SourceToMusicApi};
 use moosicbox_paging::Page;
 use moosicbox_player::Playback;
@@ -207,15 +208,19 @@ static PROFILE: &str = "master";
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if cfg!(feature = "profiling-tracing") {
         // no global tracing defined here
-    } else if std::env::var("TOKIO_CONSOLE") == Ok("1".to_string()) {
-        console_subscriber::init();
     } else {
+        let mut layers = vec![];
+
+        if std::env::var("TOKIO_CONSOLE") == Ok("1".to_string()) {
+            layers.push(Box::new(console_subscriber::spawn()) as DynLayer);
+        }
+
         #[cfg(target_os = "android")]
         let filename = None;
         #[cfg(not(target_os = "android"))]
         let filename = Some("moosicbox_app_native.log");
 
-        moosicbox_logging::init(filename).expect("Failed to initialize FreeLog");
+        moosicbox_logging::init(filename, Some(layers)).expect("Failed to initialize FreeLog");
     }
 
     moosicbox_player::on_playback_event(on_playback_event);
