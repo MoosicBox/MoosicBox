@@ -140,6 +140,7 @@ pub mod api {
         Ok(profile)
     }
 
+    #[derive(Debug)]
     pub struct ProfileNameUnverified(pub String);
 
     impl From<ProfileNameUnverified> for String {

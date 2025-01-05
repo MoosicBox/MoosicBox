@@ -42,7 +42,7 @@ pub async fn health_endpoint() -> Result<Json<Value>> {
     Ok(Json(json!({"healthy": true})))
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthMagicTokenRequest {
     magic_token: String,
@@ -93,7 +93,7 @@ pub async fn auth_magic_token_endpoint(
     Ok(Json(json!({"success": true})))
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthRegisterClientRequest {
     client_id: String,
@@ -112,7 +112,7 @@ pub async fn auth_register_client_endpoint(
     Ok(Json(json!({"token": token})))
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthRequest {
     client_id: String,
