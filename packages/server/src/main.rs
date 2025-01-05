@@ -42,8 +42,20 @@ fn main() -> std::io::Result<()> {
             layers.push(Box::new(console_subscriber::spawn()) as DynLayer);
         }
 
+        #[cfg(feature = "telemetry")]
+        layers.push(
+            moosicbox_telemetry::init_tracer(env!("CARGO_PKG_NAME"))
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?,
+        );
+
         moosicbox_logging::init(Some("moosicbox_server.log"), Some(layers))
             .expect("Failed to initialize FreeLog");
+
+        #[cfg(feature = "telemetry")]
+        let otel = std::sync::Arc::new(
+            moosicbox_telemetry::Otel::new()
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?,
+        );
 
         moosicbox_server::run(
             AppType::Server,
@@ -54,6 +66,8 @@ fn main() -> std::io::Result<()> {
             true,
             #[cfg(feature = "upnp")]
             true,
+            #[cfg(feature = "telemetry")]
+            otel,
             || {},
         )
         .await?;

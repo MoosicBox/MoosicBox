@@ -64,6 +64,9 @@ moosicbox_session = { version = "0.1.0", path = "../session", default-features =
     "events",
 ] }
 moosicbox_task = { version = "0.1.0", path = "../task", default-features = false }
+moosicbox_telemetry = { version = "0.1.0", path = "../telemetry", default-features = false, features = [
+    "actix",
+], optional = true }
 moosicbox_ws = { version = "0.1.0", path = "../ws", default-features = false, features = [
     "ws",
 ] }
@@ -168,10 +171,13 @@ default = [
     "pulseaudio",
     "sqlite-sqlx",
     "static-token-auth",
+    "telemetry",
     "tunnel",
 ]
 
 fail-on-warnings = []
+
+telemetry = ["dep:moosicbox_telemetry"]
 
 tls = ["actix-web/openssl", "dep:openssl", "dep:rcgen"]
 

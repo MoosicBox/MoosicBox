@@ -49,8 +49,20 @@ fn main() -> Result<(), std::io::Error> {
             layers.push(Box::new(console_subscriber::spawn()) as DynLayer);
         }
 
+        #[cfg(feature = "telemetry")]
+        layers.push(
+            moosicbox_telemetry::init_tracer(env!("CARGO_PKG_NAME"))
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?,
+        );
+
         moosicbox_logging::init(Some("moosicbox_tunnel_server.log"), Some(layers))
             .expect("Failed to initialize FreeLog");
+
+        #[cfg(feature = "telemetry")]
+        let otel = std::sync::Arc::new(
+            moosicbox_telemetry::Otel::new()
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?,
+        );
 
         db::init().await.expect("Failed to init postgres DB");
 
@@ -98,10 +110,19 @@ fn main() -> Result<(), std::io::Error> {
                 .supports_credentials()
                 .max_age(3600);
 
-            App::new()
+            let app = App::new()
                 .wrap(cors)
                 .wrap(moosicbox_middleware::api_logger::ApiLogger::default())
-                .wrap(middleware::Compress::default())
+                .wrap(middleware::Compress::default());
+
+            #[cfg(feature = "telemetry")]
+            let app = app
+                .app_data(actix_web::web::Data::new(otel.clone()))
+                .service(moosicbox_telemetry::metrics)
+                .wrap(otel.request_metrics.clone())
+                .wrap(moosicbox_telemetry::RequestTracing::new());
+
+            let app = app
                 .service(health_endpoint)
                 .service(ws::api::websocket)
                 .service(api::auth_register_client_endpoint)
@@ -112,7 +133,10 @@ fn main() -> Result<(), std::io::Error> {
                 .service(api::track_endpoint)
                 .service(api::artist_cover_endpoint)
                 .service(api::album_cover_endpoint)
-                .service(api::tunnel_endpoint)
+                .service(api::tunnel_endpoint);
+
+            #[allow(clippy::let_and_return)]
+            app
         };
 
         let mut http_server = actix_web::HttpServer::new(app);

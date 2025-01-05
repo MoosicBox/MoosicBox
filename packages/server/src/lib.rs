@@ -38,6 +38,7 @@ static CONFIG_DB: LazyLock<std::sync::RwLock<Option<ConfigDatabase>>> =
 static SERVER_ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
 #[allow(
+    clippy::too_many_arguments,
     clippy::too_many_lines,
     clippy::missing_panics_doc,
     clippy::missing_errors_doc
@@ -49,6 +50,7 @@ pub async fn run(
     actix_workers: Option<usize>,
     #[cfg(feature = "player")] local_players: bool,
     #[cfg(feature = "upnp")] upnp_players: bool,
+    #[cfg(feature = "telemetry")] otel: Arc<moosicbox_telemetry::Otel>,
     on_startup: impl FnOnce() + Send,
 ) -> std::io::Result<()> {
     #[cfg(feature = "profiling-tracing")]
@@ -251,6 +253,13 @@ pub async fn run(
                 .max_age(3600);
 
             let app = App::new().wrap(cors);
+
+            #[cfg(feature = "telemetry")]
+            let app = app
+                .app_data(actix_web::web::Data::new(otel.clone()))
+                .service(moosicbox_telemetry::metrics)
+                .wrap(otel.request_metrics.clone())
+                .wrap(moosicbox_telemetry::RequestTracing::new());
 
             #[cfg(feature = "static-token-auth")]
             let app = app.wrap(crate::auth::StaticTokenAuth::new(

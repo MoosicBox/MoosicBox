@@ -190,6 +190,7 @@ enum ResponseType {
     Body,
 }
 
+#[cfg_attr(feature = "telemetry", tracing::instrument)]
 fn get_headers_for_request(req: &HttpRequest) -> Option<Value> {
     let mut headers = HashMap::<String, String>::new();
 
@@ -209,6 +210,7 @@ fn get_headers_for_request(req: &HttpRequest) -> Option<Value> {
     }
 }
 
+#[cfg_attr(feature = "telemetry", tracing::instrument)]
 async fn proxy_request(
     body: Option<Bytes>,
     req: HttpRequest,
@@ -239,6 +241,7 @@ async fn proxy_request(
     handle_request(&client_id, &method, path, query, body, headers, profile).await
 }
 
+#[cfg_attr(feature = "telemetry", tracing::instrument)]
 async fn handle_request(
     client_id: &str,
     method: &Method,
@@ -326,6 +329,7 @@ pub enum RequestError {
     Commander(#[from] CommanderError),
 }
 
+#[cfg_attr(feature = "telemetry", tracing::instrument)]
 #[allow(clippy::too_many_arguments)]
 fn request(
     client_id: &str,
