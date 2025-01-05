@@ -51,6 +51,7 @@ pub use moosicbox_session as session;
 pub use moosicbox_session_models as session_models;
 pub use moosicbox_stream_utils as stream_utils;
 pub use moosicbox_task as task;
+pub use moosicbox_telemetry as telemetry;
 #[cfg(feature = "tidal")]
 pub use moosicbox_tidal as tidal;
 pub use moosicbox_tunnel as tunnel;

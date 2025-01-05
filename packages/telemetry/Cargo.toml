@@ -1,0 +1,34 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools"]
+description = "MoosicBox telemetry package"
+edition     = "2021"
+keywords    = ["grafana", "otel", "telemetry", "tempo"]
+license     = "MPL-2.0"
+name        = "moosicbox_telemetry"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_env_utils = { version = "0.1.0", path = "../env_utils", default-features = false }
+moosicbox_logging = { version = "0.1.0", path = "../logging", features = [
+    "free_log",
+], default-features = false }
+
+actix-web                = { workspace = true, optional = true }
+actix-web-opentelemetry  = { workspace = true, optional = true }
+opentelemetry            = { workspace = true }
+opentelemetry-otlp       = { workspace = true }
+opentelemetry-prometheus = { workspace = true }
+opentelemetry_sdk        = { workspace = true }
+prometheus               = { workspace = true }
+tracing                  = { workspace = true }
+tracing-opentelemetry    = { workspace = true }
+
+[features]
+default = ["actix"]
+
+fail-on-warnings = []
+
+actix = ["dep:actix-web", "dep:actix-web-opentelemetry"]

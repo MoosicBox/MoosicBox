@@ -60,6 +60,7 @@ moosicbox_session             = { version = "0.1.0", path = "../session", defaul
 moosicbox_session_models      = { version = "0.1.0", path = "../session/models", default-features = false }
 moosicbox_stream_utils        = { version = "0.1.0", path = "../stream_utils", default-features = false }
 moosicbox_task                = { version = "0.1.0", path = "../task", default-features = false }
+moosicbox_telemetry           = { version = "0.1.0", path = "../telemetry", default-features = false }
 moosicbox_tidal               = { version = "0.1.0", path = "../tidal", optional = true, default-features = false }
 moosicbox_tunnel              = { version = "0.1.0", path = "../tunnel", default-features = false }
 moosicbox_tunnel_sender       = { version = "0.1.0", path = "../tunnel_sender", default-features = false }
