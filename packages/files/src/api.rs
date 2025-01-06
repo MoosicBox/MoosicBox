@@ -87,7 +87,7 @@ pub struct Api;
 impl From<TrackSourceError> for actix_web::Error {
     fn from(e: TrackSourceError) -> Self {
         match e {
-            TrackSourceError::NotFound(e) => ErrorNotFound(e.to_string()),
+            TrackSourceError::NotFound(_) => ErrorNotFound(e.to_string()),
             TrackSourceError::InvalidSource => ErrorBadRequest(e.to_string()),
             TrackSourceError::Track(_)
             | TrackSourceError::Db(_)
