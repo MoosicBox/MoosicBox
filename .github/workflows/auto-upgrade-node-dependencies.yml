@@ -1,4 +1,4 @@
-name: App Website Auto-upgrade Node Dependencies
+name: Auto-upgrade Node Dependencies
 
 on:
     workflow_dispatch:
@@ -11,12 +11,28 @@ env:
 
 jobs:
     upgrade:
+        strategy:
+            fail-fast: false
+            max-parallel: 1
+
+            matrix:
+                project: 
+                    - directory: .
+                      sst: true
+                    - directory: app-website
+                      sst: true
+                    - directory: marketing-website
+                      sst: true
+
         runs-on: ubuntu-latest
 
         steps:
             - uses: actions/checkout@v4
               with:
                   token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+
+            - name: Update history
+              run: git pull
 
             - uses: pnpm/action-setup@v3
               name: Install pnpm
@@ -30,39 +46,49 @@ jobs:
                   echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
             - name: pnpm install
-              working-directory: app-website
+              working-directory: ${{ matrix.project.directory }}
               run: |
                   pnpm install
+
+            - name: SST install
+              if: ${{ matrix.project.sst == true }}
+              working-directory: ${{ matrix.project.directory }}
+              run: |
                   pnpm sst install
 
             - name: Upgrade
               id: upgrade
-              working-directory: app-website
+              working-directory: ${{ matrix.project.directory }}
               shell: bash
               run: |
                   pnpm update
                   if [ -n "$(git status --porcelain)" ]; then
                       echo "Found upgrades"
                       echo "upgraded=true" >> "$GITHUB_OUTPUT"
-                      pnpm sst install
                   else
                       echo "No upgrades"
                       echo "upgraded=false" >> "$GITHUB_OUTPUT"
                   fi
 
+            - name: SST reinstall
+              if: ${{ steps.upgrade.outputs.upgraded == 'true' && matrix.project.sst == true }}
+              working-directory: ${{ matrix.project.directory }}
+              run: |
+                  pnpm sst install
+
             - name: Validate
-              if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
-              working-directory: app-website
+              if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
+              working-directory: ${{ matrix.project.directory }}
               shell: bash
               run: pnpm validate
 
             - name: Commit
-              if: ${{ steps.upgrade.outputs.upgraded == 'true'}}
+              if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
               shell: bash
               run: |
                   git config user.name "MoosicBoxBot"
                   git config user.email "MoosicBoxBot@gmail.com"
                   git add .
-                  git commit --message "Upgrade app-website node dependencies"
+                  git commit --message "Upgrade ${{ matrix.project.directory }} node dependencies"
                   echo "Pushing upgrades"
                   git push origin master
