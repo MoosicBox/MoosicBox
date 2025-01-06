@@ -6728,6 +6728,7 @@ dependencies = [
  "futures-util",
  "log",
  "moosicbox_assert",
+ "tracing",
 ]
 
 [[package]]

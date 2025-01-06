@@ -99,15 +99,21 @@ where
                         log::trace!("{prefix} FINISHED SUCCESS \"{status}\" ({duration} ms)");
                     } else {
                         let e = data.response().error();
-                        if status.is_server_error() {
-                            moosicbox_assert::die_or_error!(
-                                "{prefix} FINISHED FAILURE \"{status}\" ({duration} ms): {e:?}"
-                            );
-                        } else {
-                            log::error!(
-                                "{prefix} FINISHED FAILURE \"{status}\" ({duration} ms): {e:?}"
-                            );
-                        }
+                        let error_message = e.map_or_else(String::new, |e| format!(": {e:?}"));
+
+                        log::error!(
+                            "{prefix} FINISHED FAILURE \"{status}\" ({duration} ms){error_message}"
+                        );
+
+                        tracing::error!(
+                            name: "FINISHED FAILURE",
+                            name = "FINISHED FAILURE",
+                            status = status.to_string(),
+                            duration = duration.to_string(),
+                            error = format!("{:?}", e)
+                        );
+
+                        moosicbox_assert::assert!(!status.is_server_error());
                     }
                     Ok(data)
                 }

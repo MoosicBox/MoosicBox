@@ -16,6 +16,7 @@ moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = f
 actix-web    = { workspace = true }
 futures-util = { workspace = true }
 log          = { workspace = true }
+tracing      = { workspace = true }
 
 [features]
 fail-on-warnings = []
