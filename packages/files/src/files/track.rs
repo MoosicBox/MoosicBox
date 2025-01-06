@@ -112,6 +112,8 @@ pub async fn get_track_id_source(
         .await?
         .ok_or_else(|| TrackSourceError::NotFound(track_id.to_owned()))?;
 
+    log::debug!("get_track_id_source: track={track:?}");
+
     let track_source = track.track_source.into();
 
     let (api, track) = if track_source == source {
