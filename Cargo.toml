@@ -139,7 +139,7 @@ actix-ws = "0.3.0"
 arrayvec = "0.7.6"
 async-once-cell = "0.5.4"
 async-recursion = "1.1.1"
-async-trait = "0.1.84"
+async-trait = "0.1.85"
 atomic_float = "1.1.0"
 audiopus = "0.2.0"
 awc = "3.5.1"
@@ -220,7 +220,7 @@ opentelemetry-otlp = { version = "0.27.0", features = ["tonic"] }
 opentelemetry-prometheus = "0.27.0"
 opentelemetry_sdk = { version = "0.27.1", features = ["rt-tokio"] }
 opus = "0.3.0"
-pin-project = "1.1.7"
+pin-project = "1.1.8"
 pin-utils = "0.1.0"
 pingora = "0.4.0"
 pingora-core = "0.4.0"
@@ -257,7 +257,7 @@ rusqlite = { version = "0.32.1", features = ["bundled"] }
 rustls = "0.23"
 serde = { version = "1", features = ["derive"] }
 serde-aux = "4.5.0"
-serde_json = "1.0.134"
+serde_json = "1.0.135"
 serial_test = "3.2.0"
 sha2 = "0.10.8"
 sqlx = { version = "0.8.3", default-features = false, features = [
