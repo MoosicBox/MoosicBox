@@ -54,6 +54,7 @@ allowed-duplicate-crates = [
     "rustls",
     "rustls-pemfile",
     "rustls-webpki",
+    "siphasher",
     "spin",
     "strsim",
     "syn",
