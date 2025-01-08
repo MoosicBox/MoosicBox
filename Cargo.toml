@@ -155,6 +155,7 @@ chrono = { version = "0.4.39", default-features = false, features = [
 ] }
 clap = { version = "4.5.24", features = ["derive"] }
 color-hex = "0.2.0"
+colored = { version = "3.0.0" }
 console-subscriber = "0.4.1"
 cpal = "0.15.3"
 debounce = "0.2.2"

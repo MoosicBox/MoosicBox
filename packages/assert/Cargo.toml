@@ -13,7 +13,7 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_env_utils = { version = "0.1.0", path = "../env_utils", default-features = false }
 
-colored = { version = "3.0.0" }
+colored = { workspace = true }
 
 [features]
 fail-on-warnings = []
