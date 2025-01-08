@@ -15,7 +15,7 @@
     "author": "Braden Steffaniak",
     "license": "ISC",
     "devDependencies": {
-        "@pulumi/pulumi": "^3.144.1",
+        "@pulumi/pulumi": "^3.145.0",
         "@tsconfig/node18": "18.2.2",
         "@typescript-eslint/eslint-plugin": "^7.18.0",
         "@typescript-eslint/parser": "^7.18.0",
@@ -28,7 +28,7 @@
         "eslint-plugin-node": "^11.1.0",
         "prettier": "^3.4.2",
         "prettier-plugin-astro": "^0.13.0",
-        "sst": "^3.4.56",
+        "sst": "^3.5.0",
         "typescript": "^5.7.2",
         "yaml": "^2.7.0"
     }
