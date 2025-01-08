@@ -54,7 +54,7 @@
         "prettier": "^3.4.2",
         "prettier-plugin-astro": "^0.13.0",
         "solid-js": "^1.7.11",
-        "sst": "^3.4.56",
+        "sst": "^3.5.0",
         "typescript": "^5.7.2",
         "vite": "^5.4.11",
         "vitest": "^1.6.0"
@@ -75,6 +75,6 @@
         "date-fns": "^3.6.0",
         "howler": "^2.2.4",
         "nanostores": "^0.9.5",
-        "solid-js": "^1.9.3"
+        "solid-js": "^1.9.4"
     }
 }
