@@ -214,7 +214,7 @@ fn scan_track(
 
             let duration = if std::path::Path::new(path.clone().to_str().unwrap())
                 .extension()
-                .map_or(false, |ext| ext.eq_ignore_ascii_case("mp3"))
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("mp3"))
             {
                 mp3_duration::from_path(path.as_path())
                     .unwrap()

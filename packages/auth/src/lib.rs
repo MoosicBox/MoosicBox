@@ -47,7 +47,7 @@ async fn tunnel_magic_token(
 
     Ok(value
         .get("success")
-        .map_or(false, |success| success.as_bool().unwrap_or(false)))
+        .is_some_and(|success| success.as_bool().unwrap_or(false)))
 }
 
 #[cfg(feature = "api")]

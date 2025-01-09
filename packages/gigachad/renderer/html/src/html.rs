@@ -33,7 +33,7 @@ pub trait HtmlTagRenderer {
         background: Option<Color>,
     ) -> String {
         format!(
-            r#"
+            r"
             <html>
                 <head>
                     <style>
@@ -55,7 +55,7 @@ pub trait HtmlTagRenderer {
                 </head>
                 <body>{content}</body>
             </html>
-            "#,
+            ",
             background = background
                 .map(|x| format!("background:rgb({},{},{})", x.r, x.g, x.b))
                 .as_deref()

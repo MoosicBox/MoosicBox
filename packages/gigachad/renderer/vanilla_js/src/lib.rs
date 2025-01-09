@@ -79,7 +79,7 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
             content
         } else {
             format!(
-                r#"
+                r"
                 <html>
                     <head>
                         <style>
@@ -101,7 +101,7 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                     </head>
                     <body>{content}</body>
                 </html>
-                "#,
+                ",
                 background = background
                     .map(|x| format!("background:rgb({},{},{})", x.r, x.g, x.b))
                     .as_deref()

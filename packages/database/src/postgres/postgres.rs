@@ -758,7 +758,7 @@ fn format_identifier(identifier: &str) -> String {
     }
 }
 
-async fn to_rows<'a>(
+async fn to_rows(
     column_names: &[String],
     rows: RowStream,
 ) -> Result<Vec<crate::Row>, PostgresDatabaseError> {

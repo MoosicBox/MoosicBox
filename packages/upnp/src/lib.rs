@@ -317,7 +317,7 @@ pub async fn set_av_transport_uri(
     let transport_uri = xml::escape::escape_str_attribute(transport_uri);
 
     let metadata = format!(
-        r###"
+        r#"
         <DIDL-Lite
             xmlns="{DIDL_LITE_NS}"
             xmlns:dc="{DC_NS}"
@@ -333,7 +333,7 @@ pub async fn set_av_transport_uri(
                 <res{duration}{size} protocolInfo="http-get:*:audio/{format}:{headers}">{transport_uri}</res>
             </item>
         </DIDL-Lite>
-        "###,
+        "#,
         title = title
             .map(xml::escape::escape_str_attribute)
             .map_or_else(String::new, |x| format!("<dc:title>{x}</dc:title>")),
@@ -359,11 +359,11 @@ pub async fn set_av_transport_uri(
     let metadata = escape_xml(&compress_xml(&metadata));
 
     let args = format!(
-        r###"
+        r"
         <InstanceID>{instance_id}</InstanceID>
         <CurrentURI>{transport_uri}</CurrentURI>
         <CurrentURIMetaData>{metadata}</CurrentURIMetaData>
-        "###
+        "
     );
     let args = compress_xml(&args);
     log::debug!("set_av_transport_uri args={args}");
@@ -607,11 +607,11 @@ pub async fn seek(
             url,
             "Seek",
             &format!(
-                r###"
+                r"
                 <InstanceID>{instance_id}</InstanceID>
                 <Unit>{unit}</Unit>
                 <Target>{target_str}</Target>
-                "###
+                "
             ),
         )
         .await?)

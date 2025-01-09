@@ -948,12 +948,7 @@ impl<'a> UpsertMultiStatement<'a> {
     }
 
     pub fn unique(&mut self, unique: Vec<Box<dyn Expression>>) -> &mut Self {
-        self.unique.replace(
-            unique
-                .into_iter()
-                .map(std::convert::Into::into)
-                .collect::<Vec<_>>(),
-        );
+        self.unique.replace(unique);
         self
     }
 
