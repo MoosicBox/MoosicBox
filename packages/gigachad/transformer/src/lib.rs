@@ -628,6 +628,7 @@ impl Container {
     /// * If the `Container` is not properly attached to the tree
     #[cfg(all(feature = "id", feature = "calc"))]
     pub fn partial_calc(&mut self, id: usize) {
+        use bumpalo::Bump;
         use calc::Calc as _;
 
         let relative_size = self.find_relative_size_by_id(id);
@@ -642,7 +643,7 @@ impl Container {
 
         let parent = self.find_parent_by_id_mut(id).unwrap();
 
-        if parent.handle_overflow(relative_size) {
+        if parent.handle_overflow(&Bump::new(), relative_size) {
             self.calc();
         }
     }

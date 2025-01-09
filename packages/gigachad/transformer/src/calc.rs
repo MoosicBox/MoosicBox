@@ -441,7 +441,7 @@ impl Container {
         }
 
         let mut attempt = 0;
-        while self.handle_overflow(relative_size) {
+        while self.handle_overflow(&Bump::new(), relative_size) {
             attempt += 1;
 
             {
@@ -1058,7 +1058,7 @@ impl Container {
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    pub fn handle_overflow(&mut self, relative_size: Option<(f32, f32)>) -> bool {
+    pub fn handle_overflow(&mut self, arena: &Bump, relative_size: Option<(f32, f32)>) -> bool {
         log::trace!("handle_overflow: processing self\n{self}");
         let mut layout_shifted = false;
 
@@ -1085,7 +1085,7 @@ impl Container {
             // TODO:
             // need to handle non container elements that have a width/height that is the split
             // remainder of the container width/height
-            container.handle_overflow(relative_size);
+            container.handle_overflow(arena, relative_size);
             let width = container.calculated_width_minus_borders().unwrap_or(0.0);
             let height = container.calculated_height_minus_borders().unwrap_or(0.0);
 
@@ -1188,7 +1188,7 @@ impl Container {
             max_width = if max_width > width { max_width } else { width };
         }
 
-        if self.resize_children() {
+        if self.resize_children(arena) {
             log::debug!("handle_overflow: layout_shifted because children were resized");
             layout_shifted = true;
         }
@@ -1672,7 +1672,7 @@ impl Container {
                 .map(|x| x.calculated_position.as_ref())
         );
 
-        match self.direction {
+        let width = match self.direction {
             LayoutDirection::Row => self
                 .relative_positioned_elements()
                 .chunk_by(|x| {
@@ -1734,12 +1734,16 @@ impl Container {
                 })
                 .max_by(order_float)
                 .unwrap_or(0.0),
-        }
+        };
+
+        log::trace!("contained_calculated_width: width={width}");
+
+        width
     }
 
     #[must_use]
     pub fn contained_calculated_height(&self) -> f32 {
-        match self.direction {
+        let height = match self.direction {
             LayoutDirection::Row => self
                 .relative_positioned_elements()
                 .chunk_by(|x| {
@@ -1800,7 +1804,11 @@ impl Container {
                 })
                 .max_by(order_float)
                 .unwrap_or(0.0),
-        }
+        };
+
+        log::trace!("contained_calculated_height: height={height}");
+
+        height
     }
 
     pub fn iter_row(&self, row: u32) -> impl Iterator<Item = &Self> {
@@ -2051,7 +2059,7 @@ impl Container {
 
     #[allow(clippy::too_many_lines)]
     #[allow(clippy::cognitive_complexity)]
-    fn resize_children(&mut self) -> bool {
+    fn resize_children(&mut self, arena: &Bump) -> bool {
         if self
             .relative_positioned_elements()
             .peekable()
@@ -2185,7 +2193,7 @@ impl Container {
                             );
                         }
 
-                        if element.resize_children() {
+                        if element.resize_children(arena) {
                             resized = true;
                             log::debug!("resize_children: resized because child was resized");
                         }
@@ -2214,41 +2222,102 @@ impl Container {
                     }
                 }
                 LayoutOverflow::Wrap | LayoutOverflow::Squash => {
-                    let contained_sized_height = self.contained_sized_height(false).unwrap_or(0.0);
+                    let overflow_x = self.overflow_x;
+                    let overflow_y = self.overflow_y;
+                    let direction = self.direction;
+
+                    let mut contained_sized_height = 0.0;
+                    let mut unsized_row_count = 0;
+
+                    let rows = arena.alloc(Vec::with_capacity(self.rows() as usize));
+
+                    for (row, elements) in &self
+                        .relative_positioned_elements()
+                        .enumerate()
+                        .chunk_by(|(index, x)| {
+                            if overflow_x != LayoutOverflow::Wrap
+                                && overflow_y != LayoutOverflow::Wrap
+                            {
+                                match direction {
+                                    LayoutDirection::Row => None,
+                                    LayoutDirection::Column => Some(u32::try_from(*index).unwrap()),
+                                }
+                            } else {
+                                x.calculated_position.as_ref().and_then(LayoutPosition::row)
+                            }
+                        })
+                    {
+                        if let Some(height) = elements
+                            .filter_map(|(_, x)| x.contained_sized_height(true))
+                            .max_by(order_float)
+                        {
+                            log::trace!("resize_children: row={row:?} height={height}");
+                            rows.push(Some(height));
+                            contained_sized_height += height;
+                        } else {
+                            log::trace!("resize_children: row={row:?} unsized");
+                            rows.push(None);
+                            unsized_row_count += 1;
+                        }
+                    }
+
                     #[allow(clippy::cast_precision_loss)]
-                    let evenly_split_remaining_size = if height > contained_sized_height {
-                        (height - contained_sized_height) / (self.rows() as f32)
-                    } else {
-                        0.0
-                    };
+                    let evenly_split_remaining_size =
+                        if unsized_row_count > 0 && height > contained_sized_height {
+                            (height - contained_sized_height) / (unsized_row_count as f32)
+                        } else {
+                            0.0
+                        };
                     log::debug!("resize_children: height={height} contained_sized_height={contained_sized_height} evenly_split_remaining_size={evenly_split_remaining_size}");
 
-                    for element in self
+                    for (row, elements) in &self
                         .relative_positioned_elements_mut()
-                        .filter(|x| x.height.is_none())
-                    {
-                        let element_height =
-                            evenly_split_remaining_size - element.vertical_padding().unwrap_or(0.0);
-
-                        if let Some(existing) = element.calculated_height {
-                            if (existing - element_height).abs() > 0.01 {
-                                moosicbox_assert::assert!(element_height >= 0.0);
-                                element.calculated_height.replace(element_height);
-                                resized = true;
-                                log::debug!("resize_children: resized because child calculated_height was different ({existing} != {element_height})");
+                        .enumerate()
+                        .chunk_by(|(index, x)| {
+                            if overflow_x != LayoutOverflow::Wrap
+                                && overflow_y != LayoutOverflow::Wrap
+                            {
+                                match direction {
+                                    LayoutDirection::Row => None,
+                                    LayoutDirection::Column => Some(u32::try_from(*index).unwrap()),
+                                }
+                            } else {
+                                x.calculated_position.as_ref().and_then(LayoutPosition::row)
                             }
-                        } else {
-                            moosicbox_assert::assert!(element_height >= 0.0);
-                            element.calculated_height.replace(element_height);
-                            resized = true;
-                            log::debug!(
-                                "resize_children: resized because child calculated_height was None"
-                            );
-                        }
+                        })
+                    {
+                        if let Some(height) = row.and_then(|i| rows.get(i as usize)).copied() {
+                            log::trace!("resize_children: row={row:?} updating elements heights");
+                            for (i, element) in elements {
+                                let height = height.unwrap_or(evenly_split_remaining_size);
+                                let element_height =
+                                    height - element.vertical_padding().unwrap_or(0.0);
 
-                        if element.resize_children() {
-                            resized = true;
-                            log::debug!("resize_children: resized because child was resized");
+                                log::trace!("resize_children: i={i} updating element height element_height={element_height}");
+
+                                if let Some(existing) = element.calculated_height {
+                                    if (existing - element_height).abs() > 0.01 {
+                                        moosicbox_assert::assert!(element_height >= 0.0);
+                                        element.calculated_height.replace(element_height);
+                                        resized = true;
+                                        log::debug!("resize_children: resized because child calculated_height was different ({existing} != {element_height})");
+                                    } else {
+                                        log::trace!("resize_children: existing height already set to {element_height}");
+                                    }
+                                } else {
+                                    moosicbox_assert::assert!(element_height >= 0.0);
+                                    element.calculated_height.replace(element_height);
+                                    resized = true;
+                                    log::debug!("resize_children: resized because child calculated_height was None");
+                                }
+
+                                if element.resize_children(arena) {
+                                    resized = true;
+                                    log::debug!(
+                                        "resize_children: resized because child was resized"
+                                    );
+                                }
+                            }
                         }
                     }
 
@@ -2288,6 +2357,7 @@ fn increase_opt(opt: &mut Option<f32>, value: f32) -> f32 {
 
 #[cfg(test)]
 mod test {
+    use bumpalo::Bump;
     use maud::html;
     use pretty_assertions::{assert_eq, assert_ne};
 
@@ -2887,7 +2957,7 @@ mod test {
             overflow_y: LayoutOverflow::Auto,
             ..Default::default()
         };
-        while container.handle_overflow(None) {}
+        while container.handle_overflow(&Bump::new(), None) {}
         let width = container.contained_calculated_width();
         let expected = 50.0 - f32::from(get_scrollbar_size());
 
@@ -2928,7 +2998,7 @@ mod test {
             overflow_y: LayoutOverflow::Auto,
             ..Default::default()
         };
-        while container.handle_overflow(None) {}
+        while container.handle_overflow(&Bump::new(), None) {}
         let width = 50.0 - f32::from(get_scrollbar_size());
 
         assert_eq!(
@@ -3000,7 +3070,7 @@ mod test {
             overflow_y: LayoutOverflow::Auto,
             ..Default::default()
         };
-        while container.handle_overflow(None) {}
+        while container.handle_overflow(&Bump::new(), None) {}
         let width = container.contained_calculated_width();
         let expected = 25.0;
 
@@ -3045,7 +3115,7 @@ mod test {
             overflow_y: LayoutOverflow::Auto,
             ..Default::default()
         };
-        while container.handle_overflow(None) {}
+        while container.handle_overflow(&Bump::new(), None) {}
 
         assert_eq!(
             container.clone().to_string(),
@@ -3126,7 +3196,7 @@ mod test {
             overflow_y: LayoutOverflow::Auto,
             ..Default::default()
         };
-        while container.handle_overflow(None) {}
+        while container.handle_overflow(&Bump::new(), None) {}
 
         assert_eq!(
             container.clone().to_string(),
@@ -3223,7 +3293,7 @@ mod test {
             justify_content: JustifyContent::SpaceBetween,
             ..Default::default()
         };
-        while container.handle_overflow(None) {}
+        while container.handle_overflow(&Bump::new(), None) {}
 
         assert_eq!(
             container.clone().to_string(),
@@ -3329,7 +3399,7 @@ mod test {
             justify_content: JustifyContent::SpaceBetween,
             ..Default::default()
         };
-        while container.handle_overflow(None) {}
+        while container.handle_overflow(&Bump::new(), None) {}
 
         assert_eq!(
             container.clone().to_string(),
@@ -3412,7 +3482,7 @@ mod test {
         };
 
         log::debug!("First handle_overflow");
-        while container.handle_overflow(None) {}
+        while container.handle_overflow(&Bump::new(), None) {}
 
         container.children.extend(vec![
             div.clone(),
@@ -3423,7 +3493,7 @@ mod test {
         ]);
 
         log::debug!("Second handle_overflow");
-        while container.handle_overflow(None) {}
+        while container.handle_overflow(&Bump::new(), None) {}
 
         assert_eq!(
             container.clone().to_string(),
@@ -3562,7 +3632,7 @@ mod test {
             gap: Some(Number::Integer(10)),
             ..Default::default()
         };
-        while container.handle_overflow(None) {}
+        while container.handle_overflow(&Bump::new(), None) {}
 
         assert_eq!(
             container.clone().to_string(),
@@ -3661,7 +3731,7 @@ mod test {
             gap: Some(Number::Integer(10)),
             ..Default::default()
         };
-        while container.handle_overflow(None) {}
+        while container.handle_overflow(&Bump::new(), None) {}
 
         let mut actual = container.clone();
         let expected = Container {
@@ -3714,7 +3784,7 @@ mod test {
 
         assert_eq!(actual.to_string(), expected.to_string());
 
-        while actual.handle_overflow(None) {}
+        while actual.handle_overflow(&Bump::new(), None) {}
 
         assert_eq!(actual.to_string(), expected.to_string());
     }
@@ -3761,7 +3831,7 @@ mod test {
             justify_content: JustifyContent::SpaceEvenly,
             ..Default::default()
         };
-        while container.handle_overflow(None) {}
+        while container.handle_overflow(&Bump::new(), None) {}
 
         assert_eq!(
             container.clone().to_string(),
@@ -3965,7 +4035,7 @@ mod test {
             justify_content: JustifyContent::SpaceEvenly,
             ..Default::default()
         };
-        while container.handle_overflow(None) {}
+        while container.handle_overflow(&Bump::new(), None) {}
 
         assert_eq!(
             container.clone().to_string(),
@@ -4048,7 +4118,7 @@ mod test {
         };
 
         log::debug!("First handle_overflow");
-        while container.handle_overflow(None) {}
+        while container.handle_overflow(&Bump::new(), None) {}
 
         container.children.extend(vec![
             div.clone(),
@@ -4059,7 +4129,7 @@ mod test {
         ]);
 
         log::debug!("Second handle_overflow");
-        while container.handle_overflow(None) {}
+        while container.handle_overflow(&Bump::new(), None) {}
 
         assert_eq!(
             container.clone().to_string(),
@@ -4198,7 +4268,7 @@ mod test {
             gap: Some(Number::Integer(10)),
             ..Default::default()
         };
-        while container.handle_overflow(None) {}
+        while container.handle_overflow(&Bump::new(), None) {}
 
         assert_eq!(
             container.clone().to_string(),
@@ -4297,7 +4367,7 @@ mod test {
             gap: Some(Number::Integer(10)),
             ..Default::default()
         };
-        while container.handle_overflow(None) {}
+        while container.handle_overflow(&Bump::new(), None) {}
 
         let mut actual = container.clone();
         let expected = Container {
@@ -4350,7 +4420,7 @@ mod test {
 
         assert_eq!(actual.to_string(), expected.to_string());
 
-        while actual.handle_overflow(None) {}
+        while actual.handle_overflow(&Bump::new(), None) {}
 
         assert_eq!(actual.to_string(), expected.to_string());
     }
@@ -4585,7 +4655,7 @@ mod test {
             overflow_y: LayoutOverflow::Show,
             ..Default::default()
         };
-        let resized = container.resize_children();
+        let resized = container.resize_children(&Bump::new());
 
         assert_eq!(resized, true);
         assert_eq!(
@@ -4653,7 +4723,7 @@ mod test {
             overflow_y: LayoutOverflow::default(),
             ..Default::default()
         };
-        let resized = container.resize_children();
+        let resized = container.resize_children(&Bump::new());
 
         assert_eq!(resized, true);
         assert_eq!(
@@ -4712,7 +4782,7 @@ mod test {
             overflow_y: LayoutOverflow::Scroll,
             ..Default::default()
         };
-        let resized = container.resize_children();
+        let resized = container.resize_children(&Bump::new());
 
         assert_eq!(resized, true);
         assert_eq!(
@@ -4769,7 +4839,7 @@ mod test {
             ..Default::default()
         };
         let mut shifted = false;
-        while container.handle_overflow(None) {
+        while container.handle_overflow(&Bump::new(), None) {
             shifted = true;
         }
 
@@ -4855,7 +4925,7 @@ mod test {
             ..Default::default()
         };
         let mut shifted = false;
-        while container.handle_overflow(None) {
+        while container.handle_overflow(&Bump::new(), None) {
             shifted = true;
         }
 
@@ -4944,7 +5014,7 @@ mod test {
             ..Default::default()
         };
         let mut shifted = false;
-        while container.handle_overflow(None) {
+        while container.handle_overflow(&Bump::new(), None) {
             shifted = true;
         }
 
@@ -7817,6 +7887,57 @@ mod test {
                     calculated_height: Some(90.0),
                     ..container.children[0].clone()
                 }],
+                calculated_height: Some(100.0),
+                ..container.clone()
+            }
+            .to_string()
+        );
+    }
+
+    #[test_log::test]
+    fn calc_calculates_table_sibling_element_height_correctly() {
+        let mut container: Container = html! {
+            div {}
+            table {
+                tr sx-height=(30) {
+                    td sx-height=(30) {}
+                    td sx-height=(30) {}
+                    td sx-height=(30) {}
+                }
+                tr sx-height=(30) {
+                    td sx-height=(30) {}
+                    td sx-height=(30) {}
+                    td sx-height=(30) {}
+                }
+                tr sx-height=(30) {
+                    td sx-height=(30) {}
+                    td sx-height=(30) {}
+                    td sx-height=(30) {}
+                }
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(50.0);
+        container.calculated_height = Some(100.0);
+
+        container.calc();
+        log::trace!("container:\n{}", container);
+
+        assert_eq!(
+            container.to_string(),
+            Container {
+                children: vec![
+                    Container {
+                        calculated_height: Some(10.0),
+                        ..container.children[0].clone()
+                    },
+                    Container {
+                        calculated_height: Some(90.0),
+                        ..container.children[1].clone()
+                    }
+                ],
                 calculated_height: Some(100.0),
                 ..container.clone()
             }
