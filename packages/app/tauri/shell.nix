@@ -35,23 +35,32 @@ pkgs.mkShellNoCC {
     xorg.xcbutilimage
     xorg.xcbutilkeysyms
     xorg.xcbutilwm # contains xcb-ewmh among others
+    cairo
+    gdk-pixbuf
+    glib
   ];
 
   shellHook = ''
-    export LD_LIBRARY_PATH=${pkgs.wayland}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.libxkbcommon}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.amdvlk}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.webkitgtk_4_1}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.xorg.libX11}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.xorg.libxcb}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.xorg.xcbutil}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.xorg.xcbutilimage}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.xorg.xcbutilkeysyms}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.xorg.xcbutilwm}/lib:$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.wayland ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.libxkbcommon ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.amdvlk ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.webkitgtk_4_1 ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.xorg.libX11 ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.xorg.libxcb ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.xorg.xcbutil ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.xorg.xcbutilimage ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.xorg.xcbutilkeysyms ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.xorg.xcbutilwm ]}"
     export RUSTFLAGS="$RUSTFLAGS -C link-arg=-Wl,-rpath,"
-    export RUSTFLAGS="$RUSTFLAGS:${pkgs.wayland}/lib"
-    export RUSTFLAGS="$RUSTFLAGS:${pkgs.libxkbcommon}/lib"
-    export RUSTFLAGS="$RUSTFLAGS:${pkgs.webkitgtk_4_1}/lib"
+    export RUSTFLAGS="$RUSTFLAGS:${pkgs.lib.makeLibraryPath [ pkgs.wayland ]}"
+    export RUSTFLAGS="$RUSTFLAGS:${pkgs.lib.makeLibraryPath [ pkgs.libxkbcommon ]}"
+    export RUSTFLAGS="$RUSTFLAGS:${pkgs.lib.makeLibraryPath [ pkgs.webkitgtk_4_1 ]}"
+    export RUSTFLAGS="$RUSTFLAGS:${pkgs.lib.makeLibraryPath [ pkgs.gtk3 ]}"
+    export RUSTFLAGS="$RUSTFLAGS:${pkgs.lib.makeLibraryPath [ pkgs.cairo ]}"
+    export RUSTFLAGS="$RUSTFLAGS:${pkgs.lib.makeLibraryPath [ pkgs.gdk-pixbuf ]}"
+    export RUSTFLAGS="$RUSTFLAGS:${pkgs.lib.makeLibraryPath [ pkgs.libsoup_3 ]}"
+    export RUSTFLAGS="$RUSTFLAGS:${pkgs.lib.makeLibraryPath [ pkgs.glib ]}"
+    export RUSTFLAGS="$RUSTFLAGS:${pkgs.lib.makeLibraryPath [ pkgs.alsa-lib ]}"
   '';
 
 }
