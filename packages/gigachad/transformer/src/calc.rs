@@ -5455,6 +5455,7 @@ mod test {
                 children: vec![
                     Container {
                         element: Element::TR,
+                        direction: LayoutDirection::Row,
                         children: vec![
                             Container {
                                 element: Element::TD,
@@ -5481,6 +5482,7 @@ mod test {
                     },
                     Container {
                         element: Element::TR,
+                        direction: LayoutDirection::Row,
                         children: vec![
                             Container {
                                 element: Element::TD,
@@ -5601,6 +5603,7 @@ mod test {
                 children: vec![
                     Container {
                         element: Element::TR,
+                        direction: LayoutDirection::Row,
                         children: vec![
                             Container {
                                 element: Element::TD,
@@ -5627,6 +5630,7 @@ mod test {
                     },
                     Container {
                         element: Element::TR,
+                        direction: LayoutDirection::Row,
                         children: vec![
                             Container {
                                 element: Element::TD,
@@ -5747,6 +5751,7 @@ mod test {
                 children: vec![
                     Container {
                         element: Element::TR,
+                        direction: LayoutDirection::Row,
                         children: vec![
                             Container {
                                 element: Element::TD,
@@ -5771,6 +5776,7 @@ mod test {
                     },
                     Container {
                         element: Element::TR,
+                        direction: LayoutDirection::Row,
                         children: vec![
                             Container {
                                 element: Element::TD,
@@ -5885,6 +5891,7 @@ mod test {
                 children: vec![
                     Container {
                         element: Element::TR,
+                        direction: LayoutDirection::Row,
                         children: vec![
                             Container {
                                 element: Element::TD,
@@ -5901,6 +5908,7 @@ mod test {
                     },
                     Container {
                         element: Element::TR,
+                        direction: LayoutDirection::Row,
                         children: vec![
                             Container {
                                 element: Element::TD,
@@ -6098,6 +6106,7 @@ mod test {
                     children: vec![
                         Container {
                             element: Element::TR,
+                            direction: LayoutDirection::Row,
                             children: vec![
                                 Container {
                                     element: Element::TD,
@@ -6124,6 +6133,7 @@ mod test {
                         },
                         Container {
                             element: Element::TR,
+                            direction: LayoutDirection::Row,
                             children: vec![
                                 Container {
                                     element: Element::TD,

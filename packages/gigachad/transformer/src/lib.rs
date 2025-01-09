@@ -822,8 +822,17 @@ impl Container {
             attrs.add("sx-align-items", self.align_items);
         }
 
-        if self.direction != LayoutDirection::default() {
-            attrs.add("sx-dir", self.direction);
+        match self.element {
+            Element::TR => {
+                if self.direction != LayoutDirection::Row {
+                    attrs.add("sx-dir", self.direction);
+                }
+            }
+            _ => {
+                if self.direction != LayoutDirection::default() {
+                    attrs.add("sx-dir", self.direction);
+                }
+            }
         }
 
         attrs.add_opt("sx-position", self.position);

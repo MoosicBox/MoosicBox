@@ -502,7 +502,12 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                 "thead" => container.element = crate::Element::THead,
                 "th" => container.element = crate::Element::TH,
                 "tbody" => container.element = crate::Element::TBody,
-                "tr" => container.element = crate::Element::TR,
+                "tr" => {
+                    container.element = crate::Element::TR;
+                    if get_tag_attr_value_undecoded(tag, "sx-dir").is_none() {
+                        container.direction = LayoutDirection::Row;
+                    }
+                }
                 "td" => container.element = crate::Element::TD,
                 #[cfg(feature = "canvas")]
                 "canvas" => container.element = crate::Element::Canvas,
