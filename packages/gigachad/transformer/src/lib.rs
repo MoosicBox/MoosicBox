@@ -1,7 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use std::io::Write;
+use std::{collections::HashMap, io::Write};
 
 use gigachad_actions::Action;
 use gigachad_color::Color;
@@ -175,6 +175,7 @@ pub struct Container {
     #[cfg(feature = "id")]
     pub id: usize,
     pub str_id: Option<String>,
+    pub data: HashMap<String, String>,
     pub element: Element,
     pub children: Vec<Container>,
     pub direction: LayoutDirection,
@@ -792,6 +793,13 @@ impl Container {
         attrs.add("dbg-id", self.id);
 
         attrs.add_opt("id", self.str_id.as_ref());
+
+        let mut data = self.data.iter().collect::<Vec<_>>();
+        data.sort_by(|(a, _), (b, _)| (*a).cmp(b));
+
+        for (name, value) in data {
+            attrs.add(format!("data-{name}"), value);
+        }
 
         if let Some(route) = &self.route {
             match route {

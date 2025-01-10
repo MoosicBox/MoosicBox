@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::HashMap};
 
 use gigachad_actions::{Action, ActionTrigger, ActionType};
 use gigachad_color::Color;
@@ -250,6 +250,21 @@ fn get_position(tag: &HTMLTag) -> Option<Position> {
         })
 }
 
+fn get_data_attrs(tag: &HTMLTag) -> HashMap<String, String> {
+    tag.attributes()
+        .iter()
+        .filter_map(|(k, v)| v.map(|v| (k, v)))
+        .filter_map(|(k, v)| {
+            k.strip_prefix("data-").map(|name| {
+                (
+                    name.to_string(),
+                    html_escape::decode_html_entities(&v).to_string(),
+                )
+            })
+        })
+        .collect()
+}
+
 fn get_number(tag: &HTMLTag, name: &str) -> Result<Option<Number>, GetNumberError> {
     Ok(if let Some(number) = get_tag_attr_value_owned(tag, name) {
         Some(parse_number(&number)?)
@@ -366,6 +381,7 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
         #[cfg(feature = "id")]
         id: CURRENT_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
         str_id: get_tag_attr_value_owned(tag, "id"),
+        data: get_data_attrs(tag),
         direction: get_direction(tag),
         background: get_color(tag, "sx-background"),
         border_top: get_border(tag, "sx-border-top"),

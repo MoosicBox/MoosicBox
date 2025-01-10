@@ -1,5 +1,10 @@
+use std::collections::HashMap;
+
 use gigachad_transformer_models::{AlignItems, JustifyContent, LayoutDirection, LayoutOverflow};
-use moosicbox_gen::{serde::JsonValue, xml::XmlString};
+use moosicbox_gen::{
+    serde::JsonValue,
+    xml::{XmlPropNameString, XmlString},
+};
 use quickcheck::{Arbitrary, Gen};
 use strum::IntoEnumIterator;
 
@@ -144,6 +149,12 @@ fn half_g_max(g: &Gen, max: usize) -> Gen {
     Gen::new(std::cmp::min(max, g.size() / 2))
 }
 
+fn xml_hashmap(g: &mut Gen) -> HashMap<String, String> {
+    let map: HashMap<XmlPropNameString, XmlString> = Arbitrary::arbitrary(g);
+
+    map.into_iter().map(|(k, v)| (k.0, v.0)).collect()
+}
+
 impl Arbitrary for Container {
     #[allow(clippy::too_many_lines)]
     fn arbitrary(g: &mut Gen) -> Self {
@@ -165,6 +176,7 @@ impl Arbitrary for Container {
             #[cfg(feature = "id")]
             id: usize::arbitrary(g),
             str_id: Option::arbitrary(g).map(|x: XmlString| x.0),
+            data: xml_hashmap(g),
             element,
             children,
             direction: LayoutDirection::arbitrary(g),
