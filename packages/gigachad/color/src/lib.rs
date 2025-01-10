@@ -152,6 +152,16 @@ impl From<Color> for egui::Color32 {
     }
 }
 
+#[cfg(feature = "egui")]
+impl From<&Color> for egui::Color32 {
+    fn from(value: &Color) -> Self {
+        value.a.map_or_else(
+            || Self::from_rgb(value.r, value.g, value.b),
+            |a| Self::from_rgba_unmultiplied(value.r, value.g, value.b, a),
+        )
+    }
+}
+
 impl std::fmt::Display for Color {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(a) = self.a {
