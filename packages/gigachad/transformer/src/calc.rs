@@ -2104,7 +2104,7 @@ impl Container {
                 moosicbox_assert::assert!(new_width >= 0.0);
                 self.calculated_width = Some(new_width);
                 width = self.calculated_width_minus_borders().unwrap();
-                log::debug!("resize_children: resized because vertical scrollbar is now visible and affected children elements, setting scrollbar_right to {scrollbar_size}");
+                log::trace!("resize_children: resized because vertical scrollbar is now visible and affected children elements, setting scrollbar_right to {scrollbar_size}");
                 resized = true;
             }
         } else if let Some(scrollbar_size) = self.scrollbar_right {
@@ -2113,7 +2113,7 @@ impl Container {
             moosicbox_assert::assert!(new_width >= 0.0);
             self.calculated_width = Some(new_width);
             width = self.calculated_width_minus_borders().unwrap();
-            log::debug!(
+            log::trace!(
                 "resize_children: resized because vertical scrollbar is not visible anymore and affected children elements"
             );
             resized = true;
@@ -2130,7 +2130,7 @@ impl Container {
                 moosicbox_assert::assert!(new_height >= 0.0);
                 self.calculated_height = Some(new_height);
                 height = self.calculated_height_minus_borders().unwrap();
-                log::debug!("resize_children: resized because horizontal scrollbar is now visible and affected children elements, setting scrollbar_bottom to {scrollbar_size}");
+                log::trace!("resize_children: resized because horizontal scrollbar is now visible and affected children elements, setting scrollbar_bottom to {scrollbar_size}");
                 resized = true;
             }
         } else if let Some(scrollbar_size) = self.scrollbar_bottom {
@@ -2139,14 +2139,14 @@ impl Container {
             moosicbox_assert::assert!(new_height >= 0.0);
             self.calculated_height = Some(new_height);
             height = self.calculated_height_minus_borders().unwrap();
-            log::debug!(
+            log::trace!(
                 "resize_children: resized because horizontal scrollbar is not visible anymore and affected children elements"
             );
             resized = true;
         }
 
         if width < contained_calculated_width - EPSILON {
-            log::debug!("resize_children: width < contained_calculated_width (width={width} contained_calculated_width={contained_calculated_width})");
+            log::trace!("resize_children: width < contained_calculated_width (width={width} contained_calculated_width={contained_calculated_width})");
             match self.overflow_x {
                 LayoutOverflow::Auto | LayoutOverflow::Scroll => {}
                 LayoutOverflow::Show => {
@@ -2154,7 +2154,7 @@ impl Container {
                         && (self.calculated_width.unwrap() - contained_calculated_width).abs()
                             > EPSILON
                     {
-                        log::debug!("resize_children: resized because contained_calculated_width changed from {} to {contained_calculated_width}", self.calculated_width.unwrap());
+                        log::trace!("resize_children: resized because contained_calculated_width changed from {} to {contained_calculated_width}", self.calculated_width.unwrap());
                         moosicbox_assert::assert!(contained_calculated_width >= 0.0);
                         self.calculated_width.replace(contained_calculated_width);
                         resized = true;
@@ -2168,7 +2168,7 @@ impl Container {
                     } else {
                         0.0
                     };
-                    log::debug!("resize_children: width={width} contained_sized_width={contained_sized_width} evenly_split_remaining_size={evenly_split_remaining_size}");
+                    log::trace!("resize_children: width={width} contained_sized_width={contained_sized_width} evenly_split_remaining_size={evenly_split_remaining_size}");
 
                     for element in self
                         .relative_positioned_elements_mut()
@@ -2182,20 +2182,20 @@ impl Container {
                                 moosicbox_assert::assert!(element_width >= 0.0);
                                 element.calculated_width.replace(element_width);
                                 resized = true;
-                                log::debug!("resize_children: resized because child calculated_width was different ({existing} != {element_width})");
+                                log::trace!("resize_children: resized because child calculated_width was different ({existing} != {element_width})");
                             }
                         } else {
                             moosicbox_assert::assert!(element_width >= 0.0);
                             element.calculated_width.replace(element_width);
                             resized = true;
-                            log::debug!(
+                            log::trace!(
                                 "resize_children: resized because child calculated_width was None"
                             );
                         }
 
                         if element.resize_children(arena) {
                             resized = true;
-                            log::debug!("resize_children: resized because child was resized");
+                            log::trace!("resize_children: resized because child was resized");
                         }
                     }
 
@@ -2207,7 +2207,7 @@ impl Container {
             }
         }
         if height < contained_calculated_height - EPSILON {
-            log::debug!("resize_children: height < contained_calculated_height (height={height} contained_calculated_height={contained_calculated_height})");
+            log::trace!("resize_children: height < contained_calculated_height (height={height} contained_calculated_height={contained_calculated_height})");
             match self.overflow_y {
                 LayoutOverflow::Auto | LayoutOverflow::Scroll => {}
                 LayoutOverflow::Show => {
@@ -2215,7 +2215,7 @@ impl Container {
                         && (self.calculated_height.unwrap() - contained_calculated_height).abs()
                             > EPSILON
                     {
-                        log::debug!("resize_children: resized because contained_calculated_height changed from {} to {contained_calculated_height}", self.calculated_height.unwrap());
+                        log::trace!("resize_children: resized because contained_calculated_height changed from {} to {contained_calculated_height}", self.calculated_height.unwrap());
                         moosicbox_assert::assert!(contained_calculated_height >= 0.0);
                         self.calculated_height.replace(contained_calculated_height);
                         resized = true;
@@ -2268,7 +2268,7 @@ impl Container {
                         } else {
                             0.0
                         };
-                    log::debug!("resize_children: height={height} contained_sized_height={contained_sized_height} evenly_split_remaining_size={evenly_split_remaining_size}");
+                    log::trace!("resize_children: height={height} contained_sized_height={contained_sized_height} evenly_split_remaining_size={evenly_split_remaining_size}");
 
                     for (row, elements) in &self
                         .relative_positioned_elements_mut()
@@ -2300,7 +2300,7 @@ impl Container {
                                         moosicbox_assert::assert!(element_height >= 0.0);
                                         element.calculated_height.replace(element_height);
                                         resized = true;
-                                        log::debug!("resize_children: resized because child calculated_height was different ({existing} != {element_height})");
+                                        log::trace!("resize_children: resized because child calculated_height was different ({existing} != {element_height})");
                                     } else {
                                         log::trace!("resize_children: existing height already set to {element_height}");
                                     }
@@ -2308,12 +2308,12 @@ impl Container {
                                     moosicbox_assert::assert!(element_height >= 0.0);
                                     element.calculated_height.replace(element_height);
                                     resized = true;
-                                    log::debug!("resize_children: resized because child calculated_height was None");
+                                    log::trace!("resize_children: resized because child calculated_height was None");
                                 }
 
                                 if element.resize_children(arena) {
                                     resized = true;
-                                    log::debug!(
+                                    log::trace!(
                                         "resize_children: resized because child was resized"
                                     );
                                 }
