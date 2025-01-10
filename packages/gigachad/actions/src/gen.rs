@@ -10,14 +10,17 @@ fn half_g_max(g: &Gen, max: usize) -> Gen {
 
 impl Arbitrary for ActionTrigger {
     fn arbitrary(g: &mut Gen) -> Self {
-        *g.choose(&[
+        let half_g = &mut half_g_max(g, 10);
+        g.choose(&[
             Self::Click,
             Self::ClickOutside,
             Self::Hover,
             Self::Change,
             Self::Immediate,
+            Self::Event(XmlString::arbitrary(half_g).0),
         ])
         .unwrap()
+        .clone()
     }
 }
 
@@ -131,9 +134,22 @@ impl Arbitrary for ActionType {
 
 impl Arbitrary for Action {
     fn arbitrary(g: &mut Gen) -> Self {
-        Self {
-            trigger: ActionTrigger::arbitrary(g),
-            action: ActionType::arbitrary(g),
+        let trigger = ActionTrigger::arbitrary(g);
+        let is_event_trigger = matches!(trigger, ActionTrigger::Event(..));
+
+        if is_event_trigger {
+            Self {
+                trigger,
+                action: ActionType::Event {
+                    name: XmlString::arbitrary(g).0,
+                    action: Box::new(ActionType::arbitrary(g)),
+                },
+            }
+        } else {
+            Self {
+                trigger,
+                action: ActionType::arbitrary(g),
+            }
         }
     }
 }

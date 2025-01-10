@@ -179,6 +179,27 @@ impl Renderer for EguiRenderer {
 
     /// # Errors
     ///
+    /// Will error if egui app fails to emit the event.
+    async fn emit_event(
+        &self,
+        event_name: String,
+        event_value: Option<String>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        log::trace!("emit_event: event_name={event_name} event_value={event_value:?}");
+
+        let app = self.app.clone();
+
+        moosicbox_task::spawn_blocking("handle_event", move || {
+            app.handle_event(&event_name, event_value.as_deref());
+        })
+        .await
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)?;
+
+        Ok(())
+    }
+
+    /// # Errors
+    ///
     /// Will error if egui fails to render the view.
     ///
     /// # Panics
@@ -186,8 +207,8 @@ impl Renderer for EguiRenderer {
     /// Will panic if elements `Mutex` is poisoned.
     async fn render(&self, view: View) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         let app = self.app.clone();
-        let width = self.width.map(f32::from);
-        let height = self.height.map(f32::from);
+        let width = self.width;
+        let height = self.height;
 
         moosicbox_task::spawn_blocking("egui render", move || {
             moosicbox_logging::debug_or_trace!(
@@ -201,6 +222,7 @@ impl Renderer for EguiRenderer {
             elements.calc();
             *app.container.write().unwrap() = elements;
             app.images.write().unwrap().clear();
+            app.backgrounds.write().unwrap().clear();
             app.viewport_listeners.write().unwrap().clear();
             app.route_requests.write().unwrap().clear();
             app.checkboxes.write().unwrap().clear();
@@ -250,11 +272,18 @@ impl Renderer for EguiRenderer {
             {
                 let mut visibilities = app.visibilities.write().unwrap();
                 if let Some(visibility) = visibilities.remove(&removed.id) {
-                    for id in ids {
-                        visibilities.insert(id, visibility);
+                    for id in &ids {
+                        visibilities.insert(*id, visibility);
                     }
                 }
                 drop(visibilities);
+                let mut backgrounds = app.backgrounds.write().unwrap();
+                if let Some(background) = backgrounds.remove(&removed.id) {
+                    for id in &ids {
+                        backgrounds.insert(*id, background);
+                    }
+                }
+                drop(backgrounds);
                 drop(page);
                 if let Some(ctx) = &*app.ctx.read().unwrap() {
                     ctx.request_repaint();
@@ -353,6 +382,7 @@ struct RenderContext<'a> {
     route_requests: &'a mut Vec<usize>,
     visibilities: &'a mut HashMap<usize, Visibility>,
     displays: &'a mut HashMap<usize, bool>,
+    backgrounds: &'a mut HashMap<usize, Option<Color>>,
     checkboxes: &'a mut HashMap<egui::Id, bool>,
 }
 
@@ -371,15 +401,18 @@ struct EguiApp {
     route_requests: Arc<RwLock<Vec<usize>>>,
     visibilities: Arc<RwLock<HashMap<usize, Visibility>>>,
     displays: Arc<RwLock<HashMap<usize, bool>>>,
+    backgrounds: Arc<RwLock<HashMap<usize, Option<Color>>>>,
     checkboxes: Arc<RwLock<HashMap<egui::Id, bool>>>,
     router: Router,
     background: Option<Color32>,
     request_action: Sender<String>,
     on_resize: Sender<(f32, f32)>,
     side_effects: Arc<Mutex<VecDeque<Handler>>>,
+    event_handlers: Arc<RwLock<Vec<(String, EventHandler)>>>,
 }
 
 type Handler = Box<dyn Fn(&mut RenderContext) -> bool + Send + Sync>;
+type EventHandler = Box<dyn Fn(&mut RenderContext, Option<&str>) + Send + Sync>;
 
 impl EguiApp {
     fn new(
@@ -404,13 +437,58 @@ impl EguiApp {
             route_requests: Arc::new(RwLock::new(vec![])),
             visibilities: Arc::new(RwLock::new(HashMap::new())),
             displays: Arc::new(RwLock::new(HashMap::new())),
+            backgrounds: Arc::new(RwLock::new(HashMap::new())),
             checkboxes: Arc::new(RwLock::new(HashMap::new())),
             router,
             background: None,
             request_action,
             on_resize,
             side_effects: Arc::new(Mutex::new(VecDeque::new())),
+            event_handlers: Arc::new(RwLock::new(vec![])),
         }
+    }
+
+    /// # Errors
+    ///
+    /// Will error if egui fails to emit the event.
+    fn handle_event(&self, event_name: &str, event_value: Option<&str>) {
+        log::debug!("handle_event: event_name={event_name} event_value={event_value:?}");
+
+        let container = self.container.write().unwrap();
+        let mut viewport_listeners = self.viewport_listeners.write().unwrap();
+        let mut images = self.images.write().unwrap();
+        let mut canvas_actions = self.canvas_actions.write().unwrap();
+        let mut route_requests = self.route_requests.write().unwrap();
+        let mut visibilities = self.visibilities.write().unwrap();
+        let mut displays = self.displays.write().unwrap();
+        let mut backgrounds = self.backgrounds.write().unwrap();
+        let mut checkboxes = self.checkboxes.write().unwrap();
+
+        let mut render_context = RenderContext {
+            container: &container,
+            viewport_listeners: &mut viewport_listeners,
+            images: &mut images,
+            canvas_actions: &mut canvas_actions,
+            route_requests: &mut route_requests,
+            visibilities: &mut visibilities,
+            backgrounds: &mut backgrounds,
+            displays: &mut displays,
+            checkboxes: &mut checkboxes,
+        };
+
+        let binding = self.event_handlers.read().unwrap();
+        for handler in binding.iter().filter_map(|(name, handler)| {
+            if name == event_name {
+                Some(handler)
+            } else {
+                None
+            }
+        }) {
+            handler(&mut render_context, event_value);
+        }
+
+        drop(container);
+        drop(binding);
     }
 
     #[allow(clippy::too_many_lines)]
@@ -1147,11 +1225,7 @@ impl EguiApp {
         relative_container: Option<(egui::Rect, &'a Container)>,
         vscroll: bool,
     ) -> Response {
-        for element in container
-            .children
-            .iter()
-            .filter(|x| x.calculated_position == Some(LayoutPosition::Default))
-        {
+        for element in container.children.iter().filter(|x| x.is_hidden()) {
             self.handle_container_side_effects(
                 render_context,
                 ctx,
@@ -1356,7 +1430,11 @@ impl EguiApp {
                     bottom: container.calculated_padding_bottom.unwrap_or(0.0),
                 });
 
-                if let Some(background) = container.background {
+                if let Some(background) = render_context.backgrounds.get(&container.id) {
+                    if let Some(background) = background {
+                        frame = frame.fill(background.into());
+                    }
+                } else if let Some(background) = container.background {
                     frame = frame.fill(background.into());
                 }
                 if container.calculated_border_top_left_radius.is_some()
@@ -1666,7 +1744,11 @@ impl EguiApp {
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
-    #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_lines,
+        clippy::too_many_arguments,
+        clippy::cognitive_complexity
+    )]
     fn handle_container_side_effects(
         &self,
         render_context: &mut RenderContext,
@@ -1752,6 +1834,7 @@ impl EguiApp {
                                         id,
                                         &sender,
                                         &request_action,
+                                        None,
                                     );
                                     return !inside;
                                 }
@@ -1779,6 +1862,7 @@ impl EguiApp {
                                         id,
                                         &sender,
                                         &request_action,
+                                        None,
                                     );
                                 }
 
@@ -1803,6 +1887,7 @@ impl EguiApp {
                                         id,
                                         &sender,
                                         &request_action,
+                                        None,
                                     );
                                 }
 
@@ -1811,9 +1896,28 @@ impl EguiApp {
                                 true
                             });
                         }
-                        ActionTrigger::Immediate => {}
+                        ActionTrigger::Immediate | ActionTrigger::Event(..) => {}
                     }
                 }
+            }
+        }
+
+        for fx_action in &container.actions {
+            if let ActionTrigger::Event(event_name) = &fx_action.trigger {
+                let request_action = self.request_action.clone();
+                let action = fx_action.action.clone();
+                let id = container.id;
+                let sender = self.sender.clone();
+                self.add_event_handler(event_name.to_string(), move |render_context, value| {
+                    Self::handle_action(
+                        &action,
+                        render_context,
+                        id,
+                        &sender,
+                        &request_action,
+                        value,
+                    );
+                });
             }
         }
 
@@ -1955,13 +2059,14 @@ impl EguiApp {
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn handle_action(
         action: &ActionType,
         render_context: &mut RenderContext,
         id: usize,
         sender: &Sender<String>,
         request_action: &Sender<String>,
+        event_value: Option<&str>,
     ) -> bool {
         log::trace!("handle_action: action={action}");
         match &action {
@@ -1972,6 +2077,7 @@ impl EguiApp {
                 render_context.container,
                 render_context.visibilities,
                 render_context.displays,
+                render_context.backgrounds,
             ),
             ActionType::Navigate { url } => {
                 if let Err(e) = sender.send(url.to_owned()) {
@@ -2009,8 +2115,8 @@ impl EguiApp {
             ActionType::Logic(eval) => {
                 use gigachad_actions::logic::{CalcValue, Condition, Value};
 
-                let calc_visibility = |calc_value: &CalcValue| match calc_value {
-                    CalcValue::GetVisibility { target } => {
+                let calc_func = |calc_value: &CalcValue| match calc_value {
+                    CalcValue::GetVisibility { target } => Some(Value::Visibility(
                         Self::map_element_target(target, id, render_context.container, |element| {
                             render_context
                                 .visibilities
@@ -2019,57 +2125,95 @@ impl EguiApp {
                                 .or(element.visibility)
                                 .unwrap_or_default()
                         })
-                        .unwrap_or_default()
+                        .unwrap_or_default(),
+                    )),
+                    CalcValue::GetId { target } => {
+                        Self::map_element_target(target, id, render_context.container, |element| {
+                            element.str_id.clone()
+                        })
+                        .flatten()
+                        .map(Value::String)
+                    }
+                    CalcValue::GetDataAttrValue { attr, target } => {
+                        Self::map_element_target(target, id, render_context.container, |element| {
+                            element.data.get(attr).cloned()
+                        })
+                        .flatten()
+                        .map(Value::String)
+                    }
+                    CalcValue::GetEventValue => {
+                        event_value.map(ToString::to_string).map(Value::String)
                     }
                 };
 
                 let success = match &eval.condition {
-                    Condition::Eq(a, b) => match a {
-                        Value::Calc(calc_value) => match b {
-                            Value::Calc(b_calc_value) => {
-                                calc_visibility(calc_value) == calc_visibility(b_calc_value)
+                    Condition::Eq(a, b) => {
+                        log::debug!("handle_action: checking eq a={a:?} b={b:?}");
+
+                        if let Value::Calc(calc_value) = a {
+                            if let Value::Calc(b_calc_value) = b {
+                                let a = calc_func(calc_value);
+                                let b = calc_func(b_calc_value);
+                                log::debug!("handle_action: inner checking eq a={a:?} b={b:?}");
+                                a == b
+                            } else {
+                                calc_func(calc_value).is_some_and(|a| {
+                                    log::debug!("handle_action: inner checking eq a={a:?} b={b:?}");
+                                    &a == b
+                                })
                             }
-                            Value::Visibility(visibility) => {
-                                *visibility == calc_visibility(calc_value)
-                            }
-                        },
-                        Value::Visibility(visibility) => match b {
-                            Value::Calc(calc_value) => *visibility == calc_visibility(calc_value),
-                            Value::Visibility(b_visibility) => visibility == b_visibility,
-                        },
-                    },
+                        } else if let Value::Calc(calc_value) = b {
+                            calc_func(calc_value).is_some_and(|b| {
+                                log::debug!("handle_action: inner checking eq a={a:?} b={b:?}");
+                                a == &b
+                            })
+                        } else {
+                            log::debug!("handle_action: inner checking eq a={a:?} b={b:?}");
+                            a == b
+                        }
+                    }
                 };
+
+                log::debug!("handle_action: success={success}");
 
                 if success {
                     for action in &eval.actions {
-                        if action.trigger == ActionTrigger::Immediate
-                            && !Self::handle_action(
-                                &action.action,
-                                render_context,
-                                id,
-                                sender,
-                                request_action,
-                            )
-                        {
+                        if matches!(
+                            action.trigger,
+                            ActionTrigger::Immediate | ActionTrigger::Event(..)
+                        ) && !Self::handle_action(
+                            &action.action,
+                            render_context,
+                            id,
+                            sender,
+                            request_action,
+                            event_value,
+                        ) {
                             return false;
                         }
                     }
                 } else {
                     for action in &eval.else_actions {
-                        if action.trigger == ActionTrigger::Immediate
-                            && !Self::handle_action(
-                                &action.action,
-                                render_context,
-                                id,
-                                sender,
-                                request_action,
-                            )
-                        {
+                        if matches!(
+                            action.trigger,
+                            ActionTrigger::Immediate | ActionTrigger::Event(..)
+                        ) && !Self::handle_action(
+                            &action.action,
+                            render_context,
+                            id,
+                            sender,
+                            request_action,
+                            event_value,
+                        ) {
                             return false;
                         }
                     }
                 }
 
+                true
+            }
+            ActionType::Event { name, .. } => {
+                log::trace!("handle_action: event '{name}' will be handled elsewhere");
                 true
             }
         }
@@ -2094,6 +2238,15 @@ impl EguiApp {
                     {
                         if render_context.displays.contains_key(&id) {
                             render_context.displays.remove(&id);
+                        }
+                    }
+                }
+                StyleAction::SetBackground(..) => {
+                    if let Some(id) =
+                        Self::get_element_target_id(target, id, render_context.container)
+                    {
+                        if render_context.backgrounds.contains_key(&id) {
+                            render_context.backgrounds.remove(&id);
                         }
                     }
                 }
@@ -2188,6 +2341,7 @@ impl EguiApp {
         container: &Container,
         visibilities: &mut HashMap<usize, Visibility>,
         displays: &mut HashMap<usize, bool>,
+        backgrounds: &mut HashMap<usize, Option<Color>>,
     ) -> bool {
         match action {
             StyleAction::SetVisibility(visibility) => {
@@ -2200,6 +2354,26 @@ impl EguiApp {
             StyleAction::SetDisplay(display) => {
                 if let Some(id) = Self::get_element_target_id(target, id, container) {
                     displays.insert(id, *display);
+                }
+
+                true
+            }
+            StyleAction::SetBackground(background) => {
+                if let Some(id) = Self::get_element_target_id(target, id, container) {
+                    if let Some(background) = background {
+                        match Color::try_from_hex(background) {
+                            Ok(color) => {
+                                log::debug!("handle_style_action: set background color id={id} color={color}");
+                                backgrounds.insert(id, Some(color));
+                            }
+                            Err(e) => {
+                                log::error!("handle_style_action: invalid background color: {e:?}");
+                            }
+                        }
+                    } else {
+                        log::debug!("handle_style_action: remove background color id={id}");
+                        backgrounds.insert(id, None);
+                    }
                 }
 
                 true
@@ -2478,8 +2652,13 @@ impl EguiApp {
         mut frame: egui::Frame,
         start: bool,
         end: bool,
+        backgrounds: &HashMap<usize, Option<Color>>,
     ) -> egui::Frame {
-        if let Some(background) = container.background {
+        if let Some(background) = backgrounds.get(&container.id) {
+            if let Some(background) = background {
+                frame = frame.fill(background.into());
+            }
+        } else if let Some(background) = container.background {
             frame = frame.fill(background.into());
         }
 
@@ -2530,7 +2709,7 @@ impl EguiApp {
         frame
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_table(
         &self,
@@ -2562,6 +2741,18 @@ impl EguiApp {
             if let Some(headings) = headings {
                 for heading in headings {
                     let tr = head_trs.next();
+                    if let Some(tr) = tr {
+                        self.handle_container_side_effects(
+                            render_context,
+                            ctx,
+                            Some(ui),
+                            tr,
+                            viewport,
+                            rect,
+                            None,
+                            false,
+                        );
+                    }
                     let mut heading = heading.peekable();
                     let mut first = true;
                     while let Some(th) = heading.next() {
@@ -2573,6 +2764,7 @@ impl EguiApp {
                                 frame,
                                 first,
                                 heading.peek().is_none(),
+                                render_context.backgrounds,
                             );
                         }
 
@@ -2594,6 +2786,18 @@ impl EguiApp {
             }
             for row in rows {
                 let tr = body_trs.next();
+                if let Some(tr) = tr {
+                    self.handle_container_side_effects(
+                        render_context,
+                        ctx,
+                        Some(ui),
+                        tr,
+                        viewport,
+                        rect,
+                        None,
+                        false,
+                    );
+                }
                 {
                     let mut row = row.peekable();
                     let mut first = true;
@@ -2606,6 +2810,7 @@ impl EguiApp {
                                 frame,
                                 first,
                                 row.peek().is_none(),
+                                render_context.backgrounds,
                             );
                         }
 
@@ -2629,6 +2834,18 @@ impl EguiApp {
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
+    fn add_event_handler(
+        &self,
+        event_name: String,
+        handler: impl Fn(&mut RenderContext, Option<&str>) + Send + Sync + 'static,
+    ) {
+        self.event_handlers
+            .write()
+            .unwrap()
+            .push((event_name, Box::new(handler)));
+    }
+
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn trigger_side_effect(
         &self,
         handler: impl Fn(&mut RenderContext) -> bool + Send + Sync + 'static,
@@ -2643,12 +2860,15 @@ impl EguiApp {
     fn paint(&self, ctx: &egui::Context) {
         self.check_frame_resize(ctx);
 
+        self.event_handlers.write().unwrap().clear();
+
         let container = self.container.write().unwrap();
         let mut viewport_listeners = self.viewport_listeners.write().unwrap();
         let mut images = self.images.write().unwrap();
         let mut canvas_actions = self.canvas_actions.write().unwrap();
         let mut route_requests = self.route_requests.write().unwrap();
         let mut visibilities = self.visibilities.write().unwrap();
+        let mut backgrounds = self.backgrounds.write().unwrap();
         let mut displays = self.displays.write().unwrap();
         let mut checkboxes = self.checkboxes.write().unwrap();
 
@@ -2672,6 +2892,7 @@ impl EguiApp {
                 canvas_actions: &mut canvas_actions,
                 route_requests: &mut route_requests,
                 visibilities: &mut visibilities,
+                backgrounds: &mut backgrounds,
                 displays: &mut displays,
                 checkboxes: &mut checkboxes,
             };

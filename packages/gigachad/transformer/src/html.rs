@@ -288,6 +288,14 @@ fn parse_action(action: String) -> ActionType {
     ActionType::Custom { action }
 }
 
+fn parse_event_action(action: &str) -> (String, ActionType) {
+    let Ok(ActionType::Event { name, action }) = serde_json::from_str::<ActionType>(action) else {
+        panic!("Invalid event action: '{action}'");
+    };
+
+    (name, *action)
+}
+
 fn get_actions(tag: &HTMLTag) -> Vec<Action> {
     let mut actions = vec![];
 
@@ -319,6 +327,13 @@ fn get_actions(tag: &HTMLTag) -> Vec<Action> {
         actions.push(Action {
             trigger: ActionTrigger::Immediate,
             action: parse_action(action),
+        });
+    }
+    if let Some(action) = get_tag_attr_value_owned(tag, "fx-event") {
+        let (name, action) = parse_event_action(&action);
+        actions.push(Action {
+            trigger: ActionTrigger::Event(name),
+            action,
         });
     }
 
@@ -572,7 +587,7 @@ mod test {
             actions
                 .iter()
                 .take(i - 1)
-                .all(|prev| prev.trigger != x.trigger)
+                .all(|prev| prev.trigger.trigger_type() != x.trigger.trigger_type())
         });
         container
             .actions

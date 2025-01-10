@@ -22,15 +22,30 @@ pub enum ElementTarget {
     LastChild,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ActionTrigger {
     Click,
     ClickOutside,
     Hover,
     Change,
+    Event(String),
     #[default]
     Immediate,
+}
+
+impl ActionTrigger {
+    #[must_use]
+    pub const fn trigger_type(&self) -> &'static str {
+        match self {
+            Self::Click => "Click",
+            Self::ClickOutside => "ClickOutside",
+            Self::Hover => "Hover",
+            Self::Change => "Change",
+            Self::Event(_) => "Event",
+            Self::Immediate => "Immediate",
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -39,6 +54,13 @@ pub enum ActionTrigger {
 pub struct Action {
     pub trigger: ActionTrigger,
     pub action: ActionType,
+}
+
+#[cfg(feature = "serde")]
+impl std::fmt::Display for Action {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&serde_json::to_string(self).unwrap())
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,11 +90,23 @@ pub enum ActionType {
     Custom {
         action: String,
     },
+    Event {
+        name: String,
+        action: Box<ActionType>,
+    },
     #[cfg(feature = "logic")]
     Logic(logic::If),
 }
 
 impl ActionType {
+    #[must_use]
+    pub fn on_event(event: impl Into<String>, action: Self) -> Self {
+        Self::Event {
+            name: event.into(),
+            action: Box::new(action),
+        }
+    }
+
     #[must_use]
     pub fn set_visibility_str_id(visibility: Visibility, target: &str) -> Self {
         Self::Style {
@@ -222,6 +256,47 @@ impl ActionType {
     pub const fn display_last_child() -> Self {
         Self::set_display_last_child(true)
     }
+
+    #[must_use]
+    pub fn set_background_str_id(background: impl Into<String>, target: &str) -> Self {
+        Self::Style {
+            target: ElementTarget::StrId(target.to_string()),
+            action: StyleAction::SetBackground(Some(background.into())),
+        }
+    }
+
+    #[cfg(feature = "id")]
+    #[must_use]
+    pub fn set_background_id(background: impl Into<String>, target: usize) -> Self {
+        Self::Style {
+            target: ElementTarget::Id(target),
+            action: StyleAction::SetBackground(Some(background.into())),
+        }
+    }
+
+    #[must_use]
+    pub fn set_background_self(background: impl Into<String>) -> Self {
+        Self::Style {
+            target: ElementTarget::SelfTarget,
+            action: StyleAction::SetBackground(Some(background.into())),
+        }
+    }
+
+    #[must_use]
+    pub const fn remove_background_self() -> Self {
+        Self::Style {
+            target: ElementTarget::SelfTarget,
+            action: StyleAction::SetBackground(None),
+        }
+    }
+
+    #[must_use]
+    pub fn set_background_last_child(background: impl Into<String>) -> Self {
+        Self::Style {
+            target: ElementTarget::LastChild,
+            action: StyleAction::SetBackground(Some(background.into())),
+        }
+    }
 }
 
 impl From<ActionType> for Action {
@@ -254,6 +329,7 @@ impl<'a> TryFrom<&'a str> for ActionType {
 pub enum StyleAction {
     SetVisibility(Visibility),
     SetDisplay(bool),
+    SetBackground(Option<String>),
 }
 
 #[cfg(feature = "serde")]

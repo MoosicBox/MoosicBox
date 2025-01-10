@@ -98,6 +98,15 @@ pub trait Renderer: Send + Sync {
 
     /// # Errors
     ///
+    /// Will error if `Renderer` implementation fails to emit the event.
+    async fn emit_event(
+        &self,
+        event_name: String,
+        event_value: Option<String>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
+
+    /// # Errors
+    ///
     /// Will error if `Renderer` implementation fails to render the view.
     async fn render(&self, view: View) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
 

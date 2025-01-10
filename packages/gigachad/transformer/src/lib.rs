@@ -921,7 +921,7 @@ impl Container {
         attrs.add_opt("state", self.state.as_ref());
 
         for action in &self.actions {
-            match action.trigger {
+            match &action.trigger {
                 gigachad_actions::ActionTrigger::Click => {
                     attrs.add("fx-click", action.action.to_string());
                 }
@@ -936,6 +936,13 @@ impl Container {
                 }
                 gigachad_actions::ActionTrigger::Immediate => {
                     attrs.add("fx-immediate", action.action.to_string());
+                }
+                gigachad_actions::ActionTrigger::Event(name) => {
+                    attrs.add(
+                        "fx-event",
+                        gigachad_actions::ActionType::on_event(name, action.action.clone())
+                            .to_string(),
+                    );
                 }
             }
         }

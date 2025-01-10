@@ -265,6 +265,19 @@ impl Renderer for HtmlRenderer {
 
     /// # Errors
     ///
+    /// Will error if html app fails to emit the event.
+    async fn emit_event(
+        &self,
+        event_name: String,
+        event_value: Option<String>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        log::trace!("emit_event: event_name={event_name} event_value={event_value:?}");
+
+        Ok(())
+    }
+
+    /// # Errors
+    ///
     /// Will error if html fails to render the elements.
     async fn render(
         &self,

@@ -8,7 +8,9 @@ use crate::{Action, ElementTarget};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CalcValue {
     GetVisibility { target: ElementTarget },
+    GetId { target: ElementTarget },
     GetDataAttrValue { attr: String, target: ElementTarget },
+    GetEventValue,
 }
 
 impl CalcValue {
@@ -22,6 +24,7 @@ impl CalcValue {
 pub enum Value {
     Calc(CalcValue),
     Visibility(Visibility),
+    String(String),
 }
 
 impl Value {
@@ -149,6 +152,18 @@ pub const fn get_visibility_id(id: usize) -> CalcValue {
 #[must_use]
 pub const fn get_visibility_self() -> CalcValue {
     CalcValue::GetVisibility {
+        target: ElementTarget::SelfTarget,
+    }
+}
+
+#[must_use]
+pub const fn get_event_value() -> CalcValue {
+    CalcValue::GetEventValue
+}
+
+#[must_use]
+pub const fn get_id_self() -> CalcValue {
+    CalcValue::GetId {
         target: ElementTarget::SelfTarget,
     }
 }
