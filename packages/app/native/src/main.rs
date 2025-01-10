@@ -18,10 +18,13 @@ use moosicbox_app_native_lib::{
     renderer::{Color, PartialView, Renderer, View},
     router::{Container, RouteRequest, Router},
 };
-use moosicbox_app_native_ui::{state, Action};
+use moosicbox_app_native_ui::{
+    state::{self, State},
+    Action,
+};
 use moosicbox_app_state::AppStateError;
 use moosicbox_core::sqlite::models::{
-    AlbumSort, AlbumType, ApiAlbum, ApiArtist, ApiSource, TrackApiSource,
+    AlbumSort, AlbumType, ApiAlbum, ApiArtist, ApiSource, ApiTrack, TrackApiSource,
 };
 use moosicbox_env_utils::{default_env_usize, option_env_f32, option_env_i32};
 use moosicbox_logging::free_log_client::DynLayer;
@@ -112,35 +115,14 @@ async fn set_current_session(session: ApiSession) {
         volume: session.volume,
         playlist: Some(ApiUpdateSessionPlaylist {
             session_playlist_id: session.playlist.session_playlist_id,
-            tracks: session
-                .playlist
-                .tracks
-                .clone()
-                .into_iter()
-                .map(Into::into)
-                .collect::<Vec<_>>(),
+            tracks: session.playlist.tracks.clone(),
         }),
         quality: None,
     };
 
     let state = convert_state(&STATE).await;
 
-    for (id, markup) in moosicbox_app_native_ui::session_updated(&state, &update, &session) {
-        let view = PartialView {
-            target: id,
-            container: markup.try_into().unwrap(),
-        };
-        let response = RENDERER
-            .get()
-            .unwrap()
-            .read()
-            .await
-            .render_partial(view)
-            .await;
-        if let Err(e) = response {
-            log::error!("Failed to render_partial: {e:?}");
-        }
-    }
+    handle_session_update(&state, &update, &session).await;
 
     visualization::check_visualization_update().await;
 }
@@ -166,24 +148,7 @@ async fn handle_playback_update(update: ApiUpdateSession) {
             if let Some(session) = STATE.get_current_session().await {
                 let state = convert_state(&STATE).await;
 
-                for (id, markup) in
-                    moosicbox_app_native_ui::session_updated(&state, &update, &session)
-                {
-                    let view = PartialView {
-                        target: id,
-                        container: markup.try_into().unwrap(),
-                    };
-                    let response = RENDERER
-                        .get()
-                        .unwrap()
-                        .write()
-                        .await
-                        .render_partial(view)
-                        .await;
-                    if let Err(e) = response {
-                        log::error!("Failed to render_partial: {e:?}");
-                    }
-                }
+                handle_session_update(&state, &update, &session).await;
             } else {
                 log::debug!("handle_playback_update: no session");
             }
@@ -191,6 +156,49 @@ async fn handle_playback_update(update: ApiUpdateSession) {
     );
 
     visualization::check_visualization_update().await;
+}
+
+async fn handle_session_update(state: &State, update: &ApiUpdateSession, session: &ApiSession) {
+    for (id, markup) in moosicbox_app_native_ui::session_updated(state, update, session) {
+        let view = PartialView {
+            target: id,
+            container: markup.try_into().unwrap(),
+        };
+        let response = RENDERER
+            .get()
+            .unwrap()
+            .write()
+            .await
+            .render_partial(view)
+            .await;
+        if let Err(e) = response {
+            log::error!("Failed to render_partial: {e:?}");
+        }
+    }
+
+    if update.position.is_some() || update.playlist.is_some() {
+        log::debug!("handle_session_update: position or playlist updated");
+        let track: Option<&ApiTrack> = session
+            .playlist
+            .tracks
+            .get(session.position.unwrap_or(0) as usize);
+
+        let binding = RENDERER.get().unwrap().clone();
+        let renderer = binding.read().await;
+
+        if let Some(track) = track {
+            if let Err(e) = renderer
+                .emit_event("play-track".to_string(), Some(track.track_id.to_string()))
+                .await
+            {
+                log::error!("Failed to emit event: {e:?}");
+            }
+        } else if let Err(e) = renderer.emit_event("unplay-track".to_string(), None).await {
+            log::error!("Failed to emit event: {e:?}");
+        }
+
+        drop(renderer);
+    }
 }
 
 fn parse_track_sources(value: &str) -> Result<Vec<TrackApiSource>, RouteError> {
@@ -292,6 +300,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .transpose()?;
 
                 if req.query.get("full").map(String::as_str) == Some("true") {
+                    let state = convert_state(&STATE).await;
                     let album_id = album_id.into();
                     let api = PROFILES.get(PROFILE).unwrap().get(source)?;
                     let album = api
@@ -314,6 +323,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     log::debug!("versions: {versions:?}");
 
                     let container: Container = moosicbox_app_native_ui::albums::album_page_content(
+                        &state,
                         &album,
                         &versions,
                         versions.iter().find(|v| {
