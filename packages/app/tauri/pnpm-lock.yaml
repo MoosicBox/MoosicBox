@@ -13,7 +13,7 @@ importers:
         version: 0.9.4(prettier-plugin-astro@0.14.1)(prettier@3.4.2)(typescript@5.7.3)
       '@astrojs/node':
         specifier: ^9.0.0
-        version: 9.0.0(astro@5.1.4(@types/node@22.10.5)(jiti@2.4.2)(rollup@4.30.1)(typescript@5.7.3)(yaml@2.7.0))
+        version: 9.0.0(astro@5.1.5(@types/node@22.10.5)(jiti@2.4.2)(rollup@4.30.1)(typescript@5.7.3)(yaml@2.7.0))
       '@astrojs/solid-js':
         specifier: ^5.0.1
         version: 5.0.1(@testing-library/jest-dom@5.17.0)(@types/node@22.10.5)(jiti@2.4.2)(solid-js@1.9.4)(yaml@2.7.0)
@@ -45,8 +45,8 @@ importers:
         specifier: ^2.2.0
         version: 2.2.0
       astro:
-        specifier: ^5.1.4
-        version: 5.1.4(@types/node@22.10.5)(jiti@2.4.2)(rollup@4.30.1)(typescript@5.7.3)(yaml@2.7.0)
+        specifier: ^5.1.5
+        version: 5.1.5(@types/node@22.10.5)(jiti@2.4.2)(rollup@4.30.1)(typescript@5.7.3)(yaml@2.7.0)
       date-fns:
         specifier: ^3.6.0
         version: 3.6.0
@@ -70,8 +70,8 @@ importers:
         specifier: ^0.8.10
         version: 0.8.10(solid-js@1.9.4)
       '@tauri-apps/cli':
-        specifier: ^2.2.2
-        version: 2.2.2
+        specifier: ^2.2.3
+        version: 2.2.3
       '@testing-library/jest-dom':
         specifier: ^5.17.0
         version: 5.17.0
@@ -202,20 +202,20 @@ packages:
     resolution: {integrity: sha512-RJlIHRueQgwWitWgF8OdFYGZX328Ax5BCemNGlqHfplnRT9ESi8JkFlvaVYbS+UubVY6dpv87Fs2u5M29iNFVQ==}
     engines: {node: '>=6.9.0'}
 
-  '@babel/compat-data@7.26.3':
-    resolution: {integrity: sha512-nHIxvKPniQXpmQLb0vhY3VaFb3S0YrTAwpOWJZh1wn3oJPjJk9Asva204PsBdmAE8vpzfHudT8DB0scYvy9q0g==}
+  '@babel/compat-data@7.26.5':
+    resolution: {integrity: sha512-XvcZi1KWf88RVbF9wn8MN6tYFloU5qX8KjuF3E1PVBmJ9eypXfs4GRiJwLuTZL0iSnJUKn1BFPa5BPZZJyFzPg==}
     engines: {node: '>=6.9.0'}
 
   '@babel/core@7.26.0':
     resolution: {integrity: sha512-i1SLeK+DzNnQ3LL/CswPCa/E5u4lh1k6IAEphON8F+cXt0t9euTshDru0q7/IqMa1PMPz5RnHuHscF8/ZJsStg==}
     engines: {node: '>=6.9.0'}
 
-  '@babel/generator@7.26.3':
-    resolution: {integrity: sha512-6FF/urZvD0sTeO7k6/B15pMLC4CHUv1426lzr3N01aHJTl046uCAh9LXW/fzeXXjPNCJ6iABW5XaWOsIZB93aQ==}
+  '@babel/generator@7.26.5':
+    resolution: {integrity: sha512-2caSP6fN9I7HOe6nqhtft7V4g7/V/gfDsC3Ag4W7kEzzvRGKqiv0pu0HogPiZ3KaVSoNDhUws6IJjDjpfmYIXw==}
     engines: {node: '>=6.9.0'}
 
-  '@babel/helper-compilation-targets@7.25.9':
-    resolution: {integrity: sha512-j9Db8Suy6yV/VHa4qzrj9yZfZxhLWQdVnRlXxmKLYlhWUVB1sB2G5sxuWYXk/whHD9iW76PmNzxZ4UCnTQTVEQ==}
+  '@babel/helper-compilation-targets@7.26.5':
+    resolution: {integrity: sha512-IXuyn5EkouFJscIDuFF5EsiSolseme1s0CZB+QxVugqJLYmKdxI1VfIBOst0SUu4rnk2Z7kqTwmoO1lp3HIfnA==}
     engines: {node: '>=6.9.0'}
 
   '@babel/helper-module-imports@7.18.6':
@@ -232,8 +232,8 @@ packages:
     peerDependencies:
       '@babel/core': ^7.0.0
 
-  '@babel/helper-plugin-utils@7.25.9':
-    resolution: {integrity: sha512-kSMlyUVdWe25rEsRGviIgOWnoT/nfABVWlqt9N19/dIPWViAOW2s9wznP5tURbs/IDuNk4gPy3YdYRgH3uxhBw==}
+  '@babel/helper-plugin-utils@7.26.5':
+    resolution: {integrity: sha512-RS+jZcRdZdRFzMyr+wcsaqOmld1/EqTghfaBGQQd/WnRdzdlvSZ//kF7U8VQTxf1ynZ4cjUcYgjVGx13ewNPMg==}
     engines: {node: '>=6.9.0'}
 
   '@babel/helper-string-parser@7.25.9':
@@ -252,8 +252,8 @@ packages:
     resolution: {integrity: sha512-tbhNuIxNcVb21pInl3ZSjksLCvgdZy9KwJ8brv993QtIVKJBBkYXz4q4ZbAv31GdnC+R90np23L5FbEBlthAEw==}
     engines: {node: '>=6.9.0'}
 
-  '@babel/parser@7.26.3':
-    resolution: {integrity: sha512-WJ/CvmY8Mea8iDXo6a7RK2wbmJITT5fN3BEkRuFlxVyNx8jOKIIhmC4fSkTcPcf8JyavbBwIe6OpiCOBXt/IcA==}
+  '@babel/parser@7.26.5':
+    resolution: {integrity: sha512-SRJ4jYmXRqV1/Xc+TIVG84WjHBXKlxO9sHQnA2Pf12QQEAp1LOh6kDzNHXcUnbH1QI0FDoPPVOt+vyUDucxpaw==}
     engines: {node: '>=6.0.0'}
     hasBin: true
 
@@ -271,12 +271,12 @@ packages:
     resolution: {integrity: sha512-9DGttpmPvIxBb/2uwpVo3dqJ+O6RooAFOS+lB+xDqoE2PVCE8nfoHMdZLpfCQRLwvohzXISPZcgxt80xLfsuwg==}
     engines: {node: '>=6.9.0'}
 
-  '@babel/traverse@7.26.4':
-    resolution: {integrity: sha512-fH+b7Y4p3yqvApJALCPJcwb0/XaOSgtK4pzV6WVjPR5GLFQBRI7pfoX2V2iM48NXvX07NUxxm1Vw98YjqTcU5w==}
+  '@babel/traverse@7.26.5':
+    resolution: {integrity: sha512-rkOSPOw+AXbgtwUga3U4u8RpoK9FEFWBNAlTpcnkLFjL5CT+oyHNuUUC/xx6XefEJ16r38r8Bc/lfp6rYuHeJQ==}
     engines: {node: '>=6.9.0'}
 
-  '@babel/types@7.26.3':
-    resolution: {integrity: sha512-vN5p+1kl59GVKMvTHt55NzzmYVxprfJD+ql7U9NFIfKCBkYE55LYtS+WtPlaYOyzydrKI8Nezd+aZextrd+FMA==}
+  '@babel/types@7.26.5':
+    resolution: {integrity: sha512-L6mZmwFDK6Cjh1nRCLXpa6no13ZIioJDz7mdkzHv399pThrTa/k0nUlNaenOeh2kWu/iaOQYElEpKPUswUa9Vg==}
     engines: {node: '>=6.9.0'}
 
   '@bcoe/v8-coverage@0.2.3':
@@ -1001,68 +1001,68 @@ packages:
   '@tauri-apps/api@2.2.0':
     resolution: {integrity: sha512-R8epOeZl1eJEl603aUMIGb4RXlhPjpgxbGVEaqY+0G5JG9vzV/clNlzTeqc+NLYXVqXcn8mb4c5b9pJIUDEyAg==}
 
-  '@tauri-apps/cli-darwin-arm64@2.2.2':
-    resolution: {integrity: sha512-JMXbX5hGrLOzJbjisd7gBe25PmHouXA1+f4yVWg5PRlgxW7pla7krOzhu2mchFlMVDr8aLwhMLgohvvx+raXag==}
+  '@tauri-apps/cli-darwin-arm64@2.2.3':
+    resolution: {integrity: sha512-dMObP+sEifhnEmQdOqbq+wct2CUjj3DDM0JKT20q3qcaGP5asK68RxPleL0HnU5REXekcYwGV7m6Y8VtLFKrmw==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [darwin]
 
-  '@tauri-apps/cli-darwin-x64@2.2.2':
-    resolution: {integrity: sha512-i2gxKXev+Ed0UWeq0xSiyRjSkzzBbu9MCOhs/QVv1YuV+097K/fF89f+a4v5JJftCq2IOHhSKH23KyTJBLnNKQ==}
+  '@tauri-apps/cli-darwin-x64@2.2.3':
+    resolution: {integrity: sha512-nNS9+jOoNxIE2qVjE0vxuLNXVTV5VKsTpt0SLDOnO4sp33PRJ8Jiwe3U8Nvv4sn36DXmp9i0lX1WXuDp48dTsA==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [darwin]
 
-  '@tauri-apps/cli-linux-arm-gnueabihf@2.2.2':
-    resolution: {integrity: sha512-iC2HndsN5smmbvEDUQFyTHyYHSgx7OwJ6puyXLLpkAHnQDo4TGSPxIlPeZFSZmEoaJEmHLdG3j1LcFWOKrxWQg==}
+  '@tauri-apps/cli-linux-arm-gnueabihf@2.2.3':
+    resolution: {integrity: sha512-fOzMQHT/5KGesAdDygk2y0zKz5a6jcXkEmvo7wyGp9KEpfJzozBIEzdx7Cvwt//WqXci4SfFq59kUI4ZY3qUAA==}
     engines: {node: '>= 10'}
     cpu: [arm]
     os: [linux]
 
-  '@tauri-apps/cli-linux-arm64-gnu@2.2.2':
-    resolution: {integrity: sha512-YzK30tleUzWxfIp1davc5RhvmNZxiZQkUnQ4zajGJZ99zxNk8kwvv8nYSC3/J2R8sYpnuv+7CzNyIwA2s6yH+w==}
+  '@tauri-apps/cli-linux-arm64-gnu@2.2.3':
+    resolution: {integrity: sha512-qJpwKawgwLNoi34PVbKdCz5CMvB4ru5pvucvtiBaeki5qdBsqlXuhNeUdrhTs+bb2LVNMK4BgzcLSj1WNHeaXg==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
 
-  '@tauri-apps/cli-linux-arm64-musl@2.2.2':
-    resolution: {integrity: sha512-nOw2apBzOCTiH1fLOjL42ajHNhMzdp640CX5RrWkDYdyVO7YbGmWzrN26PPXohScScXVjSjtDDxdeQV1gHCxhg==}
+  '@tauri-apps/cli-linux-arm64-musl@2.2.3':
+    resolution: {integrity: sha512-lkiaMNFU4aDXO1QXUZ97ERtxOc1952oEpMRXtRrpwIJutKlLg08Nm2fiaH3vKbGXFvuRBL68rO1xBOKZ8CYpJQ==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
 
-  '@tauri-apps/cli-linux-x64-gnu@2.2.2':
-    resolution: {integrity: sha512-Tmm4qVY8yxSugi8sCko1dyZxyPGK8m3tWm+b1J0DXwzxqaoMqNXuYGxkwtUdkznPXEfQSD8OGBfwjXNmVGE91Q==}
+  '@tauri-apps/cli-linux-x64-gnu@2.2.3':
+    resolution: {integrity: sha512-yTKk5i50UQCrL0OhMin+ThzXWFXbH3O93tcX5eKQh3ZUS2BXQkDdGmYmwsIgdqevMOQTj19PasxY5SgPzCi5CA==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
 
-  '@tauri-apps/cli-linux-x64-musl@2.2.2':
-    resolution: {integrity: sha512-AwAcaCUhmwzOFPvje80g2BAhnkoEpXdl1E0Uk+lvr9makHM0+aV++M5jibD97yxKnK5NrQ9YXPH5Sn6CdncgUg==}
+  '@tauri-apps/cli-linux-x64-musl@2.2.3':
+    resolution: {integrity: sha512-eP4F+DihyShB7PV2rw7NYRtcJWod7qtJkVaF4BvW+kk0TXWsp1tQIjKGh5LA7wrWXGdeOZrLHRbQY9ArVXkAdA==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
 
-  '@tauri-apps/cli-win32-arm64-msvc@2.2.2':
-    resolution: {integrity: sha512-u7TnwuUAN+eX6R2kDfSM8fsUFiBzNqq9PnAOsQ2qbwbHGbu7mHfGO1OFgnIzBt1C9FolFbENk2pzjiL4R9baXQ==}
+  '@tauri-apps/cli-win32-arm64-msvc@2.2.3':
+    resolution: {integrity: sha512-b/OoNk3PiFPzYvS+AMBEuv7s4vCxv8tWSwm9WKkSbankyFJq41KdIujlODYOaAgeQoA2sXwbAeQ7b+wQfu8L6g==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [win32]
 
-  '@tauri-apps/cli-win32-ia32-msvc@2.2.2':
-    resolution: {integrity: sha512-9KScbGKU6GfHThEYWdlO0+COW/8SDfIXbYgEvEcfZztE4VedHBbI0XfU+l+aS8nJN+fvYX+DtvY0tpDwyo0G4A==}
+  '@tauri-apps/cli-win32-ia32-msvc@2.2.3':
+    resolution: {integrity: sha512-0s2BUQ08MB7ucySH/iLWP9JS0VIBI+uViRL9bifOpTjKSVk1EGSYQy1K+jR1bch9U1L/nJE8wXPlhgmsOpOAdA==}
     engines: {node: '>= 10'}
     cpu: [ia32]
     os: [win32]
 
-  '@tauri-apps/cli-win32-x64-msvc@2.2.2':
-    resolution: {integrity: sha512-ko8OWCLwFaHfdBaKbRX/C5btNt61v17qKOSQPksuc5PVvY0tAoci09612nEMlYiogZKEtn7VAqSdRAG6h0tz+g==}
+  '@tauri-apps/cli-win32-x64-msvc@2.2.3':
+    resolution: {integrity: sha512-QQpiuMKJS3uMfsf5wrAf36qnxGnEQ/i0YcBWMU7HJnYRLEcwpUT4PWVdzLS0ltrA7hDqsHV3leI/KGbdllpVDw==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [win32]
 
-  '@tauri-apps/cli@2.2.2':
-    resolution: {integrity: sha512-5fVEdP4t4BT0ymvXZAM78kB0S/TaiRDLDoSRWGxVy1e7XCwuKyST5m6ybeyw/h/soK/91tbf+W3xXXy7XzkT4A==}
+  '@tauri-apps/cli@2.2.3':
+    resolution: {integrity: sha512-tvI/wEL1v//Qka1CDTCXR1cvwNCguJ0PtqXhdHBcKiT7DPZuFV/ZYUTygy+HpiP0b25t4XksoJqTeETxOtlb/Q==}
     engines: {node: '>= 10'}
     hasBin: true
 
@@ -1384,8 +1384,8 @@ packages:
     resolution: {integrity: sha512-F6NW1RJo5pp2kPnnM97M5Ohw8zAGjv83MpxHqfAochH68n/kiXN57+hYaNUCA7XkScoVNr6yzvly3hsY34TGfQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  astro@5.1.4:
-    resolution: {integrity: sha512-V0XD2GlwUweCROYv+QKs97p7I1cZ6mYycU3VKGbJv2l55suTTy766F/MtHgoM/VAFdPBn488MUvDAYx85gf/Zw==}
+  astro@5.1.5:
+    resolution: {integrity: sha512-Q9TE4aNlczxVoPDoXR3UcjLezL+70z0KbTRXovE4ybpx0mgNL1jsmSWtF3UFXB5+GTf9JK7om5fbIaaMReKcUg==}
     engines: {node: ^18.17.1 || ^20.3.0 || >=22.0.0, npm: '>=9.6.5', pnpm: '>=7.1.0'}
     hasBin: true
 
@@ -2126,8 +2126,8 @@ packages:
   graphemer@1.4.0:
     resolution: {integrity: sha512-EtKwoO6kxCL9WO5xipiHTZlSzBm7WLT627TqC/uVRd0HKmq8NXyebnNYxDoBi7wt8eTWrUrKXCOVaFq9x1kgag==}
 
-  h3@1.13.0:
-    resolution: {integrity: sha512-vFEAu/yf8UMUcB4s43OaDaigcqpQd14yanmOsn+NcRX3/guSKncyE2rOYhq8RIchgJrPSs/QiIddnTTR1ddiAg==}
+  h3@1.13.1:
+    resolution: {integrity: sha512-u/z6Z4YY+ANZ05cRRfsFJadTBrNA6e3jxdU+AN5UCbZSZEUwgHiwjvUEe0k1NoQmAvQmETwr+xB5jd7mhCJuIQ==}
 
   has-bigints@1.1.0:
     resolution: {integrity: sha512-R3pbpkcIqv2Pm3dUwgjclDRVmWpTJW2DcMzcIhEXEx1oh/CEMObMm3KLmRJOdvhM7o4uQBnwr8pzRK2sJWIqfg==}
@@ -4094,9 +4094,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@astrojs/node@9.0.0(astro@5.1.4(@types/node@22.10.5)(jiti@2.4.2)(rollup@4.30.1)(typescript@5.7.3)(yaml@2.7.0))':
+  '@astrojs/node@9.0.0(astro@5.1.5(@types/node@22.10.5)(jiti@2.4.2)(rollup@4.30.1)(typescript@5.7.3)(yaml@2.7.0))':
     dependencies:
-      astro: 5.1.4(@types/node@22.10.5)(jiti@2.4.2)(rollup@4.30.1)(typescript@5.7.3)(yaml@2.7.0)
+      astro: 5.1.5(@types/node@22.10.5)(jiti@2.4.2)(rollup@4.30.1)(typescript@5.7.3)(yaml@2.7.0)
       send: 1.1.0
       server-destroy: 1.0.1
     transitivePeerDependencies:
@@ -4148,20 +4148,20 @@ snapshots:
       js-tokens: 4.0.0
       picocolors: 1.1.1
 
-  '@babel/compat-data@7.26.3': {}
+  '@babel/compat-data@7.26.5': {}
 
   '@babel/core@7.26.0':
     dependencies:
       '@ampproject/remapping': 2.3.0
       '@babel/code-frame': 7.26.2
-      '@babel/generator': 7.26.3
-      '@babel/helper-compilation-targets': 7.25.9
+      '@babel/generator': 7.26.5
+      '@babel/helper-compilation-targets': 7.26.5
       '@babel/helper-module-transforms': 7.26.0(@babel/core@7.26.0)
       '@babel/helpers': 7.26.0
-      '@babel/parser': 7.26.3
+      '@babel/parser': 7.26.5
       '@babel/template': 7.25.9
-      '@babel/traverse': 7.26.4
-      '@babel/types': 7.26.3
+      '@babel/traverse': 7.26.5
+      '@babel/types': 7.26.5
       convert-source-map: 2.0.0
       debug: 4.4.0
       gensync: 1.0.0-beta.2
@@ -4170,17 +4170,17 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@babel/generator@7.26.3':
+  '@babel/generator@7.26.5':
     dependencies:
-      '@babel/parser': 7.26.3
-      '@babel/types': 7.26.3
+      '@babel/parser': 7.26.5
+      '@babel/types': 7.26.5
       '@jridgewell/gen-mapping': 0.3.8
       '@jridgewell/trace-mapping': 0.3.25
       jsesc: 3.1.0
 
-  '@babel/helper-compilation-targets@7.25.9':
+  '@babel/helper-compilation-targets@7.26.5':
     dependencies:
-      '@babel/compat-data': 7.26.3
+      '@babel/compat-data': 7.26.5
       '@babel/helper-validator-option': 7.25.9
       browserslist: 4.24.4
       lru-cache: 5.1.1
@@ -4188,12 +4188,12 @@ snapshots:
 
   '@babel/helper-module-imports@7.18.6':
     dependencies:
-      '@babel/types': 7.26.3
+      '@babel/types': 7.26.5
 
   '@babel/helper-module-imports@7.25.9':
     dependencies:
-      '@babel/traverse': 7.26.4
-      '@babel/types': 7.26.3
+      '@babel/traverse': 7.26.5
+      '@babel/types': 7.26.5
     transitivePeerDependencies:
       - supports-color
 
@@ -4202,11 +4202,11 @@ snapshots:
       '@babel/core': 7.26.0
       '@babel/helper-module-imports': 7.25.9
       '@babel/helper-validator-identifier': 7.25.9
-      '@babel/traverse': 7.26.4
+      '@babel/traverse': 7.26.5
     transitivePeerDependencies:
       - supports-color
 
-  '@babel/helper-plugin-utils@7.25.9': {}
+  '@babel/helper-plugin-utils@7.26.5': {}
 
   '@babel/helper-string-parser@7.25.9': {}
 
@@ -4217,16 +4217,16 @@ snapshots:
   '@babel/helpers@7.26.0':
     dependencies:
       '@babel/template': 7.25.9
-      '@babel/types': 7.26.3
+      '@babel/types': 7.26.5
 
-  '@babel/parser@7.26.3':
+  '@babel/parser@7.26.5':
     dependencies:
-      '@babel/types': 7.26.3
+      '@babel/types': 7.26.5
 
   '@babel/plugin-syntax-jsx@7.25.9(@babel/core@7.26.0)':
     dependencies:
       '@babel/core': 7.26.0
-      '@babel/helper-plugin-utils': 7.25.9
+      '@babel/helper-plugin-utils': 7.26.5
 
   '@babel/runtime@7.26.0':
     dependencies:
@@ -4235,22 +4235,22 @@ snapshots:
   '@babel/template@7.25.9':
     dependencies:
       '@babel/code-frame': 7.26.2
-      '@babel/parser': 7.26.3
-      '@babel/types': 7.26.3
+      '@babel/parser': 7.26.5
+      '@babel/types': 7.26.5
 
-  '@babel/traverse@7.26.4':
+  '@babel/traverse@7.26.5':
     dependencies:
       '@babel/code-frame': 7.26.2
-      '@babel/generator': 7.26.3
-      '@babel/parser': 7.26.3
+      '@babel/generator': 7.26.5
+      '@babel/parser': 7.26.5
       '@babel/template': 7.25.9
-      '@babel/types': 7.26.3
+      '@babel/types': 7.26.5
       debug: 4.4.0
       globals: 11.12.0
     transitivePeerDependencies:
       - supports-color
 
-  '@babel/types@7.26.3':
+  '@babel/types@7.26.5':
     dependencies:
       '@babel/helper-string-parser': 7.25.9
       '@babel/helper-validator-identifier': 7.25.9
@@ -4754,48 +4754,48 @@ snapshots:
 
   '@tauri-apps/api@2.2.0': {}
 
-  '@tauri-apps/cli-darwin-arm64@2.2.2':
+  '@tauri-apps/cli-darwin-arm64@2.2.3':
     optional: true
 
-  '@tauri-apps/cli-darwin-x64@2.2.2':
+  '@tauri-apps/cli-darwin-x64@2.2.3':
     optional: true
 
-  '@tauri-apps/cli-linux-arm-gnueabihf@2.2.2':
+  '@tauri-apps/cli-linux-arm-gnueabihf@2.2.3':
     optional: true
 
-  '@tauri-apps/cli-linux-arm64-gnu@2.2.2':
+  '@tauri-apps/cli-linux-arm64-gnu@2.2.3':
     optional: true
 
-  '@tauri-apps/cli-linux-arm64-musl@2.2.2':
+  '@tauri-apps/cli-linux-arm64-musl@2.2.3':
     optional: true
 
-  '@tauri-apps/cli-linux-x64-gnu@2.2.2':
+  '@tauri-apps/cli-linux-x64-gnu@2.2.3':
     optional: true
 
-  '@tauri-apps/cli-linux-x64-musl@2.2.2':
+  '@tauri-apps/cli-linux-x64-musl@2.2.3':
     optional: true
 
-  '@tauri-apps/cli-win32-arm64-msvc@2.2.2':
+  '@tauri-apps/cli-win32-arm64-msvc@2.2.3':
     optional: true
 
-  '@tauri-apps/cli-win32-ia32-msvc@2.2.2':
+  '@tauri-apps/cli-win32-ia32-msvc@2.2.3':
     optional: true
 
-  '@tauri-apps/cli-win32-x64-msvc@2.2.2':
+  '@tauri-apps/cli-win32-x64-msvc@2.2.3':
     optional: true
 
-  '@tauri-apps/cli@2.2.2':
+  '@tauri-apps/cli@2.2.3':
     optionalDependencies:
-      '@tauri-apps/cli-darwin-arm64': 2.2.2
-      '@tauri-apps/cli-darwin-x64': 2.2.2
-      '@tauri-apps/cli-linux-arm-gnueabihf': 2.2.2
-      '@tauri-apps/cli-linux-arm64-gnu': 2.2.2
-      '@tauri-apps/cli-linux-arm64-musl': 2.2.2
-      '@tauri-apps/cli-linux-x64-gnu': 2.2.2
-      '@tauri-apps/cli-linux-x64-musl': 2.2.2
-      '@tauri-apps/cli-win32-arm64-msvc': 2.2.2
-      '@tauri-apps/cli-win32-ia32-msvc': 2.2.2
-      '@tauri-apps/cli-win32-x64-msvc': 2.2.2
+      '@tauri-apps/cli-darwin-arm64': 2.2.3
+      '@tauri-apps/cli-darwin-x64': 2.2.3
+      '@tauri-apps/cli-linux-arm-gnueabihf': 2.2.3
+      '@tauri-apps/cli-linux-arm64-gnu': 2.2.3
+      '@tauri-apps/cli-linux-arm64-musl': 2.2.3
+      '@tauri-apps/cli-linux-x64-gnu': 2.2.3
+      '@tauri-apps/cli-linux-x64-musl': 2.2.3
+      '@tauri-apps/cli-win32-arm64-msvc': 2.2.3
+      '@tauri-apps/cli-win32-ia32-msvc': 2.2.3
+      '@tauri-apps/cli-win32-x64-msvc': 2.2.3
 
   '@tauri-apps/plugin-dialog@2.2.0':
     dependencies:
@@ -4830,24 +4830,24 @@ snapshots:
 
   '@types/babel__core@7.20.5':
     dependencies:
-      '@babel/parser': 7.26.3
-      '@babel/types': 7.26.3
+      '@babel/parser': 7.26.5
+      '@babel/types': 7.26.5
       '@types/babel__generator': 7.6.8
       '@types/babel__template': 7.4.4
       '@types/babel__traverse': 7.20.6
 
   '@types/babel__generator@7.6.8':
     dependencies:
-      '@babel/types': 7.26.3
+      '@babel/types': 7.26.5
 
   '@types/babel__template@7.4.4':
     dependencies:
-      '@babel/parser': 7.26.3
-      '@babel/types': 7.26.3
+      '@babel/parser': 7.26.5
+      '@babel/types': 7.26.5
 
   '@types/babel__traverse@7.20.6':
     dependencies:
-      '@babel/types': 7.26.3
+      '@babel/types': 7.26.5
 
   '@types/cookie@0.6.0': {}
 
@@ -5257,7 +5257,7 @@ snapshots:
       - supports-color
       - typescript
 
-  astro@5.1.4(@types/node@22.10.5)(jiti@2.4.2)(rollup@4.30.1)(typescript@5.7.3)(yaml@2.7.0):
+  astro@5.1.5(@types/node@22.10.5)(jiti@2.4.2)(rollup@4.30.1)(typescript@5.7.3)(yaml@2.7.0):
     dependencies:
       '@astrojs/compiler': 2.10.3
       '@astrojs/internal-helpers': 0.4.2
@@ -5372,7 +5372,7 @@ snapshots:
       '@babel/core': 7.26.0
       '@babel/helper-module-imports': 7.18.6
       '@babel/plugin-syntax-jsx': 7.25.9(@babel/core@7.26.0)
-      '@babel/types': 7.26.3
+      '@babel/types': 7.26.5
       html-entities: 2.3.3
       parse5: 7.2.1
       validate-html-nesting: 1.2.2
@@ -6223,7 +6223,7 @@ snapshots:
 
   graphemer@1.4.0: {}
 
-  h3@1.13.0:
+  h3@1.13.1:
     dependencies:
       cookie-es: 1.2.2
       crossws: 0.3.1
@@ -6737,8 +6737,8 @@ snapshots:
 
   magicast@0.3.5:
     dependencies:
-      '@babel/parser': 7.26.3
-      '@babel/types': 7.26.3
+      '@babel/parser': 7.26.5
+      '@babel/types': 7.26.5
       source-map-js: 1.2.1
 
   make-dir@4.0.0:
@@ -7740,9 +7740,9 @@ snapshots:
 
   solid-refresh@0.6.3(solid-js@1.9.4):
     dependencies:
-      '@babel/generator': 7.26.3
+      '@babel/generator': 7.26.5
       '@babel/helper-module-imports': 7.25.9
-      '@babel/types': 7.26.3
+      '@babel/types': 7.26.5
       solid-js: 1.9.4
     transitivePeerDependencies:
       - supports-color
@@ -8035,7 +8035,7 @@ snapshots:
       anymatch: 3.1.3
       chokidar: 3.6.0
       destr: 2.0.3
-      h3: 1.13.0
+      h3: 1.13.1
       lru-cache: 10.4.3
       node-fetch-native: 1.6.4
       ofetch: 1.4.1
