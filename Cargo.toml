@@ -276,13 +276,13 @@ strum = "0.26.3"
 strum_macros = "0.26.4"
 symphonia = { version = "0.5.4", features = ["all"] }
 tantivy = "0.22.0"
-tauri = { version = "2.2.0", features = ["protocol-asset"] }
-tauri-build = { version = "2.0.4", features = [] }
+tauri = { version = "2.2.1", features = ["protocol-asset"] }
+tauri-build = { version = "2.0.5", features = [] }
 tauri-plugin = { version = "2.0.4", features = ["build"] }
 tauri-plugin-dialog = "2.2.0"
 tauri-plugin-notification = "2.2.0"
 test-log = "0.2.16"
-thiserror = "2.0.10"
+thiserror = "2.0.11"
 throttle = "0.1.0"
 tl = "0.7.8"
 tokio = { version = "1.43.0" }
