@@ -476,6 +476,7 @@ impl EguiApp {
             checkboxes: &mut checkboxes,
         };
 
+        let ctx = self.ctx.read().unwrap().clone();
         let binding = self.event_handlers.read().unwrap();
         for handler in binding.iter().filter_map(|(name, handler)| {
             if name == event_name {
@@ -485,6 +486,10 @@ impl EguiApp {
             }
         }) {
             handler(&mut render_context, event_value);
+
+            if let Some(ctx) = &ctx {
+                ctx.request_repaint();
+            };
         }
 
         drop(container);
