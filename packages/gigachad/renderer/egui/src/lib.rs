@@ -906,7 +906,10 @@ impl EguiApp {
         }
 
         Some(Self::render_borders(ui, container, |ui| {
-            let response = egui::Frame::none()
+            let (
+                render_context,
+                response,
+            ) = egui::Frame::none()
                 .inner_margin(egui::Margin {
                     left:
                         container.internal_margin_left.unwrap_or(0.0)
@@ -941,15 +944,18 @@ impl EguiApp {
                                                     move |ui, rect| {
                                                         let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
                                                         let viewport = Some(&viewport);
-                                                        self.render_container_contents(
-                                                            render_context,ctx,
+                                                        let response = self.render_container_contents(
+                                                            render_context,
+                                                            ctx,
                                                             ui,
                                                             container,
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
                                                             true,
-                                                        )
+                                                        );
+
+                                                        (render_context, response)
                                                     }
                                                 }).inner
                                         }
@@ -965,15 +971,18 @@ impl EguiApp {
                                                     move |ui, rect| {
                                                         let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
                                                         let viewport = Some(&viewport);
-                                                        self.render_container_contents(
-                                                            render_context,ctx,
+                                                        let response = self.render_container_contents(
+                                                            render_context,
+                                                            ctx,
                                                             ui,
                                                             container,
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
                                                             true,
-                                                        )
+                                                        );
+
+                                                        (render_context, response)
                                                     }
                                                 }).inner
                                         }
@@ -991,7 +1000,7 @@ impl EguiApp {
                                                         let viewport = Some(&viewport);
                                                         let cursor = ui.cursor();
                                                         let (pos_x, pos_y) = (cursor.left(), cursor.top());
-                                                        egui::ScrollArea::horizontal()
+                                                        let (render_context, response) = egui::ScrollArea::horizontal()
                                                             .scroll_bar_visibility(
                                                                 egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
                                                             )
@@ -999,17 +1008,22 @@ impl EguiApp {
                                                                 move |ui, rect| {
                                                                     let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
                                                                     let viewport = Some(&viewport);
-                                                                    self.render_container_contents(
-                                                                        render_context,ctx,
+                                                                    let response = self.render_container_contents(
+                                                                        render_context,
+                                                                        ctx,
                                                                         ui,
                                                                         container,
                                                                         viewport,
                                                                         Some(rect),
                                                                         relative_container,
                                                                         true,
-                                                                    )
+                                                                    );
+
+                                                                    (render_context, response)
                                                                 }
-                                                            }).inner
+                                                            }).inner;
+
+                                                        (render_context, response)
                                                     }
                                                 }).inner
                                         }
@@ -1027,25 +1041,30 @@ impl EguiApp {
                                                         let viewport = Some(&viewport);
                                                         let cursor = ui.cursor();
                                                         let (pos_x, pos_y) = (cursor.left(), cursor.top());
-                                                        egui::ScrollArea::horizontal()
+                                                        let (render_context, response) = egui::ScrollArea::horizontal()
                                                             .scroll_bar_visibility(
                                                                 egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
                                                             )
                                                             .show_viewport(ui, {
                                                                 move |ui, rect| {
-                                                                let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
-                                                                let viewport = Some(&viewport);
-                                                                    self.render_container_contents(
-                                                                        render_context,ctx,
+                                                                    let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
+                                                                    let viewport = Some(&viewport);
+                                                                    let response = self.render_container_contents(
+                                                                        render_context,
+                                                                        ctx,
                                                                         ui,
                                                                         container,
                                                                         viewport,
                                                                         Some(rect),
                                                                         relative_container,
                                                                         true,
-                                                                    )
+                                                                    );
+
+                                                                    (render_context, response)
                                                                 }
-                                                            }).inner
+                                                            }).inner;
+
+                                                        (render_context, response)
                                                     }
                                                 }).inner
                                         }
@@ -1058,15 +1077,18 @@ impl EguiApp {
                                                     move |ui, rect| {
                                                         let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
                                                         let viewport = Some(&viewport);
-                                                        self.render_container_contents(
-                                                            render_context,ctx,
+                                                        let response = self.render_container_contents(
+                                                            render_context,
+                                                            ctx,
                                                             ui,
                                                             container,
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
                                                             false,
-                                                        )
+                                                        );
+
+                                                        (render_context, response)
                                                     }
                                                 }).inner
                                         }
@@ -1079,15 +1101,18 @@ impl EguiApp {
                                                     move |ui, rect| {
                                                         let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
                                                         let viewport = Some(&viewport);
-                                                        self.render_container_contents(
-                                                            render_context,ctx,
+                                                        let response = self.render_container_contents(
+                                                            render_context,
+                                                            ctx,
                                                             ui,
                                                             container,
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
                                                             false,
-                                                        )
+                                                        );
+
+                                                        (render_context, response)
                                                     }
                                                 }).inner
                                         }
@@ -1100,15 +1125,18 @@ impl EguiApp {
                                                     move |ui, rect| {
                                                         let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
                                                         let viewport = Some(&viewport);
-                                                        self.render_container_contents(
-                                                            render_context,ctx,
+                                                        let response = self.render_container_contents(
+                                                            render_context,
+                                                            ctx,
                                                             ui,
                                                             container,
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
                                                             true,
-                                                        )
+                                                        );
+
+                                                        (render_context, response)
                                                     }
                                                 }).inner
                                         }
@@ -1121,37 +1149,56 @@ impl EguiApp {
                                                     move |ui, rect| {
                                                         let viewport = Self::get_scroll_container(rect, pos_x, pos_y, container, viewport);
                                                         let viewport = Some(&viewport);
-                                                        self.render_container_contents(
-                                                            render_context,ctx,
+                                                        let response = self.render_container_contents(
+                                                            render_context,
+                                                            ctx,
                                                             ui,
                                                             container,
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
                                                             true,
-                                                        )
+                                                        );
+
+                                                        (render_context, response)
                                                     }
                                                 }).inner
                                         }
                                         (_, _) => {
-                                            self.render_container_contents(
-                                                render_context,ctx,
+                                            let response = self.render_container_contents(
+                                                render_context,
+                                                ctx,
                                                 ui,
                                                 container,
                                                 viewport,
                                                 rect,
                                                 relative_container,
                                                 false,
-                                            )
+                                            );
+
+                                            (render_context, response)
                                         }
                                     }
                                 }
                             })
-                        })
+                        }).inner.inner
                     }
-                }).inner.inner.inner;
+                }).inner;
 
             ui.set_opacity(1.0);
+
+            if !Self::container_hidden(render_context, container) {
+                self.handle_container_side_effects(
+                    render_context,
+                    ctx,
+                    Some(ui),
+                    container,
+                    viewport,
+                    rect,
+                    Some(&response),
+                    false,
+                );
+            }
 
             response
         }))
@@ -1790,141 +1837,12 @@ impl EguiApp {
                 }
             }
         }
+
         if let Some(response) = response {
-            let viewport_rect = rect.map(|rect| {
-                let (offset_x, offset_y) =
-                    viewport.map_or((0.0, 0.0), |viewport| (viewport.pos.x, viewport.pos.y));
-                egui::Rect::from_min_size(egui::pos2(offset_x, offset_y), rect.size())
-            });
-
-            if let Some(cursor) = container.cursor {
-                #[cfg(feature = "profiling")]
-                profiling::scope!("cursor side effects");
-                let ctx = ctx.clone();
-                let pointer = ctx.input(|x| x.pointer.clone());
-                let response = response.clone();
-                self.trigger_side_effect(move |_render_context| {
-                    if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect) {
-                        ctx.output_mut(|x| {
-                            x.cursor_icon = cursor_to_cursor_icon(cursor);
-                        });
-                    }
-
-                    true
-                });
-            }
-            if container.is_visible() {
-                for fx_action in &container.actions {
-                    let request_action = self.request_action.clone();
-
-                    match fx_action.trigger {
-                        ActionTrigger::Click | ActionTrigger::ClickOutside => {
-                            #[cfg(feature = "profiling")]
-                            profiling::scope!("click/clickOutside side effects");
-                            let inside = matches!(fx_action.trigger, ActionTrigger::Click);
-                            let action = fx_action.action.clone();
-                            let id = container.id;
-                            let pointer = ctx.input(|x| x.pointer.clone());
-                            let response = response.clone();
-                            let sender = self.sender.clone();
-                            self.trigger_side_effect(move |render_context| {
-                                if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
-                                    == inside
-                                    && pointer.primary_released()
-                                {
-                                    log::trace!("click action: {action}");
-                                    Self::handle_action(
-                                        &action,
-                                        render_context,
-                                        id,
-                                        &sender,
-                                        &request_action,
-                                        None,
-                                    );
-                                    return !inside;
-                                }
-
-                                Self::unhandle_action(&action, render_context, id);
-
-                                true
-                            });
-                        }
-                        ActionTrigger::Hover => {
-                            #[cfg(feature = "profiling")]
-                            profiling::scope!("hover side effects");
-                            let action = fx_action.action.clone();
-                            let id = container.id;
-                            let response = response.clone();
-                            let pointer = ctx.input(|x| x.pointer.clone());
-                            let sender = self.sender.clone();
-                            self.trigger_side_effect(move |render_context| {
-                                if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
-                                {
-                                    log::trace!("hover action: {action}");
-                                    return Self::handle_action(
-                                        &action,
-                                        render_context,
-                                        id,
-                                        &sender,
-                                        &request_action,
-                                        None,
-                                    );
-                                }
-
-                                Self::unhandle_action(&action, render_context, id);
-
-                                true
-                            });
-                        }
-                        ActionTrigger::Change => {
-                            #[cfg(feature = "profiling")]
-                            profiling::scope!("change side effects");
-                            let action = fx_action.action.clone();
-                            let id = container.id;
-                            let response = response.clone();
-                            let sender = self.sender.clone();
-                            self.trigger_side_effect(move |render_context| {
-                                if response.changed() {
-                                    log::trace!("change action: {action}");
-                                    return Self::handle_action(
-                                        &action,
-                                        render_context,
-                                        id,
-                                        &sender,
-                                        &request_action,
-                                        None,
-                                    );
-                                }
-
-                                Self::unhandle_action(&action, render_context, id);
-
-                                true
-                            });
-                        }
-                        ActionTrigger::Immediate | ActionTrigger::Event(..) => {}
-                    }
-                }
-            }
+            self.handle_ui_event_side_effects(container, ctx, viewport, rect, response);
         }
 
-        for fx_action in &container.actions {
-            if let ActionTrigger::Event(event_name) = &fx_action.trigger {
-                let request_action = self.request_action.clone();
-                let action = fx_action.action.clone();
-                let id = container.id;
-                let sender = self.sender.clone();
-                self.add_event_handler(event_name.to_string(), move |render_context, value| {
-                    Self::handle_action(
-                        &action,
-                        render_context,
-                        id,
-                        &sender,
-                        &request_action,
-                        value,
-                    );
-                });
-            }
-        }
+        self.handle_custom_event_side_effects(container);
 
         if let Some(ui) = ui {
             if let Element::Image {
@@ -1993,6 +1911,152 @@ impl EguiApp {
                     response,
                     recurse,
                 );
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn handle_ui_event_side_effects(
+        &self,
+        container: &Container,
+        ctx: &egui::Context,
+        viewport: Option<&Viewport>,
+        rect: Option<egui::Rect>,
+        response: &Response,
+    ) {
+        let viewport_rect = rect.map(|rect| {
+            let (offset_x, offset_y) =
+                viewport.map_or((0.0, 0.0), |viewport| (viewport.pos.x, viewport.pos.y));
+            egui::Rect::from_min_size(egui::pos2(offset_x, offset_y), rect.size())
+        });
+
+        if let Some(cursor) = container.cursor {
+            #[cfg(feature = "profiling")]
+            profiling::scope!("cursor side effects");
+            let ctx = ctx.clone();
+            let pointer = ctx.input(|x| x.pointer.clone());
+            let response = response.clone();
+            self.trigger_side_effect(move |_render_context| {
+                if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect) {
+                    ctx.output_mut(|x| {
+                        x.cursor_icon = cursor_to_cursor_icon(cursor);
+                    });
+                }
+
+                true
+            });
+        }
+
+        if container.is_visible() {
+            for fx_action in &container.actions {
+                let request_action = self.request_action.clone();
+
+                match fx_action.trigger {
+                    ActionTrigger::Click | ActionTrigger::ClickOutside => {
+                        #[cfg(feature = "profiling")]
+                        profiling::scope!("click/clickOutside side effects");
+                        let inside = matches!(fx_action.trigger, ActionTrigger::Click);
+                        let action = fx_action.action.clone();
+                        let id = container.id;
+                        let pointer = ctx.input(|x| x.pointer.clone());
+                        let response = response.clone();
+                        let sender = self.sender.clone();
+                        self.trigger_side_effect(move |render_context| {
+                            if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
+                                == inside
+                                && pointer.primary_released()
+                            {
+                                log::trace!("click action: {action}");
+                                Self::handle_action(
+                                    &action,
+                                    render_context,
+                                    id,
+                                    &sender,
+                                    &request_action,
+                                    None,
+                                );
+                                return !inside;
+                            }
+
+                            Self::unhandle_action(&action, render_context, id);
+
+                            true
+                        });
+                    }
+                    ActionTrigger::Hover => {
+                        #[cfg(feature = "profiling")]
+                        profiling::scope!("hover side effects");
+                        let action = fx_action.action.clone();
+                        let id = container.id;
+                        let response = response.clone();
+                        let pointer = ctx.input(|x| x.pointer.clone());
+                        let sender = self.sender.clone();
+                        self.trigger_side_effect(move |render_context| {
+                            if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect) {
+                                log::trace!("hover action: {action}");
+                                return Self::handle_action(
+                                    &action,
+                                    render_context,
+                                    id,
+                                    &sender,
+                                    &request_action,
+                                    None,
+                                );
+                            }
+
+                            Self::unhandle_action(&action, render_context, id);
+
+                            true
+                        });
+                    }
+                    ActionTrigger::Change => {
+                        #[cfg(feature = "profiling")]
+                        profiling::scope!("change side effects");
+                        let action = fx_action.action.clone();
+                        let id = container.id;
+                        let response = response.clone();
+                        let sender = self.sender.clone();
+                        self.trigger_side_effect(move |render_context| {
+                            if response.changed() {
+                                log::trace!("change action: {action}");
+                                return Self::handle_action(
+                                    &action,
+                                    render_context,
+                                    id,
+                                    &sender,
+                                    &request_action,
+                                    None,
+                                );
+                            }
+
+                            Self::unhandle_action(&action, render_context, id);
+
+                            true
+                        });
+                    }
+                    ActionTrigger::Immediate | ActionTrigger::Event(..) => {}
+                }
+            }
+        }
+    }
+
+    fn handle_custom_event_side_effects(&self, container: &Container) {
+        for fx_action in &container.actions {
+            if let ActionTrigger::Event(event_name) = &fx_action.trigger {
+                let request_action = self.request_action.clone();
+                let action = fx_action.action.clone();
+                let id = container.id;
+                let sender = self.sender.clone();
+                self.add_event_handler(event_name.to_string(), move |render_context, value| {
+                    Self::handle_action(
+                        &action,
+                        render_context,
+                        id,
+                        &sender,
+                        &request_action,
+                        value,
+                    );
+                });
             }
         }
     }
@@ -2457,7 +2521,7 @@ impl EguiApp {
             return;
         }
 
-        if let Some(response) = self.render_container(
+        self.render_container(
             render_context,
             ctx,
             ui,
@@ -2465,20 +2529,7 @@ impl EguiApp {
             viewport,
             rect,
             relative_container,
-        ) {
-            if !Self::container_hidden(render_context, element) {
-                self.handle_container_side_effects(
-                    render_context,
-                    ctx,
-                    Some(ui),
-                    element,
-                    viewport,
-                    rect,
-                    Some(&response),
-                    false,
-                );
-            }
-        }
+        );
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
@@ -2773,7 +2824,7 @@ impl EguiApp {
                             );
                         }
 
-                        frame.show(ui, |ui| {
+                        let response = frame.show(ui, |ui| {
                             self.render_container(
                                 render_context,
                                 ctx,
@@ -2784,6 +2835,17 @@ impl EguiApp {
                                 relative_container,
                             );
                         });
+
+                        if let Some(tr) = tr {
+                            self.handle_ui_event_side_effects(
+                                tr,
+                                ctx,
+                                viewport,
+                                rect,
+                                &response.response,
+                            );
+                        }
+
                         first = false;
                     }
                     ui.end_row();
@@ -2819,7 +2881,7 @@ impl EguiApp {
                             );
                         }
 
-                        frame.show(ui, |ui| {
+                        let response = frame.show(ui, |ui| {
                             self.render_container(
                                 render_context,
                                 ctx,
@@ -2830,6 +2892,17 @@ impl EguiApp {
                                 relative_container,
                             );
                         });
+
+                        if let Some(tr) = tr {
+                            self.handle_ui_event_side_effects(
+                                tr,
+                                ctx,
+                                viewport,
+                                rect,
+                                &response.response,
+                            );
+                        }
+
                         first = false;
                     }
                     ui.end_row();
