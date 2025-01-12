@@ -878,7 +878,7 @@ impl Container {
         let mut rowcol_index = 0;
         let mut padding_and_margins_x = 0.0;
         let mut padding_and_margins_y = 0.0;
-        let buf = arena.alloc(vec![]);
+        let buf = &mut bumpalo::collections::Vec::new_in(arena);
 
         for element in elements {
             log::trace!("calc_element_sizes_by_rowcol: element={element}");
@@ -2229,7 +2229,10 @@ impl Container {
                     let mut contained_sized_height = 0.0;
                     let mut unsized_row_count = 0;
 
-                    let rows = arena.alloc(Vec::with_capacity(self.rows() as usize));
+                    let rows = &mut bumpalo::collections::Vec::with_capacity_in(
+                        self.rows() as usize,
+                        arena,
+                    );
 
                     for (row, elements) in &self
                         .relative_positioned_elements()
