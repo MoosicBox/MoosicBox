@@ -100,10 +100,10 @@ pub enum ActionType {
 
 impl ActionType {
     #[must_use]
-    pub fn on_event(event: impl Into<String>, action: Self) -> Self {
+    pub fn on_event(event: impl Into<String>, action: impl Into<Self>) -> Self {
         Self::Event {
             name: event.into(),
-            action: Box::new(action),
+            action: Box::new(action.into()),
         }
     }
 
@@ -296,6 +296,13 @@ impl ActionType {
             target: ElementTarget::LastChild,
             action: StyleAction::SetBackground(Some(background.into())),
         }
+    }
+}
+
+#[cfg(feature = "logic")]
+impl From<logic::If> for ActionType {
+    fn from(value: logic::If) -> Self {
+        Self::Logic(value)
     }
 }
 
