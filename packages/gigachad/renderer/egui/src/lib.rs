@@ -280,7 +280,7 @@ impl Renderer for EguiRenderer {
                 let mut backgrounds = app.backgrounds.write().unwrap();
                 if let Some(background) = backgrounds.remove(&removed.id) {
                     for id in &ids {
-                        backgrounds.insert(*id, background);
+                        backgrounds.insert(*id, background.clone());
                     }
                 }
                 drop(backgrounds);
@@ -374,6 +374,18 @@ enum AppImage {
     Bytes(Arc<[u8]>),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StyleTrigger {
+    UiEvent,
+    CustomEvent,
+}
+
+#[derive(Debug, Clone)]
+struct StyleOverride<T> {
+    trigger: StyleTrigger,
+    value: T,
+}
+
 struct RenderContext<'a> {
     container: &'a Container,
     viewport_listeners: &'a mut HashMap<usize, ViewportListener>,
@@ -382,10 +394,11 @@ struct RenderContext<'a> {
     route_requests: &'a mut Vec<usize>,
     visibilities: &'a mut HashMap<usize, Visibility>,
     displays: &'a mut HashMap<usize, bool>,
-    backgrounds: &'a mut HashMap<usize, Option<Color>>,
+    backgrounds: &'a mut HashMap<usize, Vec<StyleOverride<Option<Color>>>>,
     checkboxes: &'a mut HashMap<egui::Id, bool>,
 }
 
+#[allow(clippy::type_complexity)]
 #[derive(Clone)]
 struct EguiApp {
     ctx: Arc<RwLock<Option<egui::Context>>>,
@@ -401,7 +414,7 @@ struct EguiApp {
     route_requests: Arc<RwLock<Vec<usize>>>,
     visibilities: Arc<RwLock<HashMap<usize, Visibility>>>,
     displays: Arc<RwLock<HashMap<usize, bool>>>,
-    backgrounds: Arc<RwLock<HashMap<usize, Option<Color>>>>,
+    backgrounds: Arc<RwLock<HashMap<usize, Vec<StyleOverride<Option<Color>>>>>>,
     checkboxes: Arc<RwLock<HashMap<egui::Id, bool>>>,
     router: Router,
     background: Option<Color32>,
@@ -1482,8 +1495,12 @@ impl EguiApp {
                     bottom: container.calculated_padding_bottom.unwrap_or(0.0),
                 });
 
-                if let Some(background) = render_context.backgrounds.get(&container.id) {
-                    if let Some(background) = background {
+                if let Some(overrides) = render_context.backgrounds.get(&container.id) {
+                    if let Some(StyleOverride {
+                        value: Some(background),
+                        ..
+                    }) = overrides.first()
+                    {
                         frame = frame.fill(background.into());
                     }
                 } else if let Some(background) = container.background {
@@ -1969,6 +1986,7 @@ impl EguiApp {
                                 log::trace!("click action: {action}");
                                 Self::handle_action(
                                     &action,
+                                    StyleTrigger::UiEvent,
                                     render_context,
                                     id,
                                     &sender,
@@ -1978,7 +1996,12 @@ impl EguiApp {
                                 return !inside;
                             }
 
-                            Self::unhandle_action(&action, render_context, id);
+                            Self::unhandle_action(
+                                &action,
+                                StyleTrigger::UiEvent,
+                                render_context,
+                                id,
+                            );
 
                             true
                         });
@@ -1996,6 +2019,7 @@ impl EguiApp {
                                 log::trace!("hover action: {action}");
                                 return Self::handle_action(
                                     &action,
+                                    StyleTrigger::UiEvent,
                                     render_context,
                                     id,
                                     &sender,
@@ -2004,7 +2028,12 @@ impl EguiApp {
                                 );
                             }
 
-                            Self::unhandle_action(&action, render_context, id);
+                            Self::unhandle_action(
+                                &action,
+                                StyleTrigger::UiEvent,
+                                render_context,
+                                id,
+                            );
 
                             true
                         });
@@ -2021,6 +2050,7 @@ impl EguiApp {
                                 log::trace!("change action: {action}");
                                 return Self::handle_action(
                                     &action,
+                                    StyleTrigger::UiEvent,
                                     render_context,
                                     id,
                                     &sender,
@@ -2029,7 +2059,12 @@ impl EguiApp {
                                 );
                             }
 
-                            Self::unhandle_action(&action, render_context, id);
+                            Self::unhandle_action(
+                                &action,
+                                StyleTrigger::UiEvent,
+                                render_context,
+                                id,
+                            );
 
                             true
                         });
@@ -2050,6 +2085,7 @@ impl EguiApp {
                 self.add_event_handler(event_name.to_string(), move |render_context, value| {
                     Self::handle_action(
                         &action,
+                        StyleTrigger::CustomEvent,
                         render_context,
                         id,
                         &sender,
@@ -2131,6 +2167,7 @@ impl EguiApp {
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn handle_action(
         action: &ActionType,
+        trigger: StyleTrigger,
         render_context: &mut RenderContext,
         id: usize,
         sender: &Sender<String>,
@@ -2142,6 +2179,7 @@ impl EguiApp {
             ActionType::Style { target, action } => Self::handle_style_action(
                 action,
                 target,
+                trigger,
                 id,
                 render_context.container,
                 render_context.visibilities,
@@ -2252,6 +2290,7 @@ impl EguiApp {
                             ActionTrigger::Immediate | ActionTrigger::Event(..)
                         ) && !Self::handle_action(
                             &action.action,
+                            trigger,
                             render_context,
                             id,
                             sender,
@@ -2268,6 +2307,7 @@ impl EguiApp {
                             ActionTrigger::Immediate | ActionTrigger::Event(..)
                         ) && !Self::handle_action(
                             &action.action,
+                            trigger,
                             render_context,
                             id,
                             sender,
@@ -2289,7 +2329,12 @@ impl EguiApp {
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
-    fn unhandle_action(action: &ActionType, render_context: &mut RenderContext, id: usize) {
+    fn unhandle_action(
+        action: &ActionType,
+        trigger: StyleTrigger,
+        render_context: &mut RenderContext,
+        id: usize,
+    ) {
         if let ActionType::Style { action, target } = &action {
             match action {
                 StyleAction::SetVisibility { .. } => {
@@ -2314,8 +2359,14 @@ impl EguiApp {
                     if let Some(id) =
                         Self::get_element_target_id(target, id, render_context.container)
                     {
-                        if render_context.backgrounds.contains_key(&id) {
-                            render_context.backgrounds.remove(&id);
+                        if let Some(overrides) = render_context.backgrounds.get_mut(&id) {
+                            overrides.retain(|x| x.trigger != trigger);
+
+                            // TODO: don't delete the corresponding entry. just check for if it
+                            // is empty in places this is read from.
+                            if overrides.is_empty() {
+                                render_context.backgrounds.remove(&id);
+                            }
                         }
                     }
                 }
@@ -2403,14 +2454,16 @@ impl EguiApp {
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
+    #[allow(clippy::too_many_arguments)]
     fn handle_style_action(
         action: &StyleAction,
         target: &ElementTarget,
+        trigger: StyleTrigger,
         id: usize,
         container: &Container,
         visibilities: &mut HashMap<usize, Visibility>,
         displays: &mut HashMap<usize, bool>,
-        backgrounds: &mut HashMap<usize, Option<Color>>,
+        backgrounds: &mut HashMap<usize, Vec<StyleOverride<Option<Color>>>>,
     ) -> bool {
         match action {
             StyleAction::SetVisibility(visibility) => {
@@ -2432,16 +2485,38 @@ impl EguiApp {
                     if let Some(background) = background {
                         match Color::try_from_hex(background) {
                             Ok(color) => {
-                                log::debug!("handle_style_action: set background color id={id} color={color}");
-                                backgrounds.insert(id, Some(color));
+                                log::debug!("handle_style_action: set background color id={id} color={color} trigger={trigger:?}");
+                                let style_override = StyleOverride {
+                                    trigger,
+                                    value: Some(color),
+                                };
+                                match backgrounds.entry(id) {
+                                    std::collections::hash_map::Entry::Occupied(mut entry) => {
+                                        entry.get_mut().push(style_override);
+                                    }
+                                    std::collections::hash_map::Entry::Vacant(entry) => {
+                                        entry.insert(vec![style_override]);
+                                    }
+                                }
                             }
                             Err(e) => {
                                 log::error!("handle_style_action: invalid background color: {e:?}");
                             }
                         }
                     } else {
-                        log::debug!("handle_style_action: remove background color id={id}");
-                        backgrounds.insert(id, None);
+                        log::debug!("handle_style_action: remove background color id={id} trigger={trigger:?}");
+                        let style_override = StyleOverride {
+                            trigger,
+                            value: None,
+                        };
+                        match backgrounds.entry(id) {
+                            std::collections::hash_map::Entry::Occupied(mut entry) => {
+                                entry.get_mut().push(style_override);
+                            }
+                            std::collections::hash_map::Entry::Vacant(entry) => {
+                                entry.insert(vec![style_override]);
+                            }
+                        }
                     }
                 }
 
@@ -2708,10 +2783,14 @@ impl EguiApp {
         mut frame: egui::Frame,
         start: bool,
         end: bool,
-        backgrounds: &HashMap<usize, Option<Color>>,
+        backgrounds: &HashMap<usize, Vec<StyleOverride<Option<Color>>>>,
     ) -> egui::Frame {
-        if let Some(background) = backgrounds.get(&container.id) {
-            if let Some(background) = background {
+        if let Some(overrides) = backgrounds.get(&container.id) {
+            if let Some(StyleOverride {
+                value: Some(background),
+                ..
+            }) = overrides.first()
+            {
                 frame = frame.fill(background.into());
             }
         } else if let Some(background) = container.background {
