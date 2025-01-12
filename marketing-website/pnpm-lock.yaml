@@ -115,8 +115,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.5.5
-        version: 3.5.5
+        specifier: ^3.5.7
+        version: 3.5.7
       typescript:
         specifier: ^5.7.3
         version: 5.7.3
@@ -3338,9 +3338,9 @@ packages:
     resolution: {integrity: sha512-hOS089on8RduqdbhvQ5Z37A0ESjsqz6qnRcffsMU3495FuTdqSm+7bhJ29JvIOsBDEEnan5DPu9t3To9VRlMzA==}
     engines: {node: '>=8.10.0'}
 
-  readdirp@4.0.2:
-    resolution: {integrity: sha512-yDMz9g+VaZkqBYS/ozoBJwaBhTbZo3UNYQHNRw1D3UFQB8oHB4uS/tAODO+ZLjGWmUbKnIlOWO+aaIiAxrUWHA==}
-    engines: {node: '>= 14.16.0'}
+  readdirp@4.1.1:
+    resolution: {integrity: sha512-h80JrZu/MHUZCyHu5ciuoI0+WxsCxzxJTILn6Fs8rxSnFPh+UVHYfeIxK1nVGugMqkfC4vJcBOYbkfkwYK0+gw==}
+    engines: {node: '>= 14.18.0'}
 
   redent@3.0.0:
     resolution: {integrity: sha512-6tDA8g98We0zd0GvVeMT9arEOnTw9qM03L9cJXaCjrip1OO764RDBLBfrB4cwzNGDj5OA5ioymC9GkizgWJDUg==}
@@ -3613,33 +3613,33 @@ packages:
   sprintf-js@1.0.3:
     resolution: {integrity: sha512-D9cPgkvLlV3t3IzL0D0YLvGA9Ahk4PcvVwUbN0dSGr1aP0Nrt4AEnTUbuGvquEC0mA64Gqt1fzirlRs5ibXx8g==}
 
-  sst-darwin-arm64@3.5.5:
-    resolution: {integrity: sha512-pmSXas8LhJ5GT4pYvCp6T0tpIUnfmuWYE5bLlatLzj3OBJVYlFj/hkNzmGnmFuV5w3awhcoN145dAKRdcvFcCQ==}
+  sst-darwin-arm64@3.5.7:
+    resolution: {integrity: sha512-wrWiOyp/gJQFmKhYgcqXP06SQlksVIFXzFK8x7F+67nJ/TmTXBy4VU8fyHAeQHRUcAI4daVmkz+0gsuxRW3oGQ==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.5.5:
-    resolution: {integrity: sha512-83EI6DoZX0xX+Kx4esQU+foxszmoVcbe5P/kUC9YgLELsPy3lxOwujDFi2kQlS5zKm+CMsOYLgOm1+ALvwMvOA==}
+  sst-darwin-x64@3.5.7:
+    resolution: {integrity: sha512-+R+mwqeGGNNTn5o5iKBER9lCug2FtcrBwyfyHOYR3nv9kzR9zyEgs7ca0jXM8Il9iT75+n7P46dnCg7Gti5sdw==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.5.5:
-    resolution: {integrity: sha512-JwkwGiQJQ8Iww4ARSJUNrdFnunUq0LIAQKgQMocQzPVqFXDSwkDG8W/RL951dltnK6F+zgNCSTwJNZXkf5QJRg==}
+  sst-linux-arm64@3.5.7:
+    resolution: {integrity: sha512-7AFVeC/b/kove5Bnu1FZKnPaXpBpz5fnMdqdXImw1Wdl0LHnC2yQBPNOtyS8IaVNts0ybmbeUNbT9OXV0ko0gg==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.5.5:
-    resolution: {integrity: sha512-CV6hgVZnTsUkRjRTJ4vXf0n/A2Y5v/qW+lwvD0eSnn5H7A5Ec6cKFpCMiyY1Hd4gFLrpYbIKimLJzZJeke+R2g==}
+  sst-linux-x64@3.5.7:
+    resolution: {integrity: sha512-5tB52rhbe5qCXop7Y1ihhIVcjwJSBHzXexBId8AXRdEbhYovolVsvY2HMDDnHplFgh2L3dEYpszj4y5297Gplw==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.5.5:
-    resolution: {integrity: sha512-yQ7hr8r4rYHYn1qgzy5QWEWd7/AYEOwEYn6OKRtlLlSnWKg4dzPI7/35GXdizx466Uv1gQCs7A044kTnKmXavQ==}
+  sst-linux-x86@3.5.7:
+    resolution: {integrity: sha512-dLOZEKu5Kdf9FTvWrdaqQ9w5yBm632VlxqL4iQ5Fah4lpHLOrL7ia/4H/NrFiUjSTESYZOzvp8ddpQMP5MzmAg==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.5.5:
-    resolution: {integrity: sha512-oqQl01JRFZ8aL6ArTypYdfAPLN5q7ml2FkBgtnqlCkUAhbln2DdpmL8hMkktUNdfd6xtrf1cAvfYj8okMaFQVQ==}
+  sst@3.5.7:
+    resolution: {integrity: sha512-fBgSMFyV1NeDlfix7YqiI9PJzOGF2ObsTs7bTkNswqzRzuoGZILxnvxYGmMKX+371DvKKnb9LbgKCHX0c+GmUA==}
     hasBin: true
 
   stack-utils@2.0.6:
@@ -6539,7 +6539,7 @@ snapshots:
 
   chokidar@4.0.3:
     dependencies:
-      readdirp: 4.0.2
+      readdirp: 4.1.1
 
   ci-info@3.9.0: {}
 
@@ -8535,7 +8535,7 @@ snapshots:
     dependencies:
       picomatch: 2.3.1
 
-  readdirp@4.0.2: {}
+  readdirp@4.1.1: {}
 
   redent@3.0.0:
     dependencies:
@@ -8940,32 +8940,32 @@ snapshots:
 
   sprintf-js@1.0.3: {}
 
-  sst-darwin-arm64@3.5.5:
+  sst-darwin-arm64@3.5.7:
     optional: true
 
-  sst-darwin-x64@3.5.5:
+  sst-darwin-x64@3.5.7:
     optional: true
 
-  sst-linux-arm64@3.5.5:
+  sst-linux-arm64@3.5.7:
     optional: true
 
-  sst-linux-x64@3.5.5:
+  sst-linux-x64@3.5.7:
     optional: true
 
-  sst-linux-x86@3.5.5:
+  sst-linux-x86@3.5.7:
     optional: true
 
-  sst@3.5.5:
+  sst@3.5.7:
     dependencies:
       aws4fetch: 1.0.20
       jose: 5.2.3
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.5.5
-      sst-darwin-x64: 3.5.5
-      sst-linux-arm64: 3.5.5
-      sst-linux-x64: 3.5.5
-      sst-linux-x86: 3.5.5
+      sst-darwin-arm64: 3.5.7
+      sst-darwin-x64: 3.5.7
+      sst-linux-arm64: 3.5.7
+      sst-linux-x64: 3.5.7
+      sst-linux-x86: 3.5.7
 
   stack-utils@2.0.6:
     dependencies:
