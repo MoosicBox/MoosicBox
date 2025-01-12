@@ -593,7 +593,7 @@ impl Container {
             #[allow(clippy::cast_precision_loss)]
             let evenly_split_remaining_size = remainder / (unsized_elements_count as f32);
 
-            log::debug!(
+            log::trace!(
                 "size_children: setting {} to evenly_split_remaining_size={evenly_split_remaining_size} unsized_elements_count={unsized_elements_count}",
                 if direction == LayoutDirection::Row { "width"} else { "height" },
             );
