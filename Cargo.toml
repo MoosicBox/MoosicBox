@@ -213,7 +213,7 @@ mysql_common = { version = "0.34.0", default-features = false }
 nanoid = "0.4.0"
 native-tls = "0.2.12"
 ndk-context = "0.1.1"
-ogg = "0.9.1"
+ogg = "0.9.2"
 open = "5.3.2"
 openssl = { version = "0.10.68", features = ["v110"] }
 opentelemetry = { version = "0.27.1", features = ["trace"] }
