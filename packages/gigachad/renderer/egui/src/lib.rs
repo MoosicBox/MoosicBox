@@ -1856,7 +1856,13 @@ impl EguiApp {
         }
 
         if let Some(response) = response {
-            self.handle_ui_event_side_effects(container, ctx, viewport, rect, response);
+            self.handle_ui_event_side_effects(
+                container,
+                ctx,
+                viewport,
+                rect,
+                vec![response.clone()],
+            );
         }
 
         self.handle_custom_event_side_effects(container);
@@ -1939,8 +1945,9 @@ impl EguiApp {
         ctx: &egui::Context,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
-        response: &Response,
+        responses: Vec<Response>,
     ) {
+        let responses = Arc::new(responses);
         let viewport_rect = rect.map(|rect| {
             let (offset_x, offset_y) =
                 viewport.map_or((0.0, 0.0), |viewport| (viewport.pos.x, viewport.pos.y));
@@ -1952,9 +1959,12 @@ impl EguiApp {
             profiling::scope!("cursor side effects");
             let ctx = ctx.clone();
             let pointer = ctx.input(|x| x.pointer.clone());
-            let response = response.clone();
+            let responses = responses.clone();
             self.trigger_side_effect(move |_render_context| {
-                if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect) {
+                if responses
+                    .iter()
+                    .any(|r| Self::rect_contains_mouse(&pointer, r.rect, viewport_rect))
+                {
                     ctx.output_mut(|x| {
                         x.cursor_icon = cursor_to_cursor_icon(cursor);
                     });
@@ -1976,10 +1986,12 @@ impl EguiApp {
                         let action = fx_action.action.clone();
                         let id = container.id;
                         let pointer = ctx.input(|x| x.pointer.clone());
-                        let response = response.clone();
+                        let responses = responses.clone();
                         let sender = self.sender.clone();
                         self.trigger_side_effect(move |render_context| {
-                            if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
+                            if responses
+                                .iter()
+                                .any(|r| Self::rect_contains_mouse(&pointer, r.rect, viewport_rect))
                                 == inside
                                 && pointer.primary_released()
                             {
@@ -2011,11 +2023,14 @@ impl EguiApp {
                         profiling::scope!("hover side effects");
                         let action = fx_action.action.clone();
                         let id = container.id;
-                        let response = response.clone();
+                        let responses = responses.clone();
                         let pointer = ctx.input(|x| x.pointer.clone());
                         let sender = self.sender.clone();
                         self.trigger_side_effect(move |render_context| {
-                            if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect) {
+                            if responses
+                                .iter()
+                                .any(|r| Self::rect_contains_mouse(&pointer, r.rect, viewport_rect))
+                            {
                                 log::trace!("hover action: {action}");
                                 return Self::handle_action(
                                     &action,
@@ -2043,10 +2058,10 @@ impl EguiApp {
                         profiling::scope!("change side effects");
                         let action = fx_action.action.clone();
                         let id = container.id;
-                        let response = response.clone();
+                        let responses = responses.clone();
                         let sender = self.sender.clone();
                         self.trigger_side_effect(move |render_context| {
-                            if response.changed() {
+                            if responses.iter().any(Response::changed) {
                                 log::trace!("change action: {action}");
                                 return Self::handle_action(
                                     &action,
@@ -2890,6 +2905,7 @@ impl EguiApp {
                     }
                     let mut heading = heading.peekable();
                     let mut first = true;
+                    let mut responses = vec![];
                     while let Some(th) = heading.next() {
                         let mut frame = egui::Frame::none();
 
@@ -2915,17 +2931,12 @@ impl EguiApp {
                             );
                         });
 
-                        if let Some(tr) = tr {
-                            self.handle_ui_event_side_effects(
-                                tr,
-                                ctx,
-                                viewport,
-                                rect,
-                                &response.response,
-                            );
-                        }
-
+                        responses.push(response.response);
                         first = false;
+                    }
+
+                    if let Some(tr) = tr {
+                        self.handle_ui_event_side_effects(tr, ctx, viewport, rect, responses);
                     }
                     ui.end_row();
                 }
@@ -2947,6 +2958,7 @@ impl EguiApp {
                 {
                     let mut row = row.peekable();
                     let mut first = true;
+                    let mut responses = vec![];
                     while let Some(td) = row.next() {
                         let mut frame = egui::Frame::none();
 
@@ -2972,17 +2984,11 @@ impl EguiApp {
                             );
                         });
 
-                        if let Some(tr) = tr {
-                            self.handle_ui_event_side_effects(
-                                tr,
-                                ctx,
-                                viewport,
-                                rect,
-                                &response.response,
-                            );
-                        }
-
+                        responses.push(response.response);
                         first = false;
+                    }
+                    if let Some(tr) = tr {
+                        self.handle_ui_event_side_effects(tr, ctx, viewport, rect, responses);
                     }
                     ui.end_row();
                 }
