@@ -818,16 +818,12 @@ impl EguiApp {
 
     #[cfg_attr(feature = "profiling", profiling::function)]
     fn container_hidden(render_context: &mut RenderContext, container: &Container) -> bool {
-        if container.visibility == Some(Visibility::Hidden) {
-            render_context
-                .visibilities
-                .get(&container.id)
-                .copied()
-                .unwrap_or(Visibility::Hidden)
-                == Visibility::Hidden
-        } else {
-            false
-        }
+        render_context
+            .visibilities
+            .get(&container.id)
+            .copied()
+            .unwrap_or_else(|| container.visibility.unwrap_or_default())
+            == Visibility::Hidden
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
