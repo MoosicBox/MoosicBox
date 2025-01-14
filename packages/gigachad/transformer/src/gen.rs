@@ -176,6 +176,10 @@ impl Arbitrary for Container {
             #[cfg(feature = "id")]
             id: usize::arbitrary(g),
             str_id: Option::arbitrary(g).map(|x: XmlString| x.0),
+            classes: Vec::arbitrary(g)
+                .into_iter()
+                .map(|x: XmlString| x.0)
+                .collect(),
             data: xml_hashmap(g),
             element,
             children,

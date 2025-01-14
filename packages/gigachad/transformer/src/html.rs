@@ -113,6 +113,15 @@ fn get_border(tag: &HTMLTag, name: &str) -> Option<(Color, Number)> {
         .map(|(size, color)| (color, size))
 }
 
+fn get_classes(tag: &HTMLTag) -> Vec<String> {
+    get_tag_attr_value_owned(tag, "class").map_or_else(Vec::new, |x| {
+        x.split_whitespace()
+            .filter(|x| !x.is_empty())
+            .map(ToString::to_string)
+            .collect()
+    })
+}
+
 fn get_state(tag: &HTMLTag, name: &str) -> Option<Value> {
     get_tag_attr_value_undecoded(tag, name)
         .as_deref()
@@ -396,6 +405,7 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
         #[cfg(feature = "id")]
         id: CURRENT_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
         str_id: get_tag_attr_value_owned(tag, "id"),
+        classes: get_classes(tag),
         data: get_data_attrs(tag),
         direction: get_direction(tag),
         background: get_color(tag, "sx-background"),

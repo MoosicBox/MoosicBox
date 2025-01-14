@@ -175,6 +175,7 @@ pub struct Container {
     #[cfg(feature = "id")]
     pub id: usize,
     pub str_id: Option<String>,
+    pub classes: Vec<String>,
     pub data: HashMap<String, String>,
     pub element: Element,
     pub children: Vec<Container>,
@@ -383,6 +384,16 @@ impl Container {
         self.children
             .iter()
             .find_map(|x| x.find_element_by_str_id(str_id))
+    }
+
+    #[must_use]
+    pub fn find_element_by_class(&self, class: &str) -> Option<&Self> {
+        if self.classes.iter().any(|x| x == class) {
+            return Some(self);
+        }
+        self.children
+            .iter()
+            .find_map(|x| x.find_element_by_class(class))
     }
 
     #[must_use]
@@ -796,6 +807,10 @@ impl Container {
 
         let mut data = self.data.iter().collect::<Vec<_>>();
         data.sort_by(|(a, _), (b, _)| (*a).cmp(b));
+
+        if !self.classes.is_empty() {
+            attrs.add("class", self.classes.join(" "));
+        }
 
         for (name, value) in data {
             attrs.add(format!("data-{name}"), value);
