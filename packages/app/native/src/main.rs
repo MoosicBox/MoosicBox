@@ -621,7 +621,8 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
         | Action::PreviousTrack
         | Action::NextTrack
         | Action::PlayAlbum { .. }
-        | Action::AddAlbumToQueue { .. } => {
+        | Action::AddAlbumToQueue { .. }
+        | Action::PlayTracks { .. } => {
             let Some(session) = STATE.get_current_session().await else {
                 log::debug!("handle_action: no current session");
                 return Ok(());
@@ -788,6 +789,52 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
                                     profile,
                                     playback_target,
                                     play: Some(play),
+                                    stop: None,
+                                    name: None,
+                                    active: None,
+                                    playing: None,
+                                    position,
+                                    seek,
+                                    volume: None,
+                                    playlist: Some(UpdateSessionPlaylist {
+                                        session_playlist_id: session.playlist.session_playlist_id,
+                                        tracks,
+                                    }),
+                                    quality: None,
+                                },
+                            }),
+                            true,
+                        )
+                        .await
+                }
+                Action::PlayTracks {
+                    track_ids,
+                    api_source,
+                } => {
+                    let api = PROFILES
+                        .get(PROFILE)
+                        .unwrap()
+                        .get(*api_source)
+                        .map_err(|e| AppStateError::unknown(e.to_string()))?;
+                    let tracks = api
+                        .tracks(Some(track_ids), None, None, None, None)
+                        .await
+                        .map_err(|e| AppStateError::unknown(e.to_string()))?
+                        .map(Into::into)
+                        .items()
+                        .to_vec();
+
+                    let position = Some(0);
+                    let seek = Some(0.0);
+
+                    STATE
+                        .queue_ws_message(
+                            InboundPayload::UpdateSession(UpdateSessionPayload {
+                                payload: UpdateSession {
+                                    session_id: session.session_id,
+                                    profile,
+                                    playback_target,
+                                    play: Some(true),
                                     stop: None,
                                     name: None,
                                     active: None,

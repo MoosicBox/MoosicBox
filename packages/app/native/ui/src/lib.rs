@@ -60,6 +60,10 @@ pub enum Action {
         sample_rate: Option<u32>,
         bit_depth: Option<u8>,
     },
+    PlayTracks {
+        track_ids: Vec<Id>,
+        api_source: ApiSource,
+    },
 }
 
 impl std::fmt::Display for Action {
