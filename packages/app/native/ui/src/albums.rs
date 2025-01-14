@@ -259,12 +259,16 @@ pub fn album_page_content(
 pub fn album_page_tracks_table_body(version: &ApiAlbumVersion, track_id: Option<&Id>) -> Markup {
     html! {
         tbody id="album-page-tracks" {
-            @for track in &version.tracks {
+            @for (i, track) in version.tracks.iter().enumerate() {
                 @let current_track = track_id.is_some_and(|x| x == &track.track_id);
                 tr
                     sx-border-radius=(5)
                     data-track-id=(track.track_id)
-                    fx-hover=(ActionType::set_background_self("#444"))
+                    fx-hover=(
+                        ActionType::set_background_self("#444")
+                            .and(ActionType::set_visibility_child_class(Visibility::Hidden, "track-number"))
+                            .and(ActionType::set_visibility_child_class(Visibility::Visible, "play-button"))
+                    )
                     fx-event=(ActionType::on_event(
                         "play-track",
                         get_event_value()
@@ -275,7 +279,21 @@ pub fn album_page_tracks_table_body(version: &ApiAlbumVersion, track_id: Option<
                     sx-background=[if current_track { Some("#333") } else { None }]
                 {
                     td sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) {
-                        (track.number)
+                        span class="track-number" { (track.number) }
+                        button
+                            class="play-button"
+                            sx-visibility=(Visibility::Hidden)
+                            fx-click=(Action::PlayTracks {
+                                track_ids: version.tracks.iter().skip(i).map(|x| x.track_id.clone()).collect(),
+                                api_source: track.api_source,
+                            })
+                        {
+                            @let icon_size = 12;
+                            img
+                                sx-width=(icon_size)
+                                sx-height=(icon_size)
+                                src=(public_img!("play-button-white.svg"));
+                        }
                     }
                     td sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) {
                         (track.title)
