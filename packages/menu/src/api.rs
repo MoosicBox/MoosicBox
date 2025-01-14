@@ -340,14 +340,22 @@ pub async fn get_tracks_endpoint(
         }
     })?;
 
-    Ok(Json(
-        get_tracks(&db, Some(&ids))
-            .await
-            .map_err(|_e| ErrorInternalServerError("Failed to fetch tracks"))?
-            .into_iter()
-            .map(Into::into)
-            .collect(),
-    ))
+    let mut tracks = get_tracks(&db, Some(&ids))
+        .await
+        .map_err(|_e| ErrorInternalServerError("Failed to fetch tracks"))?
+        .into_iter()
+        .map(Into::into)
+        .collect::<Vec<ApiTrack>>();
+
+    let mut sorted_tracks = Vec::with_capacity(tracks.len());
+
+    for id in ids {
+        if let Some(index) = tracks.iter().position(|x| x.track_id == id) {
+            sorted_tracks.push(tracks.remove(index));
+        }
+    }
+
+    Ok(Json(sorted_tracks))
 }
 
 #[derive(Deserialize, Clone)]
