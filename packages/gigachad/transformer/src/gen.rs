@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use gigachad_transformer_models::{AlignItems, JustifyContent, LayoutDirection, LayoutOverflow};
 use moosicbox_gen::{
     serde::JsonValue,
-    xml::{XmlPropNameString, XmlString},
+    xml::{XmlAttrNameString, XmlString},
 };
 use quickcheck::{Arbitrary, Gen};
 use strum::IntoEnumIterator;
@@ -150,7 +150,7 @@ fn half_g_max(g: &Gen, max: usize) -> Gen {
 }
 
 fn xml_hashmap(g: &mut Gen) -> HashMap<String, String> {
-    let map: HashMap<XmlPropNameString, XmlString> = Arbitrary::arbitrary(g);
+    let map: HashMap<XmlAttrNameString, XmlString> = Arbitrary::arbitrary(g);
 
     map.into_iter().map(|(k, v)| (k.0, v.0)).collect()
 }
@@ -179,6 +179,8 @@ impl Arbitrary for Container {
             classes: Vec::arbitrary(g)
                 .into_iter()
                 .map(|x: XmlString| x.0)
+                .filter(|x| !x.is_empty())
+                .filter(|x| !x.chars().any(char::is_whitespace))
                 .collect(),
             data: xml_hashmap(g),
             element,

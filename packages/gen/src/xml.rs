@@ -29,9 +29,9 @@ pub const fn is_valid_xml_char(c: char) -> bool {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct XmlPropNameString(pub String);
+pub struct XmlAttrNameString(pub String);
 
-impl Arbitrary for XmlPropNameString {
+impl Arbitrary for XmlAttrNameString {
     fn arbitrary(g: &mut Gen) -> Self {
         let string = loop {
             let string = String::arbitrary(g);
