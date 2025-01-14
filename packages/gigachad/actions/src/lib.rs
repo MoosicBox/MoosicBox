@@ -94,6 +94,7 @@ pub enum ActionType {
         name: String,
         action: Box<ActionType>,
     },
+    Multi(Vec<ActionType>),
     #[cfg(feature = "logic")]
     Logic(logic::If),
 }
@@ -295,6 +296,16 @@ impl ActionType {
         Self::Style {
             target: ElementTarget::LastChild,
             action: StyleAction::SetBackground(Some(background.into())),
+        }
+    }
+
+    #[must_use]
+    pub fn and(self, action: impl Into<Self>) -> Self {
+        if let Self::Multi(mut actions) = self {
+            actions.push(action.into());
+            Self::Multi(actions)
+        } else {
+            Self::Multi(vec![self, action.into()])
         }
     }
 }

@@ -2336,6 +2336,23 @@ impl EguiApp {
                 log::trace!("handle_action: event '{name}' will be handled elsewhere");
                 true
             }
+            ActionType::Multi(actions) => {
+                for action in actions {
+                    if !Self::handle_action(
+                        action,
+                        trigger,
+                        render_context,
+                        id,
+                        sender,
+                        request_action,
+                        event_value,
+                    ) {
+                        return false;
+                    }
+                }
+
+                true
+            }
         }
     }
 
@@ -2346,42 +2363,54 @@ impl EguiApp {
         render_context: &mut RenderContext,
         id: usize,
     ) {
-        if let ActionType::Style { action, target } = &action {
-            match action {
-                StyleAction::SetVisibility { .. } => {
-                    if let Some(id) =
-                        Self::get_element_target_id(target, id, render_context.container)
-                    {
-                        if render_context.visibilities.contains_key(&id) {
-                            render_context.visibilities.remove(&id);
+        match &action {
+            ActionType::Style { target, action } => {
+                match action {
+                    StyleAction::SetVisibility { .. } => {
+                        if let Some(id) =
+                            Self::get_element_target_id(target, id, render_context.container)
+                        {
+                            if render_context.visibilities.contains_key(&id) {
+                                render_context.visibilities.remove(&id);
+                            }
                         }
                     }
-                }
-                StyleAction::SetDisplay { .. } => {
-                    if let Some(id) =
-                        Self::get_element_target_id(target, id, render_context.container)
-                    {
-                        if render_context.displays.contains_key(&id) {
-                            render_context.displays.remove(&id);
+                    StyleAction::SetDisplay { .. } => {
+                        if let Some(id) =
+                            Self::get_element_target_id(target, id, render_context.container)
+                        {
+                            if render_context.displays.contains_key(&id) {
+                                render_context.displays.remove(&id);
+                            }
                         }
                     }
-                }
-                StyleAction::SetBackground(..) => {
-                    if let Some(id) =
-                        Self::get_element_target_id(target, id, render_context.container)
-                    {
-                        if let Some(overrides) = render_context.backgrounds.get_mut(&id) {
-                            overrides.retain(|x| x.trigger != trigger);
+                    StyleAction::SetBackground(..) => {
+                        if let Some(id) =
+                            Self::get_element_target_id(target, id, render_context.container)
+                        {
+                            if let Some(overrides) = render_context.backgrounds.get_mut(&id) {
+                                overrides.retain(|x| x.trigger != trigger);
 
-                            // TODO: don't delete the corresponding entry. just check for if it
-                            // is empty in places this is read from.
-                            if overrides.is_empty() {
-                                render_context.backgrounds.remove(&id);
+                                // TODO: don't delete the corresponding entry. just check for if it
+                                // is empty in places this is read from.
+                                if overrides.is_empty() {
+                                    render_context.backgrounds.remove(&id);
+                                }
                             }
                         }
                     }
                 }
             }
+            ActionType::Multi(actions) => {
+                for action in actions {
+                    Self::unhandle_action(action, trigger, render_context, id);
+                }
+            }
+            ActionType::Navigate { .. }
+            | ActionType::Log { .. }
+            | ActionType::Custom { .. }
+            | ActionType::Event { .. }
+            | ActionType::Logic(_) => {}
         }
     }
 
