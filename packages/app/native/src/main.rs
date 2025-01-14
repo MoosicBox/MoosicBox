@@ -622,6 +622,7 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
         | Action::NextTrack
         | Action::PlayAlbum { .. }
         | Action::AddAlbumToQueue { .. }
+        | Action::PlayAlbumStartingAtTrackId { .. }
         | Action::PlayTracks { .. } => {
             let Some(session) = STATE.get_current_session().await else {
                 log::debug!("handle_action: no current session");
@@ -739,6 +740,14 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
                     sample_rate,
                     bit_depth,
                 }
+                | Action::PlayAlbumStartingAtTrackId {
+                    album_id,
+                    api_source,
+                    version_source,
+                    sample_rate,
+                    bit_depth,
+                    ..
+                }
                 | Action::AddAlbumToQueue {
                     album_id,
                     api_source,
@@ -770,9 +779,25 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
                         return Ok(());
                     };
 
-                    let play = matches!(action, Action::PlayAlbum { .. });
+                    let play = matches!(
+                        action,
+                        Action::PlayAlbum { .. } | Action::PlayAlbumStartingAtTrackId { .. }
+                    );
 
-                    let mut tracks = version.tracks.into_iter().map(Into::into).collect();
+                    let tracks =
+                        if let Action::PlayAlbumStartingAtTrackId { start_track_id, .. } = action {
+                            if let Some(index) =
+                                version.tracks.iter().position(|x| x.id == start_track_id)
+                            {
+                                version.tracks.into_iter().skip(index).collect()
+                            } else {
+                                vec![]
+                            }
+                        } else {
+                            version.tracks
+                        };
+
+                    let mut tracks = tracks.into_iter().map(Into::into).collect();
 
                     if !play {
                         tracks = [session.playlist.tracks, tracks].concat();

@@ -60,6 +60,14 @@ pub enum Action {
         sample_rate: Option<u32>,
         bit_depth: Option<u8>,
     },
+    PlayAlbumStartingAtTrackId {
+        album_id: Id,
+        start_track_id: Id,
+        api_source: ApiSource,
+        version_source: Option<TrackApiSource>,
+        sample_rate: Option<u32>,
+        bit_depth: Option<u8>,
+    },
     PlayTracks {
         track_ids: Vec<Id>,
         api_source: ApiSource,
