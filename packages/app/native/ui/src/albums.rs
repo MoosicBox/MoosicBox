@@ -259,7 +259,7 @@ pub fn album_page_content(
 pub fn album_page_tracks_table_body(version: &ApiAlbumVersion, track_id: Option<&Id>) -> Markup {
     html! {
         tbody id="album-page-tracks" {
-            @for (i, track) in version.tracks.iter().enumerate() {
+            @for track in &version.tracks {
                 @let current_track = track_id.is_some_and(|x| x == &track.track_id);
                 tr
                     sx-border-radius=(5)
@@ -283,9 +283,13 @@ pub fn album_page_tracks_table_body(version: &ApiAlbumVersion, track_id: Option<
                         button
                             class="play-button"
                             sx-visibility=(Visibility::Hidden)
-                            fx-click=(Action::PlayTracks {
-                                track_ids: version.tracks.iter().skip(i).map(|x| x.track_id.clone()).collect(),
+                            fx-click=(Action::PlayAlbumStartingAtTrackId {
+                                album_id: track.album_id.clone(),
+                                start_track_id: track.track_id.clone(),
                                 api_source: track.api_source,
+                                version_source: Some(version.source),
+                                sample_rate: version.sample_rate,
+                                bit_depth: version.bit_depth,
                             })
                         {
                             @let icon_size = 12;
