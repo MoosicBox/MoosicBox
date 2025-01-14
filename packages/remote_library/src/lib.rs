@@ -1,9 +1,11 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use moosicbox_core::{
-    sqlite::models::{Album, AlbumType, ApiAlbum, ApiSource, Artist, Id, Track},
+    sqlite::models::{Album, AlbumType, ApiAlbum, ApiSource, ApiTrack, Artist, Id, Track},
     types::PlaybackQuality,
 };
 use moosicbox_menu_models::{api::ApiAlbumVersion, AlbumVersion};
@@ -233,13 +235,83 @@ impl MusicApi for RemoteLibraryMusicApi {
 
     async fn tracks(
         &self,
-        _track_ids: Option<&[Id]>,
-        _offset: Option<u32>,
-        _limit: Option<u32>,
-        _order: Option<TrackOrder>,
-        _order_direction: Option<TrackOrderDirection>,
+        track_ids: Option<&[Id]>,
+        offset: Option<u32>,
+        limit: Option<u32>,
+        order: Option<TrackOrder>,
+        order_direction: Option<TrackOrderDirection>,
     ) -> PagingResult<Track, TracksError> {
-        unimplemented!("Fetching tracks is not implemented")
+        let Some(track_ids) = track_ids else {
+            unimplemented!("Fetching all tracks is not implemented");
+        };
+
+        let track_ids_str = track_ids
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(",");
+        let request = self
+            .client
+            .request(
+                reqwest::Method::GET,
+                format!(
+                    "{host}/menu/tracks?trackIds={track_ids_str}&source={source}",
+                    host = self.host,
+                    source = self.api_source
+                ),
+            )
+            .header("moosicbox-profile", &self.profile);
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| TracksError::Other(Box::new(e)))?;
+
+        if !response.status().is_success() {
+            return Err(TracksError::Other(Box::new(RequestError::Unsuccessful(
+                format!("Status {}", response.status()),
+            ))));
+        }
+
+        let tracks: Vec<Track> = response
+            .json::<Vec<ApiTrack>>()
+            .await
+            .map_err(|e| TracksError::Other(Box::new(e)))?
+            .into_iter()
+            .map(Into::into)
+            .collect();
+
+        let offset = offset.unwrap_or(0);
+        let limit = limit.unwrap_or(100);
+
+        Ok(PagingResponse {
+            page: Page::WithTotal {
+                total: u32::try_from(tracks.len()).unwrap(),
+                items: tracks,
+                offset,
+                limit,
+            },
+            fetch: Arc::new(tokio::sync::Mutex::new(Box::new({
+                let api = self.clone();
+                let track_ids = track_ids.to_vec();
+
+                move |offset, limit| {
+                    let api = api.clone();
+                    let track_ids = track_ids.clone();
+
+                    Box::pin(async move {
+                        api.tracks(
+                            Some(&track_ids),
+                            Some(offset),
+                            Some(limit),
+                            order,
+                            order_direction,
+                        )
+                        .await
+                    })
+                }
+            }))),
+        })
     }
 
     async fn album_tracks(

@@ -6870,6 +6870,7 @@ dependencies = [
  "moosicbox_paging",
  "reqwest",
  "thiserror 2.0.11",
+ "tokio",
 ]
 
 [[package]]

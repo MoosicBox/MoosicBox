@@ -22,6 +22,7 @@ async-trait = { workspace = true }
 log         = { workspace = true }
 reqwest     = { workspace = true, features = ["json"] }
 thiserror   = { workspace = true }
+tokio       = { workspace = true }
 
 [features]
 default = ["aac", "flac", "mp3", "opus"]
