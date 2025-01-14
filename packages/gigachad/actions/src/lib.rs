@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ElementTarget {
     StrId(String),
+    ChildClass(String),
     #[cfg(feature = "id")]
     Id(usize),
     SelfTarget,
@@ -112,6 +113,14 @@ impl ActionType {
     pub fn set_visibility_str_id(visibility: Visibility, target: &str) -> Self {
         Self::Style {
             target: ElementTarget::StrId(target.to_string()),
+            action: StyleAction::SetVisibility(visibility),
+        }
+    }
+
+    #[must_use]
+    pub fn set_visibility_child_class(visibility: Visibility, class: &str) -> Self {
+        Self::Style {
+            target: ElementTarget::ChildClass(class.to_string()),
             action: StyleAction::SetVisibility(visibility),
         }
     }

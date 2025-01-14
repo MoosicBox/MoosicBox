@@ -2429,6 +2429,15 @@ impl EguiApp {
 
                 log::warn!("Could not find element with str id '{str_id}'");
             }
+            ElementTarget::ChildClass(class) => {
+                if let Some(container) = container.find_element_by_id(self_id) {
+                    if let Some(element) = container.find_element_by_class(class) {
+                        return Some(func(element));
+                    }
+                }
+
+                log::warn!("Could not find element with class '{class}'");
+            }
             ElementTarget::Id(id) => {
                 if let Some(element) = container.find_element_by_id(self_id) {
                     return Some(func(element));
@@ -2471,6 +2480,15 @@ impl EguiApp {
                 }
 
                 log::warn!("Could not find element with str id '{str_id}'");
+            }
+            ElementTarget::ChildClass(class) => {
+                if let Some(container) = container.find_element_by_id(self_id) {
+                    if let Some(element) = container.find_element_by_class(class) {
+                        return Some(element.id);
+                    }
+                }
+
+                log::warn!("Could not find element with class '{class}'");
             }
             ElementTarget::Id(id) => {
                 return Some(*id);
