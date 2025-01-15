@@ -302,7 +302,7 @@ utoipa-rapidoc = { version = "5.0.1", features = ["actix-web"] }
 utoipa-redoc = { version = "5.0.1", features = ["actix-web"] }
 utoipa-scalar = { version = "0.2.1", features = ["actix-web"] }
 utoipa-swagger-ui = { version = "8.1.1", features = ["actix-web"] }
-uuid = { version = "1.11.1", features = ["v4"] }
+uuid = { version = "1.12.0", features = ["v4"] }
 webp = "0.3.0"
 whoami = "1.5.2"
 xml = "0.8.20"
