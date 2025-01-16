@@ -1464,6 +1464,25 @@ impl EguiApp {
         .response
     }
 
+    fn get_container_background(
+        container: &Container,
+        backgrounds: &HashMap<usize, Vec<StyleOverride<Option<Color>>>>,
+    ) -> Option<Color> {
+        if let Some(overrides) = backgrounds.get(&container.id) {
+            if let Some(StyleOverride {
+                value: Some(background),
+                ..
+            }) = overrides.last()
+            {
+                return Some(*background);
+            }
+        } else if let Some(background) = container.background {
+            return Some(background);
+        }
+
+        None
+    }
+
     #[cfg_attr(feature = "profiling", profiling::function)]
     #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     fn render_container_contents<'a>(
@@ -1489,15 +1508,9 @@ impl EguiApp {
                     bottom: container.calculated_padding_bottom.unwrap_or(0.0),
                 });
 
-                if let Some(overrides) = render_context.backgrounds.get(&container.id) {
-                    if let Some(StyleOverride {
-                        value: Some(background),
-                        ..
-                    }) = overrides.last()
-                    {
-                        frame = frame.fill(background.into());
-                    }
-                } else if let Some(background) = container.background {
+                if let Some(background) =
+                    Self::get_container_background(container, render_context.backgrounds)
+                {
                     frame = frame.fill(background.into());
                 }
                 if container.calculated_border_top_left_radius.is_some()
@@ -2541,7 +2554,7 @@ impl EguiApp {
                     if let Some(background) = background {
                         match Color::try_from_hex(background) {
                             Ok(color) => {
-                                log::debug!("handle_style_action: set background color id={id} color={color} trigger={trigger:?}");
+                                log::trace!("handle_style_action: set background color id={id} color={color} trigger={trigger:?}");
                                 let style_override = StyleOverride {
                                     trigger,
                                     value: Some(color),
@@ -2560,7 +2573,7 @@ impl EguiApp {
                             }
                         }
                     } else {
-                        log::debug!("handle_style_action: remove background color id={id} trigger={trigger:?}");
+                        log::trace!("handle_style_action: remove background color id={id} trigger={trigger:?}");
                         let style_override = StyleOverride {
                             trigger,
                             value: None,
@@ -2841,15 +2854,7 @@ impl EguiApp {
         end: bool,
         backgrounds: &HashMap<usize, Vec<StyleOverride<Option<Color>>>>,
     ) -> egui::Frame {
-        if let Some(overrides) = backgrounds.get(&container.id) {
-            if let Some(StyleOverride {
-                value: Some(background),
-                ..
-            }) = overrides.last()
-            {
-                frame = frame.fill(background.into());
-            }
-        } else if let Some(background) = container.background {
+        if let Some(background) = Self::get_container_background(container, backgrounds) {
             frame = frame.fill(background.into());
         }
 
