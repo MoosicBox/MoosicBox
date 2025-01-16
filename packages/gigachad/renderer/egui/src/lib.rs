@@ -1493,7 +1493,10 @@ impl EguiApp {
                     if let Some(StyleOverride {
                         value: Some(background),
                         ..
-                    }) = overrides.first()
+                    }) = overrides
+                        .iter()
+                        .find(|x| x.trigger == StyleTrigger::UiEvent)
+                        .or_else(|| overrides.first())
                     {
                         frame = frame.fill(background.into());
                     }
@@ -2845,7 +2848,10 @@ impl EguiApp {
             if let Some(StyleOverride {
                 value: Some(background),
                 ..
-            }) = overrides.first()
+            }) = overrides
+                .iter()
+                .find(|x| x.trigger == StyleTrigger::UiEvent)
+                .or_else(|| overrides.first())
             {
                 frame = frame.fill(background.into());
             }
