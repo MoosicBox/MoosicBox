@@ -2255,48 +2255,7 @@ impl Container {
                     }
                 }
                 LayoutOverflow::Wrap | LayoutOverflow::Squash => {
-                    let contained_sized_width = self.contained_sized_width(false).unwrap_or(0.0);
-                    #[allow(clippy::cast_precision_loss)]
-                    let evenly_split_remaining_size = if width > contained_sized_width {
-                        (width - contained_sized_width) / (self.columns() as f32)
-                    } else {
-                        0.0
-                    };
-                    log::trace!("resize_children: width={width} contained_sized_width={contained_sized_width} evenly_split_remaining_size={evenly_split_remaining_size}");
-
-                    for element in self
-                        .relative_positioned_elements_mut()
-                        .filter(|x| x.width.is_none())
-                    {
-                        let element_width = evenly_split_remaining_size
-                            - element.horizontal_padding().unwrap_or(0.0);
-
-                        if let Some(existing) = element.calculated_width {
-                            if (existing - element_width).abs() > 0.01 {
-                                moosicbox_assert::assert!(element_width >= 0.0);
-                                element.calculated_width.replace(element_width);
-                                resized = true;
-                                log::trace!("resize_children: resized because child calculated_width was different ({existing} != {element_width})");
-                            }
-                        } else {
-                            moosicbox_assert::assert!(element_width >= 0.0);
-                            element.calculated_width.replace(element_width);
-                            resized = true;
-                            log::trace!(
-                                "resize_children: resized because child calculated_width was None"
-                            );
-                        }
-
-                        if element.resize_children(arena) {
-                            resized = true;
-                            log::trace!("resize_children: resized because child was resized");
-                        }
-                    }
-
-                    log::trace!(
-                        "resize_children: {} updated unsized children width to {evenly_split_remaining_size}",
-                        self.direction,
-                    );
+                    resized = self.evenly_distribute_children_width(arena, width) || resized;
                 }
             }
         }
@@ -2316,115 +2275,273 @@ impl Container {
                     }
                 }
                 LayoutOverflow::Wrap | LayoutOverflow::Squash => {
-                    let overflow_x = self.overflow_x;
-                    let overflow_y = self.overflow_y;
-                    let direction = self.direction;
-
-                    let mut contained_sized_height = 0.0;
-                    let mut unsized_row_count = 0;
-
-                    let rows = &mut bumpalo::collections::Vec::with_capacity_in(
-                        self.rows() as usize,
-                        arena,
-                    );
-
-                    for (row, elements) in &self
-                        .relative_positioned_elements()
-                        .enumerate()
-                        .chunk_by(|(index, x)| {
-                            if overflow_x != LayoutOverflow::Wrap
-                                && overflow_y != LayoutOverflow::Wrap
-                            {
-                                match direction {
-                                    LayoutDirection::Row => None,
-                                    LayoutDirection::Column => Some(u32::try_from(*index).unwrap()),
-                                }
-                            } else {
-                                x.calculated_position.as_ref().and_then(LayoutPosition::row)
-                            }
-                        })
-                    {
-                        if let Some(height) = elements
-                            .filter_map(|(_, x)| x.contained_sized_height(true))
-                            .max_by(order_float)
-                        {
-                            log::trace!("resize_children: row={row:?} height={height}");
-                            rows.push(Some(height));
-                            contained_sized_height += height;
-                        } else {
-                            log::trace!("resize_children: row={row:?} unsized");
-                            rows.push(None);
-                            unsized_row_count += 1;
-                        }
-                    }
-
-                    #[allow(clippy::cast_precision_loss)]
-                    let evenly_split_remaining_size =
-                        if unsized_row_count > 0 && height > contained_sized_height {
-                            (height - contained_sized_height) / (unsized_row_count as f32)
-                        } else {
-                            0.0
-                        };
-                    log::trace!("resize_children: height={height} contained_sized_height={contained_sized_height} evenly_split_remaining_size={evenly_split_remaining_size}");
-
-                    for (row, elements) in &self
-                        .relative_positioned_elements_mut()
-                        .enumerate()
-                        .chunk_by(|(index, x)| {
-                            if overflow_x != LayoutOverflow::Wrap
-                                && overflow_y != LayoutOverflow::Wrap
-                            {
-                                match direction {
-                                    LayoutDirection::Row => None,
-                                    LayoutDirection::Column => Some(u32::try_from(*index).unwrap()),
-                                }
-                            } else {
-                                x.calculated_position.as_ref().and_then(LayoutPosition::row)
-                            }
-                        })
-                    {
-                        if let Some(height) = row.and_then(|i| rows.get(i as usize)).copied() {
-                            log::trace!("resize_children: row={row:?} updating elements heights");
-                            for (i, element) in elements {
-                                let height = height.unwrap_or(evenly_split_remaining_size);
-                                let element_height =
-                                    height - element.vertical_padding().unwrap_or(0.0);
-
-                                log::trace!("resize_children: i={i} updating element height element_height={element_height}");
-
-                                if let Some(existing) = element.calculated_height {
-                                    if (existing - element_height).abs() > 0.01 {
-                                        moosicbox_assert::assert!(element_height >= 0.0);
-                                        element.calculated_height.replace(element_height);
-                                        resized = true;
-                                        log::trace!("resize_children: resized because child calculated_height was different ({existing} != {element_height})");
-                                    } else {
-                                        log::trace!("resize_children: existing height already set to {element_height}");
-                                    }
-                                } else {
-                                    moosicbox_assert::assert!(element_height >= 0.0);
-                                    element.calculated_height.replace(element_height);
-                                    resized = true;
-                                    log::trace!("resize_children: resized because child calculated_height was None");
-                                }
-
-                                if element.resize_children(arena) {
-                                    resized = true;
-                                    log::trace!(
-                                        "resize_children: resized because child was resized"
-                                    );
-                                }
-                            }
-                        }
-                    }
-
-                    log::trace!(
-                        "resize_children: {} updated unsized children height to {evenly_split_remaining_size}",
-                        self.direction,
-                    );
+                    resized = self.evenly_distribute_children_height(arena, height) || resized;
                 }
             }
         }
+
+        resized
+    }
+
+    fn evenly_distribute_children_width(&mut self, arena: &Bump, width: f32) -> bool {
+        let mut resized = false;
+        let contained_sized_width = self.contained_sized_width(false).unwrap_or(0.0);
+        #[allow(clippy::cast_precision_loss)]
+        let evenly_split_remaining_size = if width > contained_sized_width {
+            (width - contained_sized_width) / (self.columns() as f32)
+        } else {
+            0.0
+        };
+        log::trace!("evenly_distribute_children_width: width={width} contained_sized_width={contained_sized_width} evenly_split_remaining_size={evenly_split_remaining_size}");
+
+        for element in self
+            .relative_positioned_elements_mut()
+            .filter(|x| x.width.is_none())
+        {
+            let element_width =
+                evenly_split_remaining_size - element.horizontal_padding().unwrap_or(0.0);
+
+            if let Some(existing) = element.calculated_width {
+                if (existing - element_width).abs() > 0.01 {
+                    moosicbox_assert::assert!(element_width >= 0.0);
+                    element.calculated_width.replace(element_width);
+                    resized = true;
+                    log::trace!("evenly_distribute_children_width: resized because child calculated_width was different ({existing} != {element_width})");
+                }
+            } else {
+                moosicbox_assert::assert!(element_width >= 0.0);
+                element.calculated_width.replace(element_width);
+                resized = true;
+                log::trace!("evenly_distribute_children_width: resized because child calculated_width was None");
+            }
+
+            if element.resize_children(arena) {
+                resized = true;
+                log::trace!("evenly_distribute_children_width: resized because child was resized");
+            }
+        }
+
+        log::trace!(
+            "evenly_distribute_children_width: {} updated unsized children width to {evenly_split_remaining_size}",
+            self.direction,
+        );
+
+        resized
+    }
+
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+    fn evenly_distribute_children_height(&mut self, arena: &Bump, height: f32) -> bool {
+        let mut resized = false;
+
+        let overflow_x = self.overflow_x;
+        let overflow_y = self.overflow_y;
+        let direction = self.direction;
+
+        let mut contained_sized_height = 0.0;
+        let mut unsized_row_count = 0;
+
+        let rows = &mut bumpalo::collections::Vec::with_capacity_in(self.rows() as usize, arena);
+
+        for (row, elements) in
+            &self
+                .relative_positioned_elements()
+                .enumerate()
+                .chunk_by(|(index, x)| {
+                    if overflow_x != LayoutOverflow::Wrap && overflow_y != LayoutOverflow::Wrap {
+                        match direction {
+                            LayoutDirection::Row => None,
+                            LayoutDirection::Column => Some(u32::try_from(*index).unwrap()),
+                        }
+                    } else {
+                        x.calculated_position.as_ref().and_then(LayoutPosition::row)
+                    }
+                })
+        {
+            if let Some(height) = elements
+                .filter_map(|(_, x)| x.contained_sized_height(true))
+                .max_by(order_float)
+            {
+                log::trace!("evenly_distribute_children_size: row={row:?} height={height}");
+                rows.push(Some(height));
+                contained_sized_height += height;
+            } else {
+                log::trace!("evenly_distribute_children_size: row={row:?} unsized");
+                rows.push(None);
+                unsized_row_count += 1;
+            }
+        }
+
+        #[allow(clippy::cast_precision_loss)]
+        let evenly_split_remaining_size =
+            if unsized_row_count > 0 && height > contained_sized_height {
+                (height - contained_sized_height) / (unsized_row_count as f32)
+            } else {
+                0.0
+            };
+        log::trace!("evenly_distribute_children_size: height={height} contained_sized_height={contained_sized_height} evenly_split_remaining_size={evenly_split_remaining_size}");
+
+        for (row, elements) in &self
+            .relative_positioned_elements_mut()
+            .enumerate()
+            .chunk_by(|(index, x)| {
+                if overflow_x != LayoutOverflow::Wrap && overflow_y != LayoutOverflow::Wrap {
+                    match direction {
+                        LayoutDirection::Row => None,
+                        LayoutDirection::Column => Some(u32::try_from(*index).unwrap()),
+                    }
+                } else {
+                    x.calculated_position.as_ref().and_then(LayoutPosition::row)
+                }
+            })
+        {
+            if let Some(height) = row.and_then(|i| rows.get(i as usize)).copied() {
+                log::trace!(
+                    "evenly_distribute_children_size: row={row:?} updating elements heights"
+                );
+                for (i, element) in elements {
+                    let height = height.unwrap_or(evenly_split_remaining_size);
+                    let element_height = height - element.vertical_padding().unwrap_or(0.0);
+
+                    log::trace!("evenly_distribute_children_size: i={i} updating element height element_height={element_height}");
+
+                    if let Some(existing) = element.calculated_height {
+                        if (existing - element_height).abs() > 0.01 {
+                            moosicbox_assert::assert!(element_height >= 0.0);
+                            element.calculated_height.replace(element_height);
+                            resized = true;
+                            log::trace!("evenly_distribute_children_size: resized because child calculated_height was different ({existing} != {element_height})");
+                        } else {
+                            log::trace!(
+                                "evenly_distribute_children_size: existing height already set to {element_height}"
+                            );
+                        }
+                    } else {
+                        moosicbox_assert::assert!(element_height >= 0.0);
+                        element.calculated_height.replace(element_height);
+                        resized = true;
+                        log::trace!(
+                            "evenly_distribute_children_size: resized because child calculated_height was None"
+                        );
+                    }
+
+                    if element.resize_children(arena) {
+                        resized = true;
+                        log::trace!(
+                            "evenly_distribute_children_size: resized because child was resized"
+                        );
+                    }
+                }
+            }
+        }
+
+        log::trace!(
+            "evenly_distribute_children_size: {} updated unsized children height to {evenly_split_remaining_size}",
+            self.direction,
+        );
+        let overflow_y = self.overflow_y;
+        let direction = self.direction;
+
+        let mut contained_sized_height = 0.0;
+        let mut unsized_row_count = 0;
+
+        let rows = &mut bumpalo::collections::Vec::with_capacity_in(self.rows() as usize, arena);
+
+        for (row, elements) in
+            &self
+                .relative_positioned_elements()
+                .enumerate()
+                .chunk_by(|(index, x)| {
+                    if overflow_x != LayoutOverflow::Wrap && overflow_y != LayoutOverflow::Wrap {
+                        match direction {
+                            LayoutDirection::Row => None,
+                            LayoutDirection::Column => Some(u32::try_from(*index).unwrap()),
+                        }
+                    } else {
+                        x.calculated_position.as_ref().and_then(LayoutPosition::row)
+                    }
+                })
+        {
+            if let Some(height) = elements
+                .filter_map(|(_, x)| x.contained_sized_height(true))
+                .max_by(order_float)
+            {
+                log::trace!("evenly_distribute_children_size: row={row:?} height={height}");
+                rows.push(Some(height));
+                contained_sized_height += height;
+            } else {
+                log::trace!("evenly_distribute_children_size: row={row:?} unsized");
+                rows.push(None);
+                unsized_row_count += 1;
+            }
+        }
+
+        #[allow(clippy::cast_precision_loss)]
+        let evenly_split_remaining_size =
+            if unsized_row_count > 0 && height > contained_sized_height {
+                (height - contained_sized_height) / (unsized_row_count as f32)
+            } else {
+                0.0
+            };
+        log::trace!("evenly_distribute_children_size: height={height} contained_sized_height={contained_sized_height} evenly_split_remaining_size={evenly_split_remaining_size}");
+
+        for (row, elements) in &self
+            .relative_positioned_elements_mut()
+            .enumerate()
+            .chunk_by(|(index, x)| {
+                if overflow_x != LayoutOverflow::Wrap && overflow_y != LayoutOverflow::Wrap {
+                    match direction {
+                        LayoutDirection::Row => None,
+                        LayoutDirection::Column => Some(u32::try_from(*index).unwrap()),
+                    }
+                } else {
+                    x.calculated_position.as_ref().and_then(LayoutPosition::row)
+                }
+            })
+        {
+            if let Some(height) = row.and_then(|i| rows.get(i as usize)).copied() {
+                log::trace!(
+                    "evenly_distribute_children_size: row={row:?} updating elements heights"
+                );
+                for (i, element) in elements {
+                    let height = height.unwrap_or(evenly_split_remaining_size);
+                    let element_height = height - element.vertical_padding().unwrap_or(0.0);
+
+                    log::trace!("evenly_distribute_children_size: i={i} updating element height element_height={element_height}");
+
+                    if let Some(existing) = element.calculated_height {
+                        if (existing - element_height).abs() > 0.01 {
+                            moosicbox_assert::assert!(element_height >= 0.0);
+                            element.calculated_height.replace(element_height);
+                            resized = true;
+                            log::trace!("evenly_distribute_children_size: resized because child calculated_height was different ({existing} != {element_height})");
+                        } else {
+                            log::trace!(
+                                "evenly_distribute_children_size: existing height already set to {element_height}"
+                            );
+                        }
+                    } else {
+                        moosicbox_assert::assert!(element_height >= 0.0);
+                        element.calculated_height.replace(element_height);
+                        resized = true;
+                        log::trace!(
+                            "evenly_distribute_children_size: resized because child calculated_height was None"
+                        );
+                    }
+
+                    if element.resize_children(arena) {
+                        resized = true;
+                        log::trace!(
+                            "evenly_distribute_children_size: resized because child was resized"
+                        );
+                    }
+                }
+            }
+        }
+
+        log::trace!(
+            "evenly_distribute_children_size: {} updated unsized children height to {evenly_split_remaining_size}",
+            self.direction,
+        );
 
         resized
     }
