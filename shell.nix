@@ -80,6 +80,7 @@ pkgs.mkShellNoCC {
     export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.gtk3.dev ]}"
     export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.gtk3-x11 ]}"
     export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.gtk3-x11.dev ]}"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.openssl ]}"
     export RUSTFLAGS="$RUSTFLAGS -C link-arg=-Wl,-rpath,"
     export RUSTFLAGS="$RUSTFLAGS:${pkgs.lib.makeLibraryPath [ pkgs.wayland ]}"
     export RUSTFLAGS="$RUSTFLAGS:${pkgs.lib.makeLibraryPath [ pkgs.libxkbcommon ]}"
