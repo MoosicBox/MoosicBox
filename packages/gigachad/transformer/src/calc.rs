@@ -2379,66 +2379,11 @@ impl Container {
             } else {
                 0.0
             };
-        log::trace!("evenly_distribute_children_height: height={height} contained_sized_height={contained_sized_height} evenly_split_remaining_size={evenly_split_remaining_size}");
-
-        for (row, elements) in &self
-            .relative_positioned_elements_mut()
-            .enumerate()
-            .chunk_by(|(index, x)| {
-                if overflow_x != LayoutOverflow::Wrap && overflow_y != LayoutOverflow::Wrap {
-                    match direction {
-                        LayoutDirection::Row => None,
-                        LayoutDirection::Column => Some(u32::try_from(*index).unwrap()),
-                    }
-                } else {
-                    x.calculated_position.as_ref().and_then(LayoutPosition::row)
-                }
-            })
-        {
-            if let Some(height) = row.and_then(|i| rows.get(i as usize)).copied() {
-                log::trace!(
-                    "evenly_distribute_children_height: row={row:?} updating elements heights"
-                );
-                for (i, element) in elements {
-                    let height = height.unwrap_or(evenly_split_remaining_size);
-                    let element_height = height - element.vertical_padding().unwrap_or(0.0);
-
-                    log::trace!("evenly_distribute_children_height: i={i} updating element height element_height={element_height}");
-
-                    if let Some(existing) = element.calculated_height {
-                        if (existing - element_height).abs() > 0.01 {
-                            moosicbox_assert::assert!(element_height >= 0.0);
-                            element.calculated_height.replace(element_height);
-                            resized = true;
-                            log::trace!("evenly_distribute_children_height: resized because child calculated_height was different ({existing} != {element_height})");
-                        } else {
-                            log::trace!(
-                                "evenly_distribute_children_height: existing height already set to {element_height}"
-                            );
-                        }
-                    } else {
-                        moosicbox_assert::assert!(element_height >= 0.0);
-                        element.calculated_height.replace(element_height);
-                        resized = true;
-                        log::trace!(
-                            "evenly_distribute_children_height: resized because child calculated_height was None"
-                        );
-                    }
-
-                    if element.resize_children(arena) {
-                        resized = true;
-                        log::trace!(
-                            "evenly_distribute_children_height: resized because child was resized"
-                        );
-                    }
-                }
-            }
-        }
 
         let overflow_y = self.overflow_y;
         let direction = self.direction;
 
-        log::trace!("evenly_distribute_children_height: {direction} updated unsized children height to {evenly_split_remaining_size}");
+        log::trace!("evenly_distribute_children_height: height={height} contained_sized_height={contained_sized_height} evenly_split_remaining_size={evenly_split_remaining_size}");
 
         let mut contained_sized_height = 0.0;
         let mut unsized_row_count = 0;
