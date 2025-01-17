@@ -2342,6 +2342,7 @@ impl Container {
 
         let rows = &mut bumpalo::collections::Vec::with_capacity_in(self.rows() as usize, arena);
 
+        // calculate row heights
         for (row, elements) in
             &self
                 .relative_positioned_elements()
@@ -2361,11 +2362,11 @@ impl Container {
                 .filter_map(|(_, x)| x.contained_sized_height(true))
                 .max_by(order_float)
             {
-                log::trace!("evenly_distribute_children_size: row={row:?} height={height}");
+                log::trace!("evenly_distribute_children_height: row={row:?} height={height}");
                 rows.push(Some(height));
                 contained_sized_height += height;
             } else {
-                log::trace!("evenly_distribute_children_size: row={row:?} unsized");
+                log::trace!("evenly_distribute_children_height: row={row:?} unsized");
                 rows.push(None);
                 unsized_row_count += 1;
             }
@@ -2378,7 +2379,7 @@ impl Container {
             } else {
                 0.0
             };
-        log::trace!("evenly_distribute_children_size: height={height} contained_sized_height={contained_sized_height} evenly_split_remaining_size={evenly_split_remaining_size}");
+        log::trace!("evenly_distribute_children_height: height={height} contained_sized_height={contained_sized_height} evenly_split_remaining_size={evenly_split_remaining_size}");
 
         for (row, elements) in &self
             .relative_positioned_elements_mut()
@@ -2396,23 +2397,23 @@ impl Container {
         {
             if let Some(height) = row.and_then(|i| rows.get(i as usize)).copied() {
                 log::trace!(
-                    "evenly_distribute_children_size: row={row:?} updating elements heights"
+                    "evenly_distribute_children_height: row={row:?} updating elements heights"
                 );
                 for (i, element) in elements {
                     let height = height.unwrap_or(evenly_split_remaining_size);
                     let element_height = height - element.vertical_padding().unwrap_or(0.0);
 
-                    log::trace!("evenly_distribute_children_size: i={i} updating element height element_height={element_height}");
+                    log::trace!("evenly_distribute_children_height: i={i} updating element height element_height={element_height}");
 
                     if let Some(existing) = element.calculated_height {
                         if (existing - element_height).abs() > 0.01 {
                             moosicbox_assert::assert!(element_height >= 0.0);
                             element.calculated_height.replace(element_height);
                             resized = true;
-                            log::trace!("evenly_distribute_children_size: resized because child calculated_height was different ({existing} != {element_height})");
+                            log::trace!("evenly_distribute_children_height: resized because child calculated_height was different ({existing} != {element_height})");
                         } else {
                             log::trace!(
-                                "evenly_distribute_children_size: existing height already set to {element_height}"
+                                "evenly_distribute_children_height: existing height already set to {element_height}"
                             );
                         }
                     } else {
@@ -2420,14 +2421,14 @@ impl Container {
                         element.calculated_height.replace(element_height);
                         resized = true;
                         log::trace!(
-                            "evenly_distribute_children_size: resized because child calculated_height was None"
+                            "evenly_distribute_children_height: resized because child calculated_height was None"
                         );
                     }
 
                     if element.resize_children(arena) {
                         resized = true;
                         log::trace!(
-                            "evenly_distribute_children_size: resized because child was resized"
+                            "evenly_distribute_children_height: resized because child was resized"
                         );
                     }
                 }
@@ -2435,7 +2436,7 @@ impl Container {
         }
 
         log::trace!(
-            "evenly_distribute_children_size: {} updated unsized children height to {evenly_split_remaining_size}",
+            "evenly_distribute_children_height: {} updated unsized children height to {evenly_split_remaining_size}",
             self.direction,
         );
         let overflow_y = self.overflow_y;
@@ -2465,11 +2466,11 @@ impl Container {
                 .filter_map(|(_, x)| x.contained_sized_height(true))
                 .max_by(order_float)
             {
-                log::trace!("evenly_distribute_children_size: row={row:?} height={height}");
+                log::trace!("evenly_distribute_children_height: row={row:?} height={height}");
                 rows.push(Some(height));
                 contained_sized_height += height;
             } else {
-                log::trace!("evenly_distribute_children_size: row={row:?} unsized");
+                log::trace!("evenly_distribute_children_height: row={row:?} unsized");
                 rows.push(None);
                 unsized_row_count += 1;
             }
@@ -2482,7 +2483,7 @@ impl Container {
             } else {
                 0.0
             };
-        log::trace!("evenly_distribute_children_size: height={height} contained_sized_height={contained_sized_height} evenly_split_remaining_size={evenly_split_remaining_size}");
+        log::trace!("evenly_distribute_children_height: height={height} contained_sized_height={contained_sized_height} evenly_split_remaining_size={evenly_split_remaining_size}");
 
         for (row, elements) in &self
             .relative_positioned_elements_mut()
@@ -2500,23 +2501,23 @@ impl Container {
         {
             if let Some(height) = row.and_then(|i| rows.get(i as usize)).copied() {
                 log::trace!(
-                    "evenly_distribute_children_size: row={row:?} updating elements heights"
+                    "evenly_distribute_children_height: row={row:?} updating elements heights"
                 );
                 for (i, element) in elements {
                     let height = height.unwrap_or(evenly_split_remaining_size);
                     let element_height = height - element.vertical_padding().unwrap_or(0.0);
 
-                    log::trace!("evenly_distribute_children_size: i={i} updating element height element_height={element_height}");
+                    log::trace!("evenly_distribute_children_height: i={i} updating element height element_height={element_height}");
 
                     if let Some(existing) = element.calculated_height {
                         if (existing - element_height).abs() > 0.01 {
                             moosicbox_assert::assert!(element_height >= 0.0);
                             element.calculated_height.replace(element_height);
                             resized = true;
-                            log::trace!("evenly_distribute_children_size: resized because child calculated_height was different ({existing} != {element_height})");
+                            log::trace!("evenly_distribute_children_height: resized because child calculated_height was different ({existing} != {element_height})");
                         } else {
                             log::trace!(
-                                "evenly_distribute_children_size: existing height already set to {element_height}"
+                                "evenly_distribute_children_height: existing height already set to {element_height}"
                             );
                         }
                     } else {
@@ -2524,14 +2525,14 @@ impl Container {
                         element.calculated_height.replace(element_height);
                         resized = true;
                         log::trace!(
-                            "evenly_distribute_children_size: resized because child calculated_height was None"
+                            "evenly_distribute_children_height: resized because child calculated_height was None"
                         );
                     }
 
                     if element.resize_children(arena) {
                         resized = true;
                         log::trace!(
-                            "evenly_distribute_children_size: resized because child was resized"
+                            "evenly_distribute_children_height: resized because child was resized"
                         );
                     }
                 }
@@ -2539,7 +2540,7 @@ impl Container {
         }
 
         log::trace!(
-            "evenly_distribute_children_size: {} updated unsized children height to {evenly_split_remaining_size}",
+            "evenly_distribute_children_height: {} updated unsized children height to {evenly_split_remaining_size}",
             self.direction,
         );
 
