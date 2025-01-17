@@ -199,6 +199,14 @@ jobs:
                       echo "upgraded=false" >> "$GITHUB_OUTPUT"
                   fi
 
+            - name: Install winget
+              if: ${{ steps.upgrade_incompatible.outputs.upgraded == 'true' && steps.upgrade.outputs.upgraded == 'false' && matrix.package.os == 'windows-latest' }}
+              uses: Cyberboss/install-winget@v1
+
+            - name: Install dependencies
+              if: ${{ steps.upgrade_incompatible.outputs.upgraded == 'true' && steps.upgrade.outputs.upgraded == 'false' && matrix.package.dependencies }}
+              run: ${{ matrix.package.dependencies }}
+
             - name: Clippy ${{ matrix.package.name }}
               if: ${{ success() && steps.upgrade_incompatible.outputs.upgraded == 'true' }}
               shell: bash
@@ -258,6 +266,12 @@ jobs:
               shell: bash
               run: |
                   (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo fmt)
+
+            - name: Install cargo-machete
+              if: ${{ steps.upgrade_incompatible.outputs.upgraded == 'true' && steps.upgrade.outputs.upgraded == 'false' }}
+              shell: bash
+              run: |
+                  cargo install cargo-machete
 
             - name: Validate ${{ matrix.package.name }} dependencies (machete)
               if: ${{ success() && steps.upgrade_incompatible.outputs.upgraded == 'true' }}
