@@ -2435,12 +2435,10 @@ impl Container {
             }
         }
 
-        log::trace!(
-            "evenly_distribute_children_height: {} updated unsized children height to {evenly_split_remaining_size}",
-            self.direction,
-        );
         let overflow_y = self.overflow_y;
         let direction = self.direction;
+
+        log::trace!("evenly_distribute_children_height: {direction} updated unsized children height to {evenly_split_remaining_size}");
 
         let mut contained_sized_height = 0.0;
         let mut unsized_row_count = 0;
