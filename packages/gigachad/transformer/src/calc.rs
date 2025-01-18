@@ -639,7 +639,7 @@ impl Container {
             };
 
             log::trace!(
-                "size_children: container_width={container_width} container_height={container_height}"
+                "size_elements: container_width={container_width} container_height={container_height}"
             );
             for container in sized_elements.map(|x| &mut **x) {
                 remainder -=
@@ -662,7 +662,7 @@ impl Container {
                 .count();
 
             if unsized_elements_count == 0 {
-                log::trace!("size_children: no unsized elements to size");
+                log::trace!("size_elements: no unsized elements to size");
                 return;
             }
 
@@ -675,7 +675,7 @@ impl Container {
             let evenly_split_remaining_size = remainder / (unsized_elements_count as f32);
 
             log::trace!(
-                "size_children: setting {} to evenly_split_remaining_size={evenly_split_remaining_size} unsized_elements_count={unsized_elements_count}",
+                "size_elements: setting {} to evenly_split_remaining_size={evenly_split_remaining_size} unsized_elements_count={unsized_elements_count}",
                 if direction == LayoutDirection::Row { "width"} else { "height" },
             );
 
