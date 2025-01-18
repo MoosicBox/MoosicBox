@@ -1176,7 +1176,7 @@ impl Container {
             match overflow {
                 LayoutOverflow::Auto
                 | LayoutOverflow::Scroll
-                | LayoutOverflow::Show
+                | LayoutOverflow::Expand
                 | LayoutOverflow::Squash => {
                     match direction {
                         LayoutDirection::Row => {
@@ -2243,7 +2243,7 @@ impl Container {
             log::trace!("resize_children: width < contained_calculated_width (width={width} contained_calculated_width={contained_calculated_width})");
             match self.overflow_x {
                 LayoutOverflow::Auto | LayoutOverflow::Scroll => {}
-                LayoutOverflow::Show => {
+                LayoutOverflow::Expand => {
                     if self.width.is_none()
                         && (self.calculated_width.unwrap() - contained_calculated_width).abs()
                             > EPSILON
@@ -2263,7 +2263,7 @@ impl Container {
             log::trace!("resize_children: height < contained_calculated_height (height={height} contained_calculated_height={contained_calculated_height})");
             match self.overflow_y {
                 LayoutOverflow::Auto | LayoutOverflow::Scroll => {}
-                LayoutOverflow::Show => {
+                LayoutOverflow::Expand => {
                     if self.height.is_none()
                         && (self.calculated_height.unwrap() - contained_calculated_height).abs()
                             > EPSILON
@@ -3783,7 +3783,7 @@ mod test {
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
-            overflow_y: LayoutOverflow::Show,
+            overflow_y: LayoutOverflow::Expand,
             justify_content: JustifyContent::SpaceBetween,
             gap: Some(Number::Integer(10)),
             ..Default::default()
@@ -3882,7 +3882,7 @@ mod test {
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
-            overflow_y: LayoutOverflow::Show,
+            overflow_y: LayoutOverflow::Expand,
             justify_content: JustifyContent::SpaceBetween,
             gap: Some(Number::Integer(10)),
             ..Default::default()
@@ -4419,7 +4419,7 @@ mod test {
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
-            overflow_y: LayoutOverflow::Show,
+            overflow_y: LayoutOverflow::Expand,
             justify_content: JustifyContent::SpaceEvenly,
             gap: Some(Number::Integer(10)),
             ..Default::default()
@@ -4518,7 +4518,7 @@ mod test {
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
-            overflow_y: LayoutOverflow::Show,
+            overflow_y: LayoutOverflow::Expand,
             justify_content: JustifyContent::SpaceEvenly,
             gap: Some(Number::Integer(10)),
             ..Default::default()
@@ -4611,7 +4611,7 @@ mod test {
                 calculated_height: Some(40.0),
                 direction: LayoutDirection::Row,
                 overflow_x: LayoutOverflow::Wrap,
-                overflow_y: LayoutOverflow::Show,
+                overflow_y: LayoutOverflow::Expand,
                 ..Default::default()
             }],
 
@@ -4681,7 +4681,7 @@ mod test {
     }
 
     #[test_log::test]
-    fn contained_calculated_show_y_calculates_height_correctly() {
+    fn contained_calculated_expand_y_calculates_height_correctly() {
         let container = Container {
             children: vec![
                 Container {
@@ -4710,7 +4710,7 @@ mod test {
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
-            overflow_y: LayoutOverflow::Show,
+            overflow_y: LayoutOverflow::Expand,
             ..Default::default()
         };
         let height = container.contained_calculated_height();
@@ -4724,7 +4724,7 @@ mod test {
     }
 
     #[test_log::test]
-    fn contained_calculated_show_y_nested_calculates_height_correctly() {
+    fn contained_calculated_expand_y_nested_calculates_height_correctly() {
         let container = Container {
             children: vec![Container {
                 children: vec![
@@ -4759,7 +4759,7 @@ mod test {
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
-            overflow_y: LayoutOverflow::Show,
+            overflow_y: LayoutOverflow::Expand,
             ..Default::default()
         };
         let height = container.contained_calculated_height();
@@ -4773,7 +4773,7 @@ mod test {
     }
 
     #[test_log::test]
-    fn resize_children_show_y_nested_expands_parent_height_correctly() {
+    fn resize_children_expand_y_nested_expands_parent_height_correctly() {
         let mut container = Container {
             children: vec![Container {
                 children: vec![
@@ -4808,7 +4808,7 @@ mod test {
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
-            overflow_y: LayoutOverflow::Show,
+            overflow_y: LayoutOverflow::Expand,
             ..Default::default()
         };
         let resized = container.resize_children(&Bump::new());
@@ -7727,7 +7727,7 @@ mod test {
                         div
                             sx-dir="row"
                             sx-overflow-x="wrap"
-                            sx-overflow-y="show"
+                            sx-overflow-y="expand"
                             sx-justify-content="space-evenly"
                             sx-gap=(15)
                             sx-padding-left=(30)

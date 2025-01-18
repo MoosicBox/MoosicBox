@@ -209,7 +209,7 @@ pub fn element_style_to_html(
             }
             write_css_attr(f, b"overflow-x", b"scroll")?;
         }
-        LayoutOverflow::Show | LayoutOverflow::Squash => {}
+        LayoutOverflow::Expand | LayoutOverflow::Squash => {}
         LayoutOverflow::Wrap => {
             if !printed_start {
                 printed_start = true;
@@ -233,7 +233,7 @@ pub fn element_style_to_html(
             }
             write_css_attr(f, b"overflow-y", b"scroll")?;
         }
-        LayoutOverflow::Show | LayoutOverflow::Squash => {}
+        LayoutOverflow::Expand | LayoutOverflow::Squash => {}
         LayoutOverflow::Wrap => {
             if !printed_start {
                 printed_start = true;

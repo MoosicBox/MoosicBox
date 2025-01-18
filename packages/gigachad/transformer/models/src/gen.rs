@@ -17,7 +17,7 @@ impl Arbitrary for LayoutOverflow {
         *g.choose(&[
             Self::Auto,
             Self::Scroll,
-            Self::Show,
+            Self::Expand,
             Self::Wrap,
             Self::Squash,
         ])

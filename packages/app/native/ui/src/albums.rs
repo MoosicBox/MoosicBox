@@ -773,7 +773,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
             hx-swap="children"
             sx-dir="row"
             sx-overflow-x="wrap"
-            sx-overflow-y="show"
+            sx-overflow-y="expand"
             sx-justify-content="space-evenly"
             sx-gap=(15)
             sx-padding-x=(30)

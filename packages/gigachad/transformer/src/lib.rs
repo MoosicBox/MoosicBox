@@ -969,8 +969,8 @@ impl Container {
             LayoutOverflow::Scroll => {
                 attrs.add("sx-overflow-x", "scroll");
             }
-            LayoutOverflow::Show => {
-                attrs.add("sx-overflow-x", "show");
+            LayoutOverflow::Expand => {
+                attrs.add("sx-overflow-x", "expand");
             }
             LayoutOverflow::Squash => {}
             LayoutOverflow::Wrap => {
@@ -984,8 +984,8 @@ impl Container {
             LayoutOverflow::Scroll => {
                 attrs.add("sx-overflow-y", "scroll");
             }
-            LayoutOverflow::Show => {
-                attrs.add("sx-overflow-y", "show");
+            LayoutOverflow::Expand => {
+                attrs.add("sx-overflow-y", "expand");
             }
             LayoutOverflow::Squash => {}
             LayoutOverflow::Wrap => {

@@ -455,7 +455,7 @@ impl FltkRenderer {
                     .replace(Viewport::new(parent, ScrollWrapper(scroll.clone())));
                 scroll.into()
             }),
-            LayoutOverflow::Squash | LayoutOverflow::Show | LayoutOverflow::Wrap => None,
+            LayoutOverflow::Squash | LayoutOverflow::Expand | LayoutOverflow::Wrap => None,
         };
         #[allow(clippy::cast_possible_truncation)]
         let container_scroll_x: Option<Box<dyn Group>> = match context.overflow_x {
@@ -489,7 +489,7 @@ impl FltkRenderer {
                     .replace(Viewport::new(parent, ScrollWrapper(scroll.clone())));
                 scroll.into()
             }),
-            LayoutOverflow::Squash | LayoutOverflow::Show | LayoutOverflow::Wrap => None,
+            LayoutOverflow::Squash | LayoutOverflow::Expand | LayoutOverflow::Wrap => None,
         };
 
         #[allow(clippy::cast_possible_truncation)]
