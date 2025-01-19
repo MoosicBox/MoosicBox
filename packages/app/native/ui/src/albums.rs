@@ -238,17 +238,13 @@ pub fn album_page_content(
             }
             @if let Some(version) = selected_version {
                 div {
-                    table {
-                        thead {
-                            tr {
-                                th { "#" }
-                                th { "Title" }
-                                th { "Artist" }
-                                th { "Time" }
-                            }
-                        }
-                        (album_page_tracks_table_body_from_state(state, &version))
+                    div sx-dir="row" {
+                        div sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) { "#" }
+                        div sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) { "Title" }
+                        div sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) { "Artist" }
+                        div sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) { "Time" }
                     }
+                    (album_page_tracks_table_body_from_state(state, &version))
                 }
             }
         }
@@ -258,56 +254,55 @@ pub fn album_page_content(
 #[must_use]
 pub fn album_page_tracks_table_body(version: &ApiAlbumVersion, track_id: Option<&Id>) -> Markup {
     html! {
-        tbody id="album-page-tracks" {
-            @for track in &version.tracks {
-                @let current_track = track_id.is_some_and(|x| x == &track.track_id);
-                tr
-                    sx-border-radius=(5)
-                    data-track-id=(track.track_id)
-                    fx-hover=(
-                        ActionType::set_background_self("#444")
-                            .and(ActionType::set_visibility_child_class(Visibility::Hidden, "track-number"))
-                            .and(ActionType::set_visibility_child_class(Visibility::Visible, "play-button"))
-                    )
-                    fx-event=(ActionType::on_event(
-                        "play-track",
-                        get_event_value()
-                            .eq(get_data_attr_value_self("track-id"))
-                            .then(ActionType::set_background_self("#333"))
-                            .or_else(ActionType::remove_background_self())
-                    ))
-                    sx-background=[if current_track { Some("#333") } else { None }]
-                {
-                    td sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) {
-                        span class="track-number" { (track.number) }
-                        button
-                            class="play-button"
-                            sx-visibility=(Visibility::Hidden)
-                            fx-click=(Action::PlayAlbumStartingAtTrackId {
-                                album_id: track.album_id.clone(),
-                                start_track_id: track.track_id.clone(),
-                                api_source: track.api_source,
-                                version_source: Some(version.source),
-                                sample_rate: version.sample_rate,
-                                bit_depth: version.bit_depth,
-                            })
-                        {
-                            @let icon_size = 12;
-                            img
-                                sx-width=(icon_size)
-                                sx-height=(icon_size)
-                                src=(public_img!("play-button-white.svg"));
-                        }
+        @for track in &version.tracks {
+            @let current_track = track_id.is_some_and(|x| x == &track.track_id);
+            div
+                sx-dir="row"
+                sx-border-radius=(5)
+                data-track-id=(track.track_id)
+                fx-hover=(
+                    ActionType::set_background_self("#444")
+                        .and(ActionType::set_visibility_child_class(Visibility::Hidden, "track-number"))
+                        .and(ActionType::set_visibility_child_class(Visibility::Visible, "play-button"))
+                )
+                fx-event=(ActionType::on_event(
+                    "play-track",
+                    get_event_value()
+                        .eq(get_data_attr_value_self("track-id"))
+                        .then(ActionType::set_background_self("#333"))
+                        .or_else(ActionType::remove_background_self())
+                ))
+                sx-background=[if current_track { Some("#333") } else { None }]
+            {
+                div sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) {
+                    span class="track-number" { (track.number) }
+                    button
+                        class="play-button"
+                        sx-visibility=(Visibility::Hidden)
+                        fx-click=(Action::PlayAlbumStartingAtTrackId {
+                            album_id: track.album_id.clone(),
+                            start_track_id: track.track_id.clone(),
+                            api_source: track.api_source,
+                            version_source: Some(version.source),
+                            sample_rate: version.sample_rate,
+                            bit_depth: version.bit_depth,
+                        })
+                    {
+                        @let icon_size = 12;
+                        img
+                            sx-width=(icon_size)
+                            sx-height=(icon_size)
+                            src=(public_img!("play-button-white.svg"));
                     }
-                    td sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) {
-                        (track.title)
-                    }
-                    td sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) {
-                        a href=(pre_escaped!("/artists?artistId={}&source={}", track.artist_id, track.api_source)) { (track.artist) }
-                    }
-                    td sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) {
-                        (track.duration.into_formatted())
-                    }
+                }
+                div sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) {
+                    (track.title)
+                }
+                div sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) {
+                    a href=(pre_escaped!("/artists?artistId={}&source={}", track.artist_id, track.api_source)) { (track.artist) }
+                }
+                div sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) {
+                    (track.duration.into_formatted())
                 }
             }
         }
