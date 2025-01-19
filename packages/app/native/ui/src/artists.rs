@@ -105,7 +105,6 @@ pub fn artists_page_content(artists: &[ApiArtist]) -> Markup {
         div
             sx-dir="row"
             sx-overflow-x="wrap"
-            sx-overflow-y="expand"
             sx-justify-content="space-evenly"
             sx-gap=(15)
             sx-padding-x=(30)
@@ -154,7 +153,7 @@ pub fn albums_list(
     };
     html! {
         h2 { (header) }
-        div sx-dir="row" sx-overflow-x="wrap" sx-overflow-y="expand" sx-justify-content="space-evenly" sx-gap=(15) {
+        div sx-dir="row" sx-overflow-x="wrap" sx-justify-content="space-evenly" sx-gap=(15) {
             (crate::albums::show_albums(albums.iter(), size))
         }
     }

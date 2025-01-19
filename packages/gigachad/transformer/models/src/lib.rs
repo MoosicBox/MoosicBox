@@ -31,8 +31,8 @@ impl std::fmt::Display for LayoutDirection {
 pub enum LayoutOverflow {
     Auto,
     Scroll,
-    Expand,
     #[default]
+    Expand,
     Squash,
     Wrap,
 }

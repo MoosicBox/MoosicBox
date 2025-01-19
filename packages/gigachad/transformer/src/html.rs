@@ -190,6 +190,7 @@ fn get_overflow(tag: &HTMLTag, name: &str) -> LayoutOverflow {
         Some("wrap") => LayoutOverflow::Wrap,
         Some("scroll") => LayoutOverflow::Scroll,
         Some("expand") => LayoutOverflow::Expand,
+        Some("squash") => LayoutOverflow::Squash,
         Some("auto") => LayoutOverflow::Auto,
         _ => LayoutOverflow::default(),
     }
