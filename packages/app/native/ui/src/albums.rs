@@ -263,19 +263,45 @@ pub fn album_page_tracks_table_body(version: &ApiAlbumVersion, track_id: Option<
                 fx-hover=(
                     ActionType::set_background_self("#444")
                         .and(ActionType::set_visibility_child_class(Visibility::Hidden, "track-number"))
+                        .and(ActionType::set_visibility_child_class(Visibility::Hidden, "track-playing"))
                         .and(ActionType::set_visibility_child_class(Visibility::Visible, "play-button"))
                 )
                 fx-event=(ActionType::on_event(
                     "play-track",
                     get_event_value()
                         .eq(get_data_attr_value_self("track-id"))
-                        .then(ActionType::set_background_self("#333"))
-                        .or_else(ActionType::remove_background_self())
+                        .then(ActionType::Multi(vec![
+                            ActionType::set_background_self("#333"),
+                            ActionType::set_visibility_child_class(Visibility::Hidden, "track-number"),
+                            ActionType::set_visibility_child_class(Visibility::Hidden, "play-button"),
+                            ActionType::set_visibility_child_class(Visibility::Visible, "track-playing"),
+                        ]))
+                        .or_else(ActionType::Multi(vec![
+                            ActionType::remove_background_self(),
+                            ActionType::set_visibility_child_class(Visibility::Hidden, "play-button"),
+                            ActionType::set_visibility_child_class(Visibility::Hidden, "track-playing"),
+                            ActionType::set_visibility_child_class(Visibility::Visible, "track-number"),
+                        ]))
                 ))
                 sx-background=[if current_track { Some("#333") } else { None }]
             {
                 div sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) {
-                    span class="track-number" { (track.number) }
+                    span
+                        class="track-number"
+                        sx-visibility=(if current_track { Visibility::Hidden } else { Visibility::Visible })
+                    {
+                        (track.number)
+                    }
+                    span
+                        class="track-playing"
+                        sx-visibility=(if current_track { Visibility::Visible } else { Visibility::Hidden })
+                    {
+                        @let icon_size = 12;
+                        img
+                            sx-width=(icon_size)
+                            sx-height=(icon_size)
+                            src=(public_img!("audio-white.svg"));
+                    }
                     button
                         class="play-button"
                         sx-visibility=(Visibility::Hidden)
