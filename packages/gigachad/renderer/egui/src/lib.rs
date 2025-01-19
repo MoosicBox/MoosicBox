@@ -838,6 +838,10 @@ impl EguiApp {
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &Container)>,
     ) -> bool {
+        if container.is_hidden() || Self::container_hidden(render_context, container) {
+            return true;
+        }
+
         if let Some(rect) = rect {
             let render_rect = Self::get_render_rect(ui, container, relative_container);
             let width = render_rect.width()
@@ -1238,6 +1242,11 @@ impl EguiApp {
                     );
             }
         }
+
+        moosicbox_assert::assert_or_panic!(
+            container.calculated_width.is_some() && container.calculated_height.is_some(),
+            "Container size not properly calculated: {container}"
+        );
 
         egui::Rect::from_min_size(
             ui.cursor().left_top(),
