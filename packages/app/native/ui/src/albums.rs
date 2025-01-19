@@ -239,10 +239,10 @@ pub fn album_page_content(
             @if let Some(version) = selected_version {
                 div {
                     div sx-dir="row" {
-                        div sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) { "#" }
-                        div sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) { "Title" }
-                        div sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) { "Artist" }
-                        div sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) { "Time" }
+                        div sx-padding-x=(10) sx-height=(50) sx-align-items="center" { "#" }
+                        div sx-padding-x=(10) sx-height=(50) sx-align-items="center" { "Title" }
+                        div sx-padding-x=(10) sx-height=(50) sx-align-items="center" { "Artist" }
+                        div sx-padding-x=(10) sx-height=(50) sx-align-items="center" { "Time" }
                     }
                     (album_page_tracks_table_body_from_state(state, &version))
                 }
@@ -285,7 +285,7 @@ pub fn album_page_tracks_table_body(version: &ApiAlbumVersion, track_id: Option<
                 ))
                 sx-background=[if current_track { Some("#333") } else { None }]
             {
-                div sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) {
+                div sx-padding-x=(10) sx-height=(50) sx-align-items="center" {
                     span
                         class="track-number"
                         sx-visibility=(if current_track { Visibility::Hidden } else { Visibility::Visible })
@@ -321,13 +321,13 @@ pub fn album_page_tracks_table_body(version: &ApiAlbumVersion, track_id: Option<
                             src=(public_img!("play-button-white.svg"));
                     }
                 }
-                div sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) {
+                div sx-padding-x=(10) sx-height=(50) sx-align-items="center" {
                     (track.title)
                 }
-                div sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) {
+                div sx-padding-x=(10) sx-height=(50) sx-align-items="center" {
                     a href=(pre_escaped!("/artists?artistId={}&source={}", track.artist_id, track.api_source)) { (track.artist) }
                 }
-                div sx-padding-x=(10) sx-padding-y=(15) sx-height=(50) {
+                div sx-padding-x=(10) sx-height=(50) sx-align-items="center" {
                     (track.duration.into_formatted())
                 }
             }
