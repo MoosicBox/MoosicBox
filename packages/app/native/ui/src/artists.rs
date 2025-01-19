@@ -75,16 +75,18 @@ pub fn artist_page_content(artist: &ApiArtist) -> Markup {
     }
 
     html! {
-        div sx-dir="row" {
-            div sx-width=(size) sx-height=(size + 30) {
-                (artist_cover_img(&artist, size))
+        div sx-padding-x=(60) sx-padding-y=(20) {
+            div sx-dir="row" {
+                div sx-width=(size) sx-height=(size) sx-padding-right=(15) {
+                    (artist_cover_img(&artist, size))
+                }
+                div {
+                    h1 { (artist.title) }
+                }
             }
-            div {
-                h1 { (artist.title) }
+            @for source in sources {
+                (source)
             }
-        }
-        @for source in sources {
-            (source)
         }
     }
 }
@@ -152,9 +154,11 @@ pub fn albums_list(
         )
     };
     html! {
-        h2 { (header) }
-        div sx-dir="row" sx-overflow-x="wrap" sx-justify-content="space-evenly" sx-gap=(15) {
-            (crate::albums::show_albums(albums.iter(), size))
+        div sx-padding-y=(20) {
+            h2 { (header) }
+            div sx-dir="row" sx-overflow-x="wrap" sx-justify-content="space-evenly" sx-gap=(15) {
+                (crate::albums::show_albums(albums.iter(), size))
+            }
         }
     }
 }

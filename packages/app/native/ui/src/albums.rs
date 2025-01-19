@@ -157,18 +157,17 @@ pub fn album_page_content(
         .or_else(|| versions.first());
 
     html! {
-        div
-            sx-padding-x=(60)
-            sx-padding-y=(20)
-        {
+        div sx-padding-x=(60) sx-padding-y=(20) {
             div sx-dir="row" {
                 @let size = 200;
-                div sx-width=(size) sx-height=(size + 30) {
+                div sx-width=(size) sx-height=(size) sx-padding-right=(15) {
                     (album_cover_img_from_album(&album, size))
                 }
                 div {
                     h1 { (album.title) }
-                    h2 { (album.artist) }
+                    a href=(pre_escaped!("/artists?artistId={}&source={}", album.artist_id, album.api_source)) {
+                        h2 { (album.artist) }
+                    }
                     div sx-dir="row" {
                         @for version in &album.versions {
                             @let selected = selected_version.is_some_and(|x| same_version(version, &x.into()));
@@ -192,7 +191,7 @@ pub fn album_page_content(
                     }
                 }
             }
-            div sx-dir="row" {
+            div sx-dir="row" sx-padding-y=(20) {
                 button
                     sx-dir="row"
                     sx-width=(130)
