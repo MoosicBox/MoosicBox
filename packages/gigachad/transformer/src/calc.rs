@@ -25,15 +25,15 @@ pub fn set_scrollbar_size(size: u16) {
 }
 
 pub trait Calc {
-    fn calc(&mut self);
+    fn calc(&mut self) -> bool;
 }
 
 impl Container {
-    fn calc_inner(&mut self, arena: &Bump, relative_size: Option<(f32, f32)>) {
+    fn calc_inner(&mut self, arena: &Bump, relative_size: Option<(f32, f32)>) -> bool {
         log::trace!("calc_inner");
 
         if self.is_hidden() {
-            return;
+            return false;
         }
 
         self.internal_margin_left = None;
@@ -68,9 +68,9 @@ impl Container {
         }
 
         if self.element == Element::Table {
-            self.calc_table(arena, relative_size);
+            self.calc_table(arena, relative_size)
         } else {
-            self.calc_inner_container(arena, relative_size);
+            self.calc_inner_container(arena, relative_size)
         }
     }
 
@@ -83,7 +83,7 @@ impl Container {
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    fn calc_table(&mut self, arena: &Bump, relative_size: Option<(f32, f32)>) {
+    fn calc_table(&mut self, arena: &Bump, relative_size: Option<(f32, f32)>) -> bool {
         fn size_cells<'a>(
             iter: impl Iterator<Item = &'a mut Container>,
             col_sizes: &mut Vec<(Option<f32>, Option<f32>)>,
@@ -445,21 +445,23 @@ impl Container {
                 td.calc_inner(arena, relative_size);
             }
         }
+
+        true
     }
 }
 
 impl Calc for Container {
-    fn calc(&mut self) {
+    fn calc(&mut self) -> bool {
         log::trace!("calc");
         let arena = Bump::new();
-        self.calc_inner(&arena, None);
+        self.calc_inner(&arena, None)
     }
 }
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Container {
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    fn calc_inner_container(&mut self, arena: &Bump, relative_size: Option<(f32, f32)>) {
+    fn calc_inner_container(&mut self, arena: &Bump, relative_size: Option<(f32, f32)>) -> bool {
         log::trace!("calc_inner_container: processing self\n{self}");
 
         let direction = self.direction;
@@ -543,6 +545,8 @@ impl Container {
 
             log::trace!("handle_overflow: attempt {}", attempt + 1);
         }
+
+        attempt > 0
     }
 
     fn calc_element_sizes<'a>(
