@@ -258,7 +258,7 @@ rusqlite = { version = "0.32.1", features = ["bundled"] }
 rustls = "0.23"
 serde = { version = "1", features = ["derive"] }
 serde-aux = "4.5.0"
-serde_json = "1.0.135"
+serde_json = "1.0.136"
 serial_test = "3.2.0"
 sha2 = "0.10.8"
 sqlx = { version = "0.8.3", default-features = false, features = [
@@ -276,12 +276,12 @@ strum = "0.26.3"
 strum_macros = "0.26.4"
 symphonia = { version = "0.5.4", features = ["all"] }
 tantivy = "0.22.0"
-tauri = { version = "2.2.2", features = ["protocol-asset"] }
+tauri = { version = "2.2.3", features = ["protocol-asset"] }
 tauri-build = { version = "2.0.5", features = [] }
 tauri-plugin = { version = "2.0.4", features = ["build"] }
 tauri-plugin-dialog = "2.2.0"
 tauri-plugin-notification = "2.2.1"
-test-log = "0.2.16"
+test-log = "0.2.17"
 thiserror = "2.0.11"
 throttle = "0.1.0"
 tl = "0.7.8"
