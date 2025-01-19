@@ -840,8 +840,12 @@ impl EguiApp {
     ) -> bool {
         if let Some(rect) = rect {
             let render_rect = Self::get_render_rect(ui, container, relative_container);
-            let width = render_rect.width();
-            let height = render_rect.height();
+            let width = render_rect.width()
+                + container.horizontal_padding().unwrap_or(0.0)
+                + container.horizontal_margin().unwrap_or(0.0);
+            let height = render_rect.height()
+                + container.vertical_padding().unwrap_or(0.0)
+                + container.vertical_margin().unwrap_or(0.0);
             let (offset_x, offset_y) =
                 viewport.map_or((0.0, 0.0), |viewport| (viewport.pos.x, viewport.pos.y));
 
