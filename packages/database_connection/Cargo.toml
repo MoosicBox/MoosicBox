@@ -74,5 +74,5 @@ sqlite-sqlx = [
     "moosicbox_database/sqlite-sqlx",
     "sqlite",
     "sqlx",
-    "sqlx/sqlite",
+    "sqlx/sqlite-unbundled",
 ]

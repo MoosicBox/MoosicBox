@@ -68,5 +68,11 @@ postgres-sqlx = [
 ]
 sqlite = ["sqlite-sqlx"]
 sqlite-rusqlite = ["dep:rusqlite"]
-sqlite-sqlx = ["dep:futures", "dep:regex", "dep:sqlx", "sqlx", "sqlx/sqlite"]
+sqlite-sqlx = [
+    "dep:futures",
+    "dep:regex",
+    "dep:sqlx",
+    "sqlx",
+    "sqlx/sqlite-unbundled",
+]
 sqlx = []
