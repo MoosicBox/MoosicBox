@@ -129,7 +129,7 @@ actix-htmx = "0.3.0"
 actix-http = "3.9.0"
 actix-rt = "2.10.0"
 actix-web = "4.9.0"
-actix-web-opentelemetry = { version = "0.20.0", features = [
+actix-web-opentelemetry = { version = "0.20.1", features = [
     "metrics",
     "metrics-prometheus",
     "opentelemetry-prometheus",
@@ -258,7 +258,7 @@ rusqlite = { version = "0.32.1", features = ["bundled"] }
 rustls = "0.23"
 serde = { version = "1", features = ["derive"] }
 serde-aux = "4.5.0"
-serde_json = "1.0.136"
+serde_json = "1.0.137"
 serial_test = "3.2.0"
 sha2 = "0.10.8"
 sqlx = { version = "0.8.3", default-features = false, features = [
