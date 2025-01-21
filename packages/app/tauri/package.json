@@ -26,7 +26,7 @@
     "dependencies": {
         "@astrojs/check": "^0.9.4",
         "@astrojs/node": "^9.0.1",
-        "@astrojs/solid-js": "^5.0.3",
+        "@astrojs/solid-js": "^5.0.4",
         "@free-log/node-client": "^0.0.7",
         "@hotwired/turbo": "^8.0.12",
         "@nanostores/persistent": "^0.9.1",
@@ -36,7 +36,7 @@
         "@solid-primitives/utils": "^6.2.3",
         "@tauri-apps/api": "^2.2.0",
         "@tauri-apps/plugin-dialog": "^2.2.0",
-        "astro": "^5.1.7",
+        "astro": "^5.1.8",
         "date-fns": "^3.6.0",
         "howler": "^2.2.4",
         "htmx.org": "^2.0.4",
@@ -65,7 +65,7 @@
         "prettier": "^3.4.2",
         "prettier-plugin-astro": "^0.14.1",
         "typescript": "^5.7.3",
-        "vite": "^5.4.11",
+        "vite": "^5.4.13",
         "vitest": "^1.6.0"
     }
 }
