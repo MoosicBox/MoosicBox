@@ -31,6 +31,8 @@ impl<'a> TryFrom<&'a str> for crate::Container {
 
         Ok(Self {
             children: parse_children(result.children(), result.parser()),
+            overflow_x: LayoutOverflow::Squash,
+            overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         })
     }
