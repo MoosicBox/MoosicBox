@@ -54,9 +54,9 @@
         "prettier": "^3.4.2",
         "prettier-plugin-astro": "^0.13.0",
         "solid-js": "^1.7.11",
-        "sst": "^3.6.2",
+        "sst": "^3.6.9",
         "typescript": "^5.7.3",
-        "vite": "^5.4.13",
+        "vite": "^5.4.14",
         "vitest": "^1.6.0"
     },
     "dependencies": {
