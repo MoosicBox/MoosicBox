@@ -2227,7 +2227,10 @@ impl Container {
                     resized = self.evenly_distribute_children_width(arena, width) || resized;
                 }
             }
+        } else {
+            log::trace!("resize_children: width={width} currently contains all of the contained_calculated_width={contained_calculated_width}");
         }
+
         if height < contained_calculated_height - EPSILON {
             log::trace!("resize_children: height < contained_calculated_height (height={height} contained_calculated_height={contained_calculated_height})");
             match self.overflow_y {
@@ -2247,6 +2250,21 @@ impl Container {
                     resized = self.evenly_distribute_children_height(arena, height) || resized;
                 }
             }
+        } else {
+            log::trace!("resize_children: height={height} currently contains all of the contained_calculated_height={contained_calculated_height}");
+        }
+
+        if resized {
+            let (Some(new_width), Some(new_height)) = (
+                self.calculated_width_minus_borders(),
+                self.calculated_height_minus_borders(),
+            ) else {
+                moosicbox_assert::die_or_panic!(
+                    "Container missing calculated_width and/or calculated_height: {self:?}"
+                );
+            };
+
+            log::trace!("resize_children: original_height={height} -> new_height={new_height} original_width={width} -> new_width={new_width}");
         }
 
         resized
@@ -2401,7 +2419,7 @@ impl Container {
                 .filter_map(|(_, x)| x.contained_sized_height(true))
                 .max_by(order_float)
             {
-                log::trace!("evenly_distribute_children_height: row={row:?} height={height}");
+                log::trace!("evenly_distribute_children_height: row={row:?} contained_sized_height={height}");
                 rows.push(Some(height));
                 contained_sized_height += height;
             } else {
@@ -2492,18 +2510,12 @@ impl Container {
                     log::trace!("evenly_distribute_children_height: i={i} updating element height from={:?} element_height={element_height}", element.calculated_height);
 
                     if let Some(existing) = element.calculated_height {
-                        // let hardsized_height = element
-                        //     .height
-                        //     .as_ref()
-                        //     .map(|x| calc_number(x, container_height));
-
-                        // let existing = hardsized_height.unwrap_or(existing);
-
                         if (existing - element_height).abs() > 0.01 {
                             moosicbox_assert::assert!(element_height >= 0.0);
                             element.calculated_height.replace(element_height);
                             resized = true;
                             log::trace!("evenly_distribute_children_height: resized because child calculated_height was different ({existing} != {element_height})");
+                            element.evenly_distribute_children_height(arena, height);
                         } else {
                             log::trace!(
                                 "evenly_distribute_children_height: existing height already set to {element_height}"
@@ -2516,6 +2528,7 @@ impl Container {
                         log::trace!(
                             "evenly_distribute_children_height: resized because child calculated_height was None"
                         );
+                        element.evenly_distribute_children_height(arena, height);
                     }
 
                     if element.resize_children(arena) {
@@ -8379,7 +8392,6 @@ mod test {
                         div
                             sx-dir="row"
                             sx-overflow-x="wrap"
-                            sx-overflow-y="expand"
                             sx-justify-content="space-evenly"
                             sx-gap=(15)
                             sx-padding-left=(30)
@@ -8929,6 +8941,128 @@ mod test {
                     },],
                     ..container.children[0].clone()
                 }],
+                ..container.clone()
+            }
+            .to_string()
+        );
+    }
+
+    #[test_log::test]
+    fn calc_overflow_y_squash_expands_height_of_largest_child_as_much_as_possible() {
+        let mut container: Container = html! {
+            div {
+                div sx-height=(40) {}
+            }
+            div {
+                div sx-height=(600) {}
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(100.0);
+        container.calculated_height = Some(500.0);
+
+        container.calc();
+        log::trace!("container:\n{}", container);
+
+        assert_eq!(
+            container.to_string(),
+            Container {
+                children: vec![
+                    Container {
+                        calculated_height: Some(40.0),
+                        ..container.children[0].clone()
+                    },
+                    Container {
+                        calculated_height: Some(600.0),
+                        ..container.children[1].clone()
+                    }
+                ],
+                calculated_height: Some(500.0),
+                ..container.clone()
+            }
+            .to_string()
+        );
+    }
+
+    #[test_log::test]
+    fn calc_overflow_y_expand_expands_height_when_contained_height_is_greater_than_single_unsized_div(
+    ) {
+        let mut container: Container = html! {
+            div {
+                div {
+                    div sx-height=(600) {}
+                }
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(100.0);
+        container.calculated_height = Some(500.0);
+
+        container.calc();
+        log::trace!("container:\n{}", container);
+
+        assert_eq!(
+            container.to_string(),
+            Container {
+                children: vec![Container {
+                    children: vec![Container {
+                        calculated_height: Some(600.0),
+                        ..container.children[0].children[0].clone()
+                    }],
+                    calculated_height: Some(600.0),
+                    ..container.children[0].clone()
+                }],
+                calculated_height: Some(500.0),
+                ..container.clone()
+            }
+            .to_string()
+        );
+    }
+
+    #[test_log::test]
+    fn calc_overflow_y_expand_expands_height_when_contained_height_is_greater_than_two_unsized_divs(
+    ) {
+        let mut container: Container = html! {
+            div {
+                div {
+                    div sx-height=(40) {}
+                }
+                div {
+                    div sx-height=(600) {}
+                }
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(100.0);
+        container.calculated_height = Some(500.0);
+
+        container.calc();
+        log::trace!("container:\n{}", container);
+
+        assert_eq!(
+            container.to_string(),
+            Container {
+                children: vec![Container {
+                    children: vec![
+                        Container {
+                            calculated_height: Some(40.0),
+                            ..container.children[0].children[0].clone()
+                        },
+                        Container {
+                            calculated_height: Some(600.0),
+                            ..container.children[0].children[1].clone()
+                        }
+                    ],
+                    calculated_height: Some(640.0),
+                    ..container.children[0].clone()
+                }],
+                calculated_height: Some(500.0),
                 ..container.clone()
             }
             .to_string()
