@@ -29,6 +29,7 @@ maud        = { workspace = true, optional = true }
 profiling   = { workspace = true, optional = true }
 serde_json  = { workspace = true }
 strum       = { workspace = true, features = ["derive"] }
+syntect     = { workspace = true, optional = true }
 thiserror   = { workspace = true }
 tl          = { workspace = true, optional = true }
 xml         = { workspace = true, optional = true }
@@ -56,7 +57,16 @@ test-log = { workspace = true }
 tl = { workspace = true }
 
 [features]
-default = ["calc", "canvas", "format", "html", "id", "logic", "maud"]
+default = [
+    "calc",
+    "canvas",
+    "format",
+    "html",
+    "id",
+    "logic",
+    "maud",
+    "syntax-highlighting",
+]
 
 fail-on-warnings = []
 
@@ -82,6 +92,7 @@ maud  = ["dep:maud", "html"]
 html = ["dep:tl", "gigachad_actions/serde"]
 simd = ["tl?/simd"]
 
-format = ["dep:xml"]
+format              = ["dep:xml"]
+syntax-highlighting = ["dep:syntect"]
 
 id = []

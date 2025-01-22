@@ -1298,12 +1298,42 @@ impl Container {
             }
         };
 
-        let pretty = String::from_utf8(data)?;
-        let Some((_, pretty)) = pretty.split_once('\n') else {
-            return Ok(pretty);
+        let xml = String::from_utf8(data)?;
+
+        // Remove doctype header thing
+        let xml = if let Some((_, xml)) = xml.split_once('\n') {
+            xml.to_string()
+        } else {
+            xml
         };
 
-        Ok(pretty.to_string())
+        #[cfg(feature = "syntax-highlighting")]
+        {
+            use std::sync::LazyLock;
+
+            use syntect::highlighting::ThemeSet;
+            use syntect::parsing::{SyntaxReference, SyntaxSet};
+
+            static PS: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
+            static TS: LazyLock<ThemeSet> = LazyLock::new(ThemeSet::load_defaults);
+            static SYNTAX: LazyLock<SyntaxReference> =
+                LazyLock::new(|| PS.find_syntax_by_extension("xml").unwrap().clone());
+
+            let mut h =
+                syntect::easy::HighlightLines::new(&SYNTAX, &TS.themes["base16-ocean.dark"]);
+            let highlighted = syntect::util::LinesWithEndings::from(&xml)
+                .map(|line| {
+                    let ranges: Vec<(syntect::highlighting::Style, &str)> =
+                        h.highlight_line(line, &PS).unwrap();
+                    syntect::util::as_24_bit_terminal_escaped(&ranges[..], false)
+                })
+                .collect::<String>();
+
+            Ok(highlighted)
+        }
+
+        #[cfg(not(feature = "syntax-highlighting"))]
+        Ok(xml)
     }
 }
 
