@@ -2583,6 +2583,27 @@ mod test {
         Calculation, Container, Element, HeaderSize, Number, Position,
     };
 
+    fn compare_containers(a: &Container, b: &Container) {
+        assert_eq!(
+            a.display_to_string(
+                true,
+                #[cfg(feature = "format")]
+                true,
+                #[cfg(feature = "syntax-highlighting")]
+                false
+            )
+            .unwrap(),
+            b.display_to_string(
+                true,
+                #[cfg(feature = "format")]
+                true,
+                #[cfg(feature = "syntax-highlighting")]
+                false
+            )
+            .unwrap()
+        );
+    }
+
     #[macro_export]
     macro_rules! pre_escaped {
         ($($message:tt)+) => {
@@ -2601,18 +2622,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     calculated_width: Some(100.0),
                     calculated_height: Some(50.0),
@@ -2622,15 +2634,7 @@ mod test {
                     ..Default::default()
                 }],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -2649,18 +2653,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     children: vec![
                         Container {
@@ -2687,17 +2682,9 @@ mod test {
                     calculated_position: Some(LayoutPosition::Default),
                     direction: LayoutDirection::Row,
                     ..Default::default()
-                },],
+                }],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -2721,18 +2708,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         children: vec![
@@ -2771,15 +2749,7 @@ mod test {
                     },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -2804,18 +2774,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(50.0),
@@ -2854,15 +2815,7 @@ mod test {
                     },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -3279,18 +3232,9 @@ mod test {
         while container.handle_overflow(&Bump::new(), None) {}
         let width = 50.0 - f32::from(get_scrollbar_size());
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
@@ -3318,15 +3262,7 @@ mod test {
                     },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -3411,18 +3347,9 @@ mod test {
         };
         while container.handle_overflow(&Bump::new(), None) {}
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
@@ -3452,15 +3379,7 @@ mod test {
                 calculated_width: Some(50.0 - f32::from(get_scrollbar_size())),
                 calculated_height: Some(40.0),
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -3508,18 +3427,9 @@ mod test {
         };
         while container.handle_overflow(&Bump::new(), None) {}
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
@@ -3565,15 +3475,7 @@ mod test {
                 calculated_width: Some(75.0 - f32::from(get_scrollbar_size())),
                 calculated_height: Some(40.0),
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -3621,18 +3523,9 @@ mod test {
         };
         while container.handle_overflow(&Bump::new(), None) {}
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(20.0),
@@ -3678,15 +3571,7 @@ mod test {
                 calculated_width: Some(75.0),
                 calculated_height: Some(40.0),
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -3743,18 +3628,9 @@ mod test {
         };
         while container.handle_overflow(&Bump::new(), None) {}
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(20.0),
@@ -3799,15 +3675,7 @@ mod test {
                 calculated_width: Some(75.0),
                 calculated_height: Some(40.0),
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -3854,18 +3722,9 @@ mod test {
         log::debug!("Second handle_overflow");
         while container.handle_overflow(&Bump::new(), None) {}
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
@@ -3951,15 +3810,7 @@ mod test {
                 calculated_width: Some(75.0),
                 calculated_height: Some(40.0),
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -4006,18 +3857,9 @@ mod test {
         log::debug!("Second handle_overflow");
         while container.handle_overflow(&Bump::new(), None) {}
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
@@ -4103,15 +3945,7 @@ mod test {
                 calculated_width: Some(75.0),
                 calculated_height: Some(80.0),
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -4161,18 +3995,9 @@ mod test {
         };
         while container.handle_overflow(&Bump::new(), None) {}
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(20.0),
@@ -4218,15 +4043,7 @@ mod test {
                 calculated_width: Some(75.0),
                 calculated_height: Some(60.0),
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -4325,49 +4142,11 @@ mod test {
             ..container
         };
 
-        assert_eq!(
-            actual
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            expected
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-        );
+        compare_containers(&actual, &expected);
 
         while actual.handle_overflow(&Bump::new(), None) {}
 
-        assert_eq!(
-            actual
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            expected
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-        );
+        compare_containers(&actual, &expected);
     }
 
     #[test_log::test]
@@ -4414,18 +4193,9 @@ mod test {
         };
         while container.handle_overflow(&Bump::new(), None) {}
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(20.0),
@@ -4471,15 +4241,7 @@ mod test {
                 calculated_width: Some(75.0),
                 calculated_height: Some(40.0),
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -4532,18 +4294,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(20.0),
@@ -4587,15 +4340,7 @@ mod test {
                     },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -4648,18 +4393,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(20.0),
@@ -4703,15 +4439,7 @@ mod test {
                     },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -4768,18 +4496,9 @@ mod test {
         };
         while container.handle_overflow(&Bump::new(), None) {}
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(20.0),
@@ -4824,15 +4543,7 @@ mod test {
                 calculated_width: Some(75.0),
                 calculated_height: Some(40.0),
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -4879,18 +4590,9 @@ mod test {
         log::debug!("Second handle_overflow");
         while container.handle_overflow(&Bump::new(), None) {}
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
@@ -4976,15 +4678,7 @@ mod test {
                 calculated_width: Some(75.0),
                 calculated_height: Some(40.0),
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -5031,18 +4725,9 @@ mod test {
         log::debug!("Second handle_overflow");
         while container.handle_overflow(&Bump::new(), None) {}
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
@@ -5128,15 +4813,7 @@ mod test {
                 calculated_width: Some(75.0),
                 calculated_height: Some(80.0),
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -5186,18 +4863,9 @@ mod test {
         };
         while container.handle_overflow(&Bump::new(), None) {}
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(20.0),
@@ -5243,15 +4911,7 @@ mod test {
                 calculated_width: Some(75.0),
                 calculated_height: Some(60.0),
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -5350,49 +5010,11 @@ mod test {
             ..container
         };
 
-        assert_eq!(
-            actual
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            expected
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-        );
+        compare_containers(&actual, &expected);
 
         while actual.handle_overflow(&Bump::new(), None) {}
 
-        assert_eq!(
-            actual
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            expected
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-        );
+        compare_containers(&actual, &expected);
     }
 
     #[test_log::test]
@@ -5437,18 +5059,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     children: vec![
                         Container {
@@ -5498,15 +5111,7 @@ mod test {
                 calculated_width: Some(75.0 - f32::from(get_scrollbar_size())),
                 calculated_height: Some(40.0),
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -5644,18 +5249,9 @@ mod test {
         let resized = container.resize_children(&Bump::new());
 
         assert_eq!(resized, true);
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     children: vec![
                         Container {
@@ -5680,15 +5276,7 @@ mod test {
                 calculated_height: Some(80.0),
                 direction: LayoutDirection::Row,
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -5728,18 +5316,9 @@ mod test {
         let resized = container.resize_children(&Bump::new());
 
         assert_eq!(resized, true);
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_height: Some(20.0),
@@ -5755,15 +5334,7 @@ mod test {
                     },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -5803,18 +5374,9 @@ mod test {
         let resized = container.resize_children(&Bump::new());
 
         assert_eq!(resized, true);
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_height: Some(40.0),
@@ -5830,15 +5392,7 @@ mod test {
                     },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -5878,18 +5432,9 @@ mod test {
         }
 
         assert_eq!(shifted, true);
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         width: Some(Number::Integer(25)),
@@ -5920,15 +5465,7 @@ mod test {
                     },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -5982,18 +5519,9 @@ mod test {
         let row_height = 40.0 / 3.0;
 
         assert_eq!(shifted, true);
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(25.0),
@@ -6037,15 +5565,7 @@ mod test {
                     },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -6085,18 +5605,9 @@ mod test {
         }
 
         assert_eq!(shifted, true);
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         width: Some(Number::Integer(25)),
@@ -6127,15 +5638,7 @@ mod test {
                     },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -6166,18 +5669,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         width: Some(Number::Integer(25)),
@@ -6208,15 +5702,7 @@ mod test {
                     },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -6264,18 +5750,9 @@ mod test {
 
         let remainder = 50.0f32 / 3_f32; // 16.66666
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         children: vec![Container {
@@ -6327,18 +5804,10 @@ mod test {
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 2 }),
                         ..container.children[2].clone()
-                    }
+                    },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -6387,18 +5856,9 @@ mod test {
 
         let remainder = 50.0f32 / 3_f32; // 16.66666
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         children: vec![Container {
@@ -6450,18 +5910,10 @@ mod test {
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 2 }),
                         ..container.children[2].clone()
-                    }
+                    },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -6511,18 +5963,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         width: Some(Number::Integer(25)),
@@ -6577,18 +6020,10 @@ mod test {
                         calculated_y: Some(20.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
                         ..container.children[2].clone()
-                    }
+                    },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -6639,18 +6074,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         width: Some(Number::Integer(25)),
@@ -6705,18 +6131,10 @@ mod test {
                         calculated_y: Some(20.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
                         ..container.children[2].clone()
-                    }
+                    },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -6745,18 +6163,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         children: vec![
@@ -6814,15 +6223,7 @@ mod test {
                     },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -6855,18 +6256,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         children: vec![
@@ -6925,15 +6317,7 @@ mod test {
                     },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -7007,18 +6391,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     children: vec![
                         Container {
@@ -7085,15 +6460,7 @@ mod test {
                     ..container.children[0].clone()
                 }],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -7163,18 +6530,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     children: vec![
                         Container {
@@ -7241,15 +6599,7 @@ mod test {
                     ..container.children[0].clone()
                 }],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -7315,18 +6665,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     children: vec![
                         Container {
@@ -7381,15 +6722,7 @@ mod test {
                     ..container.children[0].clone()
                 }],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -7443,18 +6776,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     children: vec![
                         Container {
@@ -7521,15 +6845,7 @@ mod test {
                     ..container.children[0].clone()
                 }],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -7556,18 +6872,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     children: vec![
                         Container {
@@ -7622,15 +6929,7 @@ mod test {
                     ..container.children[0].clone()
                 }],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -7708,18 +7007,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     children: vec![Container {
                         children: vec![
@@ -7785,15 +7075,7 @@ mod test {
                     ..container.children[0].clone()
                 }],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -7815,18 +7097,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(100.0),
@@ -7846,15 +7119,7 @@ mod test {
                     },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -7882,18 +7147,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     children: vec![
                         Container {
@@ -7917,15 +7173,7 @@ mod test {
                     ..container.children[0].clone()
                 }],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -7948,18 +7196,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(100.0),
@@ -7980,15 +7219,7 @@ mod test {
                     },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
     #[test_log::test]
@@ -8012,18 +7243,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(100.0),
@@ -8046,15 +7268,7 @@ mod test {
                     },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -8075,29 +7289,12 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 internal_padding_left: Some((100.0 - 30.0) / 2.0),
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -8123,18 +7320,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         internal_margin_left: None,
@@ -8147,18 +7335,10 @@ mod test {
                         internal_margin_right: None,
                         calculated_x: Some(30.0),
                         ..container.children[1].clone()
-                    }
+                    },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -8184,18 +7364,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(30.0),
@@ -8207,18 +7378,10 @@ mod test {
                         calculated_width: Some(20.0),
                         calculated_x: Some(65.0),
                         ..container.children[1].clone()
-                    }
+                    },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -8244,18 +7407,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(30.0),
@@ -8267,18 +7421,10 @@ mod test {
                         calculated_width: Some(20.0),
                         calculated_x: Some(65.0),
                         ..container.children[1].clone()
-                    }
+                    },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -8301,18 +7447,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(35.0),
@@ -8324,18 +7461,10 @@ mod test {
                         calculated_padding_right: Some(30.0),
                         calculated_x: Some(35.0),
                         ..container.children[1].clone()
-                    }
+                    },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -8358,18 +7487,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(35.0),
@@ -8381,18 +7501,10 @@ mod test {
                         calculated_margin_right: Some(30.0),
                         calculated_x: Some(35.0),
                         ..container.children[1].clone()
-                    }
+                    },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -8419,18 +7531,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(40.0),
@@ -8442,18 +7545,10 @@ mod test {
                         calculated_width: Some(40.0),
                         calculated_x: Some(60.0),
                         ..container.children[1].clone()
-                    }
+                    },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -8478,18 +7573,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(40.0),
@@ -8501,18 +7587,10 @@ mod test {
                         calculated_width: Some(40.0),
                         calculated_x: Some(60.0),
                         ..container.children[1].clone()
-                    }
+                    },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -8538,18 +7616,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(40.0),
@@ -8561,18 +7630,10 @@ mod test {
                         calculated_padding_right: Some(20.0),
                         calculated_x: Some(40.0),
                         ..container.children[1].clone()
-                    }
+                    },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -8593,18 +7654,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(100.0),
@@ -8616,18 +7668,10 @@ mod test {
                         calculated_padding_right: Some(20.0),
                         calculated_x: Some(0.0),
                         ..container.children[1].clone()
-                    }
+                    },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -8651,18 +7695,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(30.0),
@@ -8679,18 +7714,10 @@ mod test {
                         calculated_width: Some(30.0),
                         calculated_x: Some(80.0),
                         ..container.children[2].clone()
-                    }
+                    },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -8716,18 +7743,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     Container {
                         children: vec![Container {
@@ -8750,18 +7768,10 @@ mod test {
                         calculated_width: Some(30.0),
                         calculated_x: Some(60.0),
                         ..container.children[2].clone()
-                    }
+                    },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -8785,36 +7795,19 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![
                     container.children[0].clone(),
                     Container {
                         calculated_width: Some(50.0),
                         calculated_x: Some(50.0),
                         ..container.children[1].clone()
-                    }
+                    },
                 ],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -8834,33 +7827,16 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     calculated_width: Some(70.0),
                     calculated_x: Some(0.0),
                     ..container.children[0].clone()
                 }],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -8880,33 +7856,16 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     calculated_height: Some(20.0),
                     calculated_y: Some(0.0),
                     ..container.children[0].clone()
                 }],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -8929,18 +7888,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     calculated_width: Some(35.0),
                     calculated_height: Some(35.0),
@@ -8949,15 +7899,7 @@ mod test {
                     ..container.children[0].clone()
                 }],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -8988,18 +7930,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     children: vec![Container {
                         calculated_width: Some(32.5),
@@ -9022,15 +7955,7 @@ mod test {
                     ..container.children[0].clone()
                 }],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -9063,18 +7988,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     children: vec![Container {
                         calculated_width: Some(32.5),
@@ -9097,15 +8013,7 @@ mod test {
                     ..container.children[0].clone()
                 }],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -9131,18 +8039,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     calculated_width: Some(70.0),
                     calculated_height: Some(35.0),
@@ -9154,15 +8053,7 @@ mod test {
                     ..container.children[0].clone()
                 }],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -9188,18 +8079,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     calculated_width: Some(35.0),
                     calculated_height: Some(50.0),
@@ -9210,15 +8092,7 @@ mod test {
                     ..container.children[0].clone()
                 }],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -9256,18 +8130,9 @@ mod test {
 
         let container = container.children[0].children[0].children[1].clone();
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     children: vec![Container {
                         children: vec![Container {
@@ -9299,15 +8164,7 @@ mod test {
                     ..container.children[0].clone()
                 }],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -9333,18 +8190,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     calculated_width: Some((1600.0 - 40.0) * 0.3),
                     calculated_height: Some(800.0),
@@ -9355,15 +8203,7 @@ mod test {
                     ..container.children[0].clone()
                 }],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -9389,18 +8229,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     calculated_width: Some(1600.0 * 0.3),
                     calculated_height: Some(1000.0 - 200.0 - 40.0),
@@ -9411,15 +8242,7 @@ mod test {
                     ..container.children[0].clone()
                 }],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -9446,18 +8269,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     calculated_width: Some((1600.0 - 40.0) * 0.3),
                     calculated_height: Some(1000.0 - 200.0 - 40.0),
@@ -9470,15 +8284,7 @@ mod test {
                     ..container.children[0].clone()
                 }],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -9512,18 +8318,9 @@ mod test {
 
         let container = container.children[0].children[1].clone();
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 calculated_width: Some((1600.0 - 40.0) * 0.3),
                 calculated_height: Some(1000.0 - 200.0 - 40.0),
                 calculated_x: Some(1092.0),
@@ -9533,15 +8330,7 @@ mod test {
                 calculated_padding_top: Some(20.0),
                 calculated_padding_bottom: Some(20.0),
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -9589,18 +8378,9 @@ mod test {
 
         let container = container.children[0].children[0].children[1].children[0].clone();
 
-        assert_eq!(
-            container
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 calculated_width: Some(1360.0 - 30.0 - 30.0 - f32::from(get_scrollbar_size())),
                 calculated_height: Some(920.0),
                 calculated_x: Some(0.0),
@@ -9610,15 +8390,7 @@ mod test {
                 calculated_padding_top: Some(15.0),
                 calculated_padding_bottom: Some(15.0),
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -9643,62 +8415,29 @@ mod test {
 
         let main = container.children[0].children[0].children[1].clone();
 
-        assert_eq!(
-            main.clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &main.clone(),
+            &Container {
                 calculated_width: Some(1320.0),
                 calculated_height: Some(860.0),
                 calculated_x: Some(280.0),
                 calculated_y: Some(0.0),
                 ..main
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
 
         let aside = container.children[0].children[0].children[0].clone();
 
-        assert_eq!(
-            aside
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &aside.clone(),
+            &Container {
                 calculated_width: Some(240.0),
                 calculated_x: Some(0.0),
                 calculated_y: Some(0.0),
                 calculated_padding_left: Some(20.0),
                 calculated_padding_right: Some(20.0),
                 ..aside
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -9729,47 +8468,22 @@ mod test {
 
         let main = container.children[0].children[0].children[1].clone();
 
-        assert_eq!(
-            main.clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &main.clone(),
+            &Container {
                 calculated_width: Some(1320.0),
                 calculated_height: Some(860.0),
                 calculated_x: Some(280.0),
                 calculated_y: Some(0.0),
                 ..main
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
 
         let aside = container.children[0].children[0].children[0].clone();
 
-        assert_eq!(
-            aside
-                .clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &aside.clone(),
+            &Container {
                 children: vec![Container {
                     children: vec![
                         Container {
@@ -9788,11 +8502,11 @@ mod test {
                                     element: Element::ListItem,
                                     calculated_height: Some(205.0),
                                     ..aside.children[0].children[1].children[1].clone()
-                                }
+                                },
                             ],
                             calculated_height: Some(410.0),
                             ..aside.children[0].children[1].clone()
-                        }
+                        },
                     ],
                     ..aside.children[0].clone()
                 }],
@@ -9803,15 +8517,7 @@ mod test {
                 calculated_padding_top: Some(20.0),
                 calculated_padding_bottom: Some(20.0),
                 ..aside
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -9835,28 +8541,12 @@ mod test {
 
         let td = container.children[0].children[0].children[0].clone();
 
-        assert_eq!(
-            td.clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &td.clone(),
+            &Container {
                 calculated_height: Some(30.0),
                 ..td
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -9880,28 +8570,12 @@ mod test {
 
         let tr = container.children[0].children[0].clone();
 
-        assert_eq!(
-            tr.clone()
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &tr.clone(),
+            &Container {
                 calculated_height: Some(30.0),
                 ..tr
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -9935,32 +8609,16 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container,
+            &Container {
                 children: vec![Container {
                     calculated_height: Some(90.0),
                     ..container.children[0].clone()
                 }],
                 calculated_height: Some(100.0),
                 ..container.clone()
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -9996,17 +8654,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container,
+            &Container {
                 children: vec![
                     Container {
                         calculated_height: Some(10.0),
@@ -10015,19 +8665,11 @@ mod test {
                     Container {
                         calculated_height: Some(90.0),
                         ..container.children[1].clone()
-                    }
+                    },
                 ],
                 calculated_height: Some(100.0),
                 ..container.clone()
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -10063,17 +8705,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container,
+            &Container {
                 children: vec![
                     Container {
                         calculated_height: Some(10.0),
@@ -10082,19 +8716,11 @@ mod test {
                     Container {
                         calculated_height: Some(90.0),
                         ..container.children[1].clone()
-                    }
+                    },
                 ],
                 calculated_height: Some(100.0),
                 ..container.clone()
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -10132,17 +8758,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container.clone(),
+            &Container {
                 children: vec![Container {
                     children: vec![
                         Container {
@@ -10160,7 +8778,7 @@ mod test {
                                     },
                                 ],
                                 ..container.children[0].children[0].children[0].clone()
-                            },],
+                            }],
                             ..container.children[0].children[0].clone()
                         },
                         Container {
@@ -10178,22 +8796,14 @@ mod test {
                                     },
                                 ],
                                 ..container.children[0].children[1].children[0].clone()
-                            },],
+                            }],
                             ..container.children[0].children[1].clone()
-                        }
+                        },
                     ],
                     ..container.children[0].clone()
                 }],
                 ..container
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -10217,17 +8827,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container,
+            &Container {
                 children: vec![Container {
                     children: vec![Container {
                         children: vec![Container {
@@ -10235,23 +8837,15 @@ mod test {
                                 calculated_width: Some(1212.0),
                                 calculated_height: Some(25.0),
                                 ..container.children[0].children[0].children[0].children[0].clone()
-                            },],
+                            }],
                             ..container.children[0].children[0].children[0].clone()
-                        },],
+                        }],
                         ..container.children[0].children[0].clone()
                     }],
                     ..container.children[0].clone()
                 }],
                 ..container.clone()
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -10273,38 +8867,22 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container,
+            &Container {
                 children: vec![Container {
                     children: vec![Container {
                         children: vec![Container {
                             calculated_width: Some(1212.0),
                             calculated_height: Some(25.0),
                             ..container.children[0].children[0].children[0].clone()
-                        },],
+                        }],
                         ..container.children[0].children[0].clone()
-                    },],
+                    }],
                     ..container.children[0].clone()
                 }],
                 ..container.clone()
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -10327,17 +8905,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container,
+            &Container {
                 children: vec![
                     Container {
                         calculated_height: Some(40.0),
@@ -10346,19 +8916,11 @@ mod test {
                     Container {
                         calculated_height: Some(600.0),
                         ..container.children[1].clone()
-                    }
+                    },
                 ],
                 calculated_height: Some(500.0),
                 ..container.clone()
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -10381,17 +8943,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container,
+            &Container {
                 children: vec![Container {
                     children: vec![Container {
                         calculated_height: Some(600.0),
@@ -10402,15 +8956,7 @@ mod test {
                 }],
                 calculated_height: Some(500.0),
                 ..container.clone()
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 
@@ -10436,17 +8982,9 @@ mod test {
         container.calc();
         log::trace!("container:\n{}", container);
 
-        assert_eq!(
-            container
-                .display_to_string(
-                    true,
-                    #[cfg(feature = "format")]
-                    true,
-                    #[cfg(feature = "syntax-highlighting")]
-                    false
-                )
-                .unwrap(),
-            Container {
+        compare_containers(
+            &container,
+            &Container {
                 children: vec![Container {
                     children: vec![
                         Container {
@@ -10456,22 +8994,14 @@ mod test {
                         Container {
                             calculated_height: Some(600.0),
                             ..container.children[0].children[1].clone()
-                        }
+                        },
                     ],
                     calculated_height: Some(640.0),
                     ..container.children[0].clone()
                 }],
                 calculated_height: Some(500.0),
                 ..container.clone()
-            }
-            .display_to_string(
-                true,
-                #[cfg(feature = "format")]
-                true,
-                #[cfg(feature = "syntax-highlighting")]
-                false
-            )
-            .unwrap(),
+            },
         );
     }
 }
