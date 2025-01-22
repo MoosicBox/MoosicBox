@@ -33,7 +33,6 @@ impl Arbitrary for JustifyContent {
             Self::End,
             Self::SpaceBetween,
             Self::SpaceEvenly,
-            Self::Default,
         ])
         .unwrap()
     }
@@ -41,8 +40,7 @@ impl Arbitrary for JustifyContent {
 
 impl Arbitrary for AlignItems {
     fn arbitrary(g: &mut Gen) -> Self {
-        *g.choose(&[Self::Start, Self::Center, Self::End, Self::Default])
-            .unwrap()
+        *g.choose(&[Self::Start, Self::Center, Self::End]).unwrap()
     }
 }
 

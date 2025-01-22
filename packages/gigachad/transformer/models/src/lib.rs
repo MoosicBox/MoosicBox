@@ -47,13 +47,12 @@ impl std::fmt::Display for LayoutOverflow {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum JustifyContent {
+    #[default]
     Start,
     Center,
     End,
     SpaceBetween,
     SpaceEvenly,
-    #[default]
-    Default,
 }
 
 impl std::fmt::Display for JustifyContent {
@@ -64,7 +63,6 @@ impl std::fmt::Display for JustifyContent {
             Self::End => f.write_str("end"),
             Self::SpaceBetween => f.write_str("space-between"),
             Self::SpaceEvenly => f.write_str("space-evenly"),
-            Self::Default => f.write_str("default"),
         }
     }
 }
@@ -73,11 +71,10 @@ impl std::fmt::Display for JustifyContent {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum AlignItems {
+    #[default]
     Start,
     Center,
     End,
-    #[default]
-    Default,
 }
 
 impl std::fmt::Display for AlignItems {
@@ -86,7 +83,6 @@ impl std::fmt::Display for AlignItems {
             Self::Start => f.write_str("start"),
             Self::Center => f.write_str("center"),
             Self::End => f.write_str("end"),
-            Self::Default => f.write_str("default"),
         }
     }
 }

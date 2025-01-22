@@ -437,7 +437,6 @@ pub fn element_style_to_html(
             }
             write_css_attr(f, b"justify-content", b"space-evenly")?;
         }
-        JustifyContent::Default => {}
     }
 
     if let Some(gap) = &container.gap {

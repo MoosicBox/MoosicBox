@@ -652,7 +652,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                 sx-padding-x=(30)
                 sx-padding-top=(15)
             {
-                div sx-dir="row" sx-justify-content="start" {
+                div sx-dir="row" {
                     h1 sx-width=(50) sx-height=(36) { "Albums" }
                     @let button_size = 30;
                     @let icon_size = button_size - 10;

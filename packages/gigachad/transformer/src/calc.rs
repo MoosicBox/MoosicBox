@@ -1415,7 +1415,6 @@ impl Container {
                     vertical_margin = Some(margin);
                 }
             },
-            JustifyContent::Default => {}
         }
 
         let mut first_horizontal_margin = horizontal_margin;
@@ -8153,7 +8152,7 @@ mod test {
                                 sx-padding-right=(30)
                                 sx-padding-top=(15)
                             {
-                                div sx-dir="row" sx-justify-content="start" {
+                                div sx-dir="row" {
                                     h1 sx-width=(50) sx-height=(36) { "Albums" }
                                 }
                             }

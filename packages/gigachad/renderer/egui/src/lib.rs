@@ -1425,13 +1425,9 @@ impl EguiApp {
         relative_container: Option<(egui::Rect, &'a Container)>,
         inner: impl FnOnce(&mut Ui, Option<(egui::Rect, &'a Container)>) -> Response,
     ) -> Response {
-        if matches!(
-            container.justify_content,
-            JustifyContent::Start | JustifyContent::Default
-        ) && matches!(
-            container.align_items,
-            AlignItems::Default | AlignItems::Start
-        ) {
+        if matches!(container.justify_content, JustifyContent::Start)
+            && matches!(container.align_items, AlignItems::Start)
+        {
             return inner(ui, relative_container);
         }
 
@@ -1445,15 +1441,11 @@ impl EguiApp {
                 AlignItems::Center => {
                     egui::Layout::centered_and_justified(egui::Direction::TopDown)
                 }
-                AlignItems::End | AlignItems::Default | AlignItems::Start => {
-                    match container.justify_content {
-                        JustifyContent::Center => {
-                            egui::Layout::top_down_justified(egui::Align::Center)
-                        }
-                        JustifyContent::End => egui::Layout::top_down_justified(egui::Align::Max),
-                        _ => egui::Layout::top_down_justified(egui::Align::Min),
-                    }
-                }
+                AlignItems::End | AlignItems::Start => match container.justify_content {
+                    JustifyContent::Center => egui::Layout::top_down_justified(egui::Align::Center),
+                    JustifyContent::End => egui::Layout::top_down_justified(egui::Align::Max),
+                    _ => egui::Layout::top_down_justified(egui::Align::Min),
+                },
             }),
             |ui| {
                 egui::Frame::none().show(ui, |ui| {
