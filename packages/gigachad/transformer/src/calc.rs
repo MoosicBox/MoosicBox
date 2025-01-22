@@ -9004,4 +9004,49 @@ mod test {
             },
         );
     }
+
+    #[test_log::test]
+    #[ignore]
+    fn calc_overflow_y_auto_justify_content_start_only_takes_up_sized_height() {
+        let mut container: Container = html! {
+            div sx-overflow-y="auto" {
+                div {
+                    div sx-height=(40) {}
+                }
+                div {
+                    div sx-height=(600) {}
+                }
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(100.0);
+        container.calculated_height = Some(500.0);
+
+        container.calc();
+        log::trace!("container:\n{}", container);
+
+        compare_containers(
+            &container,
+            &Container {
+                children: vec![Container {
+                    children: vec![
+                        Container {
+                            calculated_height: Some(40.0),
+                            ..container.children[0].children[0].clone()
+                        },
+                        Container {
+                            calculated_height: Some(600.0),
+                            ..container.children[0].children[1].clone()
+                        },
+                    ],
+                    calculated_height: Some(500.0),
+                    ..container.children[0].clone()
+                }],
+                calculated_height: Some(500.0),
+                ..container.clone()
+            },
+        );
+    }
 }
