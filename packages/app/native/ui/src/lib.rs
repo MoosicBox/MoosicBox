@@ -211,12 +211,7 @@ pub fn player(state: &State) -> Markup {
                 }
                 div sx-dir="row" sx-justify-content="end" sx-align-items="center" sx-padding-right=(20) {
                     @let size = 25;
-                    button sx-width=(size) sx-height=(size) {
-                        img
-                            sx-width=(size)
-                            sx-height=(size)
-                            src=(public_img!("audio-white.svg"));
-                    }
+                    (volume(size))
                     button sx-width=(size) sx-height=(size) sx-margin-left=(10) {
                         img
                             sx-width=(size)
@@ -240,6 +235,70 @@ pub fn player(state: &State) -> Markup {
                             sx-width=(size)
                             sx-height=(size)
                             src=(public_img!("playlist-white.svg"));
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn volume(size: u8) -> Markup {
+    html! {
+        div
+            sx-width=(size)
+            sx-height=(size)
+            sx-position="relative"
+            fx-hover=(ActionType::show_str_id("volume-slider"))
+        {
+            button {
+                img
+                    sx-width=(size)
+                    sx-height=(size)
+                    src=(public_img!("audio-white.svg"));
+            }
+            div
+                id="volume-slider"
+                sx-visibility=(Visibility::Hidden)
+                sx-width=(30)
+                sx-height=(130)
+                sx-padding-y=(15)
+                sx-position="absolute"
+                sx-bottom=(size)
+                sx-left=(0)
+                sx-margin-y=(5)
+                sx-align-items="center"
+                sx-justify-content="center"
+                sx-border-radius="100%"
+                sx-background="#181a1b"
+            {
+                div
+                    sx-position="relative"
+                    sx-width=(3)
+                    sx-height="100%"
+                    sx-border-radius="100%"
+                    sx-background="#444"
+                {
+                    div
+                        sx-position="absolute"
+                        sx-bottom=(0)
+                        sx-left=(0)
+                        sx-width="100%"
+                        sx-height="95%"
+                        sx-border-radius="100%"
+                        sx-background="#fff"
+                    {
+                        div sx-position="relative" {
+                            @let slider_top_width = f32::from(size) / 3.0;
+                            div
+                                sx-position="absolute"
+                                sx-top=(0)
+                                sx-left=(format!("calc(50% - {})", slider_top_width / 2.0))
+                                sx-width=(slider_top_width)
+                                sx-height=(3)
+                                sx-border-radius="100%"
+                                sx-background="#fff"
+                            {}
+                        }
                     }
                 }
             }
