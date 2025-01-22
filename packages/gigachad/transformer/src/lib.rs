@@ -1261,13 +1261,15 @@ impl Container {
     fn display_to_string(
         &self,
         with_debug_attrs: bool,
+        #[cfg(feature = "format")] format: bool,
+        #[cfg(feature = "syntax-highlighting")] highlight: bool,
     ) -> Result<String, Box<dyn std::error::Error>> {
         let mut data = Vec::new();
 
         let _ = self.display(&mut data, with_debug_attrs);
 
         #[cfg(feature = "format")]
-        let data = {
+        let data = if format {
             if data[0] == b'<' {
                 use xml::{reader::ParserConfig, writer::EmitterConfig};
                 let data: &[u8] = &data;
@@ -1296,6 +1298,8 @@ impl Container {
             } else {
                 data
             }
+        } else {
+            data
         };
 
         let xml = String::from_utf8(data)?;
@@ -1308,7 +1312,7 @@ impl Container {
         };
 
         #[cfg(feature = "syntax-highlighting")]
-        {
+        if highlight {
             use std::sync::LazyLock;
 
             use syntect::highlighting::ThemeSet;
@@ -1329,10 +1333,9 @@ impl Container {
                 })
                 .collect::<String>();
 
-            Ok(highlighted)
+            return Ok(highlighted);
         }
 
-        #[cfg(not(feature = "syntax-highlighting"))]
         Ok(xml)
     }
 }
@@ -1342,12 +1345,18 @@ impl std::fmt::Display for Container {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(
             &self
-                .display_to_string(if cfg!(test) {
-                    true
-                } else {
-                    std::env::var("DEBUG_ATTRS")
-                        .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str()))
-                })
+                .display_to_string(
+                    if cfg!(test) {
+                        true
+                    } else {
+                        std::env::var("DEBUG_ATTRS")
+                            .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str()))
+                    },
+                    #[cfg(feature = "format")]
+                    true,
+                    #[cfg(feature = "syntax-highlighting")]
+                    true,
+                )
                 .unwrap_or_else(|e| panic!("Failed to display container: {e:?} ({self:?})")),
         )?;
 

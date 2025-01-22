@@ -617,7 +617,15 @@ mod test {
     ) -> bool {
         clean_up_container(&mut container);
 
-        let markup = container.to_string();
+        let markup = container
+            .display_to_string(
+                true,
+                #[cfg(feature = "format")]
+                false,
+                #[cfg(feature = "syntax-highlighting")]
+                false,
+            )
+            .unwrap();
 
         let re_parsed: Container = markup.clone().try_into().unwrap();
 
@@ -634,7 +642,26 @@ mod test {
             log::trace!("after:\n{re_parsed}");
 
             std::thread::sleep(std::time::Duration::from_millis(10));
-            assert_eq!(re_parsed.to_string(), container.to_string());
+            assert_eq!(
+                re_parsed
+                    .display_to_string(
+                        true,
+                        #[cfg(feature = "format")]
+                        false,
+                        #[cfg(feature = "syntax-highlighting")]
+                        false
+                    )
+                    .unwrap(),
+                container
+                    .display_to_string(
+                        true,
+                        #[cfg(feature = "format")]
+                        false,
+                        #[cfg(feature = "syntax-highlighting")]
+                        false
+                    )
+                    .unwrap()
+            );
             assert_eq!(re_parsed, container);
         }
 
