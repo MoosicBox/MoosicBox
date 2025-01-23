@@ -185,7 +185,9 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
                         gigachad_actions::logic::Arithmetic::Plus(a, b)
                         | gigachad_actions::logic::Arithmetic::Minus(a, b)
                         | gigachad_actions::logic::Arithmetic::Multiply(a, b)
-                        | gigachad_actions::logic::Arithmetic::Divide(a, b) => {
+                        | gigachad_actions::logic::Arithmetic::Divide(a, b)
+                        | gigachad_actions::logic::Arithmetic::Min(a, b)
+                        | gigachad_actions::logic::Arithmetic::Max(a, b) => {
                             check_value(a, root, watch_positions, id);
                             check_value(b, root, watch_positions, id);
                         }

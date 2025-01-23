@@ -41,6 +41,21 @@ impl CalcValue {
     pub fn divide(self, other: impl Into<Value>) -> Arithmetic {
         Arithmetic::Divide(self.into(), other.into())
     }
+
+    #[must_use]
+    pub fn min(self, other: impl Into<Value>) -> Arithmetic {
+        Arithmetic::Min(self.into(), other.into())
+    }
+
+    #[must_use]
+    pub fn max(self, other: impl Into<Value>) -> Arithmetic {
+        Arithmetic::Max(self.into(), other.into())
+    }
+
+    #[must_use]
+    pub fn clamp(self, min: impl Into<Value>, max: impl Into<Value>) -> Arithmetic {
+        Arithmetic::Min(max.into(), Arithmetic::Max(self.into(), min.into()).into())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -124,6 +139,8 @@ pub enum Arithmetic {
     Minus(Value, Value),
     Multiply(Value, Value),
     Divide(Value, Value),
+    Min(Value, Value),
+    Max(Value, Value),
 }
 
 impl Arithmetic {
@@ -142,6 +159,12 @@ impl Arithmetic {
             Self::Divide(a, b) => a
                 .as_f32(calc_func)
                 .and_then(|a| b.as_f32(calc_func).map(|b| a / b)),
+            Self::Min(a, b) => a
+                .as_f32(calc_func)
+                .and_then(|a| b.as_f32(calc_func).map(|b| if b < a { b } else { a })),
+            Self::Max(a, b) => a
+                .as_f32(calc_func)
+                .and_then(|a| b.as_f32(calc_func).map(|b| if b > a { b } else { a })),
         }
     }
 
@@ -176,6 +199,21 @@ impl Arithmetic {
     #[must_use]
     pub fn divide(self, other: impl Into<Value>) -> Self {
         Self::Divide(self.into(), other.into())
+    }
+
+    #[must_use]
+    pub fn min(self, other: impl Into<Value>) -> Self {
+        Self::Min(self.into(), other.into())
+    }
+
+    #[must_use]
+    pub fn max(self, other: impl Into<Value>) -> Self {
+        Self::Max(self.into(), other.into())
+    }
+
+    #[must_use]
+    pub fn clamp(self, min: impl Into<Value>, max: impl Into<Value>) -> Self {
+        Self::Min(max.into(), Self::Max(self.into(), min.into()).into())
     }
 }
 
