@@ -143,13 +143,13 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
             id: usize,
         ) {
             match calc {
-                gigachad_actions::logic::CalcValue::GetVisibility { .. }
-                | gigachad_actions::logic::CalcValue::GetId { .. }
-                | gigachad_actions::logic::CalcValue::GetDataAttrValue { .. }
-                | gigachad_actions::logic::CalcValue::GetEventValue
-                | gigachad_actions::logic::CalcValue::GetHeightPx { .. } => {}
-                gigachad_actions::logic::CalcValue::GetMouseX { target }
-                | gigachad_actions::logic::CalcValue::GetMouseY { target } => {
+                gigachad_actions::logic::CalcValue::Visibility { .. }
+                | gigachad_actions::logic::CalcValue::Id { .. }
+                | gigachad_actions::logic::CalcValue::DataAttrValue { .. }
+                | gigachad_actions::logic::CalcValue::EventValue
+                | gigachad_actions::logic::CalcValue::HeightPx { .. } => {}
+                gigachad_actions::logic::CalcValue::MouseX { target }
+                | gigachad_actions::logic::CalcValue::MouseY { target } => {
                     if let Some(target) = target {
                         let id = match target {
                             ElementTarget::Id(id) => Some(*id),
@@ -2387,7 +2387,7 @@ impl EguiApp {
         use gigachad_actions::logic::{CalcValue, Value};
 
         let calc_func = |calc_value: &CalcValue| match calc_value {
-            CalcValue::GetVisibility { target } => Some(Value::Visibility(
+            CalcValue::Visibility { target } => Some(Value::Visibility(
                 Self::map_element_target(target, id, render_context.container, |element| {
                     render_context
                         .visibilities
@@ -2398,22 +2398,22 @@ impl EguiApp {
                 })
                 .unwrap_or_default(),
             )),
-            CalcValue::GetId { target } => {
+            CalcValue::Id { target } => {
                 Self::map_element_target(target, id, render_context.container, |element| {
                     element.str_id.clone()
                 })
                 .flatten()
                 .map(Value::String)
             }
-            CalcValue::GetDataAttrValue { attr, target } => {
+            CalcValue::DataAttrValue { attr, target } => {
                 Self::map_element_target(target, id, render_context.container, |element| {
                     element.data.get(attr).cloned()
                 })
                 .flatten()
                 .map(Value::String)
             }
-            CalcValue::GetEventValue => event_value.map(ToString::to_string).map(Value::String),
-            CalcValue::GetHeightPx { target } => {
+            CalcValue::EventValue => event_value.map(ToString::to_string).map(Value::String),
+            CalcValue::HeightPx { target } => {
                 let height =
                     Self::map_element_target(target, id, render_context.container, |element| {
                         Value::Real(element.calculated_height.unwrap())
@@ -2421,11 +2421,11 @@ impl EguiApp {
                 log::debug!("calc_value: getting height px for element id={id} height={height:?}");
                 height
             }
-            CalcValue::GetMouseX { target } | CalcValue::GetMouseY { target } => {
+            CalcValue::MouseX { target } | CalcValue::MouseY { target } => {
                 let pos = ctx.input(|x| {
                     x.pointer.latest_pos().map_or(0.0, |x| match calc_value {
-                        CalcValue::GetMouseX { .. } => x.x,
-                        CalcValue::GetMouseY { .. } => x.y,
+                        CalcValue::MouseX { .. } => x.x,
+                        CalcValue::MouseY { .. } => x.y,
                         _ => unreachable!(),
                     })
                 });
@@ -2435,8 +2435,8 @@ impl EguiApp {
                             render_context.positions.get(&element.id).map(|rect| {
                                 Value::Real(
                                     pos - match calc_value {
-                                        CalcValue::GetMouseX { .. } => rect.min.x,
-                                        CalcValue::GetMouseY { .. } => rect.min.y,
+                                        CalcValue::MouseX { .. } => rect.min.x,
+                                        CalcValue::MouseY { .. } => rect.min.y,
                                         _ => unreachable!(),
                                     },
                                 )

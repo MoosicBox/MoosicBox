@@ -67,7 +67,7 @@ impl Arbitrary for LogLevel {
 #[cfg(feature = "logic")]
 impl Arbitrary for crate::logic::CalcValue {
     fn arbitrary(g: &mut Gen) -> Self {
-        Self::GetVisibility {
+        Self::Visibility {
             target: ElementTarget::arbitrary(g),
         }
     }

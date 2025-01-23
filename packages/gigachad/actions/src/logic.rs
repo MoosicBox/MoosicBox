@@ -7,13 +7,13 @@ use crate::{Action, ActionType, ElementTarget};
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CalcValue {
-    GetVisibility { target: ElementTarget },
-    GetId { target: ElementTarget },
-    GetDataAttrValue { attr: String, target: ElementTarget },
-    GetEventValue,
-    GetHeightPx { target: ElementTarget },
-    GetMouseX { target: Option<ElementTarget> },
-    GetMouseY { target: Option<ElementTarget> },
+    Visibility { target: ElementTarget },
+    Id { target: ElementTarget },
+    DataAttrValue { attr: String, target: ElementTarget },
+    EventValue,
+    HeightPx { target: ElementTarget },
+    MouseX { target: Option<ElementTarget> },
+    MouseY { target: Option<ElementTarget> },
 }
 
 impl CalcValue {
@@ -252,7 +252,7 @@ pub fn eq(a: impl Into<Value>, b: impl Into<Value>) -> Condition {
 
 #[must_use]
 pub fn get_visibility_str_id(str_id: impl Into<String>) -> CalcValue {
-    CalcValue::GetVisibility {
+    CalcValue::Visibility {
         target: ElementTarget::StrId(str_id.into()),
     }
 }
@@ -260,33 +260,33 @@ pub fn get_visibility_str_id(str_id: impl Into<String>) -> CalcValue {
 #[cfg(feature = "id")]
 #[must_use]
 pub const fn get_visibility_id(id: usize) -> CalcValue {
-    CalcValue::GetVisibility {
+    CalcValue::Visibility {
         target: ElementTarget::Id(id),
     }
 }
 
 #[must_use]
 pub const fn get_visibility_self() -> CalcValue {
-    CalcValue::GetVisibility {
+    CalcValue::Visibility {
         target: ElementTarget::SelfTarget,
     }
 }
 
 #[must_use]
 pub const fn get_event_value() -> CalcValue {
-    CalcValue::GetEventValue
+    CalcValue::EventValue
 }
 
 #[must_use]
 pub const fn get_id_self() -> CalcValue {
-    CalcValue::GetId {
+    CalcValue::Id {
         target: ElementTarget::SelfTarget,
     }
 }
 
 #[must_use]
 pub fn get_data_attr_value_self(attr: impl Into<String>) -> CalcValue {
-    CalcValue::GetDataAttrValue {
+    CalcValue::DataAttrValue {
         attr: attr.into(),
         target: ElementTarget::SelfTarget,
     }
@@ -294,7 +294,7 @@ pub fn get_data_attr_value_self(attr: impl Into<String>) -> CalcValue {
 
 #[must_use]
 pub fn get_height_px_str_id(str_id: impl Into<String>) -> CalcValue {
-    CalcValue::GetHeightPx {
+    CalcValue::HeightPx {
         target: ElementTarget::StrId(str_id.into()),
     }
 }
@@ -302,26 +302,26 @@ pub fn get_height_px_str_id(str_id: impl Into<String>) -> CalcValue {
 #[cfg(feature = "id")]
 #[must_use]
 pub const fn get_height_px_id(id: usize) -> CalcValue {
-    CalcValue::GetHeightPx {
+    CalcValue::HeightPx {
         target: ElementTarget::Id(id),
     }
 }
 
 #[must_use]
 pub const fn get_height_px_self() -> CalcValue {
-    CalcValue::GetHeightPx {
+    CalcValue::HeightPx {
         target: ElementTarget::SelfTarget,
     }
 }
 
 #[must_use]
 pub const fn get_mouse_x() -> CalcValue {
-    CalcValue::GetMouseX { target: None }
+    CalcValue::MouseX { target: None }
 }
 
 #[must_use]
 pub fn get_mouse_x_str_id(str_id: impl Into<String>) -> CalcValue {
-    CalcValue::GetMouseX {
+    CalcValue::MouseX {
         target: Some(ElementTarget::StrId(str_id.into())),
     }
 }
@@ -329,26 +329,26 @@ pub fn get_mouse_x_str_id(str_id: impl Into<String>) -> CalcValue {
 #[cfg(feature = "id")]
 #[must_use]
 pub const fn get_mouse_x_id(id: usize) -> CalcValue {
-    CalcValue::GetMouseX {
+    CalcValue::MouseX {
         target: Some(ElementTarget::Id(id)),
     }
 }
 
 #[must_use]
 pub const fn get_mouse_x_self() -> CalcValue {
-    CalcValue::GetMouseX {
+    CalcValue::MouseX {
         target: Some(ElementTarget::SelfTarget),
     }
 }
 
 #[must_use]
 pub const fn get_mouse_y() -> CalcValue {
-    CalcValue::GetMouseY { target: None }
+    CalcValue::MouseY { target: None }
 }
 
 #[must_use]
 pub fn get_mouse_y_str_id(str_id: impl Into<String>) -> CalcValue {
-    CalcValue::GetMouseY {
+    CalcValue::MouseY {
         target: Some(ElementTarget::StrId(str_id.into())),
     }
 }
@@ -356,14 +356,14 @@ pub fn get_mouse_y_str_id(str_id: impl Into<String>) -> CalcValue {
 #[cfg(feature = "id")]
 #[must_use]
 pub const fn get_mouse_y_id(id: usize) -> CalcValue {
-    CalcValue::GetMouseY {
+    CalcValue::MouseY {
         target: Some(ElementTarget::Id(id)),
     }
 }
 
 #[must_use]
 pub const fn get_mouse_y_self() -> CalcValue {
-    CalcValue::GetMouseY {
+    CalcValue::MouseY {
         target: Some(ElementTarget::SelfTarget),
     }
 }
