@@ -302,7 +302,7 @@ fn volume_slider(size: u16, volume_percent: f64) -> Markup {
             sx-border-radius="100%"
             sx-background="#181a1b"
             sx-cursor="pointer"
-            fx-click=(
+            fx-mouse-down=(
                 get_height_px_str_id("volume-slider-value-container")
                     .minus(get_mouse_y_str_id("volume-slider-value-container"))
                     .divide(get_height_px_str_id("volume-slider-value-container"))
