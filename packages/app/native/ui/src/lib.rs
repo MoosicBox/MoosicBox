@@ -24,6 +24,7 @@ static VIZ_HEIGHT: u16 = 35;
 static VIZ_PADDING: u16 = 5;
 static FOOTER_BORDER_SIZE: u16 = 3;
 static FOOTER_HEIGHT: u16 = 100 + VIZ_HEIGHT + VIZ_PADDING * 2 + FOOTER_BORDER_SIZE;
+static FOOTER_ICON_SIZE: u16 = 25;
 static CURRENT_ALBUM_SIZE: u16 = 70;
 
 #[macro_export]
@@ -210,21 +211,20 @@ pub fn player(state: &State) -> Markup {
                     }
                 }
                 div sx-dir="row" sx-justify-content="end" sx-align-items="center" sx-padding-right=(20) {
-                    @let size = 25;
-                    (volume(size))
-                    button sx-width=(size) sx-height=(size) sx-margin-left=(10) {
+                    (volume(state, FOOTER_ICON_SIZE))
+                    button sx-width=(FOOTER_ICON_SIZE) sx-height=(FOOTER_ICON_SIZE) sx-margin-left=(10) {
                         img
-                            sx-width=(size)
-                            sx-height=(size)
+                            sx-width=(FOOTER_ICON_SIZE)
+                            sx-height=(FOOTER_ICON_SIZE)
                             src=(public_img!("speaker-white.svg"));
                     }
-                    button sx-width=(size) sx-height=(size) sx-margin-left=(10) {
+                    button sx-width=(FOOTER_ICON_SIZE) sx-height=(FOOTER_ICON_SIZE) sx-margin-left=(10) {
                         img
-                            sx-width=(size)
-                            sx-height=(size)
+                            sx-width=(FOOTER_ICON_SIZE)
+                            sx-height=(FOOTER_ICON_SIZE)
                             src=(public_img!("sessions-white.svg"));
                     }
-                    button sx-width=(size) sx-height=(size) sx-margin-left=(10) {
+                    button sx-width=(FOOTER_ICON_SIZE) sx-height=(FOOTER_ICON_SIZE) sx-margin-left=(10) {
                         img
                             fx-click=(
                                 get_visibility_str_id("play-queue")
@@ -232,8 +232,8 @@ pub fn player(state: &State) -> Markup {
                                     .then(ActionType::show_str_id("play-queue"))
                                     .or_else(ActionType::hide_str_id("play-queue"))
                             )
-                            sx-width=(size)
-                            sx-height=(size)
+                            sx-width=(FOOTER_ICON_SIZE)
+                            sx-height=(FOOTER_ICON_SIZE)
                             src=(public_img!("playlist-white.svg"));
                     }
                 }
@@ -242,7 +242,8 @@ pub fn player(state: &State) -> Markup {
     }
 }
 
-fn volume(size: u8) -> Markup {
+fn volume(state: &State, size: u16) -> Markup {
+    let volume_percent = state.player.playback.as_ref().map_or(1.0, |x| x.volume);
     html! {
         div
             sx-width=(size)
@@ -256,51 +257,65 @@ fn volume(size: u8) -> Markup {
                     sx-height=(size)
                     src=(public_img!("audio-white.svg"));
             }
+            (volume_slider(size, volume_percent))
+        }
+    }
+}
+
+fn volume_slider(size: u16, volume_percent: f64) -> Markup {
+    html! {
+        div
+            id="volume-slider"
+            sx-visibility=(Visibility::Hidden)
+            sx-width=(30)
+            sx-height=(130)
+            sx-padding-y=(15)
+            sx-position="absolute"
+            sx-bottom=(size)
+            sx-left=(0)
+            sx-margin-y=(5)
+            sx-align-items="center"
+            sx-justify-content="center"
+            sx-border-radius="100%"
+            sx-background="#181a1b"
+        {
             div
-                id="volume-slider"
-                sx-visibility=(Visibility::Hidden)
-                sx-width=(30)
-                sx-height=(130)
-                sx-padding-y=(15)
-                sx-position="absolute"
-                sx-bottom=(size)
-                sx-left=(0)
-                sx-margin-y=(5)
-                sx-align-items="center"
-                sx-justify-content="center"
+                sx-position="relative"
+                sx-width=(3)
+                sx-height="100%"
                 sx-border-radius="100%"
-                sx-background="#181a1b"
+                sx-background="#444"
             {
+                (volume_slider_value(size, volume_percent))
+            }
+        }
+    }
+}
+
+fn volume_slider_value(size: u16, volume_percent: f64) -> Markup {
+    let height_percent = volume_percent * 100.0;
+    html! {
+        div
+            id="volume-slider-value"
+            sx-position="absolute"
+            sx-bottom=(0)
+            sx-left=(0)
+            sx-width="100%"
+            sx-height=(format!("{height_percent}%"))
+            sx-border-radius="100%"
+            sx-background="#fff"
+        {
+            div sx-position="relative" {
+                @let slider_top_width = f32::from(size) / 3.0;
                 div
-                    sx-position="relative"
-                    sx-width=(3)
-                    sx-height="100%"
+                    sx-position="absolute"
+                    sx-top=(0)
+                    sx-left=(format!("calc(50% - {})", slider_top_width / 2.0))
+                    sx-width=(slider_top_width)
+                    sx-height=(3)
                     sx-border-radius="100%"
-                    sx-background="#444"
-                {
-                    div
-                        sx-position="absolute"
-                        sx-bottom=(0)
-                        sx-left=(0)
-                        sx-width="100%"
-                        sx-height="95%"
-                        sx-border-radius="100%"
-                        sx-background="#fff"
-                    {
-                        div sx-position="relative" {
-                            @let slider_top_width = f32::from(size) / 3.0;
-                            div
-                                sx-position="absolute"
-                                sx-top=(0)
-                                sx-left=(format!("calc(50% - {})", slider_top_width / 2.0))
-                                sx-width=(slider_top_width)
-                                sx-height=(3)
-                                sx-border-radius="100%"
-                                sx-background="#fff"
-                            {}
-                        }
-                    }
-                }
+                    sx-background="#fff"
+                {}
             }
         }
     }
@@ -451,6 +466,13 @@ pub fn session_updated(
                 player_current_progress(seek, track.duration),
             ));
         }
+    }
+    if let Some(volume) = update.volume {
+        log::debug!("session_updated: rendering volume");
+        partials.push((
+            "volume-slider-value".to_string(),
+            volume_slider_value(FOOTER_ICON_SIZE, volume),
+        ));
     }
 
     partials

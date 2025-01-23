@@ -61,6 +61,7 @@ async fn convert_state(app_state: &moosicbox_app_state::AppState) -> state::Stat
             playing: session.playing,
             position: session.position.unwrap_or(0),
             seek: session.seek.unwrap_or(0.0),
+            volume: session.volume.unwrap_or(1.0),
             tracks: session.playlist.tracks.clone(),
         });
     }

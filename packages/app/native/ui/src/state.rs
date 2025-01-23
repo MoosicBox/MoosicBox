@@ -10,6 +10,7 @@ pub struct PlaybackState {
     pub playing: bool,
     pub position: u16,
     pub seek: f64,
+    pub volume: f64,
     pub tracks: Vec<ApiTrack>,
 }
 
