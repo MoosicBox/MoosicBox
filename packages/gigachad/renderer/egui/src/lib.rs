@@ -147,24 +147,30 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
                 | gigachad_actions::logic::CalcValue::Id { .. }
                 | gigachad_actions::logic::CalcValue::DataAttrValue { .. }
                 | gigachad_actions::logic::CalcValue::EventValue
-                | gigachad_actions::logic::CalcValue::HeightPx { .. } => {}
-                gigachad_actions::logic::CalcValue::MouseX { target }
-                | gigachad_actions::logic::CalcValue::MouseY { target } => {
-                    if let Some(target) = target {
-                        let id = match target {
-                            ElementTarget::Id(id) => Some(*id),
-                            ElementTarget::SelfTarget => Some(id),
-                            ElementTarget::ChildClass(..)
-                            | ElementTarget::LastChild
-                            | ElementTarget::StrId(..) => {
-                                EguiApp::map_element_target(target, id, root, |x| x.id)
-                            }
-                        };
-                        log::debug!("add_watch_pos: got id={id:?} for target={target:?}");
-
-                        if let Some(id) = id {
-                            watch_positions.insert(id);
+                | gigachad_actions::logic::CalcValue::HeightPx { .. }
+                | gigachad_actions::logic::CalcValue::MouseX { target: None }
+                | gigachad_actions::logic::CalcValue::MouseY { target: None } => {}
+                gigachad_actions::logic::CalcValue::PositionX { target }
+                | gigachad_actions::logic::CalcValue::PositionY { target }
+                | gigachad_actions::logic::CalcValue::MouseX {
+                    target: Some(target),
+                }
+                | gigachad_actions::logic::CalcValue::MouseY {
+                    target: Some(target),
+                } => {
+                    let id = match target {
+                        ElementTarget::Id(id) => Some(*id),
+                        ElementTarget::SelfTarget => Some(id),
+                        ElementTarget::ChildClass(..)
+                        | ElementTarget::LastChild
+                        | ElementTarget::StrId(..) => {
+                            EguiApp::map_element_target(target, id, root, |x| x.id)
                         }
+                    };
+                    log::debug!("add_watch_pos: got id={id:?} for target={target:?}");
+
+                    if let Some(id) = id {
+                        watch_positions.insert(id);
                     }
                 }
             }
@@ -2422,6 +2428,23 @@ impl EguiApp {
                     });
                 log::debug!("calc_value: getting height px for element id={id} height={height:?}");
                 height
+            }
+            CalcValue::PositionX { target } | CalcValue::PositionY { target } => {
+                let position =
+                    Self::map_element_target(target, id, render_context.container, |element| {
+                        render_context.positions.get(&element.id).map(|rect| {
+                            Value::Real(match calc_value {
+                                CalcValue::PositionX { .. } => rect.min.x,
+                                CalcValue::PositionY { .. } => rect.min.y,
+                                _ => unreachable!(),
+                            })
+                        })
+                    })
+                    .flatten();
+                log::debug!(
+                    "calc_value: getting position for element id={id} position={position:?}"
+                );
+                position
             }
             CalcValue::MouseX { target } | CalcValue::MouseY { target } => {
                 let pos = ctx.input(|x| {

@@ -12,6 +12,8 @@ pub enum CalcValue {
     DataAttrValue { attr: String, target: ElementTarget },
     EventValue,
     HeightPx { target: ElementTarget },
+    PositionX { target: ElementTarget },
+    PositionY { target: ElementTarget },
     MouseX { target: Option<ElementTarget> },
     MouseY { target: Option<ElementTarget> },
 }
@@ -348,6 +350,50 @@ pub const fn get_height_px_id(id: usize) -> CalcValue {
 #[must_use]
 pub const fn get_height_px_self() -> CalcValue {
     CalcValue::HeightPx {
+        target: ElementTarget::SelfTarget,
+    }
+}
+
+#[must_use]
+pub fn get_position_x_str_id(str_id: impl Into<String>) -> CalcValue {
+    CalcValue::PositionX {
+        target: ElementTarget::StrId(str_id.into()),
+    }
+}
+
+#[cfg(feature = "id")]
+#[must_use]
+pub const fn get_position_x_id(id: usize) -> CalcValue {
+    CalcValue::PositionX {
+        target: ElementTarget::Id(id),
+    }
+}
+
+#[must_use]
+pub const fn get_position_x_self() -> CalcValue {
+    CalcValue::PositionX {
+        target: ElementTarget::SelfTarget,
+    }
+}
+
+#[must_use]
+pub fn get_position_y_str_id(str_id: impl Into<String>) -> CalcValue {
+    CalcValue::PositionY {
+        target: ElementTarget::StrId(str_id.into()),
+    }
+}
+
+#[cfg(feature = "id")]
+#[must_use]
+pub const fn get_position_y_id(id: usize) -> CalcValue {
+    CalcValue::PositionY {
+        target: ElementTarget::Id(id),
+    }
+}
+
+#[must_use]
+pub const fn get_position_y_self() -> CalcValue {
+    CalcValue::PositionY {
         target: ElementTarget::SelfTarget,
     }
 }
