@@ -12,7 +12,7 @@ pub mod state;
 use albums::album_cover_img_from_album;
 use formatting::TimeFormat;
 use gigachad_actions::{
-    logic::{get_height_px_self, get_mouse_y_self, get_visibility_str_id},
+    logic::{get_height_px_str_id, get_mouse_y_str_id, get_visibility_str_id},
     ActionType,
 };
 use gigachad_transformer_models::Visibility;
@@ -301,19 +301,22 @@ fn volume_slider(size: u16, volume_percent: f64) -> Markup {
             sx-justify-content="center"
             sx-border-radius="100%"
             sx-background="#181a1b"
+            sx-cursor="pointer"
+            fx-click=(
+                get_height_px_str_id("volume-slider-value-container")
+                    .minus(get_mouse_y_str_id("volume-slider-value-container"))
+                    .divide(get_height_px_str_id("volume-slider-value-container"))
+                    .clamp(0.0, 1.0)
+                    .then_pass_to(Action::SetVolume)
+            )
         {
             div
+                id="volume-slider-value-container"
                 sx-position="relative"
                 sx-width=(3)
                 sx-height="100%"
                 sx-border-radius="100%"
                 sx-background="#444"
-                fx-click=(
-                    get_height_px_self()
-                        .minus(get_mouse_y_self())
-                        .divide(get_height_px_self())
-                        .then_pass_to(Action::SetVolume)
-                )
             {
                 (volume_slider_value(size, volume_percent))
             }
