@@ -247,14 +247,18 @@ pub fn player(state: &State) -> Markup {
                             sx-height=(FOOTER_ICON_SIZE)
                             src=(public_img!("sessions-white.svg"));
                     }
-                    button sx-width=(FOOTER_ICON_SIZE) sx-height=(FOOTER_ICON_SIZE) sx-margin-left=(10) {
+                    button
+                        fx-click=(
+                            get_visibility_str_id("play-queue")
+                                .eq(Visibility::Hidden)
+                                .then(ActionType::show_str_id("play-queue"))
+                                .or_else(ActionType::hide_str_id("play-queue"))
+                        )
+                        sx-width=(FOOTER_ICON_SIZE)
+                        sx-height=(FOOTER_ICON_SIZE)
+                        sx-margin-left=(10)
+                    {
                         img
-                            fx-click=(
-                                get_visibility_str_id("play-queue")
-                                    .eq(Visibility::Hidden)
-                                    .then(ActionType::show_str_id("play-queue"))
-                                    .or_else(ActionType::hide_str_id("play-queue"))
-                            )
                             sx-width=(FOOTER_ICON_SIZE)
                             sx-height=(FOOTER_ICON_SIZE)
                             src=(public_img!("playlist-white.svg"));
