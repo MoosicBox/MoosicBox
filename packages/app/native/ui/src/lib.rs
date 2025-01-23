@@ -286,6 +286,7 @@ fn volume(state: &State, size: u16) -> Markup {
 }
 
 fn volume_slider(size: u16, volume_percent: f64) -> Markup {
+    const VOLUME_SLIDER_VALUE_CONTAINER_ID: &str = "volume-slider-value-container";
     html! {
         div
             id="volume-slider"
@@ -303,15 +304,15 @@ fn volume_slider(size: u16, volume_percent: f64) -> Markup {
             sx-background="#181a1b"
             sx-cursor="pointer"
             fx-mouse-down=(
-                get_height_px_str_id("volume-slider-value-container")
-                    .minus(get_mouse_y_str_id("volume-slider-value-container"))
-                    .divide(get_height_px_str_id("volume-slider-value-container"))
+                get_height_px_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID)
+                    .minus(get_mouse_y_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID))
+                    .divide(get_height_px_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID))
                     .clamp(0.0, 1.0)
                     .then_pass_to(Action::SetVolume)
             )
         {
             div
-                id="volume-slider-value-container"
+                id=(VOLUME_SLIDER_VALUE_CONTAINER_ID)
                 sx-position="relative"
                 sx-width=(3)
                 sx-height="100%"
