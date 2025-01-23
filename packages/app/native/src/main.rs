@@ -621,7 +621,7 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
         Action::TogglePlayback
         | Action::PreviousTrack
         | Action::NextTrack
-        | Action::SetVolume(..)
+        | Action::SetVolume { .. }
         | Action::PlayAlbum { .. }
         | Action::AddAlbumToQueue { .. }
         | Action::PlayAlbumStartingAtTrackId { .. }
@@ -735,7 +735,7 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
                         Ok(())
                     }
                 }
-                Action::SetVolume(volume) => {
+                Action::SetVolume { volume } => {
                     STATE
                         .queue_ws_message(
                             InboundPayload::UpdateSession(UpdateSessionPayload {

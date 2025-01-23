@@ -47,7 +47,9 @@ pub enum Action {
     TogglePlayback,
     PreviousTrack,
     NextTrack,
-    SetVolume(f32),
+    SetVolume {
+        volume: f32,
+    },
     PlayAlbum {
         album_id: Id,
         api_source: ApiSource,
