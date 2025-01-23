@@ -621,6 +621,7 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
         Action::TogglePlayback
         | Action::PreviousTrack
         | Action::NextTrack
+        | Action::SetVolume(..)
         | Action::PlayAlbum { .. }
         | Action::AddAlbumToQueue { .. }
         | Action::PlayAlbumStartingAtTrackId { .. }
@@ -733,6 +734,30 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
                     } else {
                         Ok(())
                     }
+                }
+                Action::SetVolume(volume) => {
+                    STATE
+                        .queue_ws_message(
+                            InboundPayload::UpdateSession(UpdateSessionPayload {
+                                payload: UpdateSession {
+                                    session_id: session.session_id,
+                                    profile,
+                                    playback_target,
+                                    play: None,
+                                    stop: None,
+                                    name: None,
+                                    active: None,
+                                    playing: None,
+                                    position: None,
+                                    seek: None,
+                                    volume: Some(f64::from(*volume)),
+                                    playlist: None,
+                                    quality: None,
+                                },
+                            }),
+                            true,
+                        )
+                        .await
                 }
                 Action::PlayAlbum {
                     album_id,
