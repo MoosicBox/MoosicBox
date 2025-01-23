@@ -101,6 +101,12 @@ impl From<Visibility> for Value {
     }
 }
 
+impl From<f32> for Value {
+    fn from(value: f32) -> Self {
+        Self::Real(value)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Condition {
