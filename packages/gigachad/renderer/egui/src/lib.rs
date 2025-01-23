@@ -2278,6 +2278,11 @@ impl EguiApp {
                     CalcValue::GetEventValue => {
                         event_value.map(ToString::to_string).map(Value::String)
                     }
+                    CalcValue::GetHeightPx { target } => {
+                        Self::map_element_target(target, id, render_context.container, |element| {
+                            Value::Real(element.calculated_height.unwrap())
+                        })
+                    }
                 };
 
                 let success = match &eval.condition {
