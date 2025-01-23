@@ -931,6 +931,9 @@ impl Container {
                 gigachad_actions::ActionTrigger::ClickOutside => {
                     attrs.add("fx-click-outside", action.action.to_string());
                 }
+                gigachad_actions::ActionTrigger::MouseDown => {
+                    attrs.add("fx-mouse-down", action.action.to_string());
+                }
                 gigachad_actions::ActionTrigger::Hover => {
                     attrs.add("fx-hover", action.action.to_string());
                 }

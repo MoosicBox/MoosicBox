@@ -2216,6 +2216,45 @@ impl EguiApp {
                             true
                         });
                     }
+                    ActionTrigger::MouseDown => {
+                        #[cfg(feature = "profiling")]
+                        profiling::scope!("mouse down side effects");
+                        let action = fx_action.action.clone();
+                        let id = container.id;
+                        let pointer = ctx.input(|x| x.pointer.clone());
+                        let ctx = ctx.clone();
+                        let responses = responses.clone();
+                        let sender = self.sender.clone();
+                        self.trigger_side_effect(move |render_context| {
+                            if responses
+                                .iter()
+                                .any(|r| Self::rect_contains_mouse(&pointer, r.rect, viewport_rect))
+                                && pointer.primary_down()
+                            {
+                                log::trace!("mouse down action: {action}");
+                                return Self::handle_action(
+                                    &action,
+                                    StyleTrigger::UiEvent,
+                                    render_context,
+                                    &ctx,
+                                    id,
+                                    &sender,
+                                    &request_action,
+                                    None,
+                                    None,
+                                );
+                            }
+
+                            Self::unhandle_action(
+                                &action,
+                                StyleTrigger::UiEvent,
+                                render_context,
+                                id,
+                            );
+
+                            true
+                        });
+                    }
                     ActionTrigger::Hover => {
                         #[cfg(feature = "profiling")]
                         profiling::scope!("hover side effects");

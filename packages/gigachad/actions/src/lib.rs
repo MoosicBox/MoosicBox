@@ -28,6 +28,7 @@ pub enum ElementTarget {
 pub enum ActionTrigger {
     Click,
     ClickOutside,
+    MouseDown,
     Hover,
     Change,
     Event(String),
@@ -41,6 +42,7 @@ impl ActionTrigger {
         match self {
             Self::Click => "Click",
             Self::ClickOutside => "ClickOutside",
+            Self::MouseDown => "MouseDown",
             Self::Hover => "Hover",
             Self::Change => "Change",
             Self::Event(_) => "Event",
