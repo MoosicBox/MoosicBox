@@ -11,7 +11,10 @@ pub mod state;
 
 use albums::album_cover_img_from_album;
 use formatting::TimeFormat;
-use gigachad_actions::{logic::get_visibility_str_id, ActionType};
+use gigachad_actions::{
+    logic::{get_height_px_self, get_mouse_y_self, get_visibility_str_id},
+    ActionType,
+};
 use gigachad_transformer_models::Visibility;
 use maud::{html, Markup};
 use moosicbox_core::sqlite::models::{ApiSource, ApiTrack, Id, TrackApiSource};
@@ -47,9 +50,7 @@ pub enum Action {
     TogglePlayback,
     PreviousTrack,
     NextTrack,
-    SetVolume {
-        volume: f32,
-    },
+    SetVolume,
     PlayAlbum {
         album_id: Id,
         api_source: ApiSource,
@@ -76,6 +77,25 @@ pub enum Action {
         track_ids: Vec<Id>,
         api_source: ApiSource,
     },
+}
+
+impl From<Action> for gigachad_actions::Action {
+    fn from(value: Action) -> Self {
+        Self {
+            trigger: gigachad_actions::ActionTrigger::Immediate,
+            action: ActionType::Custom {
+                action: value.to_string(),
+            },
+        }
+    }
+}
+
+impl From<Action> for ActionType {
+    fn from(value: Action) -> Self {
+        Self::Custom {
+            action: value.to_string(),
+        }
+    }
 }
 
 impl std::fmt::Display for Action {
@@ -288,6 +308,12 @@ fn volume_slider(size: u16, volume_percent: f64) -> Markup {
                 sx-height="100%"
                 sx-border-radius="100%"
                 sx-background="#444"
+                fx-click=(
+                    get_height_px_self()
+                        .minus(get_mouse_y_self())
+                        .divide(get_height_px_self())
+                        .then_pass_to(Action::SetVolume)
+                )
             {
                 (volume_slider_value(size, volume_percent))
             }

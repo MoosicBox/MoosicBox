@@ -2,7 +2,7 @@ use gigachad_transformer_models::Visibility;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::{Action, ElementTarget};
+use crate::{Action, ActionType, ElementTarget};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -12,11 +12,34 @@ pub enum CalcValue {
     GetDataAttrValue { attr: String, target: ElementTarget },
     GetEventValue,
     GetHeightPx { target: ElementTarget },
+    GetMouseX { target: Option<ElementTarget> },
+    GetMouseY { target: Option<ElementTarget> },
 }
 
 impl CalcValue {
+    #[must_use]
     pub fn eq(self, other: impl Into<Value>) -> Condition {
         Condition::Eq(self.into(), other.into())
+    }
+
+    #[must_use]
+    pub fn plus(self, other: impl Into<Value>) -> Arithmetic {
+        Arithmetic::Plus(self.into(), other.into())
+    }
+
+    #[must_use]
+    pub fn minus(self, other: impl Into<Value>) -> Arithmetic {
+        Arithmetic::Minus(self.into(), other.into())
+    }
+
+    #[must_use]
+    pub fn multiply(self, other: impl Into<Value>) -> Arithmetic {
+        Arithmetic::Multiply(self.into(), other.into())
+    }
+
+    #[must_use]
+    pub fn divide(self, other: impl Into<Value>) -> Arithmetic {
+        Arithmetic::Divide(self.into(), other.into())
     }
 }
 
@@ -24,14 +47,28 @@ impl CalcValue {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Value {
     Calc(CalcValue),
+    Arithmetic(Box<Arithmetic>),
     Real(f32),
     Visibility(Visibility),
     String(String),
 }
 
 impl Value {
+    #[must_use]
     pub fn eq(self, other: impl Into<Self>) -> Condition {
         Condition::Eq(self, other.into())
+    }
+
+    #[must_use]
+    pub fn as_f32(&self, calc_func: Option<&impl Fn(&CalcValue) -> Option<Self>>) -> Option<f32> {
+        match self {
+            Self::Arithmetic(x) => x.as_f32(calc_func),
+            Self::Calc(x) => calc_func
+                .and_then(|func| func(x))
+                .and_then(|x| x.as_f32(calc_func)),
+            Self::Real(x) => Some(*x),
+            Self::Visibility(..) | Self::String(..) => None,
+        }
     }
 }
 
@@ -54,6 +91,7 @@ pub enum Condition {
 }
 
 impl Condition {
+    #[must_use]
     pub fn then(self, action: impl Into<Action>) -> If {
         If {
             condition: self,
@@ -62,12 +100,88 @@ impl Condition {
         }
     }
 
+    #[must_use]
     pub fn or_else(self, action: impl Into<Action>) -> If {
         If {
             condition: self,
             actions: vec![],
             else_actions: vec![action.into()],
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ParameterizedAction {
+    action: Action,
+    value: Value,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum Arithmetic {
+    Plus(Value, Value),
+    Minus(Value, Value),
+    Multiply(Value, Value),
+    Divide(Value, Value),
+}
+
+impl Arithmetic {
+    #[must_use]
+    pub fn as_f32(&self, calc_func: Option<&impl Fn(&CalcValue) -> Option<Value>>) -> Option<f32> {
+        match self {
+            Self::Plus(a, b) => a
+                .as_f32(calc_func)
+                .and_then(|a| b.as_f32(calc_func).map(|b| a + b)),
+            Self::Minus(a, b) => a
+                .as_f32(calc_func)
+                .and_then(|a| b.as_f32(calc_func).map(|b| a - b)),
+            Self::Multiply(a, b) => a
+                .as_f32(calc_func)
+                .and_then(|a| b.as_f32(calc_func).map(|b| a * b)),
+            Self::Divide(a, b) => a
+                .as_f32(calc_func)
+                .and_then(|a| b.as_f32(calc_func).map(|b| a / b)),
+        }
+    }
+
+    #[must_use]
+    pub fn eq(self, other: impl Into<Value>) -> Condition {
+        Condition::Eq(self.into(), other.into())
+    }
+
+    #[must_use]
+    pub fn then_pass_to(self, other: impl Into<ActionType>) -> ActionType {
+        ActionType::Parameterized {
+            action: Box::new(other.into()),
+            value: self.into(),
+        }
+    }
+
+    #[must_use]
+    pub fn plus(self, other: impl Into<Value>) -> Self {
+        Self::Plus(self.into(), other.into())
+    }
+
+    #[must_use]
+    pub fn minus(self, other: impl Into<Value>) -> Self {
+        Self::Minus(self.into(), other.into())
+    }
+
+    #[must_use]
+    pub fn multiply(self, other: impl Into<Value>) -> Self {
+        Self::Multiply(self.into(), other.into())
+    }
+
+    #[must_use]
+    pub fn divide(self, other: impl Into<Value>) -> Self {
+        Self::Divide(self.into(), other.into())
+    }
+}
+
+impl From<Arithmetic> for Value {
+    fn from(value: Arithmetic) -> Self {
+        Self::Arithmetic(Box::new(value))
     }
 }
 
@@ -197,5 +311,59 @@ pub const fn get_height_px_id(id: usize) -> CalcValue {
 pub const fn get_height_px_self() -> CalcValue {
     CalcValue::GetHeightPx {
         target: ElementTarget::SelfTarget,
+    }
+}
+
+#[must_use]
+pub const fn get_mouse_x() -> CalcValue {
+    CalcValue::GetMouseX { target: None }
+}
+
+#[must_use]
+pub fn get_mouse_x_str_id(str_id: impl Into<String>) -> CalcValue {
+    CalcValue::GetMouseX {
+        target: Some(ElementTarget::StrId(str_id.into())),
+    }
+}
+
+#[cfg(feature = "id")]
+#[must_use]
+pub const fn get_mouse_x_id(id: usize) -> CalcValue {
+    CalcValue::GetMouseX {
+        target: Some(ElementTarget::Id(id)),
+    }
+}
+
+#[must_use]
+pub const fn get_mouse_x_self() -> CalcValue {
+    CalcValue::GetMouseX {
+        target: Some(ElementTarget::SelfTarget),
+    }
+}
+
+#[must_use]
+pub const fn get_mouse_y() -> CalcValue {
+    CalcValue::GetMouseY { target: None }
+}
+
+#[must_use]
+pub fn get_mouse_y_str_id(str_id: impl Into<String>) -> CalcValue {
+    CalcValue::GetMouseY {
+        target: Some(ElementTarget::StrId(str_id.into())),
+    }
+}
+
+#[cfg(feature = "id")]
+#[must_use]
+pub const fn get_mouse_y_id(id: usize) -> CalcValue {
+    CalcValue::GetMouseY {
+        target: Some(ElementTarget::Id(id)),
+    }
+}
+
+#[must_use]
+pub const fn get_mouse_y_self() -> CalcValue {
+    CalcValue::GetMouseY {
+        target: Some(ElementTarget::SelfTarget),
     }
 }

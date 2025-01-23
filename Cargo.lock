@@ -3840,6 +3840,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "flume",
+ "gigachad_actions",
  "gigachad_renderer",
  "gigachad_renderer_html",
  "gigachad_router",
@@ -3883,6 +3884,7 @@ dependencies = [
  "bytes",
  "fltk",
  "flume",
+ "gigachad_actions",
  "gigachad_renderer",
  "gigachad_transformer",
  "image",
@@ -3904,6 +3906,7 @@ dependencies = [
  "actix-web",
  "async-trait",
  "flume",
+ "gigachad_actions",
  "gigachad_renderer",
  "gigachad_router",
  "gigachad_transformer",
@@ -3923,6 +3926,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "flume",
+ "gigachad_actions",
  "gigachad_renderer",
  "gigachad_renderer_html",
  "gigachad_router",
@@ -3937,6 +3941,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "flume",
+ "gigachad_actions",
  "gigachad_renderer",
  "gigachad_renderer_html",
  "gigachad_router",
@@ -6043,6 +6048,7 @@ version = "0.1.0"
 dependencies = [
  "console-subscriber",
  "flume",
+ "gigachad_actions",
  "log",
  "moosicbox_app_native_bundled",
  "moosicbox_app_native_lib",
@@ -6096,6 +6102,7 @@ name = "moosicbox_app_native_lib"
 version = "0.1.0"
 dependencies = [
  "flume",
+ "gigachad_actions",
  "gigachad_renderer",
  "gigachad_renderer_datastar",
  "gigachad_renderer_egui",

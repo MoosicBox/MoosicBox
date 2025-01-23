@@ -8,6 +8,7 @@ use std::{
 
 use async_trait::async_trait;
 use flume::Sender;
+use gigachad_actions::logic::Value;
 use gigachad_renderer::{canvas::CanvasUpdate, Color, PartialView, RenderRunner, Renderer, View};
 use gigachad_renderer_html::{
     html::{element_classes_to_html, element_style_to_html, HtmlTagRenderer},
@@ -85,7 +86,11 @@ pub struct DatastarRenderer {
 
 impl DatastarRenderer {
     #[must_use]
-    pub fn new(router: Router, runtime: Arc<Runtime>, request_action: Sender<String>) -> Self {
+    pub fn new(
+        router: Router,
+        runtime: Arc<Runtime>,
+        request_action: Sender<(String, Option<Value>)>,
+    ) -> Self {
         Self {
             html_renderer: HtmlRenderer::new_with_tag_renderer(
                 router,

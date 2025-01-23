@@ -14,6 +14,7 @@ use std::{
 };
 
 use flume::SendError;
+use gigachad_actions::logic::Value;
 use moosicbox_app_native_lib::{
     renderer::{Color, PartialView, Renderer, View},
     router::{Container, RouteRequest, Router},
@@ -480,9 +481,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_router(router)
         .with_runtime_arc(runtime.clone())
         .with_background(Color::from_hex("#181a1b"))
-        .with_action_handler(move |x| {
-            Ok::<_, SendError<Action>>(if let Ok(action) = Action::try_from(x) {
-                action_tx.send(action)?;
+        .with_action_handler(move |x, value| {
+            Ok::<_, SendError<(Action, Option<Value>)>>(if let Ok(action) = Action::try_from(x) {
+                action_tx.send((action, value.cloned()))?;
                 true
             } else {
                 false
@@ -527,8 +528,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut runner = runner_runtime.block_on(async move {
         moosicbox_task::spawn("native app action listener", async move {
-            while let Ok(action) = action_rx.recv_async().await {
-                if let Err(e) = handle_action(action).await {
+            while let Ok((action, value)) = action_rx.recv_async().await {
+                if let Err(e) = handle_action(action, value).await {
                     log::error!("Failed to handle action: {e:?}");
                 };
             }
@@ -614,14 +615,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[allow(clippy::too_many_lines)]
-async fn handle_action(action: Action) -> Result<(), AppStateError> {
+async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppStateError> {
     log::debug!("handle_action: {action:?}");
 
     match &action {
         Action::TogglePlayback
         | Action::PreviousTrack
         | Action::NextTrack
-        | Action::SetVolume { .. }
+        | Action::SetVolume
         | Action::PlayAlbum { .. }
         | Action::AddAlbumToQueue { .. }
         | Action::PlayAlbumStartingAtTrackId { .. }
@@ -735,7 +736,16 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
                         Ok(())
                     }
                 }
-                Action::SetVolume { volume } => {
+                Action::SetVolume => {
+                    log::debug!("SetVolume: {value:?}");
+                    let volume = value
+                        .expect("Missing volume value")
+                        .as_f32(
+                            None::<
+                                &Box<dyn Fn(&gigachad_actions::logic::CalcValue) -> Option<Value>>,
+                            >,
+                        )
+                        .expect("Invalid volume value");
                     STATE
                         .queue_ws_message(
                             InboundPayload::UpdateSession(UpdateSessionPayload {
@@ -750,7 +760,7 @@ async fn handle_action(action: Action) -> Result<(), AppStateError> {
                                     playing: None,
                                     position: None,
                                     seek: None,
-                                    volume: Some(f64::from(*volume)),
+                                    volume: Some(f64::from(volume)),
                                     playlist: None,
                                     quality: None,
                                 },

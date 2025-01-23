@@ -97,6 +97,11 @@ pub enum ActionType {
     },
     Multi(Vec<ActionType>),
     #[cfg(feature = "logic")]
+    Parameterized {
+        action: Box<ActionType>,
+        value: logic::Value,
+    },
+    #[cfg(feature = "logic")]
     Logic(logic::If),
 }
 

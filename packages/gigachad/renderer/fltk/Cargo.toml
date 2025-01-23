@@ -11,6 +11,9 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
+gigachad_actions = { version = "0.1.0", path = "../../actions", default-features = false, features = [
+    "logic",
+] }
 gigachad_renderer = { version = "0.1.0", path = "../", default-features = false, features = [
     "canvas",
     "viewport-retained",

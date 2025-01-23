@@ -26,6 +26,7 @@ use fltk::{
     window::{DoubleWindow, Window},
 };
 use flume::{Receiver, Sender};
+use gigachad_actions::logic::Value;
 use gigachad_renderer::viewport::retained::{
     Viewport, ViewportListener, ViewportPosition, WidgetPosition,
 };
@@ -115,12 +116,12 @@ pub struct FltkRenderer {
     sender: Sender<String>,
     receiver: Receiver<String>,
     #[allow(unused)]
-    request_action: Sender<String>,
+    request_action: Sender<(String, Option<Value>)>,
 }
 
 impl FltkRenderer {
     #[must_use]
-    pub fn new(request_action: Sender<String>) -> Self {
+    pub fn new(request_action: Sender<(String, Option<Value>)>) -> Self {
         let (tx, rx) = flume::unbounded();
         Self {
             app: None,

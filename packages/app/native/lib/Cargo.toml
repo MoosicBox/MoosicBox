@@ -11,17 +11,20 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-gigachad_renderer            = { version = "0.1.0", path = "../../../gigachad/renderer", default-features = false }
-gigachad_renderer_datastar   = { version = "0.1.0", path = "../../../gigachad/renderer/datastar", optional = true, default-features = false }
-gigachad_renderer_egui       = { version = "0.1.0", path = "../../../gigachad/renderer/egui", optional = true, default-features = false }
-gigachad_renderer_fltk       = { version = "0.1.0", path = "../../../gigachad/renderer/fltk", optional = true, default-features = false }
-gigachad_renderer_html       = { version = "0.1.0", path = "../../../gigachad/renderer/html", optional = true, default-features = false }
-gigachad_renderer_htmx       = { version = "0.1.0", path = "../../../gigachad/renderer/htmx", optional = true, default-features = false }
+gigachad_actions = { version = "0.1.0", path = "../../../gigachad/actions", default-features = false, features = [
+    "logic",
+] }
+gigachad_renderer = { version = "0.1.0", path = "../../../gigachad/renderer", default-features = false }
+gigachad_renderer_datastar = { version = "0.1.0", path = "../../../gigachad/renderer/datastar", optional = true, default-features = false }
+gigachad_renderer_egui = { version = "0.1.0", path = "../../../gigachad/renderer/egui", optional = true, default-features = false }
+gigachad_renderer_fltk = { version = "0.1.0", path = "../../../gigachad/renderer/fltk", optional = true, default-features = false }
+gigachad_renderer_html = { version = "0.1.0", path = "../../../gigachad/renderer/html", optional = true, default-features = false }
+gigachad_renderer_htmx = { version = "0.1.0", path = "../../../gigachad/renderer/htmx", optional = true, default-features = false }
 gigachad_renderer_vanilla_js = { version = "0.1.0", path = "../../../gigachad/renderer/vanilla_js", optional = true, default-features = false }
-gigachad_router              = { version = "0.1.0", path = "../../../gigachad/router", default-features = false }
-moosicbox_assert             = { version = "0.1.0", path = "../../../assert", default-features = false }
-moosicbox_env_utils          = { version = "0.1.0", path = "../../../env_utils", default-features = false }
-moosicbox_task               = { version = "0.1.0", path = "../../../task", default-features = false }
+gigachad_router = { version = "0.1.0", path = "../../../gigachad/router", default-features = false }
+moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
+moosicbox_env_utils = { version = "0.1.0", path = "../../../env_utils", default-features = false }
+moosicbox_task = { version = "0.1.0", path = "../../../task", default-features = false }
 
 flume     = { workspace = true }
 log       = { workspace = true }

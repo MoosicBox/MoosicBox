@@ -14,7 +14,12 @@ version     = "0.1.0"
 ignored = ["image"]
 
 [dependencies]
-gigachad_renderer = { version = "0.1.0", path = "..", default-features = false,features = ["canvas"] }
+gigachad_actions = { version = "0.1.0", path = "../../actions", default-features = false, features = [
+    "logic",
+] }
+gigachad_renderer = { version = "0.1.0", path = "..", default-features = false, features = [
+    "canvas",
+] }
 gigachad_renderer_html = { version = "0.1.0", path = "../html", default-features = false }
 gigachad_router = { version = "0.1.0", path = "../../../gigachad/router", default-features = false }
 gigachad_transformer = { version = "0.1.0", path = "../../transformer", default-features = false, features = [

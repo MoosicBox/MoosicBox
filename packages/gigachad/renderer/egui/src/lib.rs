@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     sync::{Arc, LazyLock, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use canvas::CanvasAction;
 use eframe::egui::{self, Color32, CursorIcon, Response, Ui, Widget};
 use flume::{Receiver, Sender};
-use gigachad_actions::{ActionTrigger, ActionType, ElementTarget, StyleAction};
+use gigachad_actions::{logic::Value, ActionTrigger, ActionType, ElementTarget, StyleAction};
 use gigachad_renderer::canvas::CanvasUpdate;
 use gigachad_renderer::viewport::immediate::{Pos, Viewport, ViewportListener};
 pub use gigachad_renderer::*;
@@ -47,7 +47,7 @@ impl EguiRenderer {
     #[must_use]
     pub fn new(
         router: Router,
-        request_action: Sender<String>,
+        request_action: Sender<(String, Option<Value>)>,
         on_resize: Sender<(f32, f32)>,
     ) -> Self {
         let (tx, rx) = flume::unbounded();
@@ -125,6 +125,128 @@ impl RenderRunner for EguiRenderRunner {
         log::debug!("run: finished");
 
         Ok(())
+    }
+}
+
+#[allow(clippy::too_many_lines)]
+fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut HashSet<usize>) {
+    fn check_value(
+        value: &Value,
+        root: &Container,
+        watch_positions: &mut HashSet<usize>,
+        id: usize,
+    ) {
+        fn check_calc_value(
+            calc: &gigachad_actions::logic::CalcValue,
+            root: &Container,
+            watch_positions: &mut HashSet<usize>,
+            id: usize,
+        ) {
+            match calc {
+                gigachad_actions::logic::CalcValue::GetVisibility { .. }
+                | gigachad_actions::logic::CalcValue::GetId { .. }
+                | gigachad_actions::logic::CalcValue::GetDataAttrValue { .. }
+                | gigachad_actions::logic::CalcValue::GetEventValue
+                | gigachad_actions::logic::CalcValue::GetHeightPx { .. } => {}
+                gigachad_actions::logic::CalcValue::GetMouseX { target }
+                | gigachad_actions::logic::CalcValue::GetMouseY { target } => {
+                    if let Some(target) = target {
+                        let id = match target {
+                            ElementTarget::Id(id) => Some(*id),
+                            ElementTarget::SelfTarget => Some(id),
+                            ElementTarget::ChildClass(..)
+                            | ElementTarget::LastChild
+                            | ElementTarget::StrId(..) => {
+                                EguiApp::map_element_target(target, id, root, |x| x.id)
+                            }
+                        };
+                        log::debug!("add_watch_pos: got id={id:?} for target={target:?}");
+
+                        if let Some(id) = id {
+                            watch_positions.insert(id);
+                        }
+                    }
+                }
+            }
+        }
+
+        match value {
+            Value::Calc(calc_value) => {
+                check_calc_value(calc_value, root, watch_positions, id);
+            }
+            Value::Arithmetic(arithmetic) => {
+                fn check_arithmetic(
+                    arithmetic: &gigachad_actions::logic::Arithmetic,
+                    root: &Container,
+                    watch_positions: &mut HashSet<usize>,
+                    id: usize,
+                ) {
+                    match arithmetic {
+                        gigachad_actions::logic::Arithmetic::Plus(a, b)
+                        | gigachad_actions::logic::Arithmetic::Minus(a, b)
+                        | gigachad_actions::logic::Arithmetic::Multiply(a, b)
+                        | gigachad_actions::logic::Arithmetic::Divide(a, b) => {
+                            check_value(a, root, watch_positions, id);
+                            check_value(b, root, watch_positions, id);
+                        }
+                    }
+                }
+
+                check_arithmetic(arithmetic, root, watch_positions, id);
+            }
+            Value::Real(..) | Value::Visibility(..) | Value::String(..) => {}
+        }
+    }
+
+    fn check_action(
+        action: &gigachad_actions::ActionType,
+        root: &Container,
+        watch_positions: &mut HashSet<usize>,
+        id: usize,
+    ) {
+        match action {
+            ActionType::Logic(logic) => {
+                log::debug!("checking logic {logic:?}");
+                match &logic.condition {
+                    gigachad_actions::logic::Condition::Eq(a, b) => {
+                        check_value(a, root, watch_positions, id);
+                        check_value(b, root, watch_positions, id);
+                    }
+                }
+
+                for action in &logic.actions {
+                    check_action(&action.action, root, watch_positions, id);
+                }
+                for action in &logic.else_actions {
+                    check_action(&action.action, root, watch_positions, id);
+                }
+            }
+            ActionType::Style { .. }
+            | ActionType::Navigate { .. }
+            | ActionType::Log { .. }
+            | ActionType::Custom { .. } => {}
+            ActionType::Parameterized { action, value } => {
+                check_value(value, root, watch_positions, id);
+                check_action(action, root, watch_positions, id);
+            }
+            ActionType::Event { action, .. } => {
+                check_action(action, root, watch_positions, id);
+            }
+            ActionType::Multi(actions) => {
+                for action in actions {
+                    check_action(action, root, watch_positions, id);
+                }
+            }
+        }
+    }
+
+    for action in &container.actions {
+        log::debug!("checking action {action:?}");
+        check_action(&action.action, root, watch_positions, container.id);
+    }
+
+    for element in &container.children {
+        add_watch_pos(root, element, watch_positions);
     }
 }
 
@@ -215,17 +337,29 @@ impl Renderer for EguiRenderer {
                 ("render: start"),
                 ("render: start {:?}", view.immediate)
             );
-            let mut elements = view.immediate;
+            let mut element = view.immediate;
 
-            elements.calculated_width = app.width.read().unwrap().or(width);
-            elements.calculated_height = app.height.read().unwrap().or(height);
-            elements.calc();
-            *app.container.write().unwrap() = elements;
+            element.calculated_width = app.width.read().unwrap().or(width);
+            element.calculated_height = app.height.read().unwrap().or(height);
+            element.calc();
+
+            {
+                let mut watch_positions = app.watch_positions.write().unwrap();
+
+                watch_positions.clear();
+
+                add_watch_pos(&element, &element, &mut watch_positions);
+
+                drop(watch_positions);
+            }
+
+            *app.container.write().unwrap() = element;
             app.images.write().unwrap().clear();
             app.backgrounds.write().unwrap().clear();
             app.viewport_listeners.write().unwrap().clear();
             app.route_requests.write().unwrap().clear();
             app.checkboxes.write().unwrap().clear();
+            app.positions.write().unwrap().clear();
 
             log::debug!("render: finished");
             if let Some(ctx) = &*app.ctx.read().unwrap() {
@@ -267,9 +401,15 @@ impl Renderer for EguiRenderer {
                 .iter()
                 .map(|x| x.id)
                 .collect::<Vec<_>>();
+
             if let Some(removed) =
                 page.replace_str_id_with_elements(view.container.children, &view.target, true)
             {
+                let mut watch_positions = app.watch_positions.write().unwrap();
+                watch_positions.clear();
+                add_watch_pos(&page, &page, &mut watch_positions);
+                drop(watch_positions);
+
                 let mut visibilities = app.visibilities.write().unwrap();
                 if let Some(visibility) = visibilities.remove(&removed.id) {
                     for id in &ids {
@@ -284,6 +424,7 @@ impl Renderer for EguiRenderer {
                     }
                 }
                 drop(backgrounds);
+
                 drop(page);
                 if let Some(ctx) = &*app.ctx.read().unwrap() {
                     ctx.request_repaint();
@@ -396,6 +537,8 @@ struct RenderContext<'a> {
     displays: &'a mut HashMap<usize, bool>,
     backgrounds: &'a mut HashMap<usize, Vec<StyleOverride<Option<Color>>>>,
     checkboxes: &'a mut HashMap<egui::Id, bool>,
+    positions: &'a mut HashMap<usize, egui::Rect>,
+    watch_positions: &'a mut HashSet<usize>,
 }
 
 #[allow(clippy::type_complexity)]
@@ -416,9 +559,11 @@ struct EguiApp {
     displays: Arc<RwLock<HashMap<usize, bool>>>,
     backgrounds: Arc<RwLock<HashMap<usize, Vec<StyleOverride<Option<Color>>>>>>,
     checkboxes: Arc<RwLock<HashMap<egui::Id, bool>>>,
+    positions: Arc<RwLock<HashMap<usize, egui::Rect>>>,
+    watch_positions: Arc<RwLock<HashSet<usize>>>,
     router: Router,
     background: Option<Color32>,
-    request_action: Sender<String>,
+    request_action: Sender<(String, Option<Value>)>,
     on_resize: Sender<(f32, f32)>,
     side_effects: Arc<Mutex<VecDeque<Handler>>>,
     event_handlers: Arc<RwLock<Vec<(String, EventHandler)>>>,
@@ -433,7 +578,7 @@ impl EguiApp {
         sender: Sender<String>,
         event: Sender<AppEvent>,
         event_receiver: Receiver<AppEvent>,
-        request_action: Sender<String>,
+        request_action: Sender<(String, Option<Value>)>,
         on_resize: Sender<(f32, f32)>,
     ) -> Self {
         Self {
@@ -452,6 +597,8 @@ impl EguiApp {
             displays: Arc::new(RwLock::new(HashMap::new())),
             backgrounds: Arc::new(RwLock::new(HashMap::new())),
             checkboxes: Arc::new(RwLock::new(HashMap::new())),
+            positions: Arc::new(RwLock::new(HashMap::new())),
+            watch_positions: Arc::new(RwLock::new(HashSet::new())),
             router,
             background: None,
             request_action,
@@ -476,6 +623,8 @@ impl EguiApp {
         let mut displays = self.displays.write().unwrap();
         let mut backgrounds = self.backgrounds.write().unwrap();
         let mut checkboxes = self.checkboxes.write().unwrap();
+        let mut positions = self.positions.write().unwrap();
+        let mut watch_positions = self.watch_positions.write().unwrap();
 
         let mut render_context = RenderContext {
             container: &container,
@@ -487,6 +636,8 @@ impl EguiApp {
             backgrounds: &mut backgrounds,
             displays: &mut displays,
             checkboxes: &mut checkboxes,
+            positions: &mut positions,
+            watch_positions: &mut watch_positions,
         };
 
         let ctx = self.ctx.read().unwrap().clone();
@@ -843,7 +994,8 @@ impl EguiApp {
         }
 
         if let Some(rect) = rect {
-            let render_rect = Self::get_render_rect(ui, container, relative_container);
+            let render_rect =
+                Self::get_render_rect(render_context, ui, container, relative_container);
             let width = render_rect.width()
                 + container.horizontal_padding().unwrap_or(0.0)
                 + container.horizontal_margin().unwrap_or(0.0);
@@ -901,6 +1053,11 @@ impl EguiApp {
         if container.debug == Some(true) {
             log::info!("render_container: DEBUG {container}");
         }
+
+        if render_context.watch_positions.contains(&container.id) {
+            Self::get_render_rect(render_context, ui, container, relative_container);
+        }
+
         if container.is_hidden() || Self::container_hidden(render_context, container) {
             log::trace!("render_container: container is hidden. skipping render");
             self.handle_container_side_effects(
@@ -1221,13 +1378,14 @@ impl EguiApp {
 
     #[cfg_attr(feature = "profiling", profiling::function)]
     fn get_render_rect(
+        render_context: &mut RenderContext,
         ui: &Ui,
         container: &Container,
         relative_container: Option<(egui::Rect, &Container)>,
     ) -> egui::Rect {
         if container.position == Some(Position::Absolute) {
             if let Some((relative_rect, ..)) = relative_container {
-                return relative_rect
+                let rect = relative_rect
                     .with_min_x(relative_rect.min.x + container.calculated_x.unwrap())
                     .with_min_y(relative_rect.min.y + container.calculated_y.unwrap())
                     .with_max_x(
@@ -1240,6 +1398,12 @@ impl EguiApp {
                             + container.calculated_y.unwrap()
                             + container.bounding_calculated_height().unwrap(),
                     );
+
+                if render_context.watch_positions.contains(&container.id) {
+                    render_context.positions.insert(container.id, rect);
+                }
+
+                return rect;
             }
         }
 
@@ -1248,21 +1412,28 @@ impl EguiApp {
             "Container size not properly calculated: {container}"
         );
 
-        egui::Rect::from_min_size(
+        let rect = egui::Rect::from_min_size(
             ui.cursor().left_top(),
             egui::vec2(
                 container.calculated_width.unwrap(),
                 container.calculated_height.unwrap(),
             ),
-        )
+        );
+
+        if render_context.watch_positions.contains(&container.id) {
+            render_context.positions.insert(container.id, rect);
+        }
+
+        rect
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_position<'a>(
+        render_context: &mut RenderContext,
         ui: &mut Ui,
         container: &'a Container,
         mut relative_container: Option<(egui::Rect, &'a Container)>,
-        inner: impl FnOnce(&mut Ui, Option<(egui::Rect, &'a Container)>) -> Response,
+        inner: impl FnOnce(&mut RenderContext, &mut Ui, Option<(egui::Rect, &'a Container)>) -> Response,
     ) -> Response {
         match container.position {
             Some(Position::Relative) => {
@@ -1274,14 +1445,17 @@ impl EguiApp {
                 relative_container = Some((egui::Rect::from_min_size(pos, size), container));
             }
             Some(Position::Absolute) => {
-                let abs_rect = Self::get_render_rect(ui, container, relative_container);
+                let abs_rect =
+                    Self::get_render_rect(render_context, ui, container, relative_container);
 
-                return ui.put(abs_rect, |ui: &mut egui::Ui| inner(ui, relative_container));
+                return ui.put(abs_rect, |ui: &mut egui::Ui| {
+                    inner(render_context, ui, relative_container)
+                });
             }
             Some(Position::Static) | None => {}
         }
 
-        inner(ui, relative_container)
+        inner(render_context, ui, relative_container)
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
@@ -1502,10 +1676,11 @@ impl EguiApp {
         vscroll: bool,
     ) -> Response {
         Self::render_position(
+            render_context,
             ui,
             container,
             relative_container,
-            |ui, relative_container| {
+            |render_context, ui, relative_container| {
                 let mut frame = egui::Frame::none().inner_margin(egui::Margin {
                     left: container.calculated_padding_left.unwrap_or(0.0),
                     right: container.calculated_padding_right.unwrap_or(0.0),
@@ -1998,6 +2173,7 @@ impl EguiApp {
                         let action = fx_action.action.clone();
                         let id = container.id;
                         let pointer = ctx.input(|x| x.pointer.clone());
+                        let ctx = ctx.clone();
                         let responses = responses.clone();
                         let sender = self.sender.clone();
                         self.trigger_side_effect(move |render_context| {
@@ -2012,9 +2188,11 @@ impl EguiApp {
                                     &action,
                                     StyleTrigger::UiEvent,
                                     render_context,
+                                    &ctx,
                                     id,
                                     &sender,
                                     &request_action,
+                                    None,
                                     None,
                                 );
                                 return !inside;
@@ -2037,6 +2215,7 @@ impl EguiApp {
                         let id = container.id;
                         let responses = responses.clone();
                         let pointer = ctx.input(|x| x.pointer.clone());
+                        let ctx = ctx.clone();
                         let sender = self.sender.clone();
                         self.trigger_side_effect(move |render_context| {
                             if responses
@@ -2048,9 +2227,11 @@ impl EguiApp {
                                     &action,
                                     StyleTrigger::UiEvent,
                                     render_context,
+                                    &ctx,
                                     id,
                                     &sender,
                                     &request_action,
+                                    None,
                                     None,
                                 );
                             }
@@ -2071,6 +2252,7 @@ impl EguiApp {
                         let action = fx_action.action.clone();
                         let id = container.id;
                         let responses = responses.clone();
+                        let ctx = ctx.clone();
                         let sender = self.sender.clone();
                         self.trigger_side_effect(move |render_context| {
                             if responses.iter().any(Response::changed) {
@@ -2079,9 +2261,11 @@ impl EguiApp {
                                     &action,
                                     StyleTrigger::UiEvent,
                                     render_context,
+                                    &ctx,
                                     id,
                                     &sender,
                                     &request_action,
+                                    None,
                                     None,
                                 );
                             }
@@ -2108,16 +2292,19 @@ impl EguiApp {
                 let request_action = self.request_action.clone();
                 let action = fx_action.action.clone();
                 let id = container.id;
+                let ctx = self.ctx.read().unwrap().clone().unwrap();
                 let sender = self.sender.clone();
                 self.add_event_handler(event_name.to_string(), move |render_context, value| {
                     Self::handle_action(
                         &action,
                         StyleTrigger::CustomEvent,
                         render_context,
+                        &ctx,
                         id,
                         &sender,
                         &request_action,
                         value,
+                        None,
                     );
                 });
             }
@@ -2190,16 +2377,109 @@ impl EguiApp {
         }
     }
 
+    fn calc_value(
+        x: &Value,
+        render_context: &mut RenderContext,
+        ctx: &egui::Context,
+        id: usize,
+        event_value: Option<&str>,
+    ) -> Option<Value> {
+        use gigachad_actions::logic::{CalcValue, Value};
+
+        let calc_func = |calc_value: &CalcValue| match calc_value {
+            CalcValue::GetVisibility { target } => Some(Value::Visibility(
+                Self::map_element_target(target, id, render_context.container, |element| {
+                    render_context
+                        .visibilities
+                        .get(&element.id)
+                        .copied()
+                        .or(element.visibility)
+                        .unwrap_or_default()
+                })
+                .unwrap_or_default(),
+            )),
+            CalcValue::GetId { target } => {
+                Self::map_element_target(target, id, render_context.container, |element| {
+                    element.str_id.clone()
+                })
+                .flatten()
+                .map(Value::String)
+            }
+            CalcValue::GetDataAttrValue { attr, target } => {
+                Self::map_element_target(target, id, render_context.container, |element| {
+                    element.data.get(attr).cloned()
+                })
+                .flatten()
+                .map(Value::String)
+            }
+            CalcValue::GetEventValue => event_value.map(ToString::to_string).map(Value::String),
+            CalcValue::GetHeightPx { target } => {
+                let height =
+                    Self::map_element_target(target, id, render_context.container, |element| {
+                        Value::Real(element.calculated_height.unwrap())
+                    });
+                log::debug!("calc_value: getting height px for element id={id} height={height:?}");
+                height
+            }
+            CalcValue::GetMouseX { target } | CalcValue::GetMouseY { target } => {
+                let pos = ctx.input(|x| {
+                    x.pointer.latest_pos().map_or(0.0, |x| match calc_value {
+                        CalcValue::GetMouseX { .. } => x.x,
+                        CalcValue::GetMouseY { .. } => x.y,
+                        _ => unreachable!(),
+                    })
+                });
+                if let Some(target) = target {
+                    let position =
+                        Self::map_element_target(target, id, render_context.container, |element| {
+                            render_context.positions.get(&element.id).map(|rect| {
+                                Value::Real(
+                                    pos - match calc_value {
+                                        CalcValue::GetMouseX { .. } => rect.min.x,
+                                        CalcValue::GetMouseY { .. } => rect.min.y,
+                                        _ => unreachable!(),
+                                    },
+                                )
+                            })
+                        })
+                        .flatten();
+                    log::debug!(
+                        "calc_value: getting position for element id={id} position={position:?}"
+                    );
+                    position
+                } else {
+                    let global_position = Some(Value::Real(pos));
+                    log::debug!("calc_value: got global_position={global_position:?}");
+                    global_position
+                }
+            }
+        };
+
+        log::debug!("calc_value: calculating {x:?}");
+
+        match x {
+            Value::Calc(x) => calc_func(x),
+            Value::Arithmetic(x) => x.as_f32(Some(&calc_func)).map(Value::Real),
+            Value::Real(..) | Value::Visibility(..) | Value::String(..) => Some(x.clone()),
+        }
+    }
+
     #[cfg_attr(feature = "profiling", profiling::function)]
-    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+    #[allow(
+        clippy::too_many_lines,
+        clippy::cognitive_complexity,
+        clippy::too_many_arguments
+    )]
     fn handle_action(
         action: &ActionType,
         trigger: StyleTrigger,
         render_context: &mut RenderContext,
+        ctx: &egui::Context,
         id: usize,
         sender: &Sender<String>,
-        request_action: &Sender<String>,
+        request_action: &Sender<(String, Option<Value>)>,
         event_value: Option<&str>,
+        value: Option<&Value>,
     ) -> bool {
         log::trace!("handle_action: action={action}");
         match &action {
@@ -2241,75 +2521,24 @@ impl EguiApp {
                 true
             }
             ActionType::Custom { action } => {
-                if let Err(e) = request_action.send(action.clone()) {
+                if let Err(e) = request_action.send((action.clone(), value.cloned())) {
                     moosicbox_assert::die_or_error!("Failed to request action: {action} ({e:?})");
                 }
                 true
             }
             ActionType::Logic(eval) => {
-                use gigachad_actions::logic::{CalcValue, Condition, Value};
-
-                let calc_func = |calc_value: &CalcValue| match calc_value {
-                    CalcValue::GetVisibility { target } => Some(Value::Visibility(
-                        Self::map_element_target(target, id, render_context.container, |element| {
-                            render_context
-                                .visibilities
-                                .get(&element.id)
-                                .copied()
-                                .or(element.visibility)
-                                .unwrap_or_default()
-                        })
-                        .unwrap_or_default(),
-                    )),
-                    CalcValue::GetId { target } => {
-                        Self::map_element_target(target, id, render_context.container, |element| {
-                            element.str_id.clone()
-                        })
-                        .flatten()
-                        .map(Value::String)
-                    }
-                    CalcValue::GetDataAttrValue { attr, target } => {
-                        Self::map_element_target(target, id, render_context.container, |element| {
-                            element.data.get(attr).cloned()
-                        })
-                        .flatten()
-                        .map(Value::String)
-                    }
-                    CalcValue::GetEventValue => {
-                        event_value.map(ToString::to_string).map(Value::String)
-                    }
-                    CalcValue::GetHeightPx { target } => {
-                        Self::map_element_target(target, id, render_context.container, |element| {
-                            Value::Real(element.calculated_height.unwrap())
-                        })
-                    }
-                };
+                use gigachad_actions::logic::Condition;
 
                 let success = match &eval.condition {
                     Condition::Eq(a, b) => {
                         log::debug!("handle_action: checking eq a={a:?} b={b:?}");
 
-                        if let Value::Calc(calc_value) = a {
-                            if let Value::Calc(b_calc_value) = b {
-                                let a = calc_func(calc_value);
-                                let b = calc_func(b_calc_value);
-                                log::debug!("handle_action: inner checking eq a={a:?} b={b:?}");
-                                a == b
-                            } else {
-                                calc_func(calc_value).is_some_and(|a| {
-                                    log::debug!("handle_action: inner checking eq a={a:?} b={b:?}");
-                                    &a == b
-                                })
-                            }
-                        } else if let Value::Calc(calc_value) = b {
-                            calc_func(calc_value).is_some_and(|b| {
-                                log::debug!("handle_action: inner checking eq a={a:?} b={b:?}");
-                                a == &b
-                            })
-                        } else {
-                            log::debug!("handle_action: inner checking eq a={a:?} b={b:?}");
-                            a == b
-                        }
+                        let a = Self::calc_value(a, render_context, ctx, id, event_value);
+                        let b = Self::calc_value(b, render_context, ctx, id, event_value);
+
+                        log::debug!("handle_action: inner checking eq a={a:?} b={b:?}");
+
+                        a == b
                     }
                 };
 
@@ -2324,10 +2553,12 @@ impl EguiApp {
                             &action.action,
                             trigger,
                             render_context,
+                            ctx,
                             id,
                             sender,
                             request_action,
                             event_value,
+                            value,
                         ) {
                             return false;
                         }
@@ -2341,10 +2572,12 @@ impl EguiApp {
                             &action.action,
                             trigger,
                             render_context,
+                            ctx,
                             id,
                             sender,
                             request_action,
                             event_value,
+                            value,
                         ) {
                             return false;
                         }
@@ -2363,16 +2596,32 @@ impl EguiApp {
                         action,
                         trigger,
                         render_context,
+                        ctx,
                         id,
                         sender,
                         request_action,
                         event_value,
+                        value,
                     ) {
                         return false;
                     }
                 }
 
                 true
+            }
+            ActionType::Parameterized { action, value } => {
+                let value = Self::calc_value(value, render_context, ctx, id, event_value);
+                Self::handle_action(
+                    action,
+                    trigger,
+                    render_context,
+                    ctx,
+                    id,
+                    sender,
+                    request_action,
+                    event_value,
+                    value.as_ref(),
+                )
             }
         }
     }
@@ -2426,6 +2675,9 @@ impl EguiApp {
                 for action in actions {
                     Self::unhandle_action(action, trigger, render_context, id);
                 }
+            }
+            ActionType::Parameterized { action, .. } => {
+                Self::unhandle_action(action, trigger, render_context, id);
             }
             ActionType::Navigate { .. }
             | ActionType::Log { .. }
@@ -3090,6 +3342,8 @@ impl EguiApp {
         let mut backgrounds = self.backgrounds.write().unwrap();
         let mut displays = self.displays.write().unwrap();
         let mut checkboxes = self.checkboxes.write().unwrap();
+        let mut positions = self.positions.write().unwrap();
+        let mut watch_positions = self.watch_positions.write().unwrap();
 
         #[cfg(feature = "debug")]
         if ctx.input(|i| i.key_pressed(egui::Key::F3)) {
@@ -3114,6 +3368,8 @@ impl EguiApp {
                 backgrounds: &mut backgrounds,
                 displays: &mut displays,
                 checkboxes: &mut checkboxes,
+                positions: &mut positions,
+                watch_positions: &mut watch_positions,
             };
 
             ctx.memory_mut(|x| {
@@ -3173,6 +3429,8 @@ impl EguiApp {
         drop(visibilities);
         drop(displays);
         drop(checkboxes);
+        drop(positions);
+        drop(watch_positions);
 
         #[cfg(feature = "profiling")]
         profiling::finish_frame!();

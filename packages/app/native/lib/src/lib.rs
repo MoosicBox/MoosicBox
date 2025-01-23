@@ -20,7 +20,12 @@ pub enum NativeAppError {
     Other(#[from] Box<dyn std::error::Error + Send>),
 }
 
-type ActionHandler = Box<dyn Fn(&str) -> Result<bool, Box<dyn std::error::Error>> + Send>;
+type ActionHandler = Box<
+    dyn Fn(
+            (&str, Option<&gigachad_actions::logic::Value>),
+        ) -> Result<bool, Box<dyn std::error::Error>>
+        + Send,
+>;
 type ResizeListener = Box<dyn Fn(f32, f32) -> Result<(), Box<dyn std::error::Error>> + Send>;
 
 pub struct NativeAppBuilder {
@@ -116,10 +121,10 @@ impl NativeAppBuilder {
     #[must_use]
     pub fn with_action_handler<E: std::error::Error + 'static>(
         mut self,
-        func: impl Fn(&str) -> Result<bool, E> + Send + 'static,
+        func: impl Fn(&str, Option<&gigachad_actions::logic::Value>) -> Result<bool, E> + Send + 'static,
     ) -> Self {
-        self.action_handlers.push(Box::new(move |x| {
-            func(x).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+        self.action_handlers.push(Box::new(move |(a, b)| {
+            func(a, b).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
         }));
         self
     }
@@ -148,18 +153,21 @@ impl NativeAppBuilder {
 
     #[allow(unused)]
     #[must_use]
-    fn listen_actions(action_handlers: Vec<ActionHandler>) -> flume::Sender<String> {
-        let (action_tx, action_rx) = flume::unbounded::<String>();
+    fn listen_actions(
+        action_handlers: Vec<ActionHandler>,
+    ) -> flume::Sender<(String, Option<gigachad_actions::logic::Value>)> {
+        let (action_tx, action_rx) =
+            flume::unbounded::<(String, Option<gigachad_actions::logic::Value>)>();
 
         moosicbox_task::spawn("action listener", {
             async move {
-                while let Ok(action) = action_rx.recv_async().await {
+                while let Ok((action, value)) = action_rx.recv_async().await {
                     log::debug!(
                         "Received action: {action} for {} handler(s)",
                         action_handlers.len()
                     );
                     for handler in &action_handlers {
-                        if let Err(e) = handler(action.as_str()) {
+                        if let Err(e) = handler((action.as_str(), value.as_ref())) {
                             moosicbox_assert::die_or_error!(
                                 "Action handler error action={action}: {e:?}"
                             );

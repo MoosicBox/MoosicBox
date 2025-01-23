@@ -18,6 +18,7 @@ use actix_web::{
 };
 use async_trait::async_trait;
 use flume::{Receiver, Sender};
+use gigachad_actions::logic::Value;
 use gigachad_renderer::{canvas::CanvasUpdate, Color, PartialView, RenderRunner, Renderer, View};
 use gigachad_router::{Container, Router};
 use html::{container_element_to_html_response, HtmlTagRenderer};
@@ -44,7 +45,11 @@ pub struct HtmlRenderer {
 
 impl HtmlRenderer {
     #[must_use]
-    pub fn new(router: Router, runtime: Arc<Runtime>, request_action: Sender<String>) -> Self {
+    pub fn new(
+        router: Router,
+        runtime: Arc<Runtime>,
+        request_action: Sender<(String, Option<Value>)>,
+    ) -> Self {
         Self::new_with_tag_renderer(router, runtime, request_action, DefaultHtmlTagRenderer)
     }
 
@@ -52,7 +57,7 @@ impl HtmlRenderer {
     pub fn new_with_tag_renderer(
         router: Router,
         runtime: Arc<Runtime>,
-        request_action: Sender<String>,
+        request_action: Sender<(String, Option<Value>)>,
         tag_renderer: impl HtmlTagRenderer + Send + Sync + 'static,
     ) -> Self {
         let (_tx, rx) = flume::unbounded();
@@ -342,14 +347,14 @@ struct HtmlApp {
     router: Router,
     background: Option<Color>,
     #[allow(unused)]
-    request_action: Sender<String>,
+    request_action: Sender<(String, Option<Value>)>,
     tag_renderer: Arc<Box<dyn HtmlTagRenderer + Send + Sync>>,
 }
 
 impl HtmlApp {
     fn new(
         router: Router,
-        request_action: Sender<String>,
+        request_action: Sender<(String, Option<Value>)>,
         tag_renderer: impl HtmlTagRenderer + Send + Sync + 'static,
     ) -> Self {
         Self {
