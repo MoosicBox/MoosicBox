@@ -279,7 +279,7 @@ fn volume(state: &State, size: u16) -> Markup {
             sx-width=(size)
             sx-height=(size)
             sx-position="relative"
-            fx-hover=(ActionType::show_str_id("volume-slider"))
+            fx-hover=(ActionType::show_str_id("volume-slider").delay_off(400))
         {
             button {
                 img
@@ -317,6 +317,7 @@ fn volume_slider(size: u16, volume_percent: f64) -> Markup {
                     .clamp(0.0, 1.0)
                     .then_pass_to(Action::SetVolume)
             )
+            fx-hover=(ActionType::show_self().delay_off(400))
         {
             div
                 id=(VOLUME_SLIDER_VALUE_CONTAINER_ID)
