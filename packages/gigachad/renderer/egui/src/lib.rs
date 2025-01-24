@@ -1461,9 +1461,19 @@ impl EguiApp {
                 let abs_rect =
                     Self::get_render_rect(render_context, ui, container, relative_container);
 
-                return egui::Area::new(ui.next_auto_id())
+                let id = ui.next_auto_id();
+
+                return egui::Area::new(id)
+                    .movable(false)
+                    .kind(egui::UiKind::Frame)
+                    .interactable(false)
                     .fixed_pos(abs_rect.min)
-                    .show(ctx, |ui| inner(render_context, ui, relative_container))
+                    .show(ctx, |ui| {
+                        if let Some(opacity) = container.calculated_opacity {
+                            ui.set_opacity(opacity);
+                        }
+                        inner(render_context, ui, relative_container)
+                    })
                     .inner;
             }
             Some(Position::Static) | None => {}
