@@ -2075,6 +2075,7 @@ impl EguiApp {
         if let Some(response) = response {
             self.handle_ui_event_side_effects(
                 container,
+                ui,
                 ctx,
                 viewport,
                 rect,
@@ -2159,6 +2160,7 @@ impl EguiApp {
     fn handle_ui_event_side_effects(
         &self,
         container: &Container,
+        ui: Option<&Ui>,
         ctx: &egui::Context,
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
@@ -2329,24 +2331,36 @@ impl EguiApp {
                         profiling::scope!("change side effects");
                         let action = fx_action.action.clone();
                         let id = container.id;
-                        let responses = responses.clone();
+                        let changed = responses
+                            .iter()
+                            .filter(|x| x.changed())
+                            .map(|x| {
+                                ui.and_then(|ui| ui.data(|data| data.get_temp::<String>(x.id)))
+                            })
+                            .collect::<Vec<_>>();
                         let ctx = ctx.clone();
                         let sender = self.sender.clone();
                         self.trigger_side_effect(move |render_context| {
-                            if responses.iter().any(Response::changed) {
-                                log::trace!("change action: {action}");
-                                return Self::handle_action(
-                                    &action.action,
-                                    Some(&action),
-                                    StyleTrigger::UiEvent,
-                                    render_context,
-                                    &ctx,
-                                    id,
-                                    &sender,
-                                    &request_action,
-                                    None,
-                                    None,
-                                );
+                            if !changed.is_empty() {
+                                for value in &changed {
+                                    log::trace!("change action: {action}");
+                                    if !Self::handle_action(
+                                        &action.action,
+                                        Some(&action),
+                                        StyleTrigger::UiEvent,
+                                        render_context,
+                                        &ctx,
+                                        id,
+                                        &sender,
+                                        &request_action,
+                                        value.as_deref(),
+                                        None,
+                                    ) {
+                                        return false;
+                                    }
+                                }
+
+                                return true;
                             }
 
                             Self::unhandle_action(
@@ -3411,7 +3425,14 @@ impl EguiApp {
                     }
 
                     if let Some(tr) = tr {
-                        self.handle_ui_event_side_effects(tr, ctx, viewport, rect, responses);
+                        self.handle_ui_event_side_effects(
+                            tr,
+                            Some(ui),
+                            ctx,
+                            viewport,
+                            rect,
+                            responses,
+                        );
                     }
                     ui.end_row();
                 }
@@ -3463,7 +3484,14 @@ impl EguiApp {
                         first = false;
                     }
                     if let Some(tr) = tr {
-                        self.handle_ui_event_side_effects(tr, ctx, viewport, rect, responses);
+                        self.handle_ui_event_side_effects(
+                            tr,
+                            Some(ui),
+                            ctx,
+                            viewport,
+                            rect,
+                            responses,
+                        );
                     }
                     ui.end_row();
                 }
