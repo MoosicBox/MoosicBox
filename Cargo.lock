@@ -677,7 +677,7 @@ dependencies = [
  "wayland-backend",
  "wayland-client",
  "wayland-protocols",
- "zbus 5.3.0",
+ "zbus 5.3.1",
 ]
 
 [[package]]
@@ -1041,9 +1041,9 @@ dependencies = [
 
 [[package]]
 name = "aws-config"
-version = "1.5.14"
+version = "1.5.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f40e82e858e02445402906e454a73e244c7f501fcae198977585946c48e8697"
+checksum = "dc47e70fc35d054c8fcd296d47a61711f043ac80534a10b4f741904f81e73a90"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -1108,9 +1108,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ssm"
-version = "1.61.0"
+version = "1.62.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14a3b7cf98273e11fc80ed77b6da3782f51d3087d12586117e7c28d1b1953e80"
+checksum = "b240910a289cd95db69f2fe8c9a5d61c31a475a0589d491faedadaf30b9fa50a"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -1131,9 +1131,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-sso"
-version = "1.55.0"
+version = "1.56.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33993c0b054f4251ff2946941b56c26b582677303eeca34087594eb901ece022"
+checksum = "12e057fdcb8842de9b83592a70f5b4da0ee10bc0ad278247da1425a742a444d7"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -1153,9 +1153,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ssooidc"
-version = "1.56.0"
+version = "1.57.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bd3ceba74a584337a8f3839c818f14f1a2288bfd24235120ff22d7e17a0dd54"
+checksum = "aba487b6a05de9858f83c05133ddd1b465be60b95460491f96c5c7b761823a04"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -1175,9 +1175,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-sts"
-version = "1.56.0"
+version = "1.57.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07835598e52dd354368429cb2abf447ce523ea446d0a533a63cb42cd0d2d9280"
+checksum = "115fd4fb663817ed595a5ee4f1649d7aacd861d47462323cb37576ce89271b93"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -7613,7 +7613,7 @@ dependencies = [
  "mac-notification-sys",
  "serde",
  "tauri-winrt-notification",
- "zbus 5.3.0",
+ "zbus 5.3.1",
 ]
 
 [[package]]
@@ -8140,9 +8140,9 @@ dependencies = [
 
 [[package]]
 name = "openssl-probe"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
+checksum = "d05e27ee213611ffe7d6348b942e8f942b37114c00cc03cec254295a4a17852e"
 
 [[package]]
 name = "openssl-src"
@@ -12703,9 +12703,9 @@ checksum = "5c1cb5db39152898a79168971543b1cb5020dff7fe43c8dc468b0885f5e29df5"
 
 [[package]]
 name = "unicode-ident"
-version = "1.0.14"
+version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adb9e6ca4f869e1180728b7950e35922a7fc6397f7b641499e8f3ef06e50dc83"
+checksum = "11cd88e12b17c6494200a9c1b683a04fcac9573ed74cd1b62aeb2727c5592243"
 
 [[package]]
 name = "unicode-normalization"
@@ -14341,9 +14341,9 @@ dependencies = [
 
 [[package]]
 name = "zbus"
-version = "5.3.0"
+version = "5.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "192a0d989036cd60a1e91a54c9851fb9ad5bd96125d41803eed79d2e2ef74bd7"
+checksum = "2494e4b3f44d8363eef79a8a75fc0649efb710eef65a66b5e688a5eb4afe678a"
 dependencies = [
  "async-broadcast",
  "async-executor",
@@ -14371,7 +14371,7 @@ dependencies = [
  "windows-sys 0.59.0",
  "winnow 0.6.24",
  "xdg-home",
- "zbus_macros 5.3.0",
+ "zbus_macros 5.3.1",
  "zbus_names 4.1.1",
  "zvariant 5.2.0",
 ]
@@ -14415,9 +14415,9 @@ dependencies = [
 
 [[package]]
 name = "zbus_macros"
-version = "5.3.0"
+version = "5.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3685b5c81fce630efc3e143a4ded235b107f1b1cdf186c3f115529e5e5ae4265"
+checksum = "445efc01929302aee95e2b25bbb62a301ea8a6369466e4278e58e7d1dfb23631"
 dependencies = [
  "proc-macro-crate 3.2.0",
  "proc-macro2",
