@@ -1072,10 +1072,6 @@ impl EguiApp {
             log::info!("render_container: DEBUG {container}");
         }
 
-        if render_context.watch_positions.contains(&container.id) {
-            Self::get_render_rect(render_context, ui, container, relative_container);
-        }
-
         if container.is_hidden() || Self::container_hidden(render_context, container) {
             log::trace!("render_container: container is hidden. skipping render");
             self.handle_container_side_effects(
@@ -3086,6 +3082,10 @@ impl EguiApp {
             )
         {
             return;
+        }
+
+        if render_context.watch_positions.contains(&element.id) {
+            Self::get_render_rect(render_context, ui, element, relative_container);
         }
 
         let response = match &element.element {
