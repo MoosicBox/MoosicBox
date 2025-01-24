@@ -441,6 +441,8 @@ impl Renderer for EguiRenderer {
                 log::warn!("Unable to find element with id {}", view.target);
             }
 
+            moosicbox_logging::debug_or_trace!(("render_partial: end"), ("render_partial: end"));
+
             Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
         })
         .await
