@@ -347,7 +347,7 @@ fn volume_slider_value(size: u16, volume_percent: f64) -> Markup {
             sx-background="#fff"
         {
             div sx-position="relative" {
-                @let slider_top_width = f32::from(size) / 3.0;
+                @let slider_top_width = f32::from(size) / 2.5;
                 div
                     sx-position="absolute"
                     sx-top=(0)
