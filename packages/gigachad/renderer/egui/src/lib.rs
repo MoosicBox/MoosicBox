@@ -4,13 +4,16 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     sync::{Arc, LazyLock, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    time::Instant,
 };
 
 use async_trait::async_trait;
 use canvas::CanvasAction;
 use eframe::egui::{self, Color32, CursorIcon, Response, Ui, Widget};
 use flume::{Receiver, Sender};
-use gigachad_actions::{logic::Value, ActionTrigger, ActionType, ElementTarget, StyleAction};
+use gigachad_actions::{
+    logic::Value, ActionEffect, ActionTrigger, ActionType, ElementTarget, StyleAction,
+};
 use gigachad_renderer::canvas::CanvasUpdate;
 use gigachad_renderer::viewport::immediate::{Pos, Viewport, ViewportListener};
 pub use gigachad_renderer::*;
@@ -214,7 +217,6 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
     ) {
         match action {
             ActionType::Logic(logic) => {
-                log::debug!("checking logic {logic:?}");
                 match &logic.condition {
                     gigachad_actions::logic::Condition::Eq(a, b) => {
                         check_value(a, root, watch_positions, id);
@@ -223,10 +225,10 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
                 }
 
                 for action in &logic.actions {
-                    check_action(&action.action, root, watch_positions, id);
+                    check_action(&action.action.action, root, watch_positions, id);
                 }
                 for action in &logic.else_actions {
-                    check_action(&action.action, root, watch_positions, id);
+                    check_action(&action.action.action, root, watch_positions, id);
                 }
             }
             ActionType::Style { .. }
@@ -249,8 +251,7 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
     }
 
     for action in &container.actions {
-        log::debug!("checking action {action:?}");
-        check_action(&action.action, root, watch_positions, container.id);
+        check_action(&action.action.action, root, watch_positions, container.id);
     }
 
     for element in &container.children {
@@ -351,15 +352,10 @@ impl Renderer for EguiRenderer {
             element.calculated_height = app.height.read().unwrap().or(height);
             element.calc();
 
-            {
-                let mut watch_positions = app.watch_positions.write().unwrap();
-
-                watch_positions.clear();
-
-                add_watch_pos(&element, &element, &mut watch_positions);
-
-                drop(watch_positions);
-            }
+            let mut watch_positions = app.watch_positions.write().unwrap();
+            watch_positions.clear();
+            add_watch_pos(&element, &element, &mut watch_positions);
+            drop(watch_positions);
 
             *app.container.write().unwrap() = element;
             app.images.write().unwrap().clear();
@@ -549,6 +545,7 @@ struct RenderContext<'a> {
     checkboxes: &'a mut HashMap<egui::Id, bool>,
     positions: &'a mut HashMap<usize, egui::Rect>,
     watch_positions: &'a mut HashSet<usize>,
+    action_delay_off: &'a mut HashMap<usize, (Instant, u64)>,
 }
 
 #[allow(clippy::type_complexity)]
@@ -571,6 +568,7 @@ struct EguiApp {
     checkboxes: Arc<RwLock<HashMap<egui::Id, bool>>>,
     positions: Arc<RwLock<HashMap<usize, egui::Rect>>>,
     watch_positions: Arc<RwLock<HashSet<usize>>>,
+    action_delay_off: Arc<RwLock<HashMap<usize, (Instant, u64)>>>,
     router: Router,
     background: Option<Color32>,
     request_action: Sender<(String, Option<Value>)>,
@@ -609,6 +607,7 @@ impl EguiApp {
             checkboxes: Arc::new(RwLock::new(HashMap::new())),
             positions: Arc::new(RwLock::new(HashMap::new())),
             watch_positions: Arc::new(RwLock::new(HashSet::new())),
+            action_delay_off: Arc::new(RwLock::new(HashMap::new())),
             router,
             background: None,
             request_action,
@@ -635,6 +634,7 @@ impl EguiApp {
         let mut checkboxes = self.checkboxes.write().unwrap();
         let mut positions = self.positions.write().unwrap();
         let mut watch_positions = self.watch_positions.write().unwrap();
+        let mut action_delay_off = self.action_delay_off.write().unwrap();
 
         let mut render_context = RenderContext {
             container: &container,
@@ -648,6 +648,7 @@ impl EguiApp {
             checkboxes: &mut checkboxes,
             positions: &mut positions,
             watch_positions: &mut watch_positions,
+            action_delay_off: &mut action_delay_off,
         };
 
         let ctx = self.ctx.read().unwrap().clone();
@@ -2198,7 +2199,8 @@ impl EguiApp {
                             {
                                 log::trace!("click action: {action}");
                                 Self::handle_action(
-                                    &action,
+                                    &action.action,
+                                    Some(&action),
                                     StyleTrigger::UiEvent,
                                     render_context,
                                     &ctx,
@@ -2212,9 +2214,11 @@ impl EguiApp {
                             }
 
                             Self::unhandle_action(
-                                &action,
+                                &action.action,
+                                Some(&action),
                                 StyleTrigger::UiEvent,
                                 render_context,
+                                &ctx,
                                 id,
                             );
 
@@ -2238,7 +2242,8 @@ impl EguiApp {
                             {
                                 log::trace!("mouse down action: {action}");
                                 return Self::handle_action(
-                                    &action,
+                                    &action.action,
+                                    Some(&action),
                                     StyleTrigger::UiEvent,
                                     render_context,
                                     &ctx,
@@ -2251,9 +2256,11 @@ impl EguiApp {
                             }
 
                             Self::unhandle_action(
-                                &action,
+                                &action.action,
+                                Some(&action),
                                 StyleTrigger::UiEvent,
                                 render_context,
+                                &ctx,
                                 id,
                             );
 
@@ -2276,7 +2283,8 @@ impl EguiApp {
                             {
                                 log::trace!("hover action: {action}");
                                 return Self::handle_action(
-                                    &action,
+                                    &action.action,
+                                    Some(&action),
                                     StyleTrigger::UiEvent,
                                     render_context,
                                     &ctx,
@@ -2289,9 +2297,11 @@ impl EguiApp {
                             }
 
                             Self::unhandle_action(
-                                &action,
+                                &action.action,
+                                Some(&action),
                                 StyleTrigger::UiEvent,
                                 render_context,
+                                &ctx,
                                 id,
                             );
 
@@ -2310,7 +2320,8 @@ impl EguiApp {
                             if responses.iter().any(Response::changed) {
                                 log::trace!("change action: {action}");
                                 return Self::handle_action(
-                                    &action,
+                                    &action.action,
+                                    Some(&action),
                                     StyleTrigger::UiEvent,
                                     render_context,
                                     &ctx,
@@ -2323,9 +2334,11 @@ impl EguiApp {
                             }
 
                             Self::unhandle_action(
-                                &action,
+                                &action.action,
+                                Some(&action),
                                 StyleTrigger::UiEvent,
                                 render_context,
+                                &ctx,
                                 id,
                             );
 
@@ -2348,7 +2361,8 @@ impl EguiApp {
                 let sender = self.sender.clone();
                 self.add_event_handler(event_name.to_string(), move |render_context, value| {
                     Self::handle_action(
-                        &action,
+                        &action.action,
+                        Some(&action),
                         StyleTrigger::CustomEvent,
                         render_context,
                         &ctx,
@@ -2541,6 +2555,7 @@ impl EguiApp {
     )]
     fn handle_action(
         action: &ActionType,
+        effect: Option<&ActionEffect>,
         trigger: StyleTrigger,
         render_context: &mut RenderContext,
         ctx: &egui::Context,
@@ -2551,17 +2566,34 @@ impl EguiApp {
         value: Option<&Value>,
     ) -> bool {
         log::trace!("handle_action: action={action}");
+
         match &action {
-            ActionType::Style { target, action } => Self::handle_style_action(
-                action,
-                target,
-                trigger,
-                id,
-                render_context.container,
-                render_context.visibilities,
-                render_context.displays,
-                render_context.backgrounds,
-            ),
+            ActionType::Style { target, action } => {
+                if let Some(ActionEffect {
+                    delay_off: Some(delay),
+                    ..
+                }) = effect
+                {
+                    if let Some(id) =
+                        Self::get_element_target_id(target, id, render_context.container)
+                    {
+                        render_context
+                            .action_delay_off
+                            .insert(id, (std::time::Instant::now(), *delay));
+                    }
+                }
+
+                Self::handle_style_action(
+                    action,
+                    target,
+                    trigger,
+                    id,
+                    render_context.container,
+                    render_context.visibilities,
+                    render_context.displays,
+                    render_context.backgrounds,
+                )
+            }
             ActionType::Navigate { url } => {
                 if let Err(e) = sender.send(url.to_owned()) {
                     log::error!("Failed to navigate via action: {e:?}");
@@ -2619,7 +2651,8 @@ impl EguiApp {
                             action.trigger,
                             ActionTrigger::Immediate | ActionTrigger::Event(..)
                         ) && !Self::handle_action(
-                            &action.action,
+                            &action.action.action,
+                            Some(&action.action),
                             trigger,
                             render_context,
                             ctx,
@@ -2638,7 +2671,8 @@ impl EguiApp {
                             action.trigger,
                             ActionTrigger::Immediate | ActionTrigger::Event(..)
                         ) && !Self::handle_action(
-                            &action.action,
+                            &action.action.action,
+                            Some(&action.action),
                             trigger,
                             render_context,
                             ctx,
@@ -2663,6 +2697,7 @@ impl EguiApp {
                 for action in actions {
                     if !Self::handle_action(
                         action,
+                        effect,
                         trigger,
                         render_context,
                         ctx,
@@ -2682,6 +2717,7 @@ impl EguiApp {
                 let value = Self::calc_value(value, render_context, ctx, id, event_value);
                 Self::handle_action(
                     action,
+                    effect,
                     trigger,
                     render_context,
                     ctx,
@@ -2696,14 +2732,29 @@ impl EguiApp {
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
+    #[allow(clippy::only_used_in_recursion)]
     fn unhandle_action(
         action: &ActionType,
+        effect: Option<&ActionEffect>,
         trigger: StyleTrigger,
         render_context: &mut RenderContext,
+        ctx: &egui::Context,
         id: usize,
     ) {
         match &action {
             ActionType::Style { target, action } => {
+                if let Some(id) = Self::get_element_target_id(target, id, render_context.container)
+                {
+                    if let Some((instant, delay)) = render_context.action_delay_off.get(&id) {
+                        if Instant::now().duration_since(*instant).as_millis() < u128::from(*delay)
+                        {
+                            log::debug!("unhandle_action: delay={delay} not past delay yet.");
+                            ctx.request_repaint();
+                            return;
+                        }
+                    }
+                }
+
                 match action {
                     StyleAction::SetVisibility { .. } => {
                         if let Some(id) =
@@ -2742,11 +2793,11 @@ impl EguiApp {
             }
             ActionType::Multi(actions) => {
                 for action in actions {
-                    Self::unhandle_action(action, trigger, render_context, id);
+                    Self::unhandle_action(action, effect, trigger, render_context, ctx, id);
                 }
             }
             ActionType::Parameterized { action, .. } => {
-                Self::unhandle_action(action, trigger, render_context, id);
+                Self::unhandle_action(action, effect, trigger, render_context, ctx, id);
             }
             ActionType::Navigate { .. }
             | ActionType::Log { .. }
@@ -3413,6 +3464,7 @@ impl EguiApp {
         let mut checkboxes = self.checkboxes.write().unwrap();
         let mut positions = self.positions.write().unwrap();
         let mut watch_positions = self.watch_positions.write().unwrap();
+        let mut action_delay_off = self.action_delay_off.write().unwrap();
 
         #[cfg(feature = "debug")]
         if ctx.input(|i| i.key_pressed(egui::Key::F3)) {
@@ -3439,6 +3491,7 @@ impl EguiApp {
                 checkboxes: &mut checkboxes,
                 positions: &mut positions,
                 watch_positions: &mut watch_positions,
+                action_delay_off: &mut action_delay_off,
             };
 
             ctx.memory_mut(|x| {
@@ -3500,6 +3553,7 @@ impl EguiApp {
         drop(checkboxes);
         drop(positions);
         drop(watch_positions);
+        drop(action_delay_off);
 
         #[cfg(feature = "profiling")]
         profiling::finish_frame!();

@@ -1,6 +1,6 @@
 use std::{borrow::Cow, collections::HashMap};
 
-use gigachad_actions::{Action, ActionTrigger, ActionType};
+use gigachad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
 use gigachad_color::Color;
 use gigachad_transformer_models::{
     AlignItems, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, Position, Route,
@@ -285,27 +285,68 @@ fn get_number(tag: &HTMLTag, name: &str) -> Result<Option<Number>, GetNumberErro
     })
 }
 
-fn parse_action(action: String) -> ActionType {
-    if let Ok(action) = serde_json::from_str::<ActionType>(&action) {
-        return action;
+fn parse_std_action(action: &str) -> Option<ActionEffect> {
+    if let Ok(action) = serde_json::from_str::<ActionEffect>(action) {
+        return Some(action);
+    };
+
+    if let Ok(action) = serde_json::from_str::<ActionType>(action) {
+        return Some(ActionEffect {
+            action,
+            delay_off: None,
+        });
     };
 
     #[cfg(feature = "logic")]
     if let Ok(action) =
-        serde_json::from_str::<gigachad_actions::logic::If>(&action).map(ActionType::Logic)
+        serde_json::from_str::<gigachad_actions::logic::If>(action).map(ActionType::Logic)
     {
-        return action;
+        return Some(ActionEffect {
+            action,
+            delay_off: None,
+        });
     };
 
-    ActionType::Custom { action }
+    None
 }
 
-fn parse_event_action(action: &str) -> (String, ActionType) {
+fn parse_action(action: String) -> ActionEffect {
+    if let Some(action) = parse_std_action(&action) {
+        return action;
+    }
+
+    ActionEffect {
+        action: ActionType::Custom { action },
+        delay_off: None,
+    }
+}
+
+fn parse_event_action(action: &str) -> (String, ActionEffect) {
+    if let Some(ActionEffect {
+        action: ActionType::Event { name, action },
+        delay_off,
+    }) = parse_std_action(action)
+    {
+        return (
+            name.clone(),
+            ActionEffect {
+                action: ActionType::Event { name, action },
+                delay_off,
+            },
+        );
+    }
+
     let Ok(ActionType::Event { name, action }) = serde_json::from_str::<ActionType>(action) else {
         panic!("Invalid event action: '{action}'");
     };
 
-    (name, *action)
+    (
+        name,
+        ActionEffect {
+            action: *action,
+            delay_off: None,
+        },
+    )
 }
 
 fn get_actions(tag: &HTMLTag) -> Vec<Action> {
@@ -653,7 +694,7 @@ mod test {
                     .display_to_string(
                         true,
                         #[cfg(feature = "format")]
-                        false,
+                        true,
                         #[cfg(feature = "syntax-highlighting")]
                         false
                     )
@@ -662,7 +703,7 @@ mod test {
                     .display_to_string(
                         true,
                         #[cfg(feature = "format")]
-                        false,
+                        true,
                         #[cfg(feature = "syntax-highlighting")]
                         false
                     )

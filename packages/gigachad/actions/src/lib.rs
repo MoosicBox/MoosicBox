@@ -56,11 +56,26 @@ impl ActionTrigger {
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub struct Action {
     pub trigger: ActionTrigger,
-    pub action: ActionType,
+    pub action: ActionEffect,
 }
 
 #[cfg(feature = "serde")]
 impl std::fmt::Display for Action {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&serde_json::to_string(self).unwrap())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(tag = "type"))]
+pub struct ActionEffect {
+    pub action: ActionType,
+    pub delay_off: Option<u64>,
+}
+
+#[cfg(feature = "serde")]
+impl std::fmt::Display for ActionEffect {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&serde_json::to_string(self).unwrap())
     }
@@ -324,6 +339,14 @@ impl ActionType {
             Self::Multi(vec![self, action.into()])
         }
     }
+
+    #[must_use]
+    pub const fn delay_off(self, millis: u64) -> ActionEffect {
+        ActionEffect {
+            action: self,
+            delay_off: Some(millis),
+        }
+    }
 }
 
 #[cfg(feature = "logic")]
@@ -337,7 +360,10 @@ impl From<ActionType> for Action {
     fn from(value: ActionType) -> Self {
         Self {
             trigger: ActionTrigger::default(),
-            action: value,
+            action: ActionEffect {
+                action: value,
+                delay_off: None,
+            },
         }
     }
 }

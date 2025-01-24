@@ -943,12 +943,8 @@ impl Container {
                 gigachad_actions::ActionTrigger::Immediate => {
                     attrs.add("fx-immediate", action.action.to_string());
                 }
-                gigachad_actions::ActionTrigger::Event(name) => {
-                    attrs.add(
-                        "fx-event",
-                        gigachad_actions::ActionType::on_event(name, action.action.clone())
-                            .to_string(),
-                    );
+                gigachad_actions::ActionTrigger::Event(..) => {
+                    attrs.add("fx-event", action.action.to_string());
                 }
             }
         }

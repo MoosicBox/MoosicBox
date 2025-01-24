@@ -2,7 +2,9 @@ use gigachad_transformer_models::Visibility;
 use moosicbox_gen::xml::XmlString;
 use quickcheck::{Arbitrary, Gen};
 
-use crate::{Action, ActionTrigger, ActionType, ElementTarget, LogLevel, StyleAction};
+use crate::{
+    Action, ActionEffect, ActionTrigger, ActionType, ElementTarget, LogLevel, StyleAction,
+};
 
 fn half_g_max(g: &Gen, max: usize) -> Gen {
     Gen::new(std::cmp::min(max, g.size() / 2))
@@ -135,20 +137,25 @@ impl Arbitrary for ActionType {
 impl Arbitrary for Action {
     fn arbitrary(g: &mut Gen) -> Self {
         let trigger = ActionTrigger::arbitrary(g);
-        let is_event_trigger = matches!(trigger, ActionTrigger::Event(..));
 
-        if is_event_trigger {
+        if let ActionTrigger::Event(name) = &trigger {
             Self {
-                trigger,
-                action: ActionType::Event {
-                    name: XmlString::arbitrary(g).0,
-                    action: Box::new(ActionType::arbitrary(g)),
+                trigger: trigger.clone(),
+                action: ActionEffect {
+                    action: ActionType::Event {
+                        name: name.to_string(),
+                        action: Box::new(ActionType::arbitrary(g)),
+                    },
+                    delay_off: Option::arbitrary(g),
                 },
             }
         } else {
             Self {
                 trigger,
-                action: ActionType::arbitrary(g),
+                action: ActionEffect {
+                    action: ActionType::arbitrary(g),
+                    delay_off: Option::arbitrary(g),
+                },
             }
         }
     }
