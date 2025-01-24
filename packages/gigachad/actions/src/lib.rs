@@ -72,6 +72,37 @@ impl std::fmt::Display for Action {
 pub struct ActionEffect {
     pub action: ActionType,
     pub delay_off: Option<u64>,
+    pub throttle: Option<u64>,
+}
+
+impl ActionEffect {
+    #[must_use]
+    pub const fn delay_off(mut self, millis: u64) -> Self {
+        self.delay_off = Some(millis);
+        self
+    }
+
+    #[must_use]
+    pub const fn throttle(mut self, millis: u64) -> Self {
+        self.throttle = Some(millis);
+        self
+    }
+}
+
+impl From<ActionType> for ActionEffect {
+    fn from(value: ActionType) -> Self {
+        Self {
+            action: value,
+            delay_off: None,
+            throttle: None,
+        }
+    }
+}
+
+impl From<Box<ActionType>> for ActionEffect {
+    fn from(value: Box<ActionType>) -> Self {
+        (*value).into()
+    }
 }
 
 #[cfg(feature = "serde")]
@@ -341,9 +372,19 @@ impl ActionType {
     }
 
     #[must_use]
+    pub const fn throttle(self, millis: u64) -> ActionEffect {
+        ActionEffect {
+            action: self,
+            throttle: Some(millis),
+            delay_off: None,
+        }
+    }
+
+    #[must_use]
     pub const fn delay_off(self, millis: u64) -> ActionEffect {
         ActionEffect {
             action: self,
+            throttle: None,
             delay_off: Some(millis),
         }
     }
@@ -363,6 +404,7 @@ impl From<ActionType> for Action {
             action: ActionEffect {
                 action: value,
                 delay_off: None,
+                throttle: None,
             },
         }
     }

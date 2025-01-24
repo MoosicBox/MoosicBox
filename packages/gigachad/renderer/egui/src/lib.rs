@@ -547,6 +547,7 @@ struct RenderContext<'a> {
     positions: &'a mut HashMap<usize, egui::Rect>,
     watch_positions: &'a mut HashSet<usize>,
     action_delay_off: &'a mut HashMap<usize, (Instant, u64)>,
+    action_throttle: &'a mut HashMap<usize, (Instant, u64)>,
 }
 
 #[allow(clippy::type_complexity)]
@@ -570,6 +571,7 @@ struct EguiApp {
     positions: Arc<RwLock<HashMap<usize, egui::Rect>>>,
     watch_positions: Arc<RwLock<HashSet<usize>>>,
     action_delay_off: Arc<RwLock<HashMap<usize, (Instant, u64)>>>,
+    action_throttle: Arc<RwLock<HashMap<usize, (Instant, u64)>>>,
     router: Router,
     background: Option<Color32>,
     request_action: Sender<(String, Option<Value>)>,
@@ -609,6 +611,7 @@ impl EguiApp {
             positions: Arc::new(RwLock::new(HashMap::new())),
             watch_positions: Arc::new(RwLock::new(HashSet::new())),
             action_delay_off: Arc::new(RwLock::new(HashMap::new())),
+            action_throttle: Arc::new(RwLock::new(HashMap::new())),
             router,
             background: None,
             request_action,
@@ -636,6 +639,7 @@ impl EguiApp {
         let mut positions = self.positions.write().unwrap();
         let mut watch_positions = self.watch_positions.write().unwrap();
         let mut action_delay_off = self.action_delay_off.write().unwrap();
+        let mut action_throttle = self.action_throttle.write().unwrap();
 
         let mut render_context = RenderContext {
             container: &container,
@@ -650,6 +654,7 @@ impl EguiApp {
             positions: &mut positions,
             watch_positions: &mut watch_positions,
             action_delay_off: &mut action_delay_off,
+            action_throttle: &mut action_throttle,
         };
 
         let ctx = self.ctx.read().unwrap().clone();
@@ -2578,7 +2583,21 @@ impl EguiApp {
     ) -> bool {
         log::trace!("handle_action: action={action}");
 
-        match &action {
+        if let Some(ActionEffect {
+            throttle: Some(..), ..
+        }) = effect
+        {
+            if let Some((instant, throttle)) = render_context.action_throttle.get(&id) {
+                let ms = Instant::now().duration_since(*instant).as_millis();
+                if ms < u128::from(*throttle) {
+                    log::debug!("handle_action: throttle={throttle} not past throttle yet ms={ms}");
+                    ctx.request_repaint();
+                    return true;
+                }
+            }
+        }
+
+        let response = match &action {
             ActionType::Style { target, action } => {
                 if let Some(ActionEffect {
                     delay_off: Some(delay),
@@ -2739,7 +2758,20 @@ impl EguiApp {
                     value.as_ref(),
                 )
             }
+        };
+
+        if let Some(ActionEffect {
+            throttle: Some(throttle),
+            ..
+        }) = effect
+        {
+            log::debug!("handle_action: beginning action throttle with throttle={throttle}");
+            render_context
+                .action_throttle
+                .insert(id, (std::time::Instant::now(), *throttle));
         }
+
+        response
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
@@ -2752,14 +2784,18 @@ impl EguiApp {
         ctx: &egui::Context,
         id: usize,
     ) {
+        render_context.action_throttle.remove(&id);
+
         match &action {
             ActionType::Style { target, action } => {
                 if let Some(id) = Self::get_element_target_id(target, id, render_context.container)
                 {
                     if let Some((instant, delay)) = render_context.action_delay_off.get(&id) {
-                        if Instant::now().duration_since(*instant).as_millis() < u128::from(*delay)
-                        {
-                            log::debug!("unhandle_action: delay={delay} not past delay yet.");
+                        let ms = Instant::now().duration_since(*instant).as_millis();
+                        if ms < u128::from(*delay) {
+                            log::debug!(
+                                "unhandle_action: delay={delay} not past delay yet ms={ms}"
+                            );
                             ctx.request_repaint();
                             return;
                         }
@@ -3476,6 +3512,7 @@ impl EguiApp {
         let mut positions = self.positions.write().unwrap();
         let mut watch_positions = self.watch_positions.write().unwrap();
         let mut action_delay_off = self.action_delay_off.write().unwrap();
+        let mut action_throttle = self.action_throttle.write().unwrap();
 
         #[cfg(feature = "debug")]
         if ctx.input(|i| i.key_pressed(egui::Key::F3)) {
@@ -3503,6 +3540,7 @@ impl EguiApp {
                 positions: &mut positions,
                 watch_positions: &mut watch_positions,
                 action_delay_off: &mut action_delay_off,
+                action_throttle: &mut action_throttle,
             };
 
             ctx.memory_mut(|x| {
@@ -3565,6 +3603,7 @@ impl EguiApp {
         drop(positions);
         drop(watch_positions);
         drop(action_delay_off);
+        drop(action_throttle);
 
         #[cfg(feature = "profiling")]
         profiling::finish_frame!();

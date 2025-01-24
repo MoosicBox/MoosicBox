@@ -291,20 +291,14 @@ fn parse_std_action(action: &str) -> Option<ActionEffect> {
     };
 
     if let Ok(action) = serde_json::from_str::<ActionType>(action) {
-        return Some(ActionEffect {
-            action,
-            delay_off: None,
-        });
+        return Some(action.into());
     };
 
     #[cfg(feature = "logic")]
     if let Ok(action) =
         serde_json::from_str::<gigachad_actions::logic::If>(action).map(ActionType::Logic)
     {
-        return Some(ActionEffect {
-            action,
-            delay_off: None,
-        });
+        return Some(action.into());
     };
 
     None
@@ -315,16 +309,14 @@ fn parse_action(action: String) -> ActionEffect {
         return action;
     }
 
-    ActionEffect {
-        action: ActionType::Custom { action },
-        delay_off: None,
-    }
+    ActionType::Custom { action }.into()
 }
 
 fn parse_event_action(action: &str) -> (String, ActionEffect) {
     if let Some(ActionEffect {
         action: ActionType::Event { name, action },
         delay_off,
+        throttle,
     }) = parse_std_action(action)
     {
         return (
@@ -332,6 +324,7 @@ fn parse_event_action(action: &str) -> (String, ActionEffect) {
             ActionEffect {
                 action: ActionType::Event { name, action },
                 delay_off,
+                throttle,
             },
         );
     }
@@ -340,13 +333,7 @@ fn parse_event_action(action: &str) -> (String, ActionEffect) {
         panic!("Invalid event action: '{action}'");
     };
 
-    (
-        name,
-        ActionEffect {
-            action: *action,
-            delay_off: None,
-        },
-    )
+    (name, action.into())
 }
 
 fn get_actions(tag: &HTMLTag) -> Vec<Action> {

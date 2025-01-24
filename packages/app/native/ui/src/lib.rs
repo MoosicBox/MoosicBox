@@ -13,7 +13,7 @@ use albums::album_cover_img_from_album;
 use formatting::TimeFormat;
 use gigachad_actions::{
     logic::{get_height_px_str_id, get_mouse_y_str_id, get_visibility_str_id},
-    ActionEffect, ActionType,
+    ActionType,
 };
 use gigachad_transformer_models::Visibility;
 use maud::{html, Markup};
@@ -81,15 +81,10 @@ pub enum Action {
 
 impl From<Action> for gigachad_actions::Action {
     fn from(value: Action) -> Self {
-        Self {
-            trigger: gigachad_actions::ActionTrigger::Immediate,
-            action: ActionEffect {
-                action: ActionType::Custom {
-                    action: value.to_string(),
-                },
-                delay_off: None,
-            },
+        ActionType::Custom {
+            action: value.to_string(),
         }
+        .into()
     }
 }
 
