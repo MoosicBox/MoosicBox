@@ -311,6 +311,7 @@ fn volume_slider(size: u16, volume_percent: f64) -> Markup {
                     .divide(get_height_px_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID))
                     .clamp(0.0, 1.0)
                     .then_pass_to(Action::SetVolume)
+                    .throttle(30)
             )
             fx-hover=(ActionType::show_self().delay_off(400))
         {
