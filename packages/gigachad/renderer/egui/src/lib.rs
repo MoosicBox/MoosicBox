@@ -364,6 +364,7 @@ impl Renderer for EguiRenderer {
             app.route_requests.write().unwrap().clear();
             app.checkboxes.write().unwrap().clear();
             app.positions.write().unwrap().clear();
+            app.action_delay_off.write().unwrap().clear();
 
             log::debug!("render: finished");
             if let Some(ctx) = &*app.ctx.read().unwrap() {
