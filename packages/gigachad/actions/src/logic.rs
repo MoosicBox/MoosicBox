@@ -85,6 +85,14 @@ impl Value {
     }
 
     #[must_use]
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Self::String(str) => Some(str),
+            Self::Arithmetic(..) | Self::Calc(..) | Self::Real(..) | Self::Visibility(..) => None,
+        }
+    }
+
+    #[must_use]
     pub fn as_f32(&self, calc_func: Option<&impl Fn(&CalcValue) -> Option<Self>>) -> Option<f32> {
         match self {
             Self::Arithmetic(x) => x.as_f32(calc_func),
