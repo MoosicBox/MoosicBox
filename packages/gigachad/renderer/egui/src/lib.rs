@@ -1439,6 +1439,7 @@ impl EguiApp {
     fn render_position<'a>(
         render_context: &mut RenderContext,
         ui: &mut Ui,
+        ctx: &egui::Context,
         container: &'a Container,
         mut relative_container: Option<(egui::Rect, &'a Container)>,
         inner: impl FnOnce(&mut RenderContext, &mut Ui, Option<(egui::Rect, &'a Container)>) -> Response,
@@ -1456,9 +1457,10 @@ impl EguiApp {
                 let abs_rect =
                     Self::get_render_rect(render_context, ui, container, relative_container);
 
-                return ui.put(abs_rect, |ui: &mut egui::Ui| {
-                    inner(render_context, ui, relative_container)
-                });
+                return egui::Area::new(ui.next_auto_id())
+                    .fixed_pos(abs_rect.min)
+                    .show(ctx, |ui| inner(render_context, ui, relative_container))
+                    .inner;
             }
             Some(Position::Static) | None => {}
         }
@@ -1686,6 +1688,7 @@ impl EguiApp {
         Self::render_position(
             render_context,
             ui,
+            ctx,
             container,
             relative_container,
             |render_context, ui, relative_container| {
