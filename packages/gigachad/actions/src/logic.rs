@@ -58,6 +58,14 @@ impl CalcValue {
     pub fn clamp(self, min: impl Into<Value>, max: impl Into<Value>) -> Arithmetic {
         Arithmetic::Min(max.into(), Arithmetic::Max(self.into(), min.into()).into())
     }
+
+    #[must_use]
+    pub fn then_pass_to(self, other: impl Into<ActionType>) -> ActionType {
+        ActionType::Parameterized {
+            action: Box::new(other.into()),
+            value: Value::Calc(self),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
