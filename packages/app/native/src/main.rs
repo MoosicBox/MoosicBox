@@ -746,28 +746,36 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
                             >,
                         )
                         .expect("Invalid volume value");
-                    STATE
-                        .queue_ws_message(
-                            InboundPayload::UpdateSession(UpdateSessionPayload {
-                                payload: UpdateSession {
-                                    session_id: session.session_id,
-                                    profile,
-                                    playback_target,
-                                    play: None,
-                                    stop: None,
-                                    name: None,
-                                    active: None,
-                                    playing: None,
-                                    position: None,
-                                    seek: None,
-                                    volume: Some(f64::from(volume)),
-                                    playlist: None,
-                                    quality: None,
-                                },
-                            }),
-                            true,
-                        )
-                        .await
+                    if STATE.get_current_session().await.is_some_and(|x| {
+                        x.volume
+                            .is_some_and(|x| (x - f64::from(volume)).abs() < 0.01)
+                    }) {
+                        log::debug!("SetVolume: already at desired volume");
+                        Ok(())
+                    } else {
+                        STATE
+                            .queue_ws_message(
+                                InboundPayload::UpdateSession(UpdateSessionPayload {
+                                    payload: UpdateSession {
+                                        session_id: session.session_id,
+                                        profile,
+                                        playback_target,
+                                        play: None,
+                                        stop: None,
+                                        name: None,
+                                        active: None,
+                                        playing: None,
+                                        position: None,
+                                        seek: None,
+                                        volume: Some(f64::from(volume)),
+                                        playlist: None,
+                                        quality: None,
+                                    },
+                                }),
+                                true,
+                            )
+                            .await
+                    }
                 }
                 Action::PlayAlbum {
                     album_id,
