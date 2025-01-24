@@ -150,6 +150,7 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
                 | gigachad_actions::logic::CalcValue::Id { .. }
                 | gigachad_actions::logic::CalcValue::DataAttrValue { .. }
                 | gigachad_actions::logic::CalcValue::EventValue
+                | gigachad_actions::logic::CalcValue::WidthPx { .. }
                 | gigachad_actions::logic::CalcValue::HeightPx { .. }
                 | gigachad_actions::logic::CalcValue::MouseX { target: None }
                 | gigachad_actions::logic::CalcValue::MouseY { target: None } => {}
@@ -2509,6 +2510,14 @@ impl EguiApp {
                 .map(Value::String)
             }
             CalcValue::EventValue => event_value.map(ToString::to_string).map(Value::String),
+            CalcValue::WidthPx { target } => {
+                let width =
+                    Self::map_element_target(target, id, render_context.container, |element| {
+                        Value::Real(element.calculated_width.unwrap())
+                    });
+                log::debug!("calc_value: getting width px for element id={id} width={width:?}");
+                width
+            }
             CalcValue::HeightPx { target } => {
                 let height =
                     Self::map_element_target(target, id, render_context.container, |element| {

@@ -11,6 +11,7 @@ pub enum CalcValue {
     Id { target: ElementTarget },
     DataAttrValue { attr: String, target: ElementTarget },
     EventValue,
+    WidthPx { target: ElementTarget },
     HeightPx { target: ElementTarget },
     PositionX { target: ElementTarget },
     PositionY { target: ElementTarget },
@@ -350,6 +351,28 @@ pub const fn get_id_self() -> CalcValue {
 pub fn get_data_attr_value_self(attr: impl Into<String>) -> CalcValue {
     CalcValue::DataAttrValue {
         attr: attr.into(),
+        target: ElementTarget::SelfTarget,
+    }
+}
+
+#[must_use]
+pub fn get_width_px_str_id(str_id: impl Into<String>) -> CalcValue {
+    CalcValue::WidthPx {
+        target: ElementTarget::StrId(str_id.into()),
+    }
+}
+
+#[cfg(feature = "id")]
+#[must_use]
+pub const fn get_width_px_id(id: usize) -> CalcValue {
+    CalcValue::WidthPx {
+        target: ElementTarget::Id(id),
+    }
+}
+
+#[must_use]
+pub const fn get_width_px_self() -> CalcValue {
+    CalcValue::WidthPx {
         target: ElementTarget::SelfTarget,
     }
 }
