@@ -624,6 +624,7 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
         | Action::PreviousTrack
         | Action::NextTrack
         | Action::SetVolume
+        | Action::SeekCurrentTrackPercent
         | Action::PlayAlbum { .. }
         | Action::AddAlbumToQueue { .. }
         | Action::PlayAlbumStartingAtTrackId { .. }
@@ -738,7 +739,7 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
                     }
                 }
                 Action::SetVolume => {
-                    log::debug!("SetVolume: {value:?}");
+                    log::debug!("handle_action: SetVolume: {value:?}");
                     let volume = value
                         .expect("Missing volume value")
                         .as_f32(
@@ -751,7 +752,7 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
                         x.volume
                             .is_some_and(|x| (x - f64::from(volume)).abs() < 0.01)
                     }) {
-                        log::debug!("SetVolume: already at desired volume");
+                        log::debug!("handle_action: SetVolume: already at desired volume");
                         Ok(())
                     } else {
                         STATE
@@ -776,6 +777,70 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
                                 true,
                             )
                             .await
+                    }
+                }
+                Action::SeekCurrentTrackPercent => {
+                    log::debug!("handle_action: SeekCurrentTrackPercent: {value:?}");
+                    let seek = value
+                        .expect("Missing seek value")
+                        .as_f32(
+                            None::<
+                                &Box<dyn Fn(&gigachad_actions::logic::CalcValue) -> Option<Value>>,
+                            >,
+                        )
+                        .expect("Invalid seek value");
+                    let session = STATE.get_current_session_ref().await;
+                    if let Some(session) = session {
+                        if let Some(position) = session.position {
+                            if let Some(duration) = session
+                                .playlist
+                                .tracks
+                                .get(position as usize)
+                                .map(|x| x.duration)
+                            {
+                                let seek = duration * f64::from(seek);
+
+                                if seek < 0.0 || seek > duration {
+                                    log::debug!("handle_action: SeekCurrentTrackPercent: target seek is out of track duration bounds");
+                                    Ok(())
+                                } else if session.seek.is_some_and(|x| (x - seek).abs() < 0.1) {
+                                    log::debug!("handle_action: SeekCurrentTrackPercent: already at desired position");
+                                    Ok(())
+                                } else {
+                                    STATE
+                                        .queue_ws_message(
+                                            InboundPayload::UpdateSession(UpdateSessionPayload {
+                                                payload: UpdateSession {
+                                                    session_id: session.session_id,
+                                                    profile,
+                                                    playback_target,
+                                                    play: None,
+                                                    stop: None,
+                                                    name: None,
+                                                    active: None,
+                                                    playing: None,
+                                                    position: None,
+                                                    seek: Some(seek),
+                                                    volume: None,
+                                                    playlist: None,
+                                                    quality: None,
+                                                },
+                                            }),
+                                            true,
+                                        )
+                                        .await
+                                }
+                            } else {
+                                log::debug!("handle_action: SeekCurrentTrackPercent: no track");
+                                Ok(())
+                            }
+                        } else {
+                            log::debug!("handle_action: SeekCurrentTrackPercent: no position");
+                            Ok(())
+                        }
+                    } else {
+                        log::debug!("handle_action: SeekCurrentTrackPercent: no session");
+                        Ok(())
                     }
                 }
                 Action::PlayAlbum {

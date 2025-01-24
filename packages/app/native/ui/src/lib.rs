@@ -12,7 +12,10 @@ pub mod state;
 use albums::album_cover_img_from_album;
 use formatting::TimeFormat;
 use gigachad_actions::{
-    logic::{get_height_px_str_id, get_mouse_y_str_id, get_visibility_str_id},
+    logic::{
+        get_height_px_str_id, get_mouse_x_self, get_mouse_y_str_id, get_visibility_str_id,
+        get_width_px_self,
+    },
     ActionType,
 };
 use gigachad_transformer_models::Visibility;
@@ -51,6 +54,7 @@ pub enum Action {
     PreviousTrack,
     NextTrack,
     SetVolume,
+    SeekCurrentTrackPercent,
     FilterAlbums {
         filtered_sources: Vec<TrackApiSource>,
         sort: AlbumSort,
@@ -185,7 +189,11 @@ pub fn player(state: &State) -> Markup {
     html! {
         div sx-height=(FOOTER_HEIGHT) sx-border-top={(FOOTER_BORDER_SIZE)", #222"} {
             div sx-height=(VIZ_HEIGHT) sx-padding-y=(VIZ_PADDING) sx-dir="row" {
-                canvas id="visualization" sx-cursor="pointer" {}
+                canvas
+                    id="visualization"
+                    sx-cursor="pointer"
+                    fx-click=(get_mouse_x_self().divide(get_width_px_self()).then_pass_to(Action::SeekCurrentTrackPercent))
+                {}
             }
             div sx-height=(100) sx-dir="row" {
                 (player_current_album_from_state(state, 70))
