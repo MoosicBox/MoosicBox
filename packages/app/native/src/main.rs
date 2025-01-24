@@ -20,6 +20,7 @@ use moosicbox_app_native_lib::{
     router::{Container, RouteRequest, Router},
 };
 use moosicbox_app_native_ui::{
+    albums::load_albums,
     state::{self, State},
     Action,
 };
@@ -922,7 +923,37 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
                         )
                         .await
                 }
+                Action::FilterAlbums { .. } => unreachable!(),
             }
+        }
+        Action::FilterAlbums {
+            filtered_sources,
+            sort,
+        } => {
+            let value = value.expect("Missing filter value");
+            let filter = value.as_str().expect("Invalid filter value");
+            log::debug!("handle_action: FilterAlbums filter={filter}");
+
+            let size: u16 = 200;
+
+            let view = PartialView {
+                target: "albums".to_string(),
+                container: load_albums(size, *sort, filtered_sources, filter)
+                    .try_into()
+                    .unwrap(),
+            };
+            let response = RENDERER
+                .get()
+                .unwrap()
+                .write()
+                .await
+                .render_partial(view)
+                .await;
+            if let Err(e) = response {
+                log::error!("Failed to render_partial: {e:?}");
+            }
+
+            Ok(())
         }
     }
 }
@@ -957,6 +988,7 @@ async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteError> 
     } else {
         0
     };
+    let search = req.query.get("search").filter(|x| !x.is_empty());
 
     let filtered_sources = parse_track_sources(
         req.query
@@ -974,7 +1006,7 @@ async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteError> 
         .unwrap_or(AlbumSort::NameAsc);
 
     let response = reqwest::get(format!(
-        "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}&sort={sort}",
+        "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}&sort={sort}{}",
         std::env::var("MOOSICBOX_HOST")
             .as_deref()
             .unwrap_or("http://localhost:8500"),
@@ -989,7 +1021,8 @@ async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteError> 
                     .collect::<Vec<_>>()
                     .join(",")
             )
-        }
+        },
+        search.map_or_else(String::new, |search| format!("&search={search}"))
     ))
     .await?;
 
@@ -1003,13 +1036,19 @@ async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteError> 
 
     log::trace!("albums_list_start_route: albums={albums:?}");
 
-    moosicbox_app_native_ui::albums::albums_list_start(&albums, &filtered_sources, sort, size)
-        .into_string()
-        .try_into()
-        .map_err(|e| {
-            moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
-            RouteError::ParseMarkup
-        })
+    moosicbox_app_native_ui::albums::albums_list_start(
+        &albums,
+        &filtered_sources,
+        sort,
+        size,
+        search.map_or("", |search| search),
+    )
+    .into_string()
+    .try_into()
+    .map_err(|e| {
+        moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
+        RouteError::ParseMarkup
+    })
 }
 
 async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
@@ -1026,6 +1065,8 @@ async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
     };
     let size = size.parse::<u16>()?;
 
+    let search = req.query.get("search").filter(|x| !x.is_empty());
+
     let filtered_sources = parse_track_sources(
         req.query
             .get("sources")
@@ -1042,7 +1083,7 @@ async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
         .unwrap_or(AlbumSort::NameAsc);
 
     let response = reqwest::get(format!(
-        "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}&sort={sort}",
+        "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}&sort={sort}{}",
         std::env::var("MOOSICBOX_HOST")
             .as_deref()
             .unwrap_or("http://localhost:8500"),
@@ -1057,7 +1098,8 @@ async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
                     .collect::<Vec<_>>()
                     .join(",")
             )
-        }
+        },
+        search.map_or_else(String::new, |search| format!("&search={search}"))
     ))
     .await?;
 

@@ -17,7 +17,7 @@ use gigachad_actions::{
 };
 use gigachad_transformer_models::Visibility;
 use maud::{html, Markup};
-use moosicbox_core::sqlite::models::{ApiSource, ApiTrack, Id, TrackApiSource};
+use moosicbox_core::sqlite::models::{AlbumSort, ApiSource, ApiTrack, Id, TrackApiSource};
 use moosicbox_session_models::{ApiSession, ApiUpdateSession};
 use play_queue::play_queue;
 use serde::{Deserialize, Serialize};
@@ -51,6 +51,10 @@ pub enum Action {
     PreviousTrack,
     NextTrack,
     SetVolume,
+    FilterAlbums {
+        filtered_sources: Vec<TrackApiSource>,
+        sort: AlbumSort,
+    },
     PlayAlbum {
         album_id: Id,
         api_source: ApiSource,

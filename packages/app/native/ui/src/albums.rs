@@ -368,6 +368,7 @@ pub fn albums_list_start(
     filtered_sources: &[TrackApiSource],
     sort: AlbumSort,
     size: u16,
+    search: &str,
 ) -> Markup {
     static MAX_PARALLEL_REQUESTS: u32 = 6;
     static MIN_PAGE_THRESHOLD: u32 = 30;
@@ -388,6 +389,7 @@ pub fn albums_list_start(
                                 ("size", &size.to_string()),
                                 ("sources", &filtered_sources),
                                 ("sort", &sort),
+                                ("search", search),
                             ])
                         ))
                         hx-trigger="load"
@@ -410,6 +412,7 @@ pub fn albums_list_start(
                                     ("size", &size.to_string()),
                                     ("sources", &filtered_sources),
                                     ("sort", &sort),
+                                    ("search", search),
                                 ])
                             ))
                             hx-trigger="load"
@@ -427,6 +430,7 @@ pub fn albums_list_start(
                                             ("size", &size.to_string()),
                                             ("sources", &filtered_sources),
                                             ("sort", &sort),
+                                            ("search", search),
                                         ])
                                     ))
                                     hx-trigger="load"
@@ -442,6 +446,7 @@ pub fn albums_list_start(
                                             ("size", &size.to_string()),
                                             ("sources", &filtered_sources),
                                             ("sort", &sort),
+                                            ("search", search),
                                         ])
                                     ))
                                     hx-trigger="load"
@@ -776,10 +781,36 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                         }
                     }
                 }
-                input type="text" placeholder="Filter...";
+                input
+                    type="text"
+                    placeholder="Filter..."
+                    fx-change=(
+                        get_event_value()
+                            .then_pass_to(Action::FilterAlbums {
+                                filtered_sources: filtered_sources.to_vec(),
+                                sort
+                            })
+                    );
             }
         }
+        (load_albums(size, sort, filtered_sources, ""))
+    }
+}
+
+#[must_use]
+pub fn albums(state: &State, filtered_sources: &[TrackApiSource], sort: AlbumSort) -> Markup {
+    page(state, &albums_page_content(filtered_sources, sort))
+}
+
+pub fn load_albums(
+    size: u16,
+    sort: AlbumSort,
+    filtered_sources: &[TrackApiSource],
+    search: &str,
+) -> Markup {
+    html! {
         div
+            id="albums"
             hx-get=(pre_escaped!(
                 "/albums-list-start{}",
                 build_query('?', &[
@@ -787,6 +818,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                     ("size", &size.to_string()),
                     ("sources", &filtered_sources_to_string(filtered_sources)),
                     ("sort", &sort.to_string()),
+                    ("search", search),
                 ])
             ))
             hx-trigger="load"
@@ -805,9 +837,4 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
             }
         }
     }
-}
-
-#[must_use]
-pub fn albums(state: &State, filtered_sources: &[TrackApiSource], sort: AlbumSort) -> Markup {
-    page(state, &albums_page_content(filtered_sources, sort))
 }
