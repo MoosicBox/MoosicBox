@@ -36,8 +36,8 @@ use moosicbox_paging::Page;
 use moosicbox_player::Playback;
 use moosicbox_remote_library::RemoteLibraryMusicApi;
 use moosicbox_session_models::{
-    ApiPlaybackTarget, ApiSession, ApiUpdateSession, ApiUpdateSessionPlaylist, UpdateSession,
-    UpdateSessionPlaylist,
+    ApiConnection, ApiPlaybackTarget, ApiSession, ApiUpdateSession, ApiUpdateSessionPlaylist,
+    UpdateSession, UpdateSessionPlaylist,
 };
 use moosicbox_ws::models::{InboundPayload, UpdateSessionPayload};
 use thiserror::Error;
@@ -49,6 +49,7 @@ static STATE: LazyLock<moosicbox_app_state::AppState> = LazyLock::new(|| {
     moosicbox_app_state::AppState::default()
         .with_on_current_sessions_updated_listener(current_sessions_updated)
         .with_on_audio_zone_with_sessions_updated_listener(audio_zone_with_sessions_updated)
+        .with_on_connections_updated_listener(connections_updated)
         .with_on_after_handle_playback_update_listener(handle_playback_update)
 });
 
@@ -98,10 +99,25 @@ async fn current_sessions_updated(sessions: Vec<ApiSession>) {
     }
 }
 
-async fn audio_zone_with_sessions_updated(zones: Vec<ApiAudioZoneWithSession>) {
-    log::trace!("audio_zone_with_sessions_updated: {zones:?}");
+async fn connections_updated(_connections: Vec<ApiConnection>) {
+    log::trace!("connections_updated");
 
-    update_audio_zones(&zones).await;
+    refresh_audio_zone_with_sessions().await;
+}
+
+async fn audio_zone_with_sessions_updated(_zones: Vec<ApiAudioZoneWithSession>) {
+    log::trace!("audio_zone_with_sessions_updated");
+
+    refresh_audio_zone_with_sessions().await;
+}
+
+async fn refresh_audio_zone_with_sessions() {
+    log::trace!("refresh_audio_zone_with_sessions");
+
+    let zones = STATE.current_audio_zones.read().await;
+    let connections = STATE.current_connections.read().await;
+
+    update_audio_zones(&zones, &connections).await;
 }
 
 async fn set_current_session(session: ApiSession) {
@@ -215,10 +231,10 @@ async fn handle_session_update(state: &State, update: &ApiUpdateSession, session
     }
 }
 
-async fn update_audio_zones(zones: &[ApiAudioZoneWithSession]) {
+async fn update_audio_zones(zones: &[ApiAudioZoneWithSession], connections: &[ApiConnection]) {
     let view = PartialView {
         target: AUDIO_ZONES_CONTENT_ID.to_string(),
-        container: moosicbox_app_native_ui::audio_zones::audio_zones(zones)
+        container: moosicbox_app_native_ui::audio_zones::audio_zones(zones, connections)
             .try_into()
             .unwrap(),
     };
@@ -1309,7 +1325,7 @@ async fn audio_zones_route(_req: RouteRequest) -> Result<View, RouteError> {
 
     let zones: Page<ApiAudioZoneWithSession> = response.json().await?;
 
-    moosicbox_app_native_ui::audio_zones::audio_zones(&zones)
+    moosicbox_app_native_ui::audio_zones::audio_zones(&zones, &[])
         .into_string()
         .try_into()
         .map_err(|e| {
