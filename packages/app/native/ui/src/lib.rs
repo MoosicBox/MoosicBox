@@ -18,7 +18,7 @@ use gigachad_actions::{
     },
     ActionType,
 };
-use gigachad_transformer_models::Visibility;
+use gigachad_transformer_models::{JustifyContent, Visibility};
 use maud::{html, Markup};
 use moosicbox_core::sqlite::models::{AlbumSort, ApiSource, ApiTrack, Id, TrackApiSource};
 use moosicbox_session_models::{ApiSession, ApiUpdateSession};
@@ -32,6 +32,8 @@ static FOOTER_BORDER_SIZE: u16 = 3;
 static FOOTER_HEIGHT: u16 = 100 + VIZ_HEIGHT + VIZ_PADDING * 2 + FOOTER_BORDER_SIZE;
 static FOOTER_ICON_SIZE: u16 = 25;
 static CURRENT_ALBUM_SIZE: u16 = 70;
+static AUDIO_ZONES_ID: &str = "audio-zones";
+static AUDIO_ZONES_CONTENT_ID: &str = "audio-zones-content";
 
 #[macro_export]
 macro_rules! public_img {
@@ -184,6 +186,7 @@ pub fn sidebar_navigation() -> Markup {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 #[must_use]
 pub fn player(state: &State) -> Markup {
     html! {
@@ -245,7 +248,17 @@ pub fn player(state: &State) -> Markup {
                 }
                 div sx-dir="row" sx-justify-content="end" sx-align-items="center" sx-padding-right=(20) {
                     (volume(state, FOOTER_ICON_SIZE))
-                    button sx-width=(FOOTER_ICON_SIZE) sx-height=(FOOTER_ICON_SIZE) sx-margin-left=(10) {
+                    button
+                        sx-width=(FOOTER_ICON_SIZE)
+                        sx-height=(FOOTER_ICON_SIZE)
+                        sx-margin-left=(10)
+                        fx-click=(
+                            get_visibility_str_id(AUDIO_ZONES_ID)
+                                .eq(Visibility::Hidden)
+                                .then(ActionType::show_str_id(AUDIO_ZONES_ID))
+                                .or_else(ActionType::hide_str_id(AUDIO_ZONES_ID))
+                        )
+                    {
                         img
                             sx-width=(FOOTER_ICON_SIZE)
                             sx-height=(FOOTER_ICON_SIZE)
@@ -575,6 +588,62 @@ pub fn page(state: &State, slot: &Markup) -> Markup {
             }
             (footer(state))
             (play_queue(state))
+            (audio_zones())
+        }
+    }
+}
+
+#[must_use]
+pub fn audio_zones() -> Markup {
+    html! {
+        div
+            id=(AUDIO_ZONES_ID)
+            sx-visibility=(Visibility::Hidden)
+            sx-position="fixed"
+            sx-width="100%"
+            sx-height="100%"
+            sx-padding-x="calc(20%)"
+            sx-padding-y="calc(20%)"
+        {
+            div
+                sx-background="#080a0b"
+                sx-overflow-y="auto"
+                sx-border-radius=(15)
+                fx-click-outside=(
+                    get_visibility_str_id(AUDIO_ZONES_ID)
+                        .eq(Visibility::Visible)
+                        .then(ActionType::hide_str_id(AUDIO_ZONES_ID))
+                )
+            {
+                div sx-padding-x=(30) sx-padding-y=(20) {
+                    div sx-dir="row" {
+                        div sx-dir="row" {
+                            h1 { "Audio Zones" }
+                            button { "New" }
+                        }
+                        div sx-dir="row" sx-justify-content=(JustifyContent::End) {
+                            @let icon_size = 20;
+                            button
+                                sx-width=(icon_size)
+                                sx-height=(icon_size)
+                                fx-click=(
+                                    get_visibility_str_id(AUDIO_ZONES_ID)
+                                        .eq(Visibility::Visible)
+                                        .then(ActionType::hide_str_id(AUDIO_ZONES_ID))
+                                )
+                            {
+                                img
+                                    sx-width=(icon_size)
+                                    sx-height=(icon_size)
+                                    src=(public_img!("cross-white.svg"));
+                            }
+                        }
+                    }
+                    div id=(AUDIO_ZONES_CONTENT_ID) {
+                        "Loading..."
+                    }
+                }
+            }
         }
     }
 }
