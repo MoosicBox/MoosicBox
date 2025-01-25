@@ -452,6 +452,10 @@ impl AppState {
                         (*state.current_audio_zones.write().await).clone_from(&payload.payload);
 
                         state.update_audio_zones().await?;
+
+                        for listener in &state.on_audio_zone_with_sessions_updated_listeners {
+                            listener(&payload.payload).await;
+                        }
                     }
                     _ => {}
                 }
