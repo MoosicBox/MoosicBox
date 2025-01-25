@@ -118,15 +118,10 @@ impl<'a> TryFrom<&'a str> for Action {
     }
 }
 
-#[allow(clippy::too_many_lines)]
 #[must_use]
 pub fn sidebar_navigation() -> Markup {
     html! {
-        aside
-            id="sidebar-expanded-content"
-            sx-width="calc(max(240, min(280, 15%)))"
-            sx-background="#080a0b"
-        {
+        aside sx-width="calc(max(240, min(280, 15%)))" sx-background="#080a0b" {
             div class="navigation-bar" sx-padding=(20) {
                 @let size = 36;
                 div class="navigation-bar-header" sx-dir="row" sx-align-items="center" sx-height=(size) {
@@ -150,20 +145,10 @@ pub fn sidebar_navigation() -> Markup {
                                 src=(public_img!("settings-gear-white.svg"));
                         }
                         div sx-width=(size + 10) {
-                            button
+                            img
                                 sx-width=(size)
                                 sx-height=(size)
-                                fx-click=(
-                                    get_visibility_str_id("sidebar-expanded-content").eq(Visibility::Visible).then(
-                                    ActionType::hide_str_id("sidebar-expanded-content")
-                                        .and(ActionType::show_str_id("sidebar-collapsed-content")))
-                                )
-                            {
-                                img
-                                    sx-width=(size)
-                                    sx-height=(size)
-                                    src=(public_img!("chevron-left-white.svg"));
-                            }
+                                src=(public_img!("chevron-left-white.svg"));
                         }
                     }
                 }
@@ -192,32 +177,6 @@ pub fn sidebar_navigation() -> Markup {
                         a href="/artists" {
                             "Artists"
                         }
-                    }
-                }
-            }
-        }
-        @let size = 22;
-        aside
-            id="sidebar-collapsed-content"
-            sx-width=(size + 40 + 10)
-            sx-background="#080a0b"
-            sx-visibility=(Visibility::Hidden)
-        {
-            div class="navigation-bar" sx-padding=(20) {
-                div sx-width=(size + 10) {
-                    button
-                        sx-width=(size)
-                        sx-height=(size)
-                        fx-click=(
-                            get_visibility_str_id("sidebar-collapsed-content").eq(Visibility::Visible).then(
-                            ActionType::hide_str_id("sidebar-collapsed-content")
-                                .and(ActionType::show_str_id("sidebar-expanded-content")))
-                        )
-                    {
-                        img
-                            sx-width=(size)
-                            sx-height=(size)
-                            src=(public_img!("chevron-right-white.svg"));
                     }
                 }
             }
