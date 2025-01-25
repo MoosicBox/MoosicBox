@@ -371,6 +371,10 @@ impl AppState {
                         (*state.current_connections.write().await).clone_from(&payload.payload);
 
                         state.update_audio_zones().await?;
+
+                        for listener in &state.on_connections_updated_listeners {
+                            listener(&payload.payload).await;
+                        }
                     }
                     OutboundPayload::Sessions(payload) => {
                         let player_ids = {
