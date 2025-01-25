@@ -19,6 +19,7 @@ gigachad_transformer_models = { version = "0.1.0", path = "../../../gigachad/tra
     "serde",
 ] }
 moosicbox_app_native_image = { version = "0.1.0", path = "../image", default-features = false }
+moosicbox_audio_zone_models = { version = "0.1.0", path = "../../../audio_zone/models", default-features = false }
 moosicbox_core = { version = "0.1.0", path = "../../../core", default-features = false }
 moosicbox_menu_models = { version = "0.1.0", path = "../../../menu/models", default-features = false, features = [
     "api",

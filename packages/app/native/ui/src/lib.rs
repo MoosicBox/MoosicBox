@@ -4,6 +4,7 @@
 
 pub mod albums;
 pub mod artists;
+pub mod audio_zones;
 pub mod formatting;
 pub mod play_queue;
 pub mod settings;
@@ -651,7 +652,11 @@ pub fn audio_zones() -> Markup {
                             }
                         }
                     }
-                    div id=(AUDIO_ZONES_CONTENT_ID) {
+                    div
+                        id=(AUDIO_ZONES_CONTENT_ID)
+                        hx-get=(pre_escaped!("/audio-zones"))
+                        hx-trigger="load"
+                    {
                         "Loading..."
                     }
                 }

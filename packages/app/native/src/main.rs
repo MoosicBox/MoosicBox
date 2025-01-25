@@ -25,6 +25,7 @@ use moosicbox_app_native_ui::{
     Action,
 };
 use moosicbox_app_state::AppStateError;
+use moosicbox_audio_zone_models::ApiAudioZone;
 use moosicbox_core::sqlite::models::{
     AlbumSort, AlbumType, ApiAlbum, ApiArtist, ApiSource, ApiTrack, TrackApiSource,
 };
@@ -275,6 +276,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_route("/settings", |_| async {
             moosicbox_app_native_ui::settings::settings(&convert_state(&STATE).await)
         })
+        .with_route_result("/audio-zones", |req| async { audio_zones_route(req).await })
         .with_route_result("/albums", |req| async move {
             Ok::<_, Box<dyn std::error::Error>>(if let Some(album_id) = req.query.get("albumId") {
                 let source: ApiSource = req
@@ -1229,6 +1231,32 @@ async fn artist_albums_list_route(req: RouteRequest) -> Result<View, RouteError>
     log::trace!("albums_list_route: albums={albums:?}");
 
     moosicbox_app_native_ui::artists::albums_list(&albums, source, album_type, size)
+        .into_string()
+        .try_into()
+        .map_err(|e| {
+            moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
+            RouteError::ParseMarkup
+        })
+}
+
+async fn audio_zones_route(_req: RouteRequest) -> Result<View, RouteError> {
+    let url = format!(
+        "{}/audio-zone/with-session?moosicboxProfile={PROFILE}",
+        std::env::var("MOOSICBOX_HOST")
+            .as_deref()
+            .unwrap_or("http://localhost:8500")
+    );
+    let response = reqwest::get(url).await?;
+
+    if !response.status().is_success() {
+        let message = format!("Error: {} {}", response.status(), response.text().await?);
+        log::error!("{message}");
+        return Err(RouteError::RouteFailed(message.into()));
+    }
+
+    let zones: Page<ApiAudioZone> = response.json().await?;
+
+    moosicbox_app_native_ui::audio_zones::audio_zones(&zones)
         .into_string()
         .try_into()
         .map_err(|e| {
