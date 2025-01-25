@@ -232,7 +232,8 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
                     check_action(&action.action.action, root, watch_positions, id);
                 }
             }
-            ActionType::Style { .. }
+            ActionType::NoOp
+            | ActionType::Style { .. }
             | ActionType::Navigate { .. }
             | ActionType::Log { .. }
             | ActionType::Custom { .. } => {}
@@ -2651,6 +2652,7 @@ impl EguiApp {
         }
 
         let response = match &action {
+            ActionType::NoOp => true,
             ActionType::Style { target, action } => {
                 if let Some(ActionEffect {
                     delay_off: Some(delay),
@@ -2899,11 +2901,12 @@ impl EguiApp {
             ActionType::Parameterized { action, .. } => {
                 Self::unhandle_action(action, effect, trigger, render_context, ctx, id);
             }
-            ActionType::Navigate { .. }
+            ActionType::NoOp
+            | ActionType::Navigate { .. }
             | ActionType::Log { .. }
             | ActionType::Custom { .. }
             | ActionType::Event { .. }
-            | ActionType::Logic(_) => {}
+            | ActionType::Logic(..) => {}
         }
     }
 

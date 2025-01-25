@@ -125,6 +125,7 @@ pub enum LogLevel {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ActionType {
+    NoOp,
     Style {
         target: ElementTarget,
         action: StyleAction,
