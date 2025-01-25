@@ -2256,7 +2256,7 @@ impl EguiApp {
                                 && pointer.primary_down()
                             {
                                 log::trace!("mouse down action: {action}");
-                                return Self::handle_action(
+                                Self::handle_action(
                                     &action.action,
                                     Some(&action),
                                     StyleTrigger::UiEvent,
@@ -2268,6 +2268,7 @@ impl EguiApp {
                                     None,
                                     None,
                                 );
+                                return false;
                             }
 
                             Self::unhandle_action(
