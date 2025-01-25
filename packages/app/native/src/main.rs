@@ -277,6 +277,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             moosicbox_app_native_ui::settings::settings(&convert_state(&STATE).await)
         })
         .with_route_result("/audio-zones", |req| async { audio_zones_route(req).await })
+        .with_route_result("/playback-sessions", |req| async {
+            playback_sessions_route(req).await
+        })
         .with_route_result("/albums", |req| async move {
             Ok::<_, Box<dyn std::error::Error>>(if let Some(album_id) = req.query.get("albumId") {
                 let source: ApiSource = req
@@ -1257,6 +1260,32 @@ async fn audio_zones_route(_req: RouteRequest) -> Result<View, RouteError> {
     let zones: Page<ApiAudioZone> = response.json().await?;
 
     moosicbox_app_native_ui::audio_zones::audio_zones(&zones)
+        .into_string()
+        .try_into()
+        .map_err(|e| {
+            moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
+            RouteError::ParseMarkup
+        })
+}
+
+async fn playback_sessions_route(_req: RouteRequest) -> Result<View, RouteError> {
+    let url = format!(
+        "{}/session/sessions?moosicboxProfile={PROFILE}",
+        std::env::var("MOOSICBOX_HOST")
+            .as_deref()
+            .unwrap_or("http://localhost:8500")
+    );
+    let response = reqwest::get(url).await?;
+
+    if !response.status().is_success() {
+        let message = format!("Error: {} {}", response.status(), response.text().await?);
+        log::error!("{message}");
+        return Err(RouteError::RouteFailed(message.into()));
+    }
+
+    let sessions: Page<ApiSession> = response.json().await?;
+
+    moosicbox_app_native_ui::playback_sessions::playback_sessions(&sessions)
         .into_string()
         .try_into()
         .map_err(|e| {

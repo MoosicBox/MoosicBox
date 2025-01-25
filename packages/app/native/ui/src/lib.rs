@@ -7,6 +7,7 @@ pub mod artists;
 pub mod audio_zones;
 pub mod formatting;
 pub mod play_queue;
+pub mod playback_sessions;
 pub mod settings;
 pub mod state;
 
@@ -714,7 +715,11 @@ pub fn playback_sessions() -> Markup {
                             }
                         }
                     }
-                    div id=(PLAYBACK_SESSIONS_CONTENT_ID) {
+                    div
+                        id=(PLAYBACK_SESSIONS_CONTENT_ID)
+                        hx-get=(pre_escaped!("/playback-sessions"))
+                        hx-trigger="load"
+                    {
                         "Loading..."
                     }
                 }
