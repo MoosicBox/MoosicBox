@@ -224,6 +224,17 @@ pub enum Position {
     Static,
     Relative,
     Absolute,
+    Fixed,
+}
+
+impl Position {
+    #[must_use]
+    pub const fn is_relative(self) -> bool {
+        match self {
+            Self::Static | Self::Relative => true,
+            Self::Absolute | Self::Fixed => false,
+        }
+    }
 }
 
 impl std::fmt::Display for Position {
@@ -232,6 +243,7 @@ impl std::fmt::Display for Position {
             Self::Static => f.write_str("static"),
             Self::Relative => f.write_str("relative"),
             Self::Absolute => f.write_str("absolute"),
+            Self::Fixed => f.write_str("fixed"),
         }
     }
 }

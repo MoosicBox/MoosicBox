@@ -258,6 +258,7 @@ fn get_position(tag: &HTMLTag) -> Option<Position> {
             "static" => Position::Static,
             "relative" => Position::Relative,
             "absolute" => Position::Absolute,
+            "fixed" => Position::Fixed,
             _ => Position::default(),
         })
 }

@@ -1390,37 +1390,11 @@ impl EguiApp {
         }))
     }
 
-    #[cfg_attr(feature = "profiling", profiling::function)]
-    fn get_render_rect(
+    fn get_relative_render_rect(
         render_context: &mut RenderContext,
         ui: &Ui,
         container: &Container,
-        relative_container: Option<(egui::Rect, &Container)>,
     ) -> egui::Rect {
-        if container.position == Some(Position::Absolute) {
-            if let Some((relative_rect, ..)) = relative_container {
-                let rect = relative_rect
-                    .with_min_x(relative_rect.min.x + container.calculated_x.unwrap())
-                    .with_min_y(relative_rect.min.y + container.calculated_y.unwrap())
-                    .with_max_x(
-                        relative_rect.min.x
-                            + container.calculated_x.unwrap()
-                            + container.bounding_calculated_width().unwrap(),
-                    )
-                    .with_max_y(
-                        relative_rect.min.y
-                            + container.calculated_y.unwrap()
-                            + container.bounding_calculated_height().unwrap(),
-                    );
-
-                if render_context.watch_positions.contains(&container.id) {
-                    render_context.positions.insert(container.id, rect);
-                }
-
-                return rect;
-            }
-        }
-
         moosicbox_assert::assert_or_panic!(
             container.calculated_width.is_some() && container.calculated_height.is_some(),
             "Container size not properly calculated: {container}"
@@ -1442,6 +1416,65 @@ impl EguiApp {
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
+    fn get_render_rect(
+        render_context: &mut RenderContext,
+        ui: &Ui,
+        container: &Container,
+        relative_container: Option<(egui::Rect, &Container)>,
+    ) -> egui::Rect {
+        match container.position {
+            Some(Position::Absolute) => {
+                if let Some((relative_rect, ..)) = relative_container {
+                    let rect = relative_rect
+                        .with_min_x(relative_rect.min.x + container.calculated_x.unwrap())
+                        .with_min_y(relative_rect.min.y + container.calculated_y.unwrap())
+                        .with_max_x(
+                            relative_rect.min.x
+                                + container.calculated_x.unwrap()
+                                + container.bounding_calculated_width().unwrap(),
+                        )
+                        .with_max_y(
+                            relative_rect.min.y
+                                + container.calculated_y.unwrap()
+                                + container.bounding_calculated_height().unwrap(),
+                        );
+
+                    if render_context.watch_positions.contains(&container.id) {
+                        render_context.positions.insert(container.id, rect);
+                    }
+
+                    rect
+                } else {
+                    Self::get_relative_render_rect(render_context, ui, container)
+                }
+            }
+            Some(Position::Fixed) => {
+                let rect = egui::Rect::from_min_size(
+                    egui::pos2(
+                        container.calculated_x.unwrap(),
+                        container.calculated_y.unwrap(),
+                    ),
+                    egui::vec2(
+                        container.calculated_x.unwrap()
+                            + container.bounding_calculated_width().unwrap(),
+                        container.calculated_y.unwrap()
+                            + container.bounding_calculated_height().unwrap(),
+                    ),
+                );
+
+                if render_context.watch_positions.contains(&container.id) {
+                    render_context.positions.insert(container.id, rect);
+                }
+
+                rect
+            }
+            Some(Position::Static | Position::Relative) | None => {
+                Self::get_relative_render_rect(render_context, ui, container)
+            }
+        }
+    }
+
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_position<'a>(
         render_context: &mut RenderContext,
         ui: &mut Ui,
@@ -1459,7 +1492,7 @@ impl EguiApp {
                 );
                 relative_container = Some((egui::Rect::from_min_size(pos, size), container));
             }
-            Some(Position::Absolute) => {
+            Some(Position::Absolute | Position::Fixed) => {
                 let abs_rect =
                     Self::get_render_rect(render_context, ui, container, relative_container);
 

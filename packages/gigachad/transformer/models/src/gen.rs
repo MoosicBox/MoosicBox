@@ -79,7 +79,7 @@ impl Arbitrary for Cursor {
 
 impl Arbitrary for Position {
     fn arbitrary(g: &mut Gen) -> Self {
-        *g.choose(&[Self::Static, Self::Relative, Self::Absolute])
+        *g.choose(&[Self::Static, Self::Relative, Self::Absolute, Self::Fixed])
             .unwrap()
     }
 }

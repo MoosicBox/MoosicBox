@@ -301,13 +301,13 @@ fn visible_elements_mut(elements: &mut [Container]) -> impl Iterator<Item = &mut
 }
 
 fn relative_positioned_elements(elements: &[Container]) -> impl Iterator<Item = &Container> {
-    visible_elements(elements).filter(|x| x.position != Some(Position::Absolute))
+    visible_elements(elements).filter(|x| x.position.is_none_or(Position::is_relative))
 }
 
 fn relative_positioned_elements_mut(
     elements: &mut [Container],
 ) -> impl Iterator<Item = &mut Container> {
-    visible_elements_mut(elements).filter(|x| x.position != Some(Position::Absolute))
+    visible_elements_mut(elements).filter(|x| x.position.is_none_or(Position::is_relative))
 }
 
 fn absolute_positioned_elements(elements: &[Container]) -> impl Iterator<Item = &Container> {
@@ -318,6 +318,16 @@ fn absolute_positioned_elements_mut(
     elements: &mut [Container],
 ) -> impl Iterator<Item = &mut Container> {
     visible_elements_mut(elements).filter(|x| x.position == Some(Position::Absolute))
+}
+
+fn fixed_positioned_elements(elements: &[Container]) -> impl Iterator<Item = &Container> {
+    visible_elements(elements).filter(|x| x.position == Some(Position::Fixed))
+}
+
+fn fixed_positioned_elements_mut(
+    elements: &mut [Container],
+) -> impl Iterator<Item = &mut Container> {
+    visible_elements_mut(elements).filter(|x| x.position == Some(Position::Fixed))
 }
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
@@ -354,6 +364,14 @@ impl Container {
 
     pub fn absolute_positioned_elements_mut(&mut self) -> impl Iterator<Item = &mut Self> {
         absolute_positioned_elements_mut(&mut self.children)
+    }
+
+    pub fn fixed_positioned_elements(&self) -> impl Iterator<Item = &Self> {
+        fixed_positioned_elements(&self.children)
+    }
+
+    pub fn fixed_positioned_elements_mut(&mut self) -> impl Iterator<Item = &mut Self> {
+        fixed_positioned_elements_mut(&mut self.children)
     }
 
     #[cfg(feature = "id")]
