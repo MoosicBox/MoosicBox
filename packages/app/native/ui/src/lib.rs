@@ -251,12 +251,10 @@ pub fn player(state: &State) -> Markup {
                         sx-height=(FOOTER_ICON_SIZE)
                         sx-margin-left=(10)
                         fx-click=(
-                            close_all_modals_except(AUDIO_ZONES_ID).and(
-                                get_visibility_str_id(AUDIO_ZONES_ID)
-                                    .eq(Visibility::Hidden)
-                                    .then(ActionType::show_str_id(AUDIO_ZONES_ID))
-                                    .or_else(ActionType::hide_str_id(AUDIO_ZONES_ID))
-                            )
+                            get_visibility_str_id(AUDIO_ZONES_ID)
+                                .eq(Visibility::Hidden)
+                                .then(ActionType::show_str_id(AUDIO_ZONES_ID))
+                                .or_else(ActionType::hide_str_id(AUDIO_ZONES_ID))
                         )
                     {
                         img
@@ -269,12 +267,10 @@ pub fn player(state: &State) -> Markup {
                         sx-height=(FOOTER_ICON_SIZE)
                         sx-margin-left=(10)
                         fx-click=(
-                            close_all_modals_except(PLAYBACK_SESSIONS_ID).and(
-                                get_visibility_str_id(PLAYBACK_SESSIONS_ID)
-                                    .eq(Visibility::Hidden)
-                                    .then(ActionType::show_str_id(PLAYBACK_SESSIONS_ID))
-                                    .or_else(ActionType::hide_str_id(PLAYBACK_SESSIONS_ID))
-                            )
+                            get_visibility_str_id(PLAYBACK_SESSIONS_ID)
+                                .eq(Visibility::Hidden)
+                                .then(ActionType::show_str_id(PLAYBACK_SESSIONS_ID))
+                                .or_else(ActionType::hide_str_id(PLAYBACK_SESSIONS_ID))
                         )
                     {
                         img
@@ -284,12 +280,10 @@ pub fn player(state: &State) -> Markup {
                     }
                     button
                         fx-click=(
-                            close_all_modals().and(
-                                get_visibility_str_id("play-queue")
-                                    .eq(Visibility::Hidden)
-                                    .then(ActionType::show_str_id("play-queue"))
-                                    .or_else(ActionType::hide_str_id("play-queue"))
-                            )
+                            get_visibility_str_id("play-queue")
+                                .eq(Visibility::Hidden)
+                                .then(ActionType::show_str_id("play-queue"))
+                                .or_else(ActionType::hide_str_id("play-queue"))
                         )
                         sx-width=(FOOTER_ICON_SIZE)
                         sx-height=(FOOTER_ICON_SIZE)
@@ -606,30 +600,6 @@ pub fn page(state: &State, slot: &Markup) -> Markup {
             (playback_sessions())
         }
     }
-}
-
-static MODAL_IDS: [&str; 2] = [AUDIO_ZONES_ID, PLAYBACK_SESSIONS_ID];
-
-#[must_use]
-fn close_all_modals() -> ActionType {
-    let mut action_type = ActionType::NoOp;
-
-    for id in MODAL_IDS {
-        action_type = action_type.and(ActionType::hide_str_id(id));
-    }
-
-    action_type
-}
-
-#[must_use]
-fn close_all_modals_except(id: &str) -> ActionType {
-    let mut action_type = ActionType::NoOp;
-
-    for id in MODAL_IDS.iter().filter(|x| **x != id) {
-        action_type = action_type.and(ActionType::hide_str_id(id));
-    }
-
-    action_type
 }
 
 static AUDIO_ZONES_ID: &str = "audio-zones";
