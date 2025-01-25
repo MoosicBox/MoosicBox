@@ -604,8 +604,8 @@ pub fn page(state: &State, slot: &Markup) -> Markup {
     }
 }
 
-static AUDIO_ZONES_ID: &str = "audio-zones";
-static AUDIO_ZONES_CONTENT_ID: &str = "audio-zones-content";
+pub static AUDIO_ZONES_ID: &str = "audio-zones";
+pub static AUDIO_ZONES_CONTENT_ID: &str = "audio-zones-content";
 
 #[must_use]
 pub fn audio_zones() -> Markup {
@@ -653,11 +653,7 @@ pub fn audio_zones() -> Markup {
                             }
                         }
                     }
-                    div
-                        id=(AUDIO_ZONES_CONTENT_ID)
-                        hx-get=(pre_escaped!("/audio-zones"))
-                        hx-trigger="load"
-                    {
+                    div hx-get=(pre_escaped!("/audio-zones")) hx-trigger="load" {
                         "Loading..."
                     }
                 }
@@ -666,8 +662,8 @@ pub fn audio_zones() -> Markup {
     }
 }
 
-static PLAYBACK_SESSIONS_ID: &str = "playback-sessions";
-static PLAYBACK_SESSIONS_CONTENT_ID: &str = "playback-sessions-content";
+pub static PLAYBACK_SESSIONS_ID: &str = "playback-sessions";
+pub static PLAYBACK_SESSIONS_CONTENT_ID: &str = "playback-sessions-content";
 
 #[must_use]
 pub fn playback_sessions() -> Markup {
@@ -715,11 +711,7 @@ pub fn playback_sessions() -> Markup {
                             }
                         }
                     }
-                    div
-                        id=(PLAYBACK_SESSIONS_CONTENT_ID)
-                        hx-get=(pre_escaped!("/playback-sessions"))
-                        hx-trigger="load"
-                    {
+                    div hx-get=(pre_escaped!("/playback-sessions")) hx-trigger="load" {
                         "Loading..."
                     }
                 }

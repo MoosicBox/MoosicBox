@@ -22,10 +22,10 @@ use moosicbox_app_native_lib::{
 use moosicbox_app_native_ui::{
     albums::load_albums,
     state::{self, State},
-    Action,
+    Action, AUDIO_ZONES_CONTENT_ID, PLAYBACK_SESSIONS_CONTENT_ID,
 };
 use moosicbox_app_state::AppStateError;
-use moosicbox_audio_zone_models::ApiAudioZone;
+use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
 use moosicbox_core::sqlite::models::{
     AlbumSort, AlbumType, ApiAlbum, ApiArtist, ApiSource, ApiTrack, TrackApiSource,
 };
@@ -48,6 +48,7 @@ mod visualization;
 static STATE: LazyLock<moosicbox_app_state::AppState> = LazyLock::new(|| {
     moosicbox_app_state::AppState::default()
         .with_on_current_sessions_updated_listener(current_sessions_updated)
+        .with_on_audio_zone_with_sessions_updated_listener(audio_zone_with_sessions_updated)
         .with_on_after_handle_playback_update_listener(handle_playback_update)
 });
 
@@ -95,6 +96,12 @@ async fn current_sessions_updated(sessions: Vec<ApiSession>) {
         log::debug!("current_sessions_updated: no sessions");
         STATE.current_session_id.write().await.take();
     }
+}
+
+async fn audio_zone_with_sessions_updated(zones: Vec<ApiAudioZoneWithSession>) {
+    log::trace!("audio_zone_with_sessions_updated: {zones:?}");
+
+    update_audio_zones(&zones).await;
 }
 
 async fn set_current_session(session: ApiSession) {
@@ -181,6 +188,9 @@ async fn handle_session_update(state: &State, update: &ApiUpdateSession, session
     }
 
     if update.position.is_some() || update.playlist.is_some() {
+        log::debug!("session_updated: rendering playlist session");
+        update_playlist_sessions().await;
+
         log::debug!("handle_session_update: position or playlist updated");
         let track: Option<&ApiTrack> = session
             .playlist
@@ -202,6 +212,46 @@ async fn handle_session_update(state: &State, update: &ApiUpdateSession, session
         }
 
         drop(renderer);
+    }
+}
+
+async fn update_audio_zones(zones: &[ApiAudioZoneWithSession]) {
+    let view = PartialView {
+        target: AUDIO_ZONES_CONTENT_ID.to_string(),
+        container: moosicbox_app_native_ui::audio_zones::audio_zones(zones)
+            .try_into()
+            .unwrap(),
+    };
+    let response = RENDERER
+        .get()
+        .unwrap()
+        .write()
+        .await
+        .render_partial(view)
+        .await;
+    if let Err(e) = response {
+        log::error!("Failed to render_partial: {e:?}");
+    }
+}
+
+async fn update_playlist_sessions() {
+    let view = PartialView {
+        target: PLAYBACK_SESSIONS_CONTENT_ID.to_string(),
+        container: moosicbox_app_native_ui::playback_sessions::playback_sessions(
+            &STATE.current_sessions.read().await,
+        )
+        .try_into()
+        .unwrap(),
+    };
+    let response = RENDERER
+        .get()
+        .unwrap()
+        .write()
+        .await
+        .render_partial(view)
+        .await;
+    if let Err(e) = response {
+        log::error!("Failed to render_partial: {e:?}");
     }
 }
 
@@ -1257,7 +1307,7 @@ async fn audio_zones_route(_req: RouteRequest) -> Result<View, RouteError> {
         return Err(RouteError::RouteFailed(message.into()));
     }
 
-    let zones: Page<ApiAudioZone> = response.json().await?;
+    let zones: Page<ApiAudioZoneWithSession> = response.json().await?;
 
     moosicbox_app_native_ui::audio_zones::audio_zones(&zones)
         .into_string()
