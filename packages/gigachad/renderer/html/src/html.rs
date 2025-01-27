@@ -488,12 +488,28 @@ pub fn element_style_to_html(
         write_css_attr(f, b"width", number_to_css_string(width).as_bytes())?;
         flex_shrink_0 = true;
     }
+    if let Some(width) = &container.max_width {
+        if !printed_start {
+            printed_start = true;
+            f.write_all(b" style=\"")?;
+        }
+        write_css_attr(f, b"max-width", number_to_css_string(width).as_bytes())?;
+        flex_shrink_0 = true;
+    }
     if let Some(height) = &container.height {
         if !printed_start {
             printed_start = true;
             f.write_all(b" style=\"")?;
         }
         write_css_attr(f, b"height", number_to_css_string(height).as_bytes())?;
+        flex_shrink_0 = true;
+    }
+    if let Some(height) = &container.max_height {
+        if !printed_start {
+            printed_start = true;
+            f.write_all(b" style=\"")?;
+        }
+        write_css_attr(f, b"max-height", number_to_css_string(height).as_bytes())?;
         flex_shrink_0 = true;
     }
 

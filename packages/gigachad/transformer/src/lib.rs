@@ -185,7 +185,9 @@ pub struct Container {
     pub justify_content: JustifyContent,
     pub align_items: AlignItems,
     pub width: Option<Number>,
+    pub max_width: Option<Number>,
     pub height: Option<Number>,
+    pub max_height: Option<Number>,
     pub gap: Option<Number>,
     pub opacity: Option<Number>,
     pub left: Option<Number>,
@@ -870,7 +872,9 @@ impl Container {
         attrs.add_opt("sx-background", self.background);
 
         attrs.add_opt("sx-width", self.width.as_ref());
+        attrs.add_opt("sx-max-width", self.max_width.as_ref());
         attrs.add_opt("sx-height", self.height.as_ref());
+        attrs.add_opt("sx-max-height", self.max_height.as_ref());
 
         attrs.add_opt("sx-gap", self.gap.as_ref());
 
