@@ -3924,6 +3924,7 @@ name = "gigachad_renderer_html"
 version = "0.1.0"
 dependencies = [
  "actix-cors",
+ "actix-files",
  "actix-web",
  "async-trait",
  "flume",

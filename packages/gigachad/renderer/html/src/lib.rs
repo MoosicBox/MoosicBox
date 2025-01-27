@@ -76,6 +76,16 @@ impl HtmlRenderer {
     pub async fn wait_for_navigation(&self) -> Option<String> {
         self.receiver.recv_async().await.ok()
     }
+
+    #[cfg(feature = "assets")]
+    #[must_use]
+    pub fn with_static_asset_routes(
+        mut self,
+        paths: impl Into<Vec<gigachad_renderer::assets::StaticAssetRoute>>,
+    ) -> Self {
+        self.app = self.app.with_static_asset_routes(paths);
+        self
+    }
 }
 
 #[route(
@@ -164,6 +174,7 @@ impl RenderRunner for HtmlRenderRunner {
     /// # Errors
     ///
     /// Will error if html fails to run the event loop.
+    #[allow(clippy::too_many_lines)]
     fn run(&mut self) -> Result<(), Box<dyn std::error::Error + Send>> {
         log::debug!("run: starting");
 
@@ -204,12 +215,61 @@ impl RenderRunner for HtmlRenderRunner {
                     .supports_credentials()
                     .max_age(3600);
 
-                App::new()
+                #[allow(unused_mut)]
+                let mut app = App::new()
                     .app_data(Data::new(html_app.clone()))
                     .wrap(cors)
                     .wrap(middleware::Compress::default())
-                    .wrap(moosicbox_middleware::api_logger::ApiLogger::default())
-                    .service(catchall_endpoint)
+                    .wrap(moosicbox_middleware::api_logger::ApiLogger::default());
+
+                #[cfg(feature = "assets")]
+                {
+                    use gigachad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
+
+                    for StaticAssetRoute { route, target } in &html_app.static_asset_routes {
+                        match target {
+                            AssetPathTarget::File(target) => {
+                                let target = target.clone();
+                                app = app.route(
+                                    &format!("/{route}"),
+                                    web::get().to(move |req: HttpRequest| {
+                                        let target = target.clone();
+                                        async move {
+                                            let file = actix_files::NamedFile::open_async(target)
+                                                .await
+                                                .map_err(ErrorInternalServerError)?;
+
+                                            Ok::<_, actix_web::Error>(file.into_response(&req))
+                                        }
+                                    }),
+                                );
+                            }
+                            AssetPathTarget::Directory(target) => {
+                                let target = target.clone();
+                                app = app.route(
+                                    &format!("/{route}/{{path:.*}}"),
+                                    web::get().to(
+                                        move |req: HttpRequest, path: web::Path<String>| {
+                                            let target = target.clone();
+                                            async move {
+                                                let target = target.join(path.clone());
+
+                                                let file =
+                                                    actix_files::NamedFile::open_async(target)
+                                                        .await
+                                                        .map_err(ErrorInternalServerError)?;
+
+                                                Ok::<_, actix_web::Error>(file.into_response(&req))
+                                            }
+                                        },
+                                    ),
+                                );
+                            }
+                        }
+                    }
+                }
+
+                app.service(catchall_endpoint)
             };
 
             let mut http_server = actix_web::HttpServer::new(app);
@@ -349,6 +409,8 @@ struct HtmlApp {
     #[allow(unused)]
     request_action: Sender<(String, Option<Value>)>,
     tag_renderer: Arc<Box<dyn HtmlTagRenderer + Send + Sync>>,
+    #[cfg(feature = "assets")]
+    static_asset_routes: Vec<gigachad_renderer::assets::StaticAssetRoute>,
 }
 
 impl HtmlApp {
@@ -362,6 +424,18 @@ impl HtmlApp {
             background: None,
             request_action,
             tag_renderer: Arc::new(Box::new(tag_renderer)),
+            #[cfg(feature = "assets")]
+            static_asset_routes: vec![],
         }
+    }
+
+    #[cfg(feature = "assets")]
+    #[must_use]
+    pub fn with_static_asset_routes(
+        mut self,
+        paths: impl Into<Vec<gigachad_renderer::assets::StaticAssetRoute>>,
+    ) -> Self {
+        self.static_asset_routes = paths.into();
+        self
     }
 }

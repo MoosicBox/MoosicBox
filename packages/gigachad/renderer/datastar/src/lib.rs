@@ -9,7 +9,10 @@ use std::{
 use async_trait::async_trait;
 use flume::Sender;
 use gigachad_actions::logic::Value;
-use gigachad_renderer::{canvas::CanvasUpdate, Color, PartialView, RenderRunner, Renderer, View};
+use gigachad_renderer::{
+    assets::StaticAssetRoute, canvas::CanvasUpdate, Color, PartialView, RenderRunner, Renderer,
+    View,
+};
 use gigachad_renderer_html::{
     html::{element_classes_to_html, element_style_to_html, HtmlTagRenderer},
     HeaderMap, HtmlRenderer,
@@ -104,6 +107,12 @@ impl DatastarRenderer {
     #[must_use]
     pub async fn wait_for_navigation(&self) -> Option<String> {
         self.html_renderer.wait_for_navigation().await
+    }
+
+    #[must_use]
+    pub fn with_static_asset_routes(mut self, paths: impl Into<Vec<StaticAssetRoute>>) -> Self {
+        self.html_renderer = self.html_renderer.with_static_asset_routes(paths);
+        self
     }
 }
 

@@ -20,7 +20,9 @@ gigachad_actions = { version = "0.1.0", path = "../../actions", default-features
 gigachad_renderer = { version = "0.1.0", path = "..", default-features = false, features = [
     "canvas",
 ] }
-gigachad_renderer_html = { version = "0.1.0", path = "../html", default-features = false }
+gigachad_renderer_html = { version = "0.1.0", path = "../html", default-features = false, features = [
+    "assets",
+] }
 gigachad_router = { version = "0.1.0", path = "../../../gigachad/router", default-features = false }
 
 async-trait = { workspace = true }

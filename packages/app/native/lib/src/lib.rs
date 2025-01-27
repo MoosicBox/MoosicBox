@@ -40,6 +40,8 @@ pub struct NativeAppBuilder {
     runtime: Option<Arc<tokio::runtime::Runtime>>,
     action_handlers: Vec<ActionHandler>,
     resize_listeners: Vec<ResizeListener>,
+    #[cfg(feature = "_assets")]
+    static_asset_routes: Vec<gigachad_renderer::assets::StaticAssetRoute>,
 }
 
 impl Default for NativeAppBuilder {
@@ -63,6 +65,8 @@ impl NativeAppBuilder {
             runtime: None,
             action_handlers: vec![],
             resize_listeners: vec![],
+            #[cfg(feature = "_assets")]
+            static_asset_routes: vec![],
         }
     }
 
@@ -206,6 +210,31 @@ impl NativeAppBuilder {
         resize_tx
     }
 
+    #[cfg(feature = "_assets")]
+    #[must_use]
+    pub fn with_static_asset_route(
+        mut self,
+        path: impl Into<gigachad_renderer::assets::StaticAssetRoute>,
+    ) -> Self {
+        self.static_asset_routes.push(path.into());
+        self
+    }
+
+    /// # Errors
+    ///
+    /// * If the asset path type is a not found
+    /// * If the asset path type is an invalid path type (not a file or directory)
+    #[cfg(feature = "_assets")]
+    pub fn with_static_asset_route_result<
+        Path: TryInto<gigachad_renderer::assets::StaticAssetRoute>,
+    >(
+        mut self,
+        path: Path,
+    ) -> Result<Self, Path::Error> {
+        self.static_asset_routes.push(path.try_into()?);
+        Ok(self)
+    }
+
     /// # Panics
     ///
     /// Will panic if failed to start tokio runtime
@@ -279,6 +308,8 @@ impl NativeAppBuilder {
                             runtime,
                             action_tx,
                         );
+                        #[cfg(feature = "_assets")]
+                        let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
                         Box::new(renderer) as Box<dyn Renderer>
                     }
                     #[cfg(not(feature = "datastar"))]
@@ -296,6 +327,8 @@ impl NativeAppBuilder {
                             runtime,
                             action_tx,
                         );
+                        #[cfg(feature = "_assets")]
+                        let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
                         Box::new(renderer) as Box<dyn Renderer>
                     }
                     #[cfg(not(feature = "htmx"))]
@@ -313,6 +346,8 @@ impl NativeAppBuilder {
                             runtime,
                             action_tx,
                         );
+                        #[cfg(feature = "_assets")]
+                        let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
                         Box::new(renderer) as Box<dyn Renderer>
                     }
                     #[cfg(not(feature = "vanilla-js"))]
@@ -330,6 +365,8 @@ impl NativeAppBuilder {
                             runtime,
                             action_tx,
                         );
+                        #[cfg(feature = "_assets")]
+                        let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
                         Box::new(renderer) as Box<dyn Renderer>
                     }
                     #[cfg(not(feature = "html"))]

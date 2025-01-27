@@ -1,6 +1,8 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
+#[cfg(feature = "assets")]
+pub mod assets;
 #[cfg(feature = "canvas")]
 pub mod canvas;
 #[cfg(feature = "viewport")]

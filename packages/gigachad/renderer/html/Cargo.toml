@@ -34,6 +34,7 @@ moosicbox_middleware = { version = "0.1.0", path = "../../../middleware", defaul
 moosicbox_task = { version = "0.1.0", path = "../../../task", default-features = false }
 
 actix-cors  = { workspace = true }
+actix-files = { workspace = true, optional = true }
 actix-web   = { workspace = true }
 async-trait = { workspace = true }
 flume       = { workspace = true }
@@ -41,8 +42,10 @@ log         = { workspace = true }
 tokio       = { workspace = true }
 
 [features]
-default = ["debug"]
+default = ["assets", "debug"]
 
 fail-on-warnings = []
 
 debug = []
+
+assets = ["dep:actix-files", "gigachad_renderer/assets"]
