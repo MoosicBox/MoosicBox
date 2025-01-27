@@ -176,145 +176,91 @@ pub fn element_style_to_html(
 ) -> Result<(), std::io::Error> {
     let mut printed_start = false;
 
+    macro_rules! write_css_attr {
+        ($f:expr, $key:expr, $value:expr $(,)?) => {{
+            if !printed_start {
+                printed_start = true;
+                f.write_all(b" style=\"")?;
+            }
+            write_css_attr($f, $key, $value)
+        }};
+    }
+
     // TODO: handle vertical flex
     if is_flex_child && container.width.is_none() {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(f, b"flex", b"1")?;
+        write_css_attr!(f, b"flex", b"1")?;
     }
 
     if is_flex_container(container) {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(f, b"display", b"flex")?;
-        write_css_attr(f, b"flex-direction", b"row")?;
+        write_css_attr!(f, b"display", b"flex")?;
+        write_css_attr!(f, b"flex-direction", b"row")?;
     }
 
     match container.overflow_x {
         LayoutOverflow::Auto => {
-            if !printed_start {
-                printed_start = true;
-                f.write_all(b" style=\"")?;
-            }
-            write_css_attr(f, b"overflow-x", b"auto")?;
+            write_css_attr!(f, b"overflow-x", b"auto")?;
         }
         LayoutOverflow::Scroll => {
-            if !printed_start {
-                printed_start = true;
-                f.write_all(b" style=\"")?;
-            }
-            write_css_attr(f, b"overflow-x", b"scroll")?;
+            write_css_attr!(f, b"overflow-x", b"scroll")?;
         }
         LayoutOverflow::Expand | LayoutOverflow::Squash => {}
         LayoutOverflow::Wrap => {
-            if !printed_start {
-                printed_start = true;
-                f.write_all(b" style=\"")?;
-            }
-            write_css_attr(f, b"flex-wrap", b"wrap")?;
+            write_css_attr!(f, b"flex-wrap", b"wrap")?;
         }
     }
     match container.overflow_y {
         LayoutOverflow::Auto => {
-            if !printed_start {
-                printed_start = true;
-                f.write_all(b" style=\"")?;
-            }
-            write_css_attr(f, b"overflow-y", b"auto")?;
+            write_css_attr!(f, b"overflow-y", b"auto")?;
         }
         LayoutOverflow::Scroll => {
-            if !printed_start {
-                printed_start = true;
-                f.write_all(b" style=\"")?;
-            }
-            write_css_attr(f, b"overflow-y", b"scroll")?;
+            write_css_attr!(f, b"overflow-y", b"scroll")?;
         }
         LayoutOverflow::Expand | LayoutOverflow::Squash => {}
         LayoutOverflow::Wrap => {
-            if !printed_start {
-                printed_start = true;
-                f.write_all(b" style=\"")?;
-            }
-            write_css_attr(f, b"flex-wrap", b"wrap")?;
+            write_css_attr!(f, b"flex-wrap", b"wrap")?;
         }
     }
 
     if let Some(position) = container.position {
         match position {
             Position::Relative => {
-                if !printed_start {
-                    printed_start = true;
-                    f.write_all(b" style=\"")?;
-                }
-                write_css_attr(f, b"position", b"relative")?;
+                write_css_attr!(f, b"position", b"relative")?;
             }
             Position::Absolute => {
-                if !printed_start {
-                    printed_start = true;
-                    f.write_all(b" style=\"")?;
-                }
-                write_css_attr(f, b"position", b"absolute")?;
+                write_css_attr!(f, b"position", b"absolute")?;
             }
             Position::Fixed => {
-                if !printed_start {
-                    printed_start = true;
-                    f.write_all(b" style=\"")?;
-                }
-                write_css_attr(f, b"position", b"fixed")?;
+                write_css_attr!(f, b"position", b"fixed")?;
             }
             Position::Static => {
-                if !printed_start {
-                    printed_start = true;
-                    f.write_all(b" style=\"")?;
-                }
-                write_css_attr(f, b"position", b"static")?;
+                write_css_attr!(f, b"position", b"static")?;
             }
         }
     }
 
     if let Some(margin_left) = &container.margin_left {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(
+        write_css_attr!(
             f,
             b"margin-left",
             number_to_css_string(margin_left).as_bytes(),
         )?;
     }
     if let Some(margin_right) = &container.margin_right {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(
+        write_css_attr!(
             f,
             b"margin-right",
             number_to_css_string(margin_right).as_bytes(),
         )?;
     }
     if let Some(margin_top) = &container.margin_top {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(
+        write_css_attr!(
             f,
             b"margin-top",
             number_to_css_string(margin_top).as_bytes(),
         )?;
     }
     if let Some(margin_bottom) = &container.margin_bottom {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(
+        write_css_attr!(
             f,
             b"margin-bottom",
             number_to_css_string(margin_bottom).as_bytes(),
@@ -322,44 +268,28 @@ pub fn element_style_to_html(
     }
 
     if let Some(padding_left) = &container.padding_left {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(
+        write_css_attr!(
             f,
             b"padding-left",
             number_to_css_string(padding_left).as_bytes(),
         )?;
     }
     if let Some(padding_right) = &container.padding_right {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(
+        write_css_attr!(
             f,
             b"padding-right",
             number_to_css_string(padding_right).as_bytes(),
         )?;
     }
     if let Some(padding_top) = &container.padding_top {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(
+        write_css_attr!(
             f,
             b"padding-top",
             number_to_css_string(padding_top).as_bytes(),
         )?;
     }
     if let Some(padding_bottom) = &container.padding_bottom {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(
+        write_css_attr!(
             f,
             b"padding-bottom",
             number_to_css_string(padding_bottom).as_bytes(),
@@ -367,32 +297,16 @@ pub fn element_style_to_html(
     }
 
     if let Some(left) = &container.left {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(f, b"left", number_to_css_string(left).as_bytes())?;
+        write_css_attr!(f, b"left", number_to_css_string(left).as_bytes())?;
     }
     if let Some(right) = &container.right {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(f, b"right", number_to_css_string(right).as_bytes())?;
+        write_css_attr!(f, b"right", number_to_css_string(right).as_bytes())?;
     }
     if let Some(top) = &container.top {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(f, b"top", number_to_css_string(top).as_bytes())?;
+        write_css_attr!(f, b"top", number_to_css_string(top).as_bytes())?;
     }
     if let Some(bottom) = &container.bottom {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(f, b"bottom", number_to_css_string(bottom).as_bytes())?;
+        write_css_attr!(f, b"bottom", number_to_css_string(bottom).as_bytes())?;
     }
 
     if let Some(visibility) = container.visibility {
@@ -403,138 +317,74 @@ pub fn element_style_to_html(
                     printed_start = true;
                     f.write_all(b" style=\"")?;
                 }
-                write_css_attr(f, b"display", b"none")?;
+                write_css_attr!(f, b"display", b"none")?;
             }
         }
     }
 
     match container.justify_content {
         JustifyContent::Start => {
-            if !printed_start {
-                printed_start = true;
-                f.write_all(b" style=\"")?;
-            }
-            write_css_attr(f, b"justify-content", b"start")?;
+            write_css_attr!(f, b"justify-content", b"start")?;
         }
         JustifyContent::Center => {
-            if !printed_start {
-                printed_start = true;
-                f.write_all(b" style=\"")?;
-            }
-            write_css_attr(f, b"justify-content", b"center")?;
+            write_css_attr!(f, b"justify-content", b"center")?;
         }
         JustifyContent::End => {
-            if !printed_start {
-                printed_start = true;
-                f.write_all(b" style=\"")?;
-            }
-            write_css_attr(f, b"justify-content", b"end")?;
+            write_css_attr!(f, b"justify-content", b"end")?;
         }
         JustifyContent::SpaceBetween => {
-            if !printed_start {
-                printed_start = true;
-                f.write_all(b" style=\"")?;
-            }
-            write_css_attr(f, b"justify-content", b"space-between")?;
+            write_css_attr!(f, b"justify-content", b"space-between")?;
         }
         JustifyContent::SpaceEvenly => {
-            if !printed_start {
-                printed_start = true;
-                f.write_all(b" style=\"")?;
-            }
-            write_css_attr(f, b"justify-content", b"space-evenly")?;
+            write_css_attr!(f, b"justify-content", b"space-evenly")?;
         }
     }
 
     match container.align_items {
         AlignItems::Start => {
-            if !printed_start {
-                printed_start = true;
-                f.write_all(b" style=\"")?;
-            }
-            write_css_attr(f, b"align-items", b"start")?;
+            write_css_attr!(f, b"align-items", b"start")?;
         }
         AlignItems::Center => {
-            if !printed_start {
-                printed_start = true;
-                f.write_all(b" style=\"")?;
-            }
-            write_css_attr(f, b"align-items", b"center")?;
+            write_css_attr!(f, b"align-items", b"center")?;
         }
         AlignItems::End => {
-            if !printed_start {
-                printed_start = true;
-                f.write_all(b" style=\"")?;
-            }
-            write_css_attr(f, b"align-items", b"end")?;
+            write_css_attr!(f, b"align-items", b"end")?;
         }
     }
 
     if let Some(gap) = &container.gap {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(f, b"grid-gap", number_to_css_string(gap).as_bytes())?;
+        write_css_attr!(f, b"grid-gap", number_to_css_string(gap).as_bytes())?;
     }
 
     let mut flex_shrink_0 = false;
 
     if let Some(width) = &container.width {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(f, b"width", number_to_css_string(width).as_bytes())?;
+        write_css_attr!(f, b"width", number_to_css_string(width).as_bytes())?;
         flex_shrink_0 = true;
     }
     if let Some(width) = &container.max_width {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(f, b"max-width", number_to_css_string(width).as_bytes())?;
+        write_css_attr!(f, b"max-width", number_to_css_string(width).as_bytes())?;
         flex_shrink_0 = true;
     }
     if let Some(height) = &container.height {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(f, b"height", number_to_css_string(height).as_bytes())?;
+        write_css_attr!(f, b"height", number_to_css_string(height).as_bytes())?;
         flex_shrink_0 = true;
     }
     if let Some(height) = &container.max_height {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(f, b"max-height", number_to_css_string(height).as_bytes())?;
+        write_css_attr!(f, b"max-height", number_to_css_string(height).as_bytes())?;
         flex_shrink_0 = true;
     }
 
     if flex_shrink_0 {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(f, b"flex-shrink", b"0")?;
+        write_css_attr!(f, b"flex-shrink", b"0")?;
     }
 
     if let Some(background) = container.background {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(f, b"background", color_to_css_string(background).as_bytes())?;
+        write_css_attr!(f, b"background", color_to_css_string(background).as_bytes())?;
     }
 
     if let Some((color, size)) = &container.border_top {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(
+        write_css_attr!(
             f,
             b"border-top",
             &[
@@ -547,11 +397,7 @@ pub fn element_style_to_html(
     }
 
     if let Some((color, size)) = &container.border_right {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(
+        write_css_attr!(
             f,
             b"border-right",
             &[
@@ -564,11 +410,7 @@ pub fn element_style_to_html(
     }
 
     if let Some((color, size)) = &container.border_bottom {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(
+        write_css_attr!(
             f,
             b"border-bottom",
             &[
@@ -581,11 +423,7 @@ pub fn element_style_to_html(
     }
 
     if let Some((color, size)) = &container.border_left {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(
+        write_css_attr!(
             f,
             b"border-left",
             &[
@@ -598,11 +436,7 @@ pub fn element_style_to_html(
     }
 
     if let Some(radius) = &container.border_top_left_radius {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(
+        write_css_attr!(
             f,
             b"border-top-left-radius",
             number_to_css_string(radius).as_bytes(),
@@ -610,11 +444,7 @@ pub fn element_style_to_html(
     }
 
     if let Some(radius) = &container.border_top_right_radius {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(
+        write_css_attr!(
             f,
             b"border-top-right-radius",
             number_to_css_string(radius).as_bytes(),
@@ -622,11 +452,7 @@ pub fn element_style_to_html(
     }
 
     if let Some(radius) = &container.border_bottom_left_radius {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(
+        write_css_attr!(
             f,
             b"border-bottom-left-radius",
             number_to_css_string(radius).as_bytes(),
@@ -634,11 +460,7 @@ pub fn element_style_to_html(
     }
 
     if let Some(radius) = &container.border_bottom_right_radius {
-        if !printed_start {
-            printed_start = true;
-            f.write_all(b" style=\"")?;
-        }
-        write_css_attr(
+        write_css_attr!(
             f,
             b"border-bottom-right-radius",
             number_to_css_string(radius).as_bytes(),
