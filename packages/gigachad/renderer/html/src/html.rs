@@ -6,7 +6,7 @@ use actix_web::http::header::HeaderMap;
 use gigachad_renderer::Color;
 use gigachad_router::Container;
 use gigachad_transformer::{
-    models::{JustifyContent, LayoutDirection, LayoutOverflow, Position, Visibility},
+    models::{AlignItems, JustifyContent, LayoutDirection, LayoutOverflow, Position, Visibility},
     Calculation, Element, HeaderSize, Input, Number,
 };
 
@@ -446,6 +446,30 @@ pub fn element_style_to_html(
         }
     }
 
+    match container.align_items {
+        AlignItems::Start => {
+            if !printed_start {
+                printed_start = true;
+                f.write_all(b" style=\"")?;
+            }
+            write_css_attr(f, b"align-items", b"start")?;
+        }
+        AlignItems::Center => {
+            if !printed_start {
+                printed_start = true;
+                f.write_all(b" style=\"")?;
+            }
+            write_css_attr(f, b"align-items", b"center")?;
+        }
+        AlignItems::End => {
+            if !printed_start {
+                printed_start = true;
+                f.write_all(b" style=\"")?;
+            }
+            write_css_attr(f, b"align-items", b"end")?;
+        }
+    }
+
     if let Some(gap) = &container.gap {
         if !printed_start {
             printed_start = true;
@@ -554,6 +578,54 @@ pub fn element_style_to_html(
                 color_to_css_string(*color).as_bytes(),
             ]
             .concat(),
+        )?;
+    }
+
+    if let Some(radius) = &container.border_top_left_radius {
+        if !printed_start {
+            printed_start = true;
+            f.write_all(b" style=\"")?;
+        }
+        write_css_attr(
+            f,
+            b"border-top-left-radius",
+            number_to_css_string(radius).as_bytes(),
+        )?;
+    }
+
+    if let Some(radius) = &container.border_top_right_radius {
+        if !printed_start {
+            printed_start = true;
+            f.write_all(b" style=\"")?;
+        }
+        write_css_attr(
+            f,
+            b"border-top-right-radius",
+            number_to_css_string(radius).as_bytes(),
+        )?;
+    }
+
+    if let Some(radius) = &container.border_bottom_left_radius {
+        if !printed_start {
+            printed_start = true;
+            f.write_all(b" style=\"")?;
+        }
+        write_css_attr(
+            f,
+            b"border-bottom-left-radius",
+            number_to_css_string(radius).as_bytes(),
+        )?;
+    }
+
+    if let Some(radius) = &container.border_bottom_right_radius {
+        if !printed_start {
+            printed_start = true;
+            f.write_all(b" style=\"")?;
+        }
+        write_css_attr(
+            f,
+            b"border-bottom-right-radius",
+            number_to_css_string(radius).as_bytes(),
         )?;
     }
 

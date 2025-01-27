@@ -51,6 +51,8 @@ members = [
     "packages/library/models",
     "packages/load_balancer",
     "packages/logging",
+    "packages/marketing_site",
+    "packages/marketing_site/ui",
     "packages/mdns",
     "packages/menu",
     "packages/menu/models",

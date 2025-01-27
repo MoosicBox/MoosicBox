@@ -76,6 +76,9 @@ pub fn artist_page_content(artist: &ApiArtist) -> Markup {
 
     html! {
         div sx-padding-x=(60) sx-padding-y=(20) {
+            div sx-padding-y=(20) {
+                "Back"
+            }
             div sx-dir="row" {
                 div sx-width=(size) sx-height=(size) sx-padding-right=(15) {
                     (artist_cover_img(&artist, size))

@@ -1,0 +1,90 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["gui"]
+description = "MoosicBox Marketing Website"
+edition     = "2021"
+keywords    = ["desktop", "gui", "html", "native", "web"]
+license     = "MPL-2.0"
+name        = "moosicbox_marketing_site"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[[bin]]
+name              = "moosicbox_marketing_site"
+path              = "src/main.rs"
+required-features = []
+
+[package.metadata.bundle]
+category          = "Music"
+copyright         = "Copyright (c) Braden Steffaniak 2025. All rights reserved."
+deb_depends       = []
+icon              = ["128x128.png", "128x128@2x.png", "32x32.png"]
+identifier        = "com.moosicbox.marketing_site"
+name              = "MoosicBoxMarketingSite"
+resources         = []
+short_description = "A music app for cows"
+
+[package.metadata.wix]
+compiler-args = ["-nologo"]
+dbg-build     = false
+dbg-name      = false
+eula          = false
+linker-args   = ["-nologo"]
+name          = "MoosicBoxMarketingSite"
+no-build      = false
+product-name  = "MoosicBoxMarketingSite"
+
+[dependencies]
+moosicbox_app_native_lib = { version = "0.1.0", path = "../app/native/lib", default-features = false, features = [
+    "maud",
+] }
+moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
+moosicbox_env_utils = { version = "0.1.0", path = "../env_utils", default-features = false }
+moosicbox_logging = { version = "0.1.0", path = "../logging", default-features = false, features = [
+    "free_log",
+] }
+moosicbox_marketing_site_ui = { version = "0.1.0", path = "ui", default-features = false }
+
+console-subscriber = { workspace = true }
+log                = { workspace = true }
+tokio              = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default = [
+    "datastar",
+    "dev",
+    "egui-wgpu",
+    "fltk",
+    "html",
+    "htmx",
+    "unsafe",
+    "vanilla-js",
+]
+
+fail-on-warnings = []
+
+datastar   = ["moosicbox_app_native_lib/datastar"]
+egui       = ["moosicbox_app_native_lib/egui"]
+egui-glow  = ["egui", "moosicbox_app_native_lib/egui-glow"]
+egui-wgpu  = ["egui", "moosicbox_app_native_lib/egui-wgpu"]
+fltk       = ["moosicbox_app_native_lib/fltk"]
+html       = ["moosicbox_app_native_lib/html"]
+htmx       = ["moosicbox_app_native_lib/htmx"]
+vanilla-js = ["moosicbox_app_native_lib/vanilla-js"]
+
+wayland = ["moosicbox_app_native_lib/wayland"]
+x11     = ["moosicbox_app_native_lib/x11"]
+
+windows-console = []
+
+debug             = ["moosicbox_app_native_lib/debug"]
+format            = ["moosicbox_app_native_lib/format"]
+profiling-puffin  = ["moosicbox_app_native_lib/profiling-puffin"]
+profiling-tracing = ["moosicbox_app_native_lib/profiling-tracing"]
+profiling-tracy   = ["moosicbox_app_native_lib/profiling-tracy"]
+unsafe            = ["moosicbox_app_native_lib/unsafe"]
+
+assets = ["moosicbox_app_native_lib/assets"]
+
+dev = ["assets"]

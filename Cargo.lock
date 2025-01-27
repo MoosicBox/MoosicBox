@@ -6692,6 +6692,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_marketing_site"
+version = "0.1.0"
+dependencies = [
+ "console-subscriber",
+ "log",
+ "moosicbox_app_native_lib",
+ "moosicbox_assert",
+ "moosicbox_env_utils",
+ "moosicbox_logging",
+ "moosicbox_marketing_site_ui",
+ "tokio",
+]
+
+[[package]]
+name = "moosicbox_marketing_site_ui"
+version = "0.1.0"
+dependencies = [
+ "gigachad_transformer_models",
+ "log",
+ "maud",
+ "moosicbox_app_native_image",
+]
+
+[[package]]
 name = "moosicbox_mdns"
 version = "0.1.0"
 dependencies = [
