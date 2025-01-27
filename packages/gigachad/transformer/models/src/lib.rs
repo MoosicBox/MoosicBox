@@ -265,3 +265,27 @@ impl std::fmt::Display for Visibility {
         }
     }
 }
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(tag = "type"))]
+pub enum ImageFit {
+    #[default]
+    Default,
+    Contain,
+    Cover,
+    Fill,
+    None,
+}
+
+impl std::fmt::Display for ImageFit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Default => f.write_str("default"),
+            Self::Contain => f.write_str("contain"),
+            Self::Cover => f.write_str("cover"),
+            Self::Fill => f.write_str("fill"),
+            Self::None => f.write_str("none"),
+        }
+    }
+}

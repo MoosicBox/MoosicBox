@@ -6,7 +6,7 @@ use std::{collections::HashMap, io::Write};
 use gigachad_actions::Action;
 use gigachad_color::Color;
 use gigachad_transformer_models::{
-    AlignItems, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, Position, Route,
+    AlignItems, Cursor, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, Position, Route,
     Visibility,
 };
 use serde_json::Value;
@@ -716,6 +716,7 @@ pub enum Element {
     Button,
     Image {
         source: Option<String>,
+        fit: Option<ImageFit>,
     },
     Anchor {
         href: Option<String>,
@@ -812,6 +813,36 @@ impl Container {
         attrs.add("dbg-id", self.id);
 
         attrs.add_opt("id", self.str_id.as_ref());
+
+        match &self.element {
+            Element::Image { fit, .. } => {
+                attrs.add_opt("sx-fit", *fit);
+            }
+            Element::Div
+            | Element::Raw { .. }
+            | Element::Aside
+            | Element::Main
+            | Element::Header
+            | Element::Footer
+            | Element::Section
+            | Element::Form
+            | Element::Span
+            | Element::Input { .. }
+            | Element::Button
+            | Element::Anchor { .. }
+            | Element::Heading { .. }
+            | Element::UnorderedList
+            | Element::OrderedList
+            | Element::ListItem
+            | Element::Table
+            | Element::THead
+            | Element::TH
+            | Element::TBody
+            | Element::TR
+            | Element::TD => {}
+            #[cfg(feature = "canvas")]
+            Element::Canvas => {}
+        }
 
         let mut data = self.data.iter().collect::<Vec<_>>();
         data.sort_by(|(a, _), (b, _)| (*a).cmp(b));
@@ -1164,7 +1195,7 @@ impl Container {
                 display_elements(&self.children, f, with_debug_attrs)?;
                 f.write_fmt(format_args!("</button>"))?;
             }
-            Element::Image { source } => {
+            Element::Image { source, .. } => {
                 f.write_fmt(format_args!(
                     "<img{src_attr}{attrs} />",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs),

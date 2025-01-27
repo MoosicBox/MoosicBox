@@ -3,7 +3,7 @@ use std::{borrow::Cow, collections::HashMap};
 use gigachad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
 use gigachad_color::Color;
 use gigachad_transformer_models::{
-    AlignItems, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, Position, Route,
+    AlignItems, Cursor, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, Position, Route,
     SwapTarget, Visibility,
 };
 use serde_json::Value;
@@ -286,6 +286,19 @@ fn get_number(tag: &HTMLTag, name: &str) -> Result<Option<Number>, GetNumberErro
     })
 }
 
+fn get_image_fit(tag: &HTMLTag, name: &str) -> Option<ImageFit> {
+    get_tag_attr_value_lower(tag, name)
+        .as_deref()
+        .and_then(|x| match x {
+            "default" => Some(ImageFit::Default),
+            "contain" => Some(ImageFit::Contain),
+            "cover" => Some(ImageFit::Cover),
+            "fill" => Some(ImageFit::Fill),
+            "none" => Some(ImageFit::None),
+            _ => None,
+        })
+}
+
 fn parse_std_action(action: &str) -> Option<ActionEffect> {
     if let Ok(action) = serde_json::from_str::<ActionEffect>(action) {
         return Some(action);
@@ -539,6 +552,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                 "img" => {
                     container.element = crate::Element::Image {
                         source: get_tag_attr_value_owned(tag, "src"),
+                        fit: get_image_fit(tag, "sx-fit"),
                     }
                 }
                 "a" => {

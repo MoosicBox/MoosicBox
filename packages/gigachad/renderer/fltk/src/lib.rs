@@ -861,7 +861,7 @@ impl FltkRenderer {
                 flex_element =
                     Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
-            Element::Image { source } => {
+            Element::Image { source, .. } => {
                 context = context.with_container(container);
                 let width = container.calculated_width;
                 let height = container.calculated_height;

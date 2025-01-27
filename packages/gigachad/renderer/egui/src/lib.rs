@@ -2119,6 +2119,7 @@ impl EguiApp {
         if let Some(ui) = ui {
             if let Element::Image {
                 source: Some(source),
+                ..
             } = &container.element
             {
                 #[cfg(feature = "profiling")]
@@ -3130,7 +3131,7 @@ impl EguiApp {
                 Some(Self::render_input(ui, input, render_context.checkboxes))
             }
             Element::Raw { value } => Some(ui.label(value)),
-            Element::Image { source } => source
+            Element::Image { source, .. } => source
                 .as_ref()
                 .map(|source| Self::render_image(render_context, ui, source, element)),
             Element::Canvas => element.str_id.as_ref().map_or_else(

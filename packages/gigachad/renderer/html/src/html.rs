@@ -6,7 +6,9 @@ use actix_web::http::header::HeaderMap;
 use gigachad_renderer::Color;
 use gigachad_router::Container;
 use gigachad_transformer::{
-    models::{AlignItems, JustifyContent, LayoutDirection, LayoutOverflow, Position, Visibility},
+    models::{
+        AlignItems, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, Position, Visibility,
+    },
     Calculation, Element, HeaderSize, Input, Number,
 };
 
@@ -184,6 +186,47 @@ pub fn element_style_to_html(
             }
             write_css_attr($f, $key, $value)
         }};
+    }
+
+    match &container.element {
+        Element::Image { fit, .. } => {
+            if let Some(fit) = fit {
+                write_css_attr!(
+                    f,
+                    b"object-fit",
+                    match fit {
+                        ImageFit::Default => b"unset",
+                        ImageFit::Contain => b"contain",
+                        ImageFit::Cover => b"cover",
+                        ImageFit::Fill => b"fill",
+                        ImageFit::None => b"none",
+                    }
+                )?;
+            }
+        }
+        Element::Div
+        | Element::Raw { .. }
+        | Element::Aside
+        | Element::Main
+        | Element::Header
+        | Element::Footer
+        | Element::Section
+        | Element::Form
+        | Element::Span
+        | Element::Input { .. }
+        | Element::Button
+        | Element::Anchor { .. }
+        | Element::Heading { .. }
+        | Element::UnorderedList
+        | Element::OrderedList
+        | Element::ListItem
+        | Element::Table
+        | Element::THead
+        | Element::TH
+        | Element::TBody
+        | Element::TR
+        | Element::TD
+        | Element::Canvas => {}
     }
 
     // TODO: handle vertical flex
@@ -515,7 +558,7 @@ pub fn element_to_html(
             f.write_all(value.as_bytes())?;
             return Ok(());
         }
-        Element::Image { source } => {
+        Element::Image { source, .. } => {
             const TAG_NAME: &[u8] = b"img";
             f.write_all(b"<")?;
             f.write_all(TAG_NAME)?;
