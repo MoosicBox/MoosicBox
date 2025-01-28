@@ -565,6 +565,14 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
         justify_content: get_justify_content(tag, "sx-justify-content"),
         align_items: get_align_items(tag, "sx-align-items"),
         text_align: get_text_align(tag, "sx-text-align"),
+        font_family: get_tag_attr_value_owned(tag, "sx-font-family").map(|x| {
+            x.as_str()
+                .split(',')
+                .map(str::trim)
+                .filter(|x| !x.is_empty())
+                .map(ToString::to_string)
+                .collect()
+        }),
         children: parse_top_children(node.children(), parser),
         width: get_number(tag, "sx-width").unwrap(),
         max_width: get_number(tag, "sx-max-width").unwrap(),

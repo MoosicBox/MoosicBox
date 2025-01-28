@@ -191,6 +191,13 @@ impl Arbitrary for Container {
             #[cfg(feature = "id")]
             id: usize::arbitrary(g),
             str_id: Option::arbitrary(g).map(|x: XmlString| x.0),
+            font_family: Option::arbitrary(g).map(|x: Vec<XmlString>| {
+                x.into_iter()
+                    .map(|x| x.0.trim().to_string())
+                    .filter(|x| !x.is_empty())
+                    .filter(|x| !x.chars().any(|x| matches!(x, ',')))
+                    .collect()
+            }),
             classes: Vec::arbitrary(g)
                 .into_iter()
                 .map(|x: XmlString| x.0)

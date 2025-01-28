@@ -575,6 +575,10 @@ pub fn element_style_to_html(
         );
     }
 
+    if let Some(font_family) = &container.font_family {
+        write_css_attr!(b"font-family", font_family.join(",").as_bytes());
+    }
+
     if printed_start {
         f.write_all(b"\"")?;
     }

@@ -257,6 +257,7 @@ pub struct Container {
     pub justify_content: JustifyContent,
     pub align_items: AlignItems,
     pub text_align: Option<TextAlign>,
+    pub font_family: Option<Vec<String>>,
     pub width: Option<Number>,
     pub max_width: Option<Number>,
     pub height: Option<Number>,
@@ -964,6 +965,10 @@ impl Container {
         }
 
         attrs.add_opt("sx-text-align", self.text_align.as_ref());
+
+        if let Some(font_family) = &self.font_family {
+            attrs.add("sx-font-family", font_family.join(","));
+        }
 
         match self.element {
             Element::TR => {
