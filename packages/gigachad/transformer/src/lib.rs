@@ -225,23 +225,12 @@ impl Default for Number {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct TextDecoration {
     pub color: Option<Color>,
     pub line: Vec<TextDecorationLine>,
     pub style: Option<TextDecorationStyle>,
     pub thickness: Option<Number>,
-}
-
-impl Default for TextDecoration {
-    fn default() -> Self {
-        Self {
-            color: None,
-            line: vec![],
-            style: None,
-            thickness: None,
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
