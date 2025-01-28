@@ -2,7 +2,9 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::branches_sharing_code)]
 
-use gigachad_transformer_models::{AlignItems, JustifyContent, Position};
+use gigachad_transformer_models::{
+    AlignItems, JustifyContent, LayoutDirection, Position, TextAlign,
+};
 use maud::{html, Markup};
 
 #[macro_export]
@@ -27,27 +29,46 @@ macro_rules! pre_escaped {
 #[must_use]
 pub fn header() -> Markup {
     html! {
-        header sx-dir="row" id="header-nav" sx-align-items=(AlignItems::Center) sx-background="#080a0b" {
+        header
+            sx-dir=(LayoutDirection::Row)
+            sx-align-items=(AlignItems::Center)
+            sx-background="#080a0b"
+        {
             div sx-padding-x=(20) {
-                a sx-dir="row" sx-align-items=(AlignItems::Center) href="/" {
-                    @let icon_size = 36;
+                a
+                    sx-color="#fff"
+                    sx-dir=(LayoutDirection::Row)
+                    sx-align-items=(AlignItems::Center)
+                    sx-text-decoration="none"
+                    href="/"
+                {
+                    @let icon_size = 40;
                     img
                         sx-width=(icon_size)
                         sx-height=(icon_size)
                         sx-margin-right=(5)
                         src=(public_img!("icon128.png"));
-                    h1 { "MoosicBox" }
+
+                    h1 sx-font-size=(20) { "MoosicBox" }
                 }
             }
-            div sx-dir="row" sx-align-items=(AlignItems::Center) sx-justify-content=(JustifyContent::End) {
-                a href="/download" {
+            div
+                sx-dir=(LayoutDirection::Row)
+                sx-align-items=(AlignItems::Center)
+                sx-justify-content=(JustifyContent::End)
+                sx-flex=(1)
+                sx-padding-x=(20)
+            {
+                a sx-color="#fff" href="/download" {
                     "Download"
                 }
-                a href="https://app.moosicbox.com/login" {
+                a sx-color="#fff" sx-margin-left=(20) href="https://app.moosicbox.com/login" {
                     "Log in"
                 }
                 a
+                    sx-color="#fff"
                     sx-background="#282a2b"
+                    sx-margin-left=(20)
                     sx-border-radius=(5)
                     sx-padding=(8)
                     href="/try-now"
@@ -72,19 +93,22 @@ pub fn main(slot: &Markup) -> Markup {
 pub fn home() -> Markup {
     page(&html! {
         div
-            sx-dir="row"
+            sx-dir=(LayoutDirection::Row)
             sx-align-items=(AlignItems::Center)
             sx-height="calc(min(100%, 1000px))"
             sx-padding-x=(50)
             sx-gap="calc(min(100, 5%))"
         {
-            div {
-                "Listen to your HiFi music anywhere"
+            div sx-flex-grow="2" {
+                h1 sx-font-size=(50) sx-text-align=(TextAlign::End) {
+                    "Listen to your HiFi music anywhere"
+                }
             }
             div
-                sx-dir="row"
+                sx-dir=(LayoutDirection::Row)
                 sx-position=(Position::Relative)
                 sx-height="100%"
+                sx-flex-grow="3"
             {
                 div
                     sx-margin-left="calc(10% - (100% / 30))"
@@ -105,7 +129,7 @@ pub fn home() -> Markup {
                     sx-position="absolute"
                     sx-bottom="50%"
                     sx-translate-y="50%"
-                    sx-height="calc(min(65%, 25%))"
+                    sx-height="calc(min(65%, 25dvw))"
                     sx-max-height="80%"
                 {
                     img
@@ -125,7 +149,13 @@ pub fn home() -> Markup {
 #[must_use]
 pub fn page(slot: &Markup) -> Markup {
     html! {
-        div id="root" class="dark" sx-width="100%" sx-height="100%" sx-position="relative" {
+        div
+            sx-width="100%"
+            sx-height="100%"
+            sx-position="relative"
+            sx-color="#fff"
+            sx-font-family="Gordita, Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif"
+        {
             (header())
             (main(&slot))
         }
