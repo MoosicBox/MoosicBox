@@ -106,13 +106,25 @@ pub fn write_css_attr(f: &mut dyn Write, attr: &[u8], value: &[u8]) -> Result<()
 }
 
 #[must_use]
-pub fn number_to_css_string(number: &Number) -> String {
+pub fn number_to_css_string(number: &Number, px: bool) -> String {
     match number {
-        Number::Real(x) => format!("{x}px"),
-        Number::Integer(x) => format!("{x}px"),
+        Number::Real(x) => {
+            if px {
+                format!("{x}px")
+            } else {
+                x.to_string()
+            }
+        }
+        Number::Integer(x) => {
+            if px {
+                format!("{x}px")
+            } else {
+                x.to_string()
+            }
+        }
         Number::RealPercent(x) => format!("{x}%"),
         Number::IntegerPercent(x) => format!("{x}%"),
-        Number::Calc(x) => format!("calc({})", calc_to_css_string(x)),
+        Number::Calc(x) => format!("calc({})", calc_to_css_string(x, px)),
     }
 }
 
@@ -125,39 +137,39 @@ pub fn color_to_css_string(color: Color) -> String {
 }
 
 #[must_use]
-pub fn calc_to_css_string(calc: &Calculation) -> String {
+pub fn calc_to_css_string(calc: &Calculation, px: bool) -> String {
     match calc {
-        Calculation::Number(number) => number_to_css_string(number),
+        Calculation::Number(number) => number_to_css_string(number, px),
         Calculation::Add(left, right) => format!(
             "{} + {}",
-            calc_to_css_string(left),
-            calc_to_css_string(right)
+            calc_to_css_string(left, false),
+            calc_to_css_string(right, false)
         ),
         Calculation::Subtract(left, right) => format!(
             "{} - {}",
-            calc_to_css_string(left),
-            calc_to_css_string(right)
+            calc_to_css_string(left, false),
+            calc_to_css_string(right, false)
         ),
         Calculation::Multiply(left, right) => format!(
             "{} * {}",
-            calc_to_css_string(left),
-            calc_to_css_string(right)
+            calc_to_css_string(left, false),
+            calc_to_css_string(right, false)
         ),
         Calculation::Divide(left, right) => format!(
             "{} / {}",
-            calc_to_css_string(left),
-            calc_to_css_string(right)
+            calc_to_css_string(left, false),
+            calc_to_css_string(right, false)
         ),
-        Calculation::Grouping(value) => format!("({})", calc_to_css_string(value)),
+        Calculation::Grouping(value) => format!("({})", calc_to_css_string(value, px)),
         Calculation::Min(left, right) => format!(
             "min({}, {})",
-            calc_to_css_string(left),
-            calc_to_css_string(right)
+            calc_to_css_string(left, px),
+            calc_to_css_string(right, px)
         ),
         Calculation::Max(left, right) => format!(
             "max({}, {})",
-            calc_to_css_string(left),
-            calc_to_css_string(right)
+            calc_to_css_string(left, px),
+            calc_to_css_string(right, px)
         ),
     }
 }
@@ -281,57 +293,66 @@ pub fn element_style_to_html(
     }
 
     if let Some(margin_left) = &container.margin_left {
-        write_css_attr!(b"margin-left", number_to_css_string(margin_left).as_bytes(),);
+        write_css_attr!(
+            b"margin-left",
+            number_to_css_string(margin_left, true).as_bytes(),
+        );
     }
     if let Some(margin_right) = &container.margin_right {
         write_css_attr!(
             b"margin-right",
-            number_to_css_string(margin_right).as_bytes(),
+            number_to_css_string(margin_right, true).as_bytes(),
         );
     }
     if let Some(margin_top) = &container.margin_top {
-        write_css_attr!(b"margin-top", number_to_css_string(margin_top).as_bytes(),);
+        write_css_attr!(
+            b"margin-top",
+            number_to_css_string(margin_top, true).as_bytes(),
+        );
     }
     if let Some(margin_bottom) = &container.margin_bottom {
         write_css_attr!(
             b"margin-bottom",
-            number_to_css_string(margin_bottom).as_bytes(),
+            number_to_css_string(margin_bottom, true).as_bytes(),
         );
     }
 
     if let Some(padding_left) = &container.padding_left {
         write_css_attr!(
             b"padding-left",
-            number_to_css_string(padding_left).as_bytes(),
+            number_to_css_string(padding_left, true).as_bytes(),
         );
     }
     if let Some(padding_right) = &container.padding_right {
         write_css_attr!(
             b"padding-right",
-            number_to_css_string(padding_right).as_bytes(),
+            number_to_css_string(padding_right, true).as_bytes(),
         );
     }
     if let Some(padding_top) = &container.padding_top {
-        write_css_attr!(b"padding-top", number_to_css_string(padding_top).as_bytes(),);
+        write_css_attr!(
+            b"padding-top",
+            number_to_css_string(padding_top, true).as_bytes(),
+        );
     }
     if let Some(padding_bottom) = &container.padding_bottom {
         write_css_attr!(
             b"padding-bottom",
-            number_to_css_string(padding_bottom).as_bytes(),
+            number_to_css_string(padding_bottom, true).as_bytes(),
         );
     }
 
     if let Some(left) = &container.left {
-        write_css_attr!(b"left", number_to_css_string(left).as_bytes());
+        write_css_attr!(b"left", number_to_css_string(left, true).as_bytes());
     }
     if let Some(right) = &container.right {
-        write_css_attr!(b"right", number_to_css_string(right).as_bytes());
+        write_css_attr!(b"right", number_to_css_string(right, true).as_bytes());
     }
     if let Some(top) = &container.top {
-        write_css_attr!(b"top", number_to_css_string(top).as_bytes());
+        write_css_attr!(b"top", number_to_css_string(top, true).as_bytes());
     }
     if let Some(bottom) = &container.bottom {
-        write_css_attr!(b"bottom", number_to_css_string(bottom).as_bytes());
+        write_css_attr!(b"bottom", number_to_css_string(bottom, true).as_bytes());
     }
 
     let mut printed_transform_start = false;
@@ -352,10 +373,16 @@ pub fn element_style_to_html(
     }
 
     if let Some(translate) = &container.translate_x {
-        write_transform_attr!(b"translateX", number_to_css_string(translate).as_bytes());
+        write_transform_attr!(
+            b"translateX",
+            number_to_css_string(translate, true).as_bytes()
+        );
     }
     if let Some(translate) = &container.translate_y {
-        write_transform_attr!(b"translateY", number_to_css_string(translate).as_bytes());
+        write_transform_attr!(
+            b"translateY",
+            number_to_css_string(translate, true).as_bytes()
+        );
     }
 
     if printed_transform_start {
@@ -402,25 +429,25 @@ pub fn element_style_to_html(
     }
 
     if let Some(gap) = &container.gap {
-        write_css_attr!(b"grid-gap", number_to_css_string(gap).as_bytes());
+        write_css_attr!(b"grid-gap", number_to_css_string(gap, true).as_bytes());
     }
 
     let mut flex_shrink_0 = false;
 
     if let Some(width) = &container.width {
-        write_css_attr!(b"width", number_to_css_string(width).as_bytes());
+        write_css_attr!(b"width", number_to_css_string(width, true).as_bytes());
         flex_shrink_0 = true;
     }
     if let Some(width) = &container.max_width {
-        write_css_attr!(b"max-width", number_to_css_string(width).as_bytes());
+        write_css_attr!(b"max-width", number_to_css_string(width, true).as_bytes());
         flex_shrink_0 = true;
     }
     if let Some(height) = &container.height {
-        write_css_attr!(b"height", number_to_css_string(height).as_bytes());
+        write_css_attr!(b"height", number_to_css_string(height, true).as_bytes());
         flex_shrink_0 = true;
     }
     if let Some(height) = &container.max_height {
-        write_css_attr!(b"max-height", number_to_css_string(height).as_bytes());
+        write_css_attr!(b"max-height", number_to_css_string(height, true).as_bytes());
         flex_shrink_0 = true;
     }
 
@@ -436,7 +463,7 @@ pub fn element_style_to_html(
         write_css_attr!(
             b"border-top",
             &[
-                number_to_css_string(size).as_bytes(),
+                number_to_css_string(size, true).as_bytes(),
                 b" solid ",
                 color_to_css_string(*color).as_bytes(),
             ]
@@ -448,7 +475,7 @@ pub fn element_style_to_html(
         write_css_attr!(
             b"border-right",
             &[
-                number_to_css_string(size).as_bytes(),
+                number_to_css_string(size, true).as_bytes(),
                 b" solid ",
                 color_to_css_string(*color).as_bytes(),
             ]
@@ -460,7 +487,7 @@ pub fn element_style_to_html(
         write_css_attr!(
             b"border-bottom",
             &[
-                number_to_css_string(size).as_bytes(),
+                number_to_css_string(size, true).as_bytes(),
                 b" solid ",
                 color_to_css_string(*color).as_bytes(),
             ]
@@ -472,7 +499,7 @@ pub fn element_style_to_html(
         write_css_attr!(
             b"border-left",
             &[
-                number_to_css_string(size).as_bytes(),
+                number_to_css_string(size, true).as_bytes(),
                 b" solid ",
                 color_to_css_string(*color).as_bytes(),
             ]
@@ -483,28 +510,28 @@ pub fn element_style_to_html(
     if let Some(radius) = &container.border_top_left_radius {
         write_css_attr!(
             b"border-top-left-radius",
-            number_to_css_string(radius).as_bytes(),
+            number_to_css_string(radius, true).as_bytes(),
         );
     }
 
     if let Some(radius) = &container.border_top_right_radius {
         write_css_attr!(
             b"border-top-right-radius",
-            number_to_css_string(radius).as_bytes(),
+            number_to_css_string(radius, true).as_bytes(),
         );
     }
 
     if let Some(radius) = &container.border_bottom_left_radius {
         write_css_attr!(
             b"border-bottom-left-radius",
-            number_to_css_string(radius).as_bytes(),
+            number_to_css_string(radius, true).as_bytes(),
         );
     }
 
     if let Some(radius) = &container.border_bottom_right_radius {
         write_css_attr!(
             b"border-bottom-right-radius",
-            number_to_css_string(radius).as_bytes(),
+            number_to_css_string(radius, true).as_bytes(),
         );
     }
 
