@@ -194,6 +194,8 @@ pub struct Container {
     pub right: Option<Number>,
     pub top: Option<Number>,
     pub bottom: Option<Number>,
+    pub translate_x: Option<Number>,
+    pub translate_y: Option<Number>,
     pub cursor: Option<Cursor>,
     pub position: Option<Position>,
     pub background: Option<Color>,
@@ -915,6 +917,9 @@ impl Container {
         attrs.add_opt("sx-right", self.right.as_ref());
         attrs.add_opt("sx-top", self.top.as_ref());
         attrs.add_opt("sx-bottom", self.bottom.as_ref());
+
+        attrs.add_opt("sx-translate-x", self.translate_x.as_ref());
+        attrs.add_opt("sx-translate-y", self.translate_y.as_ref());
 
         attrs.add_opt("sx-cursor", self.cursor.as_ref());
 

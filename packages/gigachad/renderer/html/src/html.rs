@@ -179,12 +179,12 @@ pub fn element_style_to_html(
     let mut printed_start = false;
 
     macro_rules! write_css_attr {
-        ($f:expr, $key:expr, $value:expr $(,)?) => {{
+        ($key:expr, $value:expr $(,)?) => {{
             if !printed_start {
                 printed_start = true;
                 f.write_all(b" style=\"")?;
             }
-            write_css_attr($f, $key, $value)
+            write_css_attr(f, $key, $value)?;
         }};
     }
 
@@ -192,7 +192,6 @@ pub fn element_style_to_html(
         Element::Image { fit, .. } => {
             if let Some(fit) = fit {
                 write_css_attr!(
-                    f,
                     b"object-fit",
                     match fit {
                         ImageFit::Default => b"unset",
@@ -201,7 +200,7 @@ pub fn element_style_to_html(
                         ImageFit::Fill => b"fill",
                         ImageFit::None => b"none",
                     }
-                )?;
+                );
             }
         }
         Element::Div
@@ -231,204 +230,210 @@ pub fn element_style_to_html(
 
     // TODO: handle vertical flex
     if is_flex_child && container.width.is_none() {
-        write_css_attr!(f, b"flex", b"1")?;
+        write_css_attr!(b"flex", b"1");
     }
 
     if is_flex_container(container) {
-        write_css_attr!(f, b"display", b"flex")?;
-        write_css_attr!(f, b"flex-direction", b"row")?;
+        write_css_attr!(b"display", b"flex");
+        write_css_attr!(b"flex-direction", b"row");
     }
 
     match container.overflow_x {
         LayoutOverflow::Auto => {
-            write_css_attr!(f, b"overflow-x", b"auto")?;
+            write_css_attr!(b"overflow-x", b"auto");
         }
         LayoutOverflow::Scroll => {
-            write_css_attr!(f, b"overflow-x", b"scroll")?;
+            write_css_attr!(b"overflow-x", b"scroll");
         }
         LayoutOverflow::Expand | LayoutOverflow::Squash => {}
         LayoutOverflow::Wrap => {
-            write_css_attr!(f, b"flex-wrap", b"wrap")?;
+            write_css_attr!(b"flex-wrap", b"wrap");
         }
     }
     match container.overflow_y {
         LayoutOverflow::Auto => {
-            write_css_attr!(f, b"overflow-y", b"auto")?;
+            write_css_attr!(b"overflow-y", b"auto");
         }
         LayoutOverflow::Scroll => {
-            write_css_attr!(f, b"overflow-y", b"scroll")?;
+            write_css_attr!(b"overflow-y", b"scroll");
         }
         LayoutOverflow::Expand | LayoutOverflow::Squash => {}
         LayoutOverflow::Wrap => {
-            write_css_attr!(f, b"flex-wrap", b"wrap")?;
+            write_css_attr!(b"flex-wrap", b"wrap");
         }
     }
 
     if let Some(position) = container.position {
         match position {
             Position::Relative => {
-                write_css_attr!(f, b"position", b"relative")?;
+                write_css_attr!(b"position", b"relative");
             }
             Position::Absolute => {
-                write_css_attr!(f, b"position", b"absolute")?;
+                write_css_attr!(b"position", b"absolute");
             }
             Position::Fixed => {
-                write_css_attr!(f, b"position", b"fixed")?;
+                write_css_attr!(b"position", b"fixed");
             }
             Position::Static => {
-                write_css_attr!(f, b"position", b"static")?;
+                write_css_attr!(b"position", b"static");
             }
         }
     }
 
     if let Some(margin_left) = &container.margin_left {
-        write_css_attr!(
-            f,
-            b"margin-left",
-            number_to_css_string(margin_left).as_bytes(),
-        )?;
+        write_css_attr!(b"margin-left", number_to_css_string(margin_left).as_bytes(),);
     }
     if let Some(margin_right) = &container.margin_right {
         write_css_attr!(
-            f,
             b"margin-right",
             number_to_css_string(margin_right).as_bytes(),
-        )?;
+        );
     }
     if let Some(margin_top) = &container.margin_top {
-        write_css_attr!(
-            f,
-            b"margin-top",
-            number_to_css_string(margin_top).as_bytes(),
-        )?;
+        write_css_attr!(b"margin-top", number_to_css_string(margin_top).as_bytes(),);
     }
     if let Some(margin_bottom) = &container.margin_bottom {
         write_css_attr!(
-            f,
             b"margin-bottom",
             number_to_css_string(margin_bottom).as_bytes(),
-        )?;
+        );
     }
 
     if let Some(padding_left) = &container.padding_left {
         write_css_attr!(
-            f,
             b"padding-left",
             number_to_css_string(padding_left).as_bytes(),
-        )?;
+        );
     }
     if let Some(padding_right) = &container.padding_right {
         write_css_attr!(
-            f,
             b"padding-right",
             number_to_css_string(padding_right).as_bytes(),
-        )?;
+        );
     }
     if let Some(padding_top) = &container.padding_top {
-        write_css_attr!(
-            f,
-            b"padding-top",
-            number_to_css_string(padding_top).as_bytes(),
-        )?;
+        write_css_attr!(b"padding-top", number_to_css_string(padding_top).as_bytes(),);
     }
     if let Some(padding_bottom) = &container.padding_bottom {
         write_css_attr!(
-            f,
             b"padding-bottom",
             number_to_css_string(padding_bottom).as_bytes(),
-        )?;
+        );
     }
 
     if let Some(left) = &container.left {
-        write_css_attr!(f, b"left", number_to_css_string(left).as_bytes())?;
+        write_css_attr!(b"left", number_to_css_string(left).as_bytes());
     }
     if let Some(right) = &container.right {
-        write_css_attr!(f, b"right", number_to_css_string(right).as_bytes())?;
+        write_css_attr!(b"right", number_to_css_string(right).as_bytes());
     }
     if let Some(top) = &container.top {
-        write_css_attr!(f, b"top", number_to_css_string(top).as_bytes())?;
+        write_css_attr!(b"top", number_to_css_string(top).as_bytes());
     }
     if let Some(bottom) = &container.bottom {
-        write_css_attr!(f, b"bottom", number_to_css_string(bottom).as_bytes())?;
+        write_css_attr!(b"bottom", number_to_css_string(bottom).as_bytes());
+    }
+
+    let mut printed_transform_start = false;
+
+    macro_rules! write_transform_attr {
+        ($key:expr, $value:expr $(,)?) => {{
+            if !printed_transform_start {
+                printed_transform_start = true;
+                f.write_all(b"transform:")?;
+            } else {
+                f.write_all(b" ")?;
+            }
+            f.write_all($key)?;
+            f.write_all(b"(")?;
+            f.write_all($value)?;
+            f.write_all(b")")?;
+        }};
+    }
+
+    if let Some(translate) = &container.translate_x {
+        write_transform_attr!(b"translateX", number_to_css_string(translate).as_bytes());
+    }
+    if let Some(translate) = &container.translate_y {
+        write_transform_attr!(b"translateY", number_to_css_string(translate).as_bytes());
+    }
+
+    if printed_transform_start {
+        f.write_all(b";")?;
     }
 
     if let Some(visibility) = container.visibility {
         match visibility {
             Visibility::Visible => {}
             Visibility::Hidden => {
-                if !printed_start {
-                    printed_start = true;
-                    f.write_all(b" style=\"")?;
-                }
-                write_css_attr!(f, b"display", b"none")?;
+                write_css_attr!(b"display", b"none");
             }
         }
     }
 
     match container.justify_content {
         JustifyContent::Start => {
-            write_css_attr!(f, b"justify-content", b"start")?;
+            write_css_attr!(b"justify-content", b"start");
         }
         JustifyContent::Center => {
-            write_css_attr!(f, b"justify-content", b"center")?;
+            write_css_attr!(b"justify-content", b"center");
         }
         JustifyContent::End => {
-            write_css_attr!(f, b"justify-content", b"end")?;
+            write_css_attr!(b"justify-content", b"end");
         }
         JustifyContent::SpaceBetween => {
-            write_css_attr!(f, b"justify-content", b"space-between")?;
+            write_css_attr!(b"justify-content", b"space-between");
         }
         JustifyContent::SpaceEvenly => {
-            write_css_attr!(f, b"justify-content", b"space-evenly")?;
+            write_css_attr!(b"justify-content", b"space-evenly");
         }
     }
 
     match container.align_items {
         AlignItems::Start => {
-            write_css_attr!(f, b"align-items", b"start")?;
+            write_css_attr!(b"align-items", b"start");
         }
         AlignItems::Center => {
-            write_css_attr!(f, b"align-items", b"center")?;
+            write_css_attr!(b"align-items", b"center");
         }
         AlignItems::End => {
-            write_css_attr!(f, b"align-items", b"end")?;
+            write_css_attr!(b"align-items", b"end");
         }
     }
 
     if let Some(gap) = &container.gap {
-        write_css_attr!(f, b"grid-gap", number_to_css_string(gap).as_bytes())?;
+        write_css_attr!(b"grid-gap", number_to_css_string(gap).as_bytes());
     }
 
     let mut flex_shrink_0 = false;
 
     if let Some(width) = &container.width {
-        write_css_attr!(f, b"width", number_to_css_string(width).as_bytes())?;
+        write_css_attr!(b"width", number_to_css_string(width).as_bytes());
         flex_shrink_0 = true;
     }
     if let Some(width) = &container.max_width {
-        write_css_attr!(f, b"max-width", number_to_css_string(width).as_bytes())?;
+        write_css_attr!(b"max-width", number_to_css_string(width).as_bytes());
         flex_shrink_0 = true;
     }
     if let Some(height) = &container.height {
-        write_css_attr!(f, b"height", number_to_css_string(height).as_bytes())?;
+        write_css_attr!(b"height", number_to_css_string(height).as_bytes());
         flex_shrink_0 = true;
     }
     if let Some(height) = &container.max_height {
-        write_css_attr!(f, b"max-height", number_to_css_string(height).as_bytes())?;
+        write_css_attr!(b"max-height", number_to_css_string(height).as_bytes());
         flex_shrink_0 = true;
     }
 
     if flex_shrink_0 {
-        write_css_attr!(f, b"flex-shrink", b"0")?;
+        write_css_attr!(b"flex-shrink", b"0");
     }
 
     if let Some(background) = container.background {
-        write_css_attr!(f, b"background", color_to_css_string(background).as_bytes())?;
+        write_css_attr!(b"background", color_to_css_string(background).as_bytes());
     }
 
     if let Some((color, size)) = &container.border_top {
         write_css_attr!(
-            f,
             b"border-top",
             &[
                 number_to_css_string(size).as_bytes(),
@@ -436,12 +441,11 @@ pub fn element_style_to_html(
                 color_to_css_string(*color).as_bytes(),
             ]
             .concat(),
-        )?;
+        );
     }
 
     if let Some((color, size)) = &container.border_right {
         write_css_attr!(
-            f,
             b"border-right",
             &[
                 number_to_css_string(size).as_bytes(),
@@ -449,12 +453,11 @@ pub fn element_style_to_html(
                 color_to_css_string(*color).as_bytes(),
             ]
             .concat(),
-        )?;
+        );
     }
 
     if let Some((color, size)) = &container.border_bottom {
         write_css_attr!(
-            f,
             b"border-bottom",
             &[
                 number_to_css_string(size).as_bytes(),
@@ -462,12 +465,11 @@ pub fn element_style_to_html(
                 color_to_css_string(*color).as_bytes(),
             ]
             .concat(),
-        )?;
+        );
     }
 
     if let Some((color, size)) = &container.border_left {
         write_css_attr!(
-            f,
             b"border-left",
             &[
                 number_to_css_string(size).as_bytes(),
@@ -475,39 +477,35 @@ pub fn element_style_to_html(
                 color_to_css_string(*color).as_bytes(),
             ]
             .concat(),
-        )?;
+        );
     }
 
     if let Some(radius) = &container.border_top_left_radius {
         write_css_attr!(
-            f,
             b"border-top-left-radius",
             number_to_css_string(radius).as_bytes(),
-        )?;
+        );
     }
 
     if let Some(radius) = &container.border_top_right_radius {
         write_css_attr!(
-            f,
             b"border-top-right-radius",
             number_to_css_string(radius).as_bytes(),
-        )?;
+        );
     }
 
     if let Some(radius) = &container.border_bottom_left_radius {
         write_css_attr!(
-            f,
             b"border-bottom-left-radius",
             number_to_css_string(radius).as_bytes(),
-        )?;
+        );
     }
 
     if let Some(radius) = &container.border_bottom_right_radius {
         write_css_attr!(
-            f,
             b"border-bottom-right-radius",
             number_to_css_string(radius).as_bytes(),
-        )?;
+        );
     }
 
     if printed_start {

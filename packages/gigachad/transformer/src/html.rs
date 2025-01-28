@@ -492,6 +492,8 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
         right: get_number(tag, "sx-right").unwrap(),
         top: get_number(tag, "sx-top").unwrap(),
         bottom: get_number(tag, "sx-bottom").unwrap(),
+        translate_x: get_number(tag, "sx-translate-x").unwrap(),
+        translate_y: get_number(tag, "sx-translate-y").unwrap(),
         gap: get_number(tag, "sx-gap").unwrap(),
         opacity: get_number(tag, "sx-opacity").unwrap(),
         debug: get_bool(tag, "debug"),

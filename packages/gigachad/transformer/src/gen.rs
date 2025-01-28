@@ -201,6 +201,8 @@ impl Arbitrary for Container {
             right: Option::arbitrary(g),
             top: Option::arbitrary(g),
             bottom: Option::arbitrary(g),
+            translate_x: Option::arbitrary(g),
+            translate_y: Option::arbitrary(g),
             cursor: Option::arbitrary(g),
             position: Option::arbitrary(g),
             background: Option::arbitrary(g),
