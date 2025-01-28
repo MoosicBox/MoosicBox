@@ -546,6 +546,7 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
         padding_top,
         padding_bottom,
         font_size: get_number(tag, "sx-font-size").unwrap(),
+        color: get_color(tag, "sx-color"),
         state: get_state(tag, "state"),
         hidden: get_bool(tag, "sx-hidden"),
         visibility: get_visibility(tag),

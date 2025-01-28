@@ -238,6 +238,7 @@ impl Arbitrary for Container {
             padding_top: Option::arbitrary(g),
             padding_bottom: Option::arbitrary(g),
             font_size: Option::arbitrary(g),
+            color: Option::arbitrary(g),
             state: Option::arbitrary(g).map(|x: JsonValue| x.0),
             hidden: Option::arbitrary(g),
             debug: Option::arbitrary(g),

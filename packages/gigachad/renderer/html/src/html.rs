@@ -558,6 +558,10 @@ pub fn element_style_to_html(
         );
     }
 
+    if let Some(color) = &container.color {
+        write_css_attr!(b"color", color_to_css_string(*color).as_bytes(),);
+    }
+
     if printed_start {
         f.write_all(b"\"")?;
     }
