@@ -447,10 +447,6 @@ pub fn element_style_to_html(
         flex_shrink_0 = true;
     }
 
-    if flex_shrink_0 {
-        write_css_attr!(b"flex-shrink", b"0");
-    }
-
     if let Some(width) = &container.max_width {
         write_css_attr!(b"max-width", number_to_css_string(width, true).as_bytes());
     }
@@ -471,6 +467,8 @@ pub fn element_style_to_html(
             b"flex-basis",
             number_to_css_string(&flex.basis, false).as_bytes()
         );
+    } else if flex_shrink_0 {
+        write_css_attr!(b"flex-shrink", b"0");
     }
 
     if let Some(background) = container.background {
