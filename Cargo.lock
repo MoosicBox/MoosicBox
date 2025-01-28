@@ -6417,7 +6417,7 @@ dependencies = [
  "moosicbox_json_utils",
  "moosicbox_profiles",
  "nanoid",
- "rand 0.8.5",
+ "rand 0.9.0",
  "serde",
  "thiserror 2.0.11",
  "utoipa",
@@ -6881,7 +6881,7 @@ dependencies = [
  "moosicbox_stream_utils",
  "moosicbox_task",
  "profiling",
- "rand 0.8.5",
+ "rand 0.9.0",
  "regex",
  "reqwest",
  "serde",
@@ -7084,7 +7084,7 @@ dependencies = [
  "puffin",
  "puffin_http",
  "qstring",
- "rand 0.8.5",
+ "rand 0.9.0",
  "rcgen",
  "serde_json",
  "strum",
@@ -7258,7 +7258,7 @@ dependencies = [
  "moosicbox_task",
  "moosicbox_tunnel",
  "moosicbox_ws",
- "rand 0.8.5",
+ "rand 0.9.0",
  "regex",
  "reqwest",
  "serde",
@@ -7296,7 +7296,7 @@ dependencies = [
  "moosicbox_telemetry",
  "moosicbox_tunnel",
  "qstring",
- "rand 0.8.5",
+ "rand 0.9.0",
  "serde",
  "serde_json",
  "sha2",
@@ -7330,7 +7330,7 @@ dependencies = [
  "moosicbox_session",
  "moosicbox_task",
  "pin-utils",
- "rand 0.8.5",
+ "rand 0.9.0",
  "regex",
  "reqwest",
  "roxmltree 0.20.0",
@@ -8178,7 +8178,7 @@ dependencies = [
 name = "openport"
 version = "0.1.1"
 dependencies = [
- "rand 0.8.5",
+ "rand 0.9.0",
 ]
 
 [[package]]
