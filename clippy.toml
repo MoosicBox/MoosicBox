@@ -30,6 +30,7 @@ allowed-duplicate-crates = [
     "itertools",
     "itoa",
     "libloading",
+    "lru",
     "memoffset",
     "miniz_oxide",
     "mio",
