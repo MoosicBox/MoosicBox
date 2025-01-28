@@ -558,7 +558,7 @@ impl PlaybackHandler {
                 None,
                 init.playing.or(Some(session.playing)),
                 init.position.or(session.position),
-                init.seek.map(std::convert::Into::into),
+                init.seek,
                 init.volume.or(session.volume),
                 Some(
                     session
@@ -1406,7 +1406,7 @@ async fn track_to_playable_file(
     let same_source = match quality.format {
         AudioFormat::Source => true,
         #[allow(unreachable_patterns)]
-        _ => track.format.map_or(true, |format| format == quality.format),
+        _ => track.format.is_none_or(|format| format == quality.format),
     };
 
     let source: Box<dyn MediaSource> = if same_source {
