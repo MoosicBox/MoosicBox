@@ -859,16 +859,12 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
         }
         Node::Raw(x) => {
             let value = x.as_utf8_str();
-            if value.chars().all(|x| matches!(x, '\n' | '\r' | ' ' | '\t')) {
-                None
-            } else {
-                Some(crate::Container {
-                    element: crate::Element::Raw {
-                        value: value.to_string(),
-                    },
-                    ..crate::Container::default()
-                })
-            }
+            Some(crate::Container {
+                element: crate::Element::Raw {
+                    value: value.to_string(),
+                },
+                ..crate::Container::default()
+            })
         }
         Node::Comment(_x) => None,
     }
