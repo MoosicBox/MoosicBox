@@ -198,24 +198,28 @@ fn get_overflow(tag: &HTMLTag, name: &str) -> LayoutOverflow {
     }
 }
 
-fn get_justify_content(tag: &HTMLTag, name: &str) -> JustifyContent {
-    match get_tag_attr_value_lower(tag, name).as_deref() {
+fn get_justify_content(tag: &HTMLTag, name: &str) -> Option<JustifyContent> {
+    Some(match get_tag_attr_value_lower(tag, name).as_deref() {
         Some("start") => JustifyContent::Start,
         Some("center") => JustifyContent::Center,
         Some("end") => JustifyContent::End,
         Some("space-between") => JustifyContent::SpaceBetween,
         Some("space-evenly") => JustifyContent::SpaceEvenly,
-        _ => JustifyContent::default(),
-    }
+        _ => {
+            return None;
+        }
+    })
 }
 
-fn get_align_items(tag: &HTMLTag, name: &str) -> AlignItems {
-    match get_tag_attr_value_lower(tag, name).as_deref() {
+fn get_align_items(tag: &HTMLTag, name: &str) -> Option<AlignItems> {
+    Some(match get_tag_attr_value_lower(tag, name).as_deref() {
         Some("start") => AlignItems::Start,
         Some("center") => AlignItems::Center,
         Some("end") => AlignItems::End,
-        _ => AlignItems::default(),
-    }
+        _ => {
+            return None;
+        }
+    })
 }
 
 fn get_text_align(tag: &HTMLTag, name: &str) -> Option<TextAlign> {

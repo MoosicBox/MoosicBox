@@ -1534,7 +1534,7 @@ impl Container {
         let mut child_vertical_offset = 0.0;
 
         // TODO: Handle variable amount of items in rows/cols (i.e., non-uniform row/cols wrapping)
-        match self.justify_content {
+        match self.justify_content.unwrap_or_default() {
             #[allow(clippy::cast_precision_loss)]
             JustifyContent::Start => match self.direction {
                 LayoutDirection::Row => {
@@ -1607,7 +1607,7 @@ impl Container {
                 if gap_x > margin {
                     horizontal_margin.replace(gap_x);
 
-                    if self.justify_content == JustifyContent::SpaceEvenly {
+                    if self.justify_content == Some(JustifyContent::SpaceEvenly) {
                         #[allow(clippy::cast_precision_loss)]
                         first_horizontal_margin
                             .replace(gap_x.mul_add(-((columns - 1) as f32), remainder_width) / 2.0);
@@ -1620,7 +1620,7 @@ impl Container {
                 if gap_y > margin {
                     vertical_margin.replace(gap_y);
 
-                    if self.justify_content == JustifyContent::SpaceEvenly {
+                    if self.justify_content == Some(JustifyContent::SpaceEvenly) {
                         #[allow(clippy::cast_precision_loss)]
                         first_vertical_margin
                             .replace(gap_y.mul_add(-((rows - 1) as f32), remainder_height) / 2.0);
@@ -1656,7 +1656,7 @@ impl Container {
             );
 
             if let LayoutPosition::Wrap { row, col } = position {
-                if self.justify_content == JustifyContent::SpaceEvenly || *col > 0 {
+                if self.justify_content == Some(JustifyContent::SpaceEvenly) || *col > 0 {
                     let hmargin = if *col == 0 {
                         first_horizontal_margin
                     } else {
@@ -1669,7 +1669,7 @@ impl Container {
                         element.internal_margin_left.replace(margin);
                     }
                 }
-                if self.justify_content == JustifyContent::SpaceEvenly || *row > 0 {
+                if self.justify_content == Some(JustifyContent::SpaceEvenly) || *row > 0 {
                     let vmargin = if *row == 0 {
                         first_vertical_margin
                     } else {
@@ -1692,7 +1692,7 @@ impl Container {
                     match position {
                         LayoutPosition::Wrap { col, .. } => {
                             if *col == 0 {
-                                x = if self.justify_content == JustifyContent::SpaceEvenly {
+                                x = if self.justify_content == Some(JustifyContent::SpaceEvenly) {
                                     horizontal_margin.unwrap_or(0.0)
                                 } else {
                                     0.0
@@ -1711,7 +1711,7 @@ impl Container {
                     match position {
                         LayoutPosition::Wrap { row, .. } => {
                             if *row == 0 {
-                                y = if self.justify_content == JustifyContent::SpaceEvenly {
+                                y = if self.justify_content == Some(JustifyContent::SpaceEvenly) {
                                     vertical_margin.unwrap_or(0.0)
                                 } else {
                                     0.0
@@ -3767,7 +3767,7 @@ mod test {
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
-            justify_content: JustifyContent::SpaceBetween,
+            justify_content: Some(JustifyContent::SpaceBetween),
             ..Default::default()
         };
         while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
@@ -3872,7 +3872,7 @@ mod test {
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
-            justify_content: JustifyContent::SpaceBetween,
+            justify_content: Some(JustifyContent::SpaceBetween),
             ..Default::default()
         };
         while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
@@ -3953,7 +3953,7 @@ mod test {
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
             overflow_y: LayoutOverflow::Squash,
-            justify_content: JustifyContent::SpaceBetween,
+            justify_content: Some(JustifyContent::SpaceBetween),
             ..Default::default()
         };
 
@@ -4088,7 +4088,7 @@ mod test {
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
             overflow_y: LayoutOverflow::Expand,
-            justify_content: JustifyContent::SpaceBetween,
+            justify_content: Some(JustifyContent::SpaceBetween),
             ..Default::default()
         };
 
@@ -4238,7 +4238,7 @@ mod test {
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
             overflow_y: LayoutOverflow::Expand,
-            justify_content: JustifyContent::SpaceBetween,
+            justify_content: Some(JustifyContent::SpaceBetween),
             gap: Some(Number::Integer(10)),
             ..Default::default()
         };
@@ -4336,7 +4336,7 @@ mod test {
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
             overflow_y: LayoutOverflow::Expand,
-            justify_content: JustifyContent::SpaceBetween,
+            justify_content: Some(JustifyContent::SpaceBetween),
             gap: Some(Number::Integer(10)),
             ..Default::default()
         };
@@ -4437,7 +4437,7 @@ mod test {
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
-            justify_content: JustifyContent::SpaceEvenly,
+            justify_content: Some(JustifyContent::SpaceEvenly),
             ..Default::default()
         };
         while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
@@ -4537,7 +4537,7 @@ mod test {
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
             overflow_y: LayoutOverflow::Squash,
-            justify_content: JustifyContent::SpaceEvenly,
+            justify_content: Some(JustifyContent::SpaceEvenly),
             ..Default::default()
         };
         container.calc();
@@ -4636,7 +4636,7 @@ mod test {
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
             overflow_y: LayoutOverflow::Expand,
-            justify_content: JustifyContent::SpaceEvenly,
+            justify_content: Some(JustifyContent::SpaceEvenly),
             ..Default::default()
         };
         container.calc();
@@ -4740,7 +4740,7 @@ mod test {
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
-            justify_content: JustifyContent::SpaceEvenly,
+            justify_content: Some(JustifyContent::SpaceEvenly),
             ..Default::default()
         };
         while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
@@ -4821,7 +4821,7 @@ mod test {
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
             overflow_y: LayoutOverflow::Squash,
-            justify_content: JustifyContent::SpaceEvenly,
+            justify_content: Some(JustifyContent::SpaceEvenly),
             ..Default::default()
         };
 
@@ -4956,7 +4956,7 @@ mod test {
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
             overflow_y: LayoutOverflow::Expand,
-            justify_content: JustifyContent::SpaceEvenly,
+            justify_content: Some(JustifyContent::SpaceEvenly),
             ..Default::default()
         };
 
@@ -5106,7 +5106,7 @@ mod test {
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
             overflow_y: LayoutOverflow::Expand,
-            justify_content: JustifyContent::SpaceEvenly,
+            justify_content: Some(JustifyContent::SpaceEvenly),
             gap: Some(Number::Integer(10)),
             ..Default::default()
         };
@@ -5204,7 +5204,7 @@ mod test {
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap,
             overflow_y: LayoutOverflow::Expand,
-            justify_content: JustifyContent::SpaceEvenly,
+            justify_content: Some(JustifyContent::SpaceEvenly),
             gap: Some(Number::Integer(10)),
             ..Default::default()
         };
@@ -7793,7 +7793,7 @@ mod test {
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             direction: LayoutDirection::Row,
-            justify_content: JustifyContent::Center,
+            justify_content: Some(JustifyContent::Center),
             ..Default::default()
         };
         container.calc();
@@ -7824,7 +7824,7 @@ mod test {
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             direction: LayoutDirection::Row,
-            justify_content: JustifyContent::Start,
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
         container.calc();

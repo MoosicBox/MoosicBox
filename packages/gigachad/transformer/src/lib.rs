@@ -273,8 +273,8 @@ pub struct Container {
     pub direction: LayoutDirection,
     pub overflow_x: LayoutOverflow,
     pub overflow_y: LayoutOverflow,
-    pub justify_content: JustifyContent,
-    pub align_items: AlignItems,
+    pub justify_content: Option<JustifyContent>,
+    pub align_items: Option<AlignItems>,
     pub text_align: Option<TextAlign>,
     pub text_decoration: Option<TextDecoration>,
     pub font_family: Option<Vec<String>>,
@@ -977,12 +977,8 @@ impl Container {
             }
         }
 
-        if self.justify_content != JustifyContent::default() {
-            attrs.add("sx-justify-content", self.justify_content);
-        }
-        if self.align_items != AlignItems::default() {
-            attrs.add("sx-align-items", self.align_items);
-        }
+        attrs.add_opt("sx-justify-content", self.justify_content.as_ref());
+        attrs.add_opt("sx-align-items", self.align_items.as_ref());
 
         attrs.add_opt("sx-text-align", self.text_align.as_ref());
 

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use gigachad_transformer_models::{AlignItems, JustifyContent, LayoutDirection, LayoutOverflow};
+use gigachad_transformer_models::{LayoutDirection, LayoutOverflow};
 use moosicbox_gen::{
     serde::JsonValue,
     xml::{XmlAttrNameString, XmlString},
@@ -222,8 +222,8 @@ impl Arbitrary for Container {
             direction: LayoutDirection::arbitrary(g),
             overflow_x: LayoutOverflow::arbitrary(g),
             overflow_y: LayoutOverflow::arbitrary(g),
-            justify_content: JustifyContent::arbitrary(g),
-            align_items: AlignItems::arbitrary(g),
+            justify_content: Arbitrary::arbitrary(g),
+            align_items: Arbitrary::arbitrary(g),
             text_align: Arbitrary::arbitrary(g),
             text_decoration: Arbitrary::arbitrary(g),
             width: Option::arbitrary(g),

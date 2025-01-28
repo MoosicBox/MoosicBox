@@ -1659,23 +1659,26 @@ impl EguiApp {
         relative_container: Option<(egui::Rect, &'a Container)>,
         inner: impl FnOnce(&mut Ui, Option<(egui::Rect, &'a Container)>) -> Response,
     ) -> Response {
-        if matches!(container.justify_content, JustifyContent::Start)
-            && matches!(container.align_items, AlignItems::Start)
+        let justify_content = container.justify_content.unwrap_or_default();
+        let align_items = container.align_items.unwrap_or_default();
+
+        if matches!(justify_content, JustifyContent::Start)
+            && matches!(align_items, AlignItems::Start)
         {
             return inner(ui, relative_container);
         }
 
         let contained_calculated_width = container.contained_calculated_width();
         let contained_calculated_height = container.contained_calculated_height();
-        if container.justify_content == JustifyContent::End {
+        if justify_content == JustifyContent::End {
             ui.add_space(container.calculated_width.unwrap() - contained_calculated_width);
         }
         ui.allocate_new_ui(
-            egui::UiBuilder::new().layout(match container.align_items {
+            egui::UiBuilder::new().layout(match align_items {
                 AlignItems::Center => {
                     egui::Layout::centered_and_justified(egui::Direction::TopDown)
                 }
-                AlignItems::End | AlignItems::Start => match container.justify_content {
+                AlignItems::End | AlignItems::Start => match justify_content {
                     JustifyContent::Center => egui::Layout::top_down_justified(egui::Align::Center),
                     JustifyContent::End => egui::Layout::top_down_justified(egui::Align::Max),
                     _ => egui::Layout::top_down_justified(egui::Align::Min),
@@ -1685,7 +1688,7 @@ impl EguiApp {
                 egui::Frame::none().show(ui, |ui| {
                     ui.set_width(contained_calculated_width);
                     ui.set_height(contained_calculated_height);
-                    if container.align_items == AlignItems::End {
+                    if align_items == AlignItems::End {
                         let rect = egui::Rect::from_min_size(
                             ui.cursor().left_top(),
                             egui::vec2(

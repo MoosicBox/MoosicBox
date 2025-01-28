@@ -398,33 +398,37 @@ pub fn element_style_to_html(
         }
     }
 
-    match container.justify_content {
-        JustifyContent::Start => {
-            write_css_attr!(b"justify-content", b"start");
-        }
-        JustifyContent::Center => {
-            write_css_attr!(b"justify-content", b"center");
-        }
-        JustifyContent::End => {
-            write_css_attr!(b"justify-content", b"end");
-        }
-        JustifyContent::SpaceBetween => {
-            write_css_attr!(b"justify-content", b"space-between");
-        }
-        JustifyContent::SpaceEvenly => {
-            write_css_attr!(b"justify-content", b"space-evenly");
+    if let Some(justify_content) = container.justify_content {
+        match justify_content {
+            JustifyContent::Start => {
+                write_css_attr!(b"justify-content", b"start");
+            }
+            JustifyContent::Center => {
+                write_css_attr!(b"justify-content", b"center");
+            }
+            JustifyContent::End => {
+                write_css_attr!(b"justify-content", b"end");
+            }
+            JustifyContent::SpaceBetween => {
+                write_css_attr!(b"justify-content", b"space-between");
+            }
+            JustifyContent::SpaceEvenly => {
+                write_css_attr!(b"justify-content", b"space-evenly");
+            }
         }
     }
 
-    match container.align_items {
-        AlignItems::Start => {
-            write_css_attr!(b"align-items", b"start");
-        }
-        AlignItems::Center => {
-            write_css_attr!(b"align-items", b"center");
-        }
-        AlignItems::End => {
-            write_css_attr!(b"align-items", b"end");
+    if let Some(align_items) = container.align_items {
+        match align_items {
+            AlignItems::Start => {
+                write_css_attr!(b"align-items", b"start");
+            }
+            AlignItems::Center => {
+                write_css_attr!(b"align-items", b"center");
+            }
+            AlignItems::End => {
+                write_css_attr!(b"align-items", b"end");
+            }
         }
     }
 
