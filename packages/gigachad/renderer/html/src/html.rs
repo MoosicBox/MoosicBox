@@ -191,7 +191,7 @@ fn is_flex_container(container: &Container) -> bool {
 pub fn element_style_to_html(
     f: &mut dyn Write,
     container: &Container,
-    is_flex_child: bool,
+    _is_flex_child: bool,
 ) -> Result<(), std::io::Error> {
     let mut printed_start = false;
 
@@ -243,11 +243,6 @@ pub fn element_style_to_html(
         | Element::TR
         | Element::TD
         | Element::Canvas => {}
-    }
-
-    // TODO: handle vertical flex
-    if is_flex_child && container.width.is_none() {
-        write_css_attr!(b"flex", b"1");
     }
 
     if is_flex_container(container) {
@@ -437,15 +432,11 @@ pub fn element_style_to_html(
         write_css_attr!(b"grid-gap", number_to_css_string(gap, true).as_bytes());
     }
 
-    let mut flex_shrink_0 = false;
-
     if let Some(width) = &container.width {
         write_css_attr!(b"width", number_to_css_string(width, true).as_bytes());
-        flex_shrink_0 = true;
     }
     if let Some(height) = &container.height {
         write_css_attr!(b"height", number_to_css_string(height, true).as_bytes());
-        flex_shrink_0 = true;
     }
 
     if let Some(width) = &container.max_width {
@@ -468,8 +459,6 @@ pub fn element_style_to_html(
             b"flex-basis",
             number_to_css_string(&flex.basis, false).as_bytes()
         );
-    } else if flex_shrink_0 {
-        write_css_attr!(b"flex-shrink", b"0");
     }
 
     if let Some(background) = container.background {
