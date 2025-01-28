@@ -10,10 +10,7 @@ macro_rules! public_img {
     ($path:expr $(,)?) => {{
         #[cfg(feature = "bundled_images")]
         {
-            moosicbox_app_native_image::image!(concat!(
-                "../../../../app-website/public/img/",
-                $path
-            ))
+            moosicbox_app_native_image::image!(concat!("../../public/img/", $path))
         }
         #[cfg(not(feature = "bundled_images"))]
         concat!("/public/img/", $path)
