@@ -17,7 +17,7 @@ use moosicbox_audio_output::{
 use moosicbox_core::sqlite::models::ToApi;
 use moosicbox_music_api::SourceToMusicApi;
 use moosicbox_session::models::UpdateSession;
-use rand::{thread_rng, Rng as _};
+use rand::{rng, Rng as _};
 use rupnp::{Device, Service};
 
 use moosicbox_player::{
@@ -36,7 +36,7 @@ pub const DEFAULT_SEEK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOption
 #[derive(Clone)]
 pub struct UpnpPlayer {
     pub source_to_music_api: Arc<Box<dyn SourceToMusicApi + Send + Sync>>,
-    pub id: usize,
+    pub id: u64,
     source: PlayerSource,
     transport_uri: Arc<tokio::sync::RwLock<Option<String>>>,
     pub playback: Arc<RwLock<Option<Playback>>>,
@@ -323,7 +323,7 @@ impl UpnpPlayer {
         handle: Handle,
     ) -> Self {
         Self {
-            id: thread_rng().gen::<usize>(),
+            id: rng().random::<u64>(),
             source_to_music_api,
             source,
             transport_uri: Arc::new(tokio::sync::RwLock::new(None)),

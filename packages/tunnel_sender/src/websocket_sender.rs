@@ -13,9 +13,9 @@ pub struct TunnelWebsocketSender<T>
 where
     T: WebsocketSender + Send + Sync,
 {
-    pub id: usize,
-    pub propagate_id: usize,
-    pub request_id: usize,
+    pub id: u64,
+    pub propagate_id: u64,
+    pub request_id: u64,
     pub packet_id: u32,
     pub root_sender: T,
     pub tunnel_sender: PrioritizedSender<TunnelResponseMessage>,
@@ -30,8 +30,8 @@ where
         &self,
         data: &str,
         broadcast: bool,
-        except_id: Option<usize>,
-        only_id: Option<usize>,
+        except_id: Option<u64>,
+        only_id: Option<u64>,
     ) -> Result<(), TrySendError<TunnelResponseMessage>> {
         let body: Value = serde_json::from_str(data).unwrap();
         let request_id = self.request_id;
@@ -56,7 +56,7 @@ where
     T: WebsocketSender + Send + Sync,
 {
     async fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
-        let id = connection_id.parse::<usize>().unwrap();
+        let id = connection_id.parse::<u64>().unwrap();
 
         if id == self.id {
             if self
@@ -87,7 +87,7 @@ where
         connection_id: &str,
         data: &str,
     ) -> Result<(), WebsocketSendError> {
-        let id = connection_id.parse::<usize>().unwrap();
+        let id = connection_id.parse::<u64>().unwrap();
 
         if id != self.propagate_id
             && self

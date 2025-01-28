@@ -15,7 +15,7 @@ use moosicbox_tunnel::{
     Method, TunnelEncoding, TunnelHttpRequest, TunnelRequest, TunnelResponse, TunnelStream,
 };
 use qstring::QString;
-use rand::{thread_rng, Rng as _};
+use rand::{rng, Rng as _};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -251,7 +251,7 @@ async fn handle_request(
     headers: Option<Value>,
     profile: Option<String>,
 ) -> Result<HttpResponse> {
-    let request_id = thread_rng().gen::<usize>();
+    let request_id = rng().random::<u64>();
     let abort_token = CancellationToken::new();
 
     debug!("Starting ws request for {request_id} method={method} path={path} query={query:?} headers={headers:?} profile={profile:?} (id {request_id})");
@@ -333,7 +333,7 @@ pub enum RequestError {
 #[allow(clippy::too_many_arguments)]
 fn request(
     client_id: &str,
-    request_id: usize,
+    request_id: u64,
     method: &Method,
     path: &str,
     query: Value,

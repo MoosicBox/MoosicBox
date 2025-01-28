@@ -397,7 +397,7 @@ impl AppState {
                                         let mut binding = state.active_players.write().await;
                                         let player = binding
                                             .iter_mut()
-                                            .find(|x| x.player.id as u64 == player_id)
+                                            .find(|x| x.player.id == player_id)
                                             .map(|x| &mut x.player);
 
                                         if let Some(player) = player {

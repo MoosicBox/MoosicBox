@@ -92,7 +92,7 @@ pub fn make_cache_dir_path() -> Option<PathBuf> {
 pub fn get_tests_dir_path() -> PathBuf {
     std::env::temp_dir().join(format!(
         "moosicbox_tests_{}",
-        rand::Rng::gen::<usize>(&mut rand::thread_rng())
+        rand::Rng::random::<u64>(&mut rand::rng())
     ))
 }
 

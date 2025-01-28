@@ -626,7 +626,7 @@ impl AppState {
             self.pending_player_sessions
                 .write()
                 .await
-                .insert(player.id as u64, session_id);
+                .insert(player.id, session_id);
         }
 
         player

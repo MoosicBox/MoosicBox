@@ -14,7 +14,7 @@ use moosicbox_ws::{
     PlayerAction, WebsocketContext, WebsocketDisconnectError, WebsocketMessageError,
     WebsocketSendError, WebsocketSender,
 };
-use rand::{thread_rng, Rng as _};
+use rand::{rng, Rng as _};
 use serde_json::Value;
 use strum_macros::AsRefStr;
 use tokio::sync::{mpsc, RwLock};
@@ -25,7 +25,7 @@ use crate::ws::{ConnId, Msg, RoomId};
 #[async_trait]
 impl WebsocketSender for WsServer {
     async fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
-        let id = connection_id.parse::<usize>().unwrap();
+        let id = connection_id.parse::<ConnId>().unwrap();
         log::debug!("Sending to {id}");
         self.send_message_to(id, data.to_string());
         for sender in &self.senders {
@@ -49,7 +49,7 @@ impl WebsocketSender for WsServer {
     ) -> Result<(), WebsocketSendError> {
         self.send_system_message(
             "main",
-            connection_id.parse::<usize>().unwrap(),
+            connection_id.parse::<ConnId>().unwrap(),
             data.to_string(),
         );
         for sender in &self.senders {
@@ -263,7 +263,7 @@ impl WsServer {
         log::debug!("Someone joined");
 
         // register session with random connection ID
-        let id = thread_rng().gen::<usize>();
+        let id = rng().random::<ConnId>();
         self.connections.insert(
             id,
             Connection {
@@ -449,7 +449,7 @@ pub struct WsServerHandle {
 #[async_trait]
 impl WebsocketSender for WsServerHandle {
     async fn send(&self, connection_id: &str, data: &str) -> Result<(), WebsocketSendError> {
-        let id = connection_id.parse::<usize>().unwrap();
+        let id = connection_id.parse::<ConnId>().unwrap();
         self.send(id, data.to_string()).await;
         Ok(())
     }
@@ -474,7 +474,7 @@ impl WebsocketSender for WsServerHandle {
         } else {
             log::debug!("Broadcasting message to all except {connection_id}");
         }
-        self.broadcast_except(connection_id.parse::<usize>().unwrap(), data.to_string())
+        self.broadcast_except(connection_id.parse::<ConnId>().unwrap(), data.to_string())
             .await;
         Ok(())
     }

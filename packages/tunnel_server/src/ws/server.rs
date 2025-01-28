@@ -13,7 +13,7 @@ use moosicbox_tunnel::{
     TunnelAbortRequest, TunnelRequest, TunnelResponse, TunnelWsRequest, TunnelWsResponse,
 };
 use moosicbox_tunnel_server::CANCELLATION_TOKEN;
-use rand::{thread_rng, Rng as _};
+use rand::{rng, Rng as _};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
@@ -44,14 +44,14 @@ pub enum Command {
     },
 
     RequestStart {
-        request_id: usize,
+        request_id: u64,
         sender: UnboundedSender<TunnelResponse>,
         headers_sender: oneshot::Sender<RequestHeaders>,
         abort_request_token: CancellationToken,
     },
 
     RequestEnd {
-        request_id: usize,
+        request_id: u64,
     },
 
     Response {
@@ -60,7 +60,7 @@ pub enum Command {
     },
 
     WsRequest {
-        request_id: usize,
+        request_id: u64,
         conn_id: ConnId,
         client_id: String,
         body: String,
@@ -334,14 +334,14 @@ pub struct WsServer {
     /// Map of connection IDs to their message receivers.
     sessions: HashMap<ConnId, mpsc::UnboundedSender<Msg>>,
     clients: HashMap<ConnId, mpsc::UnboundedSender<Msg>>,
-    senders: HashMap<usize, UnboundedSender<TunnelResponse>>,
-    headers_senders: HashMap<usize, oneshot::Sender<RequestHeaders>>,
-    abort_request_tokens: HashMap<usize, CancellationToken>,
+    senders: HashMap<u64, UnboundedSender<TunnelResponse>>,
+    headers_senders: HashMap<u64, oneshot::Sender<RequestHeaders>>,
+    abort_request_tokens: HashMap<u64, CancellationToken>,
 
     /// Tracks total number of historical connections established.
     visitor_count: Arc<AtomicUsize>,
 
-    ws_requests: HashMap<usize, ConnId>,
+    ws_requests: HashMap<u64, ConnId>,
 }
 
 #[derive(Debug, Serialize, Deserialize, EnumString)]
@@ -378,7 +378,7 @@ impl WsServer {
         }
     }
 
-    fn abort_request(&self, id: ConnId, request_id: usize) -> Result<(), WebsocketMessageError> {
+    fn abort_request(&self, id: ConnId, request_id: u64) -> Result<(), WebsocketMessageError> {
         log::debug!("Aborting request {request_id} (conn_id={id})");
         if let Some(abort_token) = self.abort_request_tokens.get(&request_id) {
             abort_token.cancel();
@@ -444,7 +444,7 @@ impl WsServer {
         tx: mpsc::UnboundedSender<Msg>,
     ) -> Result<ConnId, DatabaseError> {
         // register session with random connection ID
-        let id = thread_rng().gen::<usize>();
+        let id = rng().random::<u64>();
 
         log::debug!("connect: Someone joined {id} sender={sender}");
 
@@ -519,7 +519,7 @@ pub enum ConnectionIdError {
     Database(#[from] DatabaseError),
 }
 
-static CACHE_CONNECTIONS_MAP: LazyLock<std::sync::RwLock<HashMap<String, usize>>> =
+static CACHE_CONNECTIONS_MAP: LazyLock<std::sync::RwLock<HashMap<String, ConnId>>> =
     LazyLock::new(|| std::sync::RwLock::new(HashMap::new()));
 
 impl service::Handle {
@@ -545,12 +545,12 @@ impl service::Handle {
 
     pub async fn ws_request(
         &self,
-        conn_id: usize,
+        conn_id: ConnId,
         client_id: &str,
         profile: Option<String>,
         msg: impl Into<String> + Send,
     ) -> Result<(), WsRequestError> {
-        let request_id = thread_rng().gen::<usize>();
+        let request_id = rng().random::<u64>();
 
         self.send_command_async(Command::WsRequest {
             request_id,
@@ -595,7 +595,7 @@ impl service::Handle {
     }
 }
 
-pub async fn get_connection_id(client_id: &str) -> Result<usize, ConnectionIdError> {
+pub async fn get_connection_id(client_id: &str) -> Result<ConnId, ConnectionIdError> {
     let existing = {
         let lock = CACHE_CONNECTIONS_MAP.read().unwrap();
         lock.get(client_id).copied()
@@ -609,7 +609,7 @@ pub async fn get_connection_id(client_id: &str) -> Result<usize, ConnectionIdErr
             .tunnel_ws_id;
 
         let conn_id = tunnel_ws_id
-            .parse::<usize>()
+            .parse::<ConnId>()
             .map_err(|_| ConnectionIdError::Invalid(tunnel_ws_id))?;
 
         CACHE_CONNECTIONS_MAP

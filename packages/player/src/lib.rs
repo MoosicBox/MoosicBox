@@ -36,7 +36,7 @@ use moosicbox_session::{
 use moosicbox_stream_utils::{
     remote_bytestream::RemoteByteStream, stalled_monitor::StalledReadMonitor,
 };
-use rand::{thread_rng, Rng as _};
+use rand::{rng, Rng as _};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -166,7 +166,7 @@ impl Playback {
         playback_target: Option<PlaybackTarget>,
     ) -> Self {
         Self {
-            id: thread_rng().gen::<u64>(),
+            id: rng().random::<u64>(),
             session_id,
             profile,
             tracks,
@@ -433,7 +433,7 @@ pub enum PlayerSource {
 
 #[derive(Debug, Clone)]
 pub struct PlaybackHandler {
-    pub id: usize,
+    pub id: u64,
     pub playback: Arc<std::sync::RwLock<Option<Playback>>>,
     pub output: Option<Arc<std::sync::Mutex<AudioOutputFactory>>>,
     pub player: Arc<Box<dyn Player + Sync>>,
@@ -453,7 +453,7 @@ impl PlaybackHandler {
         let receiver = Arc::new(tokio::sync::RwLock::new(None));
 
         Self {
-            id: thread_rng().gen::<usize>(),
+            id: rng().random::<u64>(),
             playback,
             output,
             player: Arc::new(player),

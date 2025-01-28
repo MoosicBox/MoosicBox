@@ -8,7 +8,7 @@ use moosicbox_audio_decoder::{AudioDecodeError, AudioDecodeHandler};
 use moosicbox_audio_output::{AudioOutput, AudioOutputFactory};
 use moosicbox_core::sqlite::models::{ToApi, TrackApiSource};
 use moosicbox_session::models::UpdateSession;
-use rand::{thread_rng, Rng as _};
+use rand::{rng, Rng as _};
 use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
 use tokio_util::sync::CancellationToken;
 
@@ -20,7 +20,7 @@ use crate::{
 
 #[derive(Clone)]
 pub struct LocalPlayer {
-    pub id: usize,
+    pub id: u64,
     playback_type: PlaybackType,
     source: PlayerSource,
     pub output: Option<Arc<Mutex<AudioOutputFactory>>>,
@@ -331,7 +331,7 @@ impl LocalPlayer {
     ) -> Result<Self, PlayerError> {
         Ok(Self {
             id: moosicbox_task::spawn_blocking("player: local player rng", || {
-                thread_rng().gen::<usize>()
+                rng().random::<u64>()
             })
             .await?,
             playback_type: playback_type.unwrap_or_default(),

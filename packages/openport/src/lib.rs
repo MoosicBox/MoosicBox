@@ -82,11 +82,11 @@ fn ask_free_tcp_port() -> Option<Port> {
 pub fn pick_random_unused_port() -> Option<Port> {
     use rand::prelude::*;
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     // Try random port first
     for _ in 0..10 {
-        let port = rng.gen_range(15000..25000);
+        let port = rng.random_range(15000..25000);
         if is_free(port) {
             return Some(port);
         }

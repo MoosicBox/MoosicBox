@@ -34,7 +34,7 @@ use moosicbox_stream_utils::remote_bytestream::RemoteByteStream;
 use moosicbox_stream_utils::ByteWriter;
 use moosicbox_tunnel::{Method, TunnelEncoding, TunnelWsResponse};
 use moosicbox_ws::{PlayerAction, WebsocketContext, WebsocketSendError, WebsocketSender};
-use rand::{thread_rng, Rng as _};
+use rand::{rng, Rng as _};
 use regex::Regex;
 use serde_json::Value;
 use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
@@ -101,7 +101,7 @@ impl WebsocketSender for TunnelSenderHandle {
                 .send(TunnelResponseMessage::Ws(TunnelResponseWs {
                     message: data.into(),
                     exclude_connection_ids: None,
-                    to_connection_ids: Some(vec![conn_id.parse::<usize>()?]),
+                    to_connection_ids: Some(vec![conn_id.parse::<u64>()?]),
                 }))
                 .map_err(|e| WebsocketSendError::Unknown(e.to_string()))?;
         }
@@ -130,7 +130,7 @@ impl WebsocketSender for TunnelSenderHandle {
             sender
                 .send(TunnelResponseMessage::Ws(TunnelResponseWs {
                     message: data.into(),
-                    exclude_connection_ids: Some(vec![conn_id.parse::<usize>()?]),
+                    exclude_connection_ids: Some(vec![conn_id.parse::<u64>()?]),
                     to_connection_ids: None,
                 }))
                 .map_err(|e| WebsocketSendError::Unknown(e.to_string()))?;
@@ -155,30 +155,30 @@ pub enum TunnelResponseMessage {
 }
 
 pub struct TunnelResponsePacket {
-    pub request_id: usize,
+    pub request_id: u64,
     pub packet_id: u32,
     pub message: Message,
     pub broadcast: bool,
-    pub except_id: Option<usize>,
-    pub only_id: Option<usize>,
+    pub except_id: Option<u64>,
+    pub only_id: Option<u64>,
 }
 
 pub struct TunnelResponseWs {
     pub message: Message,
-    pub exclude_connection_ids: Option<Vec<usize>>,
-    pub to_connection_ids: Option<Vec<usize>>,
+    pub exclude_connection_ids: Option<Vec<u64>>,
+    pub to_connection_ids: Option<Vec<u64>>,
 }
 
 #[derive(Clone)]
 pub struct TunnelSender {
-    id: usize,
+    id: u64,
     host: String,
     url: String,
     client_id: String,
     access_token: String,
     sender: Arc<RwLock<Option<PrioritizedSender<TunnelResponseMessage>>>>,
     cancellation_token: CancellationToken,
-    abort_request_tokens: Arc<RwLock<HashMap<usize, CancellationToken>>>,
+    abort_request_tokens: Arc<RwLock<HashMap<u64, CancellationToken>>>,
     player_actions: Arc<RwLock<Vec<(u64, PlayerAction)>>>,
     config_db: ConfigDatabase,
 }
@@ -204,7 +204,7 @@ impl TunnelSender {
     ) -> (Self, TunnelSenderHandle) {
         let sender = Arc::new(RwLock::new(None));
         let cancellation_token = CancellationToken::new();
-        let id = thread_rng().gen::<usize>();
+        let id = rng().random::<u64>();
         let player_actions = Arc::new(RwLock::new(vec![]));
         let handle = TunnelSenderHandle {
             sender: sender.clone(),
@@ -265,8 +265,8 @@ impl TunnelSender {
     }
 
     fn is_request_aborted(
-        request_id: usize,
-        tokens: &Arc<RwLock<HashMap<usize, CancellationToken>>>,
+        request_id: u64,
+        tokens: &Arc<RwLock<HashMap<u64, CancellationToken>>>,
     ) -> bool {
         if let Some(token) = tokens.read().unwrap().get(&request_id) {
             return token.is_cancelled();
@@ -546,7 +546,7 @@ impl TunnelSender {
     /// * If failed to send the bytes
     pub fn send_bytes(
         &self,
-        request_id: usize,
+        request_id: u64,
         packet_id: u32,
         bytes: impl Into<Vec<u8>>,
     ) -> Result<(), SendBytesError> {
@@ -579,7 +579,7 @@ impl TunnelSender {
     /// * If failed to send the message
     pub fn send_message(
         &self,
-        request_id: usize,
+        request_id: u64,
         packet_id: u32,
         message: impl Into<String>,
     ) -> Result<(), SendMessageError> {
@@ -608,7 +608,7 @@ impl TunnelSender {
     #[allow(clippy::unnecessary_wraps)]
     fn send(
         &self,
-        request_id: usize,
+        request_id: u64,
         status: u16,
         headers: &HashMap<String, String>,
         reader: impl std::io::Read,
@@ -626,7 +626,7 @@ impl TunnelSender {
 
     async fn send_stream<E: std::error::Error + Sized>(
         &self,
-        request_id: usize,
+        request_id: u64,
         status: u16,
         headers: &HashMap<String, String>,
         ranges: Option<Vec<Range>>,
@@ -647,7 +647,7 @@ impl TunnelSender {
     }
 
     fn init_binary_request_buffer(
-        request_id: usize,
+        request_id: u64,
         packet_id: u32,
         last: bool,
         status: u16,
@@ -700,7 +700,7 @@ impl TunnelSender {
     #[allow(clippy::too_many_lines)]
     async fn send_binary_stream<E: std::error::Error + Sized>(
         &self,
-        request_id: usize,
+        request_id: u64,
         status: u16,
         headers: &HashMap<String, String>,
         ranges: Option<Vec<Range>>,
@@ -844,7 +844,7 @@ impl TunnelSender {
 
     fn send_binary(
         &self,
-        request_id: usize,
+        request_id: u64,
         status: u16,
         headers: &HashMap<String, String>,
         mut reader: impl std::io::Read,
@@ -893,7 +893,7 @@ impl TunnelSender {
 
     #[cfg(feature = "base64")]
     fn init_base64_request_buffer(
-        request_id: usize,
+        request_id: u64,
         packet_id: u32,
         status: u16,
         headers: &HashMap<String, String>,
@@ -922,7 +922,7 @@ impl TunnelSender {
     #[cfg(feature = "base64")]
     fn send_base64(
         &self,
-        request_id: usize,
+        request_id: u64,
         status: u16,
         headers: &HashMap<String, String>,
         mut reader: impl std::io::Read,
@@ -1002,7 +1002,7 @@ impl TunnelSender {
     #[cfg(feature = "base64")]
     async fn send_base64_stream<E: std::error::Error + Sized>(
         &self,
-        request_id: usize,
+        request_id: u64,
         status: u16,
         headers: &HashMap<String, String>,
         ranges: Option<Vec<Range>>,
@@ -1086,7 +1086,7 @@ impl TunnelSender {
     async fn proxy_localhost_request(
         &self,
         service_port: u16,
-        request_id: usize,
+        request_id: u64,
         method: Method,
         path: String,
         query: Value,
@@ -1129,7 +1129,7 @@ impl TunnelSender {
     async fn proxy_request(
         &self,
         url: &str,
-        request_id: usize,
+        request_id: u64,
         method: Method,
         payload: Option<Value>,
         headers: Option<Value>,
@@ -1210,7 +1210,7 @@ impl TunnelSender {
     pub async fn tunnel_request(
         &self,
         service_port: u16,
-        request_id: usize,
+        request_id: u64,
         method: Method,
         path: String,
         query: Value,
@@ -1659,8 +1659,8 @@ impl TunnelSender {
     /// * If the websocket request fails to process
     pub async fn ws_request(
         &self,
-        conn_id: usize,
-        request_id: usize,
+        conn_id: u64,
+        request_id: u64,
         value: Value,
         profile: Option<String>,
         sender: impl WebsocketSender,
@@ -1689,7 +1689,7 @@ impl TunnelSender {
     /// # Panics
     ///
     /// * If the `abort_request_tokens` `RwLock` is poisoned
-    pub fn abort_request(&self, request_id: usize) {
+    pub fn abort_request(&self, request_id: u64) {
         if let Some(token) = self.abort_request_tokens.read().unwrap().get(&request_id) {
             token.cancel();
         }

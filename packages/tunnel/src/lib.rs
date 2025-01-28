@@ -26,17 +26,17 @@ pub enum TunnelEncoding {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TunnelWsResponse {
-    pub request_id: usize,
+    pub request_id: u64,
     pub body: Value,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub exclude_connection_ids: Option<Vec<usize>>,
+    pub exclude_connection_ids: Option<Vec<u64>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub to_connection_ids: Option<Vec<usize>>,
+    pub to_connection_ids: Option<Vec<u64>>,
 }
 
 #[derive(Debug)]
 pub struct TunnelResponse {
-    pub request_id: usize,
+    pub request_id: u64,
     pub packet_id: u32,
     pub last: bool,
     pub bytes: Bytes,
@@ -82,7 +82,7 @@ pub enum TunnelRequest {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TunnelHttpRequest {
-    pub request_id: usize,
+    pub request_id: u64,
     pub method: Method,
     pub path: String,
     pub query: Value,
@@ -96,8 +96,8 @@ pub struct TunnelHttpRequest {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TunnelWsRequest {
-    pub conn_id: usize,
-    pub request_id: usize,
+    pub conn_id: u64,
+    pub request_id: u64,
     pub body: Value,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub connection_id: Option<Value>,
@@ -106,7 +106,7 @@ pub struct TunnelWsRequest {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TunnelAbortRequest {
-    pub request_id: usize,
+    pub request_id: u64,
 }
 
 #[derive(Debug, Error)]
@@ -122,7 +122,7 @@ impl TryFrom<Bytes> for TunnelResponse {
 
     fn try_from(bytes: Bytes) -> Result<Self, Self::Error> {
         let mut data = bytes.slice(13..);
-        let request_id = usize::from_be_bytes(bytes[..8].try_into()?);
+        let request_id = u64::from_be_bytes(bytes[..8].try_into()?);
         let packet_id = u32::from_be_bytes(bytes[8..12].try_into()?);
         let last = u8::from_be_bytes(bytes[12..13].try_into()?) == 1;
         let (status, headers) = if packet_id == 1 {
@@ -172,7 +172,7 @@ impl TryFrom<&str> for TunnelResponse {
         let request_id_pos = base64.chars().position(|c| c == '|').ok_or_else(|| {
             Base64DecodeError::InvalidContent("Missing request_id. Expected '|' delimiter".into())
         })?;
-        let request_id = base64[..request_id_pos].parse::<usize>().unwrap();
+        let request_id = base64[..request_id_pos].parse::<u64>().unwrap();
 
         let packet_id_pos = base64
             .chars()
@@ -246,24 +246,24 @@ pub enum TunnelStreamError {
 
 pub struct TunnelStream<'a, F: Future<Output = Result<(), Box<dyn std::error::Error>>>> {
     start: SystemTime,
-    request_id: usize,
+    request_id: u64,
     time_to_first_byte: Option<SystemTime>,
     packet_count: u32,
     byte_count: usize,
     done: bool,
     end_of_stream: bool,
     rx: UnboundedReceiver<TunnelResponse>,
-    on_end: &'a dyn Fn(usize) -> F,
+    on_end: &'a dyn Fn(u64) -> F,
     packet_queue: Vec<TunnelResponse>,
     abort_token: CancellationToken,
 }
 
 impl<'a, F: Future<Output = Result<(), Box<dyn std::error::Error>>>> TunnelStream<'a, F> {
     pub fn new(
-        request_id: usize,
+        request_id: u64,
         rx: UnboundedReceiver<TunnelResponse>,
         abort_token: CancellationToken,
-        on_end: &'a impl Fn(usize) -> F,
+        on_end: &'a impl Fn(u64) -> F,
     ) -> Self {
         Self {
             start: SystemTime::now(),
