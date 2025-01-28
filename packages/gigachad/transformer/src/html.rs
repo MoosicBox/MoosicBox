@@ -12,7 +12,7 @@ use tl::{Children, HTMLTag, Node, NodeHandle, Parser, ParserOptions};
 
 use crate::{
     parse::{parse_number, GetNumberError},
-    Number,
+    Flex, Number,
 };
 
 impl TryFrom<String> for crate::Container {
@@ -286,6 +286,41 @@ fn get_number(tag: &HTMLTag, name: &str) -> Result<Option<Number>, GetNumberErro
     })
 }
 
+fn get_flex(tag: &HTMLTag, name: &str) -> Result<Option<Flex>, GetNumberError> {
+    match get_tag_attr_value_undecoded(tag, name)
+        .as_deref()
+        .map(|x| html_escape::decode_html_entities(x))
+        .as_deref()
+        .map(|x| {
+            x.split_whitespace()
+                .map(parse_number)
+                .collect::<Result<Vec<_>, _>>()
+        }) {
+        Some(Ok(values)) => {
+            let mut iter = values.into_iter();
+            match (iter.next(), iter.next(), iter.next(), iter.next()) {
+                (Some(grow), None, None, None) => Ok(Some(Flex {
+                    grow,
+                    ..Flex::default()
+                })),
+                (Some(grow), Some(shrink), None, None) => Ok(Some(Flex {
+                    grow,
+                    shrink,
+                    ..Flex::default()
+                })),
+                (Some(grow), Some(shrink), Some(basis), None) => Ok(Some(Flex {
+                    grow,
+                    shrink,
+                    basis,
+                })),
+                _ => Ok(None),
+            }
+        }
+        Some(Err(e)) => Err(e),
+        None => Ok(None),
+    }
+}
+
 fn get_image_fit(tag: &HTMLTag, name: &str) -> Option<ImageFit> {
     get_tag_attr_value_lower(tag, name)
         .as_deref()
@@ -400,6 +435,7 @@ fn get_actions(tag: &HTMLTag) -> Vec<Action> {
     actions
 }
 
+#[allow(clippy::too_many_lines)]
 fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> crate::Container {
     #[cfg(feature = "id")]
     static CURRENT_ID: std::sync::LazyLock<std::sync::Arc<std::sync::atomic::AtomicUsize>> =
@@ -451,6 +487,39 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
         .unwrap()
         .or_else(|| padding_y.clone().or_else(|| padding.clone()));
 
+    let mut flex = get_flex(tag, "sx-flex").unwrap();
+
+    if let Some(grow) = get_number(tag, "sx-flex-grow").unwrap() {
+        if let Some(flex) = &mut flex {
+            flex.grow = grow;
+        } else {
+            flex = Some(Flex {
+                grow,
+                ..Flex::default()
+            });
+        }
+    }
+    if let Some(shrink) = get_number(tag, "sx-flex-shrink").unwrap() {
+        if let Some(flex) = &mut flex {
+            flex.shrink = shrink;
+        } else {
+            flex = Some(Flex {
+                shrink,
+                ..Flex::default()
+            });
+        }
+    }
+    if let Some(basis) = get_number(tag, "sx-flex-basis").unwrap() {
+        if let Some(flex) = &mut flex {
+            flex.basis = basis;
+        } else {
+            flex = Some(Flex {
+                basis,
+                ..Flex::default()
+            });
+        }
+    }
+
     #[allow(clippy::needless_update)]
     crate::Container {
         #[cfg(feature = "id")]
@@ -488,6 +557,7 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
         max_width: get_number(tag, "sx-max-width").unwrap(),
         height: get_number(tag, "sx-height").unwrap(),
         max_height: get_number(tag, "sx-max-height").unwrap(),
+        flex,
         left: get_number(tag, "sx-left").unwrap(),
         right: get_number(tag, "sx-right").unwrap(),
         top: get_number(tag, "sx-top").unwrap(),

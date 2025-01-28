@@ -442,21 +442,35 @@ pub fn element_style_to_html(
         write_css_attr!(b"width", number_to_css_string(width, true).as_bytes());
         flex_shrink_0 = true;
     }
-    if let Some(width) = &container.max_width {
-        write_css_attr!(b"max-width", number_to_css_string(width, true).as_bytes());
-        flex_shrink_0 = true;
-    }
     if let Some(height) = &container.height {
         write_css_attr!(b"height", number_to_css_string(height, true).as_bytes());
-        flex_shrink_0 = true;
-    }
-    if let Some(height) = &container.max_height {
-        write_css_attr!(b"max-height", number_to_css_string(height, true).as_bytes());
         flex_shrink_0 = true;
     }
 
     if flex_shrink_0 {
         write_css_attr!(b"flex-shrink", b"0");
+    }
+
+    if let Some(width) = &container.max_width {
+        write_css_attr!(b"max-width", number_to_css_string(width, true).as_bytes());
+    }
+    if let Some(height) = &container.max_height {
+        write_css_attr!(b"max-height", number_to_css_string(height, true).as_bytes());
+    }
+
+    if let Some(flex) = &container.flex {
+        write_css_attr!(
+            b"flex-grow",
+            number_to_css_string(&flex.grow, false).as_bytes()
+        );
+        write_css_attr!(
+            b"flex-shrink",
+            number_to_css_string(&flex.shrink, false).as_bytes()
+        );
+        write_css_attr!(
+            b"flex-basis",
+            number_to_css_string(&flex.basis, false).as_bytes()
+        );
     }
 
     if let Some(background) = container.background {

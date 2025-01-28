@@ -9,7 +9,7 @@ use quickcheck::{Arbitrary, Gen};
 use strum::IntoEnumIterator;
 
 use crate::{
-    Calculation, CalculationType, Container, Element, HeaderSize, Input, Number, NumberType,
+    Calculation, CalculationType, Container, Element, Flex, HeaderSize, Input, Number, NumberType,
 };
 
 fn one_of_calc(g: &mut Gen, types: &[CalculationType]) -> Calculation {
@@ -80,6 +80,16 @@ impl Arbitrary for HeaderSize {
     fn arbitrary(g: &mut Gen) -> Self {
         *g.choose(&[Self::H1, Self::H2, Self::H3, Self::H4, Self::H5, Self::H6])
             .unwrap()
+    }
+}
+
+impl Arbitrary for Flex {
+    fn arbitrary(g: &mut Gen) -> Self {
+        Self {
+            grow: Arbitrary::arbitrary(g),
+            shrink: Arbitrary::arbitrary(g),
+            basis: Arbitrary::arbitrary(g),
+        }
     }
 }
 
@@ -199,6 +209,7 @@ impl Arbitrary for Container {
             max_width: Option::arbitrary(g),
             height: Option::arbitrary(g),
             max_height: Option::arbitrary(g),
+            flex: Option::arbitrary(g),
             gap: Option::arbitrary(g),
             opacity: Option::arbitrary(g),
             left: Option::arbitrary(g),

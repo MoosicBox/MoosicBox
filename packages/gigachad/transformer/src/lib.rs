@@ -225,6 +225,23 @@ impl Default for Number {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct Flex {
+    pub grow: Number,
+    pub shrink: Number,
+    pub basis: Number,
+}
+
+impl Default for Flex {
+    fn default() -> Self {
+        Self {
+            grow: Number::Integer(1),
+            shrink: Number::Integer(1),
+            basis: Number::IntegerPercent(0),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Container {
     #[cfg(feature = "id")]
@@ -243,6 +260,7 @@ pub struct Container {
     pub max_width: Option<Number>,
     pub height: Option<Number>,
     pub max_height: Option<Number>,
+    pub flex: Option<Flex>,
     pub gap: Option<Number>,
     pub opacity: Option<Number>,
     pub left: Option<Number>,
@@ -963,6 +981,12 @@ impl Container {
         attrs.add_opt("sx-max-width", self.max_width.as_ref());
         attrs.add_opt("sx-height", self.height.as_ref());
         attrs.add_opt("sx-max-height", self.max_height.as_ref());
+
+        if let Some(flex) = &self.flex {
+            attrs.add("sx-flex-grow", &flex.grow);
+            attrs.add("sx-flex-shrink", &flex.shrink);
+            attrs.add("sx-flex-basis", &flex.basis);
+        }
 
         attrs.add_opt("sx-gap", self.gap.as_ref());
 
