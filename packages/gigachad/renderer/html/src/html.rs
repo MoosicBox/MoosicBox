@@ -182,6 +182,8 @@ pub fn calc_to_css_string(calc: &Calculation, px: bool) -> String {
 // TODO: handle vertical flex
 fn is_flex_container(container: &Container) -> bool {
     container.direction == LayoutDirection::Row
+        || container.justify_content.is_some()
+        || container.align_items.is_some()
 }
 
 /// # Errors
@@ -247,7 +249,10 @@ pub fn element_style_to_html(
 
     if is_flex_container(container) {
         write_css_attr!(b"display", b"flex");
-        write_css_attr!(b"flex-direction", b"row");
+
+        if container.direction == LayoutDirection::Column {
+            write_css_attr!(b"flex-direction", b"column");
+        }
     }
 
     match container.overflow_x {
