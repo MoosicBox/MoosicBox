@@ -7,7 +7,8 @@ use gigachad_renderer::Color;
 use gigachad_router::Container;
 use gigachad_transformer::{
     models::{
-        AlignItems, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, Position, Visibility,
+        AlignItems, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, Position, TextAlign,
+        Visibility,
     },
     Calculation, Element, HeaderSize, Input, Number,
 };
@@ -560,6 +561,18 @@ pub fn element_style_to_html(
 
     if let Some(color) = &container.color {
         write_css_attr!(b"color", color_to_css_string(*color).as_bytes(),);
+    }
+
+    if let Some(text_align) = &container.text_align {
+        write_css_attr!(
+            b"text-align",
+            match text_align {
+                TextAlign::Start => b"start",
+                TextAlign::Center => b"center",
+                TextAlign::End => b"end",
+                TextAlign::Justify => b"justify",
+            }
+        );
     }
 
     if printed_start {

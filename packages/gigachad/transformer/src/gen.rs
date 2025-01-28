@@ -205,6 +205,7 @@ impl Arbitrary for Container {
             overflow_y: LayoutOverflow::arbitrary(g),
             justify_content: JustifyContent::arbitrary(g),
             align_items: AlignItems::arbitrary(g),
+            text_align: Arbitrary::arbitrary(g),
             width: Option::arbitrary(g),
             max_width: Option::arbitrary(g),
             height: Option::arbitrary(g),

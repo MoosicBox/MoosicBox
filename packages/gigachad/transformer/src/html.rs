@@ -4,7 +4,7 @@ use gigachad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
 use gigachad_color::Color;
 use gigachad_transformer_models::{
     AlignItems, Cursor, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, Position, Route,
-    SwapTarget, Visibility,
+    SwapTarget, TextAlign, Visibility,
 };
 use serde_json::Value;
 pub use tl::ParseError;
@@ -215,6 +215,16 @@ fn get_align_items(tag: &HTMLTag, name: &str) -> AlignItems {
         Some("center") => AlignItems::Center,
         Some("end") => AlignItems::End,
         _ => AlignItems::default(),
+    }
+}
+
+fn get_text_align(tag: &HTMLTag, name: &str) -> Option<TextAlign> {
+    match get_tag_attr_value_lower(tag, name).as_deref() {
+        Some("start") => Some(TextAlign::Start),
+        Some("center") => Some(TextAlign::Center),
+        Some("end") => Some(TextAlign::End),
+        Some("justify") => Some(TextAlign::Justify),
+        _ => None,
     }
 }
 
@@ -554,6 +564,7 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
         overflow_y: get_overflow(tag, "sx-overflow-y"),
         justify_content: get_justify_content(tag, "sx-justify-content"),
         align_items: get_align_items(tag, "sx-align-items"),
+        text_align: get_text_align(tag, "sx-text-align"),
         children: parse_top_children(node.children(), parser),
         width: get_number(tag, "sx-width").unwrap(),
         max_width: get_number(tag, "sx-max-width").unwrap(),

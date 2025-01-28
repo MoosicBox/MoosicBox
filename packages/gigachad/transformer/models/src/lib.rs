@@ -87,6 +87,28 @@ impl std::fmt::Display for AlignItems {
     }
 }
 
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(tag = "type"))]
+pub enum TextAlign {
+    #[default]
+    Start,
+    Center,
+    End,
+    Justify,
+}
+
+impl std::fmt::Display for TextAlign {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Start => f.write_str("start"),
+            Self::Center => f.write_str("center"),
+            Self::End => f.write_str("end"),
+            Self::Justify => f.write_str("justify"),
+        }
+    }
+}
+
 #[cfg(feature = "calc")]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

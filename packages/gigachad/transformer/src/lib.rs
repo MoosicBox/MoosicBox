@@ -7,7 +7,7 @@ use gigachad_actions::Action;
 use gigachad_color::Color;
 use gigachad_transformer_models::{
     AlignItems, Cursor, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, Position, Route,
-    Visibility,
+    TextAlign, Visibility,
 };
 use serde_json::Value;
 
@@ -256,6 +256,7 @@ pub struct Container {
     pub overflow_y: LayoutOverflow,
     pub justify_content: JustifyContent,
     pub align_items: AlignItems,
+    pub text_align: Option<TextAlign>,
     pub width: Option<Number>,
     pub max_width: Option<Number>,
     pub height: Option<Number>,
@@ -961,6 +962,8 @@ impl Container {
         if self.align_items != AlignItems::default() {
             attrs.add("sx-align-items", self.align_items);
         }
+
+        attrs.add_opt("sx-text-align", self.text_align.as_ref());
 
         match self.element {
             Element::TR => {
