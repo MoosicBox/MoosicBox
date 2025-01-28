@@ -288,6 +288,7 @@ pub struct Container {
     pub padding_right: Option<Number>,
     pub padding_top: Option<Number>,
     pub padding_bottom: Option<Number>,
+    pub font_size: Option<Number>,
     pub state: Option<Value>,
     pub hidden: Option<bool>,
     pub debug: Option<bool>,
@@ -1014,6 +1015,8 @@ impl Container {
 
         attrs.add_opt("sx-hidden", self.hidden.as_ref());
         attrs.add_opt("sx-visibility", self.visibility.as_ref());
+
+        attrs.add_opt("sx-font-size", self.font_size.as_ref());
 
         attrs.add_opt("debug", self.debug.as_ref());
 

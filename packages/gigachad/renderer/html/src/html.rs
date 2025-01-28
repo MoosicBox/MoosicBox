@@ -551,6 +551,13 @@ pub fn element_style_to_html(
         );
     }
 
+    if let Some(font_size) = &container.font_size {
+        write_css_attr!(
+            b"font-size",
+            number_to_css_string(font_size, true).as_bytes(),
+        );
+    }
+
     if printed_start {
         f.write_all(b"\"")?;
     }
