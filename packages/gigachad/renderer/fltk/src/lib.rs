@@ -371,7 +371,13 @@ impl FltkRenderer {
                 Cow::Owned(None),
                 container,
                 0,
-                Context::new(window_width, window_height),
+                #[allow(clippy::cast_precision_loss)]
+                Context::new(
+                    window_width,
+                    window_height,
+                    self.width.load(std::sync::atomic::Ordering::SeqCst) as f32,
+                    self.height.load(std::sync::atomic::Ordering::SeqCst) as f32,
+                ),
                 tx,
             )?);
         }
@@ -925,17 +931,33 @@ impl FltkRenderer {
                                         // FIXME: Need to handle aspect ratio if either width or
                                         // height is missing
                                         if width.is_some() || height.is_some() {
-                                            #[allow(clippy::cast_possible_truncation)]
+                                            #[allow(
+                                                clippy::cast_possible_truncation,
+                                                clippy::cast_precision_loss
+                                            )]
                                             let width = calc_number(
                                                 container.width.as_ref().unwrap(),
                                                 context.width,
+                                                self.width.load(std::sync::atomic::Ordering::SeqCst)
+                                                    as f32,
+                                                self.height
+                                                    .load(std::sync::atomic::Ordering::SeqCst)
+                                                    as f32,
                                             )
                                             .round()
                                                 as i32;
-                                            #[allow(clippy::cast_possible_truncation)]
+                                            #[allow(
+                                                clippy::cast_possible_truncation,
+                                                clippy::cast_precision_loss
+                                            )]
                                             let height = calc_number(
                                                 container.height.as_ref().unwrap(),
                                                 context.height,
+                                                self.width.load(std::sync::atomic::Ordering::SeqCst)
+                                                    as f32,
+                                                self.height
+                                                    .load(std::sync::atomic::Ordering::SeqCst)
+                                                    as f32,
                                             )
                                             .round()
                                                 as i32;
@@ -1384,10 +1406,12 @@ struct Context {
     overflow_y: LayoutOverflow,
     width: f32,
     height: f32,
+    root_width: f32,
+    root_height: f32,
 }
 
 impl Context {
-    fn new(width: f32, height: f32) -> Self {
+    fn new(width: f32, height: f32, root_width: f32, root_height: f32) -> Self {
         Self {
             size: 12,
             direction: LayoutDirection::default(),
@@ -1395,6 +1419,8 @@ impl Context {
             overflow_y: LayoutOverflow::default(),
             width,
             height,
+            root_width,
+            root_height,
         }
     }
 
@@ -1404,7 +1430,12 @@ impl Context {
         self.overflow_y = container.overflow_y;
         self.width = container
             .calculated_width
-            .or_else(|| container.width.as_ref().map(|x| calc_number(x, self.width)))
+            .or_else(|| {
+                container
+                    .width
+                    .as_ref()
+                    .map(|x| calc_number(x, self.width, self.root_width, self.root_height))
+            })
             .unwrap_or(self.width);
         self.height = container
             .calculated_height
@@ -1412,7 +1443,7 @@ impl Context {
                 container
                     .height
                     .as_ref()
-                    .map(|x| calc_number(x, self.height))
+                    .map(|x| calc_number(x, self.height, self.root_width, self.root_height))
             })
             .unwrap_or(self.height);
         self

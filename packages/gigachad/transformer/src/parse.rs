@@ -239,6 +239,36 @@ pub fn parse_number(number: &str) -> Result<Number, GetNumberError> {
 
     let mut number = if let Ok(calc) = parse_calc(number) {
         calc
+    } else if let Some((number, _)) = number.split_once("dvw") {
+        if number.contains('.') {
+            Number::RealDvw(
+                number
+                    .parse::<f32>()
+                    .map_err(|_| GetNumberError::Parse(number.to_string()))?,
+            )
+        } else {
+            number
+                .parse::<i64>()
+                .ok()
+                .map(Number::IntegerDvw)
+                .or_else(|| number.parse::<f32>().ok().map(Number::RealDvw))
+                .ok_or_else(|| GetNumberError::Parse(number.to_string()))?
+        }
+    } else if let Some((number, _)) = number.split_once("dvh") {
+        if number.contains('.') {
+            Number::RealDvh(
+                number
+                    .parse::<f32>()
+                    .map_err(|_| GetNumberError::Parse(number.to_string()))?,
+            )
+        } else {
+            number
+                .parse::<i64>()
+                .ok()
+                .map(Number::IntegerDvh)
+                .or_else(|| number.parse::<f32>().ok().map(Number::RealDvh))
+                .ok_or_else(|| GetNumberError::Parse(number.to_string()))?
+        }
     } else if let Some((number, _)) = number.split_once('%') {
         if number.contains('.') {
             Number::RealPercent(
@@ -272,12 +302,16 @@ pub fn parse_number(number: &str) -> Result<Number, GetNumberError> {
     };
 
     match &mut number {
-        Number::Real(x) | Number::RealPercent(x) => {
+        Number::Real(x) | Number::RealPercent(x) | Number::RealDvw(x) | Number::RealDvh(x) => {
             if x.is_sign_negative() && x.abs() < EPSILON {
                 *x = 0.0;
             }
         }
-        Number::Integer(_) | Number::IntegerPercent(_) | Number::Calc(_) => {}
+        Number::Integer(..)
+        | Number::IntegerPercent(..)
+        | Number::Calc(..)
+        | Number::IntegerDvw(..)
+        | Number::IntegerDvh(..) => {}
     }
 
     Ok(number)

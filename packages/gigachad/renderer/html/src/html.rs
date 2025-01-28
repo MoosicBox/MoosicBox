@@ -124,6 +124,10 @@ pub fn number_to_css_string(number: &Number, px: bool) -> String {
         }
         Number::RealPercent(x) => format!("{x}%"),
         Number::IntegerPercent(x) => format!("{x}%"),
+        Number::RealDvw(x) => format!("{x}dvw"),
+        Number::IntegerDvw(x) => format!("{x}dvw"),
+        Number::RealDvh(x) => format!("{x}dvh"),
+        Number::IntegerDvh(x) => format!("{x}dvh"),
         Number::Calc(x) => format!("calc({})", calc_to_css_string(x, px)),
     }
 }

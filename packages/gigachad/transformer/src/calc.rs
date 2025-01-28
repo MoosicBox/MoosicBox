@@ -69,7 +69,7 @@ impl Container {
         );
 
         for element in &mut self.children {
-            element.calc_styling(container_width, container_height);
+            element.calc_styling(container_width, container_height, root_size);
         }
 
         if self.element == Element::Table {
@@ -79,11 +79,11 @@ impl Container {
         }
     }
 
-    fn calc_styling(&mut self, container_width: f32, container_height: f32) {
-        self.calc_margin(container_width, container_height);
-        self.calc_padding(container_width, container_height);
-        self.calc_borders(container_width, container_height);
-        self.calc_opacity();
+    fn calc_styling(&mut self, container_width: f32, container_height: f32, root_size: (f32, f32)) {
+        self.calc_margin(container_width, container_height, root_size);
+        self.calc_padding(container_width, container_height, root_size);
+        self.calc_borders(container_width, container_height, root_size);
+        self.calc_opacity(root_size);
         self.calc_hardsized_elements();
     }
 
@@ -98,6 +98,7 @@ impl Container {
             iter: impl Iterator<Item = &'a mut Container>,
             col_sizes: &mut Vec<(Option<f32>, Option<f32>)>,
             cols: &mut Vec<&'a mut Container>,
+            root_size: (f32, f32),
         ) -> f32 {
             let mut col_count = 0;
 
@@ -106,8 +107,8 @@ impl Container {
 
                 let width = x.width.as_ref().and(x.calculated_width);
                 let height = x.height.as_ref().and(x.calculated_height);
-                let contained_width = x.contained_sized_width(true);
-                let contained_height = x.contained_sized_height(true);
+                let contained_width = x.contained_sized_width(root_size, true);
+                let contained_height = x.contained_sized_height(root_size, true);
 
                 if i >= cols.len() {
                     cols.push(x);
@@ -223,12 +224,12 @@ impl Container {
                         #[allow(clippy::manual_inspect)]
                         let heading = heading.map(|x| {
                             if x.height.is_some() {
-                                x.calc_sized_element_height(container_height);
+                                x.calc_sized_element_height(container_height, root_size);
                             } else if x.calculated_height.is_none() {
                                 x.calculated_height = Some(x.contained_calculated_height());
                             }
                             if x.width.is_some() {
-                                x.calc_sized_element_width(container_width);
+                                x.calc_sized_element_width(container_width, root_size);
                             } else if x.calculated_width.is_none() {
                                 x.calculated_width = Some(evenly_split_size);
                                 x.calc_unsized_element_size(
@@ -240,7 +241,7 @@ impl Container {
                             }
                             x
                         });
-                        let height = size_cells(heading, &mut col_sizes, &mut cols);
+                        let height = size_cells(heading, &mut col_sizes, &mut cols, root_size);
                         heading_height.replace(heading_height.map_or(height, |x| x + height));
                         log::trace!("calc_table: increased heading_height={heading_height:?}");
                     }
@@ -250,12 +251,12 @@ impl Container {
                     #[allow(clippy::manual_inspect)]
                     let row = row.map(|x| {
                         if x.height.is_some() {
-                            x.calc_sized_element_height(container_height);
+                            x.calc_sized_element_height(container_height, root_size);
                         } else if x.calculated_height.is_none() {
                             x.calculated_height = Some(x.contained_calculated_height());
                         }
                         if x.width.is_some() {
-                            x.calc_sized_element_width(container_width);
+                            x.calc_sized_element_width(container_width, root_size);
                         } else if x.calculated_width.is_none() {
                             x.calculated_width = Some(evenly_split_size);
                             x.calc_unsized_element_size(
@@ -267,7 +268,7 @@ impl Container {
                         }
                         x
                     });
-                    body_height += size_cells(row, &mut col_sizes, &mut cols);
+                    body_height += size_cells(row, &mut col_sizes, &mut cols, root_size);
                     log::trace!("calc_table: increased body_height={body_height}");
                 }
             }
@@ -277,14 +278,14 @@ impl Container {
 
                 for row in rows {
                     for element in row {
-                        element.calc_styling(container_width, container_height);
+                        element.calc_styling(container_width, container_height, root_size);
                     }
                 }
 
                 if let Some(headings) = headings {
                     for row in headings {
                         for element in row {
-                            element.calc_styling(container_width, container_height);
+                            element.calc_styling(container_width, container_height, root_size);
                         }
                     }
                 }
@@ -377,8 +378,8 @@ impl Container {
             .replace(heading_height.unwrap_or(0.0) + body_height);
 
         for element in relative_positioned_elements_mut(&mut self.children) {
-            element.calc_borders(container_width, container_height);
-            element.calc_opacity();
+            element.calc_borders(container_width, container_height, root_size);
+            element.calc_opacity(root_size);
             match &element.element {
                 Element::THead => {
                     if element.width.is_none() {
@@ -391,8 +392,8 @@ impl Container {
                     }
 
                     for element in relative_positioned_elements_mut(&mut element.children) {
-                        element.calc_borders(container_width, container_height);
-                        element.calc_opacity();
+                        element.calc_borders(container_width, container_height, root_size);
+                        element.calc_opacity(root_size);
                         if element.width.is_none() {
                             element.calculated_width.replace(container_width);
                         }
@@ -414,8 +415,8 @@ impl Container {
                     }
 
                     for element in relative_positioned_elements_mut(&mut element.children) {
-                        element.calc_borders(container_width, container_height);
-                        element.calc_opacity();
+                        element.calc_borders(container_width, container_height, root_size);
+                        element.calc_opacity(root_size);
                         if element.width.is_none() {
                             element.calculated_width.replace(container_width);
                         }
@@ -523,6 +524,7 @@ impl Container {
             overflow_y,
             container_width,
             container_height,
+            root_size,
         );
 
         let relative_size = self.get_relative_size().or(relative_size);
@@ -536,6 +538,7 @@ impl Container {
                 self.absolute_positioned_elements_mut(),
                 width,
                 height,
+                root_size,
             );
 
             Self::calc_element_sizes(
@@ -546,6 +549,7 @@ impl Container {
                 overflow_y,
                 container_width,
                 container_height,
+                root_size,
             );
 
             for container in self.absolute_positioned_elements_mut() {
@@ -559,6 +563,7 @@ impl Container {
                 self.fixed_positioned_elements_mut(),
                 root_size.0,
                 root_size.1,
+                root_size,
             );
 
             Self::calc_element_sizes(
@@ -569,6 +574,7 @@ impl Container {
                 overflow_y,
                 root_size.0,
                 root_size.1,
+                root_size,
             );
 
             for container in self.fixed_positioned_elements_mut() {
@@ -602,6 +608,7 @@ impl Container {
         attempt > 0
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn calc_element_sizes<'a>(
         arena: &Bump,
         elements: impl Iterator<Item = &'a mut Self>,
@@ -610,6 +617,7 @@ impl Container {
         overflow_y: LayoutOverflow,
         container_width: f32,
         container_height: f32,
+        root_size: (f32, f32),
     ) {
         let mut elements = elements.peekable();
 
@@ -632,7 +640,13 @@ impl Container {
                 container_width,
                 container_height,
                 |elements, container_width, container_height| {
-                    Self::size_elements(elements, direction, container_width, container_height);
+                    Self::size_elements(
+                        elements,
+                        direction,
+                        container_width,
+                        container_height,
+                        root_size,
+                    );
                 },
             );
         } else {
@@ -669,6 +683,7 @@ impl Container {
                     direction,
                     container_width - padding_x,
                     container_height - padding_y,
+                    root_size,
                 );
             }
         }
@@ -680,6 +695,7 @@ impl Container {
         direction: LayoutDirection,
         container_width: f32,
         container_height: f32,
+        root_size: (f32, f32),
     ) {
         let remainder = {
             #[cfg(feature = "profiling")]
@@ -699,8 +715,12 @@ impl Container {
                 "size_elements: container_width={container_width} container_height={container_height}"
             );
             for container in sized_elements.map(|x| &mut **x) {
-                remainder -=
-                    container.calc_sized_element_size(direction, container_width, container_height);
+                remainder -= container.calc_sized_element_size(
+                    direction,
+                    container_width,
+                    container_height,
+                    root_size,
+                );
             }
 
             remainder
@@ -740,6 +760,7 @@ impl Container {
                 container.size_unsized_element(
                     container_width,
                     container_height,
+                    root_size,
                     direction,
                     evenly_split_remaining_size,
                 );
@@ -751,6 +772,7 @@ impl Container {
         &mut self,
         container_width: f32,
         container_height: f32,
+        root_size: (f32, f32),
         direction: LayoutDirection,
         size: f32,
     ) {
@@ -766,10 +788,9 @@ impl Container {
                     - self
                         .padding_and_margins(LayoutDirection::Column)
                         .unwrap_or(0.0);
-                let height = self
-                    .height
-                    .as_ref()
-                    .map_or(container_height, |x| calc_number(x, container_height));
+                let height = self.height.as_ref().map_or(container_height, |x| {
+                    calc_number(x, container_height, root_size.0, root_size.1)
+                });
                 moosicbox_assert::assert!(height >= 0.0);
                 self.calculated_height.replace(height);
                 moosicbox_assert::assert!(size >= 0.0);
@@ -780,10 +801,9 @@ impl Container {
                     - self
                         .padding_and_margins(LayoutDirection::Row)
                         .unwrap_or(0.0);
-                let width = self
-                    .width
-                    .as_ref()
-                    .map_or(container_width, |x| calc_number(x, container_width));
+                let width = self.width.as_ref().map_or(container_width, |x| {
+                    calc_number(x, container_width, root_size.0, root_size.1)
+                });
                 moosicbox_assert::assert!(width >= 0.0);
                 self.calculated_width.replace(width);
                 moosicbox_assert::assert!(size >= 0.0);
@@ -829,66 +849,122 @@ impl Container {
         padding_and_margins
     }
 
-    fn calc_margin(&mut self, container_width: f32, container_height: f32) {
+    fn calc_margin(&mut self, container_width: f32, container_height: f32, root_size: (f32, f32)) {
         if let Some(size) = &self.margin_top {
-            self.calculated_margin_top = Some(calc_number(size, container_height));
+            self.calculated_margin_top = Some(calc_number(
+                size,
+                container_height,
+                root_size.0,
+                root_size.1,
+            ));
         }
         if let Some(size) = &self.margin_bottom {
-            self.calculated_margin_bottom = Some(calc_number(size, container_height));
+            self.calculated_margin_bottom = Some(calc_number(
+                size,
+                container_height,
+                root_size.0,
+                root_size.1,
+            ));
         }
         if let Some(size) = &self.margin_left {
-            self.calculated_margin_left = Some(calc_number(size, container_width));
+            self.calculated_margin_left =
+                Some(calc_number(size, container_width, root_size.0, root_size.1));
         }
         if let Some(size) = &self.margin_right {
-            self.calculated_margin_right = Some(calc_number(size, container_width));
+            self.calculated_margin_right =
+                Some(calc_number(size, container_width, root_size.0, root_size.1));
         }
     }
 
-    fn calc_padding(&mut self, container_width: f32, container_height: f32) {
+    fn calc_padding(&mut self, container_width: f32, container_height: f32, root_size: (f32, f32)) {
         if let Some(size) = &self.padding_top {
-            self.calculated_padding_top = Some(calc_number(size, container_height));
+            self.calculated_padding_top = Some(calc_number(
+                size,
+                container_height,
+                root_size.0,
+                root_size.1,
+            ));
         }
         if let Some(size) = &self.padding_bottom {
-            self.calculated_padding_bottom = Some(calc_number(size, container_height));
+            self.calculated_padding_bottom = Some(calc_number(
+                size,
+                container_height,
+                root_size.0,
+                root_size.1,
+            ));
         }
         if let Some(size) = &self.padding_left {
-            self.calculated_padding_left = Some(calc_number(size, container_width));
+            self.calculated_padding_left =
+                Some(calc_number(size, container_width, root_size.0, root_size.1));
         }
         if let Some(size) = &self.padding_right {
-            self.calculated_padding_right = Some(calc_number(size, container_width));
+            self.calculated_padding_right =
+                Some(calc_number(size, container_width, root_size.0, root_size.1));
         }
     }
 
-    fn calc_borders(&mut self, container_width: f32, container_height: f32) {
+    fn calc_borders(&mut self, container_width: f32, container_height: f32, root_size: (f32, f32)) {
         if let Some((color, size)) = &self.border_top {
-            self.calculated_border_top = Some((*color, calc_number(size, container_height)));
+            self.calculated_border_top = Some((
+                *color,
+                calc_number(size, container_height, root_size.0, root_size.1),
+            ));
         }
         if let Some((color, size)) = &self.border_bottom {
-            self.calculated_border_bottom = Some((*color, calc_number(size, container_height)));
+            self.calculated_border_bottom = Some((
+                *color,
+                calc_number(size, container_height, root_size.0, root_size.1),
+            ));
         }
         if let Some((color, size)) = &self.border_left {
-            self.calculated_border_left = Some((*color, calc_number(size, container_width)));
+            self.calculated_border_left = Some((
+                *color,
+                calc_number(size, container_width, root_size.0, root_size.1),
+            ));
         }
         if let Some((color, size)) = &self.border_right {
-            self.calculated_border_right = Some((*color, calc_number(size, container_width)));
+            self.calculated_border_right = Some((
+                *color,
+                calc_number(size, container_width, root_size.0, root_size.1),
+            ));
         }
         if let Some(radius) = &self.border_top_left_radius {
-            self.calculated_border_top_left_radius = Some(calc_number(radius, container_width));
+            self.calculated_border_top_left_radius = Some(calc_number(
+                radius,
+                container_width,
+                root_size.0,
+                root_size.1,
+            ));
         }
         if let Some(radius) = &self.border_top_right_radius {
-            self.calculated_border_top_right_radius = Some(calc_number(radius, container_width));
+            self.calculated_border_top_right_radius = Some(calc_number(
+                radius,
+                container_width,
+                root_size.0,
+                root_size.1,
+            ));
         }
         if let Some(radius) = &self.border_bottom_left_radius {
-            self.calculated_border_bottom_left_radius = Some(calc_number(radius, container_width));
+            self.calculated_border_bottom_left_radius = Some(calc_number(
+                radius,
+                container_width,
+                root_size.0,
+                root_size.1,
+            ));
         }
         if let Some(radius) = &self.border_bottom_right_radius {
-            self.calculated_border_bottom_right_radius = Some(calc_number(radius, container_width));
+            self.calculated_border_bottom_right_radius = Some(calc_number(
+                radius,
+                container_width,
+                root_size.0,
+                root_size.1,
+            ));
         }
     }
 
-    fn calc_opacity(&mut self) {
+    fn calc_opacity(&mut self, root_size: (f32, f32)) {
         if let Some(opacity) = &self.opacity {
-            self.calculated_opacity = Some(calc_number(opacity, 1.0));
+            self.calculated_opacity = Some(calc_number(opacity, 1.0, root_size.0, root_size.1));
         }
     }
 
@@ -912,7 +988,13 @@ impl Container {
                         #[allow(clippy::cast_precision_loss)]
                         element.calculated_width.replace(*x as f32);
                     }
-                    Number::RealPercent(_) | Number::IntegerPercent(_) | Number::Calc(_) => {}
+                    Number::RealPercent(..)
+                    | Number::IntegerPercent(..)
+                    | Number::Calc(..)
+                    | Number::RealDvw(..)
+                    | Number::IntegerDvw(..)
+                    | Number::RealDvh(..)
+                    | Number::IntegerDvh(..) => {}
                 }
             }
             if let Some(height) = &element.height {
@@ -931,21 +1013,37 @@ impl Container {
                         #[allow(clippy::cast_precision_loss)]
                         element.calculated_height.replace(*x as f32);
                     }
-                    Number::RealPercent(_) | Number::IntegerPercent(_) | Number::Calc(_) => {}
+                    Number::RealPercent(..)
+                    | Number::IntegerPercent(..)
+                    | Number::Calc(..)
+                    | Number::RealDvw(..)
+                    | Number::IntegerDvw(..)
+                    | Number::RealDvh(..)
+                    | Number::IntegerDvh(..) => {}
                 }
             }
         }
     }
 
-    fn calc_sized_element_width(&mut self, container_width: f32) -> f32 {
-        let width = calc_number(self.width.as_ref().unwrap(), container_width);
+    fn calc_sized_element_width(&mut self, container_width: f32, root_size: (f32, f32)) -> f32 {
+        let width = calc_number(
+            self.width.as_ref().unwrap(),
+            container_width,
+            root_size.0,
+            root_size.1,
+        );
         moosicbox_assert::assert!(width >= 0.0);
         self.calculated_width.replace(width);
         width
     }
 
-    fn calc_sized_element_height(&mut self, container_height: f32) -> f32 {
-        let height = calc_number(self.height.as_ref().unwrap(), container_height);
+    fn calc_sized_element_height(&mut self, container_height: f32, root_size: (f32, f32)) -> f32 {
+        let height = calc_number(
+            self.height.as_ref().unwrap(),
+            container_height,
+            root_size.0,
+            root_size.1,
+        );
         self.calculated_height.replace(height);
         height
     }
@@ -955,6 +1053,7 @@ impl Container {
         direction: LayoutDirection,
         container_width: f32,
         container_height: f32,
+        root_size: (f32, f32),
     ) -> f32 {
         match direction {
             LayoutDirection::Row => {
@@ -962,11 +1061,15 @@ impl Container {
                     - self
                         .padding_and_margins(LayoutDirection::Column)
                         .unwrap_or(0.0);
-                let width = calc_number(self.width.as_ref().unwrap(), container_width);
-                let height = self
-                    .height
-                    .as_ref()
-                    .map_or(container_height, |x| calc_number(x, container_height));
+                let width = calc_number(
+                    self.width.as_ref().unwrap(),
+                    container_width,
+                    root_size.0,
+                    root_size.1,
+                );
+                let height = self.height.as_ref().map_or(container_height, |x| {
+                    calc_number(x, container_height, root_size.0, root_size.1)
+                });
                 moosicbox_assert::assert!(width >= 0.0);
                 self.calculated_width.replace(width);
                 moosicbox_assert::assert!(height >= 0.0);
@@ -979,11 +1082,15 @@ impl Container {
                     - self
                         .padding_and_margins(LayoutDirection::Row)
                         .unwrap_or(0.0);
-                let width = self
-                    .width
-                    .as_ref()
-                    .map_or(container_width, |x| calc_number(x, container_width));
-                let height = calc_number(self.height.as_ref().unwrap(), container_height);
+                let width = self.width.as_ref().map_or(container_width, |x| {
+                    calc_number(x, container_width, root_size.0, root_size.1)
+                });
+                let height = calc_number(
+                    self.height.as_ref().unwrap(),
+                    container_height,
+                    root_size.0,
+                    root_size.1,
+                );
                 moosicbox_assert::assert!(width >= 0.0);
                 self.calculated_width.replace(width);
                 moosicbox_assert::assert!(height >= 0.0);
@@ -998,10 +1105,11 @@ impl Container {
         elements: impl Iterator<Item = &'a mut Self>,
         container_width: f32,
         container_height: f32,
+        root_size: (f32, f32),
     ) {
         for element in elements {
-            element.calc_margin(container_width, container_height);
-            element.calc_padding(container_width, container_height);
+            element.calc_margin(container_width, container_height, root_size);
+            element.calc_padding(container_width, container_height, root_size);
         }
     }
 
@@ -1173,10 +1281,9 @@ impl Container {
         for element in &mut *elements {
             match direction {
                 LayoutDirection::Row => {
-                    let height = element
-                        .height
-                        .as_ref()
-                        .map_or(container_height, |x| calc_number(x, container_height));
+                    let height = element.height.as_ref().map_or(container_height, |x| {
+                        calc_number(x, container_height, root_size.0, root_size.1)
+                    });
                     moosicbox_assert::assert!(height >= 0.0);
                     element.calculated_height.replace(height);
 
@@ -1185,10 +1292,9 @@ impl Container {
                     element.calculated_width.replace(width);
                 }
                 LayoutDirection::Column => {
-                    let width = element
-                        .width
-                        .as_ref()
-                        .map_or(container_width, |x| calc_number(x, container_width));
+                    let width = element.width.as_ref().map_or(container_width, |x| {
+                        calc_number(x, container_width, root_size.0, root_size.1)
+                    });
                     moosicbox_assert::assert!(width >= 0.0);
                     element.calculated_width.replace(width);
 
@@ -1226,8 +1332,14 @@ impl Container {
         let mut row = 0;
         let mut col = 0;
 
-        let gap_x = self.gap.as_ref().map(|x| calc_number(x, container_width));
-        let gap_y = self.gap.as_ref().map(|x| calc_number(x, container_height));
+        let gap_x = self
+            .gap
+            .as_ref()
+            .map(|x| calc_number(x, container_width, root_size.0, root_size.1));
+        let gap_y = self
+            .gap
+            .as_ref()
+            .map(|x| calc_number(x, container_height, root_size.0, root_size.1));
 
         let relative_size = self.get_relative_size().or(relative_size);
 
@@ -1340,7 +1452,7 @@ impl Container {
             max_width = if max_width > width { max_width } else { width };
         }
 
-        if self.resize_children(arena) {
+        if self.resize_children(arena, root_size) {
             log::trace!("handle_overflow: layout_shifted because children were resized");
             layout_shifted = true;
         }
@@ -1488,8 +1600,8 @@ impl Container {
         let mut first_vertical_margin = vertical_margin;
 
         if let Some(gap) = &self.gap {
-            let gap_x = calc_number(gap, container_width);
-            let gap_y = calc_number(gap, container_height);
+            let gap_x = calc_number(gap, container_width, root_size.0, root_size.1);
+            let gap_y = calc_number(gap, container_height, root_size.0, root_size.1);
 
             if let Some(margin) = horizontal_margin {
                 if gap_x > margin {
@@ -1627,19 +1739,19 @@ impl Container {
         for element in absolute_positioned_elements_mut(&mut self.children) {
             if let Some((width, height)) = relative_size {
                 if let Some(left) = &element.left {
-                    element.calculated_x = Some(calc_number(left, width));
+                    element.calculated_x = Some(calc_number(left, width, root_size.0, root_size.1));
                 }
                 if let Some(right) = &element.right {
-                    let offset = calc_number(right, width);
+                    let offset = calc_number(right, width, root_size.0, root_size.1);
                     let bounding_width = element.bounding_calculated_width().unwrap();
                     element.calculated_x = Some(width - offset - bounding_width);
                     log::trace!("position_children: absolute position right={right} calculated_x={} width={width} offset={offset} bounding_width={bounding_width}", element.calculated_x.unwrap());
                 }
                 if let Some(top) = &element.top {
-                    element.calculated_y = Some(calc_number(top, height));
+                    element.calculated_y = Some(calc_number(top, height, root_size.0, root_size.1));
                 }
                 if let Some(bottom) = &element.bottom {
-                    let offset = calc_number(bottom, height);
+                    let offset = calc_number(bottom, height, root_size.0, root_size.1);
                     let bounding_height = element.bounding_calculated_height().unwrap();
                     element.calculated_y = Some(height - offset - bounding_height);
                     log::trace!("position_children: absolute position bottom={bottom} calculated_y={} height={height} offset={offset} bounding_height={bounding_height}", element.calculated_y.unwrap());
@@ -1661,19 +1773,19 @@ impl Container {
             let (width, height) = root_size;
 
             if let Some(left) = &element.left {
-                element.calculated_x = Some(calc_number(left, width));
+                element.calculated_x = Some(calc_number(left, width, root_size.0, root_size.1));
             }
             if let Some(right) = &element.right {
-                let offset = calc_number(right, width);
+                let offset = calc_number(right, width, root_size.0, root_size.1);
                 let bounding_width = element.bounding_calculated_width().unwrap();
                 element.calculated_x = Some(width - offset - bounding_width);
                 log::trace!("position_children: fixed position right={right} calculated_x={} width={width} offset={offset} bounding_width={bounding_width}", element.calculated_x.unwrap());
             }
             if let Some(top) = &element.top {
-                element.calculated_y = Some(calc_number(top, height));
+                element.calculated_y = Some(calc_number(top, height, root_size.0, root_size.1));
             }
             if let Some(bottom) = &element.bottom {
-                let offset = calc_number(bottom, height);
+                let offset = calc_number(bottom, height, root_size.0, root_size.1);
                 let bounding_height = element.bounding_calculated_height().unwrap();
                 element.calculated_y = Some(height - offset - bounding_height);
                 log::trace!("position_children: fixed position bottom={bottom} calculated_y={} height={height} offset={offset} bounding_height={bounding_height}", element.calculated_y.unwrap());
@@ -1688,7 +1800,7 @@ impl Container {
         }
     }
 
-    pub fn contained_sized_width(&self, recurse: bool) -> Option<f32> {
+    pub fn contained_sized_width(&self, root_size: (f32, f32), recurse: bool) -> Option<f32> {
         let Some(calculated_width) = self.calculated_width else {
             moosicbox_assert::die_or_panic!(
                 "calculated_width is required to get the contained_sized_width"
@@ -1710,10 +1822,10 @@ impl Container {
                         .filter_map(|x| {
                             x.width
                                 .as_ref()
-                                .map(|x| calc_number(x, calculated_width))
+                                .map(|x| calc_number(x, calculated_width, root_size.0, root_size.1))
                                 .or_else(|| {
                                     if recurse {
-                                        x.contained_sized_width(recurse)
+                                        x.contained_sized_width(root_size, recurse)
                                     } else {
                                         None
                                     }
@@ -1743,10 +1855,12 @@ impl Container {
                             .filter_map(|x| {
                                 x.width
                                     .as_ref()
-                                    .map(|x| calc_number(x, calculated_width))
+                                    .map(|x| {
+                                        calc_number(x, calculated_width, root_size.0, root_size.1)
+                                    })
                                     .or_else(|| {
                                         if recurse {
-                                            x.contained_sized_width(recurse)
+                                            x.contained_sized_width(root_size, recurse)
                                         } else {
                                             None
                                         }
@@ -1765,7 +1879,7 @@ impl Container {
         }
     }
 
-    pub fn contained_sized_height(&self, recurse: bool) -> Option<f32> {
+    pub fn contained_sized_height(&self, root_size: (f32, f32), recurse: bool) -> Option<f32> {
         let Some(calculated_height) = self.calculated_height else {
             moosicbox_assert::die_or_panic!(
                 "calculated_height is required to get the contained_sized_height"
@@ -1788,10 +1902,12 @@ impl Container {
                             .filter_map(|x| {
                                 x.height
                                     .as_ref()
-                                    .map(|x| calc_number(x, calculated_height))
+                                    .map(|x| {
+                                        calc_number(x, calculated_height, root_size.0, root_size.1)
+                                    })
                                     .or_else(|| {
                                         if recurse {
-                                            x.contained_sized_height(recurse)
+                                            x.contained_sized_height(root_size, recurse)
                                         } else {
                                             None
                                         }
@@ -1821,10 +1937,12 @@ impl Container {
                         .filter_map(|x| {
                             x.height
                                 .as_ref()
-                                .map(|x| calc_number(x, calculated_height))
+                                .map(|x| {
+                                    calc_number(x, calculated_height, root_size.0, root_size.1)
+                                })
                                 .or_else(|| {
                                     if recurse {
-                                        x.contained_sized_height(recurse)
+                                        x.contained_sized_height(root_size, recurse)
                                     } else {
                                         None
                                     }
@@ -2243,7 +2361,7 @@ impl Container {
         clippy::cognitive_complexity,
         clippy::similar_names
     )]
-    fn resize_children(&mut self, arena: &Bump) -> bool {
+    fn resize_children(&mut self, arena: &Bump, root_size: (f32, f32)) -> bool {
         if matches!(
             self.element,
             Element::Table
@@ -2291,13 +2409,13 @@ impl Container {
         // TODO: Might not need to return out of these, might be able to just update the
         // contained_calculated_width and/or contained_calculated_height properties
         if self.check_scrollbar_x_changed(&mut width, height, contained_calculated_height) {
-            self.evenly_distribute_children_width(arena, width);
+            self.evenly_distribute_children_width(arena, width, root_size);
 
             return true;
         }
 
         if self.check_scrollbar_y_changed(width, &mut height, contained_calculated_width) {
-            self.evenly_distribute_children_height(arena, height);
+            self.evenly_distribute_children_height(arena, height, root_size);
 
             return true;
         }
@@ -2320,7 +2438,8 @@ impl Container {
                     }
                 }
                 LayoutOverflow::Wrap | LayoutOverflow::Squash => {
-                    resized = self.evenly_distribute_children_width(arena, width) || resized;
+                    resized =
+                        self.evenly_distribute_children_width(arena, width, root_size) || resized;
                 }
             }
         } else {
@@ -2343,7 +2462,8 @@ impl Container {
                     }
                 }
                 LayoutOverflow::Wrap | LayoutOverflow::Squash => {
-                    resized = self.evenly_distribute_children_height(arena, height) || resized;
+                    resized =
+                        self.evenly_distribute_children_height(arena, height, root_size) || resized;
                 }
             }
         } else {
@@ -2436,9 +2556,14 @@ impl Container {
         false
     }
 
-    fn evenly_distribute_children_width(&mut self, arena: &Bump, width: f32) -> bool {
+    fn evenly_distribute_children_width(
+        &mut self,
+        arena: &Bump,
+        width: f32,
+        root_size: (f32, f32),
+    ) -> bool {
         let mut resized = false;
-        let contained_sized_width = self.contained_sized_width(false).unwrap_or(0.0);
+        let contained_sized_width = self.contained_sized_width(root_size, false).unwrap_or(0.0);
         #[allow(clippy::cast_precision_loss)]
         let evenly_split_remaining_size = if width > contained_sized_width {
             (width - contained_sized_width) / (self.columns() as f32)
@@ -2468,7 +2593,7 @@ impl Container {
                 log::trace!("evenly_distribute_children_width: resized because child calculated_width was None");
             }
 
-            if element.resize_children(arena) {
+            if element.resize_children(arena, root_size) {
                 resized = true;
                 log::trace!("evenly_distribute_children_width: resized because child was resized");
             }
@@ -2483,7 +2608,12 @@ impl Container {
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    fn evenly_distribute_children_height(&mut self, arena: &Bump, height: f32) -> bool {
+    fn evenly_distribute_children_height(
+        &mut self,
+        arena: &Bump,
+        height: f32,
+        root_size: (f32, f32),
+    ) -> bool {
         let mut resized = false;
 
         let overflow_x = self.overflow_x;
@@ -2512,7 +2642,7 @@ impl Container {
                 })
         {
             if let Some(height) = elements
-                .filter_map(|(_, x)| x.contained_sized_height(true))
+                .filter_map(|(_, x)| x.contained_sized_height(root_size, true))
                 .max_by(order_float)
             {
                 log::trace!("evenly_distribute_children_height: row={row:?} contained_sized_height={height}");
@@ -2559,7 +2689,7 @@ impl Container {
                 })
         {
             if let Some(height) = elements
-                .filter_map(|(_, x)| x.contained_sized_height(true))
+                .filter_map(|(_, x)| x.contained_sized_height(root_size, true))
                 .max_by(order_float)
             {
                 log::trace!("evenly_distribute_children_height: row={row:?} height={height}");
@@ -2611,7 +2741,7 @@ impl Container {
                             element.calculated_height.replace(element_height);
                             resized = true;
                             log::trace!("evenly_distribute_children_height: resized because child calculated_height was different ({existing} != {element_height})");
-                            element.evenly_distribute_children_height(arena, height);
+                            element.evenly_distribute_children_height(arena, height, root_size);
                         } else {
                             log::trace!(
                                 "evenly_distribute_children_height: existing height already set to {element_height}"
@@ -2624,10 +2754,10 @@ impl Container {
                         log::trace!(
                             "evenly_distribute_children_height: resized because child calculated_height was None"
                         );
-                        element.evenly_distribute_children_height(arena, height);
+                        element.evenly_distribute_children_height(arena, height, root_size);
                     }
 
-                    if element.resize_children(arena) {
+                    if element.resize_children(arena, root_size) {
                         resized = true;
                         log::trace!(
                             "evenly_distribute_children_height: resized because child was resized"
@@ -2794,9 +2924,7 @@ mod test {
                     direction: LayoutDirection::Row,
                     ..Default::default()
                 },
-                Container {
-                    ..Default::default()
-                },
+                Container::default(),
             ],
             calculated_width: Some(100.0),
             calculated_height: Some(40.0),
@@ -2949,7 +3077,13 @@ mod test {
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
-        let width = container.contained_sized_width(true);
+        let width = container.contained_sized_width(
+            (
+                container.calculated_width.unwrap(),
+                container.calculated_height.unwrap(),
+            ),
+            true,
+        );
         let expected = 50.0;
 
         assert_ne!(width, None);
@@ -2994,7 +3128,13 @@ mod test {
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
-        let width = container.contained_sized_width(true);
+        let width = container.contained_sized_width(
+            (
+                container.calculated_width.unwrap(),
+                container.calculated_height.unwrap(),
+            ),
+            true,
+        );
 
         assert_eq!(width, None);
     }
@@ -3032,7 +3172,13 @@ mod test {
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
-        let height = container.contained_sized_height(true);
+        let height = container.contained_sized_height(
+            (
+                container.calculated_width.unwrap(),
+                container.calculated_height.unwrap(),
+            ),
+            true,
+        );
         let expected = 50.0;
 
         assert_ne!(height, None);
@@ -3077,7 +3223,13 @@ mod test {
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
-        let height = container.contained_sized_height(true);
+        let height = container.contained_sized_height(
+            (
+                container.calculated_width.unwrap(),
+                container.calculated_height.unwrap(),
+            ),
+            true,
+        );
 
         assert_eq!(height, None);
     }
@@ -5343,7 +5495,13 @@ mod test {
             overflow_y: LayoutOverflow::Expand,
             ..Default::default()
         };
-        let resized = container.resize_children(&Bump::new());
+        let resized = container.resize_children(
+            &Bump::new(),
+            (
+                container.calculated_width.unwrap(),
+                container.calculated_height.unwrap(),
+            ),
+        );
 
         assert_eq!(resized, true);
         compare_containers(
@@ -5410,7 +5568,13 @@ mod test {
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
-        let resized = container.resize_children(&Bump::new());
+        let resized = container.resize_children(
+            &Bump::new(),
+            (
+                container.calculated_width.unwrap(),
+                container.calculated_height.unwrap(),
+            ),
+        );
 
         assert_eq!(resized, true);
         compare_containers(
@@ -5468,7 +5632,13 @@ mod test {
             overflow_y: LayoutOverflow::Scroll,
             ..Default::default()
         };
-        let resized = container.resize_children(&Bump::new());
+        let resized = container.resize_children(
+            &Bump::new(),
+            (
+                container.calculated_width.unwrap(),
+                container.calculated_height.unwrap(),
+            ),
+        );
 
         assert_eq!(resized, true);
         compare_containers(
@@ -6255,7 +6425,7 @@ mod test {
                     direction: LayoutDirection::Row,
                     ..Default::default()
                 },
-                Default::default(),
+                Container::default(),
             ],
             calculated_width: Some(100.0),
             calculated_height: Some(40.0),
@@ -6725,9 +6895,7 @@ mod test {
                             },
                             Container {
                                 element: Element::TD,
-                                children: vec![Container {
-                                    ..Default::default()
-                                }],
+                                children: vec![Container::default()],
                                 ..Container::default()
                             },
                         ],
@@ -6739,9 +6907,7 @@ mod test {
                         children: vec![
                             Container {
                                 element: Element::TD,
-                                children: vec![Container {
-                                    ..Default::default()
-                                }],
+                                children: vec![Container::default()],
                                 ..Container::default()
                             },
                             Container {

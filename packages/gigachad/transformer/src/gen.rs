@@ -62,6 +62,10 @@ fn one_of_number(g: &mut Gen, types: &[NumberType]) -> Number {
         NumberType::Integer => Number::Integer(Arbitrary::arbitrary(g)),
         NumberType::RealPercent => Number::RealPercent(Arbitrary::arbitrary(g)),
         NumberType::IntegerPercent => Number::IntegerPercent(Arbitrary::arbitrary(g)),
+        NumberType::RealDvw => Number::RealDvw(Arbitrary::arbitrary(g)),
+        NumberType::IntegerDvw => Number::IntegerDvw(Arbitrary::arbitrary(g)),
+        NumberType::RealDvh => Number::RealDvh(Arbitrary::arbitrary(g)),
+        NumberType::IntegerDvh => Number::IntegerDvh(Arbitrary::arbitrary(g)),
         NumberType::Calc => Number::Calc(Arbitrary::arbitrary(g)),
     }
 }

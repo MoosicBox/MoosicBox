@@ -24,7 +24,7 @@ pub mod parse;
 
 #[allow(clippy::module_name_repetitions)]
 #[must_use]
-pub fn calc_number(number: &Number, container: f32) -> f32 {
+pub fn calc_number(number: &Number, container: f32, view_width: f32, view_height: f32) -> f32 {
     match number {
         Number::Real(x) => *x,
         #[allow(clippy::cast_precision_loss)]
@@ -32,7 +32,13 @@ pub fn calc_number(number: &Number, container: f32) -> f32 {
         Number::RealPercent(x) => container * (*x / 100.0),
         #[allow(clippy::cast_precision_loss)]
         Number::IntegerPercent(x) => container * (*x as f32 / 100.0),
-        Number::Calc(x) => x.calc(container),
+        Number::RealDvw(x) => view_width * (*x / 100.0),
+        #[allow(clippy::cast_precision_loss)]
+        Number::IntegerDvw(x) => view_width * (*x as f32 / 100.0),
+        Number::RealDvh(x) => view_height * (*x / 100.0),
+        #[allow(clippy::cast_precision_loss)]
+        Number::IntegerDvh(x) => view_height * (*x as f32 / 100.0),
+        Number::Calc(x) => x.calc(container, view_width, view_height),
     }
 }
 
@@ -51,17 +57,29 @@ pub enum Calculation {
 }
 
 impl Calculation {
-    fn calc(&self, container: f32) -> f32 {
+    fn calc(&self, container: f32, view_width: f32, view_height: f32) -> f32 {
         match self {
-            Self::Number(number) => calc_number(number, container),
-            Self::Add(left, right) => left.calc(container) + right.calc(container),
-            Self::Subtract(left, right) => left.calc(container) - right.calc(container),
-            Self::Multiply(left, right) => left.calc(container) * right.calc(container),
-            Self::Divide(left, right) => left.calc(container) / right.calc(container),
-            Self::Grouping(value) => value.calc(container),
+            Self::Number(number) => calc_number(number, container, view_width, view_height),
+            Self::Add(left, right) => {
+                left.calc(container, view_width, view_height)
+                    + right.calc(container, view_width, view_height)
+            }
+            Self::Subtract(left, right) => {
+                left.calc(container, view_width, view_height)
+                    - right.calc(container, view_width, view_height)
+            }
+            Self::Multiply(left, right) => {
+                left.calc(container, view_width, view_height)
+                    * right.calc(container, view_width, view_height)
+            }
+            Self::Divide(left, right) => {
+                left.calc(container, view_width, view_height)
+                    / right.calc(container, view_width, view_height)
+            }
+            Self::Grouping(value) => value.calc(container, view_width, view_height),
             Self::Min(left, right) => {
-                let a = left.calc(container);
-                let b = right.calc(container);
+                let a = left.calc(container, view_width, view_height);
+                let b = right.calc(container, view_width, view_height);
                 if a > b {
                     b
                 } else {
@@ -69,8 +87,8 @@ impl Calculation {
                 }
             }
             Self::Max(left, right) => {
-                let a = left.calc(container);
-                let b = right.calc(container);
+                let a = left.calc(container, view_width, view_height);
+                let b = right.calc(container, view_width, view_height);
                 if a > b {
                     a
                 } else {
@@ -104,6 +122,10 @@ pub enum Number {
     Integer(i64),
     RealPercent(f32),
     IntegerPercent(i64),
+    RealDvw(f32),
+    IntegerDvw(i64),
+    RealDvh(f32),
+    IntegerDvh(i64),
     Calc(Calculation),
 }
 
@@ -115,17 +137,26 @@ impl PartialEq for Number {
             #[allow(clippy::cast_precision_loss)]
             (Self::Real(float), Self::Integer(int))
             | (Self::RealPercent(float), Self::IntegerPercent(int))
+            | (Self::RealDvw(float), Self::IntegerDvw(int))
+            | (Self::RealDvh(float), Self::IntegerDvh(int))
             | (Self::Integer(int), Self::Real(float))
-            | (Self::IntegerPercent(int), Self::RealPercent(float)) => {
+            | (Self::IntegerPercent(int), Self::RealPercent(float))
+            | (Self::IntegerDvw(int), Self::RealDvw(float))
+            | (Self::IntegerDvh(int), Self::RealDvh(float)) => {
                 (*int as f32 - *float).abs() < EPSILON
             }
-            (Self::Real(l), Self::Real(r)) | (Self::RealPercent(l), Self::RealPercent(r)) => {
+            (Self::Real(l), Self::Real(r))
+            | (Self::RealPercent(l), Self::RealPercent(r))
+            | (Self::RealDvw(l), Self::RealDvw(r))
+            | (Self::RealDvh(l), Self::RealDvh(r)) => {
                 l.is_infinite() && r.is_infinite()
                     || l.is_nan() && r.is_nan()
                     || (l - r).abs() < EPSILON
             }
             (Self::Integer(l), Self::Integer(r))
-            | (Self::IntegerPercent(l), Self::IntegerPercent(r)) => l == r,
+            | (Self::IntegerPercent(l), Self::IntegerPercent(r))
+            | (Self::IntegerDvw(l), Self::IntegerDvw(r))
+            | (Self::IntegerDvh(l), Self::IntegerDvh(r)) => l == r,
             (Self::Calc(l), Self::Calc(r)) => l == r,
             _ => false,
         }
@@ -158,6 +189,30 @@ impl std::fmt::Display for Number {
                     return f.write_fmt(format_args!("0%"));
                 }
                 f.write_fmt(format_args!("{x}%"))
+            }
+            Self::RealDvw(x) => {
+                if x.abs() < EPSILON {
+                    return f.write_fmt(format_args!("0dvw"));
+                }
+                f.write_fmt(format_args!("{x}dvw"))
+            }
+            Self::IntegerDvw(x) => {
+                if *x == 0 {
+                    return f.write_fmt(format_args!("0dvw"));
+                }
+                f.write_fmt(format_args!("{x}dvw"))
+            }
+            Self::RealDvh(x) => {
+                if x.abs() < EPSILON {
+                    return f.write_fmt(format_args!("0dvh"));
+                }
+                f.write_fmt(format_args!("{x}dvh"))
+            }
+            Self::IntegerDvh(x) => {
+                if *x == 0 {
+                    return f.write_fmt(format_args!("0dvh"));
+                }
+                f.write_fmt(format_args!("{x}dvh"))
             }
             Self::Calc(x) => f.write_fmt(format_args!("calc({x})")),
         }
