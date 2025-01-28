@@ -3,7 +3,7 @@ use quickcheck::{Arbitrary, Gen};
 
 use crate::{
     AlignItems, Cursor, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, Position, Route,
-    SwapTarget, TextAlign, Visibility,
+    SwapTarget, TextAlign, TextDecorationLine, TextDecorationStyle, Visibility,
 };
 
 impl Arbitrary for LayoutDirection {
@@ -143,6 +143,33 @@ impl Arbitrary for ImageFit {
             Self::Cover,
             Self::Fill,
             Self::None,
+        ])
+        .unwrap()
+    }
+}
+
+impl Arbitrary for TextDecorationLine {
+    fn arbitrary(g: &mut Gen) -> Self {
+        *g.choose(&[
+            Self::Inherit,
+            Self::None,
+            Self::Underline,
+            Self::Overline,
+            Self::LineThrough,
+        ])
+        .unwrap()
+    }
+}
+
+impl Arbitrary for TextDecorationStyle {
+    fn arbitrary(g: &mut Gen) -> Self {
+        *g.choose(&[
+            Self::Inherit,
+            Self::Solid,
+            Self::Double,
+            Self::Dotted,
+            Self::Dashed,
+            Self::Wavy,
         ])
         .unwrap()
     }

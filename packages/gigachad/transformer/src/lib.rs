@@ -7,7 +7,7 @@ use gigachad_actions::Action;
 use gigachad_color::Color;
 use gigachad_transformer_models::{
     AlignItems, Cursor, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, Position, Route,
-    TextAlign, Visibility,
+    TextAlign, TextDecorationLine, TextDecorationStyle, Visibility,
 };
 use serde_json::Value;
 
@@ -226,6 +226,25 @@ impl Default for Number {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct TextDecoration {
+    pub color: Option<Color>,
+    pub line: Vec<TextDecorationLine>,
+    pub style: Option<TextDecorationStyle>,
+    pub thickness: Option<Number>,
+}
+
+impl Default for TextDecoration {
+    fn default() -> Self {
+        Self {
+            color: None,
+            line: vec![],
+            style: None,
+            thickness: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct Flex {
     pub grow: Number,
     pub shrink: Number,
@@ -257,6 +276,7 @@ pub struct Container {
     pub justify_content: JustifyContent,
     pub align_items: AlignItems,
     pub text_align: Option<TextAlign>,
+    pub text_decoration: Option<TextDecoration>,
     pub font_family: Option<Vec<String>>,
     pub width: Option<Number>,
     pub max_width: Option<Number>,
@@ -965,6 +985,24 @@ impl Container {
         }
 
         attrs.add_opt("sx-text-align", self.text_align.as_ref());
+
+        if let Some(text_decoration) = &self.text_decoration {
+            attrs.add_opt("sx-text-decoration-color", text_decoration.color);
+            attrs.add(
+                "sx-text-decoration-line",
+                text_decoration
+                    .line
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            );
+            attrs.add_opt("sx-text-decoration-style", text_decoration.style);
+            attrs.add_opt(
+                "sx-text-decoration-thickness",
+                text_decoration.thickness.as_ref(),
+            );
+        }
 
         if let Some(font_family) = &self.font_family {
             attrs.add("sx-font-family", font_family.join(","));

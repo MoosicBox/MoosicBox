@@ -311,3 +311,53 @@ impl std::fmt::Display for ImageFit {
         }
     }
 }
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(tag = "type"))]
+pub enum TextDecorationLine {
+    #[default]
+    Inherit,
+    None,
+    Underline,
+    Overline,
+    LineThrough,
+}
+
+impl std::fmt::Display for TextDecorationLine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Inherit => f.write_str("inherit"),
+            Self::None => f.write_str("none"),
+            Self::Underline => f.write_str("underline"),
+            Self::Overline => f.write_str("overline"),
+            Self::LineThrough => f.write_str("line-through"),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(tag = "type"))]
+pub enum TextDecorationStyle {
+    #[default]
+    Inherit,
+    Solid,
+    Double,
+    Dotted,
+    Dashed,
+    Wavy,
+}
+
+impl std::fmt::Display for TextDecorationStyle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Inherit => f.write_str("inherit"),
+            Self::Solid => f.write_str("solid"),
+            Self::Double => f.write_str("double"),
+            Self::Dotted => f.write_str("dotted"),
+            Self::Dashed => f.write_str("dashed"),
+            Self::Wavy => f.write_str("wavy"),
+        }
+    }
+}

@@ -8,7 +8,7 @@ use gigachad_router::Container;
 use gigachad_transformer::{
     models::{
         AlignItems, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, Position, TextAlign,
-        Visibility,
+        TextDecorationLine, TextDecorationStyle, Visibility,
     },
     Calculation, Element, HeaderSize, Input, Number,
 };
@@ -562,6 +562,53 @@ pub fn element_style_to_html(
                 TextAlign::Justify => b"justify",
             }
         );
+    }
+
+    if let Some(text_decoration) = &container.text_decoration {
+        if let Some(color) = text_decoration.color {
+            write_css_attr!(
+                b"text-decoration-color",
+                color_to_css_string(color).as_bytes()
+            );
+        }
+        if !text_decoration.line.is_empty() {
+            write_css_attr!(
+                b"text-decoration-line",
+                text_decoration
+                    .line
+                    .iter()
+                    .map(|x| match x {
+                        TextDecorationLine::Inherit => "inherit",
+                        TextDecorationLine::None => "none",
+                        TextDecorationLine::Underline => "underline",
+                        TextDecorationLine::Overline => "overline",
+                        TextDecorationLine::LineThrough => "line-through",
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ")
+                    .as_bytes()
+            );
+        }
+        if let Some(style) = text_decoration.style {
+            write_css_attr!(
+                b"text-decoration-style",
+                match style {
+                    TextDecorationStyle::Inherit => b"inherit",
+                    TextDecorationStyle::Solid => b"solid",
+                    TextDecorationStyle::Double => b"double",
+                    TextDecorationStyle::Dotted => b"dotted",
+                    TextDecorationStyle::Dashed => b"dashed",
+                    TextDecorationStyle::Wavy => b"wavy",
+                }
+            );
+        }
+
+        if let Some(thickness) = &text_decoration.thickness {
+            write_css_attr!(
+                b"text-decoration-thickness",
+                number_to_css_string(thickness, false).as_bytes()
+            );
+        }
     }
 
     if let Some(font_family) = &container.font_family {

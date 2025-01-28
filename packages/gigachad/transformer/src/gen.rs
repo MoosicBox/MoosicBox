@@ -10,6 +10,7 @@ use strum::IntoEnumIterator;
 
 use crate::{
     Calculation, CalculationType, Container, Element, Flex, HeaderSize, Input, Number, NumberType,
+    TextDecoration,
 };
 
 fn one_of_calc(g: &mut Gen, types: &[CalculationType]) -> Calculation {
@@ -80,6 +81,17 @@ impl Arbitrary for HeaderSize {
     fn arbitrary(g: &mut Gen) -> Self {
         *g.choose(&[Self::H1, Self::H2, Self::H3, Self::H4, Self::H5, Self::H6])
             .unwrap()
+    }
+}
+
+impl Arbitrary for TextDecoration {
+    fn arbitrary(g: &mut Gen) -> Self {
+        Self {
+            color: Arbitrary::arbitrary(g),
+            line: Arbitrary::arbitrary(g),
+            style: Arbitrary::arbitrary(g),
+            thickness: Arbitrary::arbitrary(g),
+        }
     }
 }
 
@@ -213,6 +225,7 @@ impl Arbitrary for Container {
             justify_content: JustifyContent::arbitrary(g),
             align_items: AlignItems::arbitrary(g),
             text_align: Arbitrary::arbitrary(g),
+            text_decoration: Arbitrary::arbitrary(g),
             width: Option::arbitrary(g),
             max_width: Option::arbitrary(g),
             height: Option::arbitrary(g),

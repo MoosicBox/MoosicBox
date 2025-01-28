@@ -4,7 +4,7 @@ use gigachad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
 use gigachad_color::Color;
 use gigachad_transformer_models::{
     AlignItems, Cursor, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, Position, Route,
-    SwapTarget, TextAlign, Visibility,
+    SwapTarget, TextAlign, TextDecorationLine, TextDecorationStyle, Visibility,
 };
 use serde_json::Value;
 pub use tl::ParseError;
@@ -12,7 +12,7 @@ use tl::{Children, HTMLTag, Node, NodeHandle, Parser, ParserOptions};
 
 use crate::{
     parse::{parse_number, GetNumberError},
-    Flex, Number,
+    Flex, Number, TextDecoration,
 };
 
 impl TryFrom<String> for crate::Container {
@@ -296,6 +296,109 @@ fn get_number(tag: &HTMLTag, name: &str) -> Result<Option<Number>, GetNumberErro
     })
 }
 
+fn parse_text_decoration_line(value: &str) -> Option<TextDecorationLine> {
+    Some(match value {
+        "inherit" => TextDecorationLine::Inherit,
+        "none" => TextDecorationLine::None,
+        "underline" => TextDecorationLine::Underline,
+        "overline" => TextDecorationLine::Overline,
+        "line-through" => TextDecorationLine::LineThrough,
+        _ => {
+            return None;
+        }
+    })
+}
+
+fn get_text_decoration_line(tag: &HTMLTag, name: &str) -> Option<Vec<TextDecorationLine>> {
+    get_tag_attr_value_owned(tag, name)
+        .as_deref()
+        .and_then(|x| {
+            x.split_whitespace()
+                .map(parse_text_decoration_line)
+                .collect::<Option<Vec<_>>>()
+        })
+}
+
+fn parse_text_decoration_style(value: &str) -> Option<TextDecorationStyle> {
+    Some(match value {
+        "inherit" => TextDecorationStyle::Inherit,
+        "solid" => TextDecorationStyle::Solid,
+        "double" => TextDecorationStyle::Double,
+        "dotted" => TextDecorationStyle::Dotted,
+        "dashed" => TextDecorationStyle::Dashed,
+        "wavy" => TextDecorationStyle::Wavy,
+        _ => {
+            return None;
+        }
+    })
+}
+
+fn get_text_decoration_style(tag: &HTMLTag, name: &str) -> Option<TextDecorationStyle> {
+    get_tag_attr_value_owned(tag, name)
+        .as_deref()
+        .and_then(parse_text_decoration_style)
+}
+
+fn get_text_decoration(
+    tag: &HTMLTag,
+    name: &str,
+) -> Result<Option<TextDecoration>, GetNumberError> {
+    Ok(get_tag_attr_value_undecoded(tag, name)
+        .as_deref()
+        .map(|x| html_escape::decode_html_entities(x))
+        .as_deref()
+        .map(|x| x.split_whitespace().collect::<Vec<_>>())
+        .map(|values| {
+            if values.is_empty() {
+                return Ok(None);
+            }
+
+            let mut text_decoration = TextDecoration::default();
+            let mut parsing_line = true;
+            let mut parsing_style = true;
+            let mut parsing_color = true;
+
+            for value in values {
+                if parsing_line {
+                    if let Some(line) = parse_text_decoration_line(value) {
+                        text_decoration.line.push(line);
+                        continue;
+                    }
+
+                    parsing_line = false;
+                }
+
+                if parsing_style {
+                    parsing_style = false;
+
+                    if let Some(style) = parse_text_decoration_style(value) {
+                        text_decoration.style = Some(style);
+                        continue;
+                    }
+                }
+
+                if parsing_color {
+                    parsing_color = false;
+
+                    if let Ok(color) = Color::try_from_hex(value) {
+                        text_decoration.color = Some(color);
+                        continue;
+                    }
+                }
+
+                if text_decoration.thickness.is_some() {
+                    return Ok(None);
+                }
+
+                text_decoration.thickness = Some(parse_number(value)?);
+            }
+
+            Ok(Some(text_decoration))
+        })
+        .transpose()?
+        .flatten())
+}
+
 fn get_flex(tag: &HTMLTag, name: &str) -> Result<Option<Flex>, GetNumberError> {
     match get_tag_attr_value_undecoded(tag, name)
         .as_deref()
@@ -497,6 +600,49 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
         .unwrap()
         .or_else(|| padding_y.clone().or_else(|| padding.clone()));
 
+    let mut text_decoration = get_text_decoration(tag, "sx-text-decoration").unwrap();
+
+    if let Some(color) = get_color(tag, "sx-text-decoration-color") {
+        if let Some(text_decoration) = &mut text_decoration {
+            text_decoration.color = Some(color);
+        } else {
+            text_decoration = Some(TextDecoration {
+                color: Some(color),
+                ..TextDecoration::default()
+            });
+        }
+    }
+    if let Some(line) = get_text_decoration_line(tag, "sx-text-decoration-line") {
+        if let Some(text_decoration) = &mut text_decoration {
+            text_decoration.line = line;
+        } else {
+            text_decoration = Some(TextDecoration {
+                line,
+                ..TextDecoration::default()
+            });
+        }
+    }
+    if let Some(style) = get_text_decoration_style(tag, "sx-text-decoration-style") {
+        if let Some(text_decoration) = &mut text_decoration {
+            text_decoration.style = Some(style);
+        } else {
+            text_decoration = Some(TextDecoration {
+                style: Some(style),
+                ..TextDecoration::default()
+            });
+        }
+    }
+    if let Some(thickness) = get_number(tag, "sx-text-decoration-thickness").unwrap() {
+        if let Some(text_decoration) = &mut text_decoration {
+            text_decoration.thickness = Some(thickness);
+        } else {
+            text_decoration = Some(TextDecoration {
+                thickness: Some(thickness),
+                ..TextDecoration::default()
+            });
+        }
+    }
+
     let mut flex = get_flex(tag, "sx-flex").unwrap();
 
     if let Some(grow) = get_number(tag, "sx-flex-grow").unwrap() {
@@ -565,6 +711,7 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
         justify_content: get_justify_content(tag, "sx-justify-content"),
         align_items: get_align_items(tag, "sx-align-items"),
         text_align: get_text_align(tag, "sx-text-align"),
+        text_decoration,
         font_family: get_tag_attr_value_owned(tag, "sx-font-family").map(|x| {
             x.as_str()
                 .split(',')
