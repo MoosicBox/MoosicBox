@@ -74,48 +74,51 @@ pub fn main(slot: &Markup) -> Markup {
 #[must_use]
 pub fn home() -> Markup {
     page(&html! {
-        div sx-dir="row" sx-align-items=(AlignItems::Center) sx-height="calc(min(100%, 1000px))" {
+        div
+            sx-dir="row"
+            sx-align-items=(AlignItems::Center)
+            sx-height="calc(min(100%, 1000px))"
+            sx-padding-x=(50)
+            sx-gap="calc(min(100, 5%))"
+        {
             div {
                 "Listen to your HiFi music anywhere"
             }
-            div sx-dir="row" sx-position=(Position::Relative) {
+            div
+                sx-dir="row"
+                sx-position=(Position::Relative)
+                sx-height="100%"
+            {
                 div
                     sx-margin-left="calc(10% - (100% / 30))"
                     sx-height="100%"
                     sx-max-height="100%"
-                    sx-max-width="calc(100% - calc(10% - (100% / 30)))";
+                    sx-max-width="calc(100% - calc(10% - (100% / 30)))"
                 {
                     img
                         src=(public_img!("showcase-1.webp"))
                         srcset="/img/showcase-1x240.webp 240w, /img/showcase-1x540.webp 540w, /img/showcase-1.webp 1080w"
                         sizes="70vw"
+                        sx-width="100%"
+                        sx-height="100%"
                         alt="MoosicBox showcase desktop"
-                        sx-object-fit="contain";
-                        // sx-margin-left="calc(10% - (100% / 30))"
-                        // sx-height="100%"
-                        // // sx-max-height="100%"
-                        // // sx-max-width="calc(100% - (10% - calc(100% / 30)))"
-                        // sx-align-self="flex-start";
+                        sx-fit="contain";
                 }
                 div
                     sx-position="absolute"
                     sx-bottom="50%"
-                    sx-transform="translateY(50%)"
+                    sx-translate-y="50%"
                     sx-height="calc(min(65%, 25%))"
-                    sx-max-height="80%";
+                    sx-max-height="80%"
                 {
                     img
                         src=(public_img!("showcase-2.webp"))
                         srcset="/img/showcase-2x240.webp 240w, /img/showcase-2x540.webp 540w, /img/showcase-2.webp 1080w"
                         sizes="30vw"
+                        sx-width="100%"
+                        sx-height="100%"
                         alt="MoosicBox showcase android"
-                        sx-object-fit="contain";
-                        // sx-position="absolute"
-                        // sx-bottom="50%"
-                        // sx-transform="translateY(50%)"
-                        // sx-height="calc(min(65%, 25%))"
-                        // // sx-max-height="80%"
-                        // sx-align-self="flex-start";
+                        sx-fit="contain";
                 }
             }
         }
