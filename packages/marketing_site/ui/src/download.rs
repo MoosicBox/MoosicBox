@@ -1,6 +1,6 @@
 use std::sync::LazyLock;
 
-use gigachad_transformer_models::AlignItems;
+use gigachad_transformer_models::{AlignItems, LayoutDirection};
 use maud::{html, Markup};
 use regex::Regex;
 
@@ -11,8 +11,7 @@ pub fn download() -> Markup {
     page(&html! {
         div sx-align-items=(AlignItems::Center) {
             div sx-width="100%" sx-max-width=(1000) {
-                h1 { "Downloads" }
-                hr;
+                h1 sx-border-bottom="2, #ccc" sx-padding-bottom=(20) sx-margin-bottom=(10) { "Downloads" }
                 div sx-hidden=(true) hx-get="/releases" hx-trigger="load" {}
             }
         }
@@ -74,31 +73,33 @@ pub fn releases(releases: &[OsRelease], os: &Os) -> Markup {
     html! {
         div id="releases" {
             @for release in releases {
-                div {
-                    div id=(format_class_name(release.version)) {
-                        h2 {
-                            div { "Release " (release.version) }
-                            div { (release.published_at) }
-                            div { "[" a target="_blank" href=(release.url) { "GitHub" } "]" }
+                div id=(format_class_name(release.version)) sx-padding-y=(20) {
+                    h2 sx-dir=(LayoutDirection::Row) sx-align-items=(AlignItems::End) {
+                        div { "Release " (release.version) }
+                        div sx-font-size=(16) sx-margin-left=(10) sx-margin-bottom=(2) sx-color="#ccc" {
+                            (release.published_at)
                         }
-                        @for release_asset in &release.assets {
-                            @if let Some(asset) = &release_asset.asset {
-                                div {
-                                    @if os.lower_name == release_asset.name {
-                                        div {
-                                            "// We think you are running " (os.header)
-                                        }
+                        div sx-font-size=(16) sx-margin-left=(10) sx-margin-bottom=(2) {
+                            "[" a sx-color="#fff" target="_blank" href=(release.url) { "GitHub" } "]"
+                        }
+                    }
+                    @for release_asset in &release.assets {
+                        @if let Some(asset) = &release_asset.asset {
+                            div {
+                                @if os.lower_name == release_asset.name {
+                                    div sx-color="#888" {
+                                        "// We think you are running " (os.header)
                                     }
-                                    h3 { (get_os_header(release_asset.name)) }
-                                    "Download "
-                                    a href=(asset.browser_download_url) { (asset.name) }
-                                    " (" (format_size(asset.size)) ")"
-                                    ul sx-margin=(0) {
-                                        @for other_asset in &release_asset.other_formats {
-                                            li {
-                                                a href=(other_asset.browser_download_url) { (other_asset.name) }
-                                                " (" (format_size(other_asset.size)) ")"
-                                            }
+                                }
+                                h3 { (get_os_header(release_asset.name)) }
+                                "Download "
+                                a sx-color="#fff" href=(asset.browser_download_url) { (asset.name) }
+                                " (" (format_size(asset.size)) ")"
+                                ul sx-margin=(0) {
+                                    @for other_asset in &release_asset.other_formats {
+                                        li {
+                                            a sx-color="#fff" href=(other_asset.browser_download_url) { (other_asset.name) }
+                                            " (" (format_size(other_asset.size)) ")"
                                         }
                                     }
                                 }
