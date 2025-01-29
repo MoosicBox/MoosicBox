@@ -6725,6 +6725,7 @@ name = "moosicbox_marketing_site"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "clap 4.5.27",
  "console-subscriber",
  "log",
  "moosicbox_app_native_lib",
