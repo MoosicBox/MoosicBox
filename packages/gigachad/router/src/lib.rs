@@ -196,8 +196,8 @@ pub enum NavigateError {
 #[derive(Clone)]
 pub struct Router {
     #[cfg(feature = "static-routes")]
-    static_routes: Arc<RwLock<Vec<(RoutePath, RouteFunc)>>>,
-    routes: Arc<RwLock<Vec<(RoutePath, RouteFunc)>>>,
+    pub static_routes: Arc<RwLock<Vec<(RoutePath, RouteFunc)>>>,
+    pub routes: Arc<RwLock<Vec<(RoutePath, RouteFunc)>>>,
     sender: Sender<View>,
     pub receiver: Receiver<View>,
 }
