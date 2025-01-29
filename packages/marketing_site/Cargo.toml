@@ -92,4 +92,4 @@ unsafe            = ["moosicbox_app_native_lib/unsafe"]
 
 assets = ["moosicbox_app_native_lib/assets"]
 
-dev = ["assets"]
+dev = ["assets", "moosicbox_app_native_lib/static-routes"]

@@ -41,6 +41,7 @@ default = [
     "html",
     "htmx",
     "maud",
+    "static-routes",
     "vanilla-js",
 ]
 
@@ -77,3 +78,5 @@ profiling-tracy = [
 unsafe = ["gigachad_renderer_fltk?/unsafe"]
 
 assets = ["gigachad_renderer/assets", "gigachad_renderer_html?/assets"]
+
+static-routes = ["gigachad_router/static-routes"]

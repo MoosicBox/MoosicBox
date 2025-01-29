@@ -195,6 +195,8 @@ pub enum NavigateError {
 
 #[derive(Clone)]
 pub struct Router {
+    #[cfg(feature = "static-routes")]
+    static_routes: Arc<RwLock<Vec<(RoutePath, RouteFunc)>>>,
     routes: Arc<RwLock<Vec<(RoutePath, RouteFunc)>>>,
     sender: Sender<View>,
     pub receiver: Receiver<View>,
@@ -212,6 +214,8 @@ impl Router {
         let (tx, rx) = flume::unbounded();
 
         Self {
+            #[cfg(feature = "static-routes")]
+            static_routes: Arc::new(RwLock::new(vec![])),
             routes: Arc::new(RwLock::new(vec![])),
             sender: tx,
             receiver: rx,
@@ -234,29 +238,35 @@ impl Router {
     where
         Response::Error: Into<Box<dyn std::error::Error>>,
     {
-        self.routes.write().unwrap().push((
-            route.into(),
-            Arc::new(Box::new(move |req| {
-                Box::pin({
-                    let handler = handler.clone();
-                    async move {
-                        let resp: Result<Response, Box<dyn std::error::Error>> =
-                            handler(req).await.map_err(Into::into);
-                        match resp.map(|x| {
-                            let x: Result<View, Box<dyn std::error::Error>> =
-                                x.try_into().map_err(Into::into);
-                            x
-                        }) {
-                            Ok(x) => match x {
-                                Ok(x) => Ok(x),
-                                Err(e) => Err(e),
-                            },
-                            Err(e) => Err(e),
-                        }
-                    }
-                })
-            })),
-        ));
+        self.routes
+            .write()
+            .unwrap()
+            .push((route.into(), gen_route_func_result(handler)));
+        self
+    }
+
+    /// # Panics
+    ///
+    /// Will panic if routes `RwLock` is poisoned.
+    #[allow(clippy::needless_pass_by_value)]
+    #[must_use]
+    pub fn with_static_route_result<
+        Response: TryInto<View>,
+        F: Future<Output = Result<Response, BoxE>> + Send + 'static,
+        BoxE: Into<Box<dyn std::error::Error>>,
+    >(
+        self,
+        #[allow(unused_variables)] route: impl Into<RoutePath>,
+        #[allow(unused_variables)] handler: impl Fn(RouteRequest) -> F + Send + Sync + Clone + 'static,
+    ) -> Self
+    where
+        Response::Error: Into<Box<dyn std::error::Error>>,
+    {
+        #[cfg(feature = "static-routes")]
+        self.static_routes
+            .write()
+            .unwrap()
+            .push((route.into(), gen_route_func_result(handler)));
         self
     }
 
@@ -272,23 +282,60 @@ impl Router {
     where
         Response::Error: std::error::Error + 'static,
     {
-        self.routes.write().unwrap().push((
-            route.into(),
-            Arc::new(Box::new(move |req| {
-                Box::pin({
-                    let handler = handler.clone();
-                    async move {
-                        let resp: Result<View, Box<dyn std::error::Error>> =
-                            handler(req).await.try_into().map_err(|e| {
-                                log::error!("Failed to handle route: {e:?}");
-                                Box::new(e) as Box<dyn std::error::Error>
-                            });
-                        resp
-                    }
-                })
-            })),
-        ));
+        self.routes
+            .write()
+            .unwrap()
+            .push((route.into(), gen_route_func(handler)));
         self
+    }
+
+    /// # Panics
+    ///
+    /// Will panic if routes `RwLock` is poisoned.
+    #[allow(clippy::needless_pass_by_value)]
+    #[must_use]
+    pub fn with_static_route<
+        Response: TryInto<View>,
+        F: Future<Output = Response> + Send + 'static,
+    >(
+        self,
+        #[allow(unused_variables)] route: impl Into<RoutePath>,
+        #[allow(unused_variables)] handler: impl Fn(RouteRequest) -> F + Send + Sync + Clone + 'static,
+    ) -> Self
+    where
+        Response::Error: std::error::Error + 'static,
+    {
+        #[cfg(feature = "static-routes")]
+        self.static_routes
+            .write()
+            .unwrap()
+            .push((route.into(), gen_route_func(handler)));
+        self
+    }
+
+    fn get_route_func(&self, path: &str) -> Option<RouteFunc> {
+        let dyn_route = self
+            .routes
+            .read()
+            .unwrap()
+            .iter()
+            .find(|(route, _)| route.matches(path))
+            .cloned()
+            .map(|(_, handler)| handler);
+
+        #[cfg(feature = "static-routes")]
+        if dyn_route.is_none() {
+            return self
+                .static_routes
+                .read()
+                .unwrap()
+                .iter()
+                .find(|(route, _)| route.matches(path))
+                .cloned()
+                .map(|(_, handler)| handler);
+        }
+
+        dyn_route
     }
 
     /// # Errors
@@ -302,15 +349,7 @@ impl Router {
         log::debug!("navigate: path={path}");
 
         let req = RouteRequest::from_path(path, info);
-        let handler = {
-            self.routes
-                .read()
-                .unwrap()
-                .iter()
-                .find(|(route, _)| route.matches(&req.path))
-                .cloned()
-                .map(|(_, handler)| handler)
-        };
+        let handler = self.get_route_func(&req.path);
 
         Ok(if let Some(handler) = handler {
             match handler(req).await {
@@ -338,15 +377,8 @@ impl Router {
 
         let view = {
             let req = RouteRequest::from_path(path, info);
-            let handler = {
-                self.routes
-                    .read()
-                    .unwrap()
-                    .iter()
-                    .find(|(route, _)| route.matches(&req.path))
-                    .cloned()
-                    .map(|(_, handler)| handler)
-            };
+            let handler = self.get_route_func(&req.path);
+
             if let Some(handler) = handler {
                 match handler(req).await {
                     Ok(view) => view,
@@ -409,4 +441,57 @@ impl Router {
     pub async fn wait_for_navigation(&self) -> Option<View> {
         self.receiver.recv_async().await.ok()
     }
+}
+
+fn gen_route_func<Response: TryInto<View>, F: Future<Output = Response> + Send + 'static>(
+    handler: impl Fn(RouteRequest) -> F + Send + Sync + Clone + 'static,
+) -> RouteFunc
+where
+    Response::Error: std::error::Error + 'static,
+{
+    Arc::new(Box::new(move |req| {
+        Box::pin({
+            let handler = handler.clone();
+            async move {
+                let resp: Result<View, Box<dyn std::error::Error>> =
+                    handler(req).await.try_into().map_err(|e| {
+                        log::error!("Failed to handle route: {e:?}");
+                        Box::new(e) as Box<dyn std::error::Error>
+                    });
+                resp
+            }
+        })
+    }))
+}
+
+fn gen_route_func_result<
+    Response: TryInto<View>,
+    F: Future<Output = Result<Response, BoxE>> + Send + 'static,
+    BoxE: Into<Box<dyn std::error::Error>>,
+>(
+    handler: impl Fn(RouteRequest) -> F + Send + Sync + Clone + 'static,
+) -> RouteFunc
+where
+    Response::Error: Into<Box<dyn std::error::Error>>,
+{
+    Arc::new(Box::new(move |req| {
+        Box::pin({
+            let handler = handler.clone();
+            async move {
+                let resp: Result<Response, Box<dyn std::error::Error>> =
+                    handler(req).await.map_err(Into::into);
+                match resp.map(|x| {
+                    let x: Result<View, Box<dyn std::error::Error>> =
+                        x.try_into().map_err(Into::into);
+                    x
+                }) {
+                    Ok(x) => match x {
+                        Ok(x) => Ok(x),
+                        Err(e) => Err(e),
+                    },
+                    Err(e) => Err(e),
+                }
+            }
+        })
+    }))
 }

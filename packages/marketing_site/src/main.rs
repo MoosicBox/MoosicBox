@@ -56,10 +56,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let runtime = Arc::new(runtime);
 
     let router = Router::new()
-        .with_route(&["/", "/home"], |_| async {
+        .with_static_route(&["/", "/home"], |_| async {
             moosicbox_marketing_site_ui::home()
         })
-        .with_route(&["/download"], |_| async {
+        .with_static_route(&["/download"], |_| async {
             moosicbox_marketing_site_ui::download::download()
         })
         .with_route_result(&["/releases"], |req| async {

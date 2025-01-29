@@ -26,12 +26,14 @@ thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["rt-multi-thread", "sync"] }
 
 [features]
-default = ["format", "id"]
+default = ["format", "id", "static-routes"]
 
 fail-on-warnings = []
 
 simd = ["gigachad_transformer/simd"]
 
 format = ["gigachad_transformer/format"]
+
+static-routes = []
 
 id = []
