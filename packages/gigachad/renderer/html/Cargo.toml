@@ -40,6 +40,7 @@ async-trait = { workspace = true }
 flume       = { workspace = true }
 log         = { workspace = true }
 tokio       = { workspace = true }
+uaparser    = { workspace = true }
 
 [features]
 default = ["assets", "debug"]

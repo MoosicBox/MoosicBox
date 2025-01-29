@@ -12,6 +12,15 @@ use tokio::{runtime::Runtime, sync::RwLock};
 pub use gigachad_renderer as renderer;
 pub use gigachad_router as router;
 
+#[cfg(any(feature = "egui", feature = "fltk"))]
+pub static CLIENT_INFO: std::sync::LazyLock<Arc<gigachad_router::ClientInfo>> =
+    std::sync::LazyLock::new(|| {
+        let os_name = os_info::get().os_type().to_string();
+        Arc::new(gigachad_router::ClientInfo {
+            os: gigachad_router::ClientOs { name: os_name },
+        })
+    });
+
 #[derive(Debug, Error)]
 pub enum NativeAppError {
     #[error("Runtime required")]
@@ -258,6 +267,7 @@ impl NativeAppBuilder {
                             router.clone(),
                             action_tx,
                             resize_tx,
+                            CLIENT_INFO.clone(),
                         );
 
                         moosicbox_task::spawn("egui navigation listener", {
@@ -265,7 +275,15 @@ impl NativeAppBuilder {
                             let router = router.clone();
                             async move {
                                 while let Some(path) = renderer.wait_for_navigation().await {
-                                    if let Err(e) = router.navigate_send(&path).await {
+                                    if let Err(e) = router
+                                        .navigate_send(
+                                            &path,
+                                            gigachad_router::RequestInfo {
+                                                client: CLIENT_INFO.clone(),
+                                            },
+                                        )
+                                        .await
+                                    {
                                         log::error!("Failed to navigate: {e:?}");
                                     }
                                 }
@@ -285,7 +303,15 @@ impl NativeAppBuilder {
                             let router = router.clone();
                             async move {
                                 while let Some(path) = renderer.wait_for_navigation().await {
-                                    if let Err(e) = router.navigate_send(&path).await {
+                                    if let Err(e) = router
+                                        .navigate_send(
+                                            &path,
+                                            gigachad_router::RequestInfo {
+                                                client: CLIENT_INFO.clone(),
+                                            },
+                                        )
+                                        .await
+                                    {
                                         log::error!("Failed to navigate: {e:?}");
                                     }
                                 }

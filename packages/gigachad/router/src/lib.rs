@@ -26,15 +26,31 @@ pub type RouteFunc = Arc<
     >,
 >;
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ClientOs {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ClientInfo {
+    pub os: ClientOs,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct RequestInfo {
+    pub client: Arc<ClientInfo>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RouteRequest {
     pub path: String,
     pub query: HashMap<String, String>,
+    pub info: RequestInfo,
 }
 
 impl RouteRequest {
     #[must_use]
-    pub fn from_path(path: &str) -> Self {
+    pub fn from_path(path: &str, info: RequestInfo) -> Self {
         let (path, query) = if let Some((path, query)) = path.split_once('?') {
             (path, query)
         } else {
@@ -44,6 +60,7 @@ impl RouteRequest {
         Self {
             path: path.to_owned(),
             query: QString::from(query).into_iter().collect(),
+            info,
         }
     }
 }
@@ -281,10 +298,10 @@ impl Router {
     /// # Panics
     ///
     /// Will panic if routes `RwLock` is poisoned.
-    pub async fn navigate(&self, path: &str) -> Result<View, NavigateError> {
+    pub async fn navigate(&self, path: &str, info: RequestInfo) -> Result<View, NavigateError> {
         log::debug!("navigate: path={path}");
 
-        let req = RouteRequest::from_path(path);
+        let req = RouteRequest::from_path(path, info);
         let handler = {
             self.routes
                 .read()
@@ -316,11 +333,11 @@ impl Router {
     /// # Panics
     ///
     /// Will panic if routes `RwLock` is poisoned.
-    pub async fn navigate_send(&self, path: &str) -> Result<(), NavigateError> {
+    pub async fn navigate_send(&self, path: &str, info: RequestInfo) -> Result<(), NavigateError> {
         log::debug!("navigate_send: path={path}");
 
         let view = {
-            let req = RouteRequest::from_path(path);
+            let req = RouteRequest::from_path(path, info);
             let handler = {
                 self.routes
                     .read()
@@ -359,10 +376,11 @@ impl Router {
     pub fn navigate_spawn(
         &self,
         path: &str,
+        info: RequestInfo,
     ) -> JoinHandle<Result<(), Box<dyn std::error::Error + Send>>> {
         log::debug!("navigate_spawn: path={path}");
 
-        self.navigate_spawn_on(&tokio::runtime::Handle::current(), path)
+        self.navigate_spawn_on(&tokio::runtime::Handle::current(), path, info)
     }
 
     /// # Errors
@@ -373,6 +391,7 @@ impl Router {
         &self,
         handle: &tokio::runtime::Handle,
         path: &str,
+        info: RequestInfo,
     ) -> JoinHandle<Result<(), Box<dyn std::error::Error + Send>>> {
         log::debug!("navigate_spawn_on: path={path}");
 
@@ -380,7 +399,7 @@ impl Router {
         let router = self.clone();
         moosicbox_task::spawn_on("NativeApp navigate_spawn", handle, async move {
             router
-                .navigate_send(&path)
+                .navigate_send(&path, info)
                 .await
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)
         })

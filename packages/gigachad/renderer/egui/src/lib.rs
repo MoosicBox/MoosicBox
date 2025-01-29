@@ -17,7 +17,7 @@ use gigachad_actions::{
 use gigachad_renderer::canvas::CanvasUpdate;
 use gigachad_renderer::viewport::immediate::{Pos, Viewport, ViewportListener};
 pub use gigachad_renderer::*;
-use gigachad_router::Router;
+use gigachad_router::{ClientInfo, RequestInfo, Router};
 use gigachad_transformer::{
     calc::Calc,
     models::{
@@ -52,6 +52,7 @@ impl EguiRenderer {
         router: Router,
         request_action: Sender<(String, Option<Value>)>,
         on_resize: Sender<(f32, f32)>,
+        client_info: Arc<ClientInfo>,
     ) -> Self {
         let (tx, rx) = flume::unbounded();
         let (event_tx, event_rx) = flume::unbounded();
@@ -60,7 +61,15 @@ impl EguiRenderer {
             height: None,
             x: None,
             y: None,
-            app: EguiApp::new(router, tx, event_tx, event_rx, request_action, on_resize),
+            app: EguiApp::new(
+                router,
+                tx,
+                event_tx,
+                event_rx,
+                request_action,
+                on_resize,
+                client_info,
+            ),
             receiver: rx,
         }
     }
@@ -580,6 +589,7 @@ struct EguiApp {
     on_resize: Sender<(f32, f32)>,
     side_effects: Arc<Mutex<VecDeque<Handler>>>,
     event_handlers: Arc<RwLock<Vec<(String, EventHandler)>>>,
+    client_info: Arc<ClientInfo>,
 }
 
 type Handler = Box<dyn Fn(&mut RenderContext) -> bool + Send + Sync>;
@@ -593,6 +603,7 @@ impl EguiApp {
         event_receiver: Receiver<AppEvent>,
         request_action: Sender<(String, Option<Value>)>,
         on_resize: Sender<(f32, f32)>,
+        client_info: Arc<ClientInfo>,
     ) -> Self {
         Self {
             ctx: Arc::new(RwLock::new(None)),
@@ -620,6 +631,7 @@ impl EguiApp {
             on_resize,
             side_effects: Arc::new(Mutex::new(VecDeque::new())),
             event_handlers: Arc::new(RwLock::new(vec![])),
+            client_info,
         }
     }
 
@@ -746,6 +758,7 @@ impl EguiApp {
                     let router = self.router.clone();
                     let container = self.container.clone();
                     let ctx = self.ctx.clone();
+                    let client = self.client_info.clone();
                     moosicbox_task::spawn("renderer: ProcessRoute", async move {
                         match route {
                             Route::Get {
@@ -759,7 +772,8 @@ impl EguiApp {
                                 swap,
                             } => {
                                 if trigger.as_deref() == Some("load") {
-                                    match router.navigate(&route).await {
+                                    let info = RequestInfo { client };
+                                    match router.navigate(&route, info).await {
                                         Ok(result) => {
                                             let Some(ctx) = ctx.read().unwrap().clone() else {
                                                 moosicbox_assert::die_or_panic!(

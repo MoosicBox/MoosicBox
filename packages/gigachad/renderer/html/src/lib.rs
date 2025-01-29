@@ -5,14 +5,15 @@ use std::{
     ops::Deref,
     path::PathBuf,
     str::FromStr as _,
-    sync::{Arc, RwLockReadGuard, RwLockWriteGuard},
+    sync::{Arc, LazyLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
 use actix_cors::Cors;
 pub use actix_web::http::header::HeaderMap;
 use actix_web::{
     error::ErrorInternalServerError,
-    http, middleware, route,
+    http::{self, header::USER_AGENT},
+    middleware, route,
     web::{self, Data},
     App, HttpRequest, HttpResponse,
 };
@@ -20,11 +21,12 @@ use async_trait::async_trait;
 use flume::{Receiver, Sender};
 use gigachad_actions::logic::Value;
 use gigachad_renderer::{canvas::CanvasUpdate, Color, PartialView, RenderRunner, Renderer, View};
-use gigachad_router::{Container, Router};
+use gigachad_router::{ClientInfo, ClientOs, Container, RequestInfo, Router};
 use html::{container_element_to_html_response, HtmlTagRenderer};
 use moosicbox_app_native_image::image;
 use moosicbox_env_utils::default_env_u16;
 use tokio::runtime::{Handle, Runtime};
+use uaparser::{Parser as _, UserAgentParser};
 
 pub mod html;
 
@@ -102,6 +104,11 @@ pub async fn catchall_endpoint(
     app: web::Data<HtmlApp>,
     req: HttpRequest,
 ) -> Result<HttpResponse, actix_web::Error> {
+    static UA_PARSER: LazyLock<UserAgentParser> = LazyLock::new(|| {
+        UserAgentParser::from_bytes(include_bytes!("../ua-regexes.yaml"))
+            .expect("Parser creation failed")
+    });
+
     let query_string = req.query_string();
     let query_string = if query_string.is_empty() {
         String::new()
@@ -146,9 +153,23 @@ pub async fn catchall_endpoint(
         }
     }
 
+    let os_name = if let Some(Ok(user_agent)) = req.headers().get(USER_AGENT).map(|x| x.to_str()) {
+        let os = UA_PARSER.parse_os(user_agent);
+
+        os.family.to_string()
+    } else {
+        "unknown".to_string()
+    };
+
+    let info = RequestInfo {
+        client: Arc::new(ClientInfo {
+            os: ClientOs { name: os_name },
+        }),
+    };
+
     let container = app
         .router
-        .navigate(&path)
+        .navigate(&path, info)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to navigate: {e:?}")))?;
 

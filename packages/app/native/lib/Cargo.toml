@@ -28,6 +28,7 @@ moosicbox_task = { version = "0.1.0", path = "../../../task", default-features =
 
 flume     = { workspace = true }
 log       = { workspace = true }
+os_info   = { workspace = true }
 thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["rt-multi-thread", "sync"] }
 

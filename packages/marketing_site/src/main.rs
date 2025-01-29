@@ -106,8 +106,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Already set RENDERER"
         );
 
-        log::debug!("app_native: navigating to home");
-        let _handle = app.router.navigate_spawn("/");
+        #[cfg(any(feature = "egui", feature = "fltk"))]
+        {
+            log::debug!("app_native: navigating to home");
+            let _handle = app.router.navigate_spawn(
+                "/",
+                moosicbox_app_native_lib::router::RequestInfo {
+                    client: moosicbox_app_native_lib::CLIENT_INFO.clone(),
+                },
+            );
+        }
 
         app.to_runner().await
     })?;
