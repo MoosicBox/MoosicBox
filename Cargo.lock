@@ -6727,6 +6727,7 @@ dependencies = [
  "chrono",
  "clap 4.5.27",
  "console-subscriber",
+ "gigachad_renderer_html",
  "log",
  "moosicbox_app_native_lib",
  "moosicbox_assert",

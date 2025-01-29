@@ -123,7 +123,7 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
 
 #[derive(Clone)]
 pub struct VanillaJsRenderer {
-    html_renderer: HtmlRenderer,
+    pub html_renderer: HtmlRenderer,
 }
 
 impl VanillaJsRenderer {

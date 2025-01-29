@@ -128,7 +128,7 @@ impl HtmlTagRenderer for HtmxTagRenderer {
 
 #[derive(Clone)]
 pub struct HtmxRenderer {
-    html_renderer: HtmlRenderer,
+    pub html_renderer: HtmlRenderer,
 }
 
 impl HtmxRenderer {

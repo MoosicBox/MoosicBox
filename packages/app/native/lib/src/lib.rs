@@ -59,6 +59,40 @@ impl Default for NativeAppBuilder {
     }
 }
 
+pub enum RendererType {
+    #[cfg(feature = "egui")]
+    Egui(gigachad_renderer_egui::EguiRenderer),
+    #[cfg(feature = "fltk")]
+    Fltk(gigachad_renderer_fltk::FltkRenderer),
+    #[cfg(feature = "html")]
+    Html(gigachad_renderer_html::HtmlRenderer),
+    #[cfg(feature = "htmx")]
+    Htmx(gigachad_renderer_htmx::HtmxRenderer),
+    #[cfg(feature = "datastar")]
+    Datastar(gigachad_renderer_datastar::DatastarRenderer),
+    #[cfg(feature = "vanilla-js")]
+    VanillaJs(gigachad_renderer_vanilla_js::VanillaJsRenderer),
+}
+
+impl From<RendererType> for Box<dyn Renderer> {
+    fn from(value: RendererType) -> Self {
+        match value {
+            #[cfg(feature = "egui")]
+            RendererType::Egui(renderer) => Box::new(renderer),
+            #[cfg(feature = "fltk")]
+            RendererType::Fltk(renderer) => Box::new(renderer),
+            #[cfg(feature = "html")]
+            RendererType::Html(renderer) => Box::new(renderer),
+            #[cfg(feature = "htmx")]
+            RendererType::Htmx(renderer) => Box::new(renderer),
+            #[cfg(feature = "datastar")]
+            RendererType::Datastar(renderer) => Box::new(renderer),
+            #[cfg(feature = "vanilla-js")]
+            RendererType::VanillaJs(renderer) => Box::new(renderer),
+        }
+    }
+}
+
 impl NativeAppBuilder {
     #[must_use]
     pub fn new() -> Self {
@@ -246,185 +280,186 @@ impl NativeAppBuilder {
 
     /// # Panics
     ///
-    /// Will panic if failed to start tokio runtime
+    /// * If missing router
     ///
     /// # Errors
     ///
-    /// Will error if there was an error starting the app
+    /// * If there was an error starting the app
     #[allow(clippy::too_many_lines)]
     pub async fn start(self) -> Result<NativeApp, NativeAppError> {
-        let router = self.router.unwrap();
-
-        let renderer = self.renderer.map_or_else(
-            || {
-                #[allow(unreachable_code)]
-                Ok(if cfg!(feature = "egui") {
-                    #[cfg(feature = "egui")]
-                    {
-                        let action_tx = Self::listen_actions(self.action_handlers);
-                        let resize_tx = Self::listen_resize(self.resize_listeners);
-                        let renderer = gigachad_renderer_egui::EguiRenderer::new(
-                            router.clone(),
-                            action_tx,
-                            resize_tx,
-                            CLIENT_INFO.clone(),
-                        );
-
-                        moosicbox_task::spawn("egui navigation listener", {
-                            let renderer = renderer.clone();
-                            let router = router.clone();
-                            async move {
-                                while let Some(path) = renderer.wait_for_navigation().await {
-                                    if let Err(e) = router
-                                        .navigate_send(
-                                            &path,
-                                            gigachad_router::RequestInfo {
-                                                client: CLIENT_INFO.clone(),
-                                            },
-                                        )
-                                        .await
-                                    {
-                                        log::error!("Failed to navigate: {e:?}");
-                                    }
-                                }
-                            }
-                        });
-                        Box::new(renderer) as Box<dyn Renderer>
-                    }
-                    #[cfg(not(feature = "egui"))]
-                    unreachable!()
-                } else if cfg!(feature = "fltk") {
-                    #[cfg(feature = "fltk")]
-                    {
-                        let action_tx = Self::listen_actions(self.action_handlers);
-                        let renderer = gigachad_renderer_fltk::FltkRenderer::new(action_tx);
-                        moosicbox_task::spawn("fltk navigation listener", {
-                            let renderer = renderer.clone();
-                            let router = router.clone();
-                            async move {
-                                while let Some(path) = renderer.wait_for_navigation().await {
-                                    if let Err(e) = router
-                                        .navigate_send(
-                                            &path,
-                                            gigachad_router::RequestInfo {
-                                                client: CLIENT_INFO.clone(),
-                                            },
-                                        )
-                                        .await
-                                    {
-                                        log::error!("Failed to navigate: {e:?}");
-                                    }
-                                }
-                            }
-                        });
-                        Box::new(renderer) as Box<dyn Renderer>
-                    }
-                    #[cfg(not(feature = "fltk"))]
-                    unreachable!()
-                } else if cfg!(feature = "datastar") {
-                    #[cfg(feature = "datastar")]
-                    {
-                        let runtime = self
-                            .runtime
-                            .clone()
-                            .ok_or(NativeAppError::RuntimeRequired)?;
-                        let action_tx = Self::listen_actions(self.action_handlers);
-                        let renderer = gigachad_renderer_datastar::DatastarRenderer::new(
-                            router.clone(),
-                            runtime,
-                            action_tx,
-                        );
-
-                        #[cfg(feature = "assets")]
-                        let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
-
-                        Box::new(renderer) as Box<dyn Renderer>
-                    }
-                    #[cfg(not(feature = "datastar"))]
-                    unreachable!()
-                } else if cfg!(feature = "htmx") {
-                    #[cfg(feature = "htmx")]
-                    {
-                        let runtime = self
-                            .runtime
-                            .clone()
-                            .ok_or(NativeAppError::RuntimeRequired)?;
-                        let action_tx = Self::listen_actions(self.action_handlers);
-                        let renderer = gigachad_renderer_htmx::HtmxRenderer::new(
-                            router.clone(),
-                            runtime,
-                            action_tx,
-                        );
-
-                        #[cfg(feature = "assets")]
-                        let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
-
-                        Box::new(renderer) as Box<dyn Renderer>
-                    }
-                    #[cfg(not(feature = "htmx"))]
-                    unreachable!()
-                } else if cfg!(feature = "vanilla-js") {
-                    #[cfg(feature = "vanilla-js")]
-                    {
-                        let runtime = self
-                            .runtime
-                            .clone()
-                            .ok_or(NativeAppError::RuntimeRequired)?;
-                        let action_tx = Self::listen_actions(self.action_handlers);
-                        let renderer = gigachad_renderer_vanilla_js::VanillaJsRenderer::new(
-                            router.clone(),
-                            runtime,
-                            action_tx,
-                        );
-
-                        #[cfg(feature = "assets")]
-                        let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
-
-                        Box::new(renderer) as Box<dyn Renderer>
-                    }
-                    #[cfg(not(feature = "vanilla-js"))]
-                    unreachable!()
-                } else if cfg!(feature = "html") {
-                    #[cfg(feature = "html")]
-                    {
-                        let runtime = self
-                            .runtime
-                            .clone()
-                            .ok_or(NativeAppError::RuntimeRequired)?;
-                        let action_tx = Self::listen_actions(self.action_handlers);
-                        let renderer = gigachad_renderer_html::HtmlRenderer::new(
-                            router.clone(),
-                            runtime,
-                            action_tx,
-                        );
-
-                        #[cfg(feature = "assets")]
-                        let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
-
-                        Box::new(renderer) as Box<dyn Renderer>
-                    }
-                    #[cfg(not(feature = "html"))]
-                    unreachable!()
-                } else {
-                    panic!("Missing renderer")
-                })
-            },
-            Ok::<_, NativeAppError>,
-        );
-
         let mut app = NativeApp {
             x: self.x,
             y: self.y,
             background: self.background,
             width: self.width,
             height: self.height,
-            router,
-            renderer: Arc::new(RwLock::new(renderer?)),
-            runtime_handle: self.runtime_handle,
-            runtime: self.runtime,
+            router: self.router.clone().unwrap(),
+            runtime_handle: self.runtime_handle.clone(),
+            runtime: self.runtime.clone(),
+            renderer: Arc::new(RwLock::new(if let Some(renderer) = self.renderer {
+                renderer
+            } else {
+                self.get_renderer().map(Into::into)?
+            })),
         };
         app.start().await?;
         Ok(app)
+    }
+
+    /// # Panics
+    ///
+    /// * If missing router
+    /// * If failed to start tokio runtime
+    ///
+    /// # Errors
+    ///
+    /// * If there was an error getting the renderer
+    #[allow(clippy::too_many_lines)]
+    pub fn get_renderer(self) -> Result<RendererType, NativeAppError> {
+        #[allow(unreachable_code)]
+        Ok(if cfg!(feature = "egui") {
+            #[cfg(feature = "egui")]
+            {
+                let router = self.router.unwrap();
+                let action_tx = Self::listen_actions(self.action_handlers);
+                let resize_tx = Self::listen_resize(self.resize_listeners);
+                let renderer = gigachad_renderer_egui::EguiRenderer::new(
+                    router.clone(),
+                    action_tx,
+                    resize_tx,
+                    CLIENT_INFO.clone(),
+                );
+
+                moosicbox_task::spawn("egui navigation listener", {
+                    let renderer = renderer.clone();
+                    async move {
+                        while let Some(path) = renderer.wait_for_navigation().await {
+                            if let Err(e) = router
+                                .navigate_send(
+                                    &path,
+                                    gigachad_router::RequestInfo {
+                                        client: CLIENT_INFO.clone(),
+                                    },
+                                )
+                                .await
+                            {
+                                log::error!("Failed to navigate: {e:?}");
+                            }
+                        }
+                    }
+                });
+                RendererType::Egui(renderer)
+            }
+            #[cfg(not(feature = "egui"))]
+            unreachable!()
+        } else if cfg!(feature = "fltk") {
+            #[cfg(feature = "fltk")]
+            {
+                let router = self.router.unwrap();
+                let action_tx = Self::listen_actions(self.action_handlers);
+                let renderer = gigachad_renderer_fltk::FltkRenderer::new(action_tx);
+                moosicbox_task::spawn("fltk navigation listener", {
+                    let renderer = renderer.clone();
+                    async move {
+                        while let Some(path) = renderer.wait_for_navigation().await {
+                            if let Err(e) = router
+                                .navigate_send(
+                                    &path,
+                                    gigachad_router::RequestInfo {
+                                        client: CLIENT_INFO.clone(),
+                                    },
+                                )
+                                .await
+                            {
+                                log::error!("Failed to navigate: {e:?}");
+                            }
+                        }
+                    }
+                });
+                RendererType::Fltk(renderer)
+            }
+            #[cfg(not(feature = "fltk"))]
+            unreachable!()
+        } else if cfg!(feature = "datastar") {
+            #[cfg(feature = "datastar")]
+            {
+                let router = self.router.unwrap();
+                let runtime = self
+                    .runtime
+                    .clone()
+                    .ok_or(NativeAppError::RuntimeRequired)?;
+                let action_tx = Self::listen_actions(self.action_handlers);
+                let renderer =
+                    gigachad_renderer_datastar::DatastarRenderer::new(router, runtime, action_tx);
+
+                #[cfg(feature = "assets")]
+                let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
+
+                RendererType::Datastar(renderer)
+            }
+            #[cfg(not(feature = "datastar"))]
+            unreachable!()
+        } else if cfg!(feature = "htmx") {
+            #[cfg(feature = "htmx")]
+            {
+                let router = self.router.unwrap();
+                let runtime = self
+                    .runtime
+                    .clone()
+                    .ok_or(NativeAppError::RuntimeRequired)?;
+                let action_tx = Self::listen_actions(self.action_handlers);
+                let renderer =
+                    gigachad_renderer_htmx::HtmxRenderer::new(router, runtime, action_tx);
+
+                #[cfg(feature = "assets")]
+                let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
+
+                RendererType::Htmx(renderer)
+            }
+            #[cfg(not(feature = "htmx"))]
+            unreachable!()
+        } else if cfg!(feature = "vanilla-js") {
+            #[cfg(feature = "vanilla-js")]
+            {
+                let router = self.router.unwrap();
+                let runtime = self
+                    .runtime
+                    .clone()
+                    .ok_or(NativeAppError::RuntimeRequired)?;
+                let action_tx = Self::listen_actions(self.action_handlers);
+                let renderer = gigachad_renderer_vanilla_js::VanillaJsRenderer::new(
+                    router, runtime, action_tx,
+                );
+
+                #[cfg(feature = "assets")]
+                let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
+
+                RendererType::VanillaJs(renderer)
+            }
+            #[cfg(not(feature = "vanilla-js"))]
+            unreachable!()
+        } else if cfg!(feature = "html") {
+            #[cfg(feature = "html")]
+            {
+                let router = self.router.unwrap();
+                let runtime = self
+                    .runtime
+                    .clone()
+                    .ok_or(NativeAppError::RuntimeRequired)?;
+                let action_tx = Self::listen_actions(self.action_handlers);
+                let renderer =
+                    gigachad_renderer_html::HtmlRenderer::new(router, runtime, action_tx);
+
+                #[cfg(feature = "assets")]
+                let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
+
+                RendererType::Html(renderer)
+            }
+            #[cfg(not(feature = "html"))]
+            unreachable!()
+        } else {
+            panic!("Missing renderer")
+        })
     }
 }
 

@@ -9,7 +9,7 @@
 use std::{
     collections::HashMap,
     path::PathBuf,
-    sync::{Arc, OnceLock},
+    sync::{Arc, LazyLock, OnceLock},
 };
 
 use clap::{Parser, Subcommand};
@@ -27,8 +27,10 @@ static ROUTER: OnceLock<Router> = OnceLock::new();
 static RENDERER: OnceLock<Arc<RwLock<Box<dyn Renderer>>>> = OnceLock::new();
 
 static DEFAULT_OUTPUT_DIR: &str = "gen";
-static CARGO_MANIFEST_DIR: std::sync::LazyLock<Option<std::path::PathBuf>> =
-    std::sync::LazyLock::new(|| std::option_env!("CARGO_MANIFEST_DIR").map(Into::into));
+static CARGO_MANIFEST_DIR: LazyLock<Option<std::path::PathBuf>> =
+    LazyLock::new(|| std::option_env!("CARGO_MANIFEST_DIR").map(Into::into));
+
+static BACKGROUND_COLOR: LazyLock<Color> = LazyLock::new(|| Color::from_hex("#181a1b"));
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -82,12 +84,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     moosicbox_assert::assert_or_panic!(ROUTER.set(router.clone()).is_ok(), "Already set ROUTER");
 
     if let Commands::Gen { output } = args.cmd {
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap();
+        #[cfg(not(feature = "_html"))]
+        {
+            return Err("Must be an html renderer to gen");
+        }
 
-        runtime.block_on(async move {
+        #[cfg(feature = "_html")]
+        {
+            use gigachad_renderer_html::{html::container_element_to_html_response, HeaderMap};
+            use moosicbox_app_native_lib::RendererType;
+
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+
+            let runtime = Arc::new(runtime);
+
             let output = output.unwrap_or_else(|| {
                 CARGO_MANIFEST_DIR
                     .as_ref()
@@ -98,66 +111,95 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let router = ROUTER.get().unwrap().clone();
             let static_routes = router.static_routes.read().unwrap().clone();
 
-            for (path, handler) in &static_routes {
-                let path_str = match path {
-                    moosicbox_app_native_lib::router::RoutePath::Literal(path) => path,
-                    moosicbox_app_native_lib::router::RoutePath::Literals(paths) => {
-                        if let Some(path) = paths.first() {
-                            path
-                        } else {
-                            continue;
+            let app = moosicbox_app_native_lib::NativeAppBuilder::new()
+                .with_router(router)
+                .with_runtime_arc(runtime.clone())
+                .with_background(*BACKGROUND_COLOR);
+
+            runtime.block_on(async move {
+                let tag_renderer = match app.get_renderer()? {
+                    #[cfg(feature = "egui")]
+                    RendererType::Egui(..) => panic!("Invalid renderer"),
+                    #[cfg(feature = "fltk")]
+                    RendererType::Fltk(..) => panic!("Invalid renderer"),
+                    #[cfg(feature = "html")]
+                    RendererType::Html(renderer) => renderer.app.tag_renderer,
+                    #[cfg(feature = "htmx")]
+                    RendererType::Htmx(renderer) => renderer.html_renderer.app.tag_renderer,
+                    #[cfg(feature = "datastar")]
+                    RendererType::Datastar(renderer) => renderer.html_renderer.app.tag_renderer,
+                    #[cfg(feature = "vanilla-js")]
+                    RendererType::VanillaJs(renderer) => renderer.html_renderer.app.tag_renderer,
+                };
+
+                for (path, handler) in &static_routes {
+                    let path_str = match path {
+                        moosicbox_app_native_lib::router::RoutePath::Literal(path) => path,
+                        moosicbox_app_native_lib::router::RoutePath::Literals(paths) => {
+                            if let Some(path) = paths.first() {
+                                path
+                            } else {
+                                continue;
+                            }
+                        }
+                    };
+                    let path_str = path_str.strip_prefix('/').unwrap_or(path_str);
+                    let path_str = if path_str.is_empty() {
+                        "index"
+                    } else {
+                        path_str
+                    };
+
+                    let req = RouteRequest {
+                        path: path_str.to_string(),
+                        query: HashMap::new(),
+                        info: RequestInfo {
+                            client: Arc::new(ClientInfo {
+                                os: ClientOs {
+                                    name: "n/a".to_string(),
+                                },
+                            }),
+                        },
+                    };
+
+                    match handler(req).await {
+                        Ok(view) => {
+                            let html = container_element_to_html_response(
+                                &HeaderMap::new(),
+                                &view.immediate,
+                                Some(*BACKGROUND_COLOR),
+                                &**tag_renderer,
+                            )?;
+                            let output_path = output_path.join(format!("{path_str}.html"));
+                            tokio::fs::create_dir_all(&output_path.parent().unwrap())
+                                .await
+                                .expect("Failed to create dirs");
+
+                            log::debug!("gen path={path_str} -> {output_path:?}\n{html}");
+
+                            let mut file = tokio::fs::File::options()
+                                .truncate(true)
+                                .write(true)
+                                .create(true)
+                                .open(&output_path)
+                                .await
+                                .expect("Failed to open file");
+
+                            file.write_all(html.as_bytes())
+                                .await
+                                .expect("Failed to write file");
+                        }
+                        Err(e) => {
+                            panic!("Failed to fetch route view: {e:?}");
                         }
                     }
-                };
-                let path_str = path_str.strip_prefix('/').unwrap_or(path_str);
-                let path_str = if path_str.is_empty() {
-                    "index"
-                } else {
-                    path_str
-                };
-
-                let req = RouteRequest {
-                    path: path_str.to_string(),
-                    query: HashMap::new(),
-                    info: RequestInfo {
-                        client: Arc::new(ClientInfo {
-                            os: ClientOs {
-                                name: "n/a".to_string(),
-                            },
-                        }),
-                    },
-                };
-
-                match handler(req).await {
-                    Ok(view) => {
-                        let html = view.immediate.to_string();
-                        let output_path = output_path.join(format!("{path_str}.html"));
-                        tokio::fs::create_dir_all(&output_path.parent().unwrap())
-                            .await
-                            .expect("Failed to create dirs");
-
-                        log::debug!("gen path={path_str} -> {output_path:?}\n{html}");
-
-                        let mut file = tokio::fs::File::options()
-                            .truncate(true)
-                            .write(true)
-                            .create(true)
-                            .open(&output_path)
-                            .await
-                            .expect("Failed to open file");
-
-                        file.write_all(html.as_bytes())
-                            .await
-                            .expect("Failed to write file");
-                    }
-                    Err(e) => {
-                        panic!("Failed to fetch route view: {e:?}");
-                    }
                 }
-            }
-        });
 
-        return Ok(());
+                Ok::<_, Box<dyn std::error::Error>>(())
+            })?;
+
+            return Ok::<_, Box<dyn std::error::Error>>(());
+        }
     }
 
     let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
@@ -174,7 +216,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut app = moosicbox_app_native_lib::NativeAppBuilder::new()
         .with_router(router)
         .with_runtime_arc(runtime.clone())
-        .with_background(Color::from_hex("#181a1b"))
+        .with_background(*BACKGROUND_COLOR)
         .with_size(
             option_env_f32("WINDOW_WIDTH").unwrap().unwrap_or(1000.0),
             option_env_f32("WINDOW_HEIGHT").unwrap().unwrap_or(600.0),

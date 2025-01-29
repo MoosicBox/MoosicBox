@@ -40,7 +40,7 @@ pub struct HtmlRenderer {
     height: Option<f32>,
     x: Option<i32>,
     y: Option<i32>,
-    app: HtmlApp,
+    pub app: HtmlApp,
     receiver: Receiver<String>,
     runtime: Arc<Runtime>,
 }
@@ -424,12 +424,12 @@ impl Renderer for HtmlRenderer {
 }
 
 #[derive(Clone)]
-struct HtmlApp {
+pub struct HtmlApp {
     router: Router,
     background: Option<Color>,
     #[allow(unused)]
     request_action: Sender<(String, Option<Value>)>,
-    tag_renderer: Arc<Box<dyn HtmlTagRenderer + Send + Sync>>,
+    pub tag_renderer: Arc<Box<dyn HtmlTagRenderer + Send + Sync>>,
     #[cfg(feature = "assets")]
     static_asset_routes: Vec<gigachad_renderer::assets::StaticAssetRoute>,
 }

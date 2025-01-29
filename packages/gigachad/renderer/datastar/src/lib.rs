@@ -90,7 +90,7 @@ impl HtmlTagRenderer for DatastarTagRenderer {
 
 #[derive(Clone)]
 pub struct DatastarRenderer {
-    html_renderer: HtmlRenderer,
+    pub html_renderer: HtmlRenderer,
 }
 
 impl DatastarRenderer {
