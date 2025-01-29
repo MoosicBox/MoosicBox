@@ -1,0 +1,45 @@
+{
+    "name": "@moosicbox/moosicbox-marketing-site",
+    "description": "MoosicBox Marketing Website",
+    "version": "0.1.0",
+    "main": "index.mjs",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/MoosicBox/MoosicBoxMarketingSite.git"
+    },
+    "author": "Braden Steffaniak",
+    "license": "ISC",
+    "bugs": {
+        "url": "https://github.com/MoosicBox/MoosicBoxMarketingSite/issues"
+    },
+    "homepage": "https://github.com/MoosicBox/MoosicBoxMarketingSite#readme",
+    "scripts": {
+        "sst:deploy": "sst deploy",
+        "sst:dev": "sst dev",
+        "pretty": "prettier --check \"**/*.{js,cjs,mjs,jsx,ts,tsx,astro}\"",
+        "pretty:write": "prettier --write \"**/*.{js,cjs,mjs,jsx,ts,tsx,astro}\"",
+        "lint": "eslint --ext .ts,.tsx .",
+        "lint:write": "eslint --fix",
+        "typecheck": "tsc --noEmit",
+        "validate": "pnpm pretty && pnpm lint && pnpm typecheck"
+    },
+    "type": "module",
+    "devDependencies": {
+        "@tsconfig/node18": "18.2.2",
+        "@typescript-eslint/eslint-plugin": "^7.18.0",
+        "@typescript-eslint/parser": "^7.18.0",
+        "@vitest/coverage-v8": "^1.6.0",
+        "@vitest/ui": "^1.6.0",
+        "eslint": "^8.57.1",
+        "eslint-config-prettier": "^9.1.0",
+        "eslint-plugin-diff": "^2.0.3",
+        "eslint-plugin-import": "^2.31.0",
+        "eslint-plugin-node": "^11.1.0",
+        "jsdom": "^24.1.3",
+        "prettier": "^3.4.2",
+        "solid-js": "^1.7.11",
+        "sst": "^3.6.25",
+        "typescript": "^5.7.3"
+    },
+    "dependencies": {}
+}
