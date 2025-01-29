@@ -100,7 +100,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
         let output_path: PathBuf = output.into();
 
-        std::fs::remove_dir_all(&output_path)?;
+        if output_path.is_dir() {
+            std::fs::remove_dir_all(&output_path)?;
+        }
 
         return Ok::<_, Box<dyn std::error::Error>>(());
     }
@@ -157,7 +159,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 RendererType::VanillaJs(renderer) => renderer.html_renderer.app.tag_renderer,
             };
 
-            tokio::fs::remove_dir_all(&output_path).await?;
+            if output_path.is_dir() {
+                tokio::fs::remove_dir_all(&output_path).await?;
+            }
 
             for (path, handler) in &static_routes {
                 let path_str = match path {
