@@ -16,6 +16,8 @@ use moosicbox_env_utils::{default_env_usize, option_env_f32, option_env_i32};
 use moosicbox_logging::free_log_client::DynLayer;
 use tokio::sync::RwLock;
 
+mod download;
+
 static ROUTER: OnceLock<Router> = OnceLock::new();
 static RENDERER: OnceLock<Arc<RwLock<Box<dyn Renderer>>>> = OnceLock::new();
 
@@ -53,9 +55,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let runtime = Arc::new(runtime);
 
-    let router = Router::new().with_route(&["/", "/home"], |_| async {
-        moosicbox_marketing_site_ui::home()
-    });
+    let router = Router::new()
+        .with_route(&["/", "/home"], |_| async {
+            moosicbox_marketing_site_ui::home()
+        })
+        .with_route(&["/download"], |_| async {
+            moosicbox_marketing_site_ui::download::download()
+        })
+        .with_route_result(&["/releases"], |req| async {
+            download::releases_route(req).await
+        });
 
     moosicbox_assert::assert_or_panic!(ROUTER.set(router.clone()).is_ok(), "Already set ROUTER");
 

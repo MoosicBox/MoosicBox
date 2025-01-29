@@ -2,6 +2,8 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::branches_sharing_code)]
 
+pub mod download;
+
 use gigachad_transformer_models::{
     AlignItems, JustifyContent, LayoutDirection, Position, TextAlign,
 };
@@ -155,6 +157,7 @@ pub fn page(slot: &Markup) -> Markup {
             sx-position="relative"
             sx-color="#fff"
             sx-font-family="Gordita, Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif"
+            sx-overflow-y="auto"
         {
             (header())
             (main(&slot))
