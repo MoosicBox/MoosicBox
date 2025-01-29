@@ -71,6 +71,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         moosicbox_logging::init(filename, Some(layers)).expect("Failed to initialize FreeLog");
     }
 
+    #[cfg(feature = "assets")]
+    let assets_dir = CARGO_MANIFEST_DIR.as_ref().map_or_else(
+        || <PathBuf as std::str::FromStr>::from_str("public").unwrap(),
+        |dir| dir.join("public"),
+    );
+
     let args = Args::parse();
     log::info!("args={args:?}");
 
@@ -245,13 +251,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         app = app.with_static_asset_route_result(
             moosicbox_app_native_lib::renderer::assets::StaticAssetRoute {
                 route: "public".to_string(),
-                target: CARGO_MANIFEST_DIR
-                    .as_ref()
-                    .map_or_else(
-                        || "public".to_string(),
-                        |dir| dir.join("public").to_str().unwrap().to_string(),
-                    )
-                    .try_into()?,
+                target: assets_dir.try_into()?,
             },
         )?;
     }
