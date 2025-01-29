@@ -77,7 +77,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let args = Args::parse();
-    log::info!("args={args:?}");
 
     let router = Router::new()
         .with_static_route(&["/", "/home"], |_| async {
