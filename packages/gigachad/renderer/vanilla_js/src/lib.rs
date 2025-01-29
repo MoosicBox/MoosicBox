@@ -72,6 +72,12 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
             }
         }
 
+        if let Some(id) = &container.str_id {
+            f.write_all(b" id=\"")?;
+            f.write_all(id.as_bytes())?;
+            f.write_all(b"\"")?;
+        }
+
         element_style_to_html(f, container, is_flex_child)?;
         element_classes_to_html(f, container)?;
 
