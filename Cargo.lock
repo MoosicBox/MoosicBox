@@ -6724,6 +6724,7 @@ dependencies = [
 name = "moosicbox_marketing_site"
 version = "0.1.0"
 dependencies = [
+ "async-recursion",
  "chrono",
  "clap 4.5.27",
  "console-subscriber",
