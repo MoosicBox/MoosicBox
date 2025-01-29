@@ -2,6 +2,7 @@ function getCustomDomain() {
     return {
         name: domainName,
         dns: sst.cloudflare.dns(),
+        redirects: [`www.${domainName}`]
     };
 }
 
