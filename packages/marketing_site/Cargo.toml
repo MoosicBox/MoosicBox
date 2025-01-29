@@ -46,6 +46,7 @@ moosicbox_logging = { version = "0.1.0", path = "../logging", default-features =
 ] }
 moosicbox_marketing_site_ui = { version = "0.1.0", path = "ui", default-features = false }
 
+chrono             = { workspace = true }
 console-subscriber = { workspace = true }
 log                = { workspace = true }
 regex              = { workspace = true }

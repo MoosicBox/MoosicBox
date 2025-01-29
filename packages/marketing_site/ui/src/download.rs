@@ -1,5 +1,6 @@
 use std::sync::LazyLock;
 
+use chrono::NaiveDateTime;
 use gigachad_transformer_models::{AlignItems, LayoutDirection};
 use maud::{html, Markup};
 use regex::Regex;
@@ -28,7 +29,7 @@ pub struct Os<'a> {
 #[derive(Default, Clone, Debug)]
 pub struct OsRelease<'a> {
     pub version: &'a str,
-    pub published_at: &'a str,
+    pub published_at: NaiveDateTime,
     pub url: &'a str,
     pub assets: Vec<OsAsset<'a>>,
 }
@@ -68,6 +69,11 @@ fn format_size(size: u64) -> String {
     bytesize::to_string(size, true)
 }
 
+fn format_date(date: &NaiveDateTime) -> String {
+    // January 08, 2025 03:09:08
+    date.format("%B %d, %Y %H:%M:%S").to_string()
+}
+
 #[must_use]
 pub fn releases(releases: &[OsRelease], os: &Os) -> Markup {
     html! {
@@ -77,7 +83,7 @@ pub fn releases(releases: &[OsRelease], os: &Os) -> Markup {
                     h2 sx-dir=(LayoutDirection::Row) sx-align-items=(AlignItems::End) {
                         div { "Release " (release.version) }
                         div sx-font-size=(16) sx-margin-left=(10) sx-margin-bottom=(2) sx-color="#ccc" {
-                            (release.published_at)
+                            (format_date(&release.published_at))
                         }
                         div sx-font-size=(16) sx-margin-left=(10) sx-margin-bottom=(2) {
                             "[" a sx-color="#fff" target="_blank" href=(release.url) { "GitHub" } "]"

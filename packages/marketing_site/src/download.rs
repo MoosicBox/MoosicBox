@@ -1,5 +1,6 @@
 use std::sync::LazyLock;
 
+use chrono::NaiveDateTime;
 use moosicbox_app_native_lib::{renderer::View, router::RouteRequest};
 use moosicbox_marketing_site_ui::download::{FileAsset, Os, OsAsset, OsRelease};
 use regex::Regex;
@@ -38,7 +39,7 @@ pub async fn releases_route(req: RouteRequest) -> Result<View, Box<dyn std::erro
         fn github_release_into_os_release<'a>(
             value: &GitHubRelease<'a>,
             os: &Os<'a>,
-        ) -> OsRelease<'a> {
+        ) -> Result<OsRelease<'a>, Box<dyn std::error::Error>> {
             static WINDOWS_ASSET_PATTERN: LazyLock<Regex> =
                 LazyLock::new(|| Regex::new(r"(.+?\.msi|.+?\.exe)").unwrap());
             static MAC_APPLE_SILICON_ASSET_PATTERN: LazyLock<Regex> =
@@ -125,12 +126,16 @@ pub async fn releases_route(req: RouteRequest) -> Result<View, Box<dyn std::erro
                 }
             });
 
-            OsRelease {
+            let published_at =
+                NaiveDateTime::parse_from_str(value.published_at, "%Y-%m-%dT%H:%M:%SZ")
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+
+            Ok(OsRelease {
                 version: value.name,
-                published_at: value.published_at,
+                published_at,
                 url: value.html_url,
                 assets,
-            }
+            })
         }
 
         impl<'a> From<&GitHubAsset<'a>> for FileAsset<'a> {
@@ -159,7 +164,7 @@ pub async fn releases_route(req: RouteRequest) -> Result<View, Box<dyn std::erro
         let releases: Vec<OsRelease<'_>> = releases
             .iter()
             .map(|x| github_release_into_os_release(x, &os))
-            .collect();
+            .collect::<Result<Vec<_>, _>>()?;
 
         moosicbox_marketing_site_ui::download::releases(&releases, &os)
             .into_string()

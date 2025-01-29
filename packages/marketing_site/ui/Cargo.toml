@@ -17,6 +17,7 @@ gigachad_transformer_models = { version = "0.1.0", path = "../../gigachad/transf
 moosicbox_app_native_image = { version = "0.1.0", path = "../../app/native/image", default-features = false }
 
 bytesize = { workspace = true }
+chrono   = { workspace = true }
 log      = { workspace = true }
 maud     = { workspace = true }
 regex    = { workspace = true }

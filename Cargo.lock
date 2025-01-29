@@ -6724,6 +6724,7 @@ dependencies = [
 name = "moosicbox_marketing_site"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "console-subscriber",
  "log",
  "moosicbox_app_native_lib",
@@ -6743,6 +6744,7 @@ name = "moosicbox_marketing_site_ui"
 version = "0.1.0"
 dependencies = [
  "bytesize",
+ "chrono",
  "gigachad_transformer_models",
  "log",
  "maud",
