@@ -656,6 +656,20 @@ pub fn element_classes_to_html(
         f.write_all(b"remove-button-styles")?;
     }
 
+    if !container.classes.is_empty() {
+        if printed_start {
+            f.write_all(b" ")?;
+        } else {
+            printed_start = true;
+            f.write_all(b" class=\"")?;
+        }
+
+        for class in &container.classes {
+            f.write_all(class.as_bytes())?;
+            f.write_all(b" ")?;
+        }
+    }
+
     if printed_start {
         f.write_all(b"\"")?;
     }
