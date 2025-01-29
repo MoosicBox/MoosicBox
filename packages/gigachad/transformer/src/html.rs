@@ -3,8 +3,8 @@ use std::{borrow::Cow, collections::HashMap};
 use gigachad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
 use gigachad_color::Color;
 use gigachad_transformer_models::{
-    AlignItems, Cursor, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, Position, Route,
-    SwapTarget, TextAlign, TextDecorationLine, TextDecorationStyle, Visibility,
+    AlignItems, Cursor, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, LinkTarget,
+    Position, Route, SwapTarget, TextAlign, TextDecorationLine, TextDecorationStyle, Visibility,
 };
 use serde_json::Value;
 pub use tl::ParseError;
@@ -122,6 +122,18 @@ fn get_classes(tag: &HTMLTag) -> Vec<String> {
             .map(ToString::to_string)
             .collect()
     })
+}
+
+fn get_link_target(tag: &HTMLTag, name: &str) -> Option<LinkTarget> {
+    get_tag_attr_value_owned(tag, name)
+        .as_deref()
+        .map(|x| match x {
+            "_self" => LinkTarget::SelfTarget,
+            "_blank" => LinkTarget::Blank,
+            "_parent" => LinkTarget::Parent,
+            "_top" => LinkTarget::Top,
+            target => LinkTarget::Custom(target.to_string()),
+        })
 }
 
 fn get_state(tag: &HTMLTag, name: &str) -> Option<Value> {
@@ -801,6 +813,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                 }
                 "a" => {
                     container.element = crate::Element::Anchor {
+                        target: get_link_target(tag, "target"),
                         href: get_tag_attr_value_owned(tag, "href"),
                     }
                 }

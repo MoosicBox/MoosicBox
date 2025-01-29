@@ -2,8 +2,8 @@ use moosicbox_gen::xml::XmlString;
 use quickcheck::{Arbitrary, Gen};
 
 use crate::{
-    AlignItems, Cursor, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, Position, Route,
-    SwapTarget, TextAlign, TextDecorationLine, TextDecorationStyle, Visibility,
+    AlignItems, Cursor, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, LinkTarget,
+    Position, Route, SwapTarget, TextAlign, TextDecorationLine, TextDecorationStyle, Visibility,
 };
 
 impl Arbitrary for LayoutDirection {
@@ -172,5 +172,18 @@ impl Arbitrary for TextDecorationStyle {
             Self::Wavy,
         ])
         .unwrap()
+    }
+}
+
+impl Arbitrary for LinkTarget {
+    fn arbitrary(g: &mut Gen) -> Self {
+        match *g.choose(&(0..=4).collect::<Vec<_>>()).unwrap() {
+            0 => Self::SelfTarget,
+            1 => Self::Blank,
+            2 => Self::Parent,
+            3 => Self::Top,
+            4 => Self::Custom(XmlString::arbitrary(g).0),
+            _ => unreachable!(),
+        }
     }
 }

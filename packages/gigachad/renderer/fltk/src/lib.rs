@@ -975,7 +975,7 @@ impl FltkRenderer {
 
                 other_element = Some(frame.as_base_widget());
             }
-            Element::Anchor { href } => {
+            Element::Anchor { href, .. } => {
                 context = context.with_container(container);
                 let mut elements =
                     self.draw_elements(viewport, container, depth, context, event_sender.clone())?;

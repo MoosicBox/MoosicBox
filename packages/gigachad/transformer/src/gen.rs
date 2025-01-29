@@ -151,6 +151,7 @@ impl Arbitrary for Element {
                 fit: Option::arbitrary(g),
             },
             12 => Self::Anchor {
+                target: Option::arbitrary(g),
                 href: Option::arbitrary(g).map(|x: XmlString| x.0),
             },
             13 => Self::Heading {

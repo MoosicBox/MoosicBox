@@ -6,8 +6,8 @@ use std::{collections::HashMap, io::Write};
 use gigachad_actions::Action;
 use gigachad_color::Color;
 use gigachad_transformer_models::{
-    AlignItems, Cursor, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, Position, Route,
-    TextAlign, TextDecorationLine, TextDecorationStyle, Visibility,
+    AlignItems, Cursor, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, LinkTarget,
+    Position, Route, TextAlign, TextDecorationLine, TextDecorationStyle, Visibility,
 };
 use serde_json::Value;
 
@@ -807,6 +807,7 @@ pub enum Element {
         fit: Option<ImageFit>,
     },
     Anchor {
+        target: Option<LinkTarget>,
         href: Option<String>,
     },
     Heading {
@@ -906,6 +907,9 @@ impl Container {
             Element::Image { fit, .. } => {
                 attrs.add_opt("sx-fit", *fit);
             }
+            Element::Anchor { target, .. } => {
+                attrs.add_opt("target", target.as_ref());
+            }
             Element::Div
             | Element::Raw { .. }
             | Element::Aside
@@ -917,7 +921,6 @@ impl Container {
             | Element::Span
             | Element::Input { .. }
             | Element::Button
-            | Element::Anchor { .. }
             | Element::Heading { .. }
             | Element::UnorderedList
             | Element::OrderedList
@@ -1324,7 +1327,7 @@ impl Container {
                         .to_string_pad_left()
                 ))?;
             }
-            Element::Anchor { href } => {
+            Element::Anchor { href, .. } => {
                 f.write_fmt(format_args!(
                     "<a{href_attr}{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs),

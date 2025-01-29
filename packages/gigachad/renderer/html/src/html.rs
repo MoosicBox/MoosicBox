@@ -7,8 +7,8 @@ use gigachad_renderer::Color;
 use gigachad_router::Container;
 use gigachad_transformer::{
     models::{
-        AlignItems, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, Position, TextAlign,
-        TextDecorationLine, TextDecorationStyle, Visibility,
+        AlignItems, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, LinkTarget,
+        Position, TextAlign, TextDecorationLine, TextDecorationStyle, Visibility,
     },
     Calculation, Element, HeaderSize, Input, Number,
 };
@@ -714,13 +714,24 @@ pub fn element_to_html(
             f.write_all(b">")?;
             return Ok(());
         }
-        Element::Anchor { href } => {
+        Element::Anchor { href, target } => {
             const TAG_NAME: &[u8] = b"a";
             f.write_all(b"<")?;
             f.write_all(TAG_NAME)?;
             if let Some(href) = href {
                 f.write_all(b" href=\"")?;
                 f.write_all(href.as_bytes())?;
+                f.write_all(b"\"")?;
+            }
+            if let Some(target) = target {
+                f.write_all(b" target=\"")?;
+                f.write_all(match target {
+                    LinkTarget::SelfTarget => b"_self",
+                    LinkTarget::Blank => b"_blank",
+                    LinkTarget::Parent => b"_parent",
+                    LinkTarget::Top => b"_top",
+                    LinkTarget::Custom(target) => target.as_bytes(),
+                })?;
                 f.write_all(b"\"")?;
             }
             tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;

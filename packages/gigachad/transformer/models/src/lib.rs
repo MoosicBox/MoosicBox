@@ -361,3 +361,27 @@ impl std::fmt::Display for TextDecorationStyle {
         }
     }
 }
+
+#[derive(Default, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(tag = "type"))]
+pub enum LinkTarget {
+    #[default]
+    SelfTarget,
+    Blank,
+    Parent,
+    Top,
+    Custom(String),
+}
+
+impl std::fmt::Display for LinkTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SelfTarget => f.write_str("_self"),
+            Self::Blank => f.write_str("_blank"),
+            Self::Parent => f.write_str("_parent"),
+            Self::Top => f.write_str("_top"),
+            Self::Custom(target) => f.write_str(target),
+        }
+    }
+}
