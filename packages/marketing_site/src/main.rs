@@ -45,6 +45,10 @@ enum Commands {
         #[arg(short, long)]
         output: Option<String>,
     },
+    Clean {
+        #[arg(short, long)]
+        output: Option<String>,
+    },
     Serve,
 }
 
@@ -82,6 +86,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
 
     moosicbox_assert::assert_or_panic!(ROUTER.set(router.clone()).is_ok(), "Already set ROUTER");
+
+    if let Commands::Clean { output } = args.cmd {
+        let output = output.unwrap_or_else(|| {
+            CARGO_MANIFEST_DIR
+                .as_ref()
+                .and_then(|x| x.join(DEFAULT_OUTPUT_DIR).to_str().map(ToString::to_string))
+                .unwrap_or_else(|| DEFAULT_OUTPUT_DIR.to_string())
+        });
+        let output_path: PathBuf = output.into();
+
+        std::fs::remove_dir_all(&output_path)?;
+
+        return Ok::<_, Box<dyn std::error::Error>>(());
+    }
 
     if let Commands::Gen { output } = args.cmd {
         #[cfg(not(feature = "_html"))]
