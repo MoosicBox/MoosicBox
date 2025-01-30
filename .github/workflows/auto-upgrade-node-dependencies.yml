@@ -19,6 +19,7 @@ jobs:
                 project:
                     - directory: .
                       sst: true
+                      label: kubernetes-infra
                     - directory: app-website
                       sst: true
                     - directory: marketing-website
@@ -91,6 +92,6 @@ jobs:
                   git config user.name "MoosicBoxBot"
                   git config user.email "MoosicBoxBot@gmail.com"
                   git add .
-                  git commit --message "Upgrade ${{ matrix.project.directory }} node dependencies"
+                  git commit --message "Upgrade ${{ matrix.project.label || matrix.project.directory }} node dependencies"
                   echo "Pushing upgrades"
                   git push origin master
