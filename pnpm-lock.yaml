@@ -48,8 +48,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.6.25
-        version: 3.6.25
+        specifier: ^3.6.30
+        version: 3.6.30
       typescript:
         specifier: ^5.7.3
         version: 5.7.3
@@ -1861,8 +1861,8 @@ packages:
     resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
     hasBin: true
 
-  semver@7.6.3:
-    resolution: {integrity: sha512-oVekP1cKtI+CTDvHWYFUcMtsK/00wmAEfyqKfNdARm8u1wNVhSgaX7A8d4UuIlUI5e84iEwOhs7ZPYRmzU9U6A==}
+  semver@7.7.0:
+    resolution: {integrity: sha512-DrfFnPzblFmNrIZzg5RzHegbiRWg7KMR7btwi2yjHwx06zsUbO5g613sVwEV7FTwmzJu+Io0lJe2GJ3LxqpvBQ==}
     engines: {node: '>=10'}
     hasBin: true
 
@@ -1965,33 +1965,33 @@ packages:
     resolution: {integrity: sha512-MGrFH9Z4NP9Iyhqn16sDtBpRRNJ0Y2hNa6D65h736fVSaPCHr4DM4sWUNvVaSuC+0OBGhwsrydQwmgfg5LncqQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
-  sst-darwin-arm64@3.6.25:
-    resolution: {integrity: sha512-vUf0OXeSIrPN7QPHSxYJcXqycBvcoZJ9scsV1VrTRQbYpySfWCJMD8LSAuRB+//QjcDYndSx/r/ad0Ofx+a2vw==}
+  sst-darwin-arm64@3.6.30:
+    resolution: {integrity: sha512-qyE0mZP0G817b82sq09oA96znZmGUix34VweZh9s8A1ahCljM3TdBqZeUl7Fyw5VjGIluCNfz4yRePiq9KMwmw==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.6.25:
-    resolution: {integrity: sha512-lFW1M/1gId2PVnNxQQJYeXgGNtRVPlL1HMQ+MUCbgNjQCDAcIFJ9C1mw3RXYorfKbgiS0yQdBfLRFIgLLIIcfw==}
+  sst-darwin-x64@3.6.30:
+    resolution: {integrity: sha512-kS10lIYkIVU2nHDtbkzzVk6SIjCG04oK71cnDhZ7Hp6INMVByKprdnoKH9OvGhavJtIE+pD6xer6SqYBRgBCmQ==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.6.25:
-    resolution: {integrity: sha512-5Xjj08Uo5J1abiCHv09lxA0SqswbP2Vz5y6DAgocTPSLMuUlgCv9m0r+w+ng3OLDoCDVb56EUY0G8zwWX1Q3gA==}
+  sst-linux-arm64@3.6.30:
+    resolution: {integrity: sha512-6ZfEEn/M9zp7TXNUAPKBfEyUHpnVaOc08UmjPsNVlWGoKVShFCB0AQW2cM7fKGNF1MNq9rJRIp2DOiRLWpzrHg==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.6.25:
-    resolution: {integrity: sha512-805J9vxCVjQJcrSHTxnHy89a496ugneE6/hS9kLwm0okp0JUL2B1Tc3PTLq37+jksq542eTSKdJ4wRED8XFJoQ==}
+  sst-linux-x64@3.6.30:
+    resolution: {integrity: sha512-KLfMR1tZAG29ILEa1uXzWhBly+d09IQTu7lRDtdvZ1ZehG/DR/g311h+2i2mFK14EN+haqA3mTqnmnDJUvFFsw==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.6.25:
-    resolution: {integrity: sha512-7n3x2JcnN6Fbn3y/S9xI2DzhkL6vdV7D2vi0FxxkmW+Q7kZE/L8KrV6K5+IHFVrLmW37H4hyzLAU1r4Oy0Mx7A==}
+  sst-linux-x86@3.6.30:
+    resolution: {integrity: sha512-dL/1TbsVW7cKuRwblyvwBdd6qG+8Ewp8E6D2G74mK5olUmZN+7UYo7Gyas1w5grrBsNtH487jenCji2wItM5HQ==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.6.25:
-    resolution: {integrity: sha512-lEvXCunAEhBQ7jUTj/tF8/5vfbXS1T7nNvfzAo0ZpHE1AH/Pj3vGqI1y4Zxs+SQBfEhUbPKjOH3aDWsOWHCmfA==}
+  sst@3.6.30:
+    resolution: {integrity: sha512-3lVLtqaHHDmCG4ib7dUglx4XhA4GMwX1/VYMF+EGhus6qt4LoJLuLDa9Xzpjf2tuAz2JgwJQTtHPqxBcFHJxig==}
     hasBin: true
 
   string-width@4.2.3:
@@ -2350,7 +2350,7 @@ snapshots:
       promise-all-reject-late: 1.0.1
       promise-call-limit: 3.0.2
       read-package-json-fast: 3.0.2
-      semver: 7.6.3
+      semver: 7.7.0
       ssri: 10.0.6
       treeverse: 3.0.0
       walk-up-path: 3.0.1
@@ -2360,7 +2360,7 @@ snapshots:
 
   '@npmcli/fs@3.1.1':
     dependencies:
-      semver: 7.6.3
+      semver: 7.7.0
 
   '@npmcli/git@5.0.8':
     dependencies:
@@ -2371,7 +2371,7 @@ snapshots:
       proc-log: 4.2.0
       promise-inflight: 1.0.1
       promise-retry: 2.0.1
-      semver: 7.6.3
+      semver: 7.7.0
       which: 4.0.0
     transitivePeerDependencies:
       - bluebird
@@ -2394,7 +2394,7 @@ snapshots:
       json-parse-even-better-errors: 3.0.2
       pacote: 18.0.6
       proc-log: 4.2.0
-      semver: 7.6.3
+      semver: 7.7.0
     transitivePeerDependencies:
       - bluebird
       - supports-color
@@ -2411,7 +2411,7 @@ snapshots:
       json-parse-even-better-errors: 3.0.2
       normalize-package-data: 6.0.2
       proc-log: 4.2.0
-      semver: 7.6.3
+      semver: 7.7.0
     transitivePeerDependencies:
       - bluebird
 
@@ -2475,7 +2475,7 @@ snapshots:
       '@types/shimmer': 1.2.0
       import-in-the-middle: 1.12.0
       require-in-the-middle: 7.5.0
-      semver: 7.6.3
+      semver: 7.7.0
       shimmer: 1.2.1
     transitivePeerDependencies:
       - supports-color
@@ -2511,7 +2511,7 @@ snapshots:
       '@opentelemetry/propagator-b3': 1.30.1(@opentelemetry/api@1.9.0)
       '@opentelemetry/propagator-jaeger': 1.30.1(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-base': 1.30.1(@opentelemetry/api@1.9.0)
-      semver: 7.6.3
+      semver: 7.7.0
 
   '@opentelemetry/semantic-conventions@1.27.0': {}
 
@@ -2573,7 +2573,7 @@ snapshots:
       picomatch: 3.0.1
       pkg-dir: 7.0.0
       require-from-string: 2.0.2
-      semver: 7.6.3
+      semver: 7.7.0
       source-map-support: 0.5.21
       tmp: 0.2.3
       upath: 1.2.0
@@ -2730,7 +2730,7 @@ snapshots:
       globby: 11.1.0
       is-glob: 4.0.3
       minimatch: 9.0.5
-      semver: 7.6.3
+      semver: 7.7.0
       ts-api-utils: 1.4.3(typescript@5.7.3)
     optionalDependencies:
       typescript: 5.7.3
@@ -2868,7 +2868,7 @@ snapshots:
       espree: 10.3.0
       fast-glob: 3.3.3
       is-glob: 4.0.3
-      semver: 7.6.3
+      semver: 7.7.0
     transitivePeerDependencies:
       - supports-color
 
@@ -3173,7 +3173,7 @@ snapshots:
   eslint-compat-utils@0.6.4(eslint@8.57.1):
     dependencies:
       eslint: 8.57.1
-      semver: 7.6.3
+      semver: 7.7.0
 
   eslint-config-prettier@9.1.0(eslint@8.57.1):
     dependencies:
@@ -3966,7 +3966,7 @@ snapshots:
       make-fetch-happen: 13.0.1
       nopt: 7.2.1
       proc-log: 4.2.0
-      semver: 7.6.3
+      semver: 7.7.0
       tar: 6.2.1
       which: 4.0.0
     transitivePeerDependencies:
@@ -3979,7 +3979,7 @@ snapshots:
   normalize-package-data@6.0.2:
     dependencies:
       hosted-git-info: 7.0.2
-      semver: 7.6.3
+      semver: 7.7.0
       validate-npm-package-license: 3.0.4
 
   normalize-url@6.1.0: {}
@@ -3990,7 +3990,7 @@ snapshots:
 
   npm-install-checks@6.3.0:
     dependencies:
-      semver: 7.6.3
+      semver: 7.7.0
 
   npm-normalize-package-bin@3.0.1: {}
 
@@ -3998,7 +3998,7 @@ snapshots:
     dependencies:
       hosted-git-info: 7.0.2
       proc-log: 4.2.0
-      semver: 7.6.3
+      semver: 7.7.0
       validate-npm-package-name: 5.0.1
 
   npm-packlist@8.0.2:
@@ -4010,7 +4010,7 @@ snapshots:
       npm-install-checks: 6.3.0
       npm-normalize-package-bin: 3.0.1
       npm-package-arg: 11.0.3
-      semver: 7.6.3
+      semver: 7.7.0
 
   npm-registry-fetch@17.1.0:
     dependencies:
@@ -4346,7 +4346,7 @@ snapshots:
 
   semver@6.3.1: {}
 
-  semver@7.6.3: {}
+  semver@7.7.0: {}
 
   set-function-length@1.2.2:
     dependencies:
@@ -4469,32 +4469,32 @@ snapshots:
     dependencies:
       minipass: 7.1.2
 
-  sst-darwin-arm64@3.6.25:
+  sst-darwin-arm64@3.6.30:
     optional: true
 
-  sst-darwin-x64@3.6.25:
+  sst-darwin-x64@3.6.30:
     optional: true
 
-  sst-linux-arm64@3.6.25:
+  sst-linux-arm64@3.6.30:
     optional: true
 
-  sst-linux-x64@3.6.25:
+  sst-linux-x64@3.6.30:
     optional: true
 
-  sst-linux-x86@3.6.25:
+  sst-linux-x86@3.6.30:
     optional: true
 
-  sst@3.6.25:
+  sst@3.6.30:
     dependencies:
       aws4fetch: 1.0.20
       jose: 5.2.3
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.6.25
-      sst-darwin-x64: 3.6.25
-      sst-linux-arm64: 3.6.25
-      sst-linux-x64: 3.6.25
-      sst-linux-x86: 3.6.25
+      sst-darwin-arm64: 3.6.30
+      sst-darwin-x64: 3.6.30
+      sst-linux-arm64: 3.6.30
+      sst-linux-x64: 3.6.30
+      sst-linux-x86: 3.6.30
 
   string-width@4.2.3:
     dependencies:
