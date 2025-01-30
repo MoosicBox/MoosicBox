@@ -115,7 +115,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         panic!("Must be an html renderer to gen");
     }
 
-    #[cfg(feature = "_html")]
+    #[cfg(all(feature = "_html", feature = "static-routes"))]
     if let Commands::Gen { output } = args.cmd {
         use gigachad_renderer_html::{html::container_element_to_html_response, HeaderMap};
         use moosicbox_app_native_lib::{
