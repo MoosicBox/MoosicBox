@@ -16,10 +16,6 @@ const domainName = `${subdomain}${domain}`;
 const customDomain = getCustomDomain();
 
 const site = new GigaChadSite('MoosicBoxMarketingSite', {
-    build: {
-        command: 'cargo run --no-default-features --features htmx,dev gen',
-        output: 'gen',
-    },
     domain: customDomain,
     environment: {},
     errorPage: 'not-found.html',

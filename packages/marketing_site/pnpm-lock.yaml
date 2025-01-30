@@ -7,10 +7,6 @@ settings:
 importers:
 
   .:
-    dependencies:
-      '@pulumi/pulumi':
-        specifier: ^3.147.0
-        version: 3.147.0(typescript@5.7.3)
     devDependencies:
       '@eslint/eslintrc':
         specifier: ^3.2.0
@@ -21,6 +17,9 @@ importers:
       '@pulumi/aws':
         specifier: ^6.67.0
         version: 6.67.0(typescript@5.7.3)
+      '@pulumi/pulumi':
+        specifier: ^3.147.0
+        version: 3.147.0(typescript@5.7.3)
       '@tsconfig/node18':
         specifier: 18.2.2
         version: 18.2.2

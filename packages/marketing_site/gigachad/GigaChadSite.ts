@@ -2,6 +2,9 @@ import { StaticSite, StaticSiteArgs } from '.sst/platform/src/components/aws';
 import { Component } from '.sst/platform/src/components/component';
 import { Link } from '.sst/platform/src/components/link';
 import { ComponentResourceOptions } from '@pulumi/pulumi';
+import { spawnSync } from 'child_process';
+
+const NO_CACHE_POLICY_ID = '4135ea2d-6df8-44a3-9df3-4b5a84be39ad';
 
 export class GigaChadSite extends Component implements Link.Linkable {
     private staticSite: StaticSite;
@@ -13,7 +16,74 @@ export class GigaChadSite extends Component implements Link.Linkable {
     ) {
         super(__pulumiType, name, args, opts);
 
-        this.staticSite = new StaticSite(`${name}-static`, args, opts);
+        args.build = {
+            command: 'cargo run --no-default-features --features htmx,dev gen',
+            output: 'gen',
+        };
+
+        const { status, stdout } = spawnSync(
+            'cargo',
+            ['run', '--no-default-features', '--features', 'htmx', 'dynamic-routes'],
+            {
+                encoding: 'utf8',
+            },
+        );
+
+        if (status !== 0) {
+            throw new Error('Failed to get dynamic routes');
+        }
+
+        const dynamicRoutes = stdout
+            .split(/\s/g)
+            .map((x) => x.trim())
+            .filter((x) => x.length > 0);
+
+        console.log("Using dynamic route paths:", dynamicRoutes);
+
+        args.indexPage = args.indexPage ?? 'index';
+
+        const staticSiteName = `${name}-static`;
+
+        this.staticSite = new StaticSite(
+            staticSiteName,
+            {
+                transform: {
+                    ...args.transform,
+                    cdn: (args) => {
+                        args.origins = $output(args.origins).apply(
+                            (origins) => [
+                                ...origins,
+                                {
+                                    originId: 'api',
+                                    domainName: origins[0].domainName,
+                                    customOriginConfig: {
+                                        httpPort: 80,
+                                        httpsPort: 443,
+                                        originProtocolPolicy: 'https-only',
+                                        originSslProtocols: ['TLSv1.2'],
+                                    },
+                                },
+                            ],
+                        );
+
+                        args.orderedCacheBehaviors = dynamicRoutes.map(
+                            (route) => {
+                                return {
+                                    pathPattern: route,
+                                    targetOriginId: 'api',
+                                    allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
+                                    cachedMethods: ['GET', 'HEAD'],
+                                    viewerProtocolPolicy: 'redirect-to-https',
+                                    cachePolicyId: NO_CACHE_POLICY_ID,
+                                };
+                            },
+                        );
+                    },
+                },
+                ...args,
+            },
+            opts,
+        );
     }
 
     /**
