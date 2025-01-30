@@ -27,6 +27,7 @@
     "devDependencies": {
         "@eslint/eslintrc": "^3.2.0",
         "@eslint/js": "^9.19.0",
+        "@pulumi/aws": "^6.67.0",
         "@tsconfig/node18": "18.2.2",
         "@typescript-eslint/eslint-plugin": "^8.22.0",
         "@typescript-eslint/parser": "^8.22.0",
@@ -38,5 +39,8 @@
         "prettier": "^3.4.2",
         "sst": "^3.6.36",
         "typescript": "^5.7.3"
+    },
+    "dependencies": {
+        "@pulumi/pulumi": "^3.147.0"
     }
 }
