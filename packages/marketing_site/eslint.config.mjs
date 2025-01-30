@@ -1,6 +1,5 @@
 import typescriptEslint from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
-import parser from 'astro-eslint-parser';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import js from '@eslint/js';
@@ -72,7 +71,7 @@ export default [
             ],
             '@typescript-eslint/no-namespace': 'off',
         },
-        files: [...tsFiles, '**/*.astro'],
+        files: [...tsFiles],
     },
     {
         files: [...jsFiles, ...tsFiles],
@@ -107,22 +106,6 @@ export default [
         files: ['**/*env.d.ts', '**/sst.config.ts', '**/infra/*.ts'],
         rules: {
             '@typescript-eslint/triple-slash-reference': 'off',
-        },
-    },
-    {
-        files: ['**/*.astro'],
-        languageOptions: {
-            parser: parser,
-            ecmaVersion: 5,
-            sourceType: 'script',
-
-            parserOptions: {
-                parser: '@typescript-eslint/parser',
-                extraFileExtensions: ['.astro'],
-            },
-        },
-        rules: {
-            '@typescript-eslint/naming-convention': 'off',
         },
     },
 ];
