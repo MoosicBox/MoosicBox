@@ -14,7 +14,7 @@ use std::{
 use clap::{Parser, Subcommand};
 use moosicbox_app_native_lib::{
     renderer::{Color, Renderer},
-    router::Router,
+    router::{RoutePath, Router},
 };
 use moosicbox_env_utils::{default_env_usize, option_env_f32, option_env_i32};
 use moosicbox_logging::free_log_client::DynLayer;
@@ -40,6 +40,7 @@ struct Args {
 
 #[derive(Subcommand, Debug, Clone, PartialEq, Eq)]
 enum Commands {
+    DynamicRoutes,
     Gen {
         #[arg(short, long)]
         output: Option<String>,
@@ -110,6 +111,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok::<_, Box<dyn std::error::Error>>(());
     }
 
+    if args.cmd == Commands::DynamicRoutes {
+        let static_routes = router.routes.read().unwrap().clone();
+
+        for (path, _) in &static_routes {
+            println!(
+                "{}",
+                match path {
+                    RoutePath::Literal(path) => path,
+                    RoutePath::Literals(paths) => {
+                        if let Some(path) = paths.first() {
+                            path
+                        } else {
+                            continue;
+                        }
+                    }
+                }
+            );
+        }
+
+        return Ok::<_, Box<dyn std::error::Error>>(());
+    }
+
     #[cfg(not(feature = "_html"))]
     if let Commands::Gen { .. } = args.cmd {
         panic!("Must be an html renderer to gen");
@@ -168,8 +191,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             for (path, handler) in &static_routes {
                 let path_str = match path {
-                    moosicbox_app_native_lib::router::RoutePath::Literal(path) => path,
-                    moosicbox_app_native_lib::router::RoutePath::Literals(paths) => {
+                    RoutePath::Literal(path) => path,
+                    RoutePath::Literals(paths) => {
                         if let Some(path) = paths.first() {
                             path
                         } else {
