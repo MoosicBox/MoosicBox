@@ -51,11 +51,11 @@ importers:
         specifier: ^3.4.2
         version: 3.4.2
       solid-js:
-        specifier: ^1.7.11
+        specifier: ^1.9.4
         version: 1.9.4
       sst:
-        specifier: ^3.6.25
-        version: 3.6.25
+        specifier: ^3.6.36
+        version: 3.6.36
       typescript:
         specifier: ^5.7.3
         version: 5.7.3
@@ -912,8 +912,8 @@ packages:
   fast-levenshtein@2.0.6:
     resolution: {integrity: sha512-DCXu6Ifhqcks7TZKY3Hxp3y6qphY5SJZmrWMDrKcERSOXWQdMhU9Ig/PYrzyw/ul9jOIyh0N4M0tbC5hodg8dw==}
 
-  fastq@1.18.0:
-    resolution: {integrity: sha512-QKHXPW0hD8g4UET03SdOdunzSouc9N4AuHdsX8XNcTsuz+yYFILVNIX4l9yHABMhiEI9Db0JTTIpu0wB+Y1QQw==}
+  fastq@1.19.0:
+    resolution: {integrity: sha512-7SFSRCNjBQIZH/xZR3iy5iQYR8aGBE0h3VG6/cwlbrpdciNYBMotQav8c1XI3HjHH+NikUpP53nPdlZSdWmFzA==}
 
   fflate@0.8.2:
     resolution: {integrity: sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A==}
@@ -1555,8 +1555,8 @@ packages:
     resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
     hasBin: true
 
-  semver@7.6.3:
-    resolution: {integrity: sha512-oVekP1cKtI+CTDvHWYFUcMtsK/00wmAEfyqKfNdARm8u1wNVhSgaX7A8d4UuIlUI5e84iEwOhs7ZPYRmzU9U6A==}
+  semver@7.7.0:
+    resolution: {integrity: sha512-DrfFnPzblFmNrIZzg5RzHegbiRWg7KMR7btwi2yjHwx06zsUbO5g613sVwEV7FTwmzJu+Io0lJe2GJ3LxqpvBQ==}
     engines: {node: '>=10'}
     hasBin: true
 
@@ -1624,33 +1624,33 @@ packages:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
 
-  sst-darwin-arm64@3.6.25:
-    resolution: {integrity: sha512-vUf0OXeSIrPN7QPHSxYJcXqycBvcoZJ9scsV1VrTRQbYpySfWCJMD8LSAuRB+//QjcDYndSx/r/ad0Ofx+a2vw==}
+  sst-darwin-arm64@3.6.36:
+    resolution: {integrity: sha512-QzfGs945AEjRilNVInIOe0c1AFEoru6Swi0+O5WPRLUHhrvfBOpGvKHSnaJ5yBD1SnNUINLbRsBu9xGjNS5CLw==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.6.25:
-    resolution: {integrity: sha512-lFW1M/1gId2PVnNxQQJYeXgGNtRVPlL1HMQ+MUCbgNjQCDAcIFJ9C1mw3RXYorfKbgiS0yQdBfLRFIgLLIIcfw==}
+  sst-darwin-x64@3.6.36:
+    resolution: {integrity: sha512-ZYaBUCIFvYvBkHhaR0kX+Hg5oW0zY4+H9saNTPiizPFOBmZgkvdj3qqIPyj/zPEoSBxBeuvRuUTVKJpW805N0w==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.6.25:
-    resolution: {integrity: sha512-5Xjj08Uo5J1abiCHv09lxA0SqswbP2Vz5y6DAgocTPSLMuUlgCv9m0r+w+ng3OLDoCDVb56EUY0G8zwWX1Q3gA==}
+  sst-linux-arm64@3.6.36:
+    resolution: {integrity: sha512-heHOxlxJdxn+Wmz2iuxae/H8J86yGo7H5C3XdqGNqQTc1nzcDrhIE7d4B6apOY7YNZyNOgk0WTa8RWnxwKLiqA==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.6.25:
-    resolution: {integrity: sha512-805J9vxCVjQJcrSHTxnHy89a496ugneE6/hS9kLwm0okp0JUL2B1Tc3PTLq37+jksq542eTSKdJ4wRED8XFJoQ==}
+  sst-linux-x64@3.6.36:
+    resolution: {integrity: sha512-Qt6pwf9dW5tH5CcDkPArD7D1k+TyJGXOyhF5uiU4bJyQowSDL2EvYBOPVudt2anVDbaOiwTlWB2btT7lvZOQUA==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.6.25:
-    resolution: {integrity: sha512-7n3x2JcnN6Fbn3y/S9xI2DzhkL6vdV7D2vi0FxxkmW+Q7kZE/L8KrV6K5+IHFVrLmW37H4hyzLAU1r4Oy0Mx7A==}
+  sst-linux-x86@3.6.36:
+    resolution: {integrity: sha512-TZrOXqb+0Z0MnrTMS4IxagGLwLY7r88M0afKyIn7QDE9SpMPij0/3hKvRaCHWHde0+ahe8WD+9N4Ym3OWFw8Bg==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.6.25:
-    resolution: {integrity: sha512-lEvXCunAEhBQ7jUTj/tF8/5vfbXS1T7nNvfzAo0ZpHE1AH/Pj3vGqI1y4Zxs+SQBfEhUbPKjOH3aDWsOWHCmfA==}
+  sst@3.6.36:
+    resolution: {integrity: sha512-uM/xqTj4KnS+T7jdOyh+bWyU1oSswBu7yK/08cENtOLeoQl0GBD60Qdrrfy0CYgmn7hREFnSKGQUHhwP2qK4mQ==}
     hasBin: true
 
   stackback@0.0.2:
@@ -2137,7 +2137,7 @@ snapshots:
   '@nodelib/fs.walk@1.2.8':
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
-      fastq: 1.18.0
+      fastq: 1.19.0
 
   '@polka/url@1.0.0-next.28': {}
 
@@ -2270,7 +2270,7 @@ snapshots:
       fast-glob: 3.3.3
       is-glob: 4.0.3
       minimatch: 9.0.5
-      semver: 7.6.3
+      semver: 7.7.0
       ts-api-utils: 2.0.0(typescript@5.7.3)
       typescript: 5.7.3
     transitivePeerDependencies:
@@ -2862,7 +2862,7 @@ snapshots:
 
   fast-levenshtein@2.0.6: {}
 
-  fastq@1.18.0:
+  fastq@1.19.0:
     dependencies:
       reusify: 1.0.4
 
@@ -3268,7 +3268,7 @@ snapshots:
 
   make-dir@4.0.0:
     dependencies:
-      semver: 7.6.3
+      semver: 7.7.0
 
   math-intrinsics@1.1.0: {}
 
@@ -3557,7 +3557,7 @@ snapshots:
 
   semver@6.3.1: {}
 
-  semver@7.6.3: {}
+  semver@7.7.0: {}
 
   seroval-plugins@1.2.0(seroval@1.2.0):
     dependencies:
@@ -3639,32 +3639,32 @@ snapshots:
 
   source-map-js@1.2.1: {}
 
-  sst-darwin-arm64@3.6.25:
+  sst-darwin-arm64@3.6.36:
     optional: true
 
-  sst-darwin-x64@3.6.25:
+  sst-darwin-x64@3.6.36:
     optional: true
 
-  sst-linux-arm64@3.6.25:
+  sst-linux-arm64@3.6.36:
     optional: true
 
-  sst-linux-x64@3.6.25:
+  sst-linux-x64@3.6.36:
     optional: true
 
-  sst-linux-x86@3.6.25:
+  sst-linux-x86@3.6.36:
     optional: true
 
-  sst@3.6.25:
+  sst@3.6.36:
     dependencies:
       aws4fetch: 1.0.20
       jose: 5.2.3
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.6.25
-      sst-darwin-x64: 3.6.25
-      sst-linux-arm64: 3.6.25
-      sst-linux-x64: 3.6.25
-      sst-linux-x86: 3.6.25
+      sst-darwin-arm64: 3.6.36
+      sst-darwin-x64: 3.6.36
+      sst-linux-arm64: 3.6.36
+      sst-linux-x64: 3.6.36
+      sst-linux-x86: 3.6.36
 
   stackback@0.0.2: {}
 
