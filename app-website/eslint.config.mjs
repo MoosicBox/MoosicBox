@@ -16,12 +16,7 @@ const compat = new FlatCompat({
 });
 
 const tsFiles = ['**/*.ts', '**/*.tsx'];
-
 const jsFiles = ['**/*.js', '**/*.jsx', '**/*.cjs', '**/*.mjs'];
-// ...tsEslint.configs.recommendedTypeChecked.map((config) => ({
-//     ...config,
-//     files: ['**/*.ts'], // We use TS config only for TS files
-//   })),
 
 export default [
     {
