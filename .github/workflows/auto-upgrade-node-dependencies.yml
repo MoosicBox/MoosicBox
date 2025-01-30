@@ -16,12 +16,14 @@ jobs:
             max-parallel: 1
 
             matrix:
-                project: 
+                project:
                     - directory: .
                       sst: true
                     - directory: app-website
                       sst: true
                     - directory: marketing-website
+                      sst: true
+                    - directory: packages/marketing_site
                       sst: true
 
         runs-on: ubuntu-latest
