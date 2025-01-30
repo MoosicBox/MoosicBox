@@ -2,7 +2,7 @@ function getCustomDomain() {
     return {
         name: domainName,
         dns: sst.cloudflare.dns(),
-        redirects: [`www.${domainName}`]
+        redirects: [`www.${domainName}`],
     };
 }
 
@@ -15,12 +15,12 @@ const customDomain = getCustomDomain();
 
 const site = new sst.aws.StaticSite('MoosicBoxMarketingSite', {
     build: {
-        command: "cargo run --no-default-features --features htmx,dev gen",
-        output: "gen"
+        command: 'cargo run --no-default-features --features htmx,dev gen',
+        output: 'gen',
     },
     domain: customDomain,
     environment: {},
-    errorPage: "not-found.html",
+    errorPage: 'not-found.html',
 });
 
 export const outputs = {
