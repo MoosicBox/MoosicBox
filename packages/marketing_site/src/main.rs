@@ -82,6 +82,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_static_route(&["/", "/home"], |_| async {
             moosicbox_marketing_site_ui::home()
         })
+        .with_static_route(&["/not-found"], |_| async {
+            moosicbox_marketing_site_ui::not_found()
+        })
         .with_static_route(&["/download"], |_| async {
             moosicbox_marketing_site_ui::download::download()
         })

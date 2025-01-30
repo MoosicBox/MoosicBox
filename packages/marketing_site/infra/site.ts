@@ -20,6 +20,7 @@ const site = new sst.aws.StaticSite('MoosicBoxMarketingSite', {
     },
     domain: customDomain,
     environment: {},
+    errorPage: "not-found.html",
 });
 
 export const outputs = {

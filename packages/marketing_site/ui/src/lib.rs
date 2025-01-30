@@ -92,6 +92,13 @@ pub fn main(slot: &Markup) -> Markup {
 }
 
 #[must_use]
+pub fn not_found() -> Markup {
+    page(&html! {
+        "Page not found"
+    })
+}
+
+#[must_use]
 pub fn home() -> Markup {
     page(&html! {
         div
