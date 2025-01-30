@@ -1,3 +1,5 @@
+import { GigaChadSite } from 'gigachad/GigaChadSite';
+
 function getCustomDomain() {
     return {
         name: domainName,
@@ -13,7 +15,7 @@ const domainName = `${subdomain}${domain}`;
 
 const customDomain = getCustomDomain();
 
-const site = new sst.aws.StaticSite('MoosicBoxMarketingSite', {
+const site = new GigaChadSite('MoosicBoxMarketingSite', {
     build: {
         command: 'cargo run --no-default-features --features htmx,dev gen',
         output: 'gen',

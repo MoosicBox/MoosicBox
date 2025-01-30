@@ -6,6 +6,10 @@
 declare module "sst" {
   export interface Resource {
     "MoosicBoxMarketingSite": {
+      "type": "sst.aws.GigaChadSite"
+      "url": string
+    }
+    "MoosicBoxMarketingSite-static": {
       "type": "sst.aws.StaticSite"
       "url": string
     }
