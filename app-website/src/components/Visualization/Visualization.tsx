@@ -34,7 +34,7 @@ function getTrackDuration() {
 }
 
 function debounce(func: (e: Event) => void): (event: Event) => void {
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setTimeout>;
     return function (event: Event) {
         if (timer) clearTimeout(timer);
         timer = setTimeout(func, 300, event);
@@ -399,8 +399,8 @@ export default function player() {
     const [backToNowPlayingPosition, setBackToNowPlayingPosition] =
         createSignal(BackToNowPlayingPosition.none);
 
-    let backToNowPlayingTopTimeout: NodeJS.Timeout;
-    let backToNowPlayingBottomTimeout: NodeJS.Timeout;
+    let backToNowPlayingTopTimeout: ReturnType<typeof setTimeout>;
+    let backToNowPlayingBottomTimeout: ReturnType<typeof setTimeout>;
     const scrollListener = () => {
         if (!getCurrentTrack()) return;
 

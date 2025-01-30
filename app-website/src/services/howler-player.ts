@@ -26,7 +26,7 @@ export const [sound, setSound] = createSignal<Howl>();
 export function createPlayer(id: number): PlayerType {
     let howlPlaying = false;
 
-    let seekHandle: NodeJS.Timeout;
+    let seekHandle: ReturnType<typeof setInterval>;
     let endHandle: HowlCallback;
     let loadHandle: HowlCallback;
 

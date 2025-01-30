@@ -226,7 +226,7 @@ export default function artists() {
         }, 300);
     }
 
-    let backToTopTimeout: NodeJS.Timeout;
+    let backToTopTimeout: ReturnType<typeof setTimeout>;
     const scrollListener = () => {
         if (
             (document.querySelector('main')?.scrollTop ?? 0) >

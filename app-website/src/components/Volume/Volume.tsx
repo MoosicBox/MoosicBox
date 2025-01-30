@@ -8,7 +8,7 @@ let mouseLeaveListener: (event: MouseEvent) => void;
 let dragStartListener: (event: MouseEvent) => void;
 let dragListener: (event: MouseEvent) => void;
 let dragEndListener: (event: MouseEvent) => void;
-let hideTimeout: NodeJS.Timeout | undefined;
+let hideTimeout: ReturnType<typeof setTimeout> | undefined;
 
 let mouseY: number;
 

@@ -18,7 +18,8 @@ type Server = {
 export default function serverPage() {
     let serverAddressInput: HTMLInputElement | undefined;
 
-    const [intervalHandle, setIntervalHandle] = createSignal<NodeJS.Timeout>();
+    const [intervalHandle, setIntervalHandle] =
+        createSignal<ReturnType<typeof setInterval>>();
     const [servers, setServers] = createSignal<Server[]>([]);
 
     onMount(async () => {

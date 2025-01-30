@@ -500,7 +500,7 @@ export const wsService = {
             console.log('connecting to ', wsUrl);
             const client = new WebSocket(wsUrl);
 
-            let pingInterval: NodeJS.Timeout | undefined;
+            let pingInterval: ReturnType<typeof setInterval> | undefined;
             let opened = false;
 
             client.addEventListener('error', (e: Event) => {

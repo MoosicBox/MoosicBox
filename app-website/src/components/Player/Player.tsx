@@ -41,7 +41,7 @@ function getTrackDuration() {
     return playerState.currentTrack?.duration ?? currentTrackLength();
 }
 
-let playlistSlideoutTimeout: NodeJS.Timeout | undefined;
+let playlistSlideoutTimeout: ReturnType<typeof setTimeout> | undefined;
 
 enum BackToNowPlayingPosition {
     top = 'TOP',
@@ -169,8 +169,8 @@ export default function player() {
     const [backToNowPlayingPosition, setBackToNowPlayingPosition] =
         createSignal(BackToNowPlayingPosition.none);
 
-    let backToNowPlayingTopTimeout: NodeJS.Timeout;
-    let backToNowPlayingBottomTimeout: NodeJS.Timeout;
+    let backToNowPlayingTopTimeout: ReturnType<typeof setTimeout>;
+    let backToNowPlayingBottomTimeout: ReturnType<typeof setTimeout>;
     const scrollListener = () => {
         if (!getCurrentTrack()) return;
 
