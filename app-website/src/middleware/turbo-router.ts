@@ -1,5 +1,5 @@
 // @ts-ignore
-import * as Turbo from '@hotwired/turbo'; // eslint-disable-line
+import * as Turbo from '@hotwired/turbo';
 import type { TurboEvent, TurboVisitEvent } from './turbo-types';
 
 function defaultEventHandler(_event: TurboEvent) {}

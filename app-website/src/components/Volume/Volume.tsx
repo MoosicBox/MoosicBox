@@ -1,7 +1,7 @@
 import { createEffect, createSignal, on, onCleanup, onMount } from 'solid-js';
 import './Volume.css';
 import { isServer } from 'solid-js/web';
-import { playerState, setPlayerState, setVolume } from '~/services/player';
+import { playerState, setVolume } from '~/services/player';
 
 let mouseEnterListener: (event: MouseEvent) => void;
 let mouseLeaveListener: (event: MouseEvent) => void;
@@ -118,7 +118,6 @@ export default function volumeRender() {
                 }
                 if (!applyDrag()) return;
                 setApplyDrag(false);
-                setPlayerState;
                 event.preventDefault();
             }
         };

@@ -580,7 +580,6 @@ export const wsService = {
     async attemptConnection(): Promise<void> {
         let attemptNumber = 0;
 
-        // eslint-disable-next-line no-constant-condition
         while (true) {
             console.debug(
                 `Attempting connection${

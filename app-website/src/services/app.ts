@@ -27,6 +27,7 @@ declare global {
         startedUp: boolean;
     }
 
+    // eslint-disable-next-line no-var
     var startupCallbacks: StartupCallback[];
     // eslint-disable-next-line no-var
     var startedUp: boolean;

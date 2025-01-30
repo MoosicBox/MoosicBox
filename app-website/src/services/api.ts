@@ -2106,8 +2106,6 @@ export async function once<T>(
 
     try {
         data = await resp.data;
-    } catch (e) {
-        throw e;
     } finally {
         delete abortControllers[id];
     }
