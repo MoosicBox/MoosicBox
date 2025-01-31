@@ -34,6 +34,10 @@ jobs:
               working-directory: packages/marketing_site
               run: |
                   pnpm install
+
+            - name: sst install
+              working-directory: packages/marketing_site
+              run: |
                   pnpm sst install
 
             - name: pretty
