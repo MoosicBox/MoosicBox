@@ -1,4 +1,4 @@
-import { GigaChadSite } from 'gigachad/GigaChadSite';
+import { GigaChadSite } from '../gigachad/GigaChadSite';
 
 function getCustomDomain() {
     return {
