@@ -5,7 +5,7 @@ on:
         branches: ['master']
         paths:
             - packages/marketing_site/**
-            - .github/workflows/marketing_site-rust-build-and-test.yml
+            - .github/workflows/marketing-website-rust-build-and-test.yml
     pull_request:
         branches: ['master']
 
