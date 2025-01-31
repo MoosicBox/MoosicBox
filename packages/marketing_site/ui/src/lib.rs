@@ -85,7 +85,7 @@ pub fn header() -> Markup {
 #[must_use]
 pub fn main(slot: &Markup) -> Markup {
     html! {
-        main sx-flex-grow=(1) {
+        main sx-flex-grow=(1) sx-min-height=(0) {
             (slot)
         }
     }
@@ -102,7 +102,7 @@ pub fn not_found() -> Markup {
 pub fn home() -> Markup {
     page(&html! {
         div
-            sx-height="100%"
+            sx-min-height="100%"
             sx-justify-content=(JustifyContent::Center)
         {
             div
