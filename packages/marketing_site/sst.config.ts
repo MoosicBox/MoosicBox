@@ -15,10 +15,6 @@ export default $config({
     async run() {
         const outputs = {};
 
-        if (process.env.SKIP_INFRA === '1') {
-            return outputs;
-        }
-
         for (const value of readdirSync('./infra/')) {
             const result = await import(`./infra/${value}`);
             if (result.outputs) {

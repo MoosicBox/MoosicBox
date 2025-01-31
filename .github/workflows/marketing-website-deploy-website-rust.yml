@@ -30,7 +30,6 @@ jobs:
             - name: sst install
               working-directory: packages/marketing_site
               run: |
-                  SKIP_INFRA=1 pnpm sst install --verbose --print-logs
                   pnpm sst install --verbose --print-logs
 
             - name: Deploy
