@@ -4,6 +4,7 @@
 
 use std::{
     error::Error,
+    num::ParseIntError,
     path::{Path, PathBuf},
     str::FromStr,
     sync::{Arc, LazyLock},
@@ -26,7 +27,7 @@ use moosicbox_core::{
     integer_range::{parse_id_ranges, ParseIdsError, ParseIntegersError},
     sqlite::{
         db::DbError,
-        models::{Album, Artist, Id, IdFromStrError, IdType, Track, TrackApiSource},
+        models::{Album, Artist, Id, IdType, Track, TrackApiSource},
     },
     types::AudioFormat,
 };
@@ -105,7 +106,7 @@ pub enum GetCreateDownloadTasksError {
     #[error(transparent)]
     Tracks(#[from] TracksError),
     #[error(transparent)]
-    IdFromStr(#[from] IdFromStrError),
+    ParseInt(#[from] ParseIntError),
     #[error(transparent)]
     ParseIds(#[from] ParseIdsError),
     #[error(transparent)]

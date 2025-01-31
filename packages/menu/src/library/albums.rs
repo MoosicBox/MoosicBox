@@ -132,6 +132,8 @@ pub async fn get_album_versions_from_source(
     album_id: &Id,
     source: ApiSource,
 ) -> Result<Vec<AlbumVersion>, GetAlbumVersionsError> {
+    log::trace!("get_album_versions_from_source: album_id={album_id} source={source}");
+
     #[allow(unreachable_code)]
     Ok(if source == ApiSource::Library {
         library_api.library_album_versions(album_id).await?

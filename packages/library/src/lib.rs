@@ -694,6 +694,8 @@ pub async fn album_versions(
     db: &LibraryDatabase,
     album_id: &Id,
 ) -> Result<Vec<AlbumVersion>, LibraryAlbumTracksError> {
+    log::trace!("album_versions: album_id={album_id}");
+
     let tracks = album_tracks(db, album_id, None, None)
         .await?
         .with_rest_of_items_in_batches()
@@ -1219,7 +1221,6 @@ impl MusicApi for LibraryMusicApi {
             .into_iter()
             .skip(offset as usize)
             .take(std::cmp::min(total - offset, limit) as usize)
-            .map(Into::into)
             .collect();
 
         let page = PagingResponse::new(

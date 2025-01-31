@@ -13,7 +13,6 @@ use moosicbox_json_utils::{database::ToValue as _, MissingValue, ParseError, ToV
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
-use thiserror::Error;
 
 use crate::types::AudioFormat;
 
@@ -1212,12 +1211,6 @@ impl utoipa::ToSchema for Id {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum IdFromStrError {
-    #[error(transparent)]
-    PopulateIndex(#[from] ParseIntError),
-}
-
 impl Id {
     pub fn from_str(value: &str, source: ApiSource, id_type: IdType) -> Self {
         Self::try_from_str(value, source, id_type).unwrap()
@@ -1227,7 +1220,7 @@ impl Id {
         value: &str,
         source: ApiSource,
         id_type: IdType,
-    ) -> Result<Self, IdFromStrError> {
+    ) -> Result<Self, ParseIntError> {
         Ok(match id_type {
             IdType::Artist => match source {
                 ApiSource::Library => Self::Number(value.parse::<u64>()?),
