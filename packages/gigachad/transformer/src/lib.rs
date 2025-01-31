@@ -840,6 +840,7 @@ pub enum Element {
     Button,
     Image {
         source: Option<String>,
+        alt: Option<String>,
         fit: Option<ImageFit>,
         source_set: Option<String>,
         sizes: Option<Number>,
@@ -946,11 +947,13 @@ impl Container {
                 fit,
                 source_set,
                 sizes,
+                alt,
                 ..
             } => {
                 attrs.add_opt("sx-fit", *fit);
                 attrs.add_opt("srcset", source_set.as_ref());
                 attrs.add_opt("sizes", sizes.as_ref());
+                attrs.add_opt("alt", alt.as_ref());
             }
             Element::Anchor { target, .. } => {
                 attrs.add_opt("target", target.as_ref());

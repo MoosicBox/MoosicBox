@@ -152,6 +152,7 @@ impl Arbitrary for Element {
             10 => Self::Button,
             11 => Self::Image {
                 source: Option::arbitrary(g).map(|x: XmlString| x.0),
+                alt: Option::arbitrary(g).map(|x: XmlString| x.0),
                 fit: Option::arbitrary(g),
                 source_set: Option::arbitrary(g).map(|x: XmlString| x.0),
                 sizes: Option::arbitrary(g),

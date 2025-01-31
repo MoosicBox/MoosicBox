@@ -808,6 +808,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                 "img" => {
                     container.element = crate::Element::Image {
                         source: get_tag_attr_value_owned(tag, "src"),
+                        alt: get_tag_attr_value_owned(tag, "alt"),
                         fit: get_image_fit(tag, "sx-fit"),
                         source_set: get_tag_attr_value_owned(tag, "srcset"),
                         sizes: get_number(tag, "sizes").unwrap(),

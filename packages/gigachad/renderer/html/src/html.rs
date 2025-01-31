@@ -701,6 +701,7 @@ pub fn element_to_html(
         }
         Element::Image {
             source,
+            alt,
             source_set,
             sizes,
             ..
@@ -721,6 +722,11 @@ pub fn element_to_html(
             if let Some(sizes) = sizes {
                 f.write_all(b" sizes=\"")?;
                 f.write_all(number_to_html_string(sizes, true).as_bytes())?;
+                f.write_all(b"\"")?;
+            }
+            if let Some(alt) = alt {
+                f.write_all(b" alt=\"")?;
+                f.write_all(alt.as_bytes())?;
                 f.write_all(b"\"")?;
             }
             tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;
