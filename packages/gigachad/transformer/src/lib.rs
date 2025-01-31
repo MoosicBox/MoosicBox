@@ -805,6 +805,7 @@ pub enum Element {
     Image {
         source: Option<String>,
         fit: Option<ImageFit>,
+        source_set: Option<String>,
     },
     Anchor {
         target: Option<LinkTarget>,
@@ -904,8 +905,11 @@ impl Container {
         attrs.add_opt("id", self.str_id.as_ref());
 
         match &self.element {
-            Element::Image { fit, .. } => {
+            Element::Image {
+                fit, source_set, ..
+            } => {
                 attrs.add_opt("sx-fit", *fit);
+                attrs.add_opt("srcset", source_set.as_ref());
             }
             Element::Anchor { target, .. } => {
                 attrs.add_opt("target", target.as_ref());

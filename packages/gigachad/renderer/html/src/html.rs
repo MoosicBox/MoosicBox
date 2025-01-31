@@ -692,13 +692,20 @@ pub fn element_to_html(
             f.write_all(value.as_bytes())?;
             return Ok(());
         }
-        Element::Image { source, .. } => {
+        Element::Image {
+            source, source_set, ..
+        } => {
             const TAG_NAME: &[u8] = b"img";
             f.write_all(b"<")?;
             f.write_all(TAG_NAME)?;
             if let Some(source) = source {
                 f.write_all(b" src=\"")?;
                 f.write_all(source.as_bytes())?;
+                f.write_all(b"\"")?;
+            }
+            if let Some(srcset) = source_set {
+                f.write_all(b" srcset=\"")?;
+                f.write_all(srcset.as_bytes())?;
                 f.write_all(b"\"")?;
             }
             tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;

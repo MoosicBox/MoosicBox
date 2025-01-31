@@ -127,7 +127,7 @@ pub fn home() -> Markup {
                 {
                     img
                         src=(public_img!("showcase-1.webp"))
-                        srcset="/img/showcase-1x240.webp 240w, /img/showcase-1x540.webp 540w, /img/showcase-1.webp 1080w"
+                        srcset={(public_img!("showcase-1x240.webp"))" 240w, "(public_img!("/img/showcase-1x540.webp"))" 540w, "(public_img!("/img/showcase-1.webp"))" 1080w"}
                         sizes="70vw"
                         sx-width="100%"
                         sx-height="100%"
