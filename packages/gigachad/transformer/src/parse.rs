@@ -234,6 +234,7 @@ fn parse_signed_operation(
 /// # Errors
 ///
 /// * If the input string is not a valid number.
+#[allow(clippy::too_many_lines)]
 pub fn parse_number(number: &str) -> Result<Number, GetNumberError> {
     static EPSILON: f32 = 0.00001;
 
@@ -269,6 +270,36 @@ pub fn parse_number(number: &str) -> Result<Number, GetNumberError> {
                 .or_else(|| number.parse::<f32>().ok().map(Number::RealDvh))
                 .ok_or_else(|| GetNumberError::Parse(number.to_string()))?
         }
+    } else if let Some((number, _)) = number.split_once("vw") {
+        if number.contains('.') {
+            Number::RealVw(
+                number
+                    .parse::<f32>()
+                    .map_err(|_| GetNumberError::Parse(number.to_string()))?,
+            )
+        } else {
+            number
+                .parse::<i64>()
+                .ok()
+                .map(Number::IntegerVw)
+                .or_else(|| number.parse::<f32>().ok().map(Number::RealVw))
+                .ok_or_else(|| GetNumberError::Parse(number.to_string()))?
+        }
+    } else if let Some((number, _)) = number.split_once("vh") {
+        if number.contains('.') {
+            Number::RealVh(
+                number
+                    .parse::<f32>()
+                    .map_err(|_| GetNumberError::Parse(number.to_string()))?,
+            )
+        } else {
+            number
+                .parse::<i64>()
+                .ok()
+                .map(Number::IntegerVh)
+                .or_else(|| number.parse::<f32>().ok().map(Number::RealVh))
+                .ok_or_else(|| GetNumberError::Parse(number.to_string()))?
+        }
     } else if let Some((number, _)) = number.split_once('%') {
         if number.contains('.') {
             Number::RealPercent(
@@ -302,7 +333,12 @@ pub fn parse_number(number: &str) -> Result<Number, GetNumberError> {
     };
 
     match &mut number {
-        Number::Real(x) | Number::RealPercent(x) | Number::RealDvw(x) | Number::RealDvh(x) => {
+        Number::Real(x)
+        | Number::RealPercent(x)
+        | Number::RealVw(x)
+        | Number::RealVh(x)
+        | Number::RealDvw(x)
+        | Number::RealDvh(x) => {
             if x.is_sign_negative() && x.abs() < EPSILON {
                 *x = 0.0;
             }
@@ -310,6 +346,8 @@ pub fn parse_number(number: &str) -> Result<Number, GetNumberError> {
         Number::Integer(..)
         | Number::IntegerPercent(..)
         | Number::Calc(..)
+        | Number::IntegerVw(..)
+        | Number::IntegerVh(..)
         | Number::IntegerDvw(..)
         | Number::IntegerDvh(..) => {}
     }

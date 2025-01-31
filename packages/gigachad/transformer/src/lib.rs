@@ -32,12 +32,12 @@ pub fn calc_number(number: &Number, container: f32, view_width: f32, view_height
         Number::RealPercent(x) => container * (*x / 100.0),
         #[allow(clippy::cast_precision_loss)]
         Number::IntegerPercent(x) => container * (*x as f32 / 100.0),
-        Number::RealDvw(x) => view_width * (*x / 100.0),
+        Number::RealVw(x) | Number::RealDvw(x) => view_width * (*x / 100.0),
         #[allow(clippy::cast_precision_loss)]
-        Number::IntegerDvw(x) => view_width * (*x as f32 / 100.0),
-        Number::RealDvh(x) => view_height * (*x / 100.0),
+        Number::IntegerVw(x) | Number::IntegerDvw(x) => view_width * (*x as f32 / 100.0),
+        Number::RealVh(x) | Number::RealDvh(x) => view_height * (*x / 100.0),
         #[allow(clippy::cast_precision_loss)]
-        Number::IntegerDvh(x) => view_height * (*x as f32 / 100.0),
+        Number::IntegerVh(x) | Number::IntegerDvh(x) => view_height * (*x as f32 / 100.0),
         Number::Calc(x) => x.calc(container, view_width, view_height),
     }
 }
@@ -126,6 +126,10 @@ pub enum Number {
     IntegerDvw(i64),
     RealDvh(f32),
     IntegerDvh(i64),
+    RealVw(f32),
+    IntegerVw(i64),
+    RealVh(f32),
+    IntegerVh(i64),
     Calc(Calculation),
 }
 
@@ -137,16 +141,22 @@ impl PartialEq for Number {
             #[allow(clippy::cast_precision_loss)]
             (Self::Real(float), Self::Integer(int))
             | (Self::RealPercent(float), Self::IntegerPercent(int))
+            | (Self::RealVw(float), Self::IntegerVw(int))
+            | (Self::RealVh(float), Self::IntegerVh(int))
             | (Self::RealDvw(float), Self::IntegerDvw(int))
             | (Self::RealDvh(float), Self::IntegerDvh(int))
             | (Self::Integer(int), Self::Real(float))
             | (Self::IntegerPercent(int), Self::RealPercent(float))
+            | (Self::IntegerVw(int), Self::RealVw(float))
+            | (Self::IntegerVh(int), Self::RealVh(float))
             | (Self::IntegerDvw(int), Self::RealDvw(float))
             | (Self::IntegerDvh(int), Self::RealDvh(float)) => {
                 (*int as f32 - *float).abs() < EPSILON
             }
             (Self::Real(l), Self::Real(r))
             | (Self::RealPercent(l), Self::RealPercent(r))
+            | (Self::RealVw(l), Self::RealVw(r))
+            | (Self::RealVh(l), Self::RealVh(r))
             | (Self::RealDvw(l), Self::RealDvw(r))
             | (Self::RealDvh(l), Self::RealDvh(r)) => {
                 l.is_infinite() && r.is_infinite()
@@ -155,6 +165,8 @@ impl PartialEq for Number {
             }
             (Self::Integer(l), Self::Integer(r))
             | (Self::IntegerPercent(l), Self::IntegerPercent(r))
+            | (Self::IntegerVw(l), Self::IntegerVw(r))
+            | (Self::IntegerVh(l), Self::IntegerVh(r))
             | (Self::IntegerDvw(l), Self::IntegerDvw(r))
             | (Self::IntegerDvh(l), Self::IntegerDvh(r)) => l == r,
             (Self::Calc(l), Self::Calc(r)) => l == r,
@@ -189,6 +201,30 @@ impl std::fmt::Display for Number {
                     return f.write_fmt(format_args!("0%"));
                 }
                 f.write_fmt(format_args!("{x}%"))
+            }
+            Self::RealVw(x) => {
+                if x.abs() < EPSILON {
+                    return f.write_fmt(format_args!("0vw"));
+                }
+                f.write_fmt(format_args!("{x}vw"))
+            }
+            Self::IntegerVw(x) => {
+                if *x == 0 {
+                    return f.write_fmt(format_args!("0vw"));
+                }
+                f.write_fmt(format_args!("{x}vw"))
+            }
+            Self::RealVh(x) => {
+                if x.abs() < EPSILON {
+                    return f.write_fmt(format_args!("0vh"));
+                }
+                f.write_fmt(format_args!("{x}vh"))
+            }
+            Self::IntegerVh(x) => {
+                if *x == 0 {
+                    return f.write_fmt(format_args!("0vh"));
+                }
+                f.write_fmt(format_args!("{x}vh"))
             }
             Self::RealDvw(x) => {
                 if x.abs() < EPSILON {

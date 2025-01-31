@@ -131,6 +131,10 @@ pub fn number_to_html_string(number: &Number, px: bool) -> String {
         }
         Number::RealPercent(x) => format!("{x}%"),
         Number::IntegerPercent(x) => format!("{x}%"),
+        Number::RealVw(x) => format!("{x}vw"),
+        Number::IntegerVw(x) => format!("{x}vw"),
+        Number::RealVh(x) => format!("{x}vh"),
+        Number::IntegerVh(x) => format!("{x}vh"),
         Number::RealDvw(x) => format!("{x}dvw"),
         Number::IntegerDvw(x) => format!("{x}dvw"),
         Number::RealDvh(x) => format!("{x}dvh"),
