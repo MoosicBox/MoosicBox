@@ -21,24 +21,11 @@ export class GigaChadSite extends Component implements Link.Linkable {
             output: 'gen',
         };
 
-        const { status, stdout } = spawnSync(
-            'cargo',
-            ['run', '--no-default-features', '--features', 'htmx', 'dynamic-routes'],
-            {
-                encoding: 'utf8',
-            },
-        );
+        const dynamicRoutes = getDynamicRoutes();
 
-        if (status !== 0) {
-            throw new Error('Failed to get dynamic routes');
-        }
+        buildServer();
 
-        const dynamicRoutes = stdout
-            .split(/\s/g)
-            .map((x) => x.trim())
-            .filter((x) => x.length > 0);
-
-        console.log("Using dynamic route paths:", dynamicRoutes);
+        console.log('Using dynamic route paths:', dynamicRoutes);
 
         args.indexPage = args.indexPage ?? 'index';
 
@@ -116,6 +103,59 @@ export class GigaChadSite extends Component implements Link.Linkable {
             },
         };
     }
+}
+
+function getDynamicRoutes() {
+    const { status, stdout, stderr } = spawnSync(
+        'cargo',
+        [
+            'run',
+            '--no-default-features',
+            '--features',
+            'htmx',
+            'dynamic-routes',
+        ],
+        {
+            encoding: 'utf8',
+        },
+    );
+
+    if (status !== 0) {
+        if (stderr.length > 0) {
+            console.error(stderr);
+        }
+        throw new Error('Failed to get dynamic routes');
+    }
+
+    return stdout
+        .split(/\s/g)
+        .map((x) => x.trim())
+        .filter((x) => x.length > 0);
+}
+
+function buildServer() {
+    const { status, stderr } = spawnSync(
+        'cargo',
+        [
+            'build',
+            '--release',
+            '--no-default-features',
+            '--features',
+            'htmx,lambda',
+        ],
+        {
+            encoding: 'utf8',
+        },
+    );
+
+    if (status !== 0) {
+        if (stderr.length > 0) {
+            console.error(stderr);
+        }
+        throw new Error('Failed to get dynamic routes');
+    }
+
+    console.log('Successfully built release server');
 }
 
 const __pulumiType = 'sst:aws:GigaChadSite';

@@ -94,6 +94,8 @@ _html = []
 wayland = ["moosicbox_app_native_lib/wayland"]
 x11     = ["moosicbox_app_native_lib/x11"]
 
+lambda = []
+
 windows-console = []
 
 debug             = ["moosicbox_app_native_lib/debug"]
