@@ -458,8 +458,17 @@ pub fn element_style_to_html(
         write_css_attr!(b"height", number_to_html_string(height, true).as_bytes());
     }
 
+    if let Some(width) = &container.min_width {
+        write_css_attr!(b"min-width", number_to_html_string(width, true).as_bytes());
+    }
     if let Some(width) = &container.max_width {
         write_css_attr!(b"max-width", number_to_html_string(width, true).as_bytes());
+    }
+    if let Some(height) = &container.min_height {
+        write_css_attr!(
+            b"min-height",
+            number_to_html_string(height, true).as_bytes()
+        );
     }
     if let Some(height) = &container.max_height {
         write_css_attr!(

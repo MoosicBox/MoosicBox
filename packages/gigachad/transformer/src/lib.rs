@@ -304,8 +304,10 @@ pub struct Container {
     pub text_decoration: Option<TextDecoration>,
     pub font_family: Option<Vec<String>>,
     pub width: Option<Number>,
+    pub min_width: Option<Number>,
     pub max_width: Option<Number>,
     pub height: Option<Number>,
+    pub min_height: Option<Number>,
     pub max_height: Option<Number>,
     pub flex: Option<Flex>,
     pub gap: Option<Number>,
@@ -1062,8 +1064,10 @@ impl Container {
         attrs.add_opt("sx-background", self.background);
 
         attrs.add_opt("sx-width", self.width.as_ref());
+        attrs.add_opt("sx-min-width", self.min_width.as_ref());
         attrs.add_opt("sx-max-width", self.max_width.as_ref());
         attrs.add_opt("sx-height", self.height.as_ref());
+        attrs.add_opt("sx-min-height", self.min_height.as_ref());
         attrs.add_opt("sx-max-height", self.max_height.as_ref());
 
         if let Some(flex) = &self.flex {
