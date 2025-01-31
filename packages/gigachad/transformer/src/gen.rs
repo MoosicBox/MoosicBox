@@ -150,6 +150,7 @@ impl Arbitrary for Element {
                 source: Option::arbitrary(g).map(|x: XmlString| x.0),
                 fit: Option::arbitrary(g),
                 source_set: Option::arbitrary(g).map(|x: XmlString| x.0),
+                sizes: Option::arbitrary(g),
             },
             12 => Self::Anchor {
                 target: Option::arbitrary(g),

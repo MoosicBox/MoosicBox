@@ -113,7 +113,7 @@ pub fn write_css_attr(f: &mut dyn Write, attr: &[u8], value: &[u8]) -> Result<()
 }
 
 #[must_use]
-pub fn number_to_css_string(number: &Number, px: bool) -> String {
+pub fn number_to_html_string(number: &Number, px: bool) -> String {
     match number {
         Number::Real(x) => {
             if px {
@@ -150,7 +150,7 @@ pub fn color_to_css_string(color: Color) -> String {
 #[must_use]
 pub fn calc_to_css_string(calc: &Calculation, px: bool) -> String {
     match calc {
-        Calculation::Number(number) => number_to_css_string(number, px),
+        Calculation::Number(number) => number_to_html_string(number, px),
         Calculation::Add(left, right) => format!(
             "{} + {}",
             calc_to_css_string(left, false),
@@ -306,64 +306,64 @@ pub fn element_style_to_html(
     if let Some(margin_left) = &container.margin_left {
         write_css_attr!(
             b"margin-left",
-            number_to_css_string(margin_left, true).as_bytes(),
+            number_to_html_string(margin_left, true).as_bytes(),
         );
     }
     if let Some(margin_right) = &container.margin_right {
         write_css_attr!(
             b"margin-right",
-            number_to_css_string(margin_right, true).as_bytes(),
+            number_to_html_string(margin_right, true).as_bytes(),
         );
     }
     if let Some(margin_top) = &container.margin_top {
         write_css_attr!(
             b"margin-top",
-            number_to_css_string(margin_top, true).as_bytes(),
+            number_to_html_string(margin_top, true).as_bytes(),
         );
     }
     if let Some(margin_bottom) = &container.margin_bottom {
         write_css_attr!(
             b"margin-bottom",
-            number_to_css_string(margin_bottom, true).as_bytes(),
+            number_to_html_string(margin_bottom, true).as_bytes(),
         );
     }
 
     if let Some(padding_left) = &container.padding_left {
         write_css_attr!(
             b"padding-left",
-            number_to_css_string(padding_left, true).as_bytes(),
+            number_to_html_string(padding_left, true).as_bytes(),
         );
     }
     if let Some(padding_right) = &container.padding_right {
         write_css_attr!(
             b"padding-right",
-            number_to_css_string(padding_right, true).as_bytes(),
+            number_to_html_string(padding_right, true).as_bytes(),
         );
     }
     if let Some(padding_top) = &container.padding_top {
         write_css_attr!(
             b"padding-top",
-            number_to_css_string(padding_top, true).as_bytes(),
+            number_to_html_string(padding_top, true).as_bytes(),
         );
     }
     if let Some(padding_bottom) = &container.padding_bottom {
         write_css_attr!(
             b"padding-bottom",
-            number_to_css_string(padding_bottom, true).as_bytes(),
+            number_to_html_string(padding_bottom, true).as_bytes(),
         );
     }
 
     if let Some(left) = &container.left {
-        write_css_attr!(b"left", number_to_css_string(left, true).as_bytes());
+        write_css_attr!(b"left", number_to_html_string(left, true).as_bytes());
     }
     if let Some(right) = &container.right {
-        write_css_attr!(b"right", number_to_css_string(right, true).as_bytes());
+        write_css_attr!(b"right", number_to_html_string(right, true).as_bytes());
     }
     if let Some(top) = &container.top {
-        write_css_attr!(b"top", number_to_css_string(top, true).as_bytes());
+        write_css_attr!(b"top", number_to_html_string(top, true).as_bytes());
     }
     if let Some(bottom) = &container.bottom {
-        write_css_attr!(b"bottom", number_to_css_string(bottom, true).as_bytes());
+        write_css_attr!(b"bottom", number_to_html_string(bottom, true).as_bytes());
     }
 
     let mut printed_transform_start = false;
@@ -386,13 +386,13 @@ pub fn element_style_to_html(
     if let Some(translate) = &container.translate_x {
         write_transform_attr!(
             b"translateX",
-            number_to_css_string(translate, true).as_bytes()
+            number_to_html_string(translate, true).as_bytes()
         );
     }
     if let Some(translate) = &container.translate_y {
         write_transform_attr!(
             b"translateY",
-            number_to_css_string(translate, true).as_bytes()
+            number_to_html_string(translate, true).as_bytes()
         );
     }
 
@@ -444,35 +444,38 @@ pub fn element_style_to_html(
     }
 
     if let Some(gap) = &container.gap {
-        write_css_attr!(b"grid-gap", number_to_css_string(gap, true).as_bytes());
+        write_css_attr!(b"grid-gap", number_to_html_string(gap, true).as_bytes());
     }
 
     if let Some(width) = &container.width {
-        write_css_attr!(b"width", number_to_css_string(width, true).as_bytes());
+        write_css_attr!(b"width", number_to_html_string(width, true).as_bytes());
     }
     if let Some(height) = &container.height {
-        write_css_attr!(b"height", number_to_css_string(height, true).as_bytes());
+        write_css_attr!(b"height", number_to_html_string(height, true).as_bytes());
     }
 
     if let Some(width) = &container.max_width {
-        write_css_attr!(b"max-width", number_to_css_string(width, true).as_bytes());
+        write_css_attr!(b"max-width", number_to_html_string(width, true).as_bytes());
     }
     if let Some(height) = &container.max_height {
-        write_css_attr!(b"max-height", number_to_css_string(height, true).as_bytes());
+        write_css_attr!(
+            b"max-height",
+            number_to_html_string(height, true).as_bytes()
+        );
     }
 
     if let Some(flex) = &container.flex {
         write_css_attr!(
             b"flex-grow",
-            number_to_css_string(&flex.grow, false).as_bytes()
+            number_to_html_string(&flex.grow, false).as_bytes()
         );
         write_css_attr!(
             b"flex-shrink",
-            number_to_css_string(&flex.shrink, false).as_bytes()
+            number_to_html_string(&flex.shrink, false).as_bytes()
         );
         write_css_attr!(
             b"flex-basis",
-            number_to_css_string(&flex.basis, false).as_bytes()
+            number_to_html_string(&flex.basis, false).as_bytes()
         );
     }
 
@@ -484,7 +487,7 @@ pub fn element_style_to_html(
         write_css_attr!(
             b"border-top",
             &[
-                number_to_css_string(size, true).as_bytes(),
+                number_to_html_string(size, true).as_bytes(),
                 b" solid ",
                 color_to_css_string(*color).as_bytes(),
             ]
@@ -496,7 +499,7 @@ pub fn element_style_to_html(
         write_css_attr!(
             b"border-right",
             &[
-                number_to_css_string(size, true).as_bytes(),
+                number_to_html_string(size, true).as_bytes(),
                 b" solid ",
                 color_to_css_string(*color).as_bytes(),
             ]
@@ -508,7 +511,7 @@ pub fn element_style_to_html(
         write_css_attr!(
             b"border-bottom",
             &[
-                number_to_css_string(size, true).as_bytes(),
+                number_to_html_string(size, true).as_bytes(),
                 b" solid ",
                 color_to_css_string(*color).as_bytes(),
             ]
@@ -520,7 +523,7 @@ pub fn element_style_to_html(
         write_css_attr!(
             b"border-left",
             &[
-                number_to_css_string(size, true).as_bytes(),
+                number_to_html_string(size, true).as_bytes(),
                 b" solid ",
                 color_to_css_string(*color).as_bytes(),
             ]
@@ -531,35 +534,35 @@ pub fn element_style_to_html(
     if let Some(radius) = &container.border_top_left_radius {
         write_css_attr!(
             b"border-top-left-radius",
-            number_to_css_string(radius, true).as_bytes(),
+            number_to_html_string(radius, true).as_bytes(),
         );
     }
 
     if let Some(radius) = &container.border_top_right_radius {
         write_css_attr!(
             b"border-top-right-radius",
-            number_to_css_string(radius, true).as_bytes(),
+            number_to_html_string(radius, true).as_bytes(),
         );
     }
 
     if let Some(radius) = &container.border_bottom_left_radius {
         write_css_attr!(
             b"border-bottom-left-radius",
-            number_to_css_string(radius, true).as_bytes(),
+            number_to_html_string(radius, true).as_bytes(),
         );
     }
 
     if let Some(radius) = &container.border_bottom_right_radius {
         write_css_attr!(
             b"border-bottom-right-radius",
-            number_to_css_string(radius, true).as_bytes(),
+            number_to_html_string(radius, true).as_bytes(),
         );
     }
 
     if let Some(font_size) = &container.font_size {
         write_css_attr!(
             b"font-size",
-            number_to_css_string(font_size, true).as_bytes(),
+            number_to_html_string(font_size, true).as_bytes(),
         );
     }
 
@@ -621,7 +624,7 @@ pub fn element_style_to_html(
         if let Some(thickness) = &text_decoration.thickness {
             write_css_attr!(
                 b"text-decoration-thickness",
-                number_to_css_string(thickness, false).as_bytes()
+                number_to_html_string(thickness, false).as_bytes()
             );
         }
     }
@@ -693,7 +696,10 @@ pub fn element_to_html(
             return Ok(());
         }
         Element::Image {
-            source, source_set, ..
+            source,
+            source_set,
+            sizes,
+            ..
         } => {
             const TAG_NAME: &[u8] = b"img";
             f.write_all(b"<")?;
@@ -706,6 +712,11 @@ pub fn element_to_html(
             if let Some(srcset) = source_set {
                 f.write_all(b" srcset=\"")?;
                 f.write_all(srcset.as_bytes())?;
+                f.write_all(b"\"")?;
+            }
+            if let Some(sizes) = sizes {
+                f.write_all(b" sizes=\"")?;
+                f.write_all(number_to_html_string(sizes, true).as_bytes())?;
                 f.write_all(b"\"")?;
             }
             tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;

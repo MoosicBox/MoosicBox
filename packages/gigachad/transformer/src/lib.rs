@@ -784,7 +784,7 @@ impl Container {
     }
 }
 
-#[derive(Default, Clone, Debug, PartialEq, Eq)]
+#[derive(Default, Clone, Debug, PartialEq)]
 pub enum Element {
     #[default]
     Div,
@@ -806,6 +806,7 @@ pub enum Element {
         source: Option<String>,
         fit: Option<ImageFit>,
         source_set: Option<String>,
+        sizes: Option<Number>,
     },
     Anchor {
         target: Option<LinkTarget>,
@@ -906,10 +907,14 @@ impl Container {
 
         match &self.element {
             Element::Image {
-                fit, source_set, ..
+                fit,
+                source_set,
+                sizes,
+                ..
             } => {
                 attrs.add_opt("sx-fit", *fit);
                 attrs.add_opt("srcset", source_set.as_ref());
+                attrs.add_opt("sizes", sizes.as_ref());
             }
             Element::Anchor { target, .. } => {
                 attrs.add_opt("target", target.as_ref());

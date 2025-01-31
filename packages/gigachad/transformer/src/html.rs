@@ -810,6 +810,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                         source: get_tag_attr_value_owned(tag, "src"),
                         fit: get_image_fit(tag, "sx-fit"),
                         source_set: get_tag_attr_value_owned(tag, "srcset"),
+                        sizes: get_number(tag, "sizes").unwrap(),
                     }
                 }
                 "a" => {
