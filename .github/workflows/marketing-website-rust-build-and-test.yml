@@ -46,6 +46,7 @@ jobs:
             - name: sst install
               working-directory: packages/marketing_site
               run: |
+                  SKIP_INFRA=1 pnpm sst install
                   pnpm sst install
 
             - name: pretty
