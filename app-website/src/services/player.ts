@@ -456,7 +456,7 @@ export async function playAlbum(album: Api.Album | Api.Track) {
     console.debug('playAlbum', album);
     setCurrentAlbum(album);
 
-    const versions = await api.getAlbumVersions(album.albumId);
+    const versions = await api.getAlbumVersions(album.albumId, album.apiSource);
     const tracks = versions[0]!.tracks;
     await playPlaylist(tracks);
 }
@@ -496,13 +496,16 @@ export async function addAlbumToQueue(album: Api.Album | Api.Track) {
             } else {
                 throw new Error(`Invalid album: ${JSON.stringify(album)}`);
             }
-            const versions = await api.getAlbumVersions(id);
+            const versions = await api.getAlbumVersions(id, album.apiSource);
             const tracks = versions[0]!.tracks;
             return addTracksToQueue(tracks);
         }
         case 'TRACK': {
             album = album as Api.Track;
-            const versions = await api.getAlbumVersions(album.albumId);
+            const versions = await api.getAlbumVersions(
+                album.albumId,
+                album.apiSource,
+            );
             const tracks = versions[0]!.tracks;
             return addTracksToQueue(tracks);
         }
