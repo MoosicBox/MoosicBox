@@ -85,7 +85,7 @@ pub fn header() -> Markup {
 #[must_use]
 pub fn main(slot: &Markup) -> Markup {
     html! {
-        main class="main-content" {
+        main sx-flex-grow=(1) {
             (slot)
         }
     }
@@ -102,53 +102,58 @@ pub fn not_found() -> Markup {
 pub fn home() -> Markup {
     page(&html! {
         div
-            sx-dir=(LayoutDirection::Row)
-            sx-align-items=(AlignItems::Center)
-            sx-height="calc(min(100%, 1000px))"
-            sx-padding-x=(50)
-            sx-gap="calc(min(100, 5%))"
+            sx-height="100%"
+            sx-justify-content=(JustifyContent::Center)
         {
-            div sx-flex-grow="2" {
-                h1 sx-font-size=(50) sx-text-align=(TextAlign::End) {
-                    "Listen to your HiFi music anywhere"
-                }
-            }
             div
                 sx-dir=(LayoutDirection::Row)
-                sx-position=(Position::Relative)
-                sx-height="100%"
-                sx-flex-grow="3"
+                sx-align-items=(AlignItems::Center)
+                sx-max-height="1000px"
+                sx-padding-x=(50)
+                sx-gap="calc(min(100, 5%))"
             {
-                div
-                    sx-margin-left="calc(10% - (100% / 30))"
-                    sx-height="100%"
-                    sx-max-height="100%"
-                    sx-max-width="calc(100% - calc(10% - (100% / 30)))"
-                {
-                    img
-                        src=(public_img!("showcase-1.webp"))
-                        srcset={(public_img!("showcase-1x240.webp"))" 240w, "(public_img!("showcase-1x540.webp"))" 540w, "(public_img!("showcase-1.webp"))" 1080w"}
-                        sizes="70vw"
-                        sx-width="100%"
-                        sx-height="100%"
-                        alt="MoosicBox showcase desktop"
-                        sx-fit="contain";
+                div sx-flex-grow=(2) {
+                    h1 sx-font-size=(50) sx-text-align=(TextAlign::End) {
+                        "Listen to your HiFi music anywhere"
+                    }
                 }
                 div
-                    sx-position="absolute"
-                    sx-bottom="50%"
-                    sx-translate-y="50%"
-                    sx-height="calc(min(65%, 25dvw))"
-                    sx-max-height="80%"
+                    sx-dir=(LayoutDirection::Row)
+                    sx-position=(Position::Relative)
+                    sx-height="100%"
+                    sx-flex-grow=(3)
                 {
-                    img
-                        src=(public_img!("showcase-2.webp"))
-                        srcset={(public_img!("showcase-2x240.webp"))" 240w, "(public_img!("showcase-2x540.webp"))" 540w, "(public_img!("showcase-2.webp"))" 1080w"}
-                        sizes="30vw"
-                        sx-width="100%"
+                    div
+                        sx-margin-left="calc(10% - (100% / 30))"
                         sx-height="100%"
-                        alt="MoosicBox showcase android"
-                        sx-fit="contain";
+                        sx-max-height="100%"
+                        sx-max-width="calc(100% - calc(10% - (100% / 30)))"
+                    {
+                        img
+                            src=(public_img!("showcase-1.webp"))
+                            srcset={(public_img!("showcase-1x240.webp"))" 240w, "(public_img!("showcase-1x540.webp"))" 540w, "(public_img!("showcase-1.webp"))" 1080w"}
+                            sizes="70vw"
+                            sx-width="100%"
+                            sx-height="100%"
+                            alt="MoosicBox showcase desktop"
+                            sx-fit="contain";
+                    }
+                    div
+                        sx-position="absolute"
+                        sx-bottom="50%"
+                        sx-translate-y="50%"
+                        sx-height="calc(min(65%, 25dvw))"
+                        sx-max-height="80%"
+                    {
+                        img
+                            src=(public_img!("showcase-2.webp"))
+                            srcset={(public_img!("showcase-2x240.webp"))" 240w, "(public_img!("showcase-2x540.webp"))" 540w, "(public_img!("showcase-2.webp"))" 1080w"}
+                            sizes="30vw"
+                            sx-width="100%"
+                            sx-height="100%"
+                            alt="MoosicBox showcase android"
+                            sx-fit="contain";
+                    }
                 }
             }
         }
@@ -165,6 +170,7 @@ pub fn page(slot: &Markup) -> Markup {
             sx-color="#fff"
             sx-font-family="Gordita, Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif"
             sx-overflow-y="auto"
+            sx-justify-content=(JustifyContent::Center)
         {
             (header())
             (main(&slot))
