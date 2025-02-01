@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@pulumi/pulumi':
-        specifier: ^3.147.0
-        version: 3.147.0(typescript@5.7.3)
+        specifier: ^3.148.0
+        version: 3.148.0(typescript@5.7.3)
       '@tsconfig/node18':
         specifier: 18.2.2
         version: 18.2.2
@@ -48,8 +48,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.6.40
-        version: 3.6.40
+        specifier: ^3.7.1
+        version: 3.7.1
       typescript:
         specifier: ^5.7.3
         version: 5.7.3
@@ -306,8 +306,8 @@ packages:
   '@protobufjs/utf8@1.1.0':
     resolution: {integrity: sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==}
 
-  '@pulumi/pulumi@3.147.0':
-    resolution: {integrity: sha512-5tBGauFC6rAiB5I8Ug6kHBNB1YNmLANT1yy2pXwyMMWXmFc1++sYrZ2QDyVf0cJVtXdFhqw1kw/CxdV4YCHi0Q==}
+  '@pulumi/pulumi@3.148.0':
+    resolution: {integrity: sha512-Y7RNkfOYcvraz6rXMoM4KJAvk2oEq8yvsT6EX4G1CyQKUH8EpdUn0TZtvIZLqhW/M06/sMYFbjgpsuXa7p5Y7Q==}
     engines: {node: '>=18'}
     peerDependencies:
       ts-node: '>= 7.0.1 < 12'
@@ -382,8 +382,8 @@ packages:
   '@types/keyv@3.1.4':
     resolution: {integrity: sha512-BQ5aZNSCpj7D6K2ksrRCTmKRLEpnPvWDiLPfoGyhZ++8YtiK9d/3DBKPJgry359X/P1PfruyYwvnvwFjuEiEIg==}
 
-  '@types/node@22.12.0':
-    resolution: {integrity: sha512-Fll2FZ1riMjNmlmJOdAyY5pUbkftXslB5DgEzlIuNaiWhXd00FhWxVC/r4yV/4wBb9JfImTu+jiSvXTkJ7F/gA==}
+  '@types/node@22.13.0':
+    resolution: {integrity: sha512-ClIbNe36lawluuvq3+YYhnIN2CELi+6q8NpnM7PYp4hBn/TatfboPgVSm2rwKRfnV2M+Ty9GWDFI64KEe+kysA==}
 
   '@types/responselike@1.0.3':
     resolution: {integrity: sha512-H/+L+UkTV33uf49PH5pCAUBVPNj2nDBXTN+qS1dOwyyg24l3CcicicCA7ca+HMvJBZcFgl5r8e+RR6elsb4Lyw==}
@@ -1965,33 +1965,33 @@ packages:
     resolution: {integrity: sha512-MGrFH9Z4NP9Iyhqn16sDtBpRRNJ0Y2hNa6D65h736fVSaPCHr4DM4sWUNvVaSuC+0OBGhwsrydQwmgfg5LncqQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
-  sst-darwin-arm64@3.6.40:
-    resolution: {integrity: sha512-cLyvyOhvXhpbpnGMMQLyKY6FH7F4kFmjqUFCC930DkDWaBdoPb0/Qrqwj6/diEkcGQMHU+xQ/R/erGOJ/nePbg==}
+  sst-darwin-arm64@3.7.1:
+    resolution: {integrity: sha512-6AdD13NUZGcPxFEa14wcE/vVhUY2Dyr55dUck4Bx54aYkkDptvlA3zDAENMgyox4sD46QGJcD8uhPoeSsYlIhA==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.6.40:
-    resolution: {integrity: sha512-o1zABkQCW+DKRQVKSe9YiHkGBSjJImiTtPIR9s/W7ee3InTPkTginyjG7UjQH7X/RRQemZ3FyscoQnOs2Tj9Jg==}
+  sst-darwin-x64@3.7.1:
+    resolution: {integrity: sha512-rSynbkCW034q4UjlGsC1WxaA0iDy8kvpMq3VHOvQ+N+cCh6ixC0f1G4nS0iprOIw0SsWLzgrX6xF0fR2/VPgjw==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.6.40:
-    resolution: {integrity: sha512-8fNbheg8jmaF7GMu8sgbQsznLr251WvtdIHV67Owt5GnoZceb5uN46zD8THsOSMVLKKFJj5Ror21rBsROqxlEg==}
+  sst-linux-arm64@3.7.1:
+    resolution: {integrity: sha512-cSfRFDjRejSVMKT+eDv1fD+XJNxh606KeUPMauysz+OJFV08iYi1YJloooNIeRD8WvHA8eVX+e/KlqYsKphY5Q==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.6.40:
-    resolution: {integrity: sha512-l5bYtI0aQ1jltoR/UZSqqAdPyJHUYfEQCAzCRcISSegjxdcjcpeALCMEkYGYmRDq8jq4OYEQ2vlESGxJhIII9w==}
+  sst-linux-x64@3.7.1:
+    resolution: {integrity: sha512-W+Yp3HHh8k2nEgX6GuQSLr6CfmYmTWPgigVMxMU88c9sPCc9HqPx7gB4FTT8xemdsN1MXOOjq50ozqv79+AdtQ==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.6.40:
-    resolution: {integrity: sha512-hg25XPCcoCV0VhaIRphwk4Cj0Xbc4s1p39qDMZ6TtaMku4BTecXeGu0QKQtH33y1ZjD0et2Lf9PKQpSiF++2cA==}
+  sst-linux-x86@3.7.1:
+    resolution: {integrity: sha512-TfCiT2tULPABEwKgsGpx+dFv0d7NNrAv/cFnwRe2gi3vnhA/JCfynbiY0j1UOG6tbYTzzQ8Rl96qYoGp/rYRLA==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.6.40:
-    resolution: {integrity: sha512-6XarTLJ11JCBQUXOsfT/MmQL6qJPubv/rhY2BSRwkPtGpd6Mwr8i8XgG24W8iiXdex+R9sjnWB8KLY5IPE249g==}
+  sst@3.7.1:
+    resolution: {integrity: sha512-y7w0wTE0YNQi4qCQ575a5KLpd0VIg6EcWwVO9rtWdCmMoLlnj8DWh0/5do3B6ZOqWvcXN5FgMuhweJrb05rTbw==}
     hasBin: true
 
   string-width@4.2.3:
@@ -2545,7 +2545,7 @@ snapshots:
 
   '@protobufjs/utf8@1.1.0': {}
 
-  '@pulumi/pulumi@3.147.0(typescript@5.7.3)':
+  '@pulumi/pulumi@3.148.0(typescript@5.7.3)':
     dependencies:
       '@grpc/grpc-js': 1.12.5
       '@logdna/tail-file': 2.2.0
@@ -2638,7 +2638,7 @@ snapshots:
     dependencies:
       '@types/http-cache-semantics': 4.0.4
       '@types/keyv': 3.1.4
-      '@types/node': 22.12.0
+      '@types/node': 22.13.0
       '@types/responselike': 1.0.3
 
   '@types/google-protobuf@3.15.12': {}
@@ -2649,15 +2649,15 @@ snapshots:
 
   '@types/keyv@3.1.4':
     dependencies:
-      '@types/node': 22.12.0
+      '@types/node': 22.13.0
 
-  '@types/node@22.12.0':
+  '@types/node@22.13.0':
     dependencies:
       undici-types: 6.20.0
 
   '@types/responselike@1.0.3':
     dependencies:
-      '@types/node': 22.12.0
+      '@types/node': 22.13.0
 
   '@types/semver@7.5.8': {}
 
@@ -4235,7 +4235,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
-      '@types/node': 22.12.0
+      '@types/node': 22.13.0
       long: 5.2.4
 
   pump@3.0.2:
@@ -4469,32 +4469,32 @@ snapshots:
     dependencies:
       minipass: 7.1.2
 
-  sst-darwin-arm64@3.6.40:
+  sst-darwin-arm64@3.7.1:
     optional: true
 
-  sst-darwin-x64@3.6.40:
+  sst-darwin-x64@3.7.1:
     optional: true
 
-  sst-linux-arm64@3.6.40:
+  sst-linux-arm64@3.7.1:
     optional: true
 
-  sst-linux-x64@3.6.40:
+  sst-linux-x64@3.7.1:
     optional: true
 
-  sst-linux-x86@3.6.40:
+  sst-linux-x86@3.7.1:
     optional: true
 
-  sst@3.6.40:
+  sst@3.7.1:
     dependencies:
       aws4fetch: 1.0.20
       jose: 5.2.3
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.6.40
-      sst-darwin-x64: 3.6.40
-      sst-linux-arm64: 3.6.40
-      sst-linux-x64: 3.6.40
-      sst-linux-x86: 3.6.40
+      sst-darwin-arm64: 3.7.1
+      sst-darwin-x64: 3.7.1
+      sst-linux-arm64: 3.7.1
+      sst-linux-x64: 3.7.1
+      sst-linux-x86: 3.7.1
 
   string-width@4.2.3:
     dependencies:
