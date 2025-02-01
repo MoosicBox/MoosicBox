@@ -74,6 +74,9 @@ jobs:
               with:
                   token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
 
+            - name: Update history
+              run: git pull
+
             - uses: dtolnay/rust-toolchain@stable
 
             - name: Install cargo-edit

@@ -19,6 +19,10 @@ jobs:
                   token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
                   path: MoosicBox
 
+            - name: Update history
+              working-directory: MoosicBox
+              run: git pull
+
             - name: Copy Files
               working-directory: MoosicBox/packages/app/tauri
               shell: bash
