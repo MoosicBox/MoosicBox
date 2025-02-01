@@ -13,10 +13,10 @@ importers:
         version: 0.9.4(prettier-plugin-astro@0.13.0)(prettier@3.4.2)(typescript@5.7.3)
       '@astrojs/node':
         specifier: ^9.0.2
-        version: 9.0.2(astro@5.2.1(@types/node@22.12.0)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.32.1)(typescript@5.7.3)(yaml@2.7.0))
+        version: 9.0.2(astro@5.2.3(@types/node@22.13.0)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.32.1)(typescript@5.7.3)(yaml@2.7.0))
       '@astrojs/solid-js':
         specifier: ^5.0.4
-        version: 5.0.4(@testing-library/jest-dom@5.17.0)(@types/node@22.12.0)(jiti@2.4.2)(solid-js@1.9.4)(yaml@2.7.0)
+        version: 5.0.4(@testing-library/jest-dom@5.17.0)(@types/node@22.13.0)(jiti@2.4.2)(solid-js@1.9.4)(yaml@2.7.0)
       '@aws-sdk/client-ssm':
         specifier: ^3.738.0
         version: 3.738.0(aws-crt@1.21.8)
@@ -39,8 +39,8 @@ importers:
         specifier: ^6.3.0
         version: 6.3.0(solid-js@1.9.4)
       astro:
-        specifier: ^5.2.1
-        version: 5.2.1(@types/node@22.12.0)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.32.1)(typescript@5.7.3)(yaml@2.7.0)
+        specifier: ^5.2.3
+        version: 5.2.3(@types/node@22.13.0)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.32.1)(typescript@5.7.3)(yaml@2.7.0)
       astro-sst:
         specifier: ^2.45.2
         version: 2.45.2
@@ -115,17 +115,17 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.6.40
-        version: 3.6.40
+        specifier: ^3.7.1
+        version: 3.7.1
       typescript:
         specifier: ^5.7.3
         version: 5.7.3
       vite:
         specifier: ^5.4.14
-        version: 5.4.14(@types/node@22.12.0)
+        version: 5.4.14(@types/node@22.13.0)
       vitest:
         specifier: ^1.6.0
-        version: 1.6.0(@types/node@22.12.0)(@vitest/ui@1.6.0)(jsdom@24.1.3)
+        version: 1.6.0(@types/node@22.13.0)(@vitest/ui@1.6.0)(jsdom@24.1.3)
 
 packages:
 
@@ -1347,8 +1347,8 @@ packages:
   '@types/nlcst@2.0.3':
     resolution: {integrity: sha512-vSYNSDe6Ix3q+6Z7ri9lyWqgGhJTmzRjZRqyq15N0Z/1/UnVsno9G/N40NBijoYx2seFDIl0+B2mgAb9mezUCA==}
 
-  '@types/node@22.12.0':
-    resolution: {integrity: sha512-Fll2FZ1riMjNmlmJOdAyY5pUbkftXslB5DgEzlIuNaiWhXd00FhWxVC/r4yV/4wBb9JfImTu+jiSvXTkJ7F/gA==}
+  '@types/node@22.13.0':
+    resolution: {integrity: sha512-ClIbNe36lawluuvq3+YYhnIN2CELi+6q8NpnM7PYp4hBn/TatfboPgVSm2rwKRfnV2M+Ty9GWDFI64KEe+kysA==}
 
   '@types/stack-utils@2.0.3':
     resolution: {integrity: sha512-9aEbYZ3TbYMznPdcdr3SmIrLXwC/AKZXQeCf9Pgao5CKb8CyHuEX5jzWPTkvregvhRJHcpRO6BFoGW9ycaOkYw==}
@@ -1584,8 +1584,8 @@ packages:
   astro-sst@2.45.2:
     resolution: {integrity: sha512-Zrrip/9VP5kvoQJ+Kj2tJA1h7mQ3ShAsfKXMqVcz8vqMqCsFjEZPLHDu8zYTGMr3WOX8r3vzY6u5nOeaKFg8ZQ==}
 
-  astro@5.2.1:
-    resolution: {integrity: sha512-OYR2kUo9EqX6OYZ1OmM14xP8mjFwgrk1FzIr+3K3tS0gCCKJsXtfboCUhX3lODZFIsmY/on7NPZd+2PURA0R2Q==}
+  astro@5.2.3:
+    resolution: {integrity: sha512-04AceE/gVihtO3V28Ss0+tPPgLHGoulXrm1E7fUVPYyQu7y6w8+oXfYyzh1lpy+uEYiebjH7AFlJoz73anBmZA==}
     engines: {node: ^18.17.1 || ^20.3.0 || >=22.0.0, npm: '>=9.6.5', pnpm: '>=7.1.0'}
     hasBin: true
 
@@ -3609,33 +3609,33 @@ packages:
   sprintf-js@1.0.3:
     resolution: {integrity: sha512-D9cPgkvLlV3t3IzL0D0YLvGA9Ahk4PcvVwUbN0dSGr1aP0Nrt4AEnTUbuGvquEC0mA64Gqt1fzirlRs5ibXx8g==}
 
-  sst-darwin-arm64@3.6.40:
-    resolution: {integrity: sha512-cLyvyOhvXhpbpnGMMQLyKY6FH7F4kFmjqUFCC930DkDWaBdoPb0/Qrqwj6/diEkcGQMHU+xQ/R/erGOJ/nePbg==}
+  sst-darwin-arm64@3.7.1:
+    resolution: {integrity: sha512-6AdD13NUZGcPxFEa14wcE/vVhUY2Dyr55dUck4Bx54aYkkDptvlA3zDAENMgyox4sD46QGJcD8uhPoeSsYlIhA==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.6.40:
-    resolution: {integrity: sha512-o1zABkQCW+DKRQVKSe9YiHkGBSjJImiTtPIR9s/W7ee3InTPkTginyjG7UjQH7X/RRQemZ3FyscoQnOs2Tj9Jg==}
+  sst-darwin-x64@3.7.1:
+    resolution: {integrity: sha512-rSynbkCW034q4UjlGsC1WxaA0iDy8kvpMq3VHOvQ+N+cCh6ixC0f1G4nS0iprOIw0SsWLzgrX6xF0fR2/VPgjw==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.6.40:
-    resolution: {integrity: sha512-8fNbheg8jmaF7GMu8sgbQsznLr251WvtdIHV67Owt5GnoZceb5uN46zD8THsOSMVLKKFJj5Ror21rBsROqxlEg==}
+  sst-linux-arm64@3.7.1:
+    resolution: {integrity: sha512-cSfRFDjRejSVMKT+eDv1fD+XJNxh606KeUPMauysz+OJFV08iYi1YJloooNIeRD8WvHA8eVX+e/KlqYsKphY5Q==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.6.40:
-    resolution: {integrity: sha512-l5bYtI0aQ1jltoR/UZSqqAdPyJHUYfEQCAzCRcISSegjxdcjcpeALCMEkYGYmRDq8jq4OYEQ2vlESGxJhIII9w==}
+  sst-linux-x64@3.7.1:
+    resolution: {integrity: sha512-W+Yp3HHh8k2nEgX6GuQSLr6CfmYmTWPgigVMxMU88c9sPCc9HqPx7gB4FTT8xemdsN1MXOOjq50ozqv79+AdtQ==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.6.40:
-    resolution: {integrity: sha512-hg25XPCcoCV0VhaIRphwk4Cj0Xbc4s1p39qDMZ6TtaMku4BTecXeGu0QKQtH33y1ZjD0et2Lf9PKQpSiF++2cA==}
+  sst-linux-x86@3.7.1:
+    resolution: {integrity: sha512-TfCiT2tULPABEwKgsGpx+dFv0d7NNrAv/cFnwRe2gi3vnhA/JCfynbiY0j1UOG6tbYTzzQ8Rl96qYoGp/rYRLA==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.6.40:
-    resolution: {integrity: sha512-6XarTLJ11JCBQUXOsfT/MmQL6qJPubv/rhY2BSRwkPtGpd6Mwr8i8XgG24W8iiXdex+R9sjnWB8KLY5IPE249g==}
+  sst@3.7.1:
+    resolution: {integrity: sha512-y7w0wTE0YNQi4qCQ575a5KLpd0VIg6EcWwVO9rtWdCmMoLlnj8DWh0/5do3B6ZOqWvcXN5FgMuhweJrb05rTbw==}
     hasBin: true
 
   stack-utils@2.0.6:
@@ -4368,8 +4368,8 @@ packages:
     resolution: {integrity: sha512-b4JR1PFR10y1mKjhHY9LaGo6tmrgjit7hxVIeAmyMw3jegXR4dhYqLaQF5zMXZxY7tLpMyJeLjr1C4rLmkVe8g==}
     engines: {node: '>=12.20'}
 
-  yocto-spinner@0.1.2:
-    resolution: {integrity: sha512-VfmLIh/ZSZOJnVRQZc/dvpPP90lWL4G0bmxQMP0+U/2vKBA8GSpcBuWv17y7F+CZItRuO97HN1wdbb4p10uhOg==}
+  yocto-spinner@0.2.0:
+    resolution: {integrity: sha512-Qu6WAqNLGleB687CCGcmgHIo8l+J19MX/32UrSMfbf/4L8gLoxjpOYoiHT1asiWyqvjRZbgvOhLlvne6E5Tbdw==}
     engines: {node: '>=18.19'}
 
   yoctocolors@2.1.1:
@@ -4478,9 +4478,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@astrojs/node@9.0.2(astro@5.2.1(@types/node@22.12.0)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.32.1)(typescript@5.7.3)(yaml@2.7.0))':
+  '@astrojs/node@9.0.2(astro@5.2.3(@types/node@22.13.0)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.32.1)(typescript@5.7.3)(yaml@2.7.0))':
     dependencies:
-      astro: 5.2.1(@types/node@22.12.0)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.32.1)(typescript@5.7.3)(yaml@2.7.0)
+      astro: 5.2.3(@types/node@22.13.0)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.32.1)(typescript@5.7.3)(yaml@2.7.0)
       send: 1.1.0
       server-destroy: 1.0.1
     transitivePeerDependencies:
@@ -4490,11 +4490,11 @@ snapshots:
     dependencies:
       prismjs: 1.29.0
 
-  '@astrojs/solid-js@5.0.4(@testing-library/jest-dom@5.17.0)(@types/node@22.12.0)(jiti@2.4.2)(solid-js@1.9.4)(yaml@2.7.0)':
+  '@astrojs/solid-js@5.0.4(@testing-library/jest-dom@5.17.0)(@types/node@22.13.0)(jiti@2.4.2)(solid-js@1.9.4)(yaml@2.7.0)':
     dependencies:
       solid-js: 1.9.4
-      vite: 6.0.11(@types/node@22.12.0)(jiti@2.4.2)(yaml@2.7.0)
-      vite-plugin-solid: 2.11.0(@testing-library/jest-dom@5.17.0)(solid-js@1.9.4)(vite@6.0.11(@types/node@22.12.0)(jiti@2.4.2)(yaml@2.7.0))
+      vite: 6.0.11(@types/node@22.13.0)(jiti@2.4.2)(yaml@2.7.0)
+      vite-plugin-solid: 2.11.0(@testing-library/jest-dom@5.17.0)(solid-js@1.9.4)(vite@6.0.11(@types/node@22.13.0)(jiti@2.4.2)(yaml@2.7.0))
     transitivePeerDependencies:
       - '@testing-library/jest-dom'
       - '@types/node'
@@ -5333,7 +5333,7 @@ snapshots:
       '@jest/schemas': 29.6.3
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 22.12.0
+      '@types/node': 22.13.0
       '@types/yargs': 17.0.33
       chalk: 4.1.2
 
@@ -5867,7 +5867,7 @@ snapshots:
     dependencies:
       '@types/unist': 3.0.3
 
-  '@types/node@22.12.0':
+  '@types/node@22.13.0':
     dependencies:
       undici-types: 6.20.0
 
@@ -5883,7 +5883,7 @@ snapshots:
 
   '@types/ws@8.5.14':
     dependencies:
-      '@types/node': 22.12.0
+      '@types/node': 22.13.0
     optional: true
 
   '@types/yargs-parser@21.0.3': {}
@@ -5990,7 +5990,7 @@ snapshots:
       std-env: 3.8.0
       strip-literal: 2.1.1
       test-exclude: 6.0.0
-      vitest: 1.6.0(@types/node@22.12.0)(@vitest/ui@1.6.0)(jsdom@24.1.3)
+      vitest: 1.6.0(@types/node@22.13.0)(@vitest/ui@1.6.0)(jsdom@24.1.3)
     transitivePeerDependencies:
       - supports-color
 
@@ -6025,7 +6025,7 @@ snapshots:
       pathe: 1.1.2
       picocolors: 1.1.1
       sirv: 2.0.4
-      vitest: 1.6.0(@types/node@22.12.0)(@vitest/ui@1.6.0)(jsdom@24.1.3)
+      vitest: 1.6.0(@types/node@22.13.0)(@vitest/ui@1.6.0)(jsdom@24.1.3)
 
   '@vitest/utils@1.6.0':
     dependencies:
@@ -6201,7 +6201,7 @@ snapshots:
       '@astrojs/webapi': 3.0.0
       set-cookie-parser: 2.7.1
 
-  astro@5.2.1(@types/node@22.12.0)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.32.1)(typescript@5.7.3)(yaml@2.7.0):
+  astro@5.2.3(@types/node@22.13.0)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.32.1)(typescript@5.7.3)(yaml@2.7.0):
     dependencies:
       '@astrojs/compiler': 2.10.3
       '@astrojs/internal-helpers': 0.5.0
@@ -6253,12 +6253,12 @@ snapshots:
       unist-util-visit: 5.0.0
       unstorage: 1.14.4(aws4fetch@1.0.20)
       vfile: 6.0.3
-      vite: 6.0.11(@types/node@22.12.0)(jiti@2.4.2)(yaml@2.7.0)
-      vitefu: 1.0.5(vite@6.0.11(@types/node@22.12.0)(jiti@2.4.2)(yaml@2.7.0))
+      vite: 6.0.11(@types/node@22.13.0)(jiti@2.4.2)(yaml@2.7.0)
+      vitefu: 1.0.5(vite@6.0.11(@types/node@22.13.0)(jiti@2.4.2)(yaml@2.7.0))
       which-pm: 3.0.0
       xxhash-wasm: 1.1.0
       yargs-parser: 21.1.1
-      yocto-spinner: 0.1.2
+      yocto-spinner: 0.2.0
       zod: 3.24.1
       zod-to-json-schema: 3.24.1(zod@3.24.1)
       zod-to-ts: 1.2.0(typescript@5.7.3)(zod@3.24.1)
@@ -7632,7 +7632,7 @@ snapshots:
   jest-util@29.7.0:
     dependencies:
       '@jest/types': 29.6.3
-      '@types/node': 22.12.0
+      '@types/node': 22.13.0
       chalk: 4.1.2
       ci-info: 3.9.0
       graceful-fs: 4.2.11
@@ -8893,32 +8893,32 @@ snapshots:
 
   sprintf-js@1.0.3: {}
 
-  sst-darwin-arm64@3.6.40:
+  sst-darwin-arm64@3.7.1:
     optional: true
 
-  sst-darwin-x64@3.6.40:
+  sst-darwin-x64@3.7.1:
     optional: true
 
-  sst-linux-arm64@3.6.40:
+  sst-linux-arm64@3.7.1:
     optional: true
 
-  sst-linux-x64@3.6.40:
+  sst-linux-x64@3.7.1:
     optional: true
 
-  sst-linux-x86@3.6.40:
+  sst-linux-x86@3.7.1:
     optional: true
 
-  sst@3.6.40:
+  sst@3.7.1:
     dependencies:
       aws4fetch: 1.0.20
       jose: 5.2.3
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.6.40
-      sst-darwin-x64: 3.6.40
-      sst-linux-arm64: 3.6.40
-      sst-linux-x64: 3.6.40
-      sst-linux-x86: 3.6.40
+      sst-darwin-arm64: 3.7.1
+      sst-darwin-x64: 3.7.1
+      sst-linux-arm64: 3.7.1
+      sst-linux-x64: 3.7.1
+      sst-linux-x86: 3.7.1
 
   stack-utils@2.0.6:
     dependencies:
@@ -9260,13 +9260,13 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.2
 
-  vite-node@1.6.0(@types/node@22.12.0):
+  vite-node@1.6.0(@types/node@22.13.0):
     dependencies:
       cac: 6.7.14
       debug: 4.4.0
       pathe: 1.1.2
       picocolors: 1.1.1
-      vite: 5.4.14(@types/node@22.12.0)
+      vite: 5.4.14(@types/node@22.13.0)
     transitivePeerDependencies:
       - '@types/node'
       - less
@@ -9278,7 +9278,7 @@ snapshots:
       - supports-color
       - terser
 
-  vite-plugin-solid@2.11.0(@testing-library/jest-dom@5.17.0)(solid-js@1.9.4)(vite@6.0.11(@types/node@22.12.0)(jiti@2.4.2)(yaml@2.7.0)):
+  vite-plugin-solid@2.11.0(@testing-library/jest-dom@5.17.0)(solid-js@1.9.4)(vite@6.0.11(@types/node@22.13.0)(jiti@2.4.2)(yaml@2.7.0)):
     dependencies:
       '@babel/core': 7.26.7
       '@types/babel__core': 7.20.5
@@ -9286,38 +9286,38 @@ snapshots:
       merge-anything: 5.1.7
       solid-js: 1.9.4
       solid-refresh: 0.6.3(solid-js@1.9.4)
-      vite: 6.0.11(@types/node@22.12.0)(jiti@2.4.2)(yaml@2.7.0)
-      vitefu: 1.0.5(vite@6.0.11(@types/node@22.12.0)(jiti@2.4.2)(yaml@2.7.0))
+      vite: 6.0.11(@types/node@22.13.0)(jiti@2.4.2)(yaml@2.7.0)
+      vitefu: 1.0.5(vite@6.0.11(@types/node@22.13.0)(jiti@2.4.2)(yaml@2.7.0))
     optionalDependencies:
       '@testing-library/jest-dom': 5.17.0
     transitivePeerDependencies:
       - supports-color
 
-  vite@5.4.14(@types/node@22.12.0):
+  vite@5.4.14(@types/node@22.13.0):
     dependencies:
       esbuild: 0.21.5
       postcss: 8.5.1
       rollup: 4.32.1
     optionalDependencies:
-      '@types/node': 22.12.0
+      '@types/node': 22.13.0
       fsevents: 2.3.3
 
-  vite@6.0.11(@types/node@22.12.0)(jiti@2.4.2)(yaml@2.7.0):
+  vite@6.0.11(@types/node@22.13.0)(jiti@2.4.2)(yaml@2.7.0):
     dependencies:
       esbuild: 0.24.2
       postcss: 8.5.1
       rollup: 4.32.1
     optionalDependencies:
-      '@types/node': 22.12.0
+      '@types/node': 22.13.0
       fsevents: 2.3.3
       jiti: 2.4.2
       yaml: 2.7.0
 
-  vitefu@1.0.5(vite@6.0.11(@types/node@22.12.0)(jiti@2.4.2)(yaml@2.7.0)):
+  vitefu@1.0.5(vite@6.0.11(@types/node@22.13.0)(jiti@2.4.2)(yaml@2.7.0)):
     optionalDependencies:
-      vite: 6.0.11(@types/node@22.12.0)(jiti@2.4.2)(yaml@2.7.0)
+      vite: 6.0.11(@types/node@22.13.0)(jiti@2.4.2)(yaml@2.7.0)
 
-  vitest@1.6.0(@types/node@22.12.0)(@vitest/ui@1.6.0)(jsdom@24.1.3):
+  vitest@1.6.0(@types/node@22.13.0)(@vitest/ui@1.6.0)(jsdom@24.1.3):
     dependencies:
       '@vitest/expect': 1.6.0
       '@vitest/runner': 1.6.0
@@ -9336,11 +9336,11 @@ snapshots:
       strip-literal: 2.1.1
       tinybench: 2.9.0
       tinypool: 0.8.4
-      vite: 5.4.14(@types/node@22.12.0)
-      vite-node: 1.6.0(@types/node@22.12.0)
+      vite: 5.4.14(@types/node@22.13.0)
+      vite-node: 1.6.0(@types/node@22.13.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
-      '@types/node': 22.12.0
+      '@types/node': 22.13.0
       '@vitest/ui': 1.6.0(vitest@1.6.0)
       jsdom: 24.1.3
     transitivePeerDependencies:
@@ -9612,7 +9612,7 @@ snapshots:
 
   yocto-queue@1.1.1: {}
 
-  yocto-spinner@0.1.2:
+  yocto-spinner@0.2.0:
     dependencies:
       yoctocolors: 2.1.1
 
