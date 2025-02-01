@@ -141,7 +141,7 @@ actix-ws = "0.3.0"
 arrayvec = "0.7.6"
 async-once-cell = "0.5.4"
 async-recursion = "1.1.1"
-async-trait = "0.1.85"
+async-trait = "0.1.86"
 atomic_float = "1.1.0"
 audiopus = "0.2.0"
 awc = "3.5.1"
@@ -163,10 +163,10 @@ console-subscriber = "0.4.1"
 cpal = "0.15.3"
 debounce = "0.2.2"
 derive_more = "1.0.0"
-diesel = { version = "2.2.6", default-features = false }
+diesel = { version = "2.2.7", default-features = false }
 diesel_migrations = { version = "2.2.0", default-features = false }
 dotenv = "0.15"
-dyn-clone = "1.0.17"
+dyn-clone = "1.0.18"
 eframe = { version = "0.30.0", default-features = false }
 egui = { version = "0.30.0", default-features = false }
 egui_extras = { version = "0.30.0", default-features = false }
