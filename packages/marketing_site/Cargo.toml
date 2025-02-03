@@ -36,6 +36,7 @@ no-build      = false
 product-name  = "MoosicBoxMarketingSite"
 
 [dependencies]
+gigachad_renderer = { version = "0.1.0", path = "../gigachad/renderer", default-features = false, optional = true }
 gigachad_renderer_html = { version = "0.1.0", path = "../gigachad/renderer/html", default-features = false, optional = true }
 moosicbox_app_native_lib = { version = "0.1.0", path = "../app/native/lib", default-features = false, features = [
     "maud",
@@ -60,41 +61,39 @@ tokio              = { workspace = true, features = ["macros", "rt-multi-thread"
 
 [features]
 default = [
+    "actix",
     "datastar",
     "dev",
     "egui-wgpu",
     "fltk",
     "html",
     "htmx",
+    "static-routes",
     "unsafe",
     "vanilla-js",
 ]
 
 fail-on-warnings = []
 
-datastar = [
-    "_html",
-    "dep:gigachad_renderer_html",
-    "moosicbox_app_native_lib/datastar",
-]
+datastar = ["html", "moosicbox_app_native_lib/datastar"]
 egui = ["moosicbox_app_native_lib/egui"]
 egui-glow = ["egui", "moosicbox_app_native_lib/egui-glow"]
 egui-wgpu = ["egui", "moosicbox_app_native_lib/egui-wgpu"]
 fltk = ["moosicbox_app_native_lib/fltk"]
-html = ["_html", "dep:gigachad_renderer_html", "moosicbox_app_native_lib/html"]
-htmx = ["_html", "dep:gigachad_renderer_html", "moosicbox_app_native_lib/htmx"]
-vanilla-js = [
-    "_html",
+html = [
     "dep:gigachad_renderer_html",
-    "moosicbox_app_native_lib/vanilla-js",
+    "gigachad_renderer/html",
+    "moosicbox_app_native_lib/html",
 ]
+htmx = ["html", "moosicbox_app_native_lib/htmx"]
+vanilla-js = ["html", "moosicbox_app_native_lib/vanilla-js"]
 
-_html = []
+actix = ["gigachad_renderer_html?/actix", "moosicbox_app_native_lib/actix"]
 
 wayland = ["moosicbox_app_native_lib/wayland"]
 x11     = ["moosicbox_app_native_lib/x11"]
 
-lambda = []
+lambda = ["gigachad_renderer_html?/lambda"]
 
 windows-console = []
 

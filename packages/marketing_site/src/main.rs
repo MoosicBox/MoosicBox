@@ -133,14 +133,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok::<_, Box<dyn std::error::Error>>(());
     }
 
-    #[cfg(not(feature = "_html"))]
+    #[cfg(not(feature = "html"))]
     if let Commands::Gen { .. } = args.cmd {
         panic!("Must be an html renderer to gen");
     }
 
-    #[cfg(all(feature = "_html", feature = "static-routes"))]
+    #[cfg(feature = "assets")]
+    let assets = {
+        vec![
+            moosicbox_app_native_lib::renderer::assets::StaticAssetRoute {
+                route: "favicon.ico".to_string(),
+                target: assets_dir.join("favicon.ico").try_into()?,
+            },
+            moosicbox_app_native_lib::renderer::assets::StaticAssetRoute {
+                route: "public".to_string(),
+                target: assets_dir.clone().try_into()?,
+            },
+        ]
+    };
+
+    #[cfg(all(feature = "html", feature = "static-routes"))]
     if let Commands::Gen { output } = args.cmd {
-        use gigachad_renderer_html::{html::container_element_to_html_response, HeaderMap};
+        use gigachad_renderer_html::html::container_element_to_html_response;
         use moosicbox_app_native_lib::{
             router::{ClientInfo, ClientOs, RequestInfo, RouteRequest},
             RendererType,
@@ -176,13 +190,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 #[cfg(feature = "fltk")]
                 RendererType::Fltk(..) => panic!("Invalid renderer"),
                 #[cfg(feature = "html")]
-                RendererType::Html(renderer) => renderer.app.tag_renderer,
+                #[cfg(feature = "actix")]
+                RendererType::Html(renderer) => renderer.app.processor.tag_renderer,
+                #[cfg(feature = "html")]
+                RendererType::HtmlStub(_renderer) => {
+                    Arc::new(Box::new(gigachad_renderer_html::DefaultHtmlTagRenderer)
+                        as Box<dyn gigachad_renderer::HtmlTagRenderer + Send + Sync>)
+                }
                 #[cfg(feature = "htmx")]
-                RendererType::Htmx(renderer) => renderer.html_renderer.app.tag_renderer,
+                #[cfg(feature = "actix")]
+                RendererType::Htmx(renderer) => renderer.app.processor.tag_renderer,
                 #[cfg(feature = "datastar")]
-                RendererType::Datastar(renderer) => renderer.html_renderer.app.tag_renderer,
+                #[cfg(feature = "actix")]
+                RendererType::Datastar(renderer) => renderer.app.processor.tag_renderer,
                 #[cfg(feature = "vanilla-js")]
-                RendererType::VanillaJs(renderer) => renderer.html_renderer.app.tag_renderer,
+                #[cfg(feature = "actix")]
+                RendererType::VanillaJs(renderer) => renderer.app.processor.tag_renderer,
             };
 
             if output_path.is_dir() {
@@ -222,7 +245,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match handler(req).await {
                     Ok(view) => {
                         let html = container_element_to_html_response(
-                            &HeaderMap::new(),
+                            &std::collections::HashMap::new(),
                             &view.immediate,
                             Some(*BACKGROUND_COLOR),
                             &**tag_renderer,
@@ -254,6 +277,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             #[cfg(feature = "assets")]
             {
+                use moosicbox_app_native_lib::renderer::assets::AssetPathTarget;
+
                 use std::path::Path;
 
                 #[async_recursion::async_recursion]
@@ -271,13 +296,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Ok(())
                 }
 
-                let assets_gen = output_path.join(assets_dir.file_name().unwrap());
-
-                tokio::fs::create_dir_all(&assets_gen)
-                    .await
-                    .expect("Failed to create dirs");
-
-                copy_dir_all(&assets_dir, &assets_gen).await?;
+                for route in assets {
+                    let assets_output = output_path.join(&route.route);
+                    tokio::fs::create_dir_all(&assets_output.parent().unwrap())
+                        .await
+                        .expect("Failed to create dirs");
+                    match route.target {
+                        AssetPathTarget::File(file) => {
+                            tokio::fs::copy(&file, &assets_output).await?;
+                        }
+                        AssetPathTarget::Directory(dir) => {
+                            copy_dir_all(&dir, &assets_output).await?;
+                        }
+                    }
+                }
             }
 
             Ok::<_, Box<dyn std::error::Error>>(())
@@ -308,12 +340,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     #[cfg(feature = "assets")]
     {
-        app = app.with_static_asset_route_result(
-            moosicbox_app_native_lib::renderer::assets::StaticAssetRoute {
-                route: "public".to_string(),
-                target: assets_dir.try_into()?,
-            },
-        )?;
+        for assets in assets {
+            app = app.with_static_asset_route_result(assets)?;
+        }
     }
 
     let runner_runtime = runtime;

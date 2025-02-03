@@ -40,6 +40,7 @@ members = [
     "packages/gigachad/renderer/egui",
     "packages/gigachad/renderer/fltk",
     "packages/gigachad/renderer/html",
+    "packages/gigachad/renderer/html/actix",
     "packages/gigachad/renderer/htmx",
     "packages/gigachad/renderer/vanilla_js",
     "packages/gigachad/router",

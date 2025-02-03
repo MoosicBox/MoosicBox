@@ -144,6 +144,7 @@ pub async fn releases_route(req: RouteRequest) -> Result<View, Box<dyn std::erro
     };
 
     log::debug!("releases_route: os={os:?}");
+    log::debug!("releases_route: requesting GitHub releases");
 
     let response = CLIENT
         .get("https://api.github.com/repos/MoosicBox/MoosicBox/releases")
@@ -153,6 +154,7 @@ pub async fn releases_route(req: RouteRequest) -> Result<View, Box<dyn std::erro
         .text()
         .await?;
 
+    log::debug!("releases_route: received GitHub releases response");
     log::trace!("releases_route: GitHub releases response: '{response}'");
 
     let mut releases: Vec<GitHubRelease> = serde_json::from_str(&response)?;

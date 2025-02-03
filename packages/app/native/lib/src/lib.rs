@@ -65,13 +65,47 @@ pub enum RendererType {
     #[cfg(feature = "fltk")]
     Fltk(gigachad_renderer_fltk::FltkRenderer),
     #[cfg(feature = "html")]
-    Html(gigachad_renderer_html::HtmlRenderer),
+    #[cfg(feature = "actix")]
+    Html(
+        gigachad_renderer_html::HtmlRenderer<
+            gigachad_renderer_html::actix::ActixApp<
+                gigachad_renderer_html::actix::PreparedRequest,
+                gigachad_renderer_html::actix::HtmlActixResponseProcessor,
+            >,
+        >,
+    ),
+    #[cfg(feature = "html")]
+    HtmlStub(gigachad_renderer_html::HtmlRenderer<gigachad_renderer_html::StubApp>),
     #[cfg(feature = "htmx")]
-    Htmx(gigachad_renderer_htmx::HtmxRenderer),
+    #[cfg(feature = "actix")]
+    Htmx(
+        gigachad_renderer_html::HtmlRenderer<
+            gigachad_renderer_html::actix::ActixApp<
+                gigachad_renderer_html::actix::PreparedRequest,
+                gigachad_renderer_html::actix::HtmlActixResponseProcessor,
+            >,
+        >,
+    ),
     #[cfg(feature = "datastar")]
-    Datastar(gigachad_renderer_datastar::DatastarRenderer),
+    #[cfg(feature = "actix")]
+    Datastar(
+        gigachad_renderer_html::HtmlRenderer<
+            gigachad_renderer_html::actix::ActixApp<
+                gigachad_renderer_html::actix::PreparedRequest,
+                gigachad_renderer_html::actix::HtmlActixResponseProcessor,
+            >,
+        >,
+    ),
     #[cfg(feature = "vanilla-js")]
-    VanillaJs(gigachad_renderer_vanilla_js::VanillaJsRenderer),
+    #[cfg(feature = "actix")]
+    VanillaJs(
+        gigachad_renderer_html::HtmlRenderer<
+            gigachad_renderer_html::actix::ActixApp<
+                gigachad_renderer_html::actix::PreparedRequest,
+                gigachad_renderer_html::actix::HtmlActixResponseProcessor,
+            >,
+        >,
+    ),
 }
 
 impl From<RendererType> for Box<dyn Renderer> {
@@ -82,12 +116,18 @@ impl From<RendererType> for Box<dyn Renderer> {
             #[cfg(feature = "fltk")]
             RendererType::Fltk(renderer) => Box::new(renderer),
             #[cfg(feature = "html")]
+            #[cfg(feature = "actix")]
             RendererType::Html(renderer) => Box::new(renderer),
+            #[cfg(feature = "html")]
+            RendererType::HtmlStub(renderer) => Box::new(renderer),
             #[cfg(feature = "htmx")]
+            #[cfg(feature = "actix")]
             RendererType::Htmx(renderer) => Box::new(renderer),
             #[cfg(feature = "datastar")]
+            #[cfg(feature = "actix")]
             RendererType::Datastar(renderer) => Box::new(renderer),
             #[cfg(feature = "vanilla-js")]
+            #[cfg(feature = "actix")]
             RendererType::VanillaJs(renderer) => Box::new(renderer),
         }
     }
@@ -380,80 +420,67 @@ impl NativeAppBuilder {
             }
             #[cfg(not(feature = "fltk"))]
             unreachable!()
-        } else if cfg!(feature = "datastar") {
-            #[cfg(feature = "datastar")]
+        } else if cfg!(all(feature = "actix", feature = "datastar")) {
+            #[cfg(all(feature = "actix", feature = "datastar"))]
             {
                 let router = self.router.unwrap();
-                let runtime = self
-                    .runtime
-                    .clone()
-                    .ok_or(NativeAppError::RuntimeRequired)?;
-                let action_tx = Self::listen_actions(self.action_handlers);
-                let renderer =
-                    gigachad_renderer_datastar::DatastarRenderer::new(router, runtime, action_tx);
+                let renderer = gigachad_renderer_html::router_to_actix(router)
+                    .with_tag_renderer(gigachad_renderer_datastar::DatastarTagRenderer);
 
                 #[cfg(feature = "assets")]
                 let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
 
                 RendererType::Datastar(renderer)
             }
-            #[cfg(not(feature = "datastar"))]
+            #[cfg(not(all(feature = "actix", feature = "datastar")))]
             unreachable!()
-        } else if cfg!(feature = "htmx") {
-            #[cfg(feature = "htmx")]
+        } else if cfg!(all(feature = "actix", feature = "htmx")) {
+            #[cfg(all(feature = "actix", feature = "htmx"))]
             {
                 let router = self.router.unwrap();
-                let runtime = self
-                    .runtime
-                    .clone()
-                    .ok_or(NativeAppError::RuntimeRequired)?;
-                let action_tx = Self::listen_actions(self.action_handlers);
-                let renderer =
-                    gigachad_renderer_htmx::HtmxRenderer::new(router, runtime, action_tx);
+                let renderer = gigachad_renderer_html::router_to_actix(router)
+                    .with_tag_renderer(gigachad_renderer_htmx::HtmxTagRenderer);
 
                 #[cfg(feature = "assets")]
                 let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
 
                 RendererType::Htmx(renderer)
             }
-            #[cfg(not(feature = "htmx"))]
+            #[cfg(not(all(feature = "actix", feature = "htmx")))]
             unreachable!()
-        } else if cfg!(feature = "vanilla-js") {
-            #[cfg(feature = "vanilla-js")]
+        } else if cfg!(all(feature = "actix", feature = "vanilla-js")) {
+            #[cfg(all(feature = "actix", feature = "vanilla-js"))]
             {
                 let router = self.router.unwrap();
-                let runtime = self
-                    .runtime
-                    .clone()
-                    .ok_or(NativeAppError::RuntimeRequired)?;
-                let action_tx = Self::listen_actions(self.action_handlers);
-                let renderer = gigachad_renderer_vanilla_js::VanillaJsRenderer::new(
-                    router, runtime, action_tx,
-                );
+                let renderer = gigachad_renderer_html::router_to_actix(router)
+                    .with_tag_renderer(gigachad_renderer_vanilla_js::VanillaJsTagRenderer);
 
                 #[cfg(feature = "assets")]
                 let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
 
                 RendererType::VanillaJs(renderer)
             }
-            #[cfg(not(feature = "vanilla-js"))]
+            #[cfg(not(all(feature = "actix", feature = "vanilla-js")))]
             unreachable!()
-        } else if cfg!(feature = "html") {
-            #[cfg(feature = "html")]
+        } else if cfg!(all(feature = "actix", feature = "html")) {
+            #[cfg(all(feature = "actix", feature = "html"))]
             {
                 let router = self.router.unwrap();
-                let runtime = self
-                    .runtime
-                    .clone()
-                    .ok_or(NativeAppError::RuntimeRequired)?;
-                let action_tx = Self::listen_actions(self.action_handlers);
-                let renderer =
-                    gigachad_renderer_html::HtmlRenderer::new(router, runtime, action_tx);
+                let renderer = gigachad_renderer_html::router_to_actix(router);
 
                 #[cfg(feature = "assets")]
                 let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
 
                 RendererType::Html(renderer)
+            }
+            #[cfg(not(all(feature = "actix", feature = "html")))]
+            unreachable!()
+        } else if cfg!(feature = "html") {
+            #[cfg(feature = "html")]
+            {
+                RendererType::HtmlStub(gigachad_renderer_html::HtmlRenderer::new(
+                    gigachad_renderer_html::StubApp,
+                ))
             }
             #[cfg(not(feature = "html"))]
             unreachable!()
@@ -521,14 +548,17 @@ impl NativeApp {
 
     /// # Errors
     ///
-    /// Will error if there was an error starting the app
+    /// * If there was an error starting the app
+    ///
+    /// # Panics
+    ///
+    /// * If the runtime handle doesn't exist
     pub async fn to_runner(self) -> Result<Box<dyn RenderRunner>, NativeAppError> {
         log::debug!("run: getting runner");
         self.renderer
             .read()
             .await
-            .to_runner()
-            .await
+            .to_runner(self.runtime_handle.unwrap())
             .map_err(NativeAppError::Other)
     }
 }

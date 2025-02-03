@@ -17,6 +17,7 @@ use std::{
 use async_trait::async_trait;
 pub use gigachad_color::Color;
 use gigachad_transformer::{html::ParseError, Container};
+pub use tokio::runtime::Handle;
 
 #[derive(Default, Debug, Clone)]
 pub struct PartialView {
@@ -77,8 +78,18 @@ pub trait RenderRunner: Send + Sync {
     fn run(&mut self) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
 }
 
+pub trait ToRenderRunner {
+    /// # Errors
+    ///
+    /// * If failed to convert the value to a `RenderRunner`
+    fn to_runner(
+        &self,
+        handle: Handle,
+    ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>>;
+}
+
 #[async_trait]
-pub trait Renderer: Send + Sync {
+pub trait Renderer: ToRenderRunner + Send + Sync {
     /// # Errors
     ///
     /// Will error if `Renderer` implementation app fails to start
@@ -90,13 +101,6 @@ pub trait Renderer: Send + Sync {
         y: Option<i32>,
         background: Option<Color>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
-
-    /// # Errors
-    ///
-    /// Will error if `Renderer` implementation fails to run.
-    async fn to_runner(
-        &self,
-    ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send + 'static>>;
 
     /// # Errors
     ///
@@ -131,4 +135,24 @@ pub trait Renderer: Send + Sync {
 
     fn container(&self) -> RwLockReadGuard<Container>;
     fn container_mut(&self) -> RwLockWriteGuard<Container>;
+}
+
+#[cfg(feature = "html")]
+pub trait HtmlTagRenderer {
+    /// # Errors
+    ///
+    /// * If the `HtmlTagRenderer` fails to write the element attributes
+    fn element_attrs_to_html(
+        &self,
+        f: &mut dyn std::io::Write,
+        container: &Container,
+        is_flex_child: bool,
+    ) -> Result<(), std::io::Error>;
+
+    fn root_html(
+        &self,
+        _headers: &std::collections::HashMap<String, String>,
+        content: String,
+        background: Option<Color>,
+    ) -> String;
 }

@@ -17,7 +17,7 @@ export class GigaChadSite extends Component implements Link.Linkable {
         super(__pulumiType, name, args, opts);
 
         args.build = {
-            command: 'cargo run --no-default-features --features htmx,dev gen',
+            command: 'cargo run --no-default-features --features htmx,static-routes gen',
             output: 'gen',
         };
 

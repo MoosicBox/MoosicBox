@@ -270,6 +270,24 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
     }
 }
 
+impl ToRenderRunner for EguiRenderer {
+    /// # Errors
+    ///
+    /// Will error if egui fails to run the event loop.
+    fn to_runner(
+        &self,
+        _handle: Handle,
+    ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
+        Ok(Box::new(EguiRenderRunner {
+            width: self.width.unwrap(),
+            height: self.height.unwrap(),
+            x: self.x,
+            y: self.y,
+            app: self.app.clone(),
+        }))
+    }
+}
+
 #[async_trait]
 impl Renderer for EguiRenderer {
     /// # Panics
@@ -304,19 +322,6 @@ impl Renderer for EguiRenderer {
         });
 
         Ok(())
-    }
-
-    /// # Errors
-    ///
-    /// Will error if egui fails to run the event loop.
-    async fn to_runner(&self) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
-        Ok(Box::new(EguiRenderRunner {
-            width: self.width.unwrap(),
-            height: self.height.unwrap(),
-            x: self.x,
-            y: self.y,
-            app: self.app.clone(),
-        }))
     }
 
     /// # Errors

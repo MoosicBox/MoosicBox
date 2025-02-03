@@ -3871,20 +3871,17 @@ dependencies = [
  "gigachad_transformer",
  "log",
  "maud",
+ "tokio",
 ]
 
 [[package]]
 name = "gigachad_renderer_datastar"
 version = "0.1.0"
 dependencies = [
- "async-trait",
- "flume",
- "gigachad_actions",
  "gigachad_renderer",
  "gigachad_renderer_html",
  "gigachad_router",
  "log",
- "tokio",
 ]
 
 [[package]]
@@ -3941,54 +3938,57 @@ dependencies = [
 name = "gigachad_renderer_html"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "flume",
+ "gigachad_renderer",
+ "gigachad_renderer_html_actix",
+ "gigachad_router",
+ "gigachad_transformer",
+ "log",
+ "maud",
+ "moosicbox_assert",
+ "moosicbox_env_utils",
+ "moosicbox_logging",
+ "tokio",
+ "uaparser",
+]
+
+[[package]]
+name = "gigachad_renderer_html_actix"
+version = "0.1.0"
+dependencies = [
  "actix-cors",
  "actix-files",
  "actix-web",
  "async-trait",
- "flume",
- "gigachad_actions",
  "gigachad_renderer",
- "gigachad_router",
- "gigachad_transformer",
  "log",
- "moosicbox_app_native_image",
  "moosicbox_assert",
  "moosicbox_env_utils",
- "moosicbox_logging",
  "moosicbox_middleware",
  "moosicbox_task",
  "tokio",
- "uaparser",
 ]
 
 [[package]]
 name = "gigachad_renderer_htmx"
 version = "0.1.0"
 dependencies = [
- "async-trait",
- "flume",
- "gigachad_actions",
  "gigachad_renderer",
  "gigachad_renderer_html",
- "gigachad_router",
  "gigachad_transformer",
  "log",
- "tokio",
+ "maud",
 ]
 
 [[package]]
 name = "gigachad_renderer_vanilla_js"
 version = "0.1.0"
 dependencies = [
- "async-trait",
- "flume",
- "gigachad_actions",
  "gigachad_renderer",
  "gigachad_renderer_html",
- "gigachad_router",
  "gigachad_transformer",
  "log",
- "tokio",
 ]
 
 [[package]]
@@ -6728,6 +6728,7 @@ dependencies = [
  "chrono",
  "clap 4.5.27",
  "console-subscriber",
+ "gigachad_renderer",
  "gigachad_renderer_html",
  "log",
  "moosicbox_app_native_lib",

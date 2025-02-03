@@ -1181,6 +1181,22 @@ impl RenderRunner for FltkRenderRunner {
     }
 }
 
+impl ToRenderRunner for FltkRenderer {
+    /// # Errors
+    ///
+    /// Will error if FLTK fails to run the event loop.
+    fn to_runner(
+        &self,
+        _handle: Handle,
+    ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
+        let Some(app) = self.app else {
+            moosicbox_assert::die_or_panic!("Cannot listen before app is started");
+        };
+
+        Ok(Box::new(FltkRenderRunner { app }))
+    }
+}
+
 #[async_trait]
 impl Renderer for FltkRenderer {
     /// # Panics
@@ -1303,17 +1319,6 @@ impl Renderer for FltkRenderer {
         });
 
         Ok(())
-    }
-
-    /// # Errors
-    ///
-    /// Will error if FLTK fails to run the event loop.
-    async fn to_runner(&self) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
-        let Some(app) = self.app else {
-            moosicbox_assert::die_or_panic!("Cannot listen before app is started");
-        };
-
-        Ok(Box::new(FltkRenderRunner { app }))
     }
 
     /// # Errors

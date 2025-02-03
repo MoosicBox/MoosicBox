@@ -19,11 +19,13 @@ gigachad_transformer = { version = "0.1.0", path = "../transformer", default-fea
 async-trait = { workspace = true }
 log         = { workspace = true }
 maud        = { workspace = true, optional = true }
+tokio       = { workspace = true, features = ["rt"] }
 
 [features]
 default = [
     "assets",
     "canvas",
+    "html",
     "maud",
     "viewport",
     "viewport-immediate",
@@ -43,5 +45,7 @@ profiling-tracy   = ["gigachad_transformer/profiling-tracy"]
 viewport           = []
 viewport-immediate = ["viewport"]
 viewport-retained  = ["viewport"]
+
+html = []
 
 assets = []

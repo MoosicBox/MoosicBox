@@ -14,24 +14,18 @@ version     = "0.1.0"
 ignored = []
 
 [dependencies]
-gigachad_actions = { version = "0.1.0", path = "../../actions", default-features = false, features = [
-    "logic",
-] }
 gigachad_renderer = { version = "0.1.0", path = "..", default-features = false, features = [
     "canvas",
+    "html",
 ] }
 gigachad_renderer_html = { version = "0.1.0", path = "../html", default-features = false, features = [
     "assets",
 ] }
-gigachad_router = { version = "0.1.0", path = "../../../gigachad/router", default-features = false }
 gigachad_transformer = { version = "0.1.0", path = "../../transformer", default-features = false, features = [
     "html",
 ] }
 
-async-trait = { workspace = true }
-flume       = { workspace = true }
-log         = { workspace = true }
-tokio       = { workspace = true }
+log = { workspace = true }
 
 [features]
 default = ["debug"]

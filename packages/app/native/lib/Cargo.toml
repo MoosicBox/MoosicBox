@@ -18,7 +18,9 @@ gigachad_renderer = { version = "0.1.0", path = "../../../gigachad/renderer", de
 gigachad_renderer_datastar = { version = "0.1.0", path = "../../../gigachad/renderer/datastar", optional = true, default-features = false }
 gigachad_renderer_egui = { version = "0.1.0", path = "../../../gigachad/renderer/egui", optional = true, default-features = false }
 gigachad_renderer_fltk = { version = "0.1.0", path = "../../../gigachad/renderer/fltk", optional = true, default-features = false }
-gigachad_renderer_html = { version = "0.1.0", path = "../../../gigachad/renderer/html", optional = true, default-features = false }
+gigachad_renderer_html = { version = "0.1.0", path = "../../../gigachad/renderer/html", optional = true, default-features = false, features = [
+    "actix",
+] }
 gigachad_renderer_htmx = { version = "0.1.0", path = "../../../gigachad/renderer/htmx", optional = true, default-features = false }
 gigachad_renderer_vanilla_js = { version = "0.1.0", path = "../../../gigachad/renderer/vanilla_js", optional = true, default-features = false }
 gigachad_router = { version = "0.1.0", path = "../../../gigachad/router", default-features = false }
@@ -34,6 +36,7 @@ tokio     = { workspace = true, features = ["rt-multi-thread", "sync"] }
 
 [features]
 default = [
+    "actix",
     "datastar",
     "egui-wgpu",
     "fltk",
@@ -49,14 +52,16 @@ fail-on-warnings = []
 
 maud = ["gigachad_renderer/maud"]
 
-datastar   = ["dep:gigachad_renderer_datastar"]
+datastar   = ["dep:gigachad_renderer_datastar", "html"]
 egui       = ["dep:gigachad_renderer_egui"]
 egui-glow  = ["egui", "gigachad_renderer_egui/glow"]
 egui-wgpu  = ["egui", "gigachad_renderer_egui/wgpu"]
 fltk       = ["dep:gigachad_renderer_fltk"]
 html       = ["dep:gigachad_renderer_html"]
-htmx       = ["dep:gigachad_renderer_htmx"]
-vanilla-js = ["dep:gigachad_renderer_vanilla_js"]
+htmx       = ["dep:gigachad_renderer_htmx", "html"]
+vanilla-js = ["dep:gigachad_renderer_vanilla_js", "html"]
+
+actix = ["gigachad_renderer_html?/actix"]
 
 wayland = ["gigachad_renderer_egui?/wayland"]
 x11     = ["gigachad_renderer_egui?/x11"]
