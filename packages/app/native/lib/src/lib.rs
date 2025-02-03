@@ -75,7 +75,17 @@ pub enum RendererType {
         >,
     ),
     #[cfg(feature = "html")]
-    HtmlStub(gigachad_renderer_html::HtmlRenderer<gigachad_renderer_html::StubApp>),
+    #[cfg(feature = "lambda")]
+    HtmlLambda(
+        gigachad_renderer_html::HtmlRenderer<
+            gigachad_renderer_html::lambda::LambdaApp<
+                gigachad_renderer_html::lambda::PreparedRequest,
+                gigachad_renderer_html::lambda::HtmlLambdaResponseProcessor,
+            >,
+        >,
+    ),
+    #[cfg(feature = "html")]
+    HtmlStub(gigachad_renderer_html::HtmlRenderer<gigachad_renderer_html::stub::StubApp>),
     #[cfg(feature = "htmx")]
     #[cfg(feature = "actix")]
     Htmx(
@@ -83,6 +93,16 @@ pub enum RendererType {
             gigachad_renderer_html::actix::ActixApp<
                 gigachad_renderer_html::actix::PreparedRequest,
                 gigachad_renderer_html::actix::HtmlActixResponseProcessor,
+            >,
+        >,
+    ),
+    #[cfg(feature = "htmx")]
+    #[cfg(feature = "lambda")]
+    HtmxLambda(
+        gigachad_renderer_html::HtmlRenderer<
+            gigachad_renderer_html::lambda::LambdaApp<
+                gigachad_renderer_html::lambda::PreparedRequest,
+                gigachad_renderer_html::lambda::HtmlLambdaResponseProcessor,
             >,
         >,
     ),
@@ -96,6 +116,16 @@ pub enum RendererType {
             >,
         >,
     ),
+    #[cfg(feature = "datastar")]
+    #[cfg(feature = "lambda")]
+    DatastarLambda(
+        gigachad_renderer_html::HtmlRenderer<
+            gigachad_renderer_html::lambda::LambdaApp<
+                gigachad_renderer_html::lambda::PreparedRequest,
+                gigachad_renderer_html::lambda::HtmlLambdaResponseProcessor,
+            >,
+        >,
+    ),
     #[cfg(feature = "vanilla-js")]
     #[cfg(feature = "actix")]
     VanillaJs(
@@ -103,6 +133,16 @@ pub enum RendererType {
             gigachad_renderer_html::actix::ActixApp<
                 gigachad_renderer_html::actix::PreparedRequest,
                 gigachad_renderer_html::actix::HtmlActixResponseProcessor,
+            >,
+        >,
+    ),
+    #[cfg(feature = "vanilla-js")]
+    #[cfg(feature = "lambda")]
+    VanillaJsLambda(
+        gigachad_renderer_html::HtmlRenderer<
+            gigachad_renderer_html::lambda::LambdaApp<
+                gigachad_renderer_html::lambda::PreparedRequest,
+                gigachad_renderer_html::lambda::HtmlLambdaResponseProcessor,
             >,
         >,
     ),
@@ -119,16 +159,28 @@ impl From<RendererType> for Box<dyn Renderer> {
             #[cfg(feature = "actix")]
             RendererType::Html(renderer) => Box::new(renderer),
             #[cfg(feature = "html")]
+            #[cfg(feature = "lambda")]
+            RendererType::HtmlLambda(renderer) => Box::new(renderer),
+            #[cfg(feature = "html")]
             RendererType::HtmlStub(renderer) => Box::new(renderer),
             #[cfg(feature = "htmx")]
             #[cfg(feature = "actix")]
             RendererType::Htmx(renderer) => Box::new(renderer),
+            #[cfg(feature = "htmx")]
+            #[cfg(feature = "lambda")]
+            RendererType::HtmxLambda(renderer) => Box::new(renderer),
             #[cfg(feature = "datastar")]
             #[cfg(feature = "actix")]
             RendererType::Datastar(renderer) => Box::new(renderer),
+            #[cfg(feature = "datastar")]
+            #[cfg(feature = "lambda")]
+            RendererType::DatastarLambda(renderer) => Box::new(renderer),
             #[cfg(feature = "vanilla-js")]
             #[cfg(feature = "actix")]
             RendererType::VanillaJs(renderer) => Box::new(renderer),
+            #[cfg(feature = "vanilla-js")]
+            #[cfg(feature = "lambda")]
+            RendererType::VanillaJsLambda(renderer) => Box::new(renderer),
         }
     }
 }
@@ -434,6 +486,20 @@ impl NativeAppBuilder {
             }
             #[cfg(not(all(feature = "actix", feature = "datastar")))]
             unreachable!()
+        } else if cfg!(all(feature = "lambda", feature = "datastar")) {
+            #[cfg(all(feature = "lambda", feature = "datastar"))]
+            {
+                let router = self.router.unwrap();
+                let renderer = gigachad_renderer_html::router_to_lambda(router)
+                    .with_tag_renderer(gigachad_renderer_datastar::DatastarTagRenderer);
+
+                #[cfg(feature = "assets")]
+                let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
+
+                RendererType::DatastarLambda(renderer)
+            }
+            #[cfg(not(all(feature = "lambda", feature = "datastar")))]
+            unreachable!()
         } else if cfg!(all(feature = "actix", feature = "htmx")) {
             #[cfg(all(feature = "actix", feature = "htmx"))]
             {
@@ -447,6 +513,20 @@ impl NativeAppBuilder {
                 RendererType::Htmx(renderer)
             }
             #[cfg(not(all(feature = "actix", feature = "htmx")))]
+            unreachable!()
+        } else if cfg!(all(feature = "lambda", feature = "htmx")) {
+            #[cfg(all(feature = "lambda", feature = "htmx"))]
+            {
+                let router = self.router.unwrap();
+                let renderer = gigachad_renderer_html::router_to_lambda(router)
+                    .with_tag_renderer(gigachad_renderer_htmx::HtmxTagRenderer);
+
+                #[cfg(feature = "assets")]
+                let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
+
+                RendererType::HtmxLambda(renderer)
+            }
+            #[cfg(not(all(feature = "lambda", feature = "htmx")))]
             unreachable!()
         } else if cfg!(all(feature = "actix", feature = "vanilla-js")) {
             #[cfg(all(feature = "actix", feature = "vanilla-js"))]
@@ -462,6 +542,20 @@ impl NativeAppBuilder {
             }
             #[cfg(not(all(feature = "actix", feature = "vanilla-js")))]
             unreachable!()
+        } else if cfg!(all(feature = "lambda", feature = "vanilla-js")) {
+            #[cfg(all(feature = "lambda", feature = "vanilla-js"))]
+            {
+                let router = self.router.unwrap();
+                let renderer = gigachad_renderer_html::router_to_lambda(router)
+                    .with_tag_renderer(gigachad_renderer_vanilla_js::VanillaJsTagRenderer);
+
+                #[cfg(feature = "assets")]
+                let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
+
+                RendererType::VanillaJsLambda(renderer)
+            }
+            #[cfg(not(all(feature = "lambda", feature = "vanilla-js")))]
+            unreachable!()
         } else if cfg!(all(feature = "actix", feature = "html")) {
             #[cfg(all(feature = "actix", feature = "html"))]
             {
@@ -475,11 +569,24 @@ impl NativeAppBuilder {
             }
             #[cfg(not(all(feature = "actix", feature = "html")))]
             unreachable!()
+        } else if cfg!(all(feature = "lambda", feature = "html")) {
+            #[cfg(all(feature = "lambda", feature = "html"))]
+            {
+                let router = self.router.unwrap();
+                let renderer = gigachad_renderer_html::router_to_lambda(router);
+
+                #[cfg(feature = "assets")]
+                let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
+
+                RendererType::HtmlLambda(renderer)
+            }
+            #[cfg(not(all(feature = "lambda", feature = "html")))]
+            unreachable!()
         } else if cfg!(feature = "html") {
             #[cfg(feature = "html")]
             {
                 RendererType::HtmlStub(gigachad_renderer_html::HtmlRenderer::new(
-                    gigachad_renderer_html::StubApp,
+                    gigachad_renderer_html::stub::StubApp,
                 ))
             }
             #[cfg(not(feature = "html"))]

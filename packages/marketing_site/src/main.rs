@@ -77,6 +77,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         |dir| dir.join("public"),
     );
 
+    #[cfg(feature = "lambda")]
+    let args = Args {
+        cmd: Commands::Serve,
+    };
+
+    #[cfg(not(feature = "lambda"))]
     let args = Args::parse();
 
     let router = Router::new()
@@ -193,6 +199,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 #[cfg(feature = "actix")]
                 RendererType::Html(renderer) => renderer.app.processor.tag_renderer,
                 #[cfg(feature = "html")]
+                #[cfg(feature = "lambda")]
+                RendererType::HtmlLambda(renderer) => renderer.app.processor.tag_renderer,
+                #[cfg(feature = "html")]
                 RendererType::HtmlStub(_renderer) => {
                     Arc::new(Box::new(gigachad_renderer_html::DefaultHtmlTagRenderer)
                         as Box<dyn gigachad_renderer::HtmlTagRenderer + Send + Sync>)
@@ -200,12 +209,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 #[cfg(feature = "htmx")]
                 #[cfg(feature = "actix")]
                 RendererType::Htmx(renderer) => renderer.app.processor.tag_renderer,
+                #[cfg(feature = "htmx")]
+                #[cfg(feature = "lambda")]
+                RendererType::HtmxLambda(renderer) => renderer.app.processor.tag_renderer,
                 #[cfg(feature = "datastar")]
                 #[cfg(feature = "actix")]
                 RendererType::Datastar(renderer) => renderer.app.processor.tag_renderer,
+                #[cfg(feature = "datastar")]
+                #[cfg(feature = "lambda")]
+                RendererType::DatastarLambda(renderer) => renderer.app.processor.tag_renderer,
                 #[cfg(feature = "vanilla-js")]
                 #[cfg(feature = "actix")]
                 RendererType::VanillaJs(renderer) => renderer.app.processor.tag_renderer,
+                #[cfg(feature = "vanilla-js")]
+                #[cfg(feature = "lambda")]
+                RendererType::VanillaJsLambda(renderer) => renderer.app.processor.tag_renderer,
             };
 
             if output_path.is_dir() {

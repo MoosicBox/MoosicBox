@@ -10,15 +10,13 @@ readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
-[package.metadata.cargo-machete]
-ignored = ["image"]
-
 [dependencies]
 gigachad_renderer = { version = "0.1.0", path = "../", default-features = false, features = [
     "canvas",
     "html",
 ] }
 gigachad_renderer_html_actix = { version = "0.1.0", path = "actix", default-features = false, optional = true }
+gigachad_renderer_html_lambda = { version = "0.1.0", path = "lambda", default-features = false, optional = true }
 gigachad_router = { version = "0.1.0", path = "../../../gigachad/router", default-features = false }
 gigachad_transformer = { version = "0.1.0", path = "../../transformer", default-features = false, features = [
     "html",
@@ -37,13 +35,17 @@ tokio       = { workspace = true }
 uaparser    = { workspace = true }
 
 [features]
-default = ["actix", "assets", "debug"]
+default = ["actix", "assets", "debug", "lambda"]
 
 fail-on-warnings = []
 
 debug = []
 
 actix  = ["dep:gigachad_renderer_html_actix"]
-lambda = []
+lambda = ["dep:gigachad_renderer_html_lambda"]
 
-assets = ["gigachad_renderer_html_actix/assets"]
+assets = [
+    "gigachad_renderer/assets",
+    "gigachad_renderer_html_actix?/assets",
+    "gigachad_renderer_html_lambda?/assets",
+]

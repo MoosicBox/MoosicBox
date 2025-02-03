@@ -68,6 +68,7 @@ default = [
     "fltk",
     "html",
     "htmx",
+    "lambda",
     "static-routes",
     "unsafe",
     "vanilla-js",
@@ -93,7 +94,7 @@ actix = ["gigachad_renderer_html?/actix", "moosicbox_app_native_lib/actix"]
 wayland = ["moosicbox_app_native_lib/wayland"]
 x11     = ["moosicbox_app_native_lib/x11"]
 
-lambda = ["gigachad_renderer_html?/lambda"]
+lambda = ["gigachad_renderer_html?/lambda", "moosicbox_app_native_lib/lambda"]
 
 windows-console = []
 

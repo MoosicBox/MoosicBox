@@ -43,6 +43,7 @@ default = [
     "format",
     "html",
     "htmx",
+    "lambda",
     "maud",
     "static-routes",
     "vanilla-js",
@@ -61,7 +62,8 @@ html       = ["dep:gigachad_renderer_html"]
 htmx       = ["dep:gigachad_renderer_htmx", "html"]
 vanilla-js = ["dep:gigachad_renderer_vanilla_js", "html"]
 
-actix = ["gigachad_renderer_html?/actix"]
+actix  = ["gigachad_renderer_html?/actix"]
+lambda = ["gigachad_renderer_html?/lambda"]
 
 wayland = ["gigachad_renderer_egui?/wayland"]
 x11     = ["gigachad_renderer_egui?/x11"]
