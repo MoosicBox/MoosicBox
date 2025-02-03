@@ -10,7 +10,7 @@ export function createGigaChadSite(
 ) {
     args.build = {
         command:
-            'cargo run --no-default-features --features htmx,static-routes gen',
+            'cargo run --no-default-features --features htmx,static-routes,assets gen',
         output: 'gen',
     };
 
