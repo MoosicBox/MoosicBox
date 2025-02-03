@@ -5,10 +5,19 @@ on:
         branches: ['master']
         paths:
             - packages/**
-            - '*.toml'
-            - Cargo.lock
+            - '**/*.toml'
+            - '**/Cargo.lock'
             - .github/workflows/build-and-test.yml
             - free_disk_space.sh
+            - '!packages/marketing_site/*.ts'
+            - '!packages/marketing_site/*.json'
+            - '!packages/marketing_site/*.mjs'
+            - '!packages/marketing_site/*.js'
+            - '!packages/marketing_site/*.md'
+            - '!packages/marketing_site/.prettierignore'
+            - '!packages/marketing_site/gigachad/**'
+            - '!packages/marketing_site/infra/**'
+            - '!**/*.nix'
     pull_request:
         branches: ['master']
 
