@@ -6,8 +6,7 @@
 declare module "sst" {
   export interface Resource {
     "MoosicBoxMarketingSite": {
-      "type": "sst.aws.GigaChadSite"
-      "url": string
+      "type": "sst.sst.Linkable"
     }
     "MoosicBoxMarketingSite-static": {
       "type": "sst.aws.StaticSite"

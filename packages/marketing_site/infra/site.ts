@@ -1,4 +1,4 @@
-import { GigaChadSite } from 'gigachad/GigaChadSite';
+import { createGigaChadSite } from 'gigachad/GigaChadSite';
 
 function getCustomDomain() {
     return {
@@ -15,13 +15,13 @@ const domainName = `${subdomain}${domain}`;
 
 const customDomain = getCustomDomain();
 
-const site = new GigaChadSite('MoosicBoxMarketingSite', {
+const { staticSite } = createGigaChadSite('MoosicBoxMarketingSite', {
     domain: customDomain,
     environment: {},
     errorPage: 'not-found.html',
 });
 
 export const outputs = {
-    url: site.url,
+    url: staticSite.url,
     host: `https://${domainName}`,
 };
