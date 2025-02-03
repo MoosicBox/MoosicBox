@@ -182,7 +182,7 @@ impl From<UpdateSessionPlaylist> for ApiUpdateSessionPlaylist {
     fn from(value: UpdateSessionPlaylist) -> Self {
         Self {
             session_playlist_id: value.session_playlist_id,
-            tracks: value.tracks.into_iter().map(Into::into).collect::<Vec<_>>(),
+            tracks: value.tracks,
         }
     }
 }
@@ -191,7 +191,7 @@ impl From<ApiUpdateSessionPlaylist> for UpdateSessionPlaylist {
     fn from(value: ApiUpdateSessionPlaylist) -> Self {
         Self {
             session_playlist_id: value.session_playlist_id,
-            tracks: value.tracks.into_iter().map(Into::into).collect::<Vec<_>>(),
+            tracks: value.tracks,
         }
     }
 }
