@@ -100,12 +100,12 @@ pub fn releases(releases: &[OsRelease], os: &Os) -> Markup {
                                 h3 { (get_os_header(release_asset.name)) }
                                 "Download "
                                 a sx-color="#fff" href=(asset.browser_download_url) { (asset.name) }
-                                " (" (format_size(asset.size)) ")"
+                                span sx-color="#ccc" sx-font-size=(12) { " (" (format_size(asset.size)) ")" }
                                 ul sx-margin=(0) {
                                     @for other_asset in &release_asset.other_formats {
                                         li {
                                             a sx-color="#fff" href=(other_asset.browser_download_url) { (other_asset.name) }
-                                            " (" (format_size(other_asset.size)) ")"
+                                            span sx-color="#ccc" sx-font-size=(12) { " (" (format_size(other_asset.size)) ")" }
                                         }
                                     }
                                 }
