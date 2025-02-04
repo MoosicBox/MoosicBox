@@ -164,7 +164,7 @@ colored = { version = "3.0.0" }
 console-subscriber = "0.4.1"
 cpal = "0.15.3"
 debounce = "0.2.2"
-derive_more = "1.0.0"
+derive_more = "2.0.1"
 diesel = { version = "2.2.7", default-features = false }
 diesel_migrations = { version = "2.2.0", default-features = false }
 dotenv = "0.15"
