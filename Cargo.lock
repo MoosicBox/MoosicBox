@@ -3898,6 +3898,7 @@ dependencies = [
  "gigachad_renderer_html",
  "gigachad_router",
  "log",
+ "maud",
 ]
 
 [[package]]
@@ -4022,6 +4023,7 @@ dependencies = [
  "gigachad_renderer_html",
  "gigachad_transformer",
  "log",
+ "maud",
 ]
 
 [[package]]

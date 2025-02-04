@@ -6,6 +6,7 @@ use std::{collections::HashMap, io::Write};
 use gigachad_renderer::{Color, HtmlTagRenderer};
 use gigachad_renderer_html::html::{element_classes_to_html, element_style_to_html};
 use gigachad_router::Container;
+use maud::{html, PreEscaped};
 
 pub struct DatastarTagRenderer;
 
@@ -37,21 +38,21 @@ impl HtmlTagRenderer for DatastarTagRenderer {
         if false {
             content
         } else {
-            format!(
-                r#"
-                <html>
-                    <head>
-                        <script
+            let background = background.map(|x| format!("background:rgb({},{},{})", x.r, x.g, x.b));
+            let background = background.as_deref().unwrap_or("");
+
+            html! {
+                html {
+                    head {
+                        script
                             type="module"
                             src="https://cdn.jsdelivr.net/npm/@sudodevnull/datastar@0.19.9/dist/datastar.min.js"
-                            defer
-                        ></script>
-                        <style>
+                            defer;
+                        style {(format!(r"
                             body {{
                                 margin: 0;{background};
                                 overflow: hidden;
                             }}
-
                             .remove-button-styles {{
                                 background: none;
                                 color: inherit;
@@ -61,16 +62,14 @@ impl HtmlTagRenderer for DatastarTagRenderer {
                                 cursor: pointer;
                                 outline: inherit;
                             }}
-                        </style>
-                    </head>
-                    <body>{content}</body>
-                </html>
-                "#,
-                background = background
-                    .map(|x| format!("background:rgb({},{},{})", x.r, x.g, x.b))
-                    .as_deref()
-                    .unwrap_or("")
-            )
+                        "))}
+                    }
+                    body {
+                        (PreEscaped(content))
+                    }
+                }
+            }
+            .into_string()
         }
     }
 }

@@ -23,7 +23,8 @@ gigachad_renderer_html = { version = "0.1.0", path = "../html", default-features
 ] }
 gigachad_router = { version = "0.1.0", path = "../../../gigachad/router", default-features = false }
 
-log = { workspace = true }
+log  = { workspace = true }
+maud = { workspace = true }
 
 [features]
 default = ["debug"]

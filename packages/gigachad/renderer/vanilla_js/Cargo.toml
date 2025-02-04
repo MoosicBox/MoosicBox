@@ -25,7 +25,8 @@ gigachad_transformer = { version = "0.1.0", path = "../../transformer", default-
     "html",
 ] }
 
-log = { workspace = true }
+log  = { workspace = true }
+maud = { workspace = true }
 
 [features]
 default = ["debug"]
