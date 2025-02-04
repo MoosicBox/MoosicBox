@@ -1,11 +1,15 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use std::marker::PhantomData;
+use std::{io::Write, marker::PhantomData};
 
 use async_trait::async_trait;
+use flate2::{write::GzEncoder, Compression};
 use gigachad_renderer::{RenderRunner, ToRenderRunner};
-use lambda_http::{http::header::CONTENT_TYPE, service_fn, Request, Response};
+use lambda_http::{
+    http::header::{CONTENT_ENCODING, CONTENT_TYPE},
+    service_fn, Request, Response,
+};
 use tokio::runtime::Handle;
 
 pub use lambda_http;
@@ -82,11 +86,15 @@ impl<
             async move {
                 let data = app.processor.prepare_request(event)?;
                 let html = app.processor.to_html(data).await?;
+                let mut gz = GzEncoder::new(vec![], Compression::default());
+                gz.write_all(html.as_bytes())?;
+                let gzip = gz.finish()?;
 
                 let response = Response::builder()
                     .status(200)
                     .header(CONTENT_TYPE, "text/html")
-                    .body(html)
+                    .header(CONTENT_ENCODING, "gzip")
+                    .body(lambda_http::Body::Binary(gzip))
                     .map_err(Box::new)?;
 
                 Ok::<_, lambda_runtime::Error>(response)

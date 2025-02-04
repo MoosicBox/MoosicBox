@@ -3992,6 +3992,7 @@ name = "gigachad_renderer_html_lambda"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "flate2",
  "gigachad_renderer",
  "lambda_http",
  "lambda_runtime",
