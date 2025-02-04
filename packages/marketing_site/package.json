@@ -14,6 +14,7 @@
     },
     "homepage": "https://github.com/MoosicBox/MoosicBoxMarketingSite#readme",
     "scripts": {
+        "dev": "cargo run --bin moosicbox_marketing_site --no-default-features --features actix,htmx,dev serve",
         "sst:deploy": "sst deploy",
         "sst:dev": "sst dev",
         "pretty": "prettier --check \"**/*.{js,cjs,mjs,jsx,ts,tsx}\"",
