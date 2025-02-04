@@ -8,6 +8,10 @@ declare module "sst" {
     "MoosicBoxMarketingSite": {
       "type": "sst.sst.Linkable"
     }
+    "MoosicBoxMarketingSite-api": {
+      "type": "sst.aws.ApiGatewayV2"
+      "url": string
+    }
     "MoosicBoxMarketingSite-static": {
       "type": "sst.aws.StaticSite"
       "url": string

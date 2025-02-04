@@ -8,19 +8,43 @@ export function createGigaChadSite(
     args: sst.aws.StaticSiteArgs = {},
     opts: ComponentResourceOptions = {},
 ) {
-    args.build = {
+    args.indexPage = args.indexPage ?? 'index';
+    args.build = args.build ?? {
         command:
             'cargo run --no-default-features --features htmx,static-routes,assets gen',
         output: 'gen',
     };
 
-    const dynamicRoutes = getDynamicRoutes();
-
     buildServer();
+
+    const dynamicRoutes = getDynamicRoutes();
 
     console.log('Using dynamic route paths:', dynamicRoutes);
 
-    args.indexPage = args.indexPage ?? 'index';
+    const apiName = `${name}-api`;
+
+    const api = new sst.aws.ApiGatewayV2(apiName, {
+        transform: {
+            route: {
+                handler: {
+                    runtime: 'rust' as 'go', // FIXME: remove this cast once rust is a valid runtime
+                    transform: {
+                        function: {
+                            runtime: 'provided.al2023',
+                            timeout: 300,
+                        },
+                    },
+                },
+            },
+        },
+    });
+
+    dynamicRoutes.forEach((route) => {
+        api.route(`GET ${route}`, {
+            handler: 'src/moosicbox_marketing_site.handler',
+            runtime: 'rust' as 'go', // FIXME: remove this cast once rust is a valid runtime
+        });
+    });
 
     const staticSiteName = `${name}-static`;
 
@@ -34,7 +58,9 @@ export function createGigaChadSite(
                         ...origins,
                         {
                             originId: 'api',
-                            domainName: origins[0].domainName,
+                            domainName: api.url.apply(
+                                (url) => new URL(url!).host,
+                            ),
                             customOriginConfig: {
                                 httpPort: 80,
                                 httpsPort: 443,
@@ -62,8 +88,11 @@ export function createGigaChadSite(
     );
 
     return {
+        api,
         staticSite,
-        linkable: new sst.Linkable(name, { properties: {} }),
+        linkable: new sst.Linkable(name, {
+            properties: {},
+        }),
     };
 }
 
