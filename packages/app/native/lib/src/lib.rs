@@ -585,9 +585,24 @@ impl NativeAppBuilder {
         } else if cfg!(feature = "html") {
             #[cfg(feature = "html")]
             {
-                RendererType::HtmlStub(gigachad_renderer_html::HtmlRenderer::new(
-                    gigachad_renderer_html::stub::StubApp,
-                ))
+                let app = gigachad_renderer_html::stub::StubApp::default();
+                #[cfg(feature = "datastar")]
+                let app = gigachad_renderer_html::HtmlApp::with_tag_renderer(
+                    app,
+                    gigachad_renderer_datastar::DatastarTagRenderer,
+                );
+                #[cfg(feature = "htmx")]
+                let app = gigachad_renderer_html::HtmlApp::with_tag_renderer(
+                    app,
+                    gigachad_renderer_htmx::HtmxTagRenderer,
+                );
+                #[cfg(feature = "vanilla-js")]
+                let app = gigachad_renderer_html::HtmlApp::with_tag_renderer(
+                    app,
+                    gigachad_renderer_vanilla_js::VanillaJsTagRenderer,
+                );
+
+                RendererType::HtmlStub(gigachad_renderer_html::HtmlRenderer::new(app))
             }
             #[cfg(not(feature = "html"))]
             unreachable!()

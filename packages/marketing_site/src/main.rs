@@ -202,10 +202,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 #[cfg(feature = "lambda")]
                 RendererType::HtmlLambda(renderer) => renderer.app.processor.tag_renderer,
                 #[cfg(feature = "html")]
-                RendererType::HtmlStub(_renderer) => {
-                    Arc::new(Box::new(gigachad_renderer_html::DefaultHtmlTagRenderer)
-                        as Box<dyn gigachad_renderer::HtmlTagRenderer + Send + Sync>)
-                }
+                RendererType::HtmlStub(renderer) => renderer.app.tag_renderer,
                 #[cfg(feature = "htmx")]
                 #[cfg(feature = "actix")]
                 RendererType::Htmx(renderer) => renderer.app.processor.tag_renderer,
