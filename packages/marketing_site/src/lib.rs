@@ -39,7 +39,6 @@ pub static ROUTER: LazyLock<Router> = LazyLock::new(|| {
             download::releases_route(req).await
         })
 });
-// pub static APP: OnceLock<NativeAppBuilder> = OnceLock::new();
 
 #[cfg(feature = "assets")]
 pub static ASSETS: LazyLock<Vec<gigachad_renderer::assets::StaticAssetRoute>> =
