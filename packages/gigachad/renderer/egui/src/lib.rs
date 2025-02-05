@@ -931,7 +931,7 @@ impl EguiApp {
     ) -> Response {
         ui.horizontal(|ui| {
             if let Some((color, size)) = container.calculated_border_left {
-                egui::Frame::none().fill(color.into()).show(ui, |ui| {
+                egui::Frame::new().fill(color.into()).show(ui, |ui| {
                     ui.set_width(size);
                     ui.set_height(container.calculated_height.unwrap_or(0.0));
                 });
@@ -940,7 +940,7 @@ impl EguiApp {
             let response = add_contents(ui);
 
             if let Some((color, size)) = container.calculated_border_right {
-                egui::Frame::none().fill(color.into()).show(ui, |ui| {
+                egui::Frame::new().fill(color.into()).show(ui, |ui| {
                     ui.set_width(size);
                     ui.set_height(container.calculated_height.unwrap_or(0.0));
                 });
@@ -959,7 +959,7 @@ impl EguiApp {
     ) -> Response {
         ui.vertical(|ui| {
             if let Some((color, size)) = container.calculated_border_top {
-                egui::Frame::none().fill(color.into()).show(ui, |ui| {
+                egui::Frame::new().fill(color.into()).show(ui, |ui| {
                     ui.set_width(container.calculated_width.unwrap_or(0.0));
                     ui.set_height(size);
                 });
@@ -968,7 +968,7 @@ impl EguiApp {
             let response = add_contents(ui);
 
             if let Some((color, size)) = container.calculated_border_bottom {
-                egui::Frame::none().fill(color.into()).show(ui, |ui| {
+                egui::Frame::new().fill(color.into()).show(ui, |ui| {
                     ui.set_width(container.calculated_width.unwrap_or(0.0));
                     ui.set_height(size);
                 });
@@ -1112,28 +1112,29 @@ impl EguiApp {
         }
 
         Some(Self::render_borders(ui, container, |ui| {
+            #[allow(clippy::cast_possible_truncation)]
             let (
                 render_context,
                 response,
-            ) = egui::Frame::none()
+            ) = egui::Frame::new()
                 .inner_margin(egui::Margin {
                     left:
-                        container.internal_margin_left.unwrap_or(0.0)
-                        + container.calculated_margin_left.unwrap_or(0.0),
+                        container.internal_margin_left.map_or(0,|x| x.round() as i8)
+                        + container.calculated_margin_left.map_or(0,|x| x.round() as i8),
                     right:
-                        container.internal_margin_right.unwrap_or(0.0)
-                        + container.calculated_margin_right.unwrap_or(0.0),
+                        container.internal_margin_right.map_or(0,|x| x.round() as i8)
+                        + container.calculated_margin_right.map_or(0,|x| x.round() as i8),
                     top:
-                        container.internal_margin_top.unwrap_or(0.0)
-                        + container.calculated_margin_top.unwrap_or(0.0),
+                        container.internal_margin_top.map_or(0,|x| x.round() as i8)
+                        + container.calculated_margin_top.map_or(0,|x| x.round() as i8),
                     bottom:
-                        container.internal_margin_bottom.unwrap_or(0.0)
-                        + container.calculated_margin_bottom.unwrap_or(0.0),
+                        container.internal_margin_bottom.map_or(0,|x| x.round() as i8)
+                        + container.calculated_margin_bottom.map_or(0,|x| x.round() as i8),
                 })
                 .show(ui, {
                     move |ui| {
                         ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
-                            egui::Frame::none().show(ui, {
+                            egui::Frame::new().show(ui, {
                                 move |ui| {
                                     let cursor = ui.cursor();
                                     let (pos_x, pos_y) = (cursor.left(), cursor.top());
@@ -1704,7 +1705,7 @@ impl EguiApp {
                 },
             }),
             |ui| {
-                egui::Frame::none().show(ui, |ui| {
+                egui::Frame::new().show(ui, |ui| {
                     ui.set_width(contained_calculated_width);
                     ui.set_height(contained_calculated_height);
                     if align_items == AlignItems::End {
@@ -1764,11 +1765,20 @@ impl EguiApp {
             container,
             relative_container,
             |render_context, ui, relative_container| {
-                let mut frame = egui::Frame::none().inner_margin(egui::Margin {
-                    left: container.calculated_padding_left.unwrap_or(0.0),
-                    right: container.calculated_padding_right.unwrap_or(0.0),
-                    top: container.calculated_padding_top.unwrap_or(0.0),
-                    bottom: container.calculated_padding_bottom.unwrap_or(0.0),
+                #[allow(clippy::cast_possible_truncation)]
+                let mut frame = egui::Frame::new().inner_margin(egui::Margin {
+                    left: container
+                        .calculated_padding_left
+                        .map_or(0, |x| x.round() as i8),
+                    right: container
+                        .calculated_padding_right
+                        .map_or(0, |x| x.round() as i8),
+                    top: container
+                        .calculated_padding_top
+                        .map_or(0, |x| x.round() as i8),
+                    bottom: container
+                        .calculated_padding_bottom
+                        .map_or(0, |x| x.round() as i8),
                 });
 
                 if let Some(background) =
@@ -1776,20 +1786,25 @@ impl EguiApp {
                 {
                     frame = frame.fill(background.into());
                 }
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                 if container.calculated_border_top_left_radius.is_some()
                     || container.calculated_border_top_right_radius.is_some()
                     || container.calculated_border_bottom_left_radius.is_some()
                     || container.calculated_border_bottom_right_radius.is_some()
                 {
-                    frame = frame.rounding(egui::Rounding {
-                        nw: container.calculated_border_top_left_radius.unwrap_or(0.0),
-                        ne: container.calculated_border_top_right_radius.unwrap_or(0.0),
+                    frame = frame.corner_radius(egui::CornerRadius {
+                        nw: container
+                            .calculated_border_top_left_radius
+                            .map_or(0, |x| x.round() as u8),
+                        ne: container
+                            .calculated_border_top_right_radius
+                            .map_or(0, |x| x.round() as u8),
                         sw: container
                             .calculated_border_bottom_left_radius
-                            .unwrap_or(0.0),
+                            .map_or(0, |x| x.round() as u8),
                         se: container
                             .calculated_border_bottom_right_radius
-                            .unwrap_or(0.0),
+                            .map_or(0, |x| x.round() as u8),
                     });
                 }
 
@@ -3267,7 +3282,7 @@ impl EguiApp {
         source: &str,
         container: &Container,
     ) -> Response {
-        egui::Frame::none()
+        egui::Frame::new()
             .show(ui, |ui| {
                 ui.set_width(container.calculated_width.unwrap());
                 ui.set_height(container.calculated_height.unwrap());
@@ -3283,10 +3298,13 @@ impl EguiApp {
                     container.calculated_height.unwrap(),
                 );
 
-                egui::Image::from_bytes(source.to_string(), egui::load::Bytes::Shared(bytes))
-                    .max_width(container.calculated_width.unwrap())
-                    .max_height(container.calculated_height.unwrap())
-                    .ui(ui);
+                egui::Image::from_bytes(
+                    format!("bytes://{source}"),
+                    egui::load::Bytes::Shared(bytes),
+                )
+                .max_width(container.calculated_width.unwrap())
+                .max_height(container.calculated_height.unwrap())
+                .ui(ui);
             })
             .response
     }
@@ -3330,12 +3348,16 @@ impl EguiApp {
                             stroke.color = egui::epaint::ColorMode::Solid((*color).into());
                         }
                         CanvasAction::Line(start, end) => {
+                            let color = match &stroke.color {
+                                egui::epaint::ColorMode::Solid(color) => *color,
+                                egui::epaint::ColorMode::UV(_f) => unreachable!(),
+                            };
                             painter.line_segment(
                                 [
                                     egui::Pos2::new(start.0 + cursor_px.x, start.1 + cursor_px.y),
                                     egui::Pos2::new(end.0 + cursor_px.x, end.1 + cursor_px.y),
                                 ],
-                                stroke.clone(),
+                                (stroke.width, color),
                             );
                         }
                         CanvasAction::FillRect(start, end) => {
@@ -3371,47 +3393,62 @@ impl EguiApp {
         }
 
         if start && end {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             if container.calculated_border_top_left_radius.is_some()
                 || container.calculated_border_top_right_radius.is_some()
                 || container.calculated_border_bottom_left_radius.is_some()
                 || container.calculated_border_bottom_right_radius.is_some()
             {
-                frame = frame.rounding(egui::Rounding {
-                    nw: container.calculated_border_top_left_radius.unwrap_or(0.0),
-                    ne: container.calculated_border_top_right_radius.unwrap_or(0.0),
+                frame = frame.corner_radius(egui::CornerRadius {
+                    nw: container
+                        .calculated_border_top_left_radius
+                        .map_or(0, |x| x.round() as u8),
+                    ne: container
+                        .calculated_border_top_right_radius
+                        .map_or(0, |x| x.round() as u8),
                     sw: container
                         .calculated_border_bottom_left_radius
-                        .unwrap_or(0.0),
+                        .map_or(0, |x| x.round() as u8),
                     se: container
                         .calculated_border_bottom_right_radius
-                        .unwrap_or(0.0),
+                        .map_or(0, |x| x.round() as u8),
                 });
             }
         } else if start {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             if container.calculated_border_top_left_radius.is_some()
                 || container.calculated_border_bottom_left_radius.is_some()
             {
-                frame = frame.rounding(egui::Rounding {
-                    nw: container.calculated_border_top_left_radius.unwrap_or(0.0),
-                    ne: 0.0,
+                frame = frame.corner_radius(egui::CornerRadius {
+                    nw: container
+                        .calculated_border_top_left_radius
+                        .map_or(0, |x| x.round() as u8),
+                    ne: 0,
                     sw: container
                         .calculated_border_bottom_left_radius
-                        .unwrap_or(0.0),
-                    se: 0.0,
+                        .map_or(0, |x| x.round() as u8),
+                    se: 0,
                 });
             }
         } else if end
             && (container.calculated_border_top_right_radius.is_some()
                 || container.calculated_border_bottom_right_radius.is_some())
         {
-            frame = frame.rounding(egui::Rounding {
-                nw: 0.0,
-                ne: container.calculated_border_top_right_radius.unwrap_or(0.0),
-                sw: 0.0,
-                se: container
-                    .calculated_border_bottom_right_radius
-                    .unwrap_or(0.0),
-            });
+            frame = frame.corner_radius(
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                {
+                    egui::CornerRadius {
+                        nw: 0,
+                        ne: container
+                            .calculated_border_top_right_radius
+                            .map_or(0, |x| x.round() as u8),
+                        sw: 0,
+                        se: container
+                            .calculated_border_bottom_right_radius
+                            .map_or(0, |x| x.round() as u8),
+                    }
+                },
+            );
         }
 
         frame
@@ -3465,7 +3502,7 @@ impl EguiApp {
                     let mut first = true;
                     let mut responses = vec![];
                     while let Some(th) = heading.next() {
-                        let mut frame = egui::Frame::none();
+                        let mut frame = egui::Frame::new();
 
                         if let Some(tr) = tr {
                             frame = Self::apply_container_styles(
@@ -3525,7 +3562,7 @@ impl EguiApp {
                     let mut first = true;
                     let mut responses = vec![];
                     while let Some(td) = row.next() {
-                        let mut frame = egui::Frame::none();
+                        let mut frame = egui::Frame::new();
 
                         if let Some(tr) = tr {
                             frame = Self::apply_container_styles(
@@ -3645,10 +3682,10 @@ impl EguiApp {
             });
 
             ctx.style_mut(|style| {
-                style.spacing.window_margin.left = 0.0;
-                style.spacing.window_margin.right = 0.0;
-                style.spacing.window_margin.top = 0.0;
-                style.spacing.window_margin.bottom = 0.0;
+                style.spacing.window_margin.left = 0;
+                style.spacing.window_margin.right = 0;
+                style.spacing.window_margin.top = 0;
+                style.spacing.window_margin.bottom = 0;
                 style.spacing.item_spacing = egui::emath::Vec2::splat(0.0);
                 #[cfg(all(debug_assertions, feature = "debug"))]
                 {
@@ -3657,9 +3694,9 @@ impl EguiApp {
             });
 
             egui::CentralPanel::default()
-                .frame(egui::Frame::none())
+                .frame(egui::Frame::new())
                 .show(ctx, |ui| {
-                    egui::Frame::none()
+                    egui::Frame::new()
                         .fill(
                             self.background
                                 .unwrap_or_else(|| Color32::from_hex("#181a1b").unwrap()),
