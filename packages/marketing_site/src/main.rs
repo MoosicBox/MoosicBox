@@ -104,7 +104,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ) {
                     app = app.with_position(x, y);
                 }
-                log::debug!("app_native: setting up routes");
 
                 log::debug!("app_native: starting app");
                 let app = app
