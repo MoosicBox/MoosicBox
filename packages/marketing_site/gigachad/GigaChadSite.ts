@@ -11,11 +11,9 @@ export function createGigaChadSite(
     args.indexPage = args.indexPage ?? 'index';
     args.build = args.build ?? {
         command:
-            'cargo run --no-default-features --features htmx,static-routes,assets gen',
+            'cargo run --bin moosicbox_marketing_site --no-default-features --features htmx,static-routes,assets gen',
         output: 'gen',
     };
-
-    buildServer();
 
     const dynamicRoutes = getDynamicRoutes();
 
@@ -41,7 +39,7 @@ export function createGigaChadSite(
 
     dynamicRoutes.forEach((route) => {
         api.route(`GET ${route}`, {
-            handler: 'src/moosicbox_marketing_site.handler',
+            handler: 'src/moosicbox_marketing_site_lambda.handler',
             runtime: 'rust' as 'go', // FIXME: remove this cast once rust is a valid runtime
         });
     });
@@ -101,6 +99,8 @@ function getDynamicRoutes() {
         'cargo',
         [
             'run',
+            '--bin',
+            'moosicbox_marketing_site',
             '--no-default-features',
             '--features',
             'htmx',
@@ -122,29 +122,4 @@ function getDynamicRoutes() {
         .split(/\s/g)
         .map((x) => x.trim())
         .filter((x) => x.length > 0);
-}
-
-function buildServer() {
-    const { status, stderr } = spawnSync(
-        'cargo',
-        [
-            'build',
-            '--release',
-            '--no-default-features',
-            '--features',
-            'htmx,lambda',
-        ],
-        {
-            encoding: 'utf8',
-        },
-    );
-
-    if (status !== 0) {
-        if (stderr.length > 0) {
-            console.error(stderr);
-        }
-        throw new Error('Failed to get dynamic routes');
-    }
-
-    console.log('Successfully built release server');
 }

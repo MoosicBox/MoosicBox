@@ -14,10 +14,10 @@ static CLIENT: LazyLock<reqwest::Client> =
 pub async fn releases_route(req: RouteRequest) -> Result<View, Box<dyn std::error::Error>> {
     #[derive(Deserialize)]
     struct GitHubRelease<'a> {
-        pub name: &'a str,
-        pub html_url: &'a str,
-        pub published_at: &'a str,
-        pub assets: Vec<GitHubAsset<'a>>,
+        name: &'a str,
+        html_url: &'a str,
+        published_at: &'a str,
+        assets: Vec<GitHubAsset<'a>>,
     }
 
     #[derive(Deserialize)]
