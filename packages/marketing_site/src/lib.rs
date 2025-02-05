@@ -101,11 +101,11 @@ pub async fn gen(
 
     #[cfg(all(feature = "html", feature = "static-routes"))]
     {
+        use std::sync::Arc;
+
+        use gigachad_renderer::HtmlTagRenderer;
         use gigachad_renderer_html::html::container_element_to_html_response;
-        use moosicbox_app_native_lib::{
-            router::{ClientInfo, ClientOs, RequestInfo, RouteRequest},
-            RendererType,
-        };
+        use moosicbox_app_native_lib::router::{ClientInfo, ClientOs, RequestInfo, RouteRequest};
         use tokio::io::AsyncWriteExt as _;
 
         let output = output.unwrap_or_else(|| {
@@ -117,38 +117,8 @@ pub async fn gen(
         let output_path: PathBuf = output.into();
         let static_routes = ROUTER.static_routes.read().unwrap().clone();
 
-        let tag_renderer = match renderer {
-            #[cfg(feature = "egui")]
-            RendererType::Egui(..) => panic!("Invalid renderer"),
-            #[cfg(feature = "fltk")]
-            RendererType::Fltk(..) => panic!("Invalid renderer"),
-            #[cfg(feature = "html")]
-            #[cfg(feature = "actix")]
-            RendererType::Html(renderer) => renderer.app.processor.tag_renderer,
-            #[cfg(feature = "html")]
-            #[cfg(feature = "lambda")]
-            RendererType::HtmlLambda(renderer) => renderer.app.processor.tag_renderer,
-            #[cfg(feature = "html")]
-            RendererType::HtmlStub(renderer) => renderer.app.tag_renderer,
-            #[cfg(feature = "htmx")]
-            #[cfg(feature = "actix")]
-            RendererType::Htmx(renderer) => renderer.app.processor.tag_renderer,
-            #[cfg(feature = "htmx")]
-            #[cfg(feature = "lambda")]
-            RendererType::HtmxLambda(renderer) => renderer.app.processor.tag_renderer,
-            #[cfg(feature = "datastar")]
-            #[cfg(feature = "actix")]
-            RendererType::Datastar(renderer) => renderer.app.processor.tag_renderer,
-            #[cfg(feature = "datastar")]
-            #[cfg(feature = "lambda")]
-            RendererType::DatastarLambda(renderer) => renderer.app.processor.tag_renderer,
-            #[cfg(feature = "vanilla-js")]
-            #[cfg(feature = "actix")]
-            RendererType::VanillaJs(renderer) => renderer.app.processor.tag_renderer,
-            #[cfg(feature = "vanilla-js")]
-            #[cfg(feature = "lambda")]
-            RendererType::VanillaJsLambda(renderer) => renderer.app.processor.tag_renderer,
-        };
+        let tag_renderer: Option<Arc<Box<dyn HtmlTagRenderer + Send + Sync>>> = renderer.into();
+        let tag_renderer = tag_renderer.unwrap();
 
         if output_path.is_dir() {
             tokio::fs::remove_dir_all(&output_path).await?;

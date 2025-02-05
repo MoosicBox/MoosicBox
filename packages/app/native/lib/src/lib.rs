@@ -148,6 +148,44 @@ pub enum RendererType {
     ),
 }
 
+#[cfg(feature = "html")]
+impl From<RendererType> for Option<Arc<Box<dyn gigachad_renderer::HtmlTagRenderer + Send + Sync>>> {
+    fn from(value: RendererType) -> Self {
+        Some(match value {
+            #[cfg(feature = "egui")]
+            RendererType::Egui(..) => return None,
+            #[cfg(feature = "fltk")]
+            RendererType::Fltk(..) => return None,
+            #[cfg(feature = "html")]
+            #[cfg(feature = "actix")]
+            RendererType::Html(renderer) => renderer.app.processor.tag_renderer,
+            #[cfg(feature = "html")]
+            #[cfg(feature = "lambda")]
+            RendererType::HtmlLambda(renderer) => renderer.app.processor.tag_renderer,
+            #[cfg(feature = "html")]
+            RendererType::HtmlStub(renderer) => renderer.app.tag_renderer,
+            #[cfg(feature = "htmx")]
+            #[cfg(feature = "actix")]
+            RendererType::Htmx(renderer) => renderer.app.processor.tag_renderer,
+            #[cfg(feature = "htmx")]
+            #[cfg(feature = "lambda")]
+            RendererType::HtmxLambda(renderer) => renderer.app.processor.tag_renderer,
+            #[cfg(feature = "datastar")]
+            #[cfg(feature = "actix")]
+            RendererType::Datastar(renderer) => renderer.app.processor.tag_renderer,
+            #[cfg(feature = "datastar")]
+            #[cfg(feature = "lambda")]
+            RendererType::DatastarLambda(renderer) => renderer.app.processor.tag_renderer,
+            #[cfg(feature = "vanilla-js")]
+            #[cfg(feature = "actix")]
+            RendererType::VanillaJs(renderer) => renderer.app.processor.tag_renderer,
+            #[cfg(feature = "vanilla-js")]
+            #[cfg(feature = "lambda")]
+            RendererType::VanillaJsLambda(renderer) => renderer.app.processor.tag_renderer,
+        })
+    }
+}
+
 impl From<RendererType> for Box<dyn Renderer> {
     fn from(value: RendererType) -> Self {
         match value {
