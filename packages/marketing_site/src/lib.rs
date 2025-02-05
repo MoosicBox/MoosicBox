@@ -94,12 +94,9 @@ pub async fn gen(
     #[allow(unused_variables)] renderer: RendererType,
     #[allow(unused_variables)] output: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    assert!(cfg!(feature = "html"), "Must be an html renderer to gen");
     assert!(
-        !cfg!(not(feature = "html")),
-        "Must be an html renderer to gen"
-    );
-    assert!(
-        !cfg!(not(feature = "static-routes")),
+        cfg!(feature = "static-routes"),
         "Must have `static-routes` enabled to gen"
     );
 
