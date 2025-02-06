@@ -69,18 +69,19 @@ fn get_tag_attr_value_undecoded<'a>(tag: &'a HTMLTag, name: &'a str) -> Option<C
         .map(|(_, v)| v)
 }
 
+fn get_tag_attr_value_decoded<'a>(tag: &'a HTMLTag, name: &'a str) -> Option<Cow<'a, str>> {
+    get_tag_attr_value_undecoded(tag, name).map(|x| match x {
+        Cow::Borrowed(x) => html_escape::decode_html_entities(x),
+        Cow::Owned(x) => Cow::Owned(html_escape::decode_html_entities(&x).to_string()),
+    })
+}
+
 fn get_tag_attr_value_owned(tag: &HTMLTag, name: &str) -> Option<String> {
-    get_tag_attr_value_undecoded(tag, name)
-        .as_deref()
-        .map(|x| html_escape::decode_html_entities(x))
-        .map(|x| x.to_string())
+    get_tag_attr_value_decoded(tag, name).map(|x| x.to_string())
 }
 
 fn get_tag_attr_value_lower(tag: &HTMLTag, name: &str) -> Option<String> {
-    get_tag_attr_value_undecoded(tag, name)
-        .as_deref()
-        .map(|x| html_escape::decode_html_entities(x))
-        .map(|x| x.to_lowercase())
+    get_tag_attr_value_decoded(tag, name).map(|x| x.to_lowercase())
 }
 
 fn get_direction(tag: &HTMLTag) -> LayoutDirection {
@@ -92,17 +93,13 @@ fn get_direction(tag: &HTMLTag) -> LayoutDirection {
 }
 
 fn get_color(tag: &HTMLTag, name: &str) -> Option<Color> {
-    get_tag_attr_value_undecoded(tag, name)
-        .as_deref()
-        .map(|x| html_escape::decode_html_entities(x))
+    get_tag_attr_value_decoded(tag, name)
         .as_deref()
         .map(Color::from_hex)
 }
 
 fn get_border(tag: &HTMLTag, name: &str) -> Option<(Color, Number)> {
-    get_tag_attr_value_undecoded(tag, name)
-        .as_deref()
-        .map(|x| html_escape::decode_html_entities(x))
+    get_tag_attr_value_decoded(tag, name)
         .as_deref()
         .and_then(|x| {
             crate::parse::split_on_char_trimmed(x, ',', 0)
@@ -116,7 +113,7 @@ fn get_border(tag: &HTMLTag, name: &str) -> Option<(Color, Number)> {
 }
 
 fn get_classes(tag: &HTMLTag) -> Vec<String> {
-    get_tag_attr_value_owned(tag, "class").map_or_else(Vec::new, |x| {
+    get_tag_attr_value_decoded(tag, "class").map_or_else(Vec::new, |x| {
         x.split_whitespace()
             .filter(|x| !x.is_empty())
             .map(ToString::to_string)
@@ -125,7 +122,7 @@ fn get_classes(tag: &HTMLTag) -> Vec<String> {
 }
 
 fn get_link_target(tag: &HTMLTag, name: &str) -> Option<LinkTarget> {
-    get_tag_attr_value_owned(tag, name)
+    get_tag_attr_value_decoded(tag, name)
         .as_deref()
         .map(|x| match x {
             "_self" => LinkTarget::SelfTarget,
@@ -137,9 +134,7 @@ fn get_link_target(tag: &HTMLTag, name: &str) -> Option<LinkTarget> {
 }
 
 fn get_state(tag: &HTMLTag, name: &str) -> Option<Value> {
-    get_tag_attr_value_undecoded(tag, name)
-        .as_deref()
-        .map(|x| html_escape::decode_html_entities(x))
+    get_tag_attr_value_decoded(tag, name)
         .as_deref()
         .and_then(|x| serde_json::from_str(x).ok())
 }
@@ -305,11 +300,13 @@ fn get_data_attrs(tag: &HTMLTag) -> HashMap<String, String> {
 }
 
 fn get_number(tag: &HTMLTag, name: &str) -> Result<Option<Number>, GetNumberError> {
-    Ok(if let Some(number) = get_tag_attr_value_owned(tag, name) {
-        Some(parse_number(&number)?)
-    } else {
-        None
-    })
+    Ok(
+        if let Some(number) = get_tag_attr_value_decoded(tag, name) {
+            Some(parse_number(&number)?)
+        } else {
+            None
+        },
+    )
 }
 
 fn parse_text_decoration_line(value: &str) -> Option<TextDecorationLine> {
@@ -326,13 +323,11 @@ fn parse_text_decoration_line(value: &str) -> Option<TextDecorationLine> {
 }
 
 fn get_text_decoration_line(tag: &HTMLTag, name: &str) -> Option<Vec<TextDecorationLine>> {
-    get_tag_attr_value_owned(tag, name)
-        .as_deref()
-        .and_then(|x| {
-            x.split_whitespace()
-                .map(parse_text_decoration_line)
-                .collect::<Option<Vec<_>>>()
-        })
+    get_tag_attr_value_decoded(tag, name).and_then(|x| {
+        x.split_whitespace()
+            .map(parse_text_decoration_line)
+            .collect::<Option<Vec<_>>>()
+    })
 }
 
 fn parse_text_decoration_style(value: &str) -> Option<TextDecorationStyle> {
@@ -350,7 +345,7 @@ fn parse_text_decoration_style(value: &str) -> Option<TextDecorationStyle> {
 }
 
 fn get_text_decoration_style(tag: &HTMLTag, name: &str) -> Option<TextDecorationStyle> {
-    get_tag_attr_value_owned(tag, name)
+    get_tag_attr_value_decoded(tag, name)
         .as_deref()
         .and_then(parse_text_decoration_style)
 }
@@ -728,9 +723,8 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
         align_items: get_align_items(tag, "sx-align-items"),
         text_align: get_text_align(tag, "sx-text-align"),
         text_decoration,
-        font_family: get_tag_attr_value_owned(tag, "sx-font-family").map(|x| {
-            x.as_str()
-                .split(',')
+        font_family: get_tag_attr_value_decoded(tag, "sx-font-family").map(|x| {
+            x.split(',')
                 .map(str::trim)
                 .filter(|x| !x.is_empty())
                 .map(ToString::to_string)
