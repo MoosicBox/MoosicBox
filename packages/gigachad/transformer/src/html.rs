@@ -1,12 +1,13 @@
 use std::{borrow::Cow, collections::HashMap};
 
 use gigachad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
-use gigachad_color::Color;
+use gigachad_color::{Color, ParseHexError};
 use gigachad_transformer_models::{
     AlignItems, Cursor, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, LinkTarget,
     Position, Route, SwapTarget, TextAlign, TextDecorationLine, TextDecorationStyle, Visibility,
 };
 use serde_json::Value;
+use thiserror::Error;
 pub use tl::ParseError;
 use tl::{Children, HTMLTag, Node, NodeHandle, Parser, ParserOptions};
 
@@ -14,6 +15,18 @@ use crate::{
     parse::{parse_number, GetNumberError},
     Flex, Number, TextDecoration,
 };
+
+#[derive(Debug, Error)]
+pub enum ParseAttrError {
+    #[error("Invalid Value: '{0}'")]
+    InvalidValue(String),
+    #[error(transparent)]
+    GetNumber(#[from] GetNumberError),
+    #[error(transparent)]
+    ParseHex(#[from] ParseHexError),
+    #[error(transparent)]
+    SerdeJson(#[from] serde_json::Error),
+}
 
 impl TryFrom<String> for crate::Container {
     type Error = ParseError;
@@ -84,343 +97,320 @@ fn get_tag_attr_value_lower(tag: &HTMLTag, name: &str) -> Option<String> {
     get_tag_attr_value_decoded(tag, name).map(|x| x.to_lowercase())
 }
 
-fn get_direction(tag: &HTMLTag) -> LayoutDirection {
-    match get_tag_attr_value_lower(tag, "sx-dir").as_deref() {
-        Some("row") => LayoutDirection::Row,
-        Some("col") => LayoutDirection::Column,
-        _ => LayoutDirection::default(),
-    }
-}
-
-fn get_color(tag: &HTMLTag, name: &str) -> Option<Color> {
-    get_tag_attr_value_decoded(tag, name)
-        .as_deref()
-        .map(Color::from_hex)
-}
-
-fn get_border(tag: &HTMLTag, name: &str) -> Option<(Color, Number)> {
-    get_tag_attr_value_decoded(tag, name)
-        .as_deref()
-        .and_then(|x| {
-            crate::parse::split_on_char_trimmed(x, ',', 0)
-                .ok()
-                .flatten()
-        })
-        .map(|(size, color)| (size.trim(), color.trim()))
-        .and_then(|(size, color)| parse_number(size).ok().map(|size| (size, color.trim())))
-        .and_then(|(size, color)| Color::try_from_hex(color).ok().map(|color| (size, color)))
-        .map(|(size, color)| (color, size))
-}
-
-fn get_classes(tag: &HTMLTag) -> Vec<String> {
-    get_tag_attr_value_decoded(tag, "class").map_or_else(Vec::new, |x| {
-        x.split_whitespace()
-            .filter(|x| !x.is_empty())
-            .map(ToString::to_string)
-            .collect()
+fn parse_direction(value: &str) -> Result<LayoutDirection, ParseAttrError> {
+    Ok(match value {
+        "row" => LayoutDirection::Row,
+        "col" => LayoutDirection::Column,
+        value => {
+            return Err(ParseAttrError::InvalidValue(value.to_string()));
+        }
     })
 }
 
-fn get_link_target(tag: &HTMLTag, name: &str) -> Option<LinkTarget> {
-    get_tag_attr_value_decoded(tag, name)
-        .as_deref()
-        .map(|x| match x {
-            "_self" => LinkTarget::SelfTarget,
-            "_blank" => LinkTarget::Blank,
-            "_parent" => LinkTarget::Parent,
-            "_top" => LinkTarget::Top,
-            target => LinkTarget::Custom(target.to_string()),
-        })
+fn parse_border(value: &str) -> Result<(Color, Number), ParseAttrError> {
+    let (size, color) = crate::parse::split_on_char_trimmed(value, ',', 0)
+        .map_err(|_e| ParseAttrError::InvalidValue(value.to_string()))?
+        .ok_or_else(|| ParseAttrError::InvalidValue(value.to_string()))?;
+    let (size, color) = (size.trim(), color.trim());
+    let size = parse_number(size)?;
+    let color = Color::try_from_hex(color)?;
+
+    Ok((color, size))
 }
 
-fn get_state(tag: &HTMLTag, name: &str) -> Option<Value> {
-    get_tag_attr_value_decoded(tag, name)
-        .as_deref()
-        .and_then(|x| serde_json::from_str(x).ok())
+fn parse_classes(value: &str) -> Result<Vec<String>, ParseAttrError> {
+    value
+        .split_whitespace()
+        .filter(|x| !x.is_empty())
+        .map(ToString::to_string)
+        .map(Ok)
+        .collect()
 }
 
-fn get_bool(tag: &HTMLTag, name: &str) -> Option<bool> {
-    match get_tag_attr_value_lower(tag, name).as_deref() {
-        Some("true" | "") => Some(true),
-        Some("false") => Some(false),
-        _ => None,
+fn parse_link_target(value: &str) -> LinkTarget {
+    match value {
+        "_self" => LinkTarget::SelfTarget,
+        "_blank" => LinkTarget::Blank,
+        "_parent" => LinkTarget::Parent,
+        "_top" => LinkTarget::Top,
+        target => LinkTarget::Custom(target.to_string()),
     }
 }
 
-fn parse_visibility(value: &str) -> Visibility {
-    match value {
+fn parse_state(value: &str) -> Result<Value, ParseAttrError> {
+    Ok(serde_json::from_str(value)?)
+}
+
+fn parse_bool(value: &str) -> Result<bool, ParseAttrError> {
+    Ok(match value {
+        "true" | "" => true,
+        "false" => false,
+        value => {
+            return Err(ParseAttrError::InvalidValue(value.to_string()));
+        }
+    })
+}
+
+fn parse_visibility(value: &str) -> Result<Visibility, ParseAttrError> {
+    Ok(match value {
         "visible" => Visibility::Visible,
         "hidden" => Visibility::Hidden,
-        _ => Visibility::default(),
-    }
+        value => {
+            return Err(ParseAttrError::InvalidValue(value.to_string()));
+        }
+    })
 }
 
-fn get_visibility(tag: &HTMLTag) -> Option<Visibility> {
-    get_tag_attr_value_lower(tag, "sx-visibility")
-        .as_deref()
-        .map(parse_visibility)
-}
-
-fn parse_swap(value: &str) -> SwapTarget {
-    match value {
+fn parse_swap(value: &str) -> Result<SwapTarget, ParseAttrError> {
+    Ok(match value {
         "this" | "self" => SwapTarget::This,
         "children" => SwapTarget::Children,
-        _ => SwapTarget::default(),
-    }
-}
-
-fn get_swap(tag: &HTMLTag) -> Option<SwapTarget> {
-    get_tag_attr_value_lower(tag, "hx-swap")
-        .as_deref()
-        .map(parse_swap)
-}
-
-fn get_route(tag: &HTMLTag) -> Option<Route> {
-    #[allow(clippy::option_if_let_else, clippy::manual_map)]
-    if let Some(get) = get_tag_attr_value_owned(tag, "hx-get") {
-        Some(Route::Get {
-            route: get,
-            trigger: get_tag_attr_value_owned(tag, "hx-trigger"),
-            swap: get_swap(tag).unwrap_or_default(),
-        })
-    } else if let Some(post) = get_tag_attr_value_owned(tag, "hx-post") {
-        Some(Route::Post {
-            route: post,
-            trigger: get_tag_attr_value_owned(tag, "hx-trigger"),
-            swap: get_swap(tag).unwrap_or_default(),
-        })
-    } else {
-        None
-    }
-}
-
-fn get_overflow(tag: &HTMLTag, name: &str) -> LayoutOverflow {
-    match get_tag_attr_value_lower(tag, name).as_deref() {
-        Some("wrap") => LayoutOverflow::Wrap,
-        Some("scroll") => LayoutOverflow::Scroll,
-        Some("expand") => LayoutOverflow::Expand,
-        Some("squash") => LayoutOverflow::Squash,
-        Some("auto") => LayoutOverflow::Auto,
-        _ => LayoutOverflow::default(),
-    }
-}
-
-fn get_justify_content(tag: &HTMLTag, name: &str) -> Option<JustifyContent> {
-    Some(match get_tag_attr_value_lower(tag, name).as_deref() {
-        Some("start") => JustifyContent::Start,
-        Some("center") => JustifyContent::Center,
-        Some("end") => JustifyContent::End,
-        Some("space-between") => JustifyContent::SpaceBetween,
-        Some("space-evenly") => JustifyContent::SpaceEvenly,
-        _ => {
-            return None;
+        value => {
+            return Err(ParseAttrError::InvalidValue(value.to_string()));
         }
     })
 }
 
-fn get_align_items(tag: &HTMLTag, name: &str) -> Option<AlignItems> {
-    Some(match get_tag_attr_value_lower(tag, name).as_deref() {
-        Some("start") => AlignItems::Start,
-        Some("center") => AlignItems::Center,
-        Some("end") => AlignItems::End,
-        _ => {
-            return None;
+fn get_route(tag: &HTMLTag) -> Result<Option<Route>, ParseAttrError> {
+    get_tag_attr_value_decoded(tag, "hx-get")
+        .as_deref()
+        .map(|x| parse_get_route(x, tag))
+        .or_else(|| {
+            get_tag_attr_value_decoded(tag, "hx-post")
+                .as_deref()
+                .map(|x| parse_post_route(x, tag))
+        })
+        .transpose()
+}
+
+// TODO: Doesn't support reactive values
+fn parse_get_route(value: &str, tag: &HTMLTag) -> Result<Route, ParseAttrError> {
+    Ok(Route::Get {
+        route: value.to_string(),
+        trigger: get_tag_attr_value_owned(tag, "hx-trigger"),
+        swap: get_tag_attr_value_decoded(tag, "hx-swap")
+            .as_deref()
+            .map(parse_swap)
+            .transpose()?
+            .unwrap_or_default(),
+    })
+}
+
+// TODO: Doesn't support reactive values
+fn parse_post_route(value: &str, tag: &HTMLTag) -> Result<Route, ParseAttrError> {
+    Ok(Route::Post {
+        route: value.to_string(),
+        trigger: get_tag_attr_value_owned(tag, "hx-trigger"),
+        swap: get_tag_attr_value_decoded(tag, "hx-swap")
+            .as_deref()
+            .map(parse_swap)
+            .transpose()?
+            .unwrap_or_default(),
+    })
+}
+
+fn parse_overflow(value: &str) -> Result<LayoutOverflow, ParseAttrError> {
+    Ok(match value {
+        "wrap" => LayoutOverflow::Wrap,
+        "scroll" => LayoutOverflow::Scroll,
+        "expand" => LayoutOverflow::Expand,
+        "squash" => LayoutOverflow::Squash,
+        "auto" => LayoutOverflow::Auto,
+        value => {
+            return Err(ParseAttrError::InvalidValue(value.to_string()));
         }
     })
 }
 
-fn get_text_align(tag: &HTMLTag, name: &str) -> Option<TextAlign> {
-    match get_tag_attr_value_lower(tag, name).as_deref() {
-        Some("start") => Some(TextAlign::Start),
-        Some("center") => Some(TextAlign::Center),
-        Some("end") => Some(TextAlign::End),
-        Some("justify") => Some(TextAlign::Justify),
-        _ => None,
-    }
+fn parse_justify_content(value: &str) -> Result<JustifyContent, ParseAttrError> {
+    Ok(match value {
+        "start" => JustifyContent::Start,
+        "center" => JustifyContent::Center,
+        "end" => JustifyContent::End,
+        "space-between" => JustifyContent::SpaceBetween,
+        "space-evenly" => JustifyContent::SpaceEvenly,
+        value => {
+            return Err(ParseAttrError::InvalidValue(value.to_string()));
+        }
+    })
 }
 
-fn get_cursor(tag: &HTMLTag) -> Option<Cursor> {
-    get_tag_attr_value_lower(tag, "sx-cursor")
-        .as_deref()
-        .map(|x| match x {
-            "auto" => Cursor::Auto,
-            "pointer" => Cursor::Pointer,
-            "text" => Cursor::Text,
-            "crosshair" => Cursor::Crosshair,
-            "move" => Cursor::Move,
-            "not-allowed" => Cursor::NotAllowed,
-            "no-drop" => Cursor::NoDrop,
-            "grab" => Cursor::Grab,
-            "grabbing" => Cursor::Grabbing,
-            "all-scroll" => Cursor::AllScroll,
-            "col-resize" => Cursor::ColResize,
-            "row-resize" => Cursor::RowResize,
-            "n-resize" => Cursor::NResize,
-            "e-resize" => Cursor::EResize,
-            "s-resize" => Cursor::SResize,
-            "w-resize" => Cursor::WResize,
-            "ne-resize" => Cursor::NeResize,
-            "nw-resize" => Cursor::NwResize,
-            "se-resize" => Cursor::SeResize,
-            "sw-resize" => Cursor::SwResize,
-            "ew-resize" => Cursor::EwResize,
-            "ns-resize" => Cursor::NsResize,
-            "nesw-resize" => Cursor::NeswResize,
-            "zoom-in" => Cursor::ZoomIn,
-            "zoom-out" => Cursor::ZoomOut,
-            _ => Cursor::default(),
-        })
+fn parse_align_items(value: &str) -> Result<AlignItems, ParseAttrError> {
+    Ok(match value {
+        "start" => AlignItems::Start,
+        "center" => AlignItems::Center,
+        "end" => AlignItems::End,
+        value => {
+            return Err(ParseAttrError::InvalidValue(value.to_string()));
+        }
+    })
 }
 
-fn get_position(tag: &HTMLTag) -> Option<Position> {
-    get_tag_attr_value_lower(tag, "sx-position")
-        .as_deref()
-        .map(|x| match x {
-            "static" => Position::Static,
-            "relative" => Position::Relative,
-            "absolute" => Position::Absolute,
-            "fixed" => Position::Fixed,
-            _ => Position::default(),
-        })
+fn parse_text_align(value: &str) -> Result<TextAlign, ParseAttrError> {
+    Ok(match value {
+        "start" => TextAlign::Start,
+        "center" => TextAlign::Center,
+        "end" => TextAlign::End,
+        "justify" => TextAlign::Justify,
+        value => {
+            return Err(ParseAttrError::InvalidValue(value.to_string()));
+        }
+    })
 }
 
-fn get_data_attrs(tag: &HTMLTag) -> HashMap<String, String> {
+fn parse_cursor(value: &str) -> Result<Cursor, ParseAttrError> {
+    Ok(match value {
+        "auto" => Cursor::Auto,
+        "pointer" => Cursor::Pointer,
+        "text" => Cursor::Text,
+        "crosshair" => Cursor::Crosshair,
+        "move" => Cursor::Move,
+        "not-allowed" => Cursor::NotAllowed,
+        "no-drop" => Cursor::NoDrop,
+        "grab" => Cursor::Grab,
+        "grabbing" => Cursor::Grabbing,
+        "all-scroll" => Cursor::AllScroll,
+        "col-resize" => Cursor::ColResize,
+        "row-resize" => Cursor::RowResize,
+        "n-resize" => Cursor::NResize,
+        "e-resize" => Cursor::EResize,
+        "s-resize" => Cursor::SResize,
+        "w-resize" => Cursor::WResize,
+        "ne-resize" => Cursor::NeResize,
+        "nw-resize" => Cursor::NwResize,
+        "se-resize" => Cursor::SeResize,
+        "sw-resize" => Cursor::SwResize,
+        "ew-resize" => Cursor::EwResize,
+        "ns-resize" => Cursor::NsResize,
+        "nesw-resize" => Cursor::NeswResize,
+        "zoom-in" => Cursor::ZoomIn,
+        "zoom-out" => Cursor::ZoomOut,
+        value => {
+            return Err(ParseAttrError::InvalidValue(value.to_string()));
+        }
+    })
+}
+
+fn parse_position(value: &str) -> Result<Position, ParseAttrError> {
+    Ok(match value {
+        "static" => Position::Static,
+        "relative" => Position::Relative,
+        "absolute" => Position::Absolute,
+        "fixed" => Position::Fixed,
+        value => {
+            return Err(ParseAttrError::InvalidValue(value.to_string()));
+        }
+    })
+}
+
+fn get_data_attrs(tag: &HTMLTag) -> Result<HashMap<String, String>, ParseAttrError> {
     tag.attributes()
         .iter()
         .filter_map(|(k, v)| v.map(|v| (k, v)))
         .filter_map(|(k, v)| {
             k.strip_prefix("data-").map(|name| {
-                (
+                Ok((
                     name.to_string(),
-                    html_escape::decode_html_entities(&v).to_string(),
-                )
+                    pmrv_inner(&html_escape::decode_html_entities(&v), |x| {
+                        Ok::<_, ParseAttrError>(x.to_string())
+                    })?,
+                ))
             })
         })
-        .collect()
+        .collect::<Result<HashMap<_, _>, _>>()
 }
 
-fn get_number(tag: &HTMLTag, name: &str) -> Result<Option<Number>, GetNumberError> {
-    Ok(
-        if let Some(number) = get_tag_attr_value_decoded(tag, name) {
-            Some(parse_number(&number)?)
-        } else {
-            None
-        },
-    )
+fn parse_text_decoration_lines(value: &str) -> Result<Vec<TextDecorationLine>, ParseAttrError> {
+    value
+        .split_whitespace()
+        .map(parse_text_decoration_line)
+        .collect::<Result<Vec<_>, _>>()
 }
 
-fn parse_text_decoration_line(value: &str) -> Option<TextDecorationLine> {
-    Some(match value {
+fn parse_text_decoration_line(value: &str) -> Result<TextDecorationLine, ParseAttrError> {
+    Ok(match value {
         "inherit" => TextDecorationLine::Inherit,
         "none" => TextDecorationLine::None,
         "underline" => TextDecorationLine::Underline,
         "overline" => TextDecorationLine::Overline,
         "line-through" => TextDecorationLine::LineThrough,
-        _ => {
-            return None;
+        value => {
+            return Err(ParseAttrError::InvalidValue(value.to_string()));
         }
     })
 }
 
-fn get_text_decoration_line(tag: &HTMLTag, name: &str) -> Option<Vec<TextDecorationLine>> {
-    get_tag_attr_value_decoded(tag, name).and_then(|x| {
-        x.split_whitespace()
-            .map(parse_text_decoration_line)
-            .collect::<Option<Vec<_>>>()
-    })
-}
-
-fn parse_text_decoration_style(value: &str) -> Option<TextDecorationStyle> {
-    Some(match value {
+fn parse_text_decoration_style(value: &str) -> Result<TextDecorationStyle, ParseAttrError> {
+    Ok(match value {
         "inherit" => TextDecorationStyle::Inherit,
         "solid" => TextDecorationStyle::Solid,
         "double" => TextDecorationStyle::Double,
         "dotted" => TextDecorationStyle::Dotted,
         "dashed" => TextDecorationStyle::Dashed,
         "wavy" => TextDecorationStyle::Wavy,
-        _ => {
-            return None;
+        value => {
+            return Err(ParseAttrError::InvalidValue(value.to_string()));
         }
     })
 }
 
-fn get_text_decoration_style(tag: &HTMLTag, name: &str) -> Option<TextDecorationStyle> {
-    get_tag_attr_value_decoded(tag, name)
-        .as_deref()
-        .and_then(parse_text_decoration_style)
-}
+fn parse_text_decoration(value: &str) -> Result<Option<TextDecoration>, GetNumberError> {
+    let mut values = value.split_whitespace().peekable();
 
-fn get_text_decoration(
-    tag: &HTMLTag,
-    name: &str,
-) -> Result<Option<TextDecoration>, GetNumberError> {
-    Ok(get_tag_attr_value_undecoded(tag, name)
-        .as_deref()
-        .map(|x| html_escape::decode_html_entities(x))
-        .as_deref()
-        .map(|x| x.split_whitespace().collect::<Vec<_>>())
-        .map(|values| {
-            if values.is_empty() {
-                return Ok(None);
+    if values.peek().is_none() {
+        return Ok(None);
+    }
+
+    let mut text_decoration = TextDecoration::default();
+    let mut parsing_line = true;
+    let mut parsing_style = true;
+    let mut parsing_color = true;
+
+    for value in values {
+        if parsing_line {
+            if let Ok(line) = parse_text_decoration_line(value) {
+                text_decoration.line.push(line);
+                continue;
             }
 
-            let mut text_decoration = TextDecoration::default();
-            let mut parsing_line = true;
-            let mut parsing_style = true;
-            let mut parsing_color = true;
+            parsing_line = false;
+        }
 
-            for value in values {
-                if parsing_line {
-                    if let Some(line) = parse_text_decoration_line(value) {
-                        text_decoration.line.push(line);
-                        continue;
-                    }
+        if parsing_style {
+            parsing_style = false;
 
-                    parsing_line = false;
-                }
-
-                if parsing_style {
-                    parsing_style = false;
-
-                    if let Some(style) = parse_text_decoration_style(value) {
-                        text_decoration.style = Some(style);
-                        continue;
-                    }
-                }
-
-                if parsing_color {
-                    parsing_color = false;
-
-                    if let Ok(color) = Color::try_from_hex(value) {
-                        text_decoration.color = Some(color);
-                        continue;
-                    }
-                }
-
-                if text_decoration.thickness.is_some() {
-                    return Ok(None);
-                }
-
-                text_decoration.thickness = Some(parse_number(value)?);
+            if let Ok(style) = parse_text_decoration_style(value) {
+                text_decoration.style = Some(style);
+                continue;
             }
+        }
 
-            Ok(Some(text_decoration))
-        })
-        .transpose()?
-        .flatten())
+        if parsing_color {
+            parsing_color = false;
+
+            if let Ok(color) = Color::try_from_hex(value) {
+                text_decoration.color = Some(color);
+                continue;
+            }
+        }
+
+        if text_decoration.thickness.is_some() {
+            return Ok(None);
+        }
+
+        text_decoration.thickness = Some(parse_number(value)?);
+    }
+
+    Ok(Some(text_decoration))
 }
 
-fn get_flex(tag: &HTMLTag, name: &str) -> Result<Option<Flex>, GetNumberError> {
-    match get_tag_attr_value_undecoded(tag, name)
-        .as_deref()
-        .map(|x| html_escape::decode_html_entities(x))
-        .as_deref()
-        .map(|x| {
-            x.split_whitespace()
-                .map(parse_number)
-                .collect::<Result<Vec<_>, _>>()
-        }) {
-        Some(Ok(values)) => {
+fn parse_flex(value: &str) -> Result<Option<Flex>, GetNumberError> {
+    match value
+        .split_whitespace()
+        .map(parse_number)
+        .collect::<Result<Vec<_>, _>>()
+    {
+        Ok(values) => {
             let mut iter = values.into_iter();
             match (iter.next(), iter.next(), iter.next(), iter.next()) {
                 (Some(grow), None, None, None) => Ok(Some(Flex {
@@ -440,22 +430,21 @@ fn get_flex(tag: &HTMLTag, name: &str) -> Result<Option<Flex>, GetNumberError> {
                 _ => Ok(None),
             }
         }
-        Some(Err(e)) => Err(e),
-        None => Ok(None),
+        Err(e) => Err(e),
     }
 }
 
-fn get_image_fit(tag: &HTMLTag, name: &str) -> Option<ImageFit> {
-    get_tag_attr_value_lower(tag, name)
-        .as_deref()
-        .and_then(|x| match x {
-            "default" => Some(ImageFit::Default),
-            "contain" => Some(ImageFit::Contain),
-            "cover" => Some(ImageFit::Cover),
-            "fill" => Some(ImageFit::Fill),
-            "none" => Some(ImageFit::None),
-            _ => None,
-        })
+fn parse_image_fit(value: &str) -> Result<ImageFit, ParseAttrError> {
+    Ok(match value {
+        "default" => ImageFit::Default,
+        "contain" => ImageFit::Contain,
+        "cover" => ImageFit::Cover,
+        "fill" => ImageFit::Fill,
+        "none" => ImageFit::None,
+        value => {
+            return Err(ParseAttrError::InvalidValue(value.to_string()));
+        }
+    })
 }
 
 fn parse_std_action(action: &str) -> Option<ActionEffect> {
@@ -559,61 +548,69 @@ fn get_actions(tag: &HTMLTag) -> Vec<Action> {
     actions
 }
 
+/// Parse maybe reactive value
+fn pmrv<T, E>(
+    tag: &HTMLTag<'_>,
+    name: &str,
+    func: impl Fn(&str) -> Result<T, E>,
+) -> Result<Option<T>, E> {
+    get_tag_attr_value_decoded(tag, name)
+        .as_deref()
+        .map(|x| pmrv_inner(x, func))
+        .transpose()
+}
+
+fn pmrv_inner<T, E>(value: &str, func: impl Fn(&str) -> Result<T, E>) -> Result<T, E> {
+    func(value)
+}
+
 #[allow(clippy::too_many_lines)]
-fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> crate::Container {
+fn parse_element(
+    tag: &HTMLTag<'_>,
+    node: &Node<'_>,
+    parser: &Parser<'_>,
+) -> Result<crate::Container, ParseAttrError> {
     #[cfg(feature = "id")]
     static CURRENT_ID: std::sync::LazyLock<std::sync::Arc<std::sync::atomic::AtomicUsize>> =
         std::sync::LazyLock::new(|| std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(1)));
 
-    let border_radius = get_number(tag, "sx-border-radius").unwrap();
-    let border_top_left_radius = get_number(tag, "sx-border-top-left-radius")
-        .unwrap()
-        .or_else(|| border_radius.clone());
-    let border_top_right_radius = get_number(tag, "sx-border-top-right-radius")
-        .unwrap()
-        .or_else(|| border_radius.clone());
-    let border_bottom_left_radius = get_number(tag, "sx-border-bottom-left-radius")
-        .unwrap()
-        .or_else(|| border_radius.clone());
-    let border_bottom_right_radius = get_number(tag, "sx-border-bottom-right-radius")
-        .unwrap()
-        .or_else(|| border_radius.clone());
+    let border_radius = pmrv(tag, "sx-border-radius", parse_number)?;
+    let border_top_left_radius =
+        pmrv(tag, "sx-border-top-left-radius", parse_number)?.or_else(|| border_radius.clone());
+    let border_top_right_radius =
+        pmrv(tag, "sx-border-top-right-radius", parse_number)?.or_else(|| border_radius.clone());
+    let border_bottom_left_radius =
+        pmrv(tag, "sx-border-bottom-left-radius", parse_number)?.or_else(|| border_radius.clone());
+    let border_bottom_right_radius =
+        pmrv(tag, "sx-border-bottom-right-radius", parse_number)?.or_else(|| border_radius.clone());
 
-    let margin = get_number(tag, "sx-margin").unwrap();
-    let margin_x = get_number(tag, "sx-margin-x").unwrap();
-    let margin_y = get_number(tag, "sx-margin-y").unwrap();
-    let margin_left = get_number(tag, "sx-margin-left")
-        .unwrap()
+    let margin = pmrv(tag, "sx-margin", parse_number)?;
+    let margin_x = pmrv(tag, "sx-margin-x", parse_number)?;
+    let margin_y = pmrv(tag, "sx-margin-y", parse_number)?;
+    let margin_left = pmrv(tag, "sx-margin-left", parse_number)?
         .or_else(|| margin_x.clone().or_else(|| margin.clone()));
-    let margin_right = get_number(tag, "sx-margin-right")
-        .unwrap()
+    let margin_right = pmrv(tag, "sx-margin-right", parse_number)?
         .or_else(|| margin_x.clone().or_else(|| margin.clone()));
-    let margin_top = get_number(tag, "sx-margin-top")
-        .unwrap()
+    let margin_top = pmrv(tag, "sx-margin-top", parse_number)?
         .or_else(|| margin_y.clone().or_else(|| margin.clone()));
-    let margin_bottom = get_number(tag, "sx-margin-bottom")
-        .unwrap()
+    let margin_bottom = pmrv(tag, "sx-margin-bottom", parse_number)?
         .or_else(|| margin_y.clone().or_else(|| margin.clone()));
 
-    let padding = get_number(tag, "sx-padding").unwrap();
-    let padding_x = get_number(tag, "sx-padding-x").unwrap();
-    let padding_y = get_number(tag, "sx-padding-y").unwrap();
-    let padding_left = get_number(tag, "sx-padding-left")
-        .unwrap()
+    let padding = pmrv(tag, "sx-padding", parse_number)?;
+    let padding_x = pmrv(tag, "sx-padding-x", parse_number)?;
+    let padding_y = pmrv(tag, "sx-padding-y", parse_number)?;
+    let padding_left = pmrv(tag, "sx-padding-left", parse_number)?
         .or_else(|| padding_x.clone().or_else(|| padding.clone()));
-    let padding_right = get_number(tag, "sx-padding-right")
-        .unwrap()
+    let padding_right = pmrv(tag, "sx-padding-right", parse_number)?
         .or_else(|| padding_x.clone().or_else(|| padding.clone()));
-    let padding_top = get_number(tag, "sx-padding-top")
-        .unwrap()
+    let padding_top = pmrv(tag, "sx-padding-top", parse_number)?
         .or_else(|| padding_y.clone().or_else(|| padding.clone()));
-    let padding_bottom = get_number(tag, "sx-padding-bottom")
-        .unwrap()
+    let padding_bottom = pmrv(tag, "sx-padding-bottom", parse_number)?
         .or_else(|| padding_y.clone().or_else(|| padding.clone()));
 
-    let mut text_decoration = get_text_decoration(tag, "sx-text-decoration").unwrap();
+    let mut text_decoration = pmrv(tag, "sx-text-decoration", parse_text_decoration)?.flatten();
 
-    if let Some(color) = get_color(tag, "sx-text-decoration-color") {
+    if let Some(color) = pmrv(tag, "sx-text-decoration-color", Color::try_from_hex)? {
         if let Some(text_decoration) = &mut text_decoration {
             text_decoration.color = Some(color);
         } else {
@@ -623,7 +620,7 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
             });
         }
     }
-    if let Some(line) = get_text_decoration_line(tag, "sx-text-decoration-line") {
+    if let Some(line) = pmrv(tag, "sx-text-decoration-line", parse_text_decoration_lines)? {
         if let Some(text_decoration) = &mut text_decoration {
             text_decoration.line = line;
         } else {
@@ -633,7 +630,7 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
             });
         }
     }
-    if let Some(style) = get_text_decoration_style(tag, "sx-text-decoration-style") {
+    if let Some(style) = pmrv(tag, "sx-text-decoration-style", parse_text_decoration_style)? {
         if let Some(text_decoration) = &mut text_decoration {
             text_decoration.style = Some(style);
         } else {
@@ -643,7 +640,7 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
             });
         }
     }
-    if let Some(thickness) = get_number(tag, "sx-text-decoration-thickness").unwrap() {
+    if let Some(thickness) = pmrv(tag, "sx-text-decoration-thickness", parse_number)? {
         if let Some(text_decoration) = &mut text_decoration {
             text_decoration.thickness = Some(thickness);
         } else {
@@ -654,9 +651,9 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
         }
     }
 
-    let mut flex = get_flex(tag, "sx-flex").unwrap();
+    let mut flex = pmrv(tag, "sx-flex", parse_flex)?.flatten();
 
-    if let Some(grow) = get_number(tag, "sx-flex-grow").unwrap() {
+    if let Some(grow) = pmrv(tag, "sx-flex-grow", parse_number)? {
         if let Some(flex) = &mut flex {
             flex.grow = grow;
         } else {
@@ -666,7 +663,7 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
             });
         }
     }
-    if let Some(shrink) = get_number(tag, "sx-flex-shrink").unwrap() {
+    if let Some(shrink) = pmrv(tag, "sx-flex-shrink", parse_number)? {
         if let Some(flex) = &mut flex {
             flex.shrink = shrink;
         } else {
@@ -676,7 +673,7 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
             });
         }
     }
-    if let Some(basis) = get_number(tag, "sx-flex-basis").unwrap() {
+    if let Some(basis) = pmrv(tag, "sx-flex-basis", parse_number)? {
         if let Some(flex) = &mut flex {
             flex.basis = basis;
         } else {
@@ -688,18 +685,18 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
     }
 
     #[allow(clippy::needless_update)]
-    crate::Container {
+    Ok(crate::Container {
         #[cfg(feature = "id")]
         id: CURRENT_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
         str_id: get_tag_attr_value_owned(tag, "id"),
-        classes: get_classes(tag),
-        data: get_data_attrs(tag),
-        direction: get_direction(tag),
-        background: get_color(tag, "sx-background"),
-        border_top: get_border(tag, "sx-border-top"),
-        border_right: get_border(tag, "sx-border-right"),
-        border_bottom: get_border(tag, "sx-border-bottom"),
-        border_left: get_border(tag, "sx-border-left"),
+        classes: pmrv(tag, "class", parse_classes)?.unwrap_or_else(Vec::new),
+        data: get_data_attrs(tag)?,
+        direction: pmrv(tag, "sx-dir", parse_direction)?.unwrap_or_default(),
+        background: pmrv(tag, "sx-background", Color::try_from_hex)?,
+        border_top: pmrv(tag, "sx-border-top", parse_border)?,
+        border_right: pmrv(tag, "sx-border-right", parse_border)?,
+        border_bottom: pmrv(tag, "sx-border-bottom", parse_border)?,
+        border_left: pmrv(tag, "sx-border-left", parse_border)?,
         border_top_left_radius,
         border_top_right_radius,
         border_bottom_left_radius,
@@ -712,16 +709,16 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
         padding_right,
         padding_top,
         padding_bottom,
-        font_size: get_number(tag, "sx-font-size").unwrap(),
-        color: get_color(tag, "sx-color"),
-        state: get_state(tag, "state"),
-        hidden: get_bool(tag, "sx-hidden"),
-        visibility: get_visibility(tag),
-        overflow_x: get_overflow(tag, "sx-overflow-x"),
-        overflow_y: get_overflow(tag, "sx-overflow-y"),
-        justify_content: get_justify_content(tag, "sx-justify-content"),
-        align_items: get_align_items(tag, "sx-align-items"),
-        text_align: get_text_align(tag, "sx-text-align"),
+        font_size: pmrv(tag, "sx-font-size", parse_number)?,
+        color: pmrv(tag, "sx-color", Color::try_from_hex)?,
+        state: pmrv(tag, "state", parse_state)?,
+        hidden: pmrv(tag, "sx-hidden", parse_bool)?,
+        visibility: pmrv(tag, "sx-visibility", parse_visibility)?,
+        overflow_x: pmrv(tag, "sx-overflow-x", parse_overflow)?.unwrap_or_default(),
+        overflow_y: pmrv(tag, "sx-overflow-y", parse_overflow)?.unwrap_or_default(),
+        justify_content: pmrv(tag, "sx-justify-content", parse_justify_content)?,
+        align_items: pmrv(tag, "sx-align-items", parse_align_items)?,
+        text_align: pmrv(tag, "sx-text-align", parse_text_align)?,
         text_decoration,
         font_family: get_tag_attr_value_decoded(tag, "sx-font-family").map(|x| {
             x.split(',')
@@ -731,35 +728,35 @@ fn parse_element(tag: &HTMLTag<'_>, node: &Node<'_>, parser: &Parser<'_>) -> cra
                 .collect()
         }),
         children: parse_top_children(node.children(), parser),
-        width: get_number(tag, "sx-width").unwrap(),
-        min_width: get_number(tag, "sx-min-width").unwrap(),
-        max_width: get_number(tag, "sx-max-width").unwrap(),
-        height: get_number(tag, "sx-height").unwrap(),
-        min_height: get_number(tag, "sx-min-height").unwrap(),
-        max_height: get_number(tag, "sx-max-height").unwrap(),
+        width: pmrv(tag, "sx-width", parse_number)?,
+        min_width: pmrv(tag, "sx-min-width", parse_number)?,
+        max_width: pmrv(tag, "sx-max-width", parse_number)?,
+        height: pmrv(tag, "sx-height", parse_number)?,
+        min_height: pmrv(tag, "sx-min-height", parse_number)?,
+        max_height: pmrv(tag, "sx-max-height", parse_number)?,
         flex,
-        left: get_number(tag, "sx-left").unwrap(),
-        right: get_number(tag, "sx-right").unwrap(),
-        top: get_number(tag, "sx-top").unwrap(),
-        bottom: get_number(tag, "sx-bottom").unwrap(),
-        translate_x: get_number(tag, "sx-translate-x").unwrap(),
-        translate_y: get_number(tag, "sx-translate-y").unwrap(),
-        gap: get_number(tag, "sx-gap").unwrap(),
-        opacity: get_number(tag, "sx-opacity").unwrap(),
-        debug: get_bool(tag, "debug"),
-        cursor: get_cursor(tag),
-        position: get_position(tag),
-        route: get_route(tag),
+        left: pmrv(tag, "sx-left", parse_number)?,
+        right: pmrv(tag, "sx-right", parse_number)?,
+        top: pmrv(tag, "sx-top", parse_number)?,
+        bottom: pmrv(tag, "sx-bottom", parse_number)?,
+        translate_x: pmrv(tag, "sx-translate-x", parse_number)?,
+        translate_y: pmrv(tag, "sx-translate-y", parse_number)?,
+        gap: pmrv(tag, "sx-gap", parse_number)?,
+        opacity: pmrv(tag, "sx-opacity", parse_number)?,
+        debug: pmrv(tag, "debug", parse_bool)?,
+        cursor: pmrv(tag, "sx-cursor", parse_cursor)?,
+        position: pmrv(tag, "sx-position", parse_position)?,
+        route: get_route(tag)?,
         actions: get_actions(tag),
         ..Default::default()
-    }
+    })
 }
 
 #[allow(clippy::too_many_lines)]
 fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container> {
     match node {
         Node::Tag(tag) => {
-            let mut container = parse_element(tag, node, parser);
+            let mut container = parse_element(tag, node, parser).unwrap();
 
             match tag.name().as_utf8_str().to_lowercase().as_str() {
                 "input" => match get_tag_attr_value_lower(tag, "type").as_deref() {
@@ -805,14 +802,16 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                     container.element = crate::Element::Image {
                         source: get_tag_attr_value_owned(tag, "src"),
                         alt: get_tag_attr_value_owned(tag, "alt"),
-                        fit: get_image_fit(tag, "sx-fit"),
+                        fit: pmrv(tag, "sx-fit", parse_image_fit).unwrap(),
                         source_set: get_tag_attr_value_owned(tag, "srcset"),
-                        sizes: get_number(tag, "sizes").unwrap(),
+                        sizes: pmrv(tag, "sizes", parse_number).unwrap(),
                     }
                 }
                 "a" => {
                     container.element = crate::Element::Anchor {
-                        target: get_link_target(tag, "target"),
+                        target: get_tag_attr_value_decoded(tag, "target")
+                            .as_deref()
+                            .map(parse_link_target),
                         href: get_tag_attr_value_owned(tag, "href"),
                     }
                 }
