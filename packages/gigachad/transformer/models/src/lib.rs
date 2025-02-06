@@ -20,7 +20,7 @@ impl std::fmt::Display for LayoutDirection {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Row => f.write_str("row"),
-            Self::Column => f.write_str("column"),
+            Self::Column => f.write_str("col"),
         }
     }
 }
