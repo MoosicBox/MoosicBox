@@ -56,6 +56,7 @@ pub static ASSETS: LazyLock<Vec<gigachad_renderer::assets::StaticAssetRoute>> =
     });
 
 pub static BACKGROUND_COLOR: LazyLock<Color> = LazyLock::new(|| Color::from_hex("#181a1b"));
+pub static VIEWPORT: LazyLock<String> = LazyLock::new(|| "width=device-width".to_string());
 
 /// # Panics
 ///
@@ -159,6 +160,7 @@ pub async fn gen(
                     let html = container_element_to_html_response(
                         &std::collections::HashMap::new(),
                         &view.immediate,
+                        Some(&*VIEWPORT),
                         Some(*BACKGROUND_COLOR),
                         &**tag_renderer,
                     )?;

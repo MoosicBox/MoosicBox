@@ -34,6 +34,12 @@ impl HtmlApp for StubApp {
         self
     }
 
+    fn with_viewport(self, _viewport: Option<String>) -> Self {
+        self
+    }
+
+    fn set_viewport(&mut self, _viewport: Option<String>) {}
+
     fn with_background(self, _background: Option<Color>) -> Self {
         self
     }

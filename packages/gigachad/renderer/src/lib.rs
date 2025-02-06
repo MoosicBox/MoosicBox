@@ -100,6 +100,7 @@ pub trait Renderer: ToRenderRunner + Send + Sync {
         x: Option<i32>,
         y: Option<i32>,
         background: Option<Color>,
+        viewport: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
 
     /// # Errors
@@ -153,6 +154,7 @@ pub trait HtmlTagRenderer {
         &self,
         _headers: &std::collections::HashMap<String, String>,
         content: String,
+        viewport: Option<&str>,
         background: Option<Color>,
     ) -> String;
 }

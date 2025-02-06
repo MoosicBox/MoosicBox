@@ -1213,6 +1213,7 @@ impl Renderer for FltkRenderer {
         x: Option<i32>,
         y: Option<i32>,
         background: Option<Color>,
+        _viewport: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         let app = app::App::default();
         self.app.replace(app);

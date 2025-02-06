@@ -75,6 +75,7 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
         &self,
         headers: &HashMap<String, String>,
         content: String,
+        viewport: Option<&str>,
         background: Option<Color>,
     ) -> String {
         if headers.get("hx-request").is_some() {
@@ -101,6 +102,9 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                                 outline: inherit;
                             }}
                         "))}
+                        @if let Some(content) = viewport {
+                            meta name="viewport" content=(content);
+                        }
                     }
                     body {
                         (PreEscaped(content))

@@ -33,6 +33,7 @@ impl HtmlTagRenderer for DatastarTagRenderer {
         &self,
         _headers: &HashMap<String, String>,
         content: String,
+        viewport: Option<&str>,
         background: Option<Color>,
     ) -> String {
         if false {
@@ -63,6 +64,9 @@ impl HtmlTagRenderer for DatastarTagRenderer {
                                 outline: inherit;
                             }}
                         "))}
+                        @if let Some(content) = viewport {
+                            meta name="viewport" content=(content);
+                        }
                     }
                     body {
                         (PreEscaped(content))

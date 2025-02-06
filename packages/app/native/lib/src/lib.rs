@@ -41,6 +41,7 @@ pub struct NativeAppBuilder {
     x: Option<i32>,
     y: Option<i32>,
     background: Option<Color>,
+    viewport: Option<String>,
     width: Option<f32>,
     height: Option<f32>,
     router: Option<Router>,
@@ -230,6 +231,7 @@ impl NativeAppBuilder {
             x: None,
             y: None,
             background: None,
+            viewport: None,
             width: None,
             height: None,
             router: None,
@@ -287,6 +289,12 @@ impl NativeAppBuilder {
     #[must_use]
     pub fn with_position(self, x: i32, y: i32) -> Self {
         self.with_x(x).with_y(y)
+    }
+
+    #[must_use]
+    pub fn with_viewport(mut self, content: String) -> Self {
+        self.viewport.replace(content);
+        self
     }
 
     #[must_use]
@@ -421,6 +429,7 @@ impl NativeAppBuilder {
             x: self.x,
             y: self.y,
             background: self.background,
+            viewport: self.viewport.clone(),
             width: self.width,
             height: self.height,
             router: self.router.clone().unwrap(),
@@ -654,6 +663,7 @@ pub struct NativeApp {
     x: Option<i32>,
     y: Option<i32>,
     background: Option<Color>,
+    viewport: Option<String>,
     width: Option<f32>,
     height: Option<f32>,
     pub router: Router,
@@ -673,6 +683,7 @@ impl NativeApp {
                 self.x,
                 self.y,
                 self.background,
+                self.viewport.as_deref(),
             )
             .await?;
 

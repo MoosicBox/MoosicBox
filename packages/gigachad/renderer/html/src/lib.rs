@@ -63,6 +63,7 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
         &self,
         _headers: &HashMap<String, String>,
         content: String,
+        viewport: Option<&str>,
         background: Option<Color>,
     ) -> String {
         let background = background.map(|x| format!("background:rgb({},{},{})", x.r, x.g, x.b));
@@ -86,6 +87,9 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                             outline: inherit;
                         }}
                     "))}
+                    @if let Some(content) = viewport {
+                        meta name="viewport" content=(content);
+                    }
                 }
                 body {
                     (PreEscaped(content))
@@ -108,8 +112,11 @@ pub trait HtmlApp {
     fn with_tag_renderer(self, tag_renderer: impl HtmlTagRenderer + Send + Sync + 'static) -> Self;
 
     #[must_use]
-    fn with_background(self, background: Option<Color>) -> Self;
+    fn with_viewport(self, viewport: Option<String>) -> Self;
+    fn set_viewport(&mut self, viewport: Option<String>);
 
+    #[must_use]
+    fn with_background(self, background: Option<Color>) -> Self;
     fn set_background(&mut self, background: Option<Color>);
 }
 
@@ -193,12 +200,14 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync + Clone> Renderer for HtmlRendere
         x: Option<i32>,
         y: Option<i32>,
         background: Option<Color>,
+        viewport: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         self.width = Some(width);
         self.height = Some(height);
         self.x = x;
         self.y = y;
         self.app.set_background(background);
+        self.app.set_viewport(viewport.map(ToString::to_string));
 
         Ok(())
     }

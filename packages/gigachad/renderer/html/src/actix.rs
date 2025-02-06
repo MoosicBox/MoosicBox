@@ -33,6 +33,7 @@ pub struct HtmlActixResponseProcessor {
     pub router: Router,
     pub tag_renderer: Arc<Box<dyn HtmlTagRenderer + Send + Sync>>,
     pub background: Option<Color>,
+    pub viewport: Option<String>,
 }
 
 impl HtmlActixResponseProcessor {
@@ -42,6 +43,7 @@ impl HtmlActixResponseProcessor {
             router,
             tag_renderer: Arc::new(Box::new(DefaultHtmlTagRenderer)),
             background: None,
+            viewport: None,
         }
     }
 }
@@ -54,6 +56,16 @@ impl HtmlApp for ActixApp<PreparedRequest, HtmlActixResponseProcessor> {
     ) -> Self {
         self.processor.tag_renderer = Arc::new(Box::new(tag_renderer));
         self
+    }
+
+    #[must_use]
+    fn with_viewport(mut self, viewport: Option<String>) -> Self {
+        self.processor.viewport = viewport;
+        self
+    }
+
+    fn set_viewport(&mut self, viewport: Option<String>) {
+        self.processor.viewport = viewport;
     }
 
     #[must_use]
@@ -139,6 +151,7 @@ impl gigachad_renderer_html_actix::ActixResponseProcessor<PreparedRequest>
             container_element_to_html_response(
                 &HEADERS,
                 &view.immediate,
+                self.viewport.as_deref(),
                 self.background,
                 &**self.tag_renderer,
             )

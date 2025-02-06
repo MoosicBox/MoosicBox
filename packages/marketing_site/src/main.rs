@@ -11,6 +11,7 @@ use std::sync::Arc;
 use clap::{Parser, Subcommand};
 use moosicbox_env_utils::{default_env_usize, option_env_f32, option_env_i32};
 use moosicbox_logging::free_log_client::DynLayer;
+use moosicbox_marketing_site::VIEWPORT;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -76,7 +77,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let runtime = runtime.build().unwrap();
             let runtime = Arc::new(runtime);
 
-            let app = moosicbox_marketing_site::init().with_runtime_arc(runtime.clone());
+            let app = moosicbox_marketing_site::init()
+                .with_viewport(VIEWPORT.clone())
+                .with_runtime_arc(runtime.clone());
 
             if let Commands::Gen { output } = args.cmd {
                 return runtime.block_on(async move {

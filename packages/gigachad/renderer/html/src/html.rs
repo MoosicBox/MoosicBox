@@ -862,12 +862,14 @@ pub fn container_element_to_html(
 pub fn container_element_to_html_response(
     headers: &HashMap<String, String>,
     container: &Container,
+    viewport: Option<&str>,
     background: Option<Color>,
     tag_renderer: &dyn HtmlTagRenderer,
 ) -> Result<String, std::io::Error> {
     Ok(tag_renderer.root_html(
         headers,
         container_element_to_html(container, tag_renderer)?,
+        viewport,
         background,
     ))
 }
