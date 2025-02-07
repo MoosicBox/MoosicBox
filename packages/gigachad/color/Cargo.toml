@@ -17,6 +17,7 @@ color-hex  = { workspace = true }
 egui       = { workspace = true, optional = true }
 log        = { workspace = true }
 quickcheck = { workspace = true, optional = true }
+serde      = { workspace = true, optional = true }
 thiserror  = { workspace = true }
 
 [dev-dependencies]
@@ -26,8 +27,10 @@ test-log          = { workspace = true }
 [features]
 default = ["egui", "gen"]
 
+fail-on-warnings = []
+
 egui = ["dep:egui"]
 
 gen = ["dep:quickcheck"]
 
-fail-on-warnings = []
+serde = ["dep:serde"]

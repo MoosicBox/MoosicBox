@@ -20,6 +20,7 @@ pub enum ParseHexError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Color {
     pub r: u8,
     pub g: u8,
