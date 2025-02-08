@@ -5,14 +5,14 @@
     "main": "index.mjs",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/MoosicBox/MoosicBoxMarketingSite.git"
+        "url": "git+https://github.com/MoosicBox/MoosicBox.git"
     },
     "author": "Braden Steffaniak",
     "license": "ISC",
     "bugs": {
-        "url": "https://github.com/MoosicBox/MoosicBoxMarketingSite/issues"
+        "url": "https://github.com/MoosicBox/MoosicBox/issues"
     },
-    "homepage": "https://github.com/MoosicBox/MoosicBoxMarketingSite#readme",
+    "homepage": "https://github.com/MoosicBox/MoosicBox#readme",
     "scripts": {
         "dev": "cargo run --bin moosicbox_marketing_site --no-default-features --features actix,htmx,dev serve",
         "sst:deploy": "sst deploy",
