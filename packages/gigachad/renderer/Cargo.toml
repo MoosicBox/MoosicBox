@@ -49,3 +49,5 @@ viewport-retained  = ["viewport"]
 html = []
 
 assets = []
+
+logic = ["gigachad_transformer/logic"]

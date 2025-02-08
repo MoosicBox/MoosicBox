@@ -29,6 +29,7 @@ pub enum NativeAppError {
     Other(#[from] Box<dyn std::error::Error + Send>),
 }
 
+#[cfg(feature = "logic")]
 type ActionHandler = Box<
     dyn Fn(
             (&str, Option<&gigachad_actions::logic::Value>),
@@ -49,6 +50,7 @@ pub struct NativeAppBuilder {
     renderer: Option<RendererType>,
     runtime_handle: Option<tokio::runtime::Handle>,
     runtime: Option<Arc<tokio::runtime::Runtime>>,
+    #[cfg(feature = "logic")]
     action_handlers: Vec<Arc<ActionHandler>>,
     resize_listeners: Vec<Arc<ResizeListener>>,
     #[cfg(feature = "assets")]
@@ -352,6 +354,7 @@ impl NativeAppBuilder {
             renderer: None,
             runtime_handle: None,
             runtime: None,
+            #[cfg(feature = "logic")]
             action_handlers: vec![],
             resize_listeners: vec![],
             #[cfg(feature = "assets")]
@@ -417,6 +420,7 @@ impl NativeAppBuilder {
         self
     }
 
+    #[cfg(feature = "logic")]
     #[must_use]
     pub fn with_action_handler<E: std::error::Error + 'static>(
         mut self,
@@ -454,6 +458,7 @@ impl NativeAppBuilder {
         self
     }
 
+    #[cfg(feature = "logic")]
     #[allow(unused)]
     #[must_use]
     fn listen_actions(
@@ -582,6 +587,7 @@ impl NativeAppBuilder {
                 let resize_tx = Self::listen_resize(self.resize_listeners);
                 let renderer = gigachad_renderer_egui::EguiRenderer::new(
                     router.clone(),
+                    #[cfg(feature = "logic")]
                     action_tx,
                     resize_tx,
                     CLIENT_INFO.clone(),
