@@ -2,6 +2,8 @@ use std::env;
 use std::path::Path;
 use std::process::Command;
 
+static NPM_COMMANDS: [&str; 3] = ["pnpm", "bun", "npm"];
+
 fn main() {
     // Get the package directory (where this build script is running)
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -10,17 +12,8 @@ fn main() {
     // Specify the TypeScript source directory relative to this package
     let ts_src_dir = web_dir.join("src");
 
-    // Run pnpm script
-    let status = Command::new("pnpm")
-        .arg("run")
-        .arg("bundle") // Replace with your actual script name
-        .current_dir(&web_dir) // Ensure we run in the correct directory
-        .status()
-        .expect("Failed to execute pnpm script");
-
-    if !status.success() {
-        panic!("pnpm script failed");
-    }
+    run_command(&NPM_COMMANDS, &["install"], &web_dir);
+    run_command(&NPM_COMMANDS, &["run", "bundle"], &web_dir);
 
     // Watch TypeScript source directory for changes
     println!("cargo:rerun-if-changed={}", ts_src_dir.display());
@@ -43,6 +36,38 @@ fn watch_directory(dir: &Path) {
                 println!("cargo:rerun-if-changed={}", path.display());
             } else if path.is_dir() {
                 watch_directory(&path);
+            }
+        }
+    }
+}
+
+fn run_command(binaries: &[&str], arguments: &[&str], dir: &Path) {
+    for binary in binaries {
+        let mut command = Command::new(binary);
+        let mut command = command.current_dir(dir);
+
+        for arg in arguments {
+            command = command.arg(arg);
+        }
+
+        match command.spawn() {
+            Ok(mut child) => {
+                let status = child
+                    .wait()
+                    .unwrap_or_else(|e| panic!("Failed to execute {binary} script: {e:?}"));
+
+                if !status.success() {
+                    panic!("{binary} script failed");
+                }
+
+                return;
+            }
+
+            Err(e) => {
+                if let std::io::ErrorKind::NotFound = e.kind() {
+                    continue;
+                }
+                panic!("Failed to execute {binary} script: {e:?}");
             }
         }
     }
