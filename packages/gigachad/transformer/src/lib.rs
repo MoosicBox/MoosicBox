@@ -9,6 +9,7 @@ use gigachad_transformer_models::{
     AlignItems, Cursor, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, LinkTarget,
     Position, Route, TextAlign, TextDecorationLine, TextDecorationStyle, Visibility,
 };
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub use gigachad_transformer_models as models;
@@ -42,7 +43,7 @@ pub fn calc_number(number: &Number, container: f32, view_width: f32, view_height
     }
 }
 
-#[derive(Clone, Debug, PartialEq, EnumDiscriminants)]
+#[derive(Clone, Debug, PartialEq, EnumDiscriminants, Serialize, Deserialize)]
 #[strum_discriminants(derive(EnumIter))]
 #[strum_discriminants(name(CalculationType))]
 pub enum Calculation {
@@ -114,7 +115,7 @@ impl std::fmt::Display for Calculation {
     }
 }
 
-#[derive(Clone, Debug, EnumDiscriminants)]
+#[derive(Clone, Debug, EnumDiscriminants, Serialize, Deserialize)]
 #[strum_discriminants(derive(EnumIter))]
 #[strum_discriminants(name(NumberType))]
 pub enum Number {
@@ -261,7 +262,7 @@ impl Default for Number {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Default)]
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct TextDecoration {
     pub color: Option<Color>,
     pub line: Vec<TextDecorationLine>,
@@ -269,7 +270,7 @@ pub struct TextDecoration {
     pub thickness: Option<Number>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Flex {
     pub grow: Number,
     pub shrink: Number,
@@ -284,6 +285,90 @@ impl Default for Flex {
             basis: Number::IntegerPercent(0),
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub enum ResponsiveTrigger {
+    MaxWidth(Number),
+    MaxHeight(Number),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ConfigOverride {
+    pub condition: OverrideCondition,
+    pub overrides: Vec<OverrideItem>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum OverrideCondition {
+    ResponsiveTarget { name: String },
+}
+
+impl From<String> for OverrideCondition {
+    fn from(value: String) -> Self {
+        Self::ResponsiveTarget { name: value }
+    }
+}
+
+impl From<&str> for OverrideCondition {
+    fn from(value: &str) -> Self {
+        value.to_string().into()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum OverrideItem {
+    StrId(String),
+    Classes(Vec<String>),
+    Data(HashMap<String, String>),
+    Direction(LayoutDirection),
+    OverflowX(LayoutOverflow),
+    OverflowY(LayoutOverflow),
+    JustifyContent(JustifyContent),
+    AlignItems(AlignItems),
+    TextAlign(TextAlign),
+    TextDecoration(TextDecoration),
+    FontFamily(Vec<String>),
+    Width(Number),
+    MinWidth(Number),
+    MaxWidth(Number),
+    Height(Number),
+    MinHeight(Number),
+    MaxHeight(Number),
+    Flex(Flex),
+    Gap(Number),
+    Opacity(Number),
+    Left(Number),
+    Right(Number),
+    Top(Number),
+    Bottom(Number),
+    TranslateX(Number),
+    TranslateY(Number),
+    Cursor(Cursor),
+    Position(Position),
+    Background(Color),
+    BorderTop((Color, Number)),
+    BorderRight((Color, Number)),
+    BorderBottom((Color, Number)),
+    BorderLeft((Color, Number)),
+    BorderTopLeftRadius(Number),
+    BorderTopRightRadius(Number),
+    BorderBottomLeftRadius(Number),
+    BorderBottomRightRadius(Number),
+    MarginLeft(Number),
+    MarginRight(Number),
+    MarginTop(Number),
+    MarginBottom(Number),
+    PaddingLeft(Number),
+    PaddingRight(Number),
+    PaddingTop(Number),
+    PaddingBottom(Number),
+    FontSize(Number),
+    Color(Color),
+    Hidden(bool),
+    Debug(bool),
+    Visibility(Visibility),
+    Route(Route),
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -345,6 +430,7 @@ pub struct Container {
     pub visibility: Option<Visibility>,
     pub route: Option<Route>,
     pub actions: Vec<Action>,
+    pub overrides: Vec<ConfigOverride>,
     #[cfg(feature = "calc")]
     pub internal_margin_left: Option<f32>,
     #[cfg(feature = "calc")]
@@ -409,6 +495,25 @@ pub struct Container {
     pub scrollbar_right: Option<f32>,
     #[cfg(feature = "calc")]
     pub scrollbar_bottom: Option<f32>,
+}
+
+impl Container {
+    pub fn iter_overrides(&self, recurse: bool) -> impl Iterator<Item = (&Self, &ConfigOverride)> {
+        let mut iter: Box<dyn Iterator<Item = (&Self, &ConfigOverride)>> =
+            if self.overrides.is_empty() {
+                Box::new(std::iter::empty())
+            } else {
+                Box::new(self.overrides.iter().map(move |x| (self, x)))
+            };
+
+        if recurse {
+            for child in &self.children {
+                iter = Box::new(iter.chain(child.iter_overrides(true)));
+            }
+        }
+
+        iter
+    }
 }
 
 #[cfg(any(test, feature = "maud"))]

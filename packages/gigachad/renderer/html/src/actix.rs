@@ -9,53 +9,63 @@ use gigachad_renderer_html_actix::actix_web::{
     error::ErrorInternalServerError, http::header::USER_AGENT,
 };
 use gigachad_router::{ClientInfo, ClientOs, RequestInfo, Router};
+use gigachad_transformer::ResponsiveTrigger;
 use uaparser::{Parser as _, UserAgentParser};
 
 use crate::{
     html::{container_element_to_html, container_element_to_html_response},
-    DefaultHtmlTagRenderer, HtmlApp, HtmlRenderer,
+    HtmlApp, HtmlRenderer,
 };
 
 pub use gigachad_renderer_html_actix::*;
 
 #[must_use]
-pub fn router_to_actix(
+pub fn router_to_actix<T: HtmlTagRenderer + Clone + Send + Sync + 'static>(
+    tag_renderer: T,
     value: gigachad_router::Router,
-) -> HtmlRenderer<gigachad_renderer_html_actix::ActixApp<PreparedRequest, HtmlActixResponseProcessor>>
-{
+) -> HtmlRenderer<
+    gigachad_renderer_html_actix::ActixApp<PreparedRequest, HtmlActixResponseProcessor<T>>,
+> {
     HtmlRenderer::new(gigachad_renderer_html_actix::ActixApp::new(
-        HtmlActixResponseProcessor::new(value),
+        HtmlActixResponseProcessor::new(tag_renderer, value),
     ))
 }
 
 #[derive(Clone)]
-pub struct HtmlActixResponseProcessor {
+pub struct HtmlActixResponseProcessor<T: HtmlTagRenderer + Clone> {
     pub router: Router,
-    pub tag_renderer: Arc<Box<dyn HtmlTagRenderer + Send + Sync>>,
+    pub tag_renderer: T,
     pub background: Option<Color>,
     pub viewport: Option<String>,
 }
 
-impl HtmlActixResponseProcessor {
+impl<T: HtmlTagRenderer + Clone> HtmlActixResponseProcessor<T> {
     #[must_use]
-    pub fn new(router: Router) -> Self {
+    pub const fn new(tag_renderer: T, router: Router) -> Self {
         Self {
             router,
-            tag_renderer: Arc::new(Box::new(DefaultHtmlTagRenderer)),
+            tag_renderer,
             background: None,
             viewport: None,
         }
     }
 }
 
-impl HtmlApp for ActixApp<PreparedRequest, HtmlActixResponseProcessor> {
+impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
+    for ActixApp<PreparedRequest, HtmlActixResponseProcessor<T>>
+{
     #[must_use]
-    fn with_tag_renderer(
-        mut self,
-        tag_renderer: impl HtmlTagRenderer + Send + Sync + 'static,
-    ) -> Self {
-        self.processor.tag_renderer = Arc::new(Box::new(tag_renderer));
+    fn with_responsive_trigger(mut self, name: String, trigger: ResponsiveTrigger) -> Self {
+        self.processor
+            .tag_renderer
+            .add_responsive_trigger(name, trigger);
         self
+    }
+
+    fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger) {
+        self.processor
+            .tag_renderer
+            .add_responsive_trigger(name, trigger);
     }
 
     #[must_use]
@@ -97,8 +107,9 @@ pub struct PreparedRequest {
 }
 
 #[async_trait]
-impl gigachad_renderer_html_actix::ActixResponseProcessor<PreparedRequest>
-    for HtmlActixResponseProcessor
+impl<T: HtmlTagRenderer + Clone + Send + Sync>
+    gigachad_renderer_html_actix::ActixResponseProcessor<PreparedRequest>
+    for HtmlActixResponseProcessor<T>
 {
     fn prepare_request(
         &self,
@@ -153,11 +164,11 @@ impl gigachad_renderer_html_actix::ActixResponseProcessor<PreparedRequest>
                 &view.immediate,
                 self.viewport.as_deref(),
                 self.background,
-                &**self.tag_renderer,
+                &self.tag_renderer,
             )
             .map_err(ErrorInternalServerError)
         } else {
-            container_element_to_html(&view.immediate, &**self.tag_renderer)
+            container_element_to_html(&view.immediate, &self.tag_renderer)
                 .map_err(ErrorInternalServerError)
         }
     }

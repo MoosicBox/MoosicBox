@@ -119,13 +119,7 @@ async fn visualization_updated(
         target: "visualization".to_string(),
         canvas_actions,
     };
-    let response = RENDERER
-        .get()
-        .unwrap()
-        .read()
-        .await
-        .render_canvas(view)
-        .await;
+    let response = RENDERER.get().unwrap().render_canvas(view).await;
     if let Err(e) = response {
         log::error!("Failed to render_canvas: {e:?}");
     }
@@ -141,13 +135,7 @@ async fn clear_canvas() {
         target: "visualization".to_string(),
         canvas_actions: vec![canvas::CanvasAction::Clear],
     };
-    let response = RENDERER
-        .get()
-        .unwrap()
-        .read()
-        .await
-        .render_canvas(view)
-        .await;
+    let response = RENDERER.get().unwrap().render_canvas(view).await;
     if let Err(e) = response {
         log::error!("Failed to render_canvas: {e:?}");
     }

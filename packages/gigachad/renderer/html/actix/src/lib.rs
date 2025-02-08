@@ -53,16 +53,14 @@ impl<
     > ToRenderRunner for ActixApp<T, R>
 {
     fn to_runner(
-        &self,
+        self,
         handle: Handle,
     ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
-        Ok(Box::new(ActixAppRunner {
-            app: self.clone(),
-            handle,
-        }))
+        Ok(Box::new(ActixAppRunner { app: self, handle }))
     }
 }
 
+#[derive(Clone)]
 pub struct ActixAppRunner<
     T: Send + Sync + Clone,
     R: ActixResponseProcessor<T> + Send + Sync + Clone,

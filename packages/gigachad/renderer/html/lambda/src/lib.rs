@@ -50,13 +50,10 @@ impl<
     > ToRenderRunner for LambdaApp<T, R>
 {
     fn to_runner(
-        &self,
+        self,
         handle: Handle,
     ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
-        Ok(Box::new(LambdaAppRunner {
-            app: self.clone(),
-            handle,
-        }))
+        Ok(Box::new(LambdaAppRunner { app: self, handle }))
     }
 }
 

@@ -83,12 +83,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             if let Commands::Gen { output } = args.cmd {
                 return runtime.block_on(async move {
-                    let renderer = app.get_renderer()?;
+                    let renderer = moosicbox_marketing_site::start(app).await?.renderer;
                     moosicbox_marketing_site::gen(renderer, output).await
                 });
             }
 
-            let mut app = app.with_size(
+            let mut builder = app.with_size(
                 option_env_f32("WINDOW_WIDTH").unwrap().unwrap_or(1000.0),
                 option_env_f32("WINDOW_HEIGHT").unwrap().unwrap_or(600.0),
             );
@@ -96,7 +96,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             #[cfg(feature = "assets")]
             {
                 for assets in moosicbox_marketing_site::ASSETS.iter().cloned() {
-                    app = app.with_static_asset_route_result(assets)?;
+                    builder = builder.with_static_asset_route_result(assets)?;
                 }
             }
 
@@ -105,12 +105,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     option_env_i32("WINDOW_X").unwrap(),
                     option_env_i32("WINDOW_Y").unwrap(),
                 ) {
-                    app = app.with_position(x, y);
+                    builder = builder.with_position(x, y);
                 }
 
                 log::debug!("app_native: starting app");
-                let app = app
-                    .start()
+                let app = moosicbox_marketing_site::start(builder)
                     .await
                     .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
 
@@ -125,7 +124,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     );
                 }
 
-                app.to_runner().await
+                app.to_runner()
             })?;
 
             log::debug!("app_native: running");

@@ -51,6 +51,21 @@ pub fn write_css_attr(f: &mut dyn Write, attr: &[u8], value: &[u8]) -> Result<()
     Ok(())
 }
 
+/// # Errors
+///
+/// * If there was an IO error writing the css attribute
+pub fn write_css_attr_important(
+    f: &mut dyn Write,
+    attr: &[u8],
+    value: &[u8],
+) -> Result<(), std::io::Error> {
+    f.write_all(attr)?;
+    f.write_all(b":")?;
+    f.write_all(value)?;
+    f.write_all(b" !important;")?;
+    Ok(())
+}
+
 #[must_use]
 pub fn number_to_html_string(number: &Number, px: bool) -> String {
     match number {
@@ -347,9 +362,13 @@ pub fn element_style_to_html(
         match visibility {
             Visibility::Visible => {}
             Visibility::Hidden => {
-                write_css_attr!(b"display", b"none");
+                write_css_attr!(b"visibility", b"hidden");
             }
         }
+    }
+
+    if container.hidden == Some(true) {
+        write_css_attr!(b"display", b"none");
     }
 
     if let Some(justify_content) = container.justify_content {
@@ -868,6 +887,7 @@ pub fn container_element_to_html_response(
 ) -> Result<String, std::io::Error> {
     Ok(tag_renderer.root_html(
         headers,
+        container,
         container_element_to_html(container, tag_renderer)?,
         viewport,
         background,

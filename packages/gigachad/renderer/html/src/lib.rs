@@ -14,11 +14,15 @@ use gigachad_renderer::{
     ToRenderRunner, View,
 };
 use gigachad_router::Container;
-use html::{element_classes_to_html, element_style_to_html};
+use gigachad_transformer::{
+    models::{LayoutDirection, Visibility},
+    OverrideCondition, OverrideItem, ResponsiveTrigger,
+};
+use html::{
+    element_classes_to_html, element_style_to_html, number_to_html_string, write_css_attr_important,
+};
 use maud::{html, PreEscaped};
 use tokio::runtime::Handle;
-
-pub use stub::stub;
 
 #[cfg(feature = "actix")]
 pub use actix::router_to_actix;
@@ -35,9 +39,28 @@ pub mod actix;
 #[cfg(feature = "lambda")]
 pub mod lambda;
 
-pub struct DefaultHtmlTagRenderer;
+#[derive(Default, Clone)]
+pub struct DefaultHtmlTagRenderer {
+    pub responsive_triggers: HashMap<String, ResponsiveTrigger>,
+}
+
+impl DefaultHtmlTagRenderer {
+    #[must_use]
+    pub fn with_responsive_trigger(
+        mut self,
+        name: impl Into<String>,
+        trigger: ResponsiveTrigger,
+    ) -> Self {
+        self.add_responsive_trigger(name.into(), trigger);
+        self
+    }
+}
 
 impl HtmlTagRenderer for DefaultHtmlTagRenderer {
+    fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger) {
+        self.responsive_triggers.insert(name, trigger);
+    }
+
     /// # Errors
     ///
     /// * If the `HtmlTagRenderer` fails to write the element attributes
@@ -59,15 +82,151 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// * If the `HtmlTagRenderer` fails to write the css media-queries
+    #[allow(clippy::too_many_lines)]
+    fn reactive_conditions_to_css(
+        &self,
+        f: &mut dyn Write,
+        container: &Container,
+    ) -> Result<(), std::io::Error> {
+        f.write_all(b"<style>")?;
+
+        for (container, config) in container.iter_overrides(true) {
+            let Some(id) = &container.str_id else {
+                continue;
+            };
+
+            let Some(trigger) = (match &config.condition {
+                OverrideCondition::ResponsiveTarget { name } => self.responsive_triggers.get(name),
+            }) else {
+                continue;
+            };
+
+            f.write_all(b"@media(")?;
+
+            match trigger {
+                ResponsiveTrigger::MaxWidth(number) => {
+                    f.write_all(b"max-width:")?;
+                    f.write_all(number_to_html_string(number, true).as_bytes())?;
+                }
+                ResponsiveTrigger::MaxHeight(number) => {
+                    f.write_all(b"max-height:")?;
+                    f.write_all(number_to_html_string(number, true).as_bytes())?;
+                }
+            }
+
+            f.write_all(b"){")?;
+
+            f.write_all(b"#")?;
+            f.write_all(id.as_bytes())?;
+            f.write_all(b"{")?;
+
+            for o in &config.overrides {
+                match o {
+                    OverrideItem::Direction(x) => {
+                        write_css_attr_important(
+                            f,
+                            b"flex-direction",
+                            match x {
+                                LayoutDirection::Row => b"row",
+                                LayoutDirection::Column => b"column",
+                            },
+                        )?;
+                    }
+                    OverrideItem::Visibility(x) => {
+                        write_css_attr_important(
+                            f,
+                            b"visibility",
+                            match x {
+                                Visibility::Visible => b"visible",
+                                Visibility::Hidden => b"hidden",
+                            },
+                        )?;
+                    }
+                    OverrideItem::Hidden(x) => {
+                        write_css_attr_important(
+                            f,
+                            b"display",
+                            if *x { b"none" } else { b"initial" },
+                        )?;
+                    }
+                    OverrideItem::StrId(..)
+                    | OverrideItem::Classes(..)
+                    | OverrideItem::Data(..)
+                    | OverrideItem::OverflowX(..)
+                    | OverrideItem::OverflowY(..)
+                    | OverrideItem::JustifyContent(..)
+                    | OverrideItem::AlignItems(..)
+                    | OverrideItem::TextAlign(..)
+                    | OverrideItem::TextDecoration(..)
+                    | OverrideItem::FontFamily(..)
+                    | OverrideItem::Width(..)
+                    | OverrideItem::MinWidth(..)
+                    | OverrideItem::MaxWidth(..)
+                    | OverrideItem::Height(..)
+                    | OverrideItem::MinHeight(..)
+                    | OverrideItem::MaxHeight(..)
+                    | OverrideItem::Flex(..)
+                    | OverrideItem::Gap(..)
+                    | OverrideItem::Opacity(..)
+                    | OverrideItem::Left(..)
+                    | OverrideItem::Right(..)
+                    | OverrideItem::Top(..)
+                    | OverrideItem::Bottom(..)
+                    | OverrideItem::TranslateX(..)
+                    | OverrideItem::TranslateY(..)
+                    | OverrideItem::Cursor(..)
+                    | OverrideItem::Position(..)
+                    | OverrideItem::Background(..)
+                    | OverrideItem::BorderTop(..)
+                    | OverrideItem::BorderRight(..)
+                    | OverrideItem::BorderBottom(..)
+                    | OverrideItem::BorderLeft(..)
+                    | OverrideItem::BorderTopLeftRadius(..)
+                    | OverrideItem::BorderTopRightRadius(..)
+                    | OverrideItem::BorderBottomLeftRadius(..)
+                    | OverrideItem::BorderBottomRightRadius(..)
+                    | OverrideItem::MarginLeft(..)
+                    | OverrideItem::MarginRight(..)
+                    | OverrideItem::MarginTop(..)
+                    | OverrideItem::MarginBottom(..)
+                    | OverrideItem::PaddingLeft(..)
+                    | OverrideItem::PaddingRight(..)
+                    | OverrideItem::PaddingTop(..)
+                    | OverrideItem::PaddingBottom(..)
+                    | OverrideItem::FontSize(..)
+                    | OverrideItem::Color(..)
+                    | OverrideItem::Debug(..)
+                    | OverrideItem::Route(..) => {}
+                }
+            }
+
+            f.write_all(b"}")?; // container id
+            f.write_all(b"}")?; // media query
+        }
+
+        f.write_all(b"</style>")?;
+
+        Ok(())
+    }
+
     fn root_html(
         &self,
         _headers: &HashMap<String, String>,
+        container: &Container,
         content: String,
         viewport: Option<&str>,
         background: Option<Color>,
     ) -> String {
         let background = background.map(|x| format!("background:rgb({},{},{})", x.r, x.g, x.b));
         let background = background.as_deref().unwrap_or("");
+
+        let mut responsive_css = vec![];
+        self.reactive_conditions_to_css(&mut responsive_css, container)
+            .unwrap();
+        let responsive_css = std::str::from_utf8(&responsive_css).unwrap();
 
         html! {
             html {
@@ -87,6 +246,7 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                             outline: inherit;
                         }}
                     "))}
+                    (PreEscaped(responsive_css))
                     @if let Some(content) = viewport {
                         meta name="viewport" content=(content);
                     }
@@ -101,15 +261,16 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
 }
 
 pub trait HtmlApp {
+    #[must_use]
+    fn with_responsive_trigger(self, _name: String, _trigger: ResponsiveTrigger) -> Self;
+    fn add_responsive_trigger(&mut self, _name: String, _trigger: ResponsiveTrigger);
+
     #[cfg(feature = "assets")]
     #[must_use]
     fn with_static_asset_routes(
         self,
         paths: impl Into<Vec<gigachad_renderer::assets::StaticAssetRoute>>,
     ) -> Self;
-
-    #[must_use]
-    fn with_tag_renderer(self, tag_renderer: impl HtmlTagRenderer + Send + Sync + 'static) -> Self;
 
     #[must_use]
     fn with_viewport(self, viewport: Option<String>) -> Self;
@@ -121,7 +282,7 @@ pub trait HtmlApp {
 }
 
 #[derive(Clone)]
-pub struct HtmlRenderer<T: HtmlApp + ToRenderRunner + Send + Sync + Clone> {
+pub struct HtmlRenderer<T: HtmlApp + ToRenderRunner + Send + Sync> {
     width: Option<f32>,
     height: Option<f32>,
     x: Option<i32>,
@@ -130,7 +291,7 @@ pub struct HtmlRenderer<T: HtmlApp + ToRenderRunner + Send + Sync + Clone> {
     receiver: Receiver<String>,
 }
 
-impl<T: HtmlApp + ToRenderRunner + Send + Sync + Clone> HtmlRenderer<T> {
+impl<T: HtmlApp + ToRenderRunner + Send + Sync> HtmlRenderer<T> {
     #[must_use]
     pub fn new(app: T) -> Self {
         let (_tx, rx) = flume::unbounded();
@@ -143,15 +304,6 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync + Clone> HtmlRenderer<T> {
             app,
             receiver: rx,
         }
-    }
-
-    #[must_use]
-    pub fn with_tag_renderer(
-        mut self,
-        tag_renderer: impl HtmlTagRenderer + Send + Sync + 'static,
-    ) -> Self {
-        self.app = self.app.with_tag_renderer(tag_renderer);
-        self
     }
 
     #[must_use]
@@ -176,12 +328,12 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync + Clone> HtmlRenderer<T> {
     }
 }
 
-impl<T: HtmlApp + ToRenderRunner + Send + Sync + Clone> ToRenderRunner for HtmlRenderer<T> {
+impl<T: HtmlApp + ToRenderRunner + Send + Sync> ToRenderRunner for HtmlRenderer<T> {
     /// # Errors
     ///
     /// Will error if html fails to run the event loop.
     fn to_runner(
-        &self,
+        self,
         handle: Handle,
     ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
         self.app.to_runner(handle)
@@ -189,7 +341,11 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync + Clone> ToRenderRunner for HtmlR
 }
 
 #[async_trait]
-impl<T: HtmlApp + ToRenderRunner + Send + Sync + Clone> Renderer for HtmlRenderer<T> {
+impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
+    fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger) {
+        self.app.add_responsive_trigger(name, trigger);
+    }
+
     /// # Errors
     ///
     /// Will error if html app fails to start

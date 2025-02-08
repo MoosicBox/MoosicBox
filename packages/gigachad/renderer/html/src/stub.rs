@@ -1,36 +1,34 @@
-use std::sync::Arc;
-
 use gigachad_renderer::{Color, Handle, HtmlTagRenderer, RenderRunner, ToRenderRunner};
+use gigachad_transformer::ResponsiveTrigger;
 
-use crate::{DefaultHtmlTagRenderer, HtmlApp, HtmlRenderer};
+use crate::HtmlApp;
 
 #[derive(Clone)]
-pub struct StubApp {
-    pub tag_renderer: Arc<Box<dyn HtmlTagRenderer + Send + Sync>>,
+pub struct StubApp<T: HtmlTagRenderer> {
+    pub tag_renderer: T,
 }
 
-impl Default for StubApp {
-    fn default() -> Self {
-        Self {
-            tag_renderer: Arc::new(Box::new(DefaultHtmlTagRenderer)),
-        }
+impl<T: HtmlTagRenderer> StubApp<T> {
+    pub const fn new(tag_renderer: T) -> Self {
+        Self { tag_renderer }
     }
 }
 
-impl HtmlApp for StubApp {
+impl<T: HtmlTagRenderer> HtmlApp for StubApp<T> {
+    fn with_responsive_trigger(mut self, name: String, trigger: ResponsiveTrigger) -> Self {
+        self.tag_renderer.add_responsive_trigger(name, trigger);
+        self
+    }
+
+    fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger) {
+        self.tag_renderer.add_responsive_trigger(name, trigger);
+    }
+
     #[cfg(feature = "assets")]
     fn with_static_asset_routes(
         self,
         _paths: impl Into<Vec<gigachad_renderer::assets::StaticAssetRoute>>,
     ) -> Self {
-        self
-    }
-
-    fn with_tag_renderer(
-        mut self,
-        tag_renderer: impl HtmlTagRenderer + Send + Sync + 'static,
-    ) -> Self {
-        self.tag_renderer = Arc::new(Box::new(tag_renderer));
         self
     }
 
@@ -57,16 +55,11 @@ impl RenderRunner for StubRunner {
     }
 }
 
-impl ToRenderRunner for StubApp {
+impl<T: HtmlTagRenderer> ToRenderRunner for StubApp<T> {
     fn to_runner(
-        &self,
+        self,
         _handle: Handle,
     ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
         Ok(Box::new(StubRunner))
     }
-}
-
-#[must_use]
-pub fn stub() -> HtmlRenderer<StubApp> {
-    HtmlRenderer::new(StubApp::default())
 }

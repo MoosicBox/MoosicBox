@@ -3,11 +3,11 @@
 
 use std::sync::Arc;
 
-use gigachad_renderer::{Color, RenderRunner, Renderer};
+use gigachad_renderer::{transformer::ResponsiveTrigger, Color, Handle, RenderRunner, Renderer};
 use gigachad_router::Router;
 use moosicbox_env_utils::default_env_usize;
 use thiserror::Error;
-use tokio::{runtime::Runtime, sync::RwLock};
+use tokio::runtime::Runtime;
 
 pub use gigachad_renderer as renderer;
 pub use gigachad_router as router;
@@ -33,9 +33,10 @@ type ActionHandler = Box<
     dyn Fn(
             (&str, Option<&gigachad_actions::logic::Value>),
         ) -> Result<bool, Box<dyn std::error::Error>>
-        + Send,
+        + Send
+        + Sync,
 >;
-type ResizeListener = Box<dyn Fn(f32, f32) -> Result<(), Box<dyn std::error::Error>> + Send>;
+type ResizeListener = Box<dyn Fn(f32, f32) -> Result<(), Box<dyn std::error::Error>> + Send + Sync>;
 
 pub struct NativeAppBuilder {
     x: Option<i32>,
@@ -45,11 +46,11 @@ pub struct NativeAppBuilder {
     width: Option<f32>,
     height: Option<f32>,
     router: Option<Router>,
-    renderer: Option<Box<dyn Renderer>>,
+    renderer: Option<RendererType>,
     runtime_handle: Option<tokio::runtime::Handle>,
     runtime: Option<Arc<tokio::runtime::Runtime>>,
-    action_handlers: Vec<ActionHandler>,
-    resize_listeners: Vec<ResizeListener>,
+    action_handlers: Vec<Arc<ActionHandler>>,
+    resize_listeners: Vec<Arc<ResizeListener>>,
     #[cfg(feature = "assets")]
     static_asset_routes: Vec<gigachad_renderer::assets::StaticAssetRoute>,
 }
@@ -60,6 +61,7 @@ impl Default for NativeAppBuilder {
     }
 }
 
+#[derive(Clone)]
 pub enum RendererType {
     #[cfg(feature = "egui")]
     Egui(gigachad_renderer_egui::EguiRenderer),
@@ -71,7 +73,9 @@ pub enum RendererType {
         gigachad_renderer_html::HtmlRenderer<
             gigachad_renderer_html::actix::ActixApp<
                 gigachad_renderer_html::actix::PreparedRequest,
-                gigachad_renderer_html::actix::HtmlActixResponseProcessor,
+                gigachad_renderer_html::actix::HtmlActixResponseProcessor<
+                    gigachad_renderer_html::DefaultHtmlTagRenderer,
+                >,
             >,
         >,
     ),
@@ -81,19 +85,47 @@ pub enum RendererType {
         gigachad_renderer_html::HtmlRenderer<
             gigachad_renderer_html::lambda::LambdaApp<
                 gigachad_renderer_html::lambda::PreparedRequest,
-                gigachad_renderer_html::lambda::HtmlLambdaResponseProcessor,
+                gigachad_renderer_html::lambda::HtmlLambdaResponseProcessor<
+                    gigachad_renderer_html::DefaultHtmlTagRenderer,
+                >,
             >,
         >,
     ),
     #[cfg(feature = "html")]
-    HtmlStub(gigachad_renderer_html::HtmlRenderer<gigachad_renderer_html::stub::StubApp>),
+    HtmlStub(
+        gigachad_renderer_html::HtmlRenderer<
+            gigachad_renderer_html::stub::StubApp<gigachad_renderer_html::DefaultHtmlTagRenderer>,
+        >,
+    ),
+    #[cfg(feature = "datastar")]
+    DatastarStub(
+        gigachad_renderer_html::HtmlRenderer<
+            gigachad_renderer_html::stub::StubApp<gigachad_renderer_datastar::DatastarTagRenderer>,
+        >,
+    ),
+    #[cfg(feature = "htmx")]
+    HtmxStub(
+        gigachad_renderer_html::HtmlRenderer<
+            gigachad_renderer_html::stub::StubApp<gigachad_renderer_htmx::HtmxTagRenderer>,
+        >,
+    ),
+    #[cfg(feature = "vanilla-js")]
+    VanillaJsStub(
+        gigachad_renderer_html::HtmlRenderer<
+            gigachad_renderer_html::stub::StubApp<
+                gigachad_renderer_vanilla_js::VanillaJsTagRenderer,
+            >,
+        >,
+    ),
     #[cfg(feature = "htmx")]
     #[cfg(feature = "actix")]
     Htmx(
         gigachad_renderer_html::HtmlRenderer<
             gigachad_renderer_html::actix::ActixApp<
                 gigachad_renderer_html::actix::PreparedRequest,
-                gigachad_renderer_html::actix::HtmlActixResponseProcessor,
+                gigachad_renderer_html::actix::HtmlActixResponseProcessor<
+                    gigachad_renderer_htmx::HtmxTagRenderer,
+                >,
             >,
         >,
     ),
@@ -103,7 +135,9 @@ pub enum RendererType {
         gigachad_renderer_html::HtmlRenderer<
             gigachad_renderer_html::lambda::LambdaApp<
                 gigachad_renderer_html::lambda::PreparedRequest,
-                gigachad_renderer_html::lambda::HtmlLambdaResponseProcessor,
+                gigachad_renderer_html::lambda::HtmlLambdaResponseProcessor<
+                    gigachad_renderer_htmx::HtmxTagRenderer,
+                >,
             >,
         >,
     ),
@@ -113,7 +147,9 @@ pub enum RendererType {
         gigachad_renderer_html::HtmlRenderer<
             gigachad_renderer_html::actix::ActixApp<
                 gigachad_renderer_html::actix::PreparedRequest,
-                gigachad_renderer_html::actix::HtmlActixResponseProcessor,
+                gigachad_renderer_html::actix::HtmlActixResponseProcessor<
+                    gigachad_renderer_datastar::DatastarTagRenderer,
+                >,
             >,
         >,
     ),
@@ -123,7 +159,9 @@ pub enum RendererType {
         gigachad_renderer_html::HtmlRenderer<
             gigachad_renderer_html::lambda::LambdaApp<
                 gigachad_renderer_html::lambda::PreparedRequest,
-                gigachad_renderer_html::lambda::HtmlLambdaResponseProcessor,
+                gigachad_renderer_html::lambda::HtmlLambdaResponseProcessor<
+                    gigachad_renderer_datastar::DatastarTagRenderer,
+                >,
             >,
         >,
     ),
@@ -133,7 +171,9 @@ pub enum RendererType {
         gigachad_renderer_html::HtmlRenderer<
             gigachad_renderer_html::actix::ActixApp<
                 gigachad_renderer_html::actix::PreparedRequest,
-                gigachad_renderer_html::actix::HtmlActixResponseProcessor,
+                gigachad_renderer_html::actix::HtmlActixResponseProcessor<
+                    gigachad_renderer_vanilla_js::VanillaJsTagRenderer,
+                >,
             >,
         >,
     ),
@@ -143,14 +183,110 @@ pub enum RendererType {
         gigachad_renderer_html::HtmlRenderer<
             gigachad_renderer_html::lambda::LambdaApp<
                 gigachad_renderer_html::lambda::PreparedRequest,
-                gigachad_renderer_html::lambda::HtmlLambdaResponseProcessor,
+                gigachad_renderer_html::lambda::HtmlLambdaResponseProcessor<
+                    gigachad_renderer_vanilla_js::VanillaJsTagRenderer,
+                >,
             >,
         >,
     ),
+    None,
+}
+
+macro_rules! renderer {
+    ($val:expr, $name:ident, $action:expr) => {{
+        match $val {
+            #[cfg(feature = "egui")]
+            RendererType::Egui($name) => $action,
+            #[cfg(feature = "fltk")]
+            RendererType::Fltk($name) => $action,
+            #[cfg(feature = "html")]
+            #[cfg(feature = "actix")]
+            RendererType::Html($name) => $action,
+            #[cfg(feature = "html")]
+            #[cfg(feature = "lambda")]
+            RendererType::HtmlLambda($name) => $action,
+            #[cfg(feature = "html")]
+            RendererType::HtmlStub($name) => $action,
+            #[cfg(feature = "datastar")]
+            RendererType::DatastarStub($name) => $action,
+            #[cfg(feature = "htmx")]
+            RendererType::HtmxStub($name) => $action,
+            #[cfg(feature = "vanilla-js")]
+            RendererType::VanillaJsStub($name) => $action,
+            #[cfg(feature = "htmx")]
+            #[cfg(feature = "actix")]
+            RendererType::Htmx($name) => $action,
+            #[cfg(feature = "htmx")]
+            #[cfg(feature = "lambda")]
+            RendererType::HtmxLambda($name) => $action,
+            #[cfg(feature = "datastar")]
+            #[cfg(feature = "actix")]
+            RendererType::Datastar($name) => $action,
+            #[cfg(feature = "datastar")]
+            #[cfg(feature = "lambda")]
+            RendererType::DatastarLambda($name) => $action,
+            #[cfg(feature = "vanilla-js")]
+            #[cfg(feature = "actix")]
+            RendererType::VanillaJs($name) => $action,
+            #[cfg(feature = "vanilla-js")]
+            #[cfg(feature = "lambda")]
+            RendererType::VanillaJsLambda($name) => $action,
+            RendererType::None => unimplemented!(),
+        }
+    }};
+}
+
+impl RendererType {
+    /// # Panics
+    ///
+    /// Will panic if elements `Mutex` is poisoned.
+    ///
+    /// # Errors
+    ///
+    /// Will error if FLTK app fails to start
+    #[allow(
+        unused_variables,
+        clippy::unused_async,
+        clippy::needless_pass_by_ref_mut
+    )]
+    async fn init(
+        &mut self,
+        width: f32,
+        height: f32,
+        x: Option<i32>,
+        y: Option<i32>,
+        background: Option<Color>,
+        viewport: Option<&str>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        renderer!(
+            self,
+            value,
+            value.init(width, height, x, y, background, viewport).await
+        )
+    }
+
+    /// # Errors
+    ///
+    /// * If failed to convert the value to a `RenderRunner`
+    #[allow(unused_variables, clippy::needless_pass_by_value)]
+    fn into_runner(
+        self,
+        handle: Handle,
+    ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
+        renderer!(self, value, {
+            use gigachad_renderer::ToRenderRunner as _;
+            value.to_runner(handle)
+        })
+    }
+
+    #[allow(unused_variables, clippy::needless_pass_by_value)]
+    pub fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger) {
+        renderer!(self, value, value.add_responsive_trigger(name, trigger));
+    }
 }
 
 #[cfg(feature = "html")]
-impl From<RendererType> for Option<Arc<Box<dyn gigachad_renderer::HtmlTagRenderer + Send + Sync>>> {
+impl From<RendererType> for Option<Box<dyn gigachad_renderer::HtmlTagRenderer + Send + Sync>> {
     fn from(value: RendererType) -> Self {
         Some(match value {
             #[cfg(feature = "egui")]
@@ -159,68 +295,46 @@ impl From<RendererType> for Option<Arc<Box<dyn gigachad_renderer::HtmlTagRendere
             RendererType::Fltk(..) => return None,
             #[cfg(feature = "html")]
             #[cfg(feature = "actix")]
-            RendererType::Html(renderer) => renderer.app.processor.tag_renderer,
+            RendererType::Html(renderer) => Box::new(renderer.app.processor.tag_renderer),
             #[cfg(feature = "html")]
             #[cfg(feature = "lambda")]
-            RendererType::HtmlLambda(renderer) => renderer.app.processor.tag_renderer,
+            RendererType::HtmlLambda(renderer) => Box::new(renderer.app.processor.tag_renderer),
             #[cfg(feature = "html")]
-            RendererType::HtmlStub(renderer) => renderer.app.tag_renderer,
+            RendererType::HtmlStub(renderer) => Box::new(renderer.app.tag_renderer),
+            #[cfg(feature = "datastar")]
+            RendererType::DatastarStub(renderer) => Box::new(renderer.app.tag_renderer),
+            #[cfg(feature = "htmx")]
+            RendererType::HtmxStub(renderer) => Box::new(renderer.app.tag_renderer),
+            #[cfg(feature = "vanilla-js")]
+            RendererType::VanillaJsStub(renderer) => Box::new(renderer.app.tag_renderer),
             #[cfg(feature = "htmx")]
             #[cfg(feature = "actix")]
-            RendererType::Htmx(renderer) => renderer.app.processor.tag_renderer,
+            RendererType::Htmx(renderer) => Box::new(renderer.app.processor.tag_renderer),
             #[cfg(feature = "htmx")]
             #[cfg(feature = "lambda")]
-            RendererType::HtmxLambda(renderer) => renderer.app.processor.tag_renderer,
+            RendererType::HtmxLambda(renderer) => Box::new(renderer.app.processor.tag_renderer),
             #[cfg(feature = "datastar")]
             #[cfg(feature = "actix")]
-            RendererType::Datastar(renderer) => renderer.app.processor.tag_renderer,
+            RendererType::Datastar(renderer) => Box::new(renderer.app.processor.tag_renderer),
             #[cfg(feature = "datastar")]
             #[cfg(feature = "lambda")]
-            RendererType::DatastarLambda(renderer) => renderer.app.processor.tag_renderer,
+            RendererType::DatastarLambda(renderer) => Box::new(renderer.app.processor.tag_renderer),
             #[cfg(feature = "vanilla-js")]
             #[cfg(feature = "actix")]
-            RendererType::VanillaJs(renderer) => renderer.app.processor.tag_renderer,
+            RendererType::VanillaJs(renderer) => Box::new(renderer.app.processor.tag_renderer),
             #[cfg(feature = "vanilla-js")]
             #[cfg(feature = "lambda")]
-            RendererType::VanillaJsLambda(renderer) => renderer.app.processor.tag_renderer,
+            RendererType::VanillaJsLambda(renderer) => {
+                Box::new(renderer.app.processor.tag_renderer)
+            }
+            RendererType::None => unimplemented!(),
         })
     }
 }
 
 impl From<RendererType> for Box<dyn Renderer> {
     fn from(value: RendererType) -> Self {
-        match value {
-            #[cfg(feature = "egui")]
-            RendererType::Egui(renderer) => Box::new(renderer),
-            #[cfg(feature = "fltk")]
-            RendererType::Fltk(renderer) => Box::new(renderer),
-            #[cfg(feature = "html")]
-            #[cfg(feature = "actix")]
-            RendererType::Html(renderer) => Box::new(renderer),
-            #[cfg(feature = "html")]
-            #[cfg(feature = "lambda")]
-            RendererType::HtmlLambda(renderer) => Box::new(renderer),
-            #[cfg(feature = "html")]
-            RendererType::HtmlStub(renderer) => Box::new(renderer),
-            #[cfg(feature = "htmx")]
-            #[cfg(feature = "actix")]
-            RendererType::Htmx(renderer) => Box::new(renderer),
-            #[cfg(feature = "htmx")]
-            #[cfg(feature = "lambda")]
-            RendererType::HtmxLambda(renderer) => Box::new(renderer),
-            #[cfg(feature = "datastar")]
-            #[cfg(feature = "actix")]
-            RendererType::Datastar(renderer) => Box::new(renderer),
-            #[cfg(feature = "datastar")]
-            #[cfg(feature = "lambda")]
-            RendererType::DatastarLambda(renderer) => Box::new(renderer),
-            #[cfg(feature = "vanilla-js")]
-            #[cfg(feature = "actix")]
-            RendererType::VanillaJs(renderer) => Box::new(renderer),
-            #[cfg(feature = "vanilla-js")]
-            #[cfg(feature = "lambda")]
-            RendererType::VanillaJsLambda(renderer) => Box::new(renderer),
-        }
+        renderer!(value, value, Box::new(value))
     }
 }
 
@@ -246,8 +360,8 @@ impl NativeAppBuilder {
     }
 
     #[must_use]
-    pub fn with_renderer(mut self, renderer: impl Renderer + 'static) -> Self {
-        self.renderer.replace(Box::new(renderer));
+    pub fn with_renderer(mut self, renderer: RendererType) -> Self {
+        self.renderer.replace(renderer);
         self
     }
 
@@ -306,11 +420,14 @@ impl NativeAppBuilder {
     #[must_use]
     pub fn with_action_handler<E: std::error::Error + 'static>(
         mut self,
-        func: impl Fn(&str, Option<&gigachad_actions::logic::Value>) -> Result<bool, E> + Send + 'static,
+        func: impl Fn(&str, Option<&gigachad_actions::logic::Value>) -> Result<bool, E>
+            + Send
+            + Sync
+            + 'static,
     ) -> Self {
-        self.action_handlers.push(Box::new(move |(a, b)| {
+        self.action_handlers.push(Arc::new(Box::new(move |(a, b)| {
             func(a, b).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
-        }));
+        })));
         self
     }
 
@@ -328,18 +445,19 @@ impl NativeAppBuilder {
     #[must_use]
     pub fn with_on_resize<E: std::error::Error + 'static>(
         mut self,
-        func: impl Fn(f32, f32) -> Result<(), E> + Send + 'static,
+        func: impl Fn(f32, f32) -> Result<(), E> + Send + Sync + 'static,
     ) -> Self {
-        self.resize_listeners.push(Box::new(move |width, height| {
-            func(width, height).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
-        }));
+        self.resize_listeners
+            .push(Arc::new(Box::new(move |width, height| {
+                func(width, height).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+            })));
         self
     }
 
     #[allow(unused)]
     #[must_use]
     fn listen_actions(
-        action_handlers: Vec<ActionHandler>,
+        action_handlers: Vec<Arc<ActionHandler>>,
     ) -> flume::Sender<(String, Option<gigachad_actions::logic::Value>)> {
         let (action_tx, action_rx) =
             flume::unbounded::<(String, Option<gigachad_actions::logic::Value>)>();
@@ -367,7 +485,7 @@ impl NativeAppBuilder {
 
     #[allow(unused)]
     #[must_use]
-    fn listen_resize(resize_listeners: Vec<ResizeListener>) -> flume::Sender<(f32, f32)> {
+    fn listen_resize(resize_listeners: Vec<Arc<ResizeListener>>) -> flume::Sender<(f32, f32)> {
         let (resize_tx, resize_rx) = flume::unbounded::<(f32, f32)>();
 
         moosicbox_task::spawn("resize listener", {
@@ -435,11 +553,11 @@ impl NativeAppBuilder {
             router: self.router.clone().unwrap(),
             runtime_handle: self.runtime_handle.clone(),
             runtime: self.runtime.clone(),
-            renderer: Arc::new(RwLock::new(if let Some(renderer) = self.renderer {
+            renderer: if let Some(renderer) = self.renderer {
                 renderer
             } else {
-                self.get_renderer().map(Into::into)?
-            })),
+                self.get_renderer()?
+            },
         };
         app.start().await?;
         Ok(app)
@@ -523,8 +641,10 @@ impl NativeAppBuilder {
             #[cfg(all(feature = "actix", feature = "datastar"))]
             {
                 let router = self.router.unwrap();
-                let renderer = gigachad_renderer_html::router_to_actix(router)
-                    .with_tag_renderer(gigachad_renderer_datastar::DatastarTagRenderer);
+                let renderer = gigachad_renderer_html::router_to_actix(
+                    gigachad_renderer_datastar::DatastarTagRenderer::default(),
+                    router,
+                );
 
                 #[cfg(feature = "assets")]
                 let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
@@ -537,8 +657,10 @@ impl NativeAppBuilder {
             #[cfg(all(feature = "lambda", feature = "datastar"))]
             {
                 let router = self.router.unwrap();
-                let renderer = gigachad_renderer_html::router_to_lambda(router)
-                    .with_tag_renderer(gigachad_renderer_datastar::DatastarTagRenderer);
+                let renderer = gigachad_renderer_html::router_to_lambda(
+                    gigachad_renderer_datastar::DatastarTagRenderer::default(),
+                    router,
+                );
 
                 #[cfg(feature = "assets")]
                 let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
@@ -551,8 +673,10 @@ impl NativeAppBuilder {
             #[cfg(all(feature = "actix", feature = "htmx"))]
             {
                 let router = self.router.unwrap();
-                let renderer = gigachad_renderer_html::router_to_actix(router)
-                    .with_tag_renderer(gigachad_renderer_htmx::HtmxTagRenderer);
+                let renderer = gigachad_renderer_html::router_to_actix(
+                    gigachad_renderer_htmx::HtmxTagRenderer::default(),
+                    router,
+                );
 
                 #[cfg(feature = "assets")]
                 let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
@@ -565,8 +689,10 @@ impl NativeAppBuilder {
             #[cfg(all(feature = "lambda", feature = "htmx"))]
             {
                 let router = self.router.unwrap();
-                let renderer = gigachad_renderer_html::router_to_lambda(router)
-                    .with_tag_renderer(gigachad_renderer_htmx::HtmxTagRenderer);
+                let renderer = gigachad_renderer_html::router_to_lambda(
+                    gigachad_renderer_htmx::HtmxTagRenderer::default(),
+                    router,
+                );
 
                 #[cfg(feature = "assets")]
                 let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
@@ -579,8 +705,10 @@ impl NativeAppBuilder {
             #[cfg(all(feature = "actix", feature = "vanilla-js"))]
             {
                 let router = self.router.unwrap();
-                let renderer = gigachad_renderer_html::router_to_actix(router)
-                    .with_tag_renderer(gigachad_renderer_vanilla_js::VanillaJsTagRenderer);
+                let renderer = gigachad_renderer_html::router_to_actix(
+                    gigachad_renderer_vanilla_js::VanillaJsTagRenderer::default(),
+                    router,
+                );
 
                 #[cfg(feature = "assets")]
                 let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
@@ -593,8 +721,10 @@ impl NativeAppBuilder {
             #[cfg(all(feature = "lambda", feature = "vanilla-js"))]
             {
                 let router = self.router.unwrap();
-                let renderer = gigachad_renderer_html::router_to_lambda(router)
-                    .with_tag_renderer(gigachad_renderer_vanilla_js::VanillaJsTagRenderer);
+                let renderer = gigachad_renderer_html::router_to_lambda(
+                    gigachad_renderer_vanilla_js::VanillaJsTagRenderer::default(),
+                    router,
+                );
 
                 #[cfg(feature = "assets")]
                 let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
@@ -607,7 +737,10 @@ impl NativeAppBuilder {
             #[cfg(all(feature = "actix", feature = "html"))]
             {
                 let router = self.router.unwrap();
-                let renderer = gigachad_renderer_html::router_to_actix(router);
+                let renderer = gigachad_renderer_html::router_to_actix(
+                    gigachad_renderer_html::DefaultHtmlTagRenderer::default(),
+                    router,
+                );
 
                 #[cfg(feature = "assets")]
                 let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
@@ -620,7 +753,10 @@ impl NativeAppBuilder {
             #[cfg(all(feature = "lambda", feature = "html"))]
             {
                 let router = self.router.unwrap();
-                let renderer = gigachad_renderer_html::router_to_lambda(router);
+                let renderer = gigachad_renderer_html::router_to_lambda(
+                    gigachad_renderer_html::DefaultHtmlTagRenderer::default(),
+                    router,
+                );
 
                 #[cfg(feature = "assets")]
                 let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
@@ -632,24 +768,46 @@ impl NativeAppBuilder {
         } else if cfg!(feature = "html") {
             #[cfg(feature = "html")]
             {
-                let app = gigachad_renderer_html::stub::StubApp::default();
-                #[cfg(feature = "datastar")]
-                let app = gigachad_renderer_html::HtmlApp::with_tag_renderer(
-                    app,
-                    gigachad_renderer_datastar::DatastarTagRenderer,
-                );
-                #[cfg(feature = "htmx")]
-                let app = gigachad_renderer_html::HtmlApp::with_tag_renderer(
-                    app,
-                    gigachad_renderer_htmx::HtmxTagRenderer,
-                );
-                #[cfg(feature = "vanilla-js")]
-                let app = gigachad_renderer_html::HtmlApp::with_tag_renderer(
-                    app,
-                    gigachad_renderer_vanilla_js::VanillaJsTagRenderer,
-                );
-
-                RendererType::HtmlStub(gigachad_renderer_html::HtmlRenderer::new(app))
+                if cfg!(feature = "datastar") {
+                    #[cfg(feature = "datastar")]
+                    {
+                        RendererType::DatastarStub(gigachad_renderer_html::HtmlRenderer::new(
+                            gigachad_renderer_html::stub::StubApp::new(
+                                gigachad_renderer_datastar::DatastarTagRenderer::default(),
+                            ),
+                        ))
+                    }
+                    #[cfg(not(feature = "datastar"))]
+                    unreachable!()
+                } else if cfg!(feature = "htmx") {
+                    #[cfg(feature = "htmx")]
+                    {
+                        RendererType::HtmxStub(gigachad_renderer_html::HtmlRenderer::new(
+                            gigachad_renderer_html::stub::StubApp::new(
+                                gigachad_renderer_htmx::HtmxTagRenderer::default(),
+                            ),
+                        ))
+                    }
+                    #[cfg(not(feature = "htmx"))]
+                    unreachable!()
+                } else if cfg!(feature = "vanilla-js") {
+                    #[cfg(feature = "vanilla-js")]
+                    {
+                        RendererType::VanillaJsStub(gigachad_renderer_html::HtmlRenderer::new(
+                            gigachad_renderer_html::stub::StubApp::new(
+                                gigachad_renderer_vanilla_js::VanillaJsTagRenderer::default(),
+                            ),
+                        ))
+                    }
+                    #[cfg(not(feature = "vanilla-js"))]
+                    unreachable!()
+                } else {
+                    RendererType::HtmlStub(gigachad_renderer_html::HtmlRenderer::new(
+                        gigachad_renderer_html::stub::StubApp::new(
+                            gigachad_renderer_html::DefaultHtmlTagRenderer::default(),
+                        ),
+                    ))
+                }
             }
             #[cfg(not(feature = "html"))]
             unreachable!()
@@ -667,7 +825,7 @@ pub struct NativeApp {
     width: Option<f32>,
     height: Option<f32>,
     pub router: Router,
-    pub renderer: Arc<RwLock<Box<dyn Renderer>>>,
+    pub renderer: RendererType,
     runtime_handle: Option<tokio::runtime::Handle>,
     runtime: Option<Arc<tokio::runtime::Runtime>>,
 }
@@ -675,8 +833,6 @@ pub struct NativeApp {
 impl NativeApp {
     async fn start(&mut self) -> Result<(), NativeAppError> {
         self.renderer
-            .write()
-            .await
             .init(
                 self.width.unwrap_or(800.0),
                 self.height.unwrap_or(600.0),
@@ -702,13 +858,14 @@ impl NativeApp {
         self.runtime_handle.replace(runtime.handle().clone());
 
         moosicbox_task::spawn_on("app_native_lib::start: router", runtime.handle(), {
-            let router = self.router.clone();
             let renderer = self.renderer.clone();
+            let router = self.router.clone();
             async move {
                 log::debug!("app_native_lib::start: router listening");
+                #[allow(unused_variables, clippy::never_loop)]
                 while let Some(element) = router.wait_for_navigation().await {
                     log::debug!("app_native_lib::start: router received element");
-                    renderer.read().await.render(element).await?;
+                    renderer!(&renderer, value, value.render(element).await?);
                 }
                 Ok::<_, NativeAppError>(())
             }
@@ -724,12 +881,10 @@ impl NativeApp {
     /// # Panics
     ///
     /// * If the runtime handle doesn't exist
-    pub async fn to_runner(self) -> Result<Box<dyn RenderRunner>, NativeAppError> {
+    pub fn to_runner(self) -> Result<Box<dyn RenderRunner>, NativeAppError> {
         log::debug!("run: getting runner");
         self.renderer
-            .read()
-            .await
-            .to_runner(self.runtime_handle.unwrap())
+            .into_runner(self.runtime_handle.unwrap())
             .map_err(NativeAppError::Other)
     }
 }

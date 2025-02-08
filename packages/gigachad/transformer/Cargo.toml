@@ -14,7 +14,9 @@ version     = "0.1.0"
 gigachad_actions = { path = "../actions", default-features = false, features = [
     "serde",
 ] }
-gigachad_color = { path = "../color", default-features = false }
+gigachad_color = { path = "../color", default-features = false, features = [
+    "serde",
+] }
 gigachad_transformer_models = { path = "models", default-features = false }
 moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
 moosicbox_logging = { version = "0.1.0", path = "../../logging", default-features = false, features = [
@@ -27,6 +29,7 @@ itertools   = { workspace = true, optional = true }
 log         = { workspace = true }
 maud        = { workspace = true, optional = true }
 profiling   = { workspace = true, optional = true }
+serde       = { workspace = true }
 serde_json  = { workspace = true }
 strum       = { workspace = true, features = ["derive"] }
 syntect     = { workspace = true, optional = true }

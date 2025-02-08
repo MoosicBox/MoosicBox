@@ -41,7 +41,6 @@ use moosicbox_session_models::{
 };
 use moosicbox_ws::models::{InboundPayload, UpdateSessionPayload};
 use thiserror::Error;
-use tokio::sync::RwLock;
 
 mod visualization;
 
@@ -54,7 +53,7 @@ static STATE: LazyLock<moosicbox_app_state::AppState> = LazyLock::new(|| {
 });
 
 static ROUTER: OnceLock<Router> = OnceLock::new();
-static RENDERER: OnceLock<Arc<RwLock<Box<dyn Renderer>>>> = OnceLock::new();
+static RENDERER: OnceLock<Box<dyn Renderer>> = OnceLock::new();
 
 async fn convert_state(app_state: &moosicbox_app_state::AppState) -> state::State {
     let mut state = state::State::default();
@@ -191,13 +190,7 @@ async fn handle_session_update(state: &State, update: &ApiUpdateSession, session
             target: id,
             container: markup.try_into().unwrap(),
         };
-        let response = RENDERER
-            .get()
-            .unwrap()
-            .write()
-            .await
-            .render_partial(view)
-            .await;
+        let response = RENDERER.get().unwrap().render_partial(view).await;
         if let Err(e) = response {
             log::error!("Failed to render_partial: {e:?}");
         }
@@ -213,8 +206,7 @@ async fn handle_session_update(state: &State, update: &ApiUpdateSession, session
             .tracks
             .get(session.position.unwrap_or(0) as usize);
 
-        let binding = RENDERER.get().unwrap().clone();
-        let renderer = binding.read().await;
+        let renderer = RENDERER.get().unwrap();
 
         if let Some(track) = track {
             if let Err(e) = renderer
@@ -226,8 +218,6 @@ async fn handle_session_update(state: &State, update: &ApiUpdateSession, session
         } else if let Err(e) = renderer.emit_event("unplay-track".to_string(), None).await {
             log::error!("Failed to emit event: {e:?}");
         }
-
-        drop(renderer);
     }
 }
 
@@ -238,13 +228,7 @@ async fn update_audio_zones(zones: &[ApiAudioZoneWithSession], connections: &[Ap
             .try_into()
             .unwrap(),
     };
-    let response = RENDERER
-        .get()
-        .unwrap()
-        .write()
-        .await
-        .render_partial(view)
-        .await;
+    let response = RENDERER.get().unwrap().render_partial(view).await;
     if let Err(e) = response {
         log::error!("Failed to render_partial: {e:?}");
     }
@@ -259,13 +243,7 @@ async fn update_playlist_sessions() {
         .try_into()
         .unwrap(),
     };
-    let response = RENDERER
-        .get()
-        .unwrap()
-        .write()
-        .await
-        .render_partial(view)
-        .await;
+    let response = RENDERER.get().unwrap().render_partial(view).await;
     if let Err(e) = response {
         log::error!("Failed to render_partial: {e:?}");
     }
@@ -572,9 +550,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let handle = runtime.handle().clone();
             move |_, _| {
                 moosicbox_task::spawn_on("check_visualization_update", &handle, async move {
-                    let binding = RENDERER.get().unwrap().read().await;
+                    let renderer = RENDERER.get().unwrap();
                     let (width, height) = if let Some(visualization) =
-                        binding.container().find_element_by_str_id("visualization")
+                        renderer.container().find_element_by_str_id("visualization")
                     {
                         (
                             visualization.calculated_width.unwrap(),
@@ -583,7 +561,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     } else {
                         return;
                     };
-                    drop(binding);
 
                     visualization::set_dimensions(width, height);
                     visualization::check_visualization_update().await;
@@ -649,7 +626,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
 
         moosicbox_assert::assert_or_panic!(
-            RENDERER.set(app.renderer.clone()).is_ok(),
+            RENDERER.set(app.renderer.clone().into()).is_ok(),
             "Already set RENDERER"
         );
 
@@ -685,7 +662,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        app.to_runner().await
+        app.to_runner()
     })?;
 
     log::debug!("app_native: running");
@@ -1086,13 +1063,7 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
                     .try_into()
                     .unwrap(),
             };
-            let response = RENDERER
-                .get()
-                .unwrap()
-                .write()
-                .await
-                .render_partial(view)
-                .await;
+            let response = RENDERER.get().unwrap().render_partial(view).await;
             if let Err(e) = response {
                 log::error!("Failed to render_partial: {e:?}");
             }

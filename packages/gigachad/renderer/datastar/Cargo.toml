@@ -22,6 +22,9 @@ gigachad_renderer_html = { version = "0.1.0", path = "../html", default-features
     "assets",
 ] }
 gigachad_router = { version = "0.1.0", path = "../../../gigachad/router", default-features = false }
+gigachad_transformer = { version = "0.1.0", path = "../../transformer", default-features = false, features = [
+    "html",
+] }
 
 log  = { workspace = true }
 maud = { workspace = true }

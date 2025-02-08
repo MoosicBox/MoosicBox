@@ -4,19 +4,29 @@
 use std::{collections::HashMap, io::Write};
 
 use gigachad_renderer::{Color, HtmlTagRenderer};
-use gigachad_renderer_html::html::{element_classes_to_html, element_style_to_html, write_attr};
-use gigachad_transformer::{models::Route, Container};
+use gigachad_renderer_html::{html::write_attr, DefaultHtmlTagRenderer};
+use gigachad_transformer::{models::Route, Container, ResponsiveTrigger};
 use maud::{html, PreEscaped};
 
-pub struct HtmxTagRenderer;
+#[derive(Default, Clone)]
+pub struct HtmxTagRenderer {
+    default: DefaultHtmlTagRenderer,
+}
 
 impl HtmlTagRenderer for HtmxTagRenderer {
+    fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger) {
+        self.default.responsive_triggers.insert(name, trigger);
+    }
+
     fn element_attrs_to_html(
         &self,
         f: &mut dyn Write,
         container: &Container,
         is_flex_child: bool,
     ) -> Result<(), std::io::Error> {
+        self.default
+            .element_attrs_to_html(f, container, is_flex_child)?;
+
         if let Some(route) = &container.route {
             match route {
                 Route::Get {
@@ -59,21 +69,13 @@ impl HtmlTagRenderer for HtmxTagRenderer {
             }
         }
 
-        if let Some(id) = &container.str_id {
-            f.write_all(b" id=\"")?;
-            f.write_all(id.as_bytes())?;
-            f.write_all(b"\"")?;
-        }
-
-        element_style_to_html(f, container, is_flex_child)?;
-        element_classes_to_html(f, container)?;
-
         Ok(())
     }
 
     fn root_html(
         &self,
         headers: &HashMap<String, String>,
+        container: &Container,
         content: String,
         viewport: Option<&str>,
         background: Option<Color>,
@@ -83,6 +85,12 @@ impl HtmlTagRenderer for HtmxTagRenderer {
         } else {
             let background = background.map(|x| format!("background:rgb({},{},{})", x.r, x.g, x.b));
             let background = background.as_deref().unwrap_or("");
+
+            let mut responsive_css = vec![];
+            self.default
+                .reactive_conditions_to_css(&mut responsive_css, container)
+                .unwrap();
+            let responsive_css = std::str::from_utf8(&responsive_css).unwrap();
 
             html! {
                 html {
@@ -106,6 +114,7 @@ impl HtmlTagRenderer for HtmxTagRenderer {
                                 outline: inherit;
                             }}
                         "))}
+                        (PreEscaped(responsive_css))
                         @if let Some(content) = viewport {
                             meta name="viewport" content=(content);
                         }

@@ -3879,6 +3879,7 @@ dependencies = [
  "moosicbox_assert",
  "pretty_assertions",
  "quickcheck",
+ "serde",
  "test-log",
  "thiserror 2.0.11",
 ]
@@ -3902,6 +3903,7 @@ dependencies = [
  "gigachad_renderer",
  "gigachad_renderer_html",
  "gigachad_router",
+ "gigachad_transformer",
  "log",
  "maud",
 ]
@@ -4066,6 +4068,7 @@ dependencies = [
  "profiling",
  "quickcheck",
  "quickcheck_macros",
+ "serde",
  "serde_json",
  "strum",
  "syntect",
@@ -6863,6 +6866,7 @@ version = "0.1.0"
 dependencies = [
  "bytesize",
  "chrono",
+ "gigachad_actions",
  "gigachad_transformer_models",
  "log",
  "maud",

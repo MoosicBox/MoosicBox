@@ -6,55 +6,64 @@ use std::{
 use async_trait::async_trait;
 use gigachad_renderer::{Color, HtmlTagRenderer};
 use gigachad_router::{ClientInfo, ClientOs, RequestInfo, Router};
+use gigachad_transformer::ResponsiveTrigger;
 use lambda_http::{http::header::USER_AGENT, Request, RequestExt as _};
 use uaparser::{Parser as _, UserAgentParser};
 
 use crate::{
     html::{container_element_to_html, container_element_to_html_response},
-    DefaultHtmlTagRenderer, HtmlApp, HtmlRenderer,
+    HtmlApp, HtmlRenderer,
 };
 
 pub use gigachad_renderer_html_lambda::*;
 
 #[must_use]
-pub fn router_to_lambda(
+pub fn router_to_lambda<T: HtmlTagRenderer + Clone + Send + Sync + 'static>(
+    tag_renderer: T,
     value: gigachad_router::Router,
 ) -> HtmlRenderer<
-    gigachad_renderer_html_lambda::LambdaApp<PreparedRequest, HtmlLambdaResponseProcessor>,
+    gigachad_renderer_html_lambda::LambdaApp<PreparedRequest, HtmlLambdaResponseProcessor<T>>,
 > {
     HtmlRenderer::new(gigachad_renderer_html_lambda::LambdaApp::new(
-        HtmlLambdaResponseProcessor::new(value),
+        HtmlLambdaResponseProcessor::new(tag_renderer, value),
     ))
 }
 
 #[derive(Clone)]
-pub struct HtmlLambdaResponseProcessor {
+pub struct HtmlLambdaResponseProcessor<T: HtmlTagRenderer + Clone + Send + Sync> {
     pub router: Router,
-    pub tag_renderer: Arc<Box<dyn HtmlTagRenderer + Send + Sync>>,
+    pub tag_renderer: T,
     pub background: Option<Color>,
     pub viewport: Option<String>,
 }
 
-impl HtmlLambdaResponseProcessor {
+impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlLambdaResponseProcessor<T> {
     #[must_use]
-    pub fn new(router: Router) -> Self {
+    pub const fn new(tag_renderer: T, router: Router) -> Self {
         Self {
             router,
-            tag_renderer: Arc::new(Box::new(DefaultHtmlTagRenderer)),
+            tag_renderer,
             background: None,
             viewport: None,
         }
     }
 }
 
-impl HtmlApp for LambdaApp<PreparedRequest, HtmlLambdaResponseProcessor> {
+impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
+    for LambdaApp<PreparedRequest, HtmlLambdaResponseProcessor<T>>
+{
     #[must_use]
-    fn with_tag_renderer(
-        mut self,
-        tag_renderer: impl HtmlTagRenderer + Send + Sync + 'static,
-    ) -> Self {
-        self.processor.tag_renderer = Arc::new(Box::new(tag_renderer));
+    fn with_responsive_trigger(mut self, name: String, trigger: ResponsiveTrigger) -> Self {
+        self.processor
+            .tag_renderer
+            .add_responsive_trigger(name, trigger);
         self
+    }
+
+    fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger) {
+        self.processor
+            .tag_renderer
+            .add_responsive_trigger(name, trigger);
     }
 
     #[must_use]
@@ -96,8 +105,9 @@ pub struct PreparedRequest {
 }
 
 #[async_trait]
-impl gigachad_renderer_html_lambda::LambdaResponseProcessor<PreparedRequest>
-    for HtmlLambdaResponseProcessor
+impl<T: HtmlTagRenderer + Clone + Send + Sync>
+    gigachad_renderer_html_lambda::LambdaResponseProcessor<PreparedRequest>
+    for HtmlLambdaResponseProcessor<T>
 {
     fn prepare_request(&self, req: Request) -> Result<PreparedRequest, lambda_runtime::Error> {
         static UA_PARSER: LazyLock<UserAgentParser> = LazyLock::new(|| {
@@ -149,11 +159,11 @@ impl gigachad_renderer_html_lambda::LambdaResponseProcessor<PreparedRequest>
                 &view.immediate,
                 self.viewport.as_deref(),
                 self.background,
-                &**self.tag_renderer,
+                &self.tag_renderer,
             )
             .map_err(|e| Box::new(e) as lambda_runtime::Error)
         } else {
-            container_element_to_html(&view.immediate, &**self.tag_renderer)
+            container_element_to_html(&view.immediate, &self.tag_renderer)
                 .map_err(|e| Box::new(e) as lambda_runtime::Error)
         }
     }

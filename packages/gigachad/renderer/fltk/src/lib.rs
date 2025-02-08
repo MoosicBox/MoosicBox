@@ -34,7 +34,7 @@ use gigachad_transformer::{
     calc::Calc as _,
     calc_number,
     models::{LayoutDirection, LayoutOverflow, LayoutPosition},
-    Container, Element, HeaderSize,
+    Container, Element, HeaderSize, ResponsiveTrigger,
 };
 use thiserror::Error;
 use tokio::task::JoinHandle;
@@ -1186,7 +1186,7 @@ impl ToRenderRunner for FltkRenderer {
     ///
     /// Will error if FLTK fails to run the event loop.
     fn to_runner(
-        &self,
+        self,
         _handle: Handle,
     ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
         let Some(app) = self.app else {
@@ -1199,6 +1199,8 @@ impl ToRenderRunner for FltkRenderer {
 
 #[async_trait]
 impl Renderer for FltkRenderer {
+    fn add_responsive_trigger(&mut self, _name: String, _trigger: ResponsiveTrigger) {}
+
     /// # Panics
     ///
     /// Will panic if elements `Mutex` is poisoned.

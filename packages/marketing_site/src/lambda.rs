@@ -23,8 +23,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::init_default_subscriber();
 
     let mut runner = RUNTIME.block_on(async move {
-        let app = moosicbox_marketing_site::init().with_runtime_arc(RUNTIME.clone());
-        app.start().await?.to_runner().await
+        let builder = moosicbox_marketing_site::init().with_runtime_arc(RUNTIME.clone());
+        moosicbox_marketing_site::start(builder).await?.to_runner()
     })?;
 
     runner.run().unwrap();

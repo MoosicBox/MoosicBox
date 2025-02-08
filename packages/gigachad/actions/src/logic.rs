@@ -1,4 +1,4 @@
-use gigachad_transformer_models::Visibility;
+use gigachad_transformer_models::{LayoutDirection, Visibility};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +17,7 @@ pub enum CalcValue {
     PositionY { target: ElementTarget },
     MouseX { target: Option<ElementTarget> },
     MouseY { target: Option<ElementTarget> },
+    Reactive { target: String },
 }
 
 impl CalcValue {
@@ -76,6 +77,7 @@ pub enum Value {
     Arithmetic(Box<Arithmetic>),
     Real(f32),
     Visibility(Visibility),
+    LayoutDirection(LayoutDirection),
     String(String),
 }
 
@@ -89,7 +91,11 @@ impl Value {
     pub fn as_str(&self) -> Option<&str> {
         match self {
             Self::String(str) => Some(str),
-            Self::Arithmetic(..) | Self::Calc(..) | Self::Real(..) | Self::Visibility(..) => None,
+            Self::Arithmetic(..)
+            | Self::Calc(..)
+            | Self::Real(..)
+            | Self::Visibility(..)
+            | Self::LayoutDirection(..) => None,
         }
     }
 
@@ -101,7 +107,7 @@ impl Value {
                 .and_then(|func| func(x))
                 .and_then(|x| x.as_f32(calc_func)),
             Self::Real(x) => Some(*x),
-            Self::Visibility(..) | Self::String(..) => None,
+            Self::Visibility(..) | Self::String(..) | Self::LayoutDirection(..) => None,
         }
     }
 }
@@ -121,6 +127,12 @@ impl From<Visibility> for Value {
 impl From<f32> for Value {
     fn from(value: f32) -> Self {
         Self::Real(value)
+    }
+}
+
+impl From<LayoutDirection> for Value {
+    fn from(value: LayoutDirection) -> Self {
+        Self::LayoutDirection(value)
     }
 }
 
@@ -147,6 +159,72 @@ impl Condition {
             actions: vec![],
             else_actions: vec![action.into()],
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ConditionExpression {
+    Eq(Value, Value),
+}
+
+impl ConditionExpression {
+    #[must_use]
+    pub fn then<T>(self, value: impl Into<T>) -> IfExpression<T, Self> {
+        IfExpression {
+            condition: self,
+            value: None,
+            default: Some(value.into()),
+        }
+    }
+
+    #[must_use]
+    pub fn or_else<T>(self, value: impl Into<T>) -> IfExpression<T, Self> {
+        IfExpression {
+            condition: self,
+            value: None,
+            default: Some(value.into()),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct IfExpression<T, C> {
+    pub condition: C,
+    pub value: Option<T>,
+    pub default: Option<T>,
+}
+
+impl<T, C> IfExpression<T, C> {
+    #[must_use]
+    pub fn then(mut self, value: impl Into<T>) -> Self {
+        self.value.replace(value.into());
+        self
+    }
+
+    #[must_use]
+    pub fn or_else(mut self, value: impl Into<T>) -> Self {
+        self.default.replace(value.into());
+        self
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<T: Serialize, C: Serialize> std::fmt::Display for IfExpression<T, C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&serde_json::to_string(self).unwrap())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'a, T: for<'de> Deserialize<'de>, C: for<'de> Deserialize<'de>> TryFrom<&'a str>
+    for IfExpression<T, C>
+{
+    type Error = serde_json::Error;
+
+    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        serde_json::from_str(value)
     }
 }
 
@@ -495,4 +573,41 @@ pub const fn get_mouse_y_self() -> CalcValue {
     CalcValue::MouseY {
         target: Some(ElementTarget::SelfTarget),
     }
+}
+
+#[must_use]
+pub fn get_responsive(target: impl Into<String>) -> CalcValue {
+    CalcValue::Reactive {
+        target: target.into(),
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Responsive(pub String);
+
+impl Responsive {
+    #[must_use]
+    pub fn then<T>(self, value: impl Into<T>) -> IfExpression<T, Self> {
+        IfExpression {
+            condition: self,
+            value: Some(value.into()),
+            default: None,
+        }
+    }
+
+    #[must_use]
+    pub fn or_else<T>(self, value: impl Into<T>) -> IfExpression<T, Self> {
+        IfExpression {
+            condition: self,
+            value: None,
+            default: Some(value.into()),
+        }
+    }
+}
+
+#[must_use]
+pub fn if_responsive(target: impl Into<String>) -> Responsive {
+    let target = target.into();
+    Responsive(target)
 }

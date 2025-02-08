@@ -11,6 +11,10 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
+gigachad_actions = { version = "0.1.0", path = "../../gigachad/actions", default-features = false, features = [
+    "logic",
+    "serde",
+] }
 gigachad_transformer_models = { version = "0.1.0", path = "../../gigachad/transformer/models", default-features = false, features = [
     "serde",
 ] }

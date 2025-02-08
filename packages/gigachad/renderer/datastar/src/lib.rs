@@ -4,27 +4,29 @@
 use std::{collections::HashMap, io::Write};
 
 use gigachad_renderer::{Color, HtmlTagRenderer};
-use gigachad_renderer_html::html::{element_classes_to_html, element_style_to_html};
+use gigachad_renderer_html::DefaultHtmlTagRenderer;
 use gigachad_router::Container;
+use gigachad_transformer::ResponsiveTrigger;
 use maud::{html, PreEscaped};
 
-pub struct DatastarTagRenderer;
+#[derive(Default, Clone)]
+pub struct DatastarTagRenderer {
+    default: DefaultHtmlTagRenderer,
+}
 
 impl HtmlTagRenderer for DatastarTagRenderer {
+    fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger) {
+        self.default.responsive_triggers.insert(name, trigger);
+    }
+
     fn element_attrs_to_html(
         &self,
         f: &mut dyn Write,
         container: &Container,
         is_flex_child: bool,
     ) -> Result<(), std::io::Error> {
-        if let Some(id) = &container.str_id {
-            f.write_all(b" id=\"")?;
-            f.write_all(id.as_bytes())?;
-            f.write_all(b"\"")?;
-        }
-
-        element_style_to_html(f, container, is_flex_child)?;
-        element_classes_to_html(f, container)?;
+        self.default
+            .element_attrs_to_html(f, container, is_flex_child)?;
 
         Ok(())
     }
@@ -32,6 +34,7 @@ impl HtmlTagRenderer for DatastarTagRenderer {
     fn root_html(
         &self,
         _headers: &HashMap<String, String>,
+        container: &Container,
         content: String,
         viewport: Option<&str>,
         background: Option<Color>,
@@ -41,6 +44,12 @@ impl HtmlTagRenderer for DatastarTagRenderer {
         } else {
             let background = background.map(|x| format!("background:rgb({},{},{})", x.r, x.g, x.b));
             let background = background.as_deref().unwrap_or("");
+
+            let mut responsive_css = vec![];
+            self.default
+                .reactive_conditions_to_css(&mut responsive_css, container)
+                .unwrap();
+            let responsive_css = std::str::from_utf8(&responsive_css).unwrap();
 
             html! {
                 html {
@@ -64,6 +73,7 @@ impl HtmlTagRenderer for DatastarTagRenderer {
                                 outline: inherit;
                             }}
                         "))}
+                        (PreEscaped(responsive_css))
                         @if let Some(content) = viewport {
                             meta name="viewport" content=(content);
                         }

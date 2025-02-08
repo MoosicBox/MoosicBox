@@ -4,6 +4,7 @@
 
 pub mod download;
 
+use gigachad_actions::logic::if_responsive;
 use gigachad_transformer_models::{
     AlignItems, JustifyContent, LayoutDirection, Position, TextAlign,
 };
@@ -68,6 +69,12 @@ pub fn header() -> Markup {
                     "Log in"
                 }
                 a
+                    id="try-desktop"
+                    sx-hidden=(
+                        if_responsive("mobile")
+                            .then::<bool>(true)
+                            .or_else(false)
+                    )
                     sx-color="#fff"
                     sx-background="#282a2b"
                     sx-margin-left=(20)
@@ -76,6 +83,22 @@ pub fn header() -> Markup {
                     href="/try-now"
                 {
                     "Start Free Trial"
+                }
+                a
+                    id="try-mobile"
+                    sx-hidden=(
+                        if_responsive("mobile")
+                            .then::<bool>(false)
+                            .or_else(true)
+                    )
+                    sx-color="#fff"
+                    sx-background="#282a2b"
+                    sx-margin-left=(20)
+                    sx-border-radius=(5)
+                    sx-padding=(8)
+                    href="/try-now"
+                {
+                    "Try"
                 }
             }
         }
@@ -106,7 +129,12 @@ pub fn home() -> Markup {
             sx-justify-content=(JustifyContent::Center)
         {
             div
-                sx-dir=(LayoutDirection::Row)
+                id="pics"
+                sx-dir=(
+                    if_responsive("mobile")
+                        .then::<LayoutDirection>(LayoutDirection::Column)
+                        .or_else(LayoutDirection::Row)
+                )
                 sx-align-items=(AlignItems::Center)
                 sx-max-height="1000px"
                 sx-padding-x=(50)
@@ -131,7 +159,11 @@ pub fn home() -> Markup {
                     {
                         img
                             src=(public_img!("showcase-1.webp"))
-                            srcset={(public_img!("showcase-1x240.webp"))" 240w, "(public_img!("showcase-1x540.webp"))" 540w, "(public_img!("showcase-1.webp"))" 1080w"}
+                            srcset={
+                                (public_img!("showcase-1x240.webp"))" 240w, "
+                                (public_img!("showcase-1x540.webp"))" 540w, "
+                                (public_img!("showcase-1.webp"))" 1080w"
+                            }
                             sizes="70vw"
                             sx-width="100%"
                             sx-height="100%"
@@ -147,7 +179,11 @@ pub fn home() -> Markup {
                     {
                         img
                             src=(public_img!("showcase-2.webp"))
-                            srcset={(public_img!("showcase-2x240.webp"))" 240w, "(public_img!("showcase-2x540.webp"))" 540w, "(public_img!("showcase-2.webp"))" 1080w"}
+                            srcset={
+                                (public_img!("showcase-2x240.webp"))" 240w, "
+                                (public_img!("showcase-2x540.webp"))" 540w, "
+                                (public_img!("showcase-2.webp"))" 1080w"
+                            }
                             sizes="30vw"
                             sx-width="100%"
                             sx-height="100%"

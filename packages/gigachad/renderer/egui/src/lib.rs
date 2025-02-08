@@ -24,7 +24,7 @@ use gigachad_transformer::{
         AlignItems, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition,
         Position, Route, SwapTarget, Visibility,
     },
-    Container, Element, Input, TableIter,
+    Container, Element, Input, ResponsiveTrigger, TableIter,
 };
 use itertools::Itertools;
 
@@ -186,6 +186,9 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
                         watch_positions.insert(id);
                     }
                 }
+                gigachad_actions::logic::CalcValue::Reactive { target } => {
+                    unimplemented!("CalcValue::Reactive not implemented for target={target}");
+                }
             }
         }
 
@@ -215,7 +218,10 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
 
                 check_arithmetic(arithmetic, root, watch_positions, id);
             }
-            Value::Real(..) | Value::Visibility(..) | Value::String(..) => {}
+            Value::Real(..)
+            | Value::Visibility(..)
+            | Value::String(..)
+            | Value::LayoutDirection(..) => {}
         }
     }
 
@@ -275,7 +281,7 @@ impl ToRenderRunner for EguiRenderer {
     ///
     /// Will error if egui fails to run the event loop.
     fn to_runner(
-        &self,
+        self,
         _handle: Handle,
     ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
         Ok(Box::new(EguiRenderRunner {
@@ -283,13 +289,15 @@ impl ToRenderRunner for EguiRenderer {
             height: self.height.unwrap(),
             x: self.x,
             y: self.y,
-            app: self.app.clone(),
+            app: self.app,
         }))
     }
 }
 
 #[async_trait]
 impl Renderer for EguiRenderer {
+    fn add_responsive_trigger(&mut self, _name: String, _trigger: ResponsiveTrigger) {}
+
     /// # Panics
     ///
     /// Will panic if elements `Mutex` is poisoned.
@@ -2544,6 +2552,7 @@ impl EguiApp {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     fn calc_value(
         x: &Value,
         render_context: &mut RenderContext,
@@ -2645,6 +2654,9 @@ impl EguiApp {
                     global_position
                 }
             }
+            gigachad_actions::logic::CalcValue::Reactive { target } => {
+                unimplemented!("CalcValue::Reactive not implemented for target={target}");
+            }
         };
 
         log::debug!("calc_value: calculating {x:?}");
@@ -2652,7 +2664,10 @@ impl EguiApp {
         match x {
             Value::Calc(x) => calc_func(x),
             Value::Arithmetic(x) => x.as_f32(Some(&calc_func)).map(Value::Real),
-            Value::Real(..) | Value::Visibility(..) | Value::String(..) => Some(x.clone()),
+            Value::Real(..)
+            | Value::Visibility(..)
+            | Value::String(..)
+            | Value::LayoutDirection(..) => Some(x.clone()),
         }
     }
 

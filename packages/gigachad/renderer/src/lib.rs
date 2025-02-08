@@ -16,8 +16,10 @@ use std::{
 
 use async_trait::async_trait;
 pub use gigachad_color::Color;
-use gigachad_transformer::{html::ParseError, Container};
+use gigachad_transformer::{html::ParseError, Container, ResponsiveTrigger};
 pub use tokio::runtime::Handle;
+
+pub use gigachad_transformer as transformer;
 
 #[derive(Default, Debug, Clone)]
 pub struct PartialView {
@@ -83,7 +85,7 @@ pub trait ToRenderRunner {
     ///
     /// * If failed to convert the value to a `RenderRunner`
     fn to_runner(
-        &self,
+        self,
         handle: Handle,
     ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>>;
 }
@@ -102,6 +104,8 @@ pub trait Renderer: ToRenderRunner + Send + Sync {
         background: Option<Color>,
         viewport: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
+
+    fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger);
 
     /// # Errors
     ///
@@ -140,6 +144,8 @@ pub trait Renderer: ToRenderRunner + Send + Sync {
 
 #[cfg(feature = "html")]
 pub trait HtmlTagRenderer {
+    fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger);
+
     /// # Errors
     ///
     /// * If the `HtmlTagRenderer` fails to write the element attributes
@@ -150,9 +156,21 @@ pub trait HtmlTagRenderer {
         is_flex_child: bool,
     ) -> Result<(), std::io::Error>;
 
+    /// # Errors
+    ///
+    /// * If the `HtmlTagRenderer` fails to write the css media-queries
+    fn reactive_conditions_to_css(
+        &self,
+        _f: &mut dyn std::io::Write,
+        _container: &Container,
+    ) -> Result<(), std::io::Error> {
+        Ok(())
+    }
+
     fn root_html(
         &self,
         _headers: &std::collections::HashMap<String, String>,
+        container: &Container,
         content: String,
         viewport: Option<&str>,
         background: Option<Color>,

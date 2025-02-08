@@ -6,7 +6,7 @@ use std::{path::PathBuf, sync::LazyLock};
 use moosicbox_app_native_lib::{
     renderer::Color,
     router::{RoutePath, Router},
-    NativeAppBuilder, RendererType,
+    NativeApp, NativeAppBuilder, NativeAppError, RendererType,
 };
 use moosicbox_env_utils::option_env_f32;
 
@@ -84,6 +84,24 @@ pub fn init() -> NativeAppBuilder {
 
 /// # Errors
 ///
+/// * If the `NativeApp` fails to start
+pub async fn start(builder: NativeAppBuilder) -> Result<NativeApp, NativeAppError> {
+    #[allow(unused_mut)]
+    let mut app = builder.start().await?;
+
+    #[cfg(feature = "html")]
+    app.renderer.add_responsive_trigger(
+        "mobile".into(),
+        gigachad_renderer::transformer::ResponsiveTrigger::MaxWidth(
+            gigachad_renderer::transformer::Number::Integer(600),
+        ),
+    );
+
+    Ok(app)
+}
+
+/// # Errors
+///
 /// * IF
 ///
 /// # Panics
@@ -102,8 +120,6 @@ pub async fn gen(
 
     #[cfg(all(feature = "html", feature = "static-routes"))]
     {
-        use std::sync::Arc;
-
         use gigachad_renderer::HtmlTagRenderer;
         use gigachad_renderer_html::html::container_element_to_html_response;
         use moosicbox_app_native_lib::router::{ClientInfo, ClientOs, RequestInfo, RouteRequest};
@@ -118,7 +134,7 @@ pub async fn gen(
         let output_path: PathBuf = output.into();
         let static_routes = ROUTER.static_routes.read().unwrap().clone();
 
-        let tag_renderer: Option<Arc<Box<dyn HtmlTagRenderer + Send + Sync>>> = renderer.into();
+        let tag_renderer: Option<Box<dyn HtmlTagRenderer + Send + Sync>> = renderer.into();
         let tag_renderer = tag_renderer.unwrap();
 
         if output_path.is_dir() {
@@ -162,7 +178,7 @@ pub async fn gen(
                         &view.immediate,
                         Some(&*VIEWPORT),
                         Some(*BACKGROUND_COLOR),
-                        &**tag_renderer,
+                        &*tag_renderer,
                     )?;
                     let output_path = output_path.join(format!("{path_str}.html"));
                     tokio::fs::create_dir_all(&output_path.parent().unwrap())
