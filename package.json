@@ -15,7 +15,7 @@
     "author": "Braden Steffaniak",
     "license": "ISC",
     "devDependencies": {
-        "@pulumi/pulumi": "^3.148.0",
+        "@pulumi/pulumi": "^3.149.0",
         "@tsconfig/node18": "18.2.2",
         "@typescript-eslint/eslint-plugin": "^7.18.0",
         "@typescript-eslint/parser": "^7.18.0",
