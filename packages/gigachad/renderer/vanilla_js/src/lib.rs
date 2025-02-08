@@ -13,6 +13,11 @@ pub struct VanillaJsTagRenderer {
     default: DefaultHtmlTagRenderer,
 }
 
+#[cfg(debug_assertions)]
+static SCRIPT: &str = include_str!("../web/dist/index.js");
+#[cfg(not(debug_assertions))]
+static SCRIPT: &str = include_str!("../web/dist/index.min.js");
+
 impl HtmlTagRenderer for VanillaJsTagRenderer {
     fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger) {
         self.default.responsive_triggers.insert(name, trigger);
@@ -68,6 +73,7 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                                 outline: inherit;
                             }}
                         "))}
+                        script { (PreEscaped(SCRIPT)) }
                         (PreEscaped(responsive_css))
                         @if let Some(content) = viewport {
                             meta name="viewport" content=(content);

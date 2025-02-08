@@ -1,5 +1,6 @@
 [package]
 authors     = ["Braden Steffaniak"]
+build       = "build.rs"
 categories  = ["gui"]
 description = "GigaChad Vanilla JS HTML renderer package"
 edition     = "2021"

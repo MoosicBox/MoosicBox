@@ -1,0 +1,26 @@
+{
+    "compilerOptions": {
+        "allowSyntheticDefaultImports": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "target": "ESNext",
+        "module": "ESNext",
+        "moduleResolution": "node",
+        "jsxImportSource": "solid-js",
+        "jsx": "preserve",
+        "strict": true,
+        "baseUrl": ".",
+        "outDir": "./dist",
+        "lib": [
+            "ESNext.Array",
+            "DOM",
+            "ESNext",
+            "DOM.iterable"
+        ],
+        "paths": {
+            "~/*": [
+                "./src/*"
+            ]
+        }
+    }
+}
