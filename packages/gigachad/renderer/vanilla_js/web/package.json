@@ -15,7 +15,8 @@
     "homepage": "https://github.com/MoosicBox/MoosicBox#readme",
     "scripts": {
         "build": "tsc",
-        "bundle": "pnpm build && esbuild dist/index.js --minify --bundle --outfile=dist/index.min.js",
+        "bundle": "esbuild dist/index.js --minify --bundle --outfile=dist/index.min.js",
+        "build_and_bundle": "pnpm build && pnpm bundle",
         "pretty": "prettier --check \"**/*.{js,cjs,mjs,jsx,ts,tsx}\"",
         "pretty:write": "prettier --write \"**/*.{js,cjs,mjs,jsx,ts,tsx}\"",
         "lint": "eslint src",
