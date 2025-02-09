@@ -42,6 +42,7 @@ fn run_command(binaries: &[&str], arguments: &[&str], dir: &Path) {
 
                 if !status.success() {
                     if status.code() == Some(127) {
+                        println!("Binary {binary} not found (status code 127)");
                         continue;
                     }
 
@@ -52,6 +53,7 @@ fn run_command(binaries: &[&str], arguments: &[&str], dir: &Path) {
             }
             Err(e) => {
                 if let std::io::ErrorKind::NotFound = e.kind() {
+                    println!("Binary {binary} not found");
                     continue;
                 }
                 panic!("Failed to execute {binary} script: {e:?}");
