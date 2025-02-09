@@ -142,6 +142,12 @@ jobs:
                   version: 9
                   run_install: false
 
+            - uses: actions/setup-node@v4
+              if: ${{ contains(matrix.package.toolchains, 'node') || contains(matrix.package.ciToolchains, 'node') }}
+              name: Install node
+              with:
+                  node-version: 22
+
             - name: Install dependencies
               if: ${{ matrix.package.dependencies }}
               run: ${{ matrix.package.dependencies }}
