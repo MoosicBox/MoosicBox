@@ -140,11 +140,12 @@ jobs:
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
-                          command="${{ matrix.package.env }} cargo clippy --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}"
+                          command="${{ matrix.package.env }} cargo clippy ${{ runner.debug && '-vv ' }}--no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}"
                           # Trim whitespace
                           command=$(echo "$command" | xargs)
                           echo "RUNNING \`$command\`"
                           if ${{ matrix.package.env }} cargo clippy \
+                              ${{ runner.debug && '-vv' }} \
                               --no-default-features \
                               --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}; then
                               echo "SUCCESS \`$command\`";
@@ -165,6 +166,7 @@ jobs:
                           command=$(echo "$command" | xargs)
                           echo "RUNNING \`$command\`"
                           if ${{ matrix.package.env }} cargo test \
+                              ${{ runner.debug && '-vv' }} \
                               --no-default-features \
                               --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}; then
                               echo "SUCCESS \`$command\`";
@@ -178,7 +180,7 @@ jobs:
             - name: Format ${{ matrix.package.name }}
               shell: bash
               run: |
-                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo fmt)
+                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo fmt ${{ runner.debug && '-vv' }})
 
             - uses: actions/download-artifact@master
               if: ${{ matrix.package.os == 'macos-latest' }}
