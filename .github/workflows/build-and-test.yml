@@ -11,6 +11,7 @@ on:
             - free_disk_space.sh
             - '!packages/marketing_site/*.ts'
             - '!packages/marketing_site/*.json'
+            - '!packages/marketing_site/pnpm-lock.yaml'
             - '!packages/marketing_site/*.mjs'
             - '!packages/marketing_site/*.js'
             - '!packages/marketing_site/*.md'
