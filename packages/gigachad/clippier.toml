@@ -1,0 +1,6 @@
+[[ci-steps]]
+features  = ['default', 'vanilla-js']
+toolchain = 'pnpm'
+
+[[config]]
+os = 'ubuntu'
