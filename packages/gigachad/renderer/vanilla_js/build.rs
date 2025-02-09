@@ -58,4 +58,6 @@ fn run_command(binaries: &[&str], arguments: &[&str], dir: &Path) {
             }
         }
     }
+
+    panic!("Failed to execute script for any of the binaries");
 }
