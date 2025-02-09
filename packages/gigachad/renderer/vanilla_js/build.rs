@@ -31,6 +31,8 @@ fn run_command(binaries: &[&str], arguments: &[&str], dir: &Path) {
             command = command.arg(arg);
         }
 
+        println!("Running {} {}", binary, arguments.join(" "));
+
         match command.spawn() {
             Ok(mut child) => {
                 let status = child
