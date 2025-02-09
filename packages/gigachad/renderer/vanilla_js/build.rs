@@ -38,6 +38,10 @@ fn run_command(binaries: &[&str], arguments: &[&str], dir: &Path) {
                     .unwrap_or_else(|e| panic!("Failed to execute {binary} script: {e:?}"));
 
                 if !status.success() {
+                    if status.code() == Some(127) {
+                        continue;
+                    }
+
                     panic!("{binary} script failed: status_code={:?}", status.code());
                 }
 
