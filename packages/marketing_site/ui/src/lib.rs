@@ -174,7 +174,7 @@ pub fn home() -> Markup {
                         sx-position="absolute"
                         sx-bottom="50%"
                         sx-translate-y="50%"
-                        sx-height="calc(min(65%, 25dvw))"
+                        sx-height="calc(min(65%, 50dvw))"
                         sx-max-height="80%"
                     {
                         img
