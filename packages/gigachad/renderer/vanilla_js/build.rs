@@ -38,12 +38,11 @@ fn run_command(binaries: &[&str], arguments: &[&str], dir: &Path) {
                     .unwrap_or_else(|e| panic!("Failed to execute {binary} script: {e:?}"));
 
                 if !status.success() {
-                    panic!("{binary} script failed");
+                    panic!("{binary} script failed: status_code={:?}", status.code());
                 }
 
                 return;
             }
-
             Err(e) => {
                 if let std::io::ErrorKind::NotFound = e.kind() {
                     continue;
