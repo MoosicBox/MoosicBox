@@ -68,11 +68,15 @@ jobs:
                                       "features": (.features),
                                       "os": (.os + "-latest"),
                                       "dependencies": (.dependencies),
+                                      "toolchains": (.toolchains),
                                       "ciSteps": (.ciSteps),
+                                      "ciToolchains": (.ciToolchains),
                                       "env": (.env)
                                   }
                                   | del(.dependencies | nulls)
+                                  | del(.toolchains | nulls)
                                   | del(.ciSteps | nulls)
+                                  | del(.ciToolchains | nulls)
                                   | del(.env | nulls)
                               ]'
                   )
@@ -130,6 +134,13 @@ jobs:
             - name: Setup CI
               if: ${{ matrix.package.ciSteps }}
               run: ${{ matrix.package.ciSteps }}
+
+            - uses: pnpm/action-setup@v3
+              if: ${{ contains(matrix.package.toolchains, 'pnpm') || contains(matrix.package.ciToolchains, 'pnpm') }}
+              name: Install pnpm
+              with:
+                  version: 9
+                  run_install: false
 
             - name: Install dependencies
               if: ${{ matrix.package.dependencies }}

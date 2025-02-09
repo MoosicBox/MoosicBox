@@ -255,7 +255,12 @@ fn create_map(
         let matches = dependencies
             .iter()
             .filter(|x| {
-                x.features.as_ref().is_none_or(|f| {
+                let target_features = match x {
+                    DependencyFilteredByFeatures::Command { features, .. }
+                    | DependencyFilteredByFeatures::Toolchain { features, .. } => features,
+                };
+
+                target_features.as_ref().is_none_or(|f| {
                     f.iter()
                         .any(|required| features.iter().any(|x| x == required))
                 })
@@ -263,16 +268,37 @@ fn create_map(
             .collect::<Vec<_>>();
 
         if !matches.is_empty() {
-            map.insert(
-                "dependencies".to_string(),
-                serde_json::to_value(
-                    matches
-                        .iter()
-                        .map(|x| x.command.as_str())
-                        .collect::<Vec<_>>()
-                        .join("\n"),
-                )?,
-            );
+            let dependencies = matches
+                .iter()
+                .filter_map(|x| match x {
+                    DependencyFilteredByFeatures::Command { command, .. } => Some(command),
+                    DependencyFilteredByFeatures::Toolchain { .. } => None,
+                })
+                .map(String::as_str)
+                .collect::<Vec<_>>();
+
+            if !dependencies.is_empty() {
+                map.insert(
+                    "dependencies".to_string(),
+                    serde_json::to_value(dependencies.join("\n"))?,
+                );
+            }
+
+            let toolchains = matches
+                .iter()
+                .filter_map(|x| match x {
+                    DependencyFilteredByFeatures::Toolchain { toolchain, .. } => Some(toolchain),
+                    DependencyFilteredByFeatures::Command { .. } => None,
+                })
+                .map(String::as_str)
+                .collect::<Vec<_>>();
+
+            if !toolchains.is_empty() {
+                map.insert(
+                    "toolchains".to_string(),
+                    serde_json::to_value(toolchains.join("\n"))?,
+                );
+            }
         }
     }
 
@@ -335,26 +361,52 @@ fn create_map(
     ci_steps.extend(config_ci_steps);
 
     let ci_steps = ci_steps
-        .into_iter()
+        .iter()
         .filter(|x| {
-            x.features.as_ref().is_none_or(|f| {
+            let target_features = match x {
+                DependencyFilteredByFeatures::Command { features, .. }
+                | DependencyFilteredByFeatures::Toolchain { features, .. } => features,
+            };
+
+            target_features.as_ref().is_none_or(|f| {
                 f.iter()
                     .any(|required| features.iter().any(|x| x == required))
             })
         })
-        .collect_vec();
+        .collect::<Vec<_>>();
 
     if !ci_steps.is_empty() {
-        map.insert(
-            "ciSteps".to_string(),
-            serde_json::to_value(
-                ci_steps
-                    .iter()
-                    .map(|x| x.command.as_str())
-                    .collect_vec()
-                    .join("\n"),
-            )?,
-        );
+        let dependencies = ci_steps
+            .iter()
+            .filter_map(|x| match x {
+                DependencyFilteredByFeatures::Command { command, .. } => Some(command),
+                DependencyFilteredByFeatures::Toolchain { .. } => None,
+            })
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+
+        if !dependencies.is_empty() {
+            map.insert(
+                "ciSteps".to_string(),
+                serde_json::to_value(dependencies.join("\n"))?,
+            );
+        }
+
+        let toolchains = ci_steps
+            .iter()
+            .filter_map(|x| match x {
+                DependencyFilteredByFeatures::Toolchain { toolchain, .. } => Some(toolchain),
+                DependencyFilteredByFeatures::Command { .. } => None,
+            })
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+
+        if !toolchains.is_empty() {
+            map.insert(
+                "ciToolchains".to_string(),
+                serde_json::to_value(toolchains.join("\n"))?,
+            );
+        }
     }
 
     Ok(map)
@@ -457,9 +509,16 @@ impl<'a, T> Iterator for Split<'a, T> {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct CommandFilteredByFeatures {
-    command: String,
-    features: Option<Vec<String>>,
+#[serde(untagged)]
+pub enum DependencyFilteredByFeatures {
+    Command {
+        command: String,
+        features: Option<Vec<String>>,
+    },
+    Toolchain {
+        toolchain: String,
+        features: Option<Vec<String>>,
+    },
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -497,10 +556,10 @@ impl<T> Default for VecOrItem<T> {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ClippierConfiguration {
-    ci_steps: Option<VecOrItem<CommandFilteredByFeatures>>,
+    ci_steps: Option<VecOrItem<DependencyFilteredByFeatures>>,
     cargo: Option<VecOrItem<String>>,
     env: Option<HashMap<String, ClippierEnv>>,
-    dependencies: Option<Vec<CommandFilteredByFeatures>>,
+    dependencies: Option<Vec<DependencyFilteredByFeatures>>,
     os: String,
     skip_features: Option<Vec<String>>,
     name: Option<String>,
@@ -515,7 +574,7 @@ pub struct ParallelizationConfig {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ClippierConf {
-    ci_steps: Option<VecOrItem<CommandFilteredByFeatures>>,
+    ci_steps: Option<VecOrItem<DependencyFilteredByFeatures>>,
     cargo: Option<VecOrItem<String>>,
     config: Vec<ClippierConfiguration>,
     env: Option<HashMap<String, ClippierEnv>>,
