@@ -192,7 +192,7 @@ hex = "0.4.3"
 home = "0.5.11"
 hostname = "0.4.0"
 html-escape = "0.2.13"
-id3 = "1.16.1"
+id3 = "1.16.2"
 image = "0.25.5"
 io-streams = "0.16.3"
 itertools = "0.14.0"
@@ -229,7 +229,7 @@ opentelemetry-otlp = { version = "0.27.0", features = ["tonic"] }
 opentelemetry-prometheus = "0.27.0"
 opentelemetry_sdk = { version = "0.27.1", features = ["rt-tokio"] }
 opus = "0.3.0"
-os_info = { version = "3.9.2", default-features = false }
+os_info = { version = "3.10.0", default-features = false }
 pin-project = "1.1.9"
 pin-utils = "0.1.0"
 pingora = "0.4.0"
