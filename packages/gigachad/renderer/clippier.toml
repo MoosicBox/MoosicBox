@@ -2,10 +2,6 @@
 features  = ['default', 'vanilla-js']
 toolchain = 'pnpm'
 
-[[ci-steps]]
-features  = ['default', 'vanilla-js']
-toolchain = 'node'
-
 [[config]]
 os = "ubuntu"
 
