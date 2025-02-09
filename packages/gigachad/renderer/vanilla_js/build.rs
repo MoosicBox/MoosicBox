@@ -13,6 +13,7 @@ fn main() {
     let ts_src_dir = web_dir.join("src");
 
     run_command(&NPM_COMMANDS, &["install"], &web_dir);
+    run_command(&NPM_COMMANDS, &["run", "build"], &web_dir);
     run_command(&NPM_COMMANDS, &["run", "bundle"], &web_dir);
 
     // Watch TypeScript source directory for changes
