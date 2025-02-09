@@ -62,6 +62,8 @@ allowed-duplicate-crates = [
     "siphasher",
     "spin",
     "strsim",
+    "strum",
+    "strum_macros",
     "syn",
     "sync_wrapper",
     "thiserror",
