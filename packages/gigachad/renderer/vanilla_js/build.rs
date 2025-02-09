@@ -1,6 +1,7 @@
 use std::env;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::str::FromStr;
 
 static NPM_COMMANDS: [&str; 3] = ["pnpm", "bun", "npm"];
 
@@ -24,7 +25,28 @@ fn main() {
 }
 
 fn run_command(binaries: &[&str], arguments: &[&str], dir: &Path) {
-    for binary in binaries {
+    let binaries = binaries.iter().map(|x| {
+        if *x == "pnpm" {
+            if let Ok(var) = env::var("PNPM_HOME") {
+                PathBuf::from_str(&var)
+                    .unwrap()
+                    .join(if cfg!(windows) {
+                        format!("{x}.CMD")
+                    } else {
+                        x.to_string()
+                    })
+                    .to_str()
+                    .unwrap()
+                    .to_string()
+            } else {
+                x.to_string()
+            }
+        } else {
+            x.to_string()
+        }
+    });
+
+    for ref binary in binaries {
         let mut command = Command::new(binary);
         let mut command = command.current_dir(dir);
 
@@ -32,7 +54,7 @@ fn run_command(binaries: &[&str], arguments: &[&str], dir: &Path) {
             command = command.arg(arg);
         }
 
-        println!("Running {} {}", binary, arguments.join(" "));
+        println!("Running {binary} {}", arguments.join(" "));
 
         match command.spawn() {
             Ok(mut child) => {
