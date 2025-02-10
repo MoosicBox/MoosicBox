@@ -15,8 +15,6 @@
     "homepage": "https://github.com/MoosicBox/MoosicBox#readme",
     "scripts": {
         "build": "tsc",
-        "bundle": "esbuild dist/index.js --minify --bundle --outfile=dist/index.min.js",
-        "build_and_bundle": "pnpm build && pnpm bundle",
         "pretty": "prettier --check \"**/*.{js,cjs,mjs,jsx,ts,tsx}\"",
         "pretty:write": "prettier --write \"**/*.{js,cjs,mjs,jsx,ts,tsx}\"",
         "lint": "eslint src",
@@ -31,7 +29,6 @@
         "@tsconfig/node18": "18.2.2",
         "@typescript-eslint/eslint-plugin": "^8.23.0",
         "@typescript-eslint/parser": "^8.23.0",
-        "esbuild": "^0.25.0",
         "eslint": "^9.20.0",
         "eslint-config-prettier": "^9.1.0",
         "eslint-plugin-import": "^2.31.0",
