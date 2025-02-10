@@ -7803,10 +7803,11 @@ checksum = "0676bb32a98c1a483ce53e500a81ad9c3d5b3f7c920c28c24e9cb0980d0b5bc8"
 
 [[package]]
 name = "notify-rust"
-version = "4.11.4"
+version = "4.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96ae13fb6065b0865d2310dfa55ce319245052ed95fbbe2bc87c99962c58d73f"
+checksum = "7fa3b9f2364a09bd359aa0206702882e208437450866a374d5372d64aece4029"
 dependencies = [
+ "futures-lite",
  "log",
  "mac-notification-sys",
  "serde",
