@@ -141,6 +141,7 @@ actix-web-opentelemetry = { version = "0.20.1", features = [
     "prometheus",
 ] }
 actix-ws = "0.3.0"
+anyhow = "1.0.95"
 arrayvec = "0.7.6"
 async-once-cell = "0.5.4"
 async-recursion = "1.1.1"
@@ -284,6 +285,15 @@ sqlx-postgres = { version = "0.8.3", default-features = false, features = [
 static_init = "1.0.3"
 strum = "0.27.0"
 strum_macros = "0.27.0"
+swc_bundler = "9.0.0"
+swc_common = { version = "6.1.0", features = ["tty-emitter"] }
+swc_ecma_ast = "6.1.0"
+swc_ecma_codegen = "6.0.2"
+swc_ecma_loader = { version = "6.0.0", features = ["cache", "node"] }
+swc_ecma_minifier = "10.2.0"
+swc_ecma_parser = "8.0.1"
+swc_ecma_transforms_base = "9.0.1"
+swc_ecma_visit = "6.0.0"
 symphonia = { version = "0.5.4", features = ["all"] }
 syntect = "5.2.0"
 tantivy = "0.22.0"

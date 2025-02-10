@@ -14,10 +14,21 @@ version     = "0.1.0"
 ignored = []
 
 [dependencies]
-log             = { workspace = true }
+log = { workspace = true }
+
+anyhow                   = { workspace = true, optional = true }
+swc_bundler              = { workspace = true, optional = true }
+swc_common               = { workspace = true, optional = true }
+swc_ecma_ast             = { workspace = true, optional = true }
+swc_ecma_codegen         = { workspace = true, optional = true }
+swc_ecma_loader          = { workspace = true, optional = true }
+swc_ecma_minifier        = { workspace = true, optional = true }
+swc_ecma_parser          = { workspace = true, optional = true }
+swc_ecma_transforms_base = { workspace = true, optional = true }
+swc_ecma_visit           = { workspace = true, optional = true }
 
 [features]
-default = ["all-web-toolchains", "esbuild"]
+default = ["all-web-toolchains", "esbuild", "swc"]
 
 bun  = []
 npm  = []
@@ -25,7 +36,18 @@ pnpm = []
 
 all-web-toolchains = ["bun", "npm", "pnpm"]
 
-swc = []
+swc = [
+    "dep:anyhow",
+    "dep:swc_bundler",
+    "dep:swc_common",
+    "dep:swc_ecma_ast",
+    "dep:swc_ecma_codegen",
+    "dep:swc_ecma_loader",
+    "dep:swc_ecma_minifier",
+    "dep:swc_ecma_parser",
+    "dep:swc_ecma_transforms_base",
+    "dep:swc_ecma_visit",
+]
 
 esbuild = []
 

@@ -4,6 +4,9 @@ use std::process::Command;
 use std::str::FromStr;
 use std::sync::LazyLock;
 
+#[cfg(feature = "swc")]
+pub mod swc;
+
 static NPM_COMMANDS: [&str; 3] = ["pnpm", "bun", "npm"];
 
 static ENABLED_NPM_COMMANDS: LazyLock<Vec<PathBuf>> = LazyLock::new(|| {
@@ -39,18 +42,13 @@ static MANIFEST_DIR: LazyLock<PathBuf> =
 pub fn bundle(target: &Path, out: &Path) {
     if cfg!(feature = "swc") {
         #[cfg(feature = "swc")]
-        return bundle_swc(target, out);
+        return swc::bundle_swc(target, out);
     } else if cfg!(feature = "esbuild") {
         #[cfg(feature = "esbuild")]
         return bundle_esbuild(target, out);
     }
 
     panic!("No bundlers enabled");
-}
-
-#[cfg(feature = "swc")]
-pub fn bundle_swc(target: &Path, out: &Path) {
-    unimplemented!()
 }
 
 #[cfg(feature = "esbuild")]
