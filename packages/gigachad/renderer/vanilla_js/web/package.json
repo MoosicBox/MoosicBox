@@ -20,7 +20,8 @@
         "lint": "eslint src",
         "lint:write": "eslint src --fix",
         "typecheck": "tsc --noEmit",
-        "validate": "pnpm pretty && pnpm lint && pnpm typecheck"
+        "validate": "pnpm typecheck && pnpm lint && pnpm pretty",
+        "validate:write": "pnpm typecheck && pnpm lint && pnpm pretty:write && pnpm pretty"
     },
     "type": "module",
     "devDependencies": {

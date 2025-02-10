@@ -30,7 +30,8 @@
         "lint": "eslint --ext .ts,.tsx .",
         "lint:write": "eslint --fix",
         "typecheck": "tsc --noEmit",
-        "validate": "pnpm pretty && pnpm lint && pnpm typecheck"
+        "validate": "pnpm typecheck && pnpm lint && pnpm pretty",
+        "validate:write": "pnpm typecheck && pnpm lint && pnpm pretty:write && pnpm pretty"
     },
     "type": "module",
     "devDependencies": {
