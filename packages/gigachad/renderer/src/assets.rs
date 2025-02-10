@@ -1,5 +1,7 @@
 use std::{path::PathBuf, sync::LazyLock};
 
+use bytes::Bytes;
+
 #[derive(Clone, Debug)]
 pub struct StaticAssetRoute {
     pub route: String,
@@ -9,6 +11,7 @@ pub struct StaticAssetRoute {
 #[derive(Clone, Debug)]
 pub enum AssetPathTarget {
     File(PathBuf),
+    FileContents(Bytes),
     Directory(PathBuf),
 }
 

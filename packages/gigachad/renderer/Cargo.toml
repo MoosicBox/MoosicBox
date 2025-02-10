@@ -17,6 +17,7 @@ gigachad_transformer = { version = "0.1.0", path = "../transformer", default-fea
 ] }
 
 async-trait = { workspace = true }
+bytes       = { workspace = true, optional = true }
 log         = { workspace = true }
 maud        = { workspace = true, optional = true }
 tokio       = { workspace = true, features = ["rt"] }
@@ -48,6 +49,6 @@ viewport-retained  = ["viewport"]
 
 html = []
 
-assets = []
+assets = ["dep:bytes"]
 
 logic = ["gigachad_transformer/logic"]

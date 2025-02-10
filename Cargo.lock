@@ -3886,6 +3886,7 @@ name = "gigachad_renderer"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "bytes",
  "gigachad_color",
  "gigachad_transformer",
  "log",

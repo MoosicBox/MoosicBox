@@ -235,6 +235,19 @@ pub async fn gen(
                     AssetPathTarget::File(file) => {
                         tokio::fs::copy(file, &assets_output).await?;
                     }
+                    AssetPathTarget::FileContents(contents) => {
+                        let mut file = tokio::fs::File::options()
+                            .truncate(true)
+                            .write(true)
+                            .create(true)
+                            .open(&assets_output)
+                            .await
+                            .expect("Failed to open file");
+
+                        file.write_all(contents)
+                            .await
+                            .expect("Failed to write file");
+                    }
                     AssetPathTarget::Directory(dir) => {
                         copy_dir_all(dir, &assets_output).await?;
                     }

@@ -127,6 +127,9 @@ impl<
 
                 #[cfg(feature = "assets")]
                 {
+                    use std::path::PathBuf;
+                    use std::str::FromStr as _;
+
                     use gigachad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
 
                     for StaticAssetRoute { route, target } in &html_app.static_asset_routes {
@@ -145,6 +148,32 @@ impl<
                                                 )?;
 
                                             Ok::<_, actix_web::Error>(file.into_response(&req))
+                                        }
+                                    }),
+                                );
+                            }
+                            AssetPathTarget::FileContents(target) => {
+                                let target = target.clone();
+                                let extension = PathBuf::from_str(route)
+                                    .unwrap()
+                                    .extension()
+                                    .and_then(|x| x.to_str().map(str::to_lowercase));
+
+                                let content_type = match extension.as_deref() {
+                                    Some("js" | "mjs" | "cjs") => "text/javascript;charset=UTF-8",
+                                    _ => "application/octet-stream",
+                                };
+
+                                app = app.route(
+                                    &format!("/{route}"),
+                                    web::get().to(move || {
+                                        let target = target.clone();
+                                        async move {
+                                            Ok::<_, actix_web::Error>(
+                                                HttpResponse::Ok()
+                                                    .content_type(content_type)
+                                                    .body(target),
+                                            )
                                         }
                                     }),
                                 );
