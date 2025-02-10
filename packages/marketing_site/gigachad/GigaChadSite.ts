@@ -3,19 +3,30 @@ import { spawnSync } from 'child_process';
 
 const NO_CACHE_POLICY_ID = '4135ea2d-6df8-44a3-9df3-4b5a84be39ad';
 
+const RENDERERS = {
+    htmx: {
+        feature: 'htmx',
+        bin: 'moosicbox_marketing_site_lambda_htmx',
+    },
+    vanillaJs: {
+        feature: 'vanilla-js',
+        bin: 'moosicbox_marketing_site_lambda_vanilla_js',
+    },
+} as const;
+
 export function createGigaChadSite(
     name: string,
+    renderer: keyof typeof RENDERERS,
     args: sst.aws.StaticSiteArgs = {},
     opts: ComponentResourceOptions = {},
 ) {
     args.indexPage = args.indexPage ?? 'index';
     args.build = args.build ?? {
-        command:
-            'cargo run --bin moosicbox_marketing_site --no-default-features --features htmx,static-routes,assets gen',
+        command: `cargo run --release --bin moosicbox_marketing_site --no-default-features --features ${RENDERERS[renderer].feature},static-routes,assets gen`,
         output: 'gen',
     };
 
-    const dynamicRoutes = getDynamicRoutes();
+    const dynamicRoutes = getDynamicRoutes(renderer);
 
     console.log('Using dynamic route paths:', dynamicRoutes);
 
@@ -39,7 +50,7 @@ export function createGigaChadSite(
 
     dynamicRoutes.forEach((route) => {
         api.route(`GET ${route}`, {
-            handler: 'src/moosicbox_marketing_site_lambda.handler',
+            handler: `src/${RENDERERS[renderer].bin}.handler`,
             runtime: 'rust' as 'go', // FIXME: remove this cast once rust is a valid runtime
         });
     });
@@ -94,16 +105,17 @@ export function createGigaChadSite(
     };
 }
 
-function getDynamicRoutes() {
+function getDynamicRoutes(renderer: keyof typeof RENDERERS) {
     const { status, stdout, stderr } = spawnSync(
         'cargo',
         [
             'run',
+            '--release',
             '--bin',
             'moosicbox_marketing_site',
             '--no-default-features',
             '--features',
-            'htmx',
+            RENDERERS[renderer].feature,
             'dynamic-routes',
         ],
         {

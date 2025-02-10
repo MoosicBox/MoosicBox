@@ -16,9 +16,14 @@ path              = "src/main.rs"
 required-features = []
 
 [[bin]]
-name              = "moosicbox_marketing_site_lambda"
-path              = "src/lambda.rs"
+name              = "moosicbox_marketing_site_lambda_htmx"
+path              = "src/lambda_htmx.rs"
 required-features = ["htmx", "lambda"]
+
+[[bin]]
+name              = "moosicbox_marketing_site_lambda_vanilla_js"
+path              = "src/lambda_vanilla_js.rs"
+required-features = ["lambda", "vanilla-js"]
 
 [package.metadata.bundle]
 category          = "Music"

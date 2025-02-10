@@ -19,7 +19,14 @@ static RUNTIME: LazyLock<Arc<Runtime>> = LazyLock::new(|| {
     )
 });
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// # Errors
+///
+/// * If the lambda fails
+///
+/// # Panics
+///
+/// * If the runner fails to run
+pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     tracing::init_default_subscriber();
 
     let mut runner = RUNTIME.block_on(async move {
