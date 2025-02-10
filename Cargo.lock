@@ -6846,6 +6846,7 @@ dependencies = [
  "console-subscriber",
  "gigachad_renderer",
  "gigachad_renderer_html",
+ "gigachad_renderer_vanilla_js",
  "log",
  "moosicbox_app_native_lib",
  "moosicbox_assert",

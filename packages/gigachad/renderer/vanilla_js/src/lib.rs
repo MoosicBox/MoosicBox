@@ -14,9 +14,14 @@ pub struct VanillaJsTagRenderer {
 }
 
 #[cfg(debug_assertions)]
-static SCRIPT: &str = include_str!("../web/dist/index.js");
+pub static SCRIPT_NAME: &str = "gigachad.js";
+#[cfg(all(debug_assertions, feature = "script"))]
+pub static SCRIPT: &str = include_str!("../web/dist/index.js");
+
 #[cfg(not(debug_assertions))]
-static SCRIPT: &str = include_str!("../web/dist/index.min.js");
+pub static SCRIPT_NAME: &str = "gigachad.min.js";
+#[cfg(all(not(debug_assertions), feature = "script"))]
+pub static SCRIPT: &str = include_str!("../web/dist/index.min.js");
 
 impl HtmlTagRenderer for VanillaJsTagRenderer {
     fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger) {
@@ -73,7 +78,7 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                                 outline: inherit;
                             }}
                         "))}
-                        script { (PreEscaped(SCRIPT)) }
+                        script src={"/js/"(SCRIPT_NAME)} {}
                         (PreEscaped(responsive_css))
                         @if let Some(content) = viewport {
                             meta name="viewport" content=(content);

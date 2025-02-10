@@ -44,6 +44,13 @@ pub static ROUTER: LazyLock<Router> = LazyLock::new(|| {
 pub static ASSETS: LazyLock<Vec<gigachad_renderer::assets::StaticAssetRoute>> =
     LazyLock::new(|| {
         vec![
+            #[cfg(feature = "vanilla-js")]
+            moosicbox_app_native_lib::renderer::assets::StaticAssetRoute {
+                route: format!("js/{}", gigachad_renderer_vanilla_js::SCRIPT_NAME),
+                target: gigachad_renderer::assets::AssetPathTarget::FileContents(
+                    gigachad_renderer_vanilla_js::SCRIPT.as_bytes().into(),
+                ),
+            },
             moosicbox_app_native_lib::renderer::assets::StaticAssetRoute {
                 route: "favicon.ico".to_string(),
                 target: ASSETS_DIR.join("favicon.ico").try_into().unwrap(),
