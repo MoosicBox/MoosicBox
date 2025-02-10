@@ -48,8 +48,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.8.2
-        version: 3.8.2
+        specifier: ^3.8.3
+        version: 3.8.3
       typescript:
         specifier: ^5.7.3
         version: 5.7.3
@@ -426,8 +426,8 @@ packages:
     resolution: {integrity: sha512-jjhdIE/FPF2B7Z1uzc6i3oWKbGcHb87Qw7AWj6jmEqNOfDFbJWtjt/XfwCpvNkpGWlcJaog5vTR+VV8+w9JflA==}
     engines: {node: ^18.18.0 || >=20.0.0}
 
-  '@typescript-eslint/scope-manager@8.23.0':
-    resolution: {integrity: sha512-OGqo7+dXHqI7Hfm+WqkZjKjsiRtFUQHPdGMXzk5mYXhJUedO7e/Y7i8AK3MyLMgZR93TX4bIzYrfyVjLC+0VSw==}
+  '@typescript-eslint/scope-manager@8.24.0':
+    resolution: {integrity: sha512-HZIX0UByphEtdVBKaQBgTDdn9z16l4aTUz8e8zPQnyxwHBtf5vtl1L+OhH+m1FGV9DrRmoDuYKqzVrvWDcDozw==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
   '@typescript-eslint/type-utils@7.18.0':
@@ -444,8 +444,8 @@ packages:
     resolution: {integrity: sha512-iZqi+Ds1y4EDYUtlOOC+aUmxnE9xS/yCigkjA7XpTKV6nCBd3Hp/PRGGmdwnfkV2ThMyYldP1wRpm/id99spTQ==}
     engines: {node: ^18.18.0 || >=20.0.0}
 
-  '@typescript-eslint/types@8.23.0':
-    resolution: {integrity: sha512-1sK4ILJbCmZOTt9k4vkoulT6/y5CHJ1qUYxqpF1K/DBAd8+ZUL4LlSCxOssuH5m4rUaaN0uS0HlVPvd45zjduQ==}
+  '@typescript-eslint/types@8.24.0':
+    resolution: {integrity: sha512-VacJCBTyje7HGAw7xp11q439A+zeGG0p0/p2zsZwpnMzjPB5WteaWqt4g2iysgGFafrqvyLWqq6ZPZAOCoefCw==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
   '@typescript-eslint/typescript-estree@7.18.0':
@@ -467,8 +467,8 @@ packages:
     resolution: {integrity: sha512-cDF0/Gf81QpY3xYyJKDV14Zwdmid5+uuENhjH2EqFaF0ni+yAyq/LzMaIJdhNJXZI7uLzwIlA+V7oWoyn6Curg==}
     engines: {node: ^18.18.0 || >=20.0.0}
 
-  '@typescript-eslint/visitor-keys@8.23.0':
-    resolution: {integrity: sha512-oWWhcWDLwDfu++BGTZcmXWqpwtkwb5o7fxUIGksMQQDSdPW9prsSnfIOZMlsj4vBOSrcnjIUZMiIjODgGosFhQ==}
+  '@typescript-eslint/visitor-keys@8.24.0':
+    resolution: {integrity: sha512-kArLq83QxGLbuHrTMoOEWO+l2MwsNS2TGISEdx8xgqpkbytB07XmlQyQdNDrCc1ecSqx0cnmhGvpX+VBwqqSkg==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
   '@ungap/structured-clone@1.3.0':
@@ -1408,8 +1408,8 @@ packages:
   lodash.merge@4.6.2:
     resolution: {integrity: sha512-0KpjqXRVvrYyCsX1swR/XTK0va6VQkQM6MNo7PqW77ByjAhoARA8EfrP1N4+KlKj8YS0ZUCtRT/YUuhyYDujIQ==}
 
-  long@5.2.5:
-    resolution: {integrity: sha512-e0r9YBBgNCq1D1o5Dp8FMH0N5hsFtXDBiVa0qoJPHpakvZkmDKPRoGffZJII/XsHvj9An9blm+cRJ01yQqU+Dw==}
+  long@5.3.0:
+    resolution: {integrity: sha512-5vvY5yF1zF/kXk+L94FRiTDa1Znom46UjPCH6/XbSvS8zBKMFBHTJk8KDMqJ+2J6QezQFi7k1k8v21ClJYHPaw==}
 
   lowercase-keys@2.0.0:
     resolution: {integrity: sha512-tqNXrS78oMOE73NMxK4EMLQsQowWf8jKooH9g7xPavRT706R6bkQJ6DY2Te7QukaZsulxa30wQ7bk0pm4XiHmA==}
@@ -1716,8 +1716,8 @@ packages:
     resolution: {integrity: sha512-8sLjZwK0R+JlxlYcTuVnyT2v+htpdrjDOKuMcOVdYjt52Lh8hWRYpxBPoKx/Zg+bcjc3wx6fmQevMmUztS/ccA==}
     engines: {node: '>=4'}
 
-  postcss@8.5.1:
-    resolution: {integrity: sha512-6oz2beyjc5VMn/KV1pPw8fliQkhBXrVn1Z3TVyqZxU8kZpzEKhBdmCFqI6ZbmGtamQvQGuU1sgPTk8ZrXDD7jQ==}
+  postcss@8.5.2:
+    resolution: {integrity: sha512-MjOadfU3Ys9KYoX0AdkBlFEF1Vx37uCCeN4ZHnmwm9FfpbsGWMZeBLMmmpY+6Ocqod7mkdZ0DT31OlbsFrLlkA==}
     engines: {node: ^10 || ^12 || >=14}
 
   prelude-ls@1.2.1:
@@ -1969,33 +1969,33 @@ packages:
     resolution: {integrity: sha512-MGrFH9Z4NP9Iyhqn16sDtBpRRNJ0Y2hNa6D65h736fVSaPCHr4DM4sWUNvVaSuC+0OBGhwsrydQwmgfg5LncqQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
-  sst-darwin-arm64@3.8.2:
-    resolution: {integrity: sha512-N0nZJAkrNUpRmRkNz3T5QA7s6QPi9hgAJJorPv0VQwhGtoxnsPU8RgVqklQKVHBgH3f4FThESZGMKPKt2JcvcA==}
+  sst-darwin-arm64@3.8.3:
+    resolution: {integrity: sha512-CrzbUIMwWGNLMt9e1AMuqaauwEAvFKZpaGrj0F5r/qrTVsKIxEuJXcoEvZ+K7C7palEWjkeeZ33yuzfuB7qS0w==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.8.2:
-    resolution: {integrity: sha512-RDf/kVYNE+vXNiNBK6v3LHz1YEa3Ka8/G2T52mI4qQh40ZBbEapIR7x6dZqV0kLQQTs4t/XxSkf9wH7pft1tEA==}
+  sst-darwin-x64@3.8.3:
+    resolution: {integrity: sha512-+mzdu3Z9GT9vnNy80Gt4UMP0Ozf8/qdBpCcbmMTL/zCPayho5sUbUydZPZMzCoBFEDvfPFYJwZb3xGLDE+YuEA==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.8.2:
-    resolution: {integrity: sha512-CGS81oW+96HJ5ZkjjHCNCk5YLwPDbqQKPnyC/APFzHMLC+gSPMVU0Ig6gKBvJ7mIzEwSEIxPoGnZkjZjxLlG4w==}
+  sst-linux-arm64@3.8.3:
+    resolution: {integrity: sha512-9rhR5n7lx1G8pG2JOn69zWoo4AD8aXUpDr2HtCFLP/wjebaXDJpBbp8ttL76JHnIlbYvQbIboLOPP6HNhhQOWQ==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.8.2:
-    resolution: {integrity: sha512-8K5giZiSEnNTBnlYBMf/IEM0ywNuakKzHjLQRh0VCWfEcyWgL1uxeOUtDIh6KyNW6Ww7/uEYtySqax3KkZIKiA==}
+  sst-linux-x64@3.8.3:
+    resolution: {integrity: sha512-OuayKqEwnC6ix0YyVWGJpNDP0E+a4xlOW0TW6P7+gcuu1vdrzfKiSP5Xrm6TyKhuD/2+aV5qEHQVN/h2oNDJ2g==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.8.2:
-    resolution: {integrity: sha512-uBFhhqr2sAq51YKkFN4v8mYIKsiKOJCyB2afoue+vF6QEwlyubnbftWwv0ISfHKUZ1DbxTnO78dAMYA4hAuVCA==}
+  sst-linux-x86@3.8.3:
+    resolution: {integrity: sha512-C/qqBMW3c8O0aXoTPFhCndMz2Rcq0SYL0fzJXuZryK94wfibxncZK6mx3jfWwAd4pZPdqZHY6pBIfrhrRjOTOw==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.8.2:
-    resolution: {integrity: sha512-CoFlEiX8cdqB/sgn4ZN+BnJaPlOUk2eGzMwTbPFkBn3hHAQMNdo1UXdo+DwbfE0en9K4Ol0j/AIO6TBTRfUIow==}
+  sst@3.8.3:
+    resolution: {integrity: sha512-jdaAQVbsox6RCYkhPTBBcF6xJ9TqlgUz+vwshAWoWIjLaE19XJyeB6vxk5YsZO99IX6+YC0euhSJR7K8g19tvA==}
     hasBin: true
 
   string-width@4.2.3:
@@ -2266,7 +2266,7 @@ snapshots:
   '@grpc/proto-loader@0.7.13':
     dependencies:
       lodash.camelcase: 4.3.0
-      long: 5.2.5
+      long: 5.3.0
       protobufjs: 7.4.0
       yargs: 17.7.2
 
@@ -2707,10 +2707,10 @@ snapshots:
       '@typescript-eslint/types': 7.18.0
       '@typescript-eslint/visitor-keys': 7.18.0
 
-  '@typescript-eslint/scope-manager@8.23.0':
+  '@typescript-eslint/scope-manager@8.24.0':
     dependencies:
-      '@typescript-eslint/types': 8.23.0
-      '@typescript-eslint/visitor-keys': 8.23.0
+      '@typescript-eslint/types': 8.24.0
+      '@typescript-eslint/visitor-keys': 8.24.0
 
   '@typescript-eslint/type-utils@7.18.0(eslint@8.57.1)(typescript@5.7.3)':
     dependencies:
@@ -2726,7 +2726,7 @@ snapshots:
 
   '@typescript-eslint/types@7.18.0': {}
 
-  '@typescript-eslint/types@8.23.0': {}
+  '@typescript-eslint/types@8.24.0': {}
 
   '@typescript-eslint/typescript-estree@7.18.0(typescript@5.7.3)':
     dependencies:
@@ -2759,9 +2759,9 @@ snapshots:
       '@typescript-eslint/types': 7.18.0
       eslint-visitor-keys: 3.4.3
 
-  '@typescript-eslint/visitor-keys@8.23.0':
+  '@typescript-eslint/visitor-keys@8.24.0':
     dependencies:
-      '@typescript-eslint/types': 8.23.0
+      '@typescript-eslint/types': 8.24.0
       eslint-visitor-keys: 4.2.0
 
   '@ungap/structured-clone@1.3.0': {}
@@ -2864,8 +2864,8 @@ snapshots:
   astro-eslint-parser@1.2.1:
     dependencies:
       '@astrojs/compiler': 2.10.4
-      '@typescript-eslint/scope-manager': 8.23.0
-      '@typescript-eslint/types': 8.23.0
+      '@typescript-eslint/scope-manager': 8.24.0
+      '@typescript-eslint/types': 8.24.0
       astrojs-compiler-sync: 1.0.1(@astrojs/compiler@2.10.4)
       debug: 4.4.0
       entities: 6.0.0
@@ -3207,12 +3207,12 @@ snapshots:
     dependencies:
       '@eslint-community/eslint-utils': 4.4.1(eslint@8.57.1)
       '@jridgewell/sourcemap-codec': 1.5.0
-      '@typescript-eslint/types': 8.23.0
+      '@typescript-eslint/types': 8.24.0
       astro-eslint-parser: 1.2.1
       eslint: 8.57.1
       eslint-compat-utils: 0.6.4(eslint@8.57.1)
       globals: 15.14.0
-      postcss: 8.5.1
+      postcss: 8.5.2
       postcss-selector-parser: 7.1.0
     transitivePeerDependencies:
       - supports-color
@@ -3860,7 +3860,7 @@ snapshots:
 
   lodash.merge@4.6.2: {}
 
-  long@5.2.5: {}
+  long@5.3.0: {}
 
   lowercase-keys@2.0.0: {}
 
@@ -4198,7 +4198,7 @@ snapshots:
       cssesc: 3.0.0
       util-deprecate: 1.0.2
 
-  postcss@8.5.1:
+  postcss@8.5.2:
     dependencies:
       nanoid: 3.3.8
       picocolors: 1.1.1
@@ -4242,7 +4242,7 @@ snapshots:
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
       '@types/node': 22.13.1
-      long: 5.2.5
+      long: 5.3.0
 
   pump@3.0.2:
     dependencies:
@@ -4475,32 +4475,32 @@ snapshots:
     dependencies:
       minipass: 7.1.2
 
-  sst-darwin-arm64@3.8.2:
+  sst-darwin-arm64@3.8.3:
     optional: true
 
-  sst-darwin-x64@3.8.2:
+  sst-darwin-x64@3.8.3:
     optional: true
 
-  sst-linux-arm64@3.8.2:
+  sst-linux-arm64@3.8.3:
     optional: true
 
-  sst-linux-x64@3.8.2:
+  sst-linux-x64@3.8.3:
     optional: true
 
-  sst-linux-x86@3.8.2:
+  sst-linux-x86@3.8.3:
     optional: true
 
-  sst@3.8.2:
+  sst@3.8.3:
     dependencies:
       aws4fetch: 1.0.20
       jose: 5.2.3
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.8.2
-      sst-darwin-x64: 3.8.2
-      sst-linux-arm64: 3.8.2
-      sst-linux-x64: 3.8.2
-      sst-linux-x86: 3.8.2
+      sst-darwin-arm64: 3.8.3
+      sst-darwin-x64: 3.8.3
+      sst-linux-arm64: 3.8.3
+      sst-linux-x64: 3.8.3
+      sst-linux-x86: 3.8.3
 
   string-width@4.2.3:
     dependencies:
