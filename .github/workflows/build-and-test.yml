@@ -18,6 +18,7 @@ on:
             - '!packages/marketing_site/.prettierignore'
             - '!packages/marketing_site/gigachad/**'
             - '!packages/marketing_site/infra/**'
+            - '!packages/gigachad/renderer/vanilla_js/web/**'
             - '!**/*.nix'
     pull_request:
         branches: ['master']
