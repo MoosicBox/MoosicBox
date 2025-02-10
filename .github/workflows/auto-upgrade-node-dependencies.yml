@@ -93,7 +93,7 @@ jobs:
               if: ${{ matrix.project.validate == true && steps.upgrade.outputs.upgraded == 'true' }}
               working-directory: ${{ matrix.project.directory }}
               shell: bash
-              run: pnpm validate
+              run: pnpm validate:write
 
             - name: Commit
               if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
