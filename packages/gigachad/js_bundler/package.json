@@ -1,0 +1,21 @@
+{
+    "name": "@gigachad/js-bundler",
+    "description": "GigaChad JS Bundler Library",
+    "version": "0.1.0",
+    "main": "index.js",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/MoosicBox/MoosicBox.git"
+    },
+    "author": "Braden Steffaniak",
+    "license": "ISC",
+    "bugs": {
+        "url": "https://github.com/MoosicBox/MoosicBox/issues"
+    },
+    "homepage": "https://github.com/MoosicBox/MoosicBox#readme",
+    "scripts": {},
+    "type": "module",
+    "devDependencies": {
+        "esbuild": "^0.25.0"
+    }
+}

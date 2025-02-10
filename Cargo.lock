@@ -3875,6 +3875,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "gigachad_js_bundler"
+version = "0.1.0"
+dependencies = [
+ "log",
+]
+
+[[package]]
 name = "gigachad_renderer"
 version = "0.1.0"
 dependencies = [

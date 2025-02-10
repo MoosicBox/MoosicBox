@@ -1,0 +1,34 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["gui"]
+description = "GigaChad JS Bundler package"
+edition     = "2021"
+keywords    = ["bundler", "html", "js", "web"]
+license     = "MPL-2.0"
+name        = "gigachad_js_bundler"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[package.metadata.cargo-machete]
+ignored = []
+
+[dependencies]
+log             = { workspace = true }
+
+[features]
+default = ["all-web-toolchains", "esbuild"]
+
+bun  = []
+npm  = []
+pnpm = []
+
+all-web-toolchains = ["bun", "npm", "pnpm"]
+
+swc = []
+
+esbuild = []
+
+fail-on-warnings = []
+
+script = []
