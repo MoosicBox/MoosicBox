@@ -12,7 +12,12 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [package.metadata.cargo-machete]
-ignored = []
+ignored = ["gigachad_js_bundler"]
+
+[build-dependencies]
+gigachad_js_bundler = { version = "0.1.0", path = "../../js_bundler", default-features = false, features = [
+    "default",
+] }
 
 [dependencies]
 gigachad_renderer = { version = "0.1.0", path = "..", default-features = false, features = [

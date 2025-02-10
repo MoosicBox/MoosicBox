@@ -4023,6 +4023,7 @@ dependencies = [
 name = "gigachad_renderer_vanilla_js"
 version = "0.1.0"
 dependencies = [
+ "gigachad_js_bundler",
  "gigachad_renderer",
  "gigachad_renderer_html",
  "gigachad_transformer",
