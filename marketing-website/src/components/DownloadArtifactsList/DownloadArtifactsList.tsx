@@ -92,7 +92,8 @@ export default function modalFunc() {
                                                     {asset().name}
                                                 </a>{' '}
                                                 <span class="download-artifacts-list-release-asset-size">
-                                                    ({getSize(asset().size)}){' '}
+                                                    ({getSize(asset().size)}
+                                                    ){' '}
                                                 </span>
                                                 <ul class="download-artifacts-list-other-assets">
                                                     <For
