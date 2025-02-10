@@ -18,19 +18,24 @@ jobs:
             matrix:
                 project:
                     - directory: .
-                      sst: true
                       label: kubernetes-infra
+                      sst: true
+                      validate: true
                     - directory: app-website
                       sst: true
+                      validate: true
                     - directory: marketing-website
                       sst: true
+                      validate: true
                     - directory: packages/marketing_site
-                      sst: true
                       label: marketing_site
+                      sst: true
+                      validate: true
                     - directory: packages/gigachad/js_bundler
                       label: js_bundler
                     - directory: packages/gigachad/renderer/vanilla_js/web
                       label: gigachad vanilla-js renderer
+                      validate: true
 
         runs-on: ubuntu-latest
 
@@ -85,7 +90,7 @@ jobs:
                   pnpm sst install
 
             - name: Validate
-              if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
+              if: ${{ matrix.project.validate == true && steps.upgrade.outputs.upgraded == 'true' }}
               working-directory: ${{ matrix.project.directory }}
               shell: bash
               run: pnpm validate
