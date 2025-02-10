@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 
 static NPM_COMMANDS: [&str; 3] = ["pnpm", "bun", "npm"];
 
-static ENABLED_NPM_COMMANDS: LazyLock<Vec<String>> = LazyLock::new(|| {
+static ENABLED_NPM_COMMANDS: LazyLock<Vec<PathBuf>> = LazyLock::new(|| {
     NPM_COMMANDS
         .iter()
         .filter(|x| match **x {
@@ -18,26 +18,17 @@ static ENABLED_NPM_COMMANDS: LazyLock<Vec<String>> = LazyLock::new(|| {
             "npm" => true,
             _ => false,
         })
+        .map(|x| PathBuf::from_str(x).unwrap())
         .map(|x| {
-            if *x == "pnpm" {
+            if x.file_name().is_some_and(|x| x == "pnpm") {
                 if let Ok(var) = env::var("PNPM_HOME") {
-                    PathBuf::from_str(&var)
-                        .unwrap()
-                        .join(if cfg!(windows) {
-                            format!("{x}.CMD")
-                        } else {
-                            x.to_string()
-                        })
-                        .to_str()
-                        .unwrap()
-                        .to_string()
-                } else {
-                    x.to_string()
+                    return PathBuf::from_str(&var).unwrap().join(x);
                 }
-            } else {
-                x.to_string()
             }
+
+            x
         })
+        .map(fixup_binary_filename)
         .collect::<Vec<_>>()
 });
 
@@ -67,13 +58,15 @@ pub fn bundle_esbuild(target: &Path, out: &Path) {
     run_npm_command(&["install"], &MANIFEST_DIR);
     run_command(
         std::iter::once(
-            &MANIFEST_DIR
-                .join("node_modules")
-                .join(".bin")
-                .join("esbuild")
-                .to_str()
-                .unwrap()
-                .to_string(),
+            fixup_binary_filename(
+                MANIFEST_DIR
+                    .join("node_modules")
+                    .join(".bin")
+                    .join("esbuild"),
+            )
+            .to_str()
+            .unwrap()
+            .to_string(),
         ),
         &[
             target.to_str().unwrap(),
@@ -86,10 +79,16 @@ pub fn bundle_esbuild(target: &Path, out: &Path) {
 }
 
 pub fn run_npm_command(arguments: &[&str], dir: &Path) {
-    run_command(ENABLED_NPM_COMMANDS.iter(), arguments, dir);
+    run_command(
+        ENABLED_NPM_COMMANDS
+            .iter()
+            .map(|x| x.to_str().unwrap().to_string()),
+        arguments,
+        dir,
+    );
 }
 
-fn run_command<'a>(binaries: impl Iterator<Item = &'a String>, arguments: &[&str], dir: &Path) {
+fn run_command(binaries: impl Iterator<Item = String>, arguments: &[&str], dir: &Path) {
     for ref binary in binaries {
         let mut command = Command::new(binary);
         let mut command = command.current_dir(dir);
@@ -128,4 +127,23 @@ fn run_command<'a>(binaries: impl Iterator<Item = &'a String>, arguments: &[&str
     }
 
     panic!("Failed to execute script for any of the binaries");
+}
+
+fn fixup_binary_filename(binary: PathBuf) -> PathBuf {
+    if cfg!(windows) {
+        let parent = binary.parent();
+
+        if let Some(parent) = parent {
+            let cmd = parent.join(format!(
+                "{}.CMD",
+                binary.file_name().unwrap().to_str().unwrap()
+            ));
+
+            if cmd.is_file() {
+                return cmd;
+            }
+        }
+    }
+
+    binary
 }
