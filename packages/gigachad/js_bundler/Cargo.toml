@@ -30,6 +30,8 @@ swc_ecma_visit           = { workspace = true, optional = true }
 [features]
 default = ["all-web-toolchains", "esbuild", "swc"]
 
+fail-on-warnings = []
+
 bun  = []
 npm  = []
 pnpm = []
@@ -50,7 +52,3 @@ swc = [
 ]
 
 esbuild = []
-
-fail-on-warnings = []
-
-script = []
