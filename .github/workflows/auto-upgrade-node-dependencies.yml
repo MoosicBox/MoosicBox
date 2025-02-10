@@ -26,6 +26,11 @@ jobs:
                       sst: true
                     - directory: packages/marketing_site
                       sst: true
+                      label: marketing_site
+                    - directory: packages/gigachad/js_bundler
+                      label: js_bundler
+                    - directory: packages/gigachad/renderer/vanilla_js/web
+                      label: gigachad vanilla-js renderer
 
         runs-on: ubuntu-latest
 
