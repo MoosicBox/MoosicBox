@@ -15,15 +15,11 @@ const domainName = `${subdomain}${domain}`;
 
 const customDomain = getCustomDomain();
 
-const { staticSite } = createGigaChadSite(
-    'MoosicBoxMarketingSite',
-    'htmx',
-    {
-        domain: customDomain,
-        environment: {},
-        errorPage: 'not-found.html',
-    },
-);
+const { staticSite } = createGigaChadSite('MoosicBoxMarketingSite', 'htmx', {
+    domain: customDomain,
+    environment: {},
+    errorPage: 'not-found.html',
+});
 
 export const outputs = {
     url: staticSite.url,
