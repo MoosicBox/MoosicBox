@@ -54,7 +54,7 @@ export function createGigaChadSite(
             handler: `src/${RENDERERS[renderer].bin}.handler`,
             runtime: 'rust' as 'go', // FIXME: remove this cast once rust is a valid runtime
             environment: {
-                MOOSICBOX_LOG: 'moosicbox=debug,gigachad=debug',
+                RUST_LOG: 'moosicbox=debug,gigachad=debug',
             },
         });
     });
