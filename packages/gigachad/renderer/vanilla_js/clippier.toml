@@ -1,5 +1,10 @@
-[[ci-steps]]
-toolchain = 'pnpm'
+[[config]]
+os                = 'ubuntu'
+required-features = ["swc"]
 
 [[config]]
-os = 'ubuntu'
+os                = 'ubuntu'
+required-features = ["esbuild"]
+
+[[config.dependencies]]
+toolchain = 'pnpm'
