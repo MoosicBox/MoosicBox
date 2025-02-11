@@ -2,6 +2,7 @@ import { ComponentResourceOptions } from '@pulumi/pulumi';
 import { spawnSync } from 'child_process';
 
 const NO_CACHE_POLICY_ID = '4135ea2d-6df8-44a3-9df3-4b5a84be39ad';
+const ALL_VIEWER_EXCEPT_HOST_POLICY_ID = 'b689b0a8-53d0-40ab-baf2-68738e2966ac';
 
 const RENDERERS = {
     htmx: {
@@ -90,6 +91,7 @@ export function createGigaChadSite(
                             cachedMethods: ['GET', 'HEAD'],
                             viewerProtocolPolicy: 'redirect-to-https',
                             cachePolicyId: NO_CACHE_POLICY_ID,
+                            originRequestPolicyId: ALL_VIEWER_EXCEPT_HOST_POLICY_ID,
                         };
                     });
                 },
