@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, fs::create_dir_all, path::Path};
 
 use anyhow::Error;
 use swc_bundler::{Bundle, Bundler, Load, ModuleData, ModuleRecord};
@@ -26,9 +26,8 @@ use swc_ecma_parser::{parse_file_as_module, Syntax};
 use swc_ecma_transforms_base::fixer::fixer;
 use swc_ecma_visit::VisitMutWith as _;
 
-pub fn bundle_swc(target: &Path, out: &Path) {
+pub fn bundle(target: &Path, out: &Path, minify: bool) {
     let inline = true;
-    let minify = true;
     let globals = Box::leak(Box::default());
     let cm = Lrc::new(SourceMap::new(FilePathMapping::empty()));
     let mut bundler = Bundler::new(
@@ -54,10 +53,7 @@ pub fn bundle_swc(target: &Path, out: &Path) {
     let mut entries = HashMap::new();
     entries.insert("main".to_string(), FileName::Real(target.to_path_buf()));
 
-    let mut modules = bundler
-        .bundle(entries)
-        .map_err(|err| println!("{:?}", err))
-        .unwrap();
+    let mut modules = bundler.bundle(entries).unwrap();
     println!("Bundled as {} modules", modules.len());
 
     if minify {
@@ -95,10 +91,8 @@ pub fn bundle_swc(target: &Path, out: &Path) {
             .collect();
     }
 
-    {
-        let cm = cm;
-        print_bundles(out, cm, modules, minify);
-    }
+    let cm = cm;
+    print_bundles(out, cm, modules, minify);
 }
 
 fn print_bundles(out: &Path, cm: Lrc<SourceMap>, modules: Vec<Bundle>, minify: bool) {
@@ -125,8 +119,11 @@ fn print_bundles(out: &Path, cm: Lrc<SourceMap>, modules: Vec<Bundle>, minify: b
             String::from_utf8_lossy(&buf).to_string()
         };
 
-        println!("Created output.js ({}kb)", code.len() / 1024);
+        if let Some(parent) = out.parent() {
+            create_dir_all(parent).unwrap();
+        }
         std::fs::write(out, &code).unwrap();
+        println!("Created {} ({}kb)", out.display(), code.len() / 1024);
     }
 }
 
@@ -174,24 +171,29 @@ pub struct Loader {
 
 impl Load for Loader {
     fn load(&self, f: &FileName) -> Result<ModuleData, Error> {
-        let fm = match f {
-            FileName::Real(path) => self.cm.load_file(path)?,
+        let (syntax, fm) = match f {
+            FileName::Real(path) => {
+                let syntax = if path.extension().and_then(|x| x.to_str()) == Some("ts") {
+                    Syntax::Typescript(Default::default())
+                } else {
+                    Syntax::Es(Default::default())
+                };
+                (syntax, self.cm.load_file(path)?)
+            }
             _ => unreachable!(),
         };
 
-        let module = parse_file_as_module(
-            &fm,
-            Syntax::Es(Default::default()),
-            EsVersion::Es2020,
-            None,
-            &mut Vec::new(),
-        )
-        .unwrap_or_else(|err| {
-            let handler =
-                Handler::with_tty_emitter(ColorConfig::Always, false, false, Some(self.cm.clone()));
-            err.into_diagnostic(&handler).emit();
-            panic!("failed to parse")
-        });
+        let module = parse_file_as_module(&fm, syntax, EsVersion::Es2020, None, &mut Vec::new())
+            .unwrap_or_else(|err| {
+                let handler = Handler::with_tty_emitter(
+                    ColorConfig::Always,
+                    false,
+                    false,
+                    Some(self.cm.clone()),
+                );
+                err.into_diagnostic(&handler).emit();
+                panic!("failed to parse")
+            });
 
         Ok(ModuleData {
             fm,

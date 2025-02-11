@@ -20,7 +20,9 @@ gigachad_renderer_html = { version = "0.1.0", path = "../../../gigachad/renderer
     "actix",
 ] }
 gigachad_renderer_htmx = { version = "0.1.0", path = "../../../gigachad/renderer/htmx", optional = true, default-features = false }
-gigachad_renderer_vanilla_js = { version = "0.1.0", path = "../../../gigachad/renderer/vanilla_js", optional = true, default-features = false }
+gigachad_renderer_vanilla_js = { version = "0.1.0", path = "../../../gigachad/renderer/vanilla_js", optional = true, default-features = false, features = [
+    "swc",
+] }
 gigachad_router = { version = "0.1.0", path = "../../../gigachad/router", default-features = false }
 moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../../../env_utils", default-features = false }

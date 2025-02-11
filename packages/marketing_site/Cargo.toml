@@ -48,7 +48,10 @@ product-name  = "MoosicBoxMarketingSite"
 [dependencies]
 gigachad_renderer = { version = "0.1.0", path = "../gigachad/renderer", default-features = false, optional = true }
 gigachad_renderer_html = { version = "0.1.0", path = "../gigachad/renderer/html", default-features = false, optional = true }
-gigachad_renderer_vanilla_js = { version = "0.1.0", path = "../gigachad/renderer/vanilla_js", default-features = false, optional = true }
+gigachad_renderer_vanilla_js = { version = "0.1.0", path = "../gigachad/renderer/vanilla_js", default-features = false, optional = true, features = [
+    "script",
+    "swc",
+] }
 moosicbox_app_native_lib = { version = "0.1.0", path = "../app/native/lib", default-features = false, features = [
     "logic",
     "maud",
@@ -100,7 +103,7 @@ html = [
 ]
 htmx = ["html", "moosicbox_app_native_lib/htmx"]
 vanilla-js = [
-    "gigachad_renderer_vanilla_js/script",
+    "dep:gigachad_renderer_vanilla_js",
     "html",
     "moosicbox_app_native_lib/vanilla-js",
 ]

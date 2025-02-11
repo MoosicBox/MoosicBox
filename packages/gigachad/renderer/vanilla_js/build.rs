@@ -13,9 +13,24 @@ fn main() {
         std::fs::remove_dir_all(&dist_dir).unwrap();
     }
 
-    gigachad_js_bundler::run_npm_command(&["install"], &web_dir);
-    gigachad_js_bundler::run_npm_command(&["build"], &web_dir);
-    gigachad_js_bundler::bundle(&dist_dir.join("index.js"), &dist_dir.join("index.min.js"));
+    println!("Bundling web...");
+
+    if cfg!(feature = "swc") {
+        println!("Bundling using swc...");
+        gigachad_js_bundler::swc::bundle(
+            &src_dir.join("index.ts"),
+            &dist_dir.join("index.js"),
+            false,
+        );
+        gigachad_js_bundler::bundle(&src_dir.join("index.ts"), &dist_dir.join("index.min.js"));
+    } else if cfg!(feature = "esbuild") {
+        println!("Bundling using esbuild...");
+        gigachad_js_bundler::run_npm_command(&["install"], &web_dir);
+        gigachad_js_bundler::run_npm_command(&["build"], &web_dir);
+        gigachad_js_bundler::bundle(&dist_dir.join("index.js"), &dist_dir.join("index.min.js"));
+    } else {
+        panic!("Invalid features specified for gigachad_renderer_vanilla_js build. Requires at least `swc` or `esbuild`");
+    }
 
     println!("cargo:rerun-if-changed={}", src_dir.display());
     println!("cargo:rerun-if-changed={}", dist_dir.display());

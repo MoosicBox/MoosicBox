@@ -42,7 +42,7 @@ static MANIFEST_DIR: LazyLock<PathBuf> =
 pub fn bundle(target: &Path, out: &Path) {
     if cfg!(feature = "swc") {
         #[cfg(feature = "swc")]
-        return swc::bundle_swc(target, out);
+        return swc::bundle(target, out, true);
     } else if cfg!(feature = "esbuild") {
         #[cfg(feature = "esbuild")]
         return bundle_esbuild(target, out);

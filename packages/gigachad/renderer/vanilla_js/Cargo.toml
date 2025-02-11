@@ -35,10 +35,13 @@ log  = { workspace = true }
 maud = { workspace = true }
 
 [features]
-default = ["debug"]
+default = ["debug", "esbuild", "swc"]
 
 fail-on-warnings = []
 
 debug = []
 
 script = []
+
+esbuild = []
+swc     = []
