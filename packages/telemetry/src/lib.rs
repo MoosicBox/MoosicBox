@@ -17,15 +17,9 @@ use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{
     metrics::{MeterProviderBuilder, MetricError, SdkMeterProvider},
     propagation::TraceContextPropagator,
-    resource::{
-        EnvResourceDetector, ResourceDetector, SdkProvidedResourceDetector,
-        TelemetryResourceDetector,
-    },
-    trace::TracerProvider,
+    trace::SdkTracerProvider,
     Resource,
 };
-
-use std::time::Duration;
 
 /// # Errors
 ///
@@ -33,7 +27,7 @@ use std::time::Duration;
 pub fn init_tracer(name: &'static str) -> Result<DynLayer, TraceError> {
     global::set_text_map_propagator(TraceContextPropagator::new());
 
-    let provider = TracerProvider::builder()
+    let provider = SdkTracerProvider::builder()
         .with_batch_exporter(
             opentelemetry_otlp::SpanExporter::builder()
                 .with_tonic()
@@ -43,7 +37,6 @@ pub fn init_tracer(name: &'static str) -> Result<DynLayer, TraceError> {
                         .unwrap_or("http://127.0.0.1:4317"),
                 )
                 .build()?,
-            opentelemetry_sdk::runtime::Tokio,
         )
         .with_resource(get_resource_attr(name))
         .build();
@@ -54,7 +47,8 @@ pub fn init_tracer(name: &'static str) -> Result<DynLayer, TraceError> {
         .build();
 
     let tracer = provider.tracer_with_scope(scope);
-    let layer: DynLayer = Box::new(tracing_opentelemetry::layer().with_tracer(tracer));
+    let layer = tracing_opentelemetry::layer().with_tracer(tracer);
+    let layer: DynLayer = Box::new(layer);
 
     global::set_tracer_provider(provider);
 
@@ -63,15 +57,10 @@ pub fn init_tracer(name: &'static str) -> Result<DynLayer, TraceError> {
 
 #[must_use]
 pub fn get_resource_attr(name: &'static str) -> Resource {
-    let sdk_resource = SdkProvidedResourceDetector.detect(Duration::from_secs(0));
-    let env_resource = EnvResourceDetector::new().detect(Duration::from_secs(0));
-    let telemetry_resource = TelemetryResourceDetector.detect(Duration::from_secs(0));
-    let manual_resource = Resource::new(std::iter::once(KeyValue::new("service.name", name)));
-
-    sdk_resource
-        .merge(&env_resource)
-        .merge(&telemetry_resource)
-        .merge(&manual_resource)
+    Resource::builder()
+        .with_service_name(name)
+        .with_attribute(KeyValue::new("service.name", name))
+        .build()
 }
 
 #[derive(Debug)]
