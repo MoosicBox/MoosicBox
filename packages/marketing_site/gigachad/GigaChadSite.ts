@@ -91,7 +91,8 @@ export function createGigaChadSite(
                             cachedMethods: ['GET', 'HEAD'],
                             viewerProtocolPolicy: 'redirect-to-https',
                             cachePolicyId: NO_CACHE_POLICY_ID,
-                            originRequestPolicyId: ALL_VIEWER_EXCEPT_HOST_POLICY_ID,
+                            originRequestPolicyId:
+                                ALL_VIEWER_EXCEPT_HOST_POLICY_ID,
                         };
                     });
                 },
