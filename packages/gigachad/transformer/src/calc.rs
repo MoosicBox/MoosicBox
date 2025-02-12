@@ -1341,11 +1341,11 @@ impl Container {
         let mut col = 0;
 
         let gap_x = self
-            .gap
+            .column_gap
             .as_ref()
             .map(|x| calc_number(x, container_width, root_size.0, root_size.1));
         let gap_y = self
-            .gap
+            .row_gap
             .as_ref()
             .map(|x| calc_number(x, container_height, root_size.0, root_size.1));
 
@@ -1607,9 +1607,8 @@ impl Container {
         let mut first_horizontal_margin = horizontal_margin;
         let mut first_vertical_margin = vertical_margin;
 
-        if let Some(gap) = &self.gap {
+        if let Some(gap) = &self.column_gap {
             let gap_x = calc_number(gap, container_width, root_size.0, root_size.1);
-            let gap_y = calc_number(gap, container_height, root_size.0, root_size.1);
 
             if let Some(margin) = horizontal_margin {
                 if gap_x > margin {
@@ -1624,6 +1623,10 @@ impl Container {
             } else {
                 horizontal_margin = Some(gap_x);
             }
+        }
+
+        if let Some(gap) = &self.row_gap {
+            let gap_y = calc_number(gap, container_height, root_size.0, root_size.1);
             if let Some(margin) = vertical_margin {
                 if gap_y > margin {
                     vertical_margin.replace(gap_y);
@@ -4247,7 +4250,8 @@ mod test {
             overflow_x: LayoutOverflow::Wrap,
             overflow_y: LayoutOverflow::Expand,
             justify_content: Some(JustifyContent::SpaceBetween),
-            gap: Some(Number::Integer(10)),
+            column_gap: Some(Number::Integer(10)),
+            row_gap: Some(Number::Integer(10)),
             ..Default::default()
         };
         while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
@@ -4345,7 +4349,8 @@ mod test {
             overflow_x: LayoutOverflow::Wrap,
             overflow_y: LayoutOverflow::Expand,
             justify_content: Some(JustifyContent::SpaceBetween),
-            gap: Some(Number::Integer(10)),
+            column_gap: Some(Number::Integer(10)),
+            row_gap: Some(Number::Integer(10)),
             ..Default::default()
         };
         while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
@@ -5115,7 +5120,8 @@ mod test {
             overflow_x: LayoutOverflow::Wrap,
             overflow_y: LayoutOverflow::Expand,
             justify_content: Some(JustifyContent::SpaceEvenly),
-            gap: Some(Number::Integer(10)),
+            column_gap: Some(Number::Integer(10)),
+            row_gap: Some(Number::Integer(10)),
             ..Default::default()
         };
         while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
@@ -5213,7 +5219,8 @@ mod test {
             overflow_x: LayoutOverflow::Wrap,
             overflow_y: LayoutOverflow::Expand,
             justify_content: Some(JustifyContent::SpaceEvenly),
-            gap: Some(Number::Integer(10)),
+            column_gap: Some(Number::Integer(10)),
+            row_gap: Some(Number::Integer(10)),
             ..Default::default()
         };
         while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}

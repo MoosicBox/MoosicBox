@@ -199,7 +199,7 @@ impl Arbitrary for OverrideCondition {
 
 impl Arbitrary for OverrideItem {
     fn arbitrary(g: &mut Gen) -> Self {
-        let max = 50;
+        let max = 51;
         match *g.choose(&(0..=max).collect::<Vec<_>>()).unwrap() {
             0 => Self::StrId(XmlString::arbitrary(g).0),
             1 => Self::FontFamily(
@@ -233,7 +233,7 @@ impl Arbitrary for OverrideItem {
             15 => Self::MinHeight(Arbitrary::arbitrary(g)),
             16 => Self::MaxHeight(Arbitrary::arbitrary(g)),
             17 => Self::Flex(Arbitrary::arbitrary(g)),
-            18 => Self::Gap(Arbitrary::arbitrary(g)),
+            18 => Self::ColumnGap(Arbitrary::arbitrary(g)),
             19 => Self::Opacity(Arbitrary::arbitrary(g)),
             20 => Self::Left(Arbitrary::arbitrary(g)),
             21 => Self::Right(Arbitrary::arbitrary(g)),
@@ -266,6 +266,7 @@ impl Arbitrary for OverrideItem {
             48 => Self::Debug(Arbitrary::arbitrary(g)),
             49 => Self::Visibility(Arbitrary::arbitrary(g)),
             50 => Self::Route(Arbitrary::arbitrary(g)),
+            51 => Self::RowGap(Arbitrary::arbitrary(g)),
             _ => unreachable!(),
         }
     }
@@ -332,7 +333,8 @@ impl Arbitrary for Container {
             min_height: Option::arbitrary(g),
             max_height: Option::arbitrary(g),
             flex: Option::arbitrary(g),
-            gap: Option::arbitrary(g),
+            column_gap: Option::arbitrary(g),
+            row_gap: Option::arbitrary(g),
             opacity: Option::arbitrary(g),
             left: Option::arbitrary(g),
             right: Option::arbitrary(g),

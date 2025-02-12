@@ -150,6 +150,10 @@ fn is_flex_container(container: &Container) -> bool {
         || container.align_items.is_some()
 }
 
+const fn is_grid_container(_container: &Container) -> bool {
+    false
+}
+
 /// # Errors
 ///
 /// * If there were any IO errors writing the element style attribute
@@ -211,7 +215,10 @@ pub fn element_style_to_html(
         | Element::Canvas => {}
     }
 
-    if is_flex_container(container) {
+    let is_flex = is_flex_container(container);
+    let is_grid = !is_flex && is_grid_container(container);
+
+    if is_flex {
         write_css_attr!(b"display", b"flex");
 
         if container.direction == LayoutDirection::Column {
@@ -405,8 +412,21 @@ pub fn element_style_to_html(
         }
     }
 
-    if let Some(gap) = &container.gap {
-        write_css_attr!(b"grid-gap", number_to_html_string(gap, true).as_bytes());
+    if let Some(gap) = &container.column_gap {
+        write_css_attr!(
+            if is_grid {
+                b"grid-column-gap"
+            } else {
+                b"column-gap"
+            },
+            number_to_html_string(gap, true).as_bytes()
+        );
+    }
+    if let Some(gap) = &container.row_gap {
+        write_css_attr!(
+            if is_grid { b"grid-row-gap" } else { b"row-gap" },
+            number_to_html_string(gap, true).as_bytes()
+        );
     }
 
     if let Some(width) = &container.width {

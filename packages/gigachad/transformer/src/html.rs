@@ -870,6 +870,14 @@ fn parse_element(
         }
     }
 
+    let gap = pmrv(
+        tag,
+        "sx-gap",
+        &mut overrides,
+        parse_number,
+        iter_once!(OverrideItem::ColumnGap),
+    )?;
+
     #[allow(clippy::needless_update)]
     Ok(crate::Container {
         #[cfg(feature = "id")]
@@ -1102,13 +1110,22 @@ fn parse_element(
             parse_number,
             iter_once!(OverrideItem::TranslateY),
         )?,
-        gap: pmrv(
+        column_gap: pmrv(
             tag,
-            "sx-gap",
+            "sx-col-gap",
             &mut overrides,
             parse_number,
-            iter_once!(OverrideItem::Gap),
-        )?,
+            iter_once!(OverrideItem::ColumnGap),
+        )?
+        .or_else(|| gap.clone()),
+        row_gap: pmrv(
+            tag,
+            "sx-row-gap",
+            &mut overrides,
+            parse_number,
+            iter_once!(OverrideItem::RowGap),
+        )?
+        .or(gap),
         opacity: pmrv(
             tag,
             "sx-opacity",

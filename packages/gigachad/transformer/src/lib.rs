@@ -336,7 +336,8 @@ pub enum OverrideItem {
     MinHeight(Number),
     MaxHeight(Number),
     Flex(Flex),
-    Gap(Number),
+    ColumnGap(Number),
+    RowGap(Number),
     Opacity(Number),
     Left(Number),
     Right(Number),
@@ -395,7 +396,8 @@ pub struct Container {
     pub min_height: Option<Number>,
     pub max_height: Option<Number>,
     pub flex: Option<Flex>,
-    pub gap: Option<Number>,
+    pub column_gap: Option<Number>,
+    pub row_gap: Option<Number>,
     pub opacity: Option<Number>,
     pub left: Option<Number>,
     pub right: Option<Number>,
@@ -1181,7 +1183,8 @@ impl Container {
             attrs.add("sx-flex-basis", &flex.basis);
         }
 
-        attrs.add_opt("sx-gap", self.gap.as_ref());
+        attrs.add_opt("sx-col-gap", self.column_gap.as_ref());
+        attrs.add_opt("sx-row-gap", self.row_gap.as_ref());
 
         attrs.add_opt("sx-opacity", self.opacity.as_ref());
 
