@@ -39,7 +39,13 @@ pub enum LayoutOverflow {
 
 impl std::fmt::Display for LayoutOverflow {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{self:?}"))
+        match self {
+            Self::Auto => f.write_str("auto"),
+            Self::Scroll => f.write_str("scroll"),
+            Self::Expand => f.write_str("expand"),
+            Self::Squash => f.write_str("squash"),
+            Self::Wrap => f.write_str("wrap"),
+        }
     }
 }
 
