@@ -1299,6 +1299,9 @@ impl Container {
             LayoutOverflow::Wrap => {
                 attrs.add("sx-overflow-x", "wrap");
             }
+            LayoutOverflow::Hidden => {
+                attrs.add("sx-overflow-x", "hidden");
+            }
         }
         match self.overflow_y {
             LayoutOverflow::Auto => {
@@ -1313,6 +1316,9 @@ impl Container {
             }
             LayoutOverflow::Wrap => {
                 attrs.add("sx-overflow-y", "wrap");
+            }
+            LayoutOverflow::Hidden => {
+                attrs.add("sx-overflow-y", "hidden");
             }
         }
 

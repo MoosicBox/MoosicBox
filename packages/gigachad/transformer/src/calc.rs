@@ -1368,6 +1368,7 @@ impl Container {
                 LayoutOverflow::Auto
                 | LayoutOverflow::Scroll
                 | LayoutOverflow::Expand
+                | LayoutOverflow::Hidden
                 | LayoutOverflow::Squash => {
                     match direction {
                         LayoutDirection::Row => {
@@ -2436,7 +2437,7 @@ impl Container {
         if width < contained_calculated_width - EPSILON {
             log::trace!("resize_children: width < contained_calculated_width (width={width} contained_calculated_width={contained_calculated_width})");
             match self.overflow_x {
-                LayoutOverflow::Auto | LayoutOverflow::Scroll => {}
+                LayoutOverflow::Auto | LayoutOverflow::Scroll | LayoutOverflow::Hidden => {}
                 LayoutOverflow::Expand => {
                     if self.width.is_none()
                         && (self.calculated_width.unwrap() - contained_calculated_width).abs()
@@ -2460,7 +2461,7 @@ impl Container {
         if height < contained_calculated_height - EPSILON {
             log::trace!("resize_children: height < contained_calculated_height (height={height} contained_calculated_height={contained_calculated_height})");
             match self.overflow_y {
-                LayoutOverflow::Auto | LayoutOverflow::Scroll => {}
+                LayoutOverflow::Auto | LayoutOverflow::Scroll | LayoutOverflow::Hidden => {}
                 LayoutOverflow::Expand => {
                     if self.height.is_none()
                         && (self.calculated_height.unwrap() - contained_calculated_height).abs()

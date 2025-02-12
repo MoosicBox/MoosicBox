@@ -237,6 +237,9 @@ pub fn element_style_to_html(
         LayoutOverflow::Wrap => {
             write_css_attr!(b"flex-wrap", b"wrap");
         }
+        LayoutOverflow::Hidden => {
+            write_css_attr!(b"overflow-x", b"hidden");
+        }
     }
     match container.overflow_y {
         LayoutOverflow::Auto => {
@@ -248,6 +251,9 @@ pub fn element_style_to_html(
         LayoutOverflow::Expand | LayoutOverflow::Squash => {}
         LayoutOverflow::Wrap => {
             write_css_attr!(b"flex-wrap", b"wrap");
+        }
+        LayoutOverflow::Hidden => {
+            write_css_attr!(b"overflow-y", b"hidden");
         }
     }
 

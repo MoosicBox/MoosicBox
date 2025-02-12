@@ -216,6 +216,7 @@ fn parse_overflow(value: &str) -> Result<LayoutOverflow, ParseAttrError> {
         "scroll" => LayoutOverflow::Scroll,
         "expand" => LayoutOverflow::Expand,
         "squash" => LayoutOverflow::Squash,
+        "hidden" => LayoutOverflow::Hidden,
         "auto" => LayoutOverflow::Auto,
         value => {
             return Err(ParseAttrError::InvalidValue(value.to_string()));
