@@ -50,9 +50,6 @@ enum Commands {
         #[arg(long)]
         skip_features: Option<String>,
 
-        #[arg(long)]
-        required_features: Option<String>,
-
         #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
         output: OutputType,
     },
@@ -72,7 +69,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             spread,
             features: specific_features,
             skip_features,
-            required_features,
             output,
         } => {
             let path = PathBuf::from_str(&file)?;
@@ -86,9 +82,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let skip_features =
                 skip_features.map(|x| x.split(',').map(str::to_string).collect_vec());
-
-            let required_features =
-                required_features.map(|x| x.split(',').map(str::to_string).collect_vec());
 
             match output {
                 OutputType::Json => {
@@ -137,7 +130,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         max,
                         specific_features.as_deref(),
                         skip_features.as_deref(),
-                        required_features.as_deref(),
                     );
                     assert!(
                         chunked.is_none(),
@@ -207,7 +199,6 @@ fn process_configs(
                 max,
                 specific_features,
                 config.skip_features.as_deref(),
-                config.required_features.as_deref(),
             );
             let features = process_features(
                 features,
@@ -224,6 +215,7 @@ fn process_configs(
                             &config,
                             path.to_str().unwrap(),
                             &name,
+                            config.required_features.as_deref(),
                             features,
                         )?);
                     }
@@ -234,6 +226,7 @@ fn process_configs(
                         &config,
                         path.to_str().unwrap(),
                         &name,
+                        config.required_features.as_deref(),
                         x,
                     )?);
                 }
@@ -250,6 +243,7 @@ fn create_map(
     config: &ClippierConfiguration,
     file: &str,
     name: &str,
+    required_features: Option<&[String]>,
     features: &[String],
 ) -> Result<serde_json::Map<String, serde_json::Value>, Box<dyn std::error::Error>> {
     let mut map = serde_json::Map::new();
@@ -260,6 +254,7 @@ fn create_map(
         serde_json::to_value(config.name.as_deref().unwrap_or(name))?,
     );
     map.insert("features".to_string(), features.into());
+    map.insert("requiredFeatures".to_string(), required_features.into());
 
     if let Some(dependencies) = &config.dependencies {
         let matches = dependencies
@@ -467,26 +462,20 @@ fn fetch_features(
     max: Option<u16>,
     specific_features: Option<&[String]>,
     skip_features: Option<&[String]>,
-    required_features: Option<&[String]>,
 ) -> Vec<String> {
     value.get("features").map_or_else(Vec::new, |features| {
         features.as_table().map_or_else(Vec::new, |features| {
             let offset = offset.unwrap_or_default().into();
             let feature_count = features.keys().len() - offset;
-            [
-                required_features.unwrap_or_default(),
-                &features
-                    .keys()
-                    .filter(|x| !x.starts_with('_'))
-                    .filter(|x| specific_features.as_ref().is_none_or(|s| s.contains(x)))
-                    .filter(|x| skip_features.as_ref().is_none_or(|s| !s.contains(x)))
-                    .filter(|x| required_features.as_ref().is_none_or(|s| !s.contains(x)))
-                    .skip(offset)
-                    .take(max.map_or(feature_count, |x| std::cmp::min(feature_count, x as usize)))
-                    .cloned()
-                    .collect::<Vec<_>>(),
-            ]
-            .concat()
+            features
+                .keys()
+                .filter(|x| !x.starts_with('_'))
+                .filter(|x| specific_features.as_ref().is_none_or(|s| s.contains(x)))
+                .filter(|x| skip_features.as_ref().is_none_or(|s| !s.contains(x)))
+                .skip(offset)
+                .take(max.map_or(feature_count, |x| std::cmp::min(feature_count, x as usize)))
+                .cloned()
+                .collect::<Vec<_>>()
         })
     })
 }
