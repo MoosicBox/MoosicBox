@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::{borrow::Cow, collections::HashMap, iter::once};
 
 use gigachad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
 use gigachad_color::{Color, ParseHexError};
@@ -549,14 +549,20 @@ fn get_actions(tag: &HTMLTag) -> Vec<Action> {
 }
 
 /// Parse maybe reactive value
-fn pmrv<T: for<'de> Deserialize<'de> + std::fmt::Debug, O: IntoIterator<Item = OverrideItem>, E>(
+fn pmrv<
+    'a,
+    T: for<'de> Deserialize<'de> + std::fmt::Debug,
+    O: IntoIterator<Item = OverrideItem>,
+    E,
+>(
     tag: &HTMLTag<'_>,
-    name: &str,
+    mut names: impl Iterator<Item = &'a str>,
     overrides: &mut Vec<ConfigOverride>,
     func: impl Fn(&str) -> Result<T, E>,
     to_overrides: impl Fn(T) -> O,
 ) -> Result<Option<T>, E> {
-    get_tag_attr_value_decoded(tag, name)
+    names
+        .find_map(|name| get_tag_attr_value_decoded(tag, name))
         .as_deref()
         .map(|x| pmrv_inner(x, overrides, func, to_overrides))
         .transpose()
@@ -614,17 +620,23 @@ fn parse_element(
 
     let mut overrides = vec![];
 
-    let border_radius = pmrv(tag, "sx-border-radius", &mut overrides, parse_number, |x| {
-        std::iter::once(OverrideItem::BorderTopLeftRadius(x.clone())).chain(
-            std::iter::once(OverrideItem::BorderTopRightRadius(x.clone())).chain(
-                std::iter::once(OverrideItem::BorderBottomLeftRadius(x.clone()))
-                    .chain(std::iter::once(OverrideItem::BorderBottomRightRadius(x))),
-            ),
-        )
-    })?;
+    let border_radius = pmrv(
+        tag,
+        once("sx-border-radius"),
+        &mut overrides,
+        parse_number,
+        |x| {
+            std::iter::once(OverrideItem::BorderTopLeftRadius(x.clone())).chain(
+                std::iter::once(OverrideItem::BorderTopRightRadius(x.clone())).chain(
+                    std::iter::once(OverrideItem::BorderBottomLeftRadius(x.clone()))
+                        .chain(std::iter::once(OverrideItem::BorderBottomRightRadius(x))),
+                ),
+            )
+        },
+    )?;
     let border_top_left_radius = pmrv(
         tag,
-        "sx-border-top-left-radius",
+        once("sx-border-top-left-radius"),
         &mut overrides,
         parse_number,
         iter_once!(OverrideItem::BorderTopLeftRadius),
@@ -632,7 +644,7 @@ fn parse_element(
     .or_else(|| border_radius.clone());
     let border_top_right_radius = pmrv(
         tag,
-        "sx-border-top-right-radius",
+        once("sx-border-top-right-radius"),
         &mut overrides,
         parse_number,
         iter_once!(OverrideItem::BorderTopRightRadius),
@@ -640,7 +652,7 @@ fn parse_element(
     .or_else(|| border_radius.clone());
     let border_bottom_left_radius = pmrv(
         tag,
-        "sx-border-bottom-left-radius",
+        once("sx-border-bottom-left-radius"),
         &mut overrides,
         parse_number,
         iter_once!(OverrideItem::BorderTopLeftRadius),
@@ -648,14 +660,14 @@ fn parse_element(
     .or_else(|| border_radius.clone());
     let border_bottom_right_radius = pmrv(
         tag,
-        "sx-border-bottom-right-radius",
+        once("sx-border-bottom-right-radius"),
         &mut overrides,
         parse_number,
         iter_once!(OverrideItem::BorderBottomRightRadius),
     )?
     .or_else(|| border_radius.clone());
 
-    let margin = pmrv(tag, "sx-margin", &mut overrides, parse_number, |x| {
+    let margin = pmrv(tag, once("sx-margin"), &mut overrides, parse_number, |x| {
         std::iter::once(OverrideItem::MarginTop(x.clone())).chain(
             std::iter::once(OverrideItem::MarginRight(x.clone())).chain(
                 std::iter::once(OverrideItem::MarginBottom(x.clone()))
@@ -663,17 +675,29 @@ fn parse_element(
             ),
         )
     })?;
-    let margin_x = pmrv(tag, "sx-margin-x", &mut overrides, parse_number, |x| {
-        std::iter::once(OverrideItem::MarginLeft(x.clone()))
-            .chain(std::iter::once(OverrideItem::MarginRight(x)))
-    })?;
-    let margin_y = pmrv(tag, "sx-margin-y", &mut overrides, parse_number, |x| {
-        std::iter::once(OverrideItem::MarginTop(x.clone()))
-            .chain(std::iter::once(OverrideItem::MarginBottom(x)))
-    })?;
+    let margin_x = pmrv(
+        tag,
+        once("sx-margin-x"),
+        &mut overrides,
+        parse_number,
+        |x| {
+            std::iter::once(OverrideItem::MarginLeft(x.clone()))
+                .chain(std::iter::once(OverrideItem::MarginRight(x)))
+        },
+    )?;
+    let margin_y = pmrv(
+        tag,
+        once("sx-margin-y"),
+        &mut overrides,
+        parse_number,
+        |x| {
+            std::iter::once(OverrideItem::MarginTop(x.clone()))
+                .chain(std::iter::once(OverrideItem::MarginBottom(x)))
+        },
+    )?;
     let margin_left = pmrv(
         tag,
-        "sx-margin-left",
+        once("sx-margin-left"),
         &mut overrides,
         parse_number,
         iter_once!(OverrideItem::MarginLeft),
@@ -681,7 +705,7 @@ fn parse_element(
     .or_else(|| margin_x.clone().or_else(|| margin.clone()));
     let margin_right = pmrv(
         tag,
-        "sx-margin-right",
+        once("sx-margin-right"),
         &mut overrides,
         parse_number,
         iter_once!(OverrideItem::MarginRight),
@@ -689,7 +713,7 @@ fn parse_element(
     .or_else(|| margin_x.clone().or_else(|| margin.clone()));
     let margin_top = pmrv(
         tag,
-        "sx-margin-top",
+        once("sx-margin-top"),
         &mut overrides,
         parse_number,
         iter_once!(OverrideItem::MarginTop),
@@ -697,14 +721,14 @@ fn parse_element(
     .or_else(|| margin_y.clone().or_else(|| margin.clone()));
     let margin_bottom = pmrv(
         tag,
-        "sx-margin-bottom",
+        once("sx-margin-bottom"),
         &mut overrides,
         parse_number,
         iter_once!(OverrideItem::MarginBottom),
     )?
     .or_else(|| margin_y.clone().or_else(|| margin.clone()));
 
-    let padding = pmrv(tag, "sx-padding", &mut overrides, parse_number, |x| {
+    let padding = pmrv(tag, once("sx-padding"), &mut overrides, parse_number, |x| {
         std::iter::once(OverrideItem::PaddingTop(x.clone())).chain(
             std::iter::once(OverrideItem::PaddingRight(x.clone())).chain(
                 std::iter::once(OverrideItem::PaddingBottom(x.clone()))
@@ -712,17 +736,29 @@ fn parse_element(
             ),
         )
     })?;
-    let padding_x = pmrv(tag, "sx-padding-x", &mut overrides, parse_number, |x| {
-        std::iter::once(OverrideItem::PaddingLeft(x.clone()))
-            .chain(std::iter::once(OverrideItem::PaddingRight(x)))
-    })?;
-    let padding_y = pmrv(tag, "sx-padding-y", &mut overrides, parse_number, |x| {
-        std::iter::once(OverrideItem::PaddingTop(x.clone()))
-            .chain(std::iter::once(OverrideItem::PaddingBottom(x)))
-    })?;
+    let padding_x = pmrv(
+        tag,
+        once("sx-padding-x"),
+        &mut overrides,
+        parse_number,
+        |x| {
+            std::iter::once(OverrideItem::PaddingLeft(x.clone()))
+                .chain(std::iter::once(OverrideItem::PaddingRight(x)))
+        },
+    )?;
+    let padding_y = pmrv(
+        tag,
+        once("sx-padding-y"),
+        &mut overrides,
+        parse_number,
+        |x| {
+            std::iter::once(OverrideItem::PaddingTop(x.clone()))
+                .chain(std::iter::once(OverrideItem::PaddingBottom(x)))
+        },
+    )?;
     let padding_left = pmrv(
         tag,
-        "sx-padding-left",
+        once("sx-padding-left"),
         &mut overrides,
         parse_number,
         iter_once!(OverrideItem::PaddingLeft),
@@ -730,7 +766,7 @@ fn parse_element(
     .or_else(|| padding_x.clone().or_else(|| padding.clone()));
     let padding_right = pmrv(
         tag,
-        "sx-padding-right",
+        once("sx-padding-right"),
         &mut overrides,
         parse_number,
         iter_once!(OverrideItem::PaddingRight),
@@ -738,7 +774,7 @@ fn parse_element(
     .or_else(|| padding_x.clone().or_else(|| padding.clone()));
     let padding_top = pmrv(
         tag,
-        "sx-padding-top",
+        once("sx-padding-top"),
         &mut overrides,
         parse_number,
         iter_once!(OverrideItem::PaddingTop),
@@ -746,7 +782,7 @@ fn parse_element(
     .or_else(|| padding_y.clone().or_else(|| padding.clone()));
     let padding_bottom = pmrv(
         tag,
-        "sx-padding-bottom",
+        once("sx-padding-bottom"),
         &mut overrides,
         parse_number,
         iter_once!(OverrideItem::PaddingBottom),
@@ -755,7 +791,7 @@ fn parse_element(
 
     let mut text_decoration = pmrv(
         tag,
-        "sx-text-decoration",
+        once("sx-text-decoration"),
         &mut overrides,
         parse_text_decoration,
         iter_once!(OverrideItem::TextDecoration),
@@ -763,7 +799,7 @@ fn parse_element(
 
     if let Some(color) = pmrv(
         tag,
-        "sx-text-decoration-color",
+        once("sx-text-decoration-color"),
         &mut overrides,
         Color::try_from_hex,
         |_| std::iter::empty(),
@@ -779,7 +815,7 @@ fn parse_element(
     }
     if let Some(line) = pmrv(
         tag,
-        "sx-text-decoration-line",
+        once("sx-text-decoration-line"),
         &mut overrides,
         parse_text_decoration_lines,
         |_| std::iter::empty(),
@@ -795,7 +831,7 @@ fn parse_element(
     }
     if let Some(style) = pmrv(
         tag,
-        "sx-text-decoration-style",
+        once("sx-text-decoration-style"),
         &mut overrides,
         parse_text_decoration_style,
         |_| std::iter::empty(),
@@ -811,7 +847,7 @@ fn parse_element(
     }
     if let Some(thickness) = pmrv(
         tag,
-        "sx-text-decoration-thickness",
+        once("sx-text-decoration-thickness"),
         &mut overrides,
         parse_number,
         |_| std::iter::empty(),
@@ -828,15 +864,19 @@ fn parse_element(
 
     let mut flex = pmrv(
         tag,
-        "sx-flex",
+        once("sx-flex"),
         &mut overrides,
         parse_flex,
         iter_once!(OverrideItem::Flex),
     )?;
 
-    if let Some(grow) = pmrv(tag, "sx-flex-grow", &mut overrides, parse_number, |_| {
-        std::iter::empty()
-    })? {
+    if let Some(grow) = pmrv(
+        tag,
+        once("sx-flex-grow"),
+        &mut overrides,
+        parse_number,
+        |_| std::iter::empty(),
+    )? {
         if let Some(flex) = &mut flex {
             flex.grow = grow;
         } else {
@@ -846,9 +886,13 @@ fn parse_element(
             });
         }
     }
-    if let Some(shrink) = pmrv(tag, "sx-flex-shrink", &mut overrides, parse_number, |_| {
-        std::iter::empty()
-    })? {
+    if let Some(shrink) = pmrv(
+        tag,
+        once("sx-flex-shrink"),
+        &mut overrides,
+        parse_number,
+        |_| std::iter::empty(),
+    )? {
         if let Some(flex) = &mut flex {
             flex.shrink = shrink;
         } else {
@@ -858,9 +902,13 @@ fn parse_element(
             });
         }
     }
-    if let Some(basis) = pmrv(tag, "sx-flex-basis", &mut overrides, parse_number, |_| {
-        std::iter::empty()
-    })? {
+    if let Some(basis) = pmrv(
+        tag,
+        once("sx-flex-basis"),
+        &mut overrides,
+        parse_number,
+        |_| std::iter::empty(),
+    )? {
         if let Some(flex) = &mut flex {
             flex.basis = basis;
         } else {
@@ -873,7 +921,7 @@ fn parse_element(
 
     let gap = pmrv(
         tag,
-        "sx-gap",
+        once("sx-gap"),
         &mut overrides,
         parse_number,
         iter_once!(OverrideItem::ColumnGap),
@@ -886,7 +934,7 @@ fn parse_element(
         str_id: get_tag_attr_value_owned(tag, "id"),
         classes: pmrv(
             tag,
-            "class",
+            once("class"),
             &mut overrides,
             parse_classes,
             iter_once!(OverrideItem::Classes),
@@ -895,7 +943,7 @@ fn parse_element(
         data: get_data_attrs(tag)?,
         direction: pmrv(
             tag,
-            "sx-dir",
+            once("sx-dir"),
             &mut overrides,
             parse_direction,
             iter_once!(OverrideItem::Direction),
@@ -903,35 +951,35 @@ fn parse_element(
         .unwrap_or_default(),
         background: pmrv(
             tag,
-            "sx-background",
+            once("sx-background"),
             &mut overrides,
             Color::try_from_hex,
             iter_once!(OverrideItem::Background),
         )?,
         border_top: pmrv(
             tag,
-            "sx-border-top",
+            once("sx-border-top"),
             &mut overrides,
             parse_border,
             iter_once!(OverrideItem::BorderTop),
         )?,
         border_right: pmrv(
             tag,
-            "sx-border-right",
+            once("sx-border-right"),
             &mut overrides,
             parse_border,
             iter_once!(OverrideItem::BorderRight),
         )?,
         border_bottom: pmrv(
             tag,
-            "sx-border-bottom",
+            once("sx-border-bottom"),
             &mut overrides,
             parse_border,
             iter_once!(OverrideItem::BorderBottom),
         )?,
         border_left: pmrv(
             tag,
-            "sx-border-left",
+            once("sx-border-left"),
             &mut overrides,
             parse_border,
             iter_once!(OverrideItem::BorderLeft),
@@ -950,14 +998,14 @@ fn parse_element(
         padding_bottom,
         font_size: pmrv(
             tag,
-            "sx-font-size",
+            once("sx-font-size"),
             &mut overrides,
             parse_number,
             iter_once!(OverrideItem::FontSize),
         )?,
         color: pmrv(
             tag,
-            "sx-color",
+            once("sx-color"),
             &mut overrides,
             Color::try_from_hex,
             iter_once!(OverrideItem::Color),
@@ -968,21 +1016,21 @@ fn parse_element(
             .transpose()?,
         hidden: pmrv(
             tag,
-            "sx-hidden",
+            once("sx-hidden"),
             &mut overrides,
             parse_bool,
             iter_once!(OverrideItem::Hidden),
         )?,
         visibility: pmrv(
             tag,
-            "sx-visibility",
+            once("sx-visibility"),
             &mut overrides,
             parse_visibility,
             iter_once!(OverrideItem::Visibility),
         )?,
         overflow_x: pmrv(
             tag,
-            "sx-overflow-x",
+            once("sx-overflow-x"),
             &mut overrides,
             parse_overflow,
             iter_once!(OverrideItem::OverflowX),
@@ -990,7 +1038,7 @@ fn parse_element(
         .unwrap_or_default(),
         overflow_y: pmrv(
             tag,
-            "sx-overflow-y",
+            once("sx-overflow-y"),
             &mut overrides,
             parse_overflow,
             iter_once!(OverrideItem::OverflowY),
@@ -998,21 +1046,21 @@ fn parse_element(
         .unwrap_or_default(),
         justify_content: pmrv(
             tag,
-            "sx-justify-content",
+            once("sx-justify-content"),
             &mut overrides,
             parse_justify_content,
             iter_once!(OverrideItem::JustifyContent),
         )?,
         align_items: pmrv(
             tag,
-            "sx-align-items",
+            once("sx-align-items"),
             &mut overrides,
             parse_align_items,
             iter_once!(OverrideItem::AlignItems),
         )?,
         text_align: pmrv(
             tag,
-            "sx-text-align",
+            once("sx-text-align"),
             &mut overrides,
             parse_text_align,
             iter_once!(OverrideItem::TextAlign),
@@ -1028,42 +1076,42 @@ fn parse_element(
         children: parse_top_children(node.children(), parser),
         width: pmrv(
             tag,
-            "sx-width",
+            once("sx-width"),
             &mut overrides,
             parse_number,
             iter_once!(OverrideItem::Width),
         )?,
         min_width: pmrv(
             tag,
-            "sx-min-width",
+            once("sx-min-width"),
             &mut overrides,
             parse_number,
             iter_once!(OverrideItem::MinWidth),
         )?,
         max_width: pmrv(
             tag,
-            "sx-max-width",
+            once("sx-max-width"),
             &mut overrides,
             parse_number,
             iter_once!(OverrideItem::MaxWidth),
         )?,
         height: pmrv(
             tag,
-            "sx-height",
+            once("sx-height"),
             &mut overrides,
             parse_number,
             iter_once!(OverrideItem::Height),
         )?,
         min_height: pmrv(
             tag,
-            "sx-min-height",
+            once("sx-min-height"),
             &mut overrides,
             parse_number,
             iter_once!(OverrideItem::MinHeight),
         )?,
         max_height: pmrv(
             tag,
-            "sx-max-height",
+            once("sx-max-height"),
             &mut overrides,
             parse_number,
             iter_once!(OverrideItem::MaxHeight),
@@ -1071,49 +1119,49 @@ fn parse_element(
         flex,
         left: pmrv(
             tag,
-            "sx-left",
+            once("sx-left"),
             &mut overrides,
             parse_number,
             iter_once!(OverrideItem::Left),
         )?,
         right: pmrv(
             tag,
-            "sx-right",
+            once("sx-right"),
             &mut overrides,
             parse_number,
             iter_once!(OverrideItem::Right),
         )?,
         top: pmrv(
             tag,
-            "sx-top",
+            once("sx-top"),
             &mut overrides,
             parse_number,
             iter_once!(OverrideItem::Top),
         )?,
         bottom: pmrv(
             tag,
-            "sx-bottom",
+            once("sx-bottom"),
             &mut overrides,
             parse_number,
             iter_once!(OverrideItem::Bottom),
         )?,
         translate_x: pmrv(
             tag,
-            "sx-translate-x",
+            once("sx-translate-x"),
             &mut overrides,
             parse_number,
             iter_once!(OverrideItem::TranslateX),
         )?,
         translate_y: pmrv(
             tag,
-            "sx-translate-y",
+            once("sx-translate-y"),
             &mut overrides,
             parse_number,
             iter_once!(OverrideItem::TranslateY),
         )?,
         column_gap: pmrv(
             tag,
-            "sx-col-gap",
+            once("sx-column-gap").chain(once("sx-col-gap")),
             &mut overrides,
             parse_number,
             iter_once!(OverrideItem::ColumnGap),
@@ -1121,7 +1169,7 @@ fn parse_element(
         .or_else(|| gap.clone()),
         row_gap: pmrv(
             tag,
-            "sx-row-gap",
+            once("sx-row-gap"),
             &mut overrides,
             parse_number,
             iter_once!(OverrideItem::RowGap),
@@ -1129,28 +1177,28 @@ fn parse_element(
         .or(gap),
         opacity: pmrv(
             tag,
-            "sx-opacity",
+            once("sx-opacity"),
             &mut overrides,
             parse_number,
             iter_once!(OverrideItem::Opacity),
         )?,
         debug: pmrv(
             tag,
-            "debug",
+            once("debug"),
             &mut overrides,
             parse_bool,
             iter_once!(OverrideItem::Debug),
         )?,
         cursor: pmrv(
             tag,
-            "sx-cursor",
+            once("sx-cursor"),
             &mut overrides,
             parse_cursor,
             iter_once!(OverrideItem::Cursor),
         )?,
         position: pmrv(
             tag,
-            "sx-position",
+            once("sx-position"),
             &mut overrides,
             parse_position,
             iter_once!(OverrideItem::Position),
