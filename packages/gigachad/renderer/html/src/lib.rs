@@ -163,6 +163,34 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                             },
                         )?;
                     }
+                    OverrideItem::MarginLeft(x) => {
+                        write_css_attr_important(
+                            f,
+                            b"margin-left",
+                            number_to_html_string(x, true).as_bytes(),
+                        )?;
+                    }
+                    OverrideItem::MarginRight(x) => {
+                        write_css_attr_important(
+                            f,
+                            b"margin-right",
+                            number_to_html_string(x, true).as_bytes(),
+                        )?;
+                    }
+                    OverrideItem::MarginTop(x) => {
+                        write_css_attr_important(
+                            f,
+                            b"margin-top",
+                            number_to_html_string(x, true).as_bytes(),
+                        )?;
+                    }
+                    OverrideItem::MarginBottom(x) => {
+                        write_css_attr_important(
+                            f,
+                            b"margin-bottom",
+                            number_to_html_string(x, true).as_bytes(),
+                        )?;
+                    }
                     OverrideItem::StrId(..)
                     | OverrideItem::Classes(..)
                     | OverrideItem::Data(..)
@@ -198,10 +226,6 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                     | OverrideItem::BorderTopRightRadius(..)
                     | OverrideItem::BorderBottomLeftRadius(..)
                     | OverrideItem::BorderBottomRightRadius(..)
-                    | OverrideItem::MarginLeft(..)
-                    | OverrideItem::MarginRight(..)
-                    | OverrideItem::MarginTop(..)
-                    | OverrideItem::MarginBottom(..)
                     | OverrideItem::PaddingLeft(..)
                     | OverrideItem::PaddingRight(..)
                     | OverrideItem::PaddingTop(..)
