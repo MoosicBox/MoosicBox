@@ -98,7 +98,7 @@ fn print_bundles(out: &Path, cm: Lrc<SourceMap>, bundles: Vec<Bundle>, minify: b
             {
                 let wr = JsWriter::new(cm.clone(), "\n", &mut buf, None);
                 let mut emitter = Emitter {
-                    cfg: swc_ecma_codegen::Config::default().with_minify(true),
+                    cfg: swc_ecma_codegen::Config::default().with_minify(minify),
                     cm: cm.clone(),
                     comments: None,
                     wr: if minify {
