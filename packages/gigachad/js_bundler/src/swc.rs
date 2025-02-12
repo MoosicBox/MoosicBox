@@ -24,7 +24,6 @@ use swc_ecma_transforms_typescript::strip;
 use swc_ecma_visit::VisitMutWith as _;
 
 pub fn bundle(target: &Path, out: &Path, minify: bool) {
-    let inline = minify;
     let globals = Box::leak(Box::default());
     let cm = Lrc::new(SourceMap::new(FilePathMapping::empty()));
     let mut bundler = Bundler::new(
@@ -37,7 +36,7 @@ pub fn bundle(target: &Path, out: &Path, minify: bool) {
         ),
         swc_bundler::Config {
             require: false,
-            disable_inliner: !inline,
+            disable_inliner: false,
             external_modules: vec![],
             disable_fixer: minify,
             disable_hygiene: minify,
