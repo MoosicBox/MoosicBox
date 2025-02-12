@@ -10,10 +10,7 @@ use gigachad_transformer::ResponsiveTrigger;
 use lambda_http::{http::header::USER_AGENT, Request, RequestExt as _};
 use uaparser::{Parser as _, UserAgentParser};
 
-use crate::{
-    html::{container_element_to_html, container_element_to_html_response},
-    HtmlApp, HtmlRenderer,
-};
+use crate::{html::container_element_to_html, HtmlApp, HtmlRenderer};
 
 pub use gigachad_renderer_html_lambda::*;
 
@@ -153,18 +150,25 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
             .await
             .map_err(|e| Box::new(e) as lambda_runtime::Error)?;
 
-        if req.full {
-            container_element_to_html_response(
+        let content = container_element_to_html(&view.immediate, &self.tag_renderer)
+            .map_err(|e| Box::new(e) as lambda_runtime::Error)?;
+
+        Ok(if req.full {
+            self.tag_renderer.root_html(
                 &HEADERS,
                 &view.immediate,
+                content,
                 self.viewport.as_deref(),
                 self.background,
-                &self.tag_renderer,
             )
-            .map_err(|e| Box::new(e) as lambda_runtime::Error)
         } else {
-            container_element_to_html(&view.immediate, &self.tag_renderer)
-                .map_err(|e| Box::new(e) as lambda_runtime::Error)
-        }
+            self.tag_renderer.partial_html(
+                &HEADERS,
+                &view.immediate,
+                content,
+                self.viewport.as_deref(),
+                self.background,
+            )
+        })
     }
 }
