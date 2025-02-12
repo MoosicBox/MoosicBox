@@ -11,8 +11,8 @@ use crate::page;
 #[must_use]
 pub fn download() -> Markup {
     page(&html! {
-        div sx-align-items=(AlignItems::Center) {
-            div sx-width="100%" sx-max-width=(1000) {
+        div {
+            div sx-max-width=(1000) sx-padding=(20) {
                 h1 sx-border-bottom="2, #ccc" sx-padding-bottom=(20) sx-margin-bottom=(10) { "Downloads" }
                 div id="releases" sx-hidden=(true) hx-get="/releases" hx-trigger="load" {}
             }
