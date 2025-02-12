@@ -204,10 +204,14 @@ impl Load for Loader {
 
             let module = program.apply(&mut strip(unresolved_mark, top_level_mark));
 
-            module.module().unwrap()
+            module.module()
         } else {
-            parse_file_as_module(&fm, syntax, EsVersion::Es2020, None, &mut Vec::new()).unwrap()
+            None
         };
+
+        let module = module.unwrap_or_else(|| {
+            parse_file_as_module(&fm, syntax, EsVersion::Es2020, None, &mut Vec::new()).unwrap()
+        });
 
         Ok(ModuleData {
             fm,
