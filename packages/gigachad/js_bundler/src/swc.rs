@@ -41,7 +41,7 @@ pub fn bundle(target: &Path, out: &Path, minify: bool) {
             external_modules: vec![],
             disable_fixer: minify,
             disable_hygiene: minify,
-            disable_dce: true,
+            disable_dce: false,
             module: ModuleType::Es,
         },
         Box::new(Hook),
