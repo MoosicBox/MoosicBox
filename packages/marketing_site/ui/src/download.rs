@@ -1,6 +1,7 @@
 use std::sync::LazyLock;
 
 use chrono::NaiveDateTime;
+use gigachad_actions::logic::if_responsive;
 use gigachad_transformer_models::{AlignItems, LayoutDirection};
 use maud::{html, Markup};
 use regex::Regex;
@@ -13,7 +14,7 @@ pub fn download() -> Markup {
         div sx-align-items=(AlignItems::Center) {
             div sx-width="100%" sx-max-width=(1000) {
                 h1 sx-border-bottom="2, #ccc" sx-padding-bottom=(20) sx-margin-bottom=(10) { "Downloads" }
-                div sx-hidden=(true) hx-get="/releases" hx-trigger="load" {}
+                div id="releases" sx-hidden=(true) hx-get="/releases" hx-trigger="load" {}
             }
         }
     })
@@ -80,7 +81,19 @@ pub fn releases(releases: &[OsRelease], os: &Os) -> Markup {
         div id="releases" {
             @for release in releases {
                 div id=(format_class_name(release.version)) sx-padding-y=(20) {
-                    h2 sx-dir=(LayoutDirection::Row) sx-align-items=(AlignItems::End) {
+                    h2
+                        id={(format_class_name(release.version))"-header"}
+                        sx-dir=(
+                            if_responsive("mobile")
+                                .then::<LayoutDirection>(LayoutDirection::Column)
+                                .or_else(LayoutDirection::Row)
+                        )
+                        sx-align-items=(
+                            if_responsive("mobile")
+                                .then::<AlignItems>(AlignItems::Start)
+                                .or_else(AlignItems::End)
+                        )
+                    {
                         div { "Release " (release.version) }
                         div sx-font-size=(16) sx-margin-left=(10) sx-margin-bottom=(2) sx-color="#ccc" {
                             (format_date(&release.published_at))

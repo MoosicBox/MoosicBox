@@ -42,6 +42,45 @@ document.addEventListener('DOMContentLoaded', (event) => {
     triggerHandlers('domLoaded', { initial: true, element: html });
 });
 
+function removeElementStyles(triggerId: string | undefined): void {
+    if (triggerId) {
+        document.querySelectorAll(`[v-id="${triggerId}"]`).forEach((style) => {
+            style.remove();
+        });
+    }
+}
+
+function textToStyle(text: string, triggerId: string): HTMLStyleElement {
+    const styleContainer = document.createElement('div');
+    styleContainer.innerHTML = text;
+    const style = styleContainer.children[0] as HTMLStyleElement;
+    style.setAttribute('v-id', triggerId);
+    return style;
+}
+
+function textToElement(
+    text: string,
+    triggerId: string | undefined,
+): HTMLElement {
+    const start = text.indexOf('\n\n');
+
+    let elementText = text;
+
+    if (start > 0) {
+        elementText = text.substring(start + 2);
+
+        if (triggerId) {
+            const styleText = text.substring(0, start);
+            document.head.appendChild(textToStyle(styleText, triggerId));
+        }
+    }
+
+    const element = document.createElement('div');
+    element.innerHTML = elementText;
+
+    return element;
+}
+
 function processElement(element: HTMLElement) {
     triggerHandlers('domLoaded', { initial: false, element });
 }
@@ -56,8 +95,9 @@ function swapOuterHtml(element: HTMLElement, text: string) {
     const children = element.parentNode?.children;
     if (!children) return;
 
-    const newElement = document.createElement('div');
-    newElement.innerHTML = text;
+    removeElementStyles(element.id);
+
+    const newElement = textToElement(text, element.id);
 
     const parent = element.parentNode;
     const child = newElement.lastChild;
@@ -76,7 +116,8 @@ function swapOuterHtml(element: HTMLElement, text: string) {
 }
 
 function swapInnerHtml(element: HTMLElement, text: string) {
-    element.innerHTML = text;
+    const newElement = textToElement(text, element.id);
+    element.innerHTML = newElement.innerHTML;
     processElementChildren(element);
 }
 

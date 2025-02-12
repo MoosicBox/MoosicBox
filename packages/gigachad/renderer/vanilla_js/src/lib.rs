@@ -95,35 +95,49 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
         Ok(())
     }
 
+    fn partial_html(
+        &self,
+        _headers: &HashMap<String, String>,
+        container: &Container,
+        content: String,
+        _viewport: Option<&str>,
+        _background: Option<Color>,
+    ) -> String {
+        let mut responsive_css = vec![];
+        self.default
+            .reactive_conditions_to_css(&mut responsive_css, container)
+            .unwrap();
+        let responsive_css = std::str::from_utf8(&responsive_css).unwrap();
+
+        format!("{responsive_css}\n\n{content}")
+    }
+
     fn root_html(
         &self,
-        headers: &HashMap<String, String>,
+        _headers: &HashMap<String, String>,
         container: &Container,
         content: String,
         viewport: Option<&str>,
         background: Option<Color>,
     ) -> String {
-        if headers.get("hx-request").is_some() {
-            content
-        } else {
-            let background = background.map(|x| format!("background:rgb({},{},{})", x.r, x.g, x.b));
-            let background = background.as_deref().unwrap_or("");
+        let mut responsive_css = vec![];
+        self.default
+            .reactive_conditions_to_css(&mut responsive_css, container)
+            .unwrap();
+        let responsive_css = std::str::from_utf8(&responsive_css).unwrap();
 
-            let mut responsive_css = vec![];
-            self.default
-                .reactive_conditions_to_css(&mut responsive_css, container)
-                .unwrap();
-            let responsive_css = std::str::from_utf8(&responsive_css).unwrap();
+        let background = background.map(|x| format!("background:rgb({},{},{})", x.r, x.g, x.b));
+        let background = background.as_deref().unwrap_or("");
 
-            #[cfg(all(feature = "hash", feature = "script"))]
-            let script = html! { script src={"/js/"(SCRIPT_NAME_HASHED.as_str())} {} };
-            #[cfg(not(all(feature = "hash", feature = "script")))]
-            let script = html! { script src={"/js/"(SCRIPT_NAME)} {} };
+        #[cfg(all(feature = "hash", feature = "script"))]
+        let script = html! { script src={"/js/"(SCRIPT_NAME_HASHED.as_str())} {} };
+        #[cfg(not(all(feature = "hash", feature = "script")))]
+        let script = html! { script src={"/js/"(SCRIPT_NAME)} {} };
 
-            html! {
-                html {
-                    head {
-                        style {(format!(r"
+        html! {
+            html {
+                head {
+                    style {(format!(r"
                             body {{
                                 margin: 0;{background};
                                 overflow: hidden;
@@ -138,18 +152,17 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                                 outline: inherit;
                             }}
                         "))}
-                        (script)
-                        (PreEscaped(responsive_css))
-                        @if let Some(content) = viewport {
-                            meta name="viewport" content=(content);
-                        }
-                    }
-                    body {
-                        (PreEscaped(content))
+                    (script)
+                    (PreEscaped(responsive_css))
+                    @if let Some(content) = viewport {
+                        meta name="viewport" content=(content);
                     }
                 }
+                body {
+                    (PreEscaped(content))
+                }
             }
-            .into_string()
         }
+        .into_string()
     }
 }

@@ -15,7 +15,7 @@ use gigachad_renderer::{
 };
 use gigachad_router::Container;
 use gigachad_transformer::{
-    models::{LayoutDirection, Visibility},
+    models::{AlignItems, LayoutDirection, Visibility},
     OverrideCondition, OverrideItem, ResponsiveTrigger,
 };
 use html::{
@@ -152,13 +152,23 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                             if *x { b"none" } else { b"initial" },
                         )?;
                     }
+                    OverrideItem::AlignItems(x) => {
+                        write_css_attr_important(
+                            f,
+                            b"align-items",
+                            match x {
+                                AlignItems::Start => b"start",
+                                AlignItems::Center => b"center",
+                                AlignItems::End => b"end",
+                            },
+                        )?;
+                    }
                     OverrideItem::StrId(..)
                     | OverrideItem::Classes(..)
                     | OverrideItem::Data(..)
                     | OverrideItem::OverflowX(..)
                     | OverrideItem::OverflowY(..)
                     | OverrideItem::JustifyContent(..)
-                    | OverrideItem::AlignItems(..)
                     | OverrideItem::TextAlign(..)
                     | OverrideItem::TextDecoration(..)
                     | OverrideItem::FontFamily(..)
@@ -210,6 +220,17 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
         f.write_all(b"</style>")?;
 
         Ok(())
+    }
+
+    fn partial_html(
+        &self,
+        _headers: &HashMap<String, String>,
+        _container: &Container,
+        content: String,
+        _viewport: Option<&str>,
+        _background: Option<Color>,
+    ) -> String {
+        content
     }
 
     fn root_html(

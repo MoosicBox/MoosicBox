@@ -167,9 +167,18 @@ pub trait HtmlTagRenderer {
         Ok(())
     }
 
+    fn partial_html(
+        &self,
+        headers: &std::collections::HashMap<String, String>,
+        container: &Container,
+        content: String,
+        viewport: Option<&str>,
+        background: Option<Color>,
+    ) -> String;
+
     fn root_html(
         &self,
-        _headers: &std::collections::HashMap<String, String>,
+        headers: &std::collections::HashMap<String, String>,
         container: &Container,
         content: String,
         viewport: Option<&str>,

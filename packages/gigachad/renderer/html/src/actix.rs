@@ -12,10 +12,7 @@ use gigachad_router::{ClientInfo, ClientOs, RequestInfo, Router};
 use gigachad_transformer::ResponsiveTrigger;
 use uaparser::{Parser as _, UserAgentParser};
 
-use crate::{
-    html::{container_element_to_html, container_element_to_html_response},
-    HtmlApp, HtmlRenderer,
-};
+use crate::{html::container_element_to_html, HtmlApp, HtmlRenderer};
 
 pub use gigachad_renderer_html_actix::*;
 
@@ -158,18 +155,25 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
             .await
             .map_err(ErrorInternalServerError)?;
 
-        if req.full {
-            container_element_to_html_response(
+        let content = container_element_to_html(&view.immediate, &self.tag_renderer)
+            .map_err(ErrorInternalServerError)?;
+
+        Ok(if req.full {
+            self.tag_renderer.root_html(
                 &HEADERS,
                 &view.immediate,
+                content,
                 self.viewport.as_deref(),
                 self.background,
-                &self.tag_renderer,
             )
-            .map_err(ErrorInternalServerError)
         } else {
-            container_element_to_html(&view.immediate, &self.tag_renderer)
-                .map_err(ErrorInternalServerError)
-        }
+            self.tag_renderer.partial_html(
+                &HEADERS,
+                &view.immediate,
+                content,
+                self.viewport.as_deref(),
+                self.background,
+            )
+        })
     }
 }

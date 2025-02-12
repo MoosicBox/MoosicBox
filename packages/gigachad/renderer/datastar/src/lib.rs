@@ -31,6 +31,17 @@ impl HtmlTagRenderer for DatastarTagRenderer {
         Ok(())
     }
 
+    fn partial_html(
+        &self,
+        _headers: &HashMap<String, String>,
+        _container: &Container,
+        content: String,
+        _viewport: Option<&str>,
+        _background: Option<Color>,
+    ) -> String {
+        content
+    }
+
     fn root_html(
         &self,
         _headers: &HashMap<String, String>,
@@ -39,51 +50,47 @@ impl HtmlTagRenderer for DatastarTagRenderer {
         viewport: Option<&str>,
         background: Option<Color>,
     ) -> String {
-        if false {
-            content
-        } else {
-            let background = background.map(|x| format!("background:rgb({},{},{})", x.r, x.g, x.b));
-            let background = background.as_deref().unwrap_or("");
+        let background = background.map(|x| format!("background:rgb({},{},{})", x.r, x.g, x.b));
+        let background = background.as_deref().unwrap_or("");
 
-            let mut responsive_css = vec![];
-            self.default
-                .reactive_conditions_to_css(&mut responsive_css, container)
-                .unwrap();
-            let responsive_css = std::str::from_utf8(&responsive_css).unwrap();
+        let mut responsive_css = vec![];
+        self.default
+            .reactive_conditions_to_css(&mut responsive_css, container)
+            .unwrap();
+        let responsive_css = std::str::from_utf8(&responsive_css).unwrap();
 
-            html! {
-                html {
-                    head {
-                        script
-                            type="module"
-                            src="https://cdn.jsdelivr.net/npm/@sudodevnull/datastar@0.19.9/dist/datastar.min.js"
-                            defer;
-                        style {(format!(r"
-                            body {{
-                                margin: 0;{background};
-                                overflow: hidden;
-                            }}
-                            .remove-button-styles {{
-                                background: none;
-                                color: inherit;
-                                border: none;
-                                padding: 0;
-                                font: inherit;
-                                cursor: pointer;
-                                outline: inherit;
-                            }}
-                        "))}
-                        (PreEscaped(responsive_css))
-                        @if let Some(content) = viewport {
-                            meta name="viewport" content=(content);
-                        }
-                    }
-                    body {
-                        (PreEscaped(content))
+        html! {
+            html {
+                head {
+                    script
+                        type="module"
+                        src="https://cdn.jsdelivr.net/npm/@sudodevnull/datastar@0.19.9/dist/datastar.min.js"
+                        defer;
+                    style {(format!(r"
+                        body {{
+                            margin: 0;{background};
+                            overflow: hidden;
+                        }}
+                        .remove-button-styles {{
+                            background: none;
+                            color: inherit;
+                            border: none;
+                            padding: 0;
+                            font: inherit;
+                            cursor: pointer;
+                            outline: inherit;
+                        }}
+                    "))}
+                    (PreEscaped(responsive_css))
+                    @if let Some(content) = viewport {
+                        meta name="viewport" content=(content);
                     }
                 }
+                body {
+                    (PreEscaped(content))
+                }
             }
-            .into_string()
         }
+        .into_string()
     }
 }
