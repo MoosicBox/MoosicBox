@@ -1,1 +1,3 @@
-console.log('hello, world!');
+import './core';
+
+console.debug('gigachad.js');
