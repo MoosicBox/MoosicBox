@@ -50,28 +50,28 @@ function removeElementStyles(triggerId: string | undefined): void {
     }
 }
 
-function textToStyle(text: string, triggerId: string): HTMLStyleElement {
+function htmlToStyle(html: string, triggerId: string): HTMLStyleElement {
     const styleContainer = document.createElement('div');
-    styleContainer.innerHTML = text;
+    styleContainer.innerHTML = html;
     const style = styleContainer.children[0] as HTMLStyleElement;
     style.setAttribute('v-id', triggerId);
     return style;
 }
 
-function textToElement(
-    text: string,
+function htmlToElement(
+    html: string,
     triggerId: string | undefined,
 ): HTMLElement {
-    const start = text.indexOf('\n\n');
+    const start = html.indexOf('\n\n');
 
-    let elementText = text;
+    let elementText = html;
 
     if (start > 0) {
-        elementText = text.substring(start + 2);
+        elementText = html.substring(start + 2);
 
         if (triggerId) {
-            const styleText = text.substring(0, start);
-            document.head.appendChild(textToStyle(styleText, triggerId));
+            const styleText = html.substring(0, start);
+            document.head.appendChild(htmlToStyle(styleText, triggerId));
         }
     }
 
@@ -91,13 +91,13 @@ function processElementChildren(element: HTMLElement) {
     }
 }
 
-function swapOuterHtml(element: HTMLElement, text: string) {
+function swapOuterHtml(element: HTMLElement, html: string) {
     const children = element.parentNode?.children;
     if (!children) return;
 
     removeElementStyles(element.id);
 
-    const newElement = textToElement(text, element.id);
+    const newElement = htmlToElement(html, element.id);
 
     const parent = element.parentNode;
     const child = newElement.lastChild;
@@ -115,23 +115,23 @@ function swapOuterHtml(element: HTMLElement, text: string) {
     processElementChildren(newElement);
 }
 
-function swapInnerHtml(element: HTMLElement, text: string) {
-    const newElement = textToElement(text, element.id);
+function swapInnerHtml(element: HTMLElement, html: string) {
+    const newElement = htmlToElement(html, element.id);
     element.innerHTML = newElement.innerHTML;
     processElementChildren(element);
 }
 
-function handleResponse(element: HTMLElement, text: string): boolean {
+function handleResponse(element: HTMLElement, html: string): boolean {
     const swap = element.getAttribute('hx-swap');
     const swapLower = swap?.toLowerCase();
 
     switch (swapLower) {
         case 'outerhtml': {
-            swapOuterHtml(element, text);
+            swapOuterHtml(element, html);
             return false;
         }
         case 'innerhtml': {
-            swapInnerHtml(element, text);
+            swapInnerHtml(element, html);
             return false;
         }
         default: {
@@ -139,7 +139,7 @@ function handleResponse(element: HTMLElement, text: string): boolean {
                 const target = document.querySelector(swap) as HTMLElement;
 
                 if (target) {
-                    swapOuterHtml(target, text);
+                    swapOuterHtml(target, html);
                 }
             }
         }
@@ -148,68 +148,34 @@ function handleResponse(element: HTMLElement, text: string): boolean {
     return true;
 }
 
-function processRoute(element: HTMLElement): boolean {
-    const getRoute = element.getAttribute('hx-get');
-    const postRoute = element.getAttribute('hx-post');
-    const putRoute = element.getAttribute('hx-put');
-    const deleteRoute = element.getAttribute('hx-delete');
-    const patchRoute = element.getAttribute('hx-patch');
+function handleHtmlResponse(
+    element: HTMLElement,
+    response: Promise<Response>,
+): void {
+    response
+        .then((response) => {
+            return response.text();
+        })
+        .then((html) => {
+            handleResponse(element, html);
+        });
+}
 
+const METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'] as const;
+
+function processRoute(element: HTMLElement): boolean {
     const options: RequestInit = {
         headers: {
             'hx-request': 'true',
         },
     };
 
-    if (typeof getRoute === 'string') {
-        options.method = 'GET';
-        fetch(getRoute, options)
-            .then((response) => {
-                return response.text();
-            })
-            .then((text) => {
-                handleResponse(element, text);
-            });
-    }
-    if (typeof postRoute === 'string') {
-        options.method = 'POST';
-        fetch(postRoute, options)
-            .then((response) => {
-                return response.text();
-            })
-            .then((text) => {
-                handleResponse(element, text);
-            });
-    }
-    if (typeof putRoute === 'string') {
-        options.method = 'PUT';
-        fetch(putRoute, options)
-            .then((response) => {
-                return response.text();
-            })
-            .then((text) => {
-                handleResponse(element, text);
-            });
-    }
-    if (typeof deleteRoute === 'string') {
-        options.method = 'DELETE';
-        fetch(deleteRoute, options)
-            .then((response) => {
-                return response.text();
-            })
-            .then((text) => {
-                handleResponse(element, text);
-            });
-    }
-    if (typeof patchRoute === 'string') {
-        options.method = 'PATCH';
-        fetch(patchRoute, options)
-            .then((response) => {
-                return response.text();
-            })
-            .then((text) => {
-                handleResponse(element, text);
-            });
+    for (const method of METHODS) {
+        const route = element.getAttribute(`hx-${method}`);
+        if (route) {
+            options.method = 'GET';
+            handleHtmlResponse(element, fetch(route, options));
+        }
     }
 
     return true;
