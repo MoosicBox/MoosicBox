@@ -31,8 +31,10 @@ gigachad_transformer = { version = "0.1.0", path = "../../transformer", default-
     "html",
 ] }
 
-log  = { workspace = true }
-maud = { workspace = true }
+const_format = { workspace = true }
+log          = { workspace = true }
+maud         = { workspace = true }
+md5          = { workspace = true, optional = true }
 
 [features]
 default = ["debug", "esbuild", "swc"]
@@ -41,6 +43,7 @@ fail-on-warnings = []
 
 debug = []
 
+hash   = ["dep:md5"]
 script = []
 
 esbuild = []

@@ -163,6 +163,7 @@ clap = { version = "4.5.29", features = ["derive"] }
 color-hex = "0.2.0"
 colored = { version = "3.0.0" }
 console-subscriber = "0.4.1"
+const_format = "0.2.34"
 cpal = "0.15.3"
 debounce = "0.2.2"
 derive_more = "2.0.1"

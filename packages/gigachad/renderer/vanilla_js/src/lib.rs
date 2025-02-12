@@ -3,6 +3,7 @@
 
 use std::{collections::HashMap, io::Write};
 
+use const_format::concatcp;
 use gigachad_renderer::{Color, HtmlTagRenderer};
 use gigachad_renderer_html::{html::write_attr, DefaultHtmlTagRenderer};
 use gigachad_transformer::{models::Route, Container, ResponsiveTrigger};
@@ -13,15 +14,27 @@ pub struct VanillaJsTagRenderer {
     default: DefaultHtmlTagRenderer,
 }
 
+const SCRIPT_NAME_STEM: &str = "gigachad";
 #[cfg(debug_assertions)]
-pub static SCRIPT_NAME: &str = "gigachad.js";
-#[cfg(all(debug_assertions, feature = "script"))]
-pub static SCRIPT: &str = include_str!("../web/dist/index.js");
-
+const SCRIPT_NAME_EXTENSION: &str = "js";
 #[cfg(not(debug_assertions))]
-pub static SCRIPT_NAME: &str = "gigachad.min.js";
+const SCRIPT_NAME_EXTENSION: &str = "min.js";
+
+pub const SCRIPT_NAME: &str = concatcp!(SCRIPT_NAME_STEM, ".", SCRIPT_NAME_EXTENSION);
+
+#[cfg(all(debug_assertions, feature = "script"))]
+pub const SCRIPT: &str = include_str!("../web/dist/index.js");
+
 #[cfg(all(not(debug_assertions), feature = "script"))]
-pub static SCRIPT: &str = include_str!("../web/dist/index.min.js");
+pub const SCRIPT: &str = include_str!("../web/dist/index.min.js");
+
+#[cfg(all(feature = "hash", feature = "script"))]
+pub static SCRIPT_NAME_HASHED: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+    let digest = md5::compute(SCRIPT.as_bytes());
+    let digest = format!("{digest:x}");
+    let hash = &digest[..10];
+    format!("{SCRIPT_NAME_STEM}-{hash}.{SCRIPT_NAME_EXTENSION}")
+});
 
 impl HtmlTagRenderer for VanillaJsTagRenderer {
     fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger) {
@@ -49,7 +62,7 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                             write_attr(f, b"hx-swap", b"outerHTML")?;
                         }
                         gigachad_transformer::models::SwapTarget::Children => {
-                            write_attr(f, b"hx-swap", b"innerHTML")?;
+                            write_attr(f, b"hx-swap", b"in 'nerHTML")?;
                         }
                     }
                     write_attr(f, b"hx-get", route.as_bytes())?;
@@ -102,6 +115,11 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                 .unwrap();
             let responsive_css = std::str::from_utf8(&responsive_css).unwrap();
 
+            #[cfg(all(feature = "hash", feature = "script"))]
+            let script = html! { script src={"/js/"(SCRIPT_NAME_HASHED.as_str())} {} };
+            #[cfg(not(all(feature = "hash", feature = "script")))]
+            let script = html! { script src={"/js/"(SCRIPT_NAME)} {} };
+
             html! {
                 html {
                     head {
@@ -120,7 +138,7 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                                 outline: inherit;
                             }}
                         "))}
-                        script src={"/js/"(SCRIPT_NAME)} {}
+                        (script)
                         (PreEscaped(responsive_css))
                         @if let Some(content) = viewport {
                             meta name="viewport" content=(content);

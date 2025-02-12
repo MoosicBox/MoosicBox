@@ -46,7 +46,10 @@ pub static ASSETS: LazyLock<Vec<gigachad_renderer::assets::StaticAssetRoute>> =
         vec![
             #[cfg(feature = "vanilla-js")]
             moosicbox_app_native_lib::renderer::assets::StaticAssetRoute {
-                route: format!("js/{}", gigachad_renderer_vanilla_js::SCRIPT_NAME),
+                route: format!(
+                    "js/{}",
+                    gigachad_renderer_vanilla_js::SCRIPT_NAME_HASHED.as_str()
+                ),
                 target: gigachad_renderer::assets::AssetPathTarget::FileContents(
                     gigachad_renderer_vanilla_js::SCRIPT.as_bytes().into(),
                 ),

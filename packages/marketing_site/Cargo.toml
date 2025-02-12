@@ -49,6 +49,7 @@ product-name  = "MoosicBoxMarketingSite"
 gigachad_renderer = { version = "0.1.0", path = "../gigachad/renderer", default-features = false, optional = true }
 gigachad_renderer_html = { version = "0.1.0", path = "../gigachad/renderer/html", default-features = false, optional = true }
 gigachad_renderer_vanilla_js = { version = "0.1.0", path = "../gigachad/renderer/vanilla_js", default-features = false, optional = true, features = [
+    "hash",
     "script",
     "swc",
 ] }
