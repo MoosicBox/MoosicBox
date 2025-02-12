@@ -4,8 +4,8 @@
 use std::{collections::HashMap, io::Write};
 
 use gigachad_renderer::{Color, HtmlTagRenderer};
-use gigachad_renderer_html::DefaultHtmlTagRenderer;
-use gigachad_transformer::{Container, ResponsiveTrigger};
+use gigachad_renderer_html::{html::write_attr, DefaultHtmlTagRenderer};
+use gigachad_transformer::{models::Route, Container, ResponsiveTrigger};
 use maud::{html, PreEscaped};
 
 #[derive(Default, Clone)]
@@ -36,6 +36,48 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
     ) -> Result<(), std::io::Error> {
         self.default
             .element_attrs_to_html(f, container, is_flex_child)?;
+
+        if let Some(route) = &container.route {
+            match route {
+                Route::Get {
+                    route,
+                    trigger,
+                    swap,
+                } => {
+                    match swap {
+                        gigachad_transformer::models::SwapTarget::This => {
+                            write_attr(f, b"hx-swap", b"outerHTML")?;
+                        }
+                        gigachad_transformer::models::SwapTarget::Children => {
+                            write_attr(f, b"hx-swap", b"innerHTML")?;
+                        }
+                    }
+                    write_attr(f, b"hx-get", route.as_bytes())?;
+                    if let Some(trigger) = trigger {
+                        write_attr(f, b"hx-trigger", trigger.as_bytes())?;
+                    }
+                }
+                Route::Post {
+                    route,
+                    trigger,
+                    swap,
+                } => {
+                    match swap {
+                        gigachad_transformer::models::SwapTarget::This => {
+                            write_attr(f, b"hx-swap", b"outerHTML")?;
+                        }
+                        gigachad_transformer::models::SwapTarget::Children => {
+                            write_attr(f, b"hx-swap", b"innerHTML")?;
+                        }
+                    }
+                    write_attr(f, b"hx-swap", b"outerHTML")?;
+                    write_attr(f, b"hx-post", route.as_bytes())?;
+                    if let Some(trigger) = trigger {
+                        write_attr(f, b"hx-trigger", trigger.as_bytes())?;
+                    }
+                }
+            }
+        }
 
         Ok(())
     }
