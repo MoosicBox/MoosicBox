@@ -265,6 +265,7 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
         content: String,
         viewport: Option<&str>,
         background: Option<Color>,
+        title: Option<&str>,
     ) -> String {
         let background = background.map(|x| format!("background:rgb({},{},{})", x.r, x.g, x.b));
         let background = background.as_deref().unwrap_or("");
@@ -277,6 +278,9 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
         html! {
             html {
                 head {
+                    @if let Some(title) = title {
+                        title { (title) }
+                    }
                     style {(format!(r"
                         body {{
                             margin: 0;{background};
@@ -323,6 +327,10 @@ pub trait HtmlApp {
     fn set_viewport(&mut self, viewport: Option<String>);
 
     #[must_use]
+    fn with_title(self, title: Option<String>) -> Self;
+    fn set_title(&mut self, title: Option<String>);
+
+    #[must_use]
     fn with_background(self, background: Option<Color>) -> Self;
     fn set_background(&mut self, background: Option<Color>);
 }
@@ -355,6 +363,12 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> HtmlRenderer<T> {
     #[must_use]
     pub fn with_background(mut self, background: Option<Color>) -> Self {
         self.app = self.app.with_background(background);
+        self
+    }
+
+    #[must_use]
+    pub fn with_title(mut self, title: Option<String>) -> Self {
+        self.app = self.app.with_title(title);
         self
     }
 
@@ -402,6 +416,7 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
         x: Option<i32>,
         y: Option<i32>,
         background: Option<Color>,
+        title: Option<&str>,
         viewport: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         self.width = Some(width);
@@ -409,6 +424,7 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
         self.x = x;
         self.y = y;
         self.app.set_background(background);
+        self.app.set_title(title.map(ToString::to_string));
         self.app.set_viewport(viewport.map(ToString::to_string));
 
         Ok(())

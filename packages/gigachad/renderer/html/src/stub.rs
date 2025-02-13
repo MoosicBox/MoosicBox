@@ -38,6 +38,12 @@ impl<T: HtmlTagRenderer> HtmlApp for StubApp<T> {
 
     fn set_viewport(&mut self, _viewport: Option<String>) {}
 
+    fn with_title(self, _title: Option<String>) -> Self {
+        self
+    }
+
+    fn set_title(&mut self, _title: Option<String>) {}
+
     fn with_background(self, _background: Option<Color>) -> Self {
         self
     }

@@ -95,6 +95,7 @@ pub trait Renderer: ToRenderRunner + Send + Sync {
     /// # Errors
     ///
     /// Will error if `Renderer` implementation app fails to start
+    #[allow(clippy::too_many_arguments)]
     async fn init(
         &mut self,
         width: f32,
@@ -102,6 +103,7 @@ pub trait Renderer: ToRenderRunner + Send + Sync {
         x: Option<i32>,
         y: Option<i32>,
         background: Option<Color>,
+        title: Option<&str>,
         viewport: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
 
@@ -183,5 +185,6 @@ pub trait HtmlTagRenderer {
         content: String,
         viewport: Option<&str>,
         background: Option<Color>,
+        title: Option<&str>,
     ) -> String;
 }

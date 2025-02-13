@@ -33,6 +33,7 @@ pub struct HtmlActixResponseProcessor<T: HtmlTagRenderer + Clone> {
     pub router: Router,
     pub tag_renderer: T,
     pub background: Option<Color>,
+    pub title: Option<String>,
     pub viewport: Option<String>,
 }
 
@@ -43,6 +44,7 @@ impl<T: HtmlTagRenderer + Clone> HtmlActixResponseProcessor<T> {
             router,
             tag_renderer,
             background: None,
+            title: None,
             viewport: None,
         }
     }
@@ -73,6 +75,16 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
 
     fn set_viewport(&mut self, viewport: Option<String>) {
         self.processor.viewport = viewport;
+    }
+
+    #[must_use]
+    fn with_title(mut self, title: Option<String>) -> Self {
+        self.processor.title = title;
+        self
+    }
+
+    fn set_title(&mut self, title: Option<String>) {
+        self.processor.title = title;
     }
 
     #[must_use]
@@ -165,6 +177,7 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                 content,
                 self.viewport.as_deref(),
                 self.background,
+                self.title.as_deref(),
             )
         } else {
             self.tag_renderer.partial_html(

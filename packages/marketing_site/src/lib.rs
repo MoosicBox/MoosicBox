@@ -74,7 +74,8 @@ pub static VIEWPORT: LazyLock<String> = LazyLock::new(|| "width=device-width".to
 pub fn init() -> NativeAppBuilder {
     let app = moosicbox_app_native_lib::NativeAppBuilder::new()
         .with_router(ROUTER.clone())
-        .with_background(*BACKGROUND_COLOR);
+        .with_background(*BACKGROUND_COLOR)
+        .with_title("MoosicBox".to_string());
 
     #[allow(unused_mut)]
     let mut app = app.with_size(
@@ -188,6 +189,7 @@ pub async fn gen(
                         &view.immediate,
                         Some(&*VIEWPORT),
                         Some(*BACKGROUND_COLOR),
+                        Some("MoosicBox"),
                         &*tag_renderer,
                     )?;
                     let output_path = output_path.join(format!("{path_str}.html"));

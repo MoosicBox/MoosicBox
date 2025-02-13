@@ -1221,6 +1221,7 @@ impl Renderer for FltkRenderer {
         x: Option<i32>,
         y: Option<i32>,
         background: Option<Color>,
+        title: Option<&str>,
         _viewport: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         let app = app::App::default();
@@ -1229,7 +1230,7 @@ impl Renderer for FltkRenderer {
         #[allow(clippy::cast_possible_truncation)]
         let mut window = Window::default()
             .with_size(width.round() as i32, height.round() as i32)
-            .with_label("MoosicBox");
+            .with_label(title.unwrap_or("MoosicBox"));
 
         self.window.replace(window.clone());
         #[allow(clippy::cast_possible_truncation)]

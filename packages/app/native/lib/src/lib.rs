@@ -43,6 +43,7 @@ pub struct NativeAppBuilder {
     x: Option<i32>,
     y: Option<i32>,
     background: Option<Color>,
+    title: Option<String>,
     viewport: Option<String>,
     width: Option<f32>,
     height: Option<f32>,
@@ -249,7 +250,8 @@ impl RendererType {
     #[allow(
         unused_variables,
         clippy::unused_async,
-        clippy::needless_pass_by_ref_mut
+        clippy::needless_pass_by_ref_mut,
+        clippy::too_many_arguments
     )]
     async fn init(
         &mut self,
@@ -258,12 +260,15 @@ impl RendererType {
         x: Option<i32>,
         y: Option<i32>,
         background: Option<Color>,
+        title: Option<&str>,
         viewport: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         renderer!(
             self,
             value,
-            value.init(width, height, x, y, background, viewport).await
+            value
+                .init(width, height, x, y, background, title, viewport)
+                .await
         )
     }
 
@@ -347,6 +352,7 @@ impl NativeAppBuilder {
             x: None,
             y: None,
             background: None,
+            title: None,
             viewport: None,
             width: None,
             height: None,
@@ -417,6 +423,12 @@ impl NativeAppBuilder {
     #[must_use]
     pub fn with_background(mut self, color: Color) -> Self {
         self.background.replace(color);
+        self
+    }
+
+    #[must_use]
+    pub fn with_title(mut self, title: String) -> Self {
+        self.title.replace(title);
         self
     }
 
@@ -552,6 +564,7 @@ impl NativeAppBuilder {
             x: self.x,
             y: self.y,
             background: self.background,
+            title: self.title.clone(),
             viewport: self.viewport.clone(),
             width: self.width,
             height: self.height,
@@ -827,6 +840,7 @@ pub struct NativeApp {
     x: Option<i32>,
     y: Option<i32>,
     background: Option<Color>,
+    title: Option<String>,
     viewport: Option<String>,
     width: Option<f32>,
     height: Option<f32>,
@@ -845,6 +859,7 @@ impl NativeApp {
                 self.x,
                 self.y,
                 self.background,
+                self.title.as_deref(),
                 self.viewport.as_deref(),
             )
             .await?;

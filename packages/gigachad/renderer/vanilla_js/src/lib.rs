@@ -119,6 +119,7 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
         content: String,
         viewport: Option<&str>,
         background: Option<Color>,
+        title: Option<&str>,
     ) -> String {
         let mut responsive_css = vec![];
         self.default
@@ -137,6 +138,9 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
         html! {
             html {
                 head {
+                    @if let Some(title) = title {
+                        title { (title) }
+                    }
                     style {(format!(r"
                             body {{
                                 margin: 0;{background};

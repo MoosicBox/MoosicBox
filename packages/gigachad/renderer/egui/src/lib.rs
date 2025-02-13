@@ -123,7 +123,7 @@ impl RenderRunner for EguiRenderRunner {
 
         log::debug!("run: starting");
         if let Err(e) = eframe::run_native(
-            "MoosicBox",
+            self.app.title.as_deref().unwrap_or("MoosicBox"),
             options,
             Box::new(|cc| {
                 egui_extras::install_image_loaders(&cc.egui_ctx);
@@ -312,12 +312,14 @@ impl Renderer for EguiRenderer {
         x: Option<i32>,
         y: Option<i32>,
         background: Option<Color>,
+        title: Option<&str>,
         _viewport: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         self.width = Some(width);
         self.height = Some(height);
         self.x = x;
         self.y = y;
+        self.app.title = title.map(Into::into);
         self.app.background = background.map(Into::into);
 
         log::debug!("start: spawning listen thread");
@@ -599,6 +601,7 @@ struct EguiApp {
     action_throttle: Arc<RwLock<HashMap<usize, (Instant, u64)>>>,
     router: Router,
     background: Option<Color32>,
+    title: Option<String>,
     request_action: Sender<(String, Option<Value>)>,
     on_resize: Sender<(f32, f32)>,
     side_effects: Arc<Mutex<VecDeque<Handler>>>,
@@ -641,6 +644,7 @@ impl EguiApp {
             action_throttle: Arc::new(RwLock::new(HashMap::new())),
             router,
             background: None,
+            title: None,
             request_action,
             on_resize,
             side_effects: Arc::new(Mutex::new(VecDeque::new())),

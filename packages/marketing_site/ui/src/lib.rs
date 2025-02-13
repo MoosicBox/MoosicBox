@@ -47,6 +47,7 @@ pub fn header() -> Markup {
                 {
                     @let icon_size = 40;
                     img
+                        alt="MoosicBox logo"
                         sx-width=(icon_size)
                         sx-height=(icon_size)
                         sx-margin-right=(5)

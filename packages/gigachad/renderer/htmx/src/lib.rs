@@ -90,6 +90,7 @@ impl HtmlTagRenderer for HtmxTagRenderer {
         content: String,
         viewport: Option<&str>,
         background: Option<Color>,
+        title: Option<&str>,
     ) -> String {
         let background = background.map(|x| format!("background:rgb({},{},{})", x.r, x.g, x.b));
         let background = background.as_deref().unwrap_or("");
@@ -103,6 +104,9 @@ impl HtmlTagRenderer for HtmxTagRenderer {
         html! {
             html {
                 head {
+                    @if let Some(title) = title {
+                        title { (title) }
+                    }
                     script
                         src="https://unpkg.com/htmx.org@2.0.3"
                         integrity="sha384-0895/pl2MU10Hqc6jd4RvrthNlDiE9U1tWmX7WRESftEDRosgxNsQG/Ze9YMRzHq"
