@@ -142,7 +142,15 @@ pub fn home() -> Markup {
                 sx-gap="calc(min(100, 5%))"
             {
                 div sx-flex-grow=(2) {
-                    h1 sx-font-size=(50) sx-text-align=(TextAlign::End) {
+                    h1
+                        id="splashscreen-motto"
+                        sx-font-size=(50)
+                        sx-text-align=(
+                            if_responsive("mobile")
+                                .then::<TextAlign>(TextAlign::Center)
+                                .or_else(TextAlign::End)
+                        )
+                    {
                         "Listen to your HiFi music anywhere"
                     }
                 }
