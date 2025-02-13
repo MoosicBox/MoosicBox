@@ -6,7 +6,7 @@ use std::{collections::HashMap, io::Write};
 use gigachad_renderer::{Color, HtmlTagRenderer};
 use gigachad_renderer_html::{html::write_attr, DefaultHtmlTagRenderer};
 use gigachad_transformer::{models::Route, Container, ResponsiveTrigger};
-use maud::{html, PreEscaped};
+use maud::{html, PreEscaped, DOCTYPE};
 
 #[derive(Default, Clone)]
 pub struct HtmxTagRenderer {
@@ -102,6 +102,7 @@ impl HtmlTagRenderer for HtmxTagRenderer {
         let responsive_css = std::str::from_utf8(&responsive_css).unwrap();
 
         html! {
+            (DOCTYPE)
             html style="height:100%" lang="en" {
                 head {
                     @if let Some(title) = title {

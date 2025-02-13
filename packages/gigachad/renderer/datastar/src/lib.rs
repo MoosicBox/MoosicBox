@@ -7,7 +7,7 @@ use gigachad_renderer::{Color, HtmlTagRenderer};
 use gigachad_renderer_html::DefaultHtmlTagRenderer;
 use gigachad_router::Container;
 use gigachad_transformer::ResponsiveTrigger;
-use maud::{html, PreEscaped};
+use maud::{html, PreEscaped, DOCTYPE};
 
 #[derive(Default, Clone)]
 pub struct DatastarTagRenderer {
@@ -61,6 +61,7 @@ impl HtmlTagRenderer for DatastarTagRenderer {
         let responsive_css = std::str::from_utf8(&responsive_css).unwrap();
 
         html! {
+            (DOCTYPE)
             html style="height:100%" lang="en" {
                 head {
                     @if let Some(title) = title {

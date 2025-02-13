@@ -7,7 +7,7 @@ use const_format::concatcp;
 use gigachad_renderer::{Color, HtmlTagRenderer};
 use gigachad_renderer_html::{html::write_attr, DefaultHtmlTagRenderer};
 use gigachad_transformer::{models::Route, Container, ResponsiveTrigger};
-use maud::{html, PreEscaped};
+use maud::{html, PreEscaped, DOCTYPE};
 
 #[derive(Default, Clone)]
 pub struct VanillaJsTagRenderer {
@@ -136,6 +136,7 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
         let script = html! { script src={"/js/"(SCRIPT_NAME)} {} };
 
         html! {
+            (DOCTYPE)
             html style="height:100%" lang="en" {
                 head {
                     @if let Some(title) = title {

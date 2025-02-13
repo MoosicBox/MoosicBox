@@ -21,7 +21,7 @@ use gigachad_transformer::{
 use html::{
     element_classes_to_html, element_style_to_html, number_to_html_string, write_css_attr_important,
 };
-use maud::{html, PreEscaped};
+use maud::{html, PreEscaped, DOCTYPE};
 use tokio::runtime::Handle;
 
 #[cfg(feature = "actix")]
@@ -276,6 +276,7 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
         let responsive_css = std::str::from_utf8(&responsive_css).unwrap();
 
         html! {
+            (DOCTYPE)
             html style="height:100%" lang="en" {
                 head {
                     @if let Some(title) = title {
