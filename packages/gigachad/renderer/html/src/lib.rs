@@ -128,7 +128,7 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                     OverrideItem::Direction(x) => {
                         write_css_attr_important(
                             f,
-                            b"flex-direction",
+                            override_item_to_css_name(o),
                             match x {
                                 LayoutDirection::Row => b"row",
                                 LayoutDirection::Column => b"column",
@@ -138,7 +138,7 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                     OverrideItem::Visibility(x) => {
                         write_css_attr_important(
                             f,
-                            b"visibility",
+                            override_item_to_css_name(o),
                             match x {
                                 Visibility::Visible => b"visible",
                                 Visibility::Hidden => b"hidden",
@@ -148,14 +148,14 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                     OverrideItem::Hidden(x) => {
                         write_css_attr_important(
                             f,
-                            b"display",
+                            override_item_to_css_name(o),
                             if *x { b"none" } else { b"initial" },
                         )?;
                     }
                     OverrideItem::AlignItems(x) => {
                         write_css_attr_important(
                             f,
-                            b"align-items",
+                            override_item_to_css_name(o),
                             match x {
                                 AlignItems::Start => b"start",
                                 AlignItems::Center => b"center",
@@ -166,7 +166,7 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                     OverrideItem::TextAlign(x) => {
                         write_css_attr_important(
                             f,
-                            b"text-align",
+                            override_item_to_css_name(o),
                             match x {
                                 TextAlign::Start => b"start",
                                 TextAlign::Center => b"center",
@@ -175,31 +175,37 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                             },
                         )?;
                     }
-                    OverrideItem::MarginLeft(x) => {
+                    OverrideItem::MarginLeft(x)
+                    | OverrideItem::MarginRight(x)
+                    | OverrideItem::MarginTop(x)
+                    | OverrideItem::MarginBottom(x)
+                    | OverrideItem::Width(x)
+                    | OverrideItem::MinWidth(x)
+                    | OverrideItem::MaxWidth(x)
+                    | OverrideItem::Height(x)
+                    | OverrideItem::MinHeight(x)
+                    | OverrideItem::MaxHeight(x)
+                    | OverrideItem::Left(x)
+                    | OverrideItem::Right(x)
+                    | OverrideItem::Top(x)
+                    | OverrideItem::Bottom(x)
+                    | OverrideItem::ColumnGap(x)
+                    | OverrideItem::RowGap(x)
+                    | OverrideItem::BorderTopLeftRadius(x)
+                    | OverrideItem::BorderTopRightRadius(x)
+                    | OverrideItem::BorderBottomLeftRadius(x)
+                    | OverrideItem::BorderBottomRightRadius(x)
+                    | OverrideItem::PaddingLeft(x)
+                    | OverrideItem::PaddingRight(x)
+                    | OverrideItem::PaddingTop(x)
+                    | OverrideItem::PaddingBottom(x)
+                    | OverrideItem::Opacity(x)
+                    | OverrideItem::TranslateX(x)
+                    | OverrideItem::TranslateY(x)
+                    | OverrideItem::FontSize(x) => {
                         write_css_attr_important(
                             f,
-                            b"margin-left",
-                            number_to_html_string(x, true).as_bytes(),
-                        )?;
-                    }
-                    OverrideItem::MarginRight(x) => {
-                        write_css_attr_important(
-                            f,
-                            b"margin-right",
-                            number_to_html_string(x, true).as_bytes(),
-                        )?;
-                    }
-                    OverrideItem::MarginTop(x) => {
-                        write_css_attr_important(
-                            f,
-                            b"margin-top",
-                            number_to_html_string(x, true).as_bytes(),
-                        )?;
-                    }
-                    OverrideItem::MarginBottom(x) => {
-                        write_css_attr_important(
-                            f,
-                            b"margin-bottom",
+                            override_item_to_css_name(o),
                             number_to_html_string(x, true).as_bytes(),
                         )?;
                     }
@@ -211,22 +217,7 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                     | OverrideItem::JustifyContent(..)
                     | OverrideItem::TextDecoration(..)
                     | OverrideItem::FontFamily(..)
-                    | OverrideItem::Width(..)
-                    | OverrideItem::MinWidth(..)
-                    | OverrideItem::MaxWidth(..)
-                    | OverrideItem::Height(..)
-                    | OverrideItem::MinHeight(..)
-                    | OverrideItem::MaxHeight(..)
                     | OverrideItem::Flex(..)
-                    | OverrideItem::ColumnGap(..)
-                    | OverrideItem::RowGap(..)
-                    | OverrideItem::Opacity(..)
-                    | OverrideItem::Left(..)
-                    | OverrideItem::Right(..)
-                    | OverrideItem::Top(..)
-                    | OverrideItem::Bottom(..)
-                    | OverrideItem::TranslateX(..)
-                    | OverrideItem::TranslateY(..)
                     | OverrideItem::Cursor(..)
                     | OverrideItem::Position(..)
                     | OverrideItem::Background(..)
@@ -234,15 +225,6 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                     | OverrideItem::BorderRight(..)
                     | OverrideItem::BorderBottom(..)
                     | OverrideItem::BorderLeft(..)
-                    | OverrideItem::BorderTopLeftRadius(..)
-                    | OverrideItem::BorderTopRightRadius(..)
-                    | OverrideItem::BorderBottomLeftRadius(..)
-                    | OverrideItem::BorderBottomRightRadius(..)
-                    | OverrideItem::PaddingLeft(..)
-                    | OverrideItem::PaddingRight(..)
-                    | OverrideItem::PaddingTop(..)
-                    | OverrideItem::PaddingBottom(..)
-                    | OverrideItem::FontSize(..)
                     | OverrideItem::Color(..)
                     | OverrideItem::Debug(..)
                     | OverrideItem::Route(..) => {}
@@ -323,6 +305,62 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
             }
         }
         .into_string()
+    }
+}
+
+const fn override_item_to_css_name(item: &OverrideItem) -> &'static [u8] {
+    match item {
+        OverrideItem::StrId(..) => b"id",
+        OverrideItem::Classes(..) => b"classes",
+        OverrideItem::Data(..) => b"data",
+        OverrideItem::Direction(..) => b"flex-direction",
+        OverrideItem::OverflowX(..) => b"overflow-x",
+        OverrideItem::OverflowY(..) => b"overflow-y",
+        OverrideItem::JustifyContent(..) => b"justify-content",
+        OverrideItem::AlignItems(..) => b"align-items",
+        OverrideItem::TextAlign(..) => b"text-align",
+        OverrideItem::TextDecoration(..) => b"text-decoration",
+        OverrideItem::FontFamily(..) => b"font-family",
+        OverrideItem::Width(..) => b"width",
+        OverrideItem::MinWidth(..) => b"min-width",
+        OverrideItem::MaxWidth(..) => b"max-width",
+        OverrideItem::Height(..) => b"height",
+        OverrideItem::MinHeight(..) => b"min-height",
+        OverrideItem::MaxHeight(..) => b"max-height",
+        OverrideItem::Flex(..) => b"flex",
+        OverrideItem::ColumnGap(..) => b"column-gap",
+        OverrideItem::RowGap(..) => b"row-gap",
+        OverrideItem::Opacity(..) => b"opacity",
+        OverrideItem::Left(..) => b"left",
+        OverrideItem::Right(..) => b"right",
+        OverrideItem::Top(..) => b"top",
+        OverrideItem::Bottom(..) => b"bottom",
+        OverrideItem::TranslateX(..) | OverrideItem::TranslateY(..) => b"transform",
+        OverrideItem::Cursor(..) => b"cursor",
+        OverrideItem::Position(..) => b"position",
+        OverrideItem::Background(..) => b"background",
+        OverrideItem::BorderTop(..) => b"border-top",
+        OverrideItem::BorderRight(..) => b"border-right",
+        OverrideItem::BorderBottom(..) => b"border-bottom",
+        OverrideItem::BorderLeft(..) => b"border-left",
+        OverrideItem::BorderTopLeftRadius(..) => b"border-top-left-radius",
+        OverrideItem::BorderTopRightRadius(..) => b"border-top-right-radius",
+        OverrideItem::BorderBottomLeftRadius(..) => b"border-bottom-left-radius",
+        OverrideItem::BorderBottomRightRadius(..) => b"border-bottom-right-radius",
+        OverrideItem::MarginLeft(..) => b"margin-left",
+        OverrideItem::MarginRight(..) => b"margin-right",
+        OverrideItem::MarginTop(..) => b"margin-top",
+        OverrideItem::MarginBottom(..) => b"margin-bottom",
+        OverrideItem::PaddingLeft(..) => b"padding-left",
+        OverrideItem::PaddingRight(..) => b"padding-right",
+        OverrideItem::PaddingTop(..) => b"padding-top",
+        OverrideItem::PaddingBottom(..) => b"padding-bottom",
+        OverrideItem::FontSize(..) => b"font-size",
+        OverrideItem::Color(..) => b"color",
+        OverrideItem::Hidden(..) => b"display",
+        OverrideItem::Debug(..) => b"debug",
+        OverrideItem::Visibility(..) => b"visibility",
+        OverrideItem::Route(..) => b"route",
     }
 }
 
