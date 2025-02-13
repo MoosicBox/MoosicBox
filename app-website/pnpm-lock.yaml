@@ -12,8 +12,8 @@ importers:
         specifier: ^0.9.4
         version: 0.9.4(prettier-plugin-astro@0.13.0)(prettier@3.5.0)(typescript@5.7.3)
       '@astrojs/node':
-        specifier: ^9.0.2
-        version: 9.0.2(astro@5.2.5(@types/node@22.13.1)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.34.6)(typescript@5.7.3)(yaml@2.7.0))
+        specifier: ^9.0.3
+        version: 9.0.3(astro@5.2.6(@types/node@22.13.1)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.34.6)(typescript@5.7.3)(yaml@2.7.0))
       '@astrojs/solid-js':
         specifier: ^5.0.4
         version: 5.0.4(@testing-library/jest-dom@5.17.0)(@types/node@22.13.1)(jiti@2.4.2)(solid-js@1.9.4)(yaml@2.7.0)
@@ -39,8 +39,8 @@ importers:
         specifier: ^6.3.0
         version: 6.3.0(solid-js@1.9.4)
       astro:
-        specifier: ^5.2.5
-        version: 5.2.5(@types/node@22.13.1)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.34.6)(typescript@5.7.3)(yaml@2.7.0)
+        specifier: ^5.2.6
+        version: 5.2.6(@types/node@22.13.1)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.34.6)(typescript@5.7.3)(yaml@2.7.0)
       astro-sst:
         specifier: ^2.45.2
         version: 2.45.2
@@ -118,8 +118,8 @@ importers:
         specifier: ^11.1.0
         version: 11.1.0(eslint@9.20.1(jiti@2.4.2))
       globals:
-        specifier: ^15.14.0
-        version: 15.14.0
+        specifier: ^15.15.0
+        version: 15.15.0
       jsdom:
         specifier: ^24.1.3
         version: 24.1.3
@@ -130,8 +130,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.8.4
-        version: 3.8.4
+        specifier: ^3.8.8
+        version: 3.8.8
       typescript:
         specifier: ^5.7.3
         version: 5.7.3
@@ -144,8 +144,8 @@ importers:
 
 packages:
 
-  '@adobe/css-tools@4.4.1':
-    resolution: {integrity: sha512-12WGKBQzjUAI4ayyF4IAtfw2QR/IDoqk6jTddXDhtYTJF9ASmoE1zst7cVtP0aL/F1jUJL5r+JxKXKEgHNbEUQ==}
+  '@adobe/css-tools@4.4.2':
+    resolution: {integrity: sha512-baYZExFpsdkBNuvGKTKWCwKH57HRZLVtycZS05WTQNVOiXVSeAki3nU35zlRbToeMW8aHlJfyS+1C4BOv27q0A==}
 
   '@ampproject/remapping@2.3.0':
     resolution: {integrity: sha512-30iZtAPgz+LTIYoeivqYo853f02jBYSd5uGnGpkFV0M3xOt9aN73erkgYAmZU43x4VfqcnLxW9Kpg3R5LC4YYw==}
@@ -184,8 +184,8 @@ packages:
   '@astrojs/markdown-remark@6.1.0':
     resolution: {integrity: sha512-emZNNSTPGgPc3V399Cazpp5+snogjaF04ocOSQn9vy3Kw/eIC4vTQjXOrWDEoSEy+AwPDZX9bQ4wd3bxhpmGgQ==}
 
-  '@astrojs/node@9.0.2':
-    resolution: {integrity: sha512-MFFYRa5yQEBegKrSUPMeKnjDMB4okTrkVRA40/mU3ADKrKY5VV3af0LS+NYkH9pFOvj/OsPbdeQVxQ0jI3f6aQ==}
+  '@astrojs/node@9.0.3':
+    resolution: {integrity: sha512-bGTahuMtXglS+xoYL4e9UplrF0eRDMt+ixKePdhy3hVuuYA+px5oRqsVnArAWkYWKMKKnI/X2l9IxSkooLc86Q==}
     peerDependencies:
       astro: ^5.0.0
 
@@ -1628,8 +1628,8 @@ packages:
   astro-sst@2.45.2:
     resolution: {integrity: sha512-Zrrip/9VP5kvoQJ+Kj2tJA1h7mQ3ShAsfKXMqVcz8vqMqCsFjEZPLHDu8zYTGMr3WOX8r3vzY6u5nOeaKFg8ZQ==}
 
-  astro@5.2.5:
-    resolution: {integrity: sha512-AYXyYkc+c5xbKTm48FyQA91y81nXyNPAaoyafR0LUugE4lAwuvIUcXDBfMzmbuP1lGRvsE33G2oypv6gbGaPFg==}
+  astro@5.2.6:
+    resolution: {integrity: sha512-CrTuJMwpWF9kmOhX+cl6uPqNbTRrHO7eXggFP9SK7+Bsen/7FpJtA6k1p/ALleuV5ndJLqn/9tpmP3qACHPjYA==}
     engines: {node: ^18.17.1 || ^20.3.0 || >=22.0.0, npm: '>=9.6.5', pnpm: '>=7.1.0'}
     hasBin: true
 
@@ -1731,8 +1731,8 @@ packages:
     resolution: {integrity: sha512-b6Ilus+c3RrdDk+JhLKUAQfzzgLEPy6wcXqS7f/xe1EETvsDP6GORG7SFuOs6cID5YkqchW/LXZbX5bc8j7ZcQ==}
     engines: {node: '>=8'}
 
-  call-bind-apply-helpers@1.0.1:
-    resolution: {integrity: sha512-BhYE+WDaywFg2TBWYNXAE+8B1ATnThNBqXHP5nQu0jWJdVvY2hvkpyB3qOmtmDePiS5/BDQ8wASEWGMWRG148g==}
+  call-bind-apply-helpers@1.0.2:
+    resolution: {integrity: sha512-Sp1ablJ0ivDkSzjcaJdxEunN5/XvksFJ2sMBFfq6x0ryhQV/2b/KwFe21cMpmHtPOSij8K99/wSfoEuTObmuMQ==}
     engines: {node: '>= 0.4'}
 
   call-bind@1.0.8:
@@ -2019,8 +2019,8 @@ packages:
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
 
-  electron-to-chromium@1.5.97:
-    resolution: {integrity: sha512-HKLtaH02augM7ZOdYRuO19rWDeY+QSJ1VxnXFa/XDFLf07HvM90pALIJFgrO+UVaajI3+aJMMpojoUTLZyQ7JQ==}
+  electron-to-chromium@1.5.98:
+    resolution: {integrity: sha512-bI/LbtRBxU2GzK7KK5xxFd2y9Lf9XguHooPYbcXWy6wUoT8NMnffsvRhPmSeUHLSDKAEtKuTaEtK4Ms15zkIEA==}
 
   emmet@2.4.11:
     resolution: {integrity: sha512-23QPJB3moh/U9sT4rQzGgeyyGIrcM+GH5uVYg2C6wZIxAIJq7Ng3QLT79tl8FUwDXhyq9SusfknOrofAKqvgyQ==}
@@ -2414,8 +2414,8 @@ packages:
     resolution: {integrity: sha512-oahGvuMGQlPw/ivIYBjVSrWAfWLBeku5tpPE2fOPLi+WHffIWbuh2tCjhyQhTBPMf5E9jDEH4FOmTYgYwbKwtQ==}
     engines: {node: '>=18'}
 
-  globals@15.14.0:
-    resolution: {integrity: sha512-OkToC372DtlQeje9/zHIo5CT8lRP/FUgEOKBEhU4e0abL7J7CD24fD9ohiLN5hagG/kWCYj4K5oaxxtj2Z0Dig==}
+  globals@15.15.0:
+    resolution: {integrity: sha512-7ACyT3wmyp3I61S4fG682L0VA2RGD9otkqGJIwNUMF1SWUombIIk+af1unuDYgMm082aHYwD+mzJvv9Iu8dsgg==}
     engines: {node: '>=18'}
 
   globalthis@1.0.4:
@@ -3685,33 +3685,33 @@ packages:
   sprintf-js@1.0.3:
     resolution: {integrity: sha512-D9cPgkvLlV3t3IzL0D0YLvGA9Ahk4PcvVwUbN0dSGr1aP0Nrt4AEnTUbuGvquEC0mA64Gqt1fzirlRs5ibXx8g==}
 
-  sst-darwin-arm64@3.8.4:
-    resolution: {integrity: sha512-I4gAox26Qo+8W6CWuQARHH3gH1hbLLVxZg3QVwPABYZp71NJu0qMS0XmpBJxpgPz1VqiS+r5OCI8MgCSjqLSAA==}
+  sst-darwin-arm64@3.8.8:
+    resolution: {integrity: sha512-FJyYk63zZ89pXf/PZnZrOHTU9reuP2IE6kdFlakxukS0SX2sGHv0BXkoiS1f+9p3VDf+74+VKDrZGn1ECIiNmA==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.8.4:
-    resolution: {integrity: sha512-xGw5A6DELB6Wq0OLETIFSadE0VyCYzkMIll/pjZpbEeP7FRO+kPzax2vifAY+wFESmzp5Em4VVxbqLyk4+bHsQ==}
+  sst-darwin-x64@3.8.8:
+    resolution: {integrity: sha512-0jNpXXkSW1pGI5vVg2je8mlmCegjJJmWVSrUXb6wJqSVYySuoZIwqQB5jvCePts3YM+/NnW5INeUFurbC6j/dQ==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.8.4:
-    resolution: {integrity: sha512-MVdN3Okb1bPHaEZYLnm5E0eUkxOCudCGWEsPQsSIRFyWoCM3pwJHLux10CENv0oJhRMfaeMN+O0ervGUIW27bA==}
+  sst-linux-arm64@3.8.8:
+    resolution: {integrity: sha512-vl/H5EDkHeFW2nnOIEOUV/oNE4ns/I1F/KtK/faDY2VotxuPjT3Uvtqdg1A2mItvyx1FKwI8/KgP9CytVagRrw==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.8.4:
-    resolution: {integrity: sha512-sKO6HYHPzBEW7/DecicuIQa0v8mysz3TmbdJgN6sObNH14ACOWzG+03pnMXHi0BtkRT/ta4UnwW6R84y6QyvVw==}
+  sst-linux-x64@3.8.8:
+    resolution: {integrity: sha512-S+iCcFhtGqK5px0+oJxic5TSHLZdulWfy+qYzSMl+e3evQGIcJmwHjLuEwlmyuwwgs0+dZYt9NYhLTKyUThLDA==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.8.4:
-    resolution: {integrity: sha512-fPzc6ViqYZigbFLs0raXBNZ7sLww7QFFoBgZkSkKDisD5r2eNxIGzKJuo2OEhntIBTpwEb/eHmDbDW5hhbEw4w==}
+  sst-linux-x86@3.8.8:
+    resolution: {integrity: sha512-lfGHfbL7U196Y8MtqCvBNOz9qaNsWGldPj6HLR6KsW5LTNxFYYehGVebB+tj0uK3gjWPou1bGPASt9/Q69VwIQ==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.8.4:
-    resolution: {integrity: sha512-zXIL+dCaxYuK/vQPF6EKO1ZBxNoP7pGS6s4eIsfwmvqHukujVwQUwsD+Zl+HP66B6Rb+QX5tBBIxjCto2Oje2g==}
+  sst@3.8.8:
+    resolution: {integrity: sha512-1de39fi3m2TdY2v/C/58qRx1fXbM8Nmg2+7B7J2fXabYTxYRP/ky3K7Jk/9aS649U5iI2Gmnvs3ltW7wO1/8FA==}
     hasBin: true
 
   stack-utils@2.0.6:
@@ -4469,7 +4469,7 @@ packages:
 
 snapshots:
 
-  '@adobe/css-tools@4.4.1': {}
+  '@adobe/css-tools@4.4.2': {}
 
   '@ampproject/remapping@2.3.0':
     dependencies:
@@ -4552,9 +4552,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@astrojs/node@9.0.2(astro@5.2.5(@types/node@22.13.1)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.34.6)(typescript@5.7.3)(yaml@2.7.0))':
+  '@astrojs/node@9.0.3(astro@5.2.6(@types/node@22.13.1)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.34.6)(typescript@5.7.3)(yaml@2.7.0))':
     dependencies:
-      astro: 5.2.5(@types/node@22.13.1)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.34.6)(typescript@5.7.3)(yaml@2.7.0)
+      '@astrojs/internal-helpers': 0.5.1
+      astro: 5.2.6(@types/node@22.13.1)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.34.6)(typescript@5.7.3)(yaml@2.7.0)
       send: 1.1.0
       server-destroy: 1.0.1
     transitivePeerDependencies:
@@ -5892,7 +5893,7 @@ snapshots:
 
   '@testing-library/jest-dom@5.17.0':
     dependencies:
-      '@adobe/css-tools': 4.4.1
+      '@adobe/css-tools': 4.4.2
       '@babel/runtime': 7.26.7
       '@types/testing-library__jest-dom': 5.14.9
       aria-query: 5.3.2
@@ -6319,7 +6320,7 @@ snapshots:
       '@astrojs/webapi': 3.0.0
       set-cookie-parser: 2.7.1
 
-  astro@5.2.5(@types/node@22.13.1)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.34.6)(typescript@5.7.3)(yaml@2.7.0):
+  astro@5.2.6(@types/node@22.13.1)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.34.6)(typescript@5.7.3)(yaml@2.7.0):
     dependencies:
       '@astrojs/compiler': 2.10.4
       '@astrojs/internal-helpers': 0.5.1
@@ -6522,7 +6523,7 @@ snapshots:
   browserslist@4.24.4:
     dependencies:
       caniuse-lite: 1.0.30001699
-      electron-to-chromium: 1.5.97
+      electron-to-chromium: 1.5.98
       node-releases: 2.0.19
       update-browserslist-db: 1.1.2(browserslist@4.24.4)
 
@@ -6543,21 +6544,21 @@ snapshots:
 
   cac@6.7.14: {}
 
-  call-bind-apply-helpers@1.0.1:
+  call-bind-apply-helpers@1.0.2:
     dependencies:
       es-errors: 1.3.0
       function-bind: 1.1.2
 
   call-bind@1.0.8:
     dependencies:
-      call-bind-apply-helpers: 1.0.1
+      call-bind-apply-helpers: 1.0.2
       es-define-property: 1.0.1
       get-intrinsic: 1.2.7
       set-function-length: 1.2.2
 
   call-bound@1.0.3:
     dependencies:
-      call-bind-apply-helpers: 1.0.1
+      call-bind-apply-helpers: 1.0.2
       get-intrinsic: 1.2.7
 
   callsites@3.1.0: {}
@@ -6807,7 +6808,7 @@ snapshots:
 
   dunder-proto@1.0.1:
     dependencies:
-      call-bind-apply-helpers: 1.0.1
+      call-bind-apply-helpers: 1.0.2
       es-errors: 1.3.0
       gopd: 1.2.0
 
@@ -6829,7 +6830,7 @@ snapshots:
 
   ee-first@1.1.1: {}
 
-  electron-to-chromium@1.5.97: {}
+  electron-to-chromium@1.5.98: {}
 
   emmet@2.4.11:
     dependencies:
@@ -7035,7 +7036,7 @@ snapshots:
       astro-eslint-parser: 1.2.1
       eslint: 9.20.1(jiti@2.4.2)
       eslint-compat-utils: 0.6.4(eslint@9.20.1(jiti@2.4.2))
-      globals: 15.14.0
+      globals: 15.15.0
       postcss: 8.5.2
       postcss-selector-parser: 7.1.0
     transitivePeerDependencies:
@@ -7316,7 +7317,7 @@ snapshots:
 
   get-intrinsic@1.2.7:
     dependencies:
-      call-bind-apply-helpers: 1.0.1
+      call-bind-apply-helpers: 1.0.2
       es-define-property: 1.0.1
       es-errors: 1.3.0
       es-object-atoms: 1.1.1
@@ -7363,7 +7364,7 @@ snapshots:
 
   globals@14.0.0: {}
 
-  globals@15.14.0: {}
+  globals@15.15.0: {}
 
   globalthis@1.0.4:
     dependencies:
@@ -9050,32 +9051,32 @@ snapshots:
 
   sprintf-js@1.0.3: {}
 
-  sst-darwin-arm64@3.8.4:
+  sst-darwin-arm64@3.8.8:
     optional: true
 
-  sst-darwin-x64@3.8.4:
+  sst-darwin-x64@3.8.8:
     optional: true
 
-  sst-linux-arm64@3.8.4:
+  sst-linux-arm64@3.8.8:
     optional: true
 
-  sst-linux-x64@3.8.4:
+  sst-linux-x64@3.8.8:
     optional: true
 
-  sst-linux-x86@3.8.4:
+  sst-linux-x86@3.8.8:
     optional: true
 
-  sst@3.8.4:
+  sst@3.8.8:
     dependencies:
       aws4fetch: 1.0.20
       jose: 5.2.3
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.8.4
-      sst-darwin-x64: 3.8.4
-      sst-linux-arm64: 3.8.4
-      sst-linux-x64: 3.8.4
-      sst-linux-x86: 3.8.4
+      sst-darwin-arm64: 3.8.8
+      sst-darwin-x64: 3.8.8
+      sst-linux-arm64: 3.8.8
+      sst-linux-x64: 3.8.8
+      sst-linux-x86: 3.8.8
 
   stack-utils@2.0.6:
     dependencies:
