@@ -1910,6 +1910,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "castaway"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0abae9be0aaf9ea96a3b1b8b1b55c602ca751eba1b1500220cea4ecbafe7c0d5"
+dependencies = [
+ "rustversion",
+]
+
+[[package]]
 name = "cc"
 version = "1.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2204,6 +2213,19 @@ checksum = "ba5a308b75df32fe02788e748662718f03fde005016435c444eea572398219fd"
 dependencies = [
  "bytes",
  "memchr",
+]
+
+[[package]]
+name = "compact_str"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f86b9c4c00838774a6d902ef931eff7470720c51d90c2e32cfe15dc304737b3f"
+dependencies = [
+ "castaway",
+ "cfg-if",
+ "itoa 1.0.14",
+ "ryu",
+ "static_assertions",
 ]
 
 [[package]]
@@ -9665,9 +9687,9 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.13.4"
+version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c0fef6c4230e4ccf618a35c59d7ede15dea37de8427500f50aff708806e42ec"
+checksum = "2796faa41db3ec313a31f7624d9286acf277b52de526150b7e69f3debf891ee5"
 dependencies = [
  "bytes",
  "prost-derive",
@@ -9675,12 +9697,12 @@ dependencies = [
 
 [[package]]
 name = "prost-derive"
-version = "0.13.4"
+version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "157c5a9d7ea5c2ed2d9fb8f495b64759f7816c7eaea54ba3978f0d63000162e3"
+checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.98",
@@ -9688,9 +9710,9 @@ dependencies = [
 
 [[package]]
 name = "prost-types"
-version = "0.13.4"
+version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc2f1e56baa61e93533aebc21af4d2134b70f66275e0fcdf3cbe43d77ff7e8fc"
+checksum = "52c2c1bf36ddb1a1c396b3601a3cec27c2462e45f07c386894ec3ccf5332bd16"
 dependencies = [
  "prost",
 ]
@@ -11920,9 +11942,9 @@ dependencies = [
 
 [[package]]
 name = "swc_common"
-version = "6.1.0"
+version = "6.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4247defb6017aa8799c43e03da35a5ef7ce737189001392083619711c6d4811e"
+checksum = "7327d132e85f8a50e0a9e2458a7b44726b2db2f7f9c8b8a556f07f359c42a461"
 dependencies = [
  "ast_node",
  "better_scoped_tls",
@@ -11993,11 +12015,12 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_codegen"
-version = "6.0.2"
+version = "6.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b342d4f7b09d2bc669c92e53748bc3db134ecb2473e4f16bc3eec6ec473ba49a"
+checksum = "fa6bdce26d910981128bc709a997292a5d1c98d54a9832154a1083d1adb6fdd7"
 dependencies = [
  "ascii",
+ "compact_str",
  "memchr",
  "num-bigint",
  "once_cell",
@@ -12049,9 +12072,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_minifier"
-version = "10.2.0"
+version = "10.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da67643e5f58e678f6228e45bddfe7550009972da331bd7927b252796c4aa764"
+checksum = "d2e2f07c54b61c282ffc1563e0e7683fc4943ff2021f9026017c2a2fe5ce5f5b"
 dependencies = [
  "arrayvec",
  "indexmap 2.7.1",
@@ -12085,9 +12108,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_parser"
-version = "8.0.1"
+version = "8.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a3e9d2f5091bb851423ca66c239802212e2c80451242ff29941bc21058376ef"
+checksum = "1a359eaebed82e5e13e1004d1e4003931b66d8b8edab8884f3d02ed827df7530"
 dependencies = [
  "either",
  "new_debug_unreachable",
@@ -14854,9 +14877,9 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "window-vibrancy"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ea403deff7b51fff19e261330f71608ff2cdef5721d72b64180bb95be7c4150"
+checksum = "831ad7678290beae36be6f9fad9234139c7f00f3b536347de7745621716be82d"
 dependencies = [
  "objc2",
  "objc2-app-kit",

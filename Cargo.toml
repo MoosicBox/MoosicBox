@@ -286,12 +286,12 @@ static_init = "1.0.3"
 strum = "0.27.0"
 strum_macros = "0.27.0"
 swc_bundler = "9.0.0"
-swc_common = { version = "6.1.0", features = ["tty-emitter"] }
+swc_common = { version = "6.1.1", features = ["tty-emitter"] }
 swc_ecma_ast = "6.1.0"
-swc_ecma_codegen = "6.0.2"
+swc_ecma_codegen = "6.1.0"
 swc_ecma_loader = { version = "6.0.0", features = ["cache", "node"] }
-swc_ecma_minifier = "10.2.0"
-swc_ecma_parser = "8.0.1"
+swc_ecma_minifier = "10.2.1"
+swc_ecma_parser = "8.0.2"
 swc_ecma_transforms_base = "9.0.1"
 swc_ecma_transforms_typescript = "9.0.0"
 swc_ecma_visit = "6.0.0"
