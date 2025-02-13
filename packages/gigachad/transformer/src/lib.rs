@@ -9,7 +9,8 @@ use gigachad_transformer_models::{
     AlignItems, Cursor, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, LinkTarget,
     Position, Route, TextAlign, TextDecorationLine, TextDecorationStyle, Visibility,
 };
-use serde::{Deserialize, Serialize};
+use parse::parse_number;
+use serde::{de::Error, Deserialize, Serialize};
 use serde_json::Value;
 
 pub use gigachad_transformer_models as models;
@@ -115,7 +116,7 @@ impl std::fmt::Display for Calculation {
     }
 }
 
-#[derive(Clone, Debug, EnumDiscriminants, Serialize, Deserialize)]
+#[derive(Clone, Debug, EnumDiscriminants, Serialize)]
 #[strum_discriminants(derive(EnumIter))]
 #[strum_discriminants(name(NumberType))]
 pub enum Number {
@@ -132,6 +133,34 @@ pub enum Number {
     RealVh(f32),
     IntegerVh(i64),
     Calc(Calculation),
+}
+
+impl<'de> Deserialize<'de> for Number {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value: Value = Value::deserialize(deserializer)?;
+
+        if value.is_number() {
+            if value.is_u64() {
+                #[allow(clippy::cast_possible_wrap)]
+                Ok(Self::Integer(value.as_u64().unwrap() as i64))
+            } else if value.is_f64() {
+                #[allow(clippy::cast_possible_truncation)]
+                Ok(Self::Real(value.as_f64().unwrap() as f32))
+            } else {
+                unreachable!()
+            }
+        } else if value.is_string() {
+            Ok(parse_number(value.as_str().unwrap()).map_err(D::Error::custom)?)
+        } else {
+            Err(D::Error::invalid_type(
+                serde::de::Unexpected::Other(&value.to_string()),
+                &"Numeric type",
+            ))
+        }
+    }
 }
 
 static EPSILON: f32 = 0.00001;
