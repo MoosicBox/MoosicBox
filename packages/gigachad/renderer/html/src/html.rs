@@ -910,6 +910,7 @@ pub fn container_element_to_html_response(
     viewport: Option<&str>,
     background: Option<Color>,
     title: Option<&str>,
+    description: Option<&str>,
     tag_renderer: &dyn HtmlTagRenderer,
 ) -> Result<String, std::io::Error> {
     Ok(tag_renderer.root_html(
@@ -919,5 +920,6 @@ pub fn container_element_to_html_response(
         viewport,
         background,
         title,
+        description,
     ))
 }

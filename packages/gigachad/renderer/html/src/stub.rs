@@ -44,6 +44,12 @@ impl<T: HtmlTagRenderer> HtmlApp for StubApp<T> {
 
     fn set_title(&mut self, _title: Option<String>) {}
 
+    fn with_description(self, _description: Option<String>) -> Self {
+        self
+    }
+
+    fn set_description(&mut self, _description: Option<String>) {}
+
     fn with_background(self, _background: Option<Color>) -> Self {
         self
     }

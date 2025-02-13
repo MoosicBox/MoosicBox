@@ -313,6 +313,7 @@ impl Renderer for EguiRenderer {
         y: Option<i32>,
         background: Option<Color>,
         title: Option<&str>,
+        description: Option<&str>,
         _viewport: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         self.width = Some(width);
@@ -320,6 +321,7 @@ impl Renderer for EguiRenderer {
         self.x = x;
         self.y = y;
         self.app.title = title.map(Into::into);
+        self.app.description = description.map(Into::into);
         self.app.background = background.map(Into::into);
 
         log::debug!("start: spawning listen thread");
@@ -602,6 +604,7 @@ struct EguiApp {
     router: Router,
     background: Option<Color32>,
     title: Option<String>,
+    description: Option<String>,
     request_action: Sender<(String, Option<Value>)>,
     on_resize: Sender<(f32, f32)>,
     side_effects: Arc<Mutex<VecDeque<Handler>>>,
@@ -645,6 +648,7 @@ impl EguiApp {
             router,
             background: None,
             title: None,
+            description: None,
             request_action,
             on_resize,
             side_effects: Arc::new(Mutex::new(VecDeque::new())),

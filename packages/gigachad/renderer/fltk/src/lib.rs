@@ -1222,6 +1222,7 @@ impl Renderer for FltkRenderer {
         y: Option<i32>,
         background: Option<Color>,
         title: Option<&str>,
+        _description: Option<&str>,
         _viewport: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         let app = app::App::default();

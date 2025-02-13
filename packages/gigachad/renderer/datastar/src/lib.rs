@@ -50,6 +50,7 @@ impl HtmlTagRenderer for DatastarTagRenderer {
         viewport: Option<&str>,
         background: Option<Color>,
         title: Option<&str>,
+        description: Option<&str>,
     ) -> String {
         let background = background.map(|x| format!("background:rgb({},{},{})", x.r, x.g, x.b));
         let background = background.as_deref().unwrap_or("");
@@ -66,6 +67,9 @@ impl HtmlTagRenderer for DatastarTagRenderer {
                 head {
                     @if let Some(title) = title {
                         title { (title) }
+                    }
+                    @if let Some(description) = description {
+                        meta name="description" content=(description);
                     }
                     script
                         type="module"

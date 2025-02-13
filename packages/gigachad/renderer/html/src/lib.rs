@@ -266,6 +266,7 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
         viewport: Option<&str>,
         background: Option<Color>,
         title: Option<&str>,
+        description: Option<&str>,
     ) -> String {
         let background = background.map(|x| format!("background:rgb({},{},{})", x.r, x.g, x.b));
         let background = background.as_deref().unwrap_or("");
@@ -281,6 +282,9 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                 head {
                     @if let Some(title) = title {
                         title { (title) }
+                    }
+                    @if let Some(description) = description {
+                        meta name="description" content=(description);
                     }
                     style {(format!(r"
                         body {{
@@ -332,6 +336,10 @@ pub trait HtmlApp {
     fn set_title(&mut self, title: Option<String>);
 
     #[must_use]
+    fn with_description(self, description: Option<String>) -> Self;
+    fn set_description(&mut self, description: Option<String>);
+
+    #[must_use]
     fn with_background(self, background: Option<Color>) -> Self;
     fn set_background(&mut self, background: Option<Color>);
 }
@@ -370,6 +378,12 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> HtmlRenderer<T> {
     #[must_use]
     pub fn with_title(mut self, title: Option<String>) -> Self {
         self.app = self.app.with_title(title);
+        self
+    }
+
+    #[must_use]
+    pub fn with_description(mut self, description: Option<String>) -> Self {
+        self.app = self.app.with_description(description);
         self
     }
 
@@ -418,6 +432,7 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
         y: Option<i32>,
         background: Option<Color>,
         title: Option<&str>,
+        description: Option<&str>,
         viewport: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         self.width = Some(width);
@@ -426,6 +441,8 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
         self.y = y;
         self.app.set_background(background);
         self.app.set_title(title.map(ToString::to_string));
+        self.app
+            .set_description(description.map(ToString::to_string));
         self.app.set_viewport(viewport.map(ToString::to_string));
 
         Ok(())

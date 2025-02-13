@@ -32,6 +32,7 @@ pub struct HtmlLambdaResponseProcessor<T: HtmlTagRenderer + Clone + Send + Sync>
     pub tag_renderer: T,
     pub background: Option<Color>,
     pub title: Option<String>,
+    pub description: Option<String>,
     pub viewport: Option<String>,
 }
 
@@ -43,6 +44,7 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlLambdaResponseProcessor<T> {
             tag_renderer,
             background: None,
             title: None,
+            description: None,
             viewport: None,
         }
     }
@@ -83,6 +85,16 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
 
     fn set_title(&mut self, title: Option<String>) {
         self.processor.title = title;
+    }
+
+    #[must_use]
+    fn with_description(mut self, description: Option<String>) -> Self {
+        self.processor.description = description;
+        self
+    }
+
+    fn set_description(&mut self, description: Option<String>) {
+        self.processor.description = description;
     }
 
     #[must_use]
@@ -173,6 +185,7 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                 self.viewport.as_deref(),
                 self.background,
                 self.title.as_deref(),
+                self.description.as_deref(),
             )
         } else {
             self.tag_renderer.partial_html(

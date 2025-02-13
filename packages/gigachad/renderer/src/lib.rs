@@ -104,6 +104,7 @@ pub trait Renderer: ToRenderRunner + Send + Sync {
         y: Option<i32>,
         background: Option<Color>,
         title: Option<&str>,
+        description: Option<&str>,
         viewport: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
 
@@ -178,6 +179,7 @@ pub trait HtmlTagRenderer {
         background: Option<Color>,
     ) -> String;
 
+    #[allow(clippy::too_many_arguments)]
     fn root_html(
         &self,
         headers: &std::collections::HashMap<String, String>,
@@ -186,5 +188,6 @@ pub trait HtmlTagRenderer {
         viewport: Option<&str>,
         background: Option<Color>,
         title: Option<&str>,
+        description: Option<&str>,
     ) -> String;
 }
