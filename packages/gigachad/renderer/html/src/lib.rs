@@ -15,7 +15,7 @@ use gigachad_renderer::{
 };
 use gigachad_router::Container;
 use gigachad_transformer::{
-    models::{AlignItems, LayoutDirection, Visibility},
+    models::{AlignItems, LayoutDirection, TextAlign, Visibility},
     OverrideCondition, OverrideItem, ResponsiveTrigger,
 };
 use html::{
@@ -163,6 +163,18 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                             },
                         )?;
                     }
+                    OverrideItem::TextAlign(x) => {
+                        write_css_attr_important(
+                            f,
+                            b"text-align",
+                            match x {
+                                TextAlign::Start => b"start",
+                                TextAlign::Center => b"center",
+                                TextAlign::End => b"end",
+                                TextAlign::Justify => b"justify",
+                            },
+                        )?;
+                    }
                     OverrideItem::MarginLeft(x) => {
                         write_css_attr_important(
                             f,
@@ -197,7 +209,6 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                     | OverrideItem::OverflowX(..)
                     | OverrideItem::OverflowY(..)
                     | OverrideItem::JustifyContent(..)
-                    | OverrideItem::TextAlign(..)
                     | OverrideItem::TextDecoration(..)
                     | OverrideItem::FontFamily(..)
                     | OverrideItem::Width(..)
