@@ -102,7 +102,7 @@ pub async fn index_endpoint(
     } else {
         html! {
             (DOCTYPE)
-            html lang="en-US" {
+            html style="height:100%" lang="en-US" {
                 head {
                     title { "MoosicBox Admin" }
                     script
@@ -127,7 +127,7 @@ pub async fn index_endpoint(
                         "#))
                     }
                 }
-                body {
+                body style="height:100%" {
                     (main)
                 }
             }

@@ -102,7 +102,7 @@ impl HtmlTagRenderer for HtmxTagRenderer {
         let responsive_css = std::str::from_utf8(&responsive_css).unwrap();
 
         html! {
-            html lang="en" {
+            html style="height:100%" lang="en" {
                 head {
                     @if let Some(title) = title {
                         title { (title) }
@@ -131,7 +131,7 @@ impl HtmlTagRenderer for HtmxTagRenderer {
                         meta name="viewport" content=(content);
                     }
                 }
-                body {
+                body style="height:100%" {
                     (PreEscaped(content))
                 }
             }

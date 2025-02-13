@@ -136,7 +136,7 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
         let script = html! { script src={"/js/"(SCRIPT_NAME)} {} };
 
         html! {
-            html lang="en" {
+            html style="height:100%" lang="en" {
                 head {
                     @if let Some(title) = title {
                         title { (title) }
@@ -162,7 +162,7 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                         meta name="viewport" content=(content);
                     }
                 }
-                body {
+                body style="height:100%" {
                     (PreEscaped(content))
                 }
             }
