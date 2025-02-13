@@ -132,7 +132,7 @@ pub fn home() -> Markup {
             div
                 id="pics"
                 sx-dir=(
-                    if_responsive("mobile")
+                    if_responsive("mobile-large")
                         .then::<LayoutDirection>(LayoutDirection::Column)
                         .or_else(LayoutDirection::Row)
                 )
@@ -146,7 +146,7 @@ pub fn home() -> Markup {
                         id="splashscreen-motto"
                         sx-font-size=(50)
                         sx-text-align=(
-                            if_responsive("mobile")
+                            if_responsive("mobile-large")
                                 .then::<TextAlign>(TextAlign::Center)
                                 .or_else(TextAlign::End)
                         )

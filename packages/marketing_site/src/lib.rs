@@ -102,12 +102,20 @@ pub async fn start(builder: NativeAppBuilder) -> Result<NativeApp, NativeAppErro
     let mut app = builder.start().await?;
 
     #[cfg(feature = "html")]
-    app.renderer.add_responsive_trigger(
-        "mobile".into(),
-        gigachad_renderer::transformer::ResponsiveTrigger::MaxWidth(
-            gigachad_renderer::transformer::Number::Integer(600),
-        ),
-    );
+    {
+        app.renderer.add_responsive_trigger(
+            "mobile".into(),
+            gigachad_renderer::transformer::ResponsiveTrigger::MaxWidth(
+                gigachad_renderer::transformer::Number::Integer(600),
+            ),
+        );
+        app.renderer.add_responsive_trigger(
+            "mobile-large".into(),
+            gigachad_renderer::transformer::ResponsiveTrigger::MaxWidth(
+                gigachad_renderer::transformer::Number::Integer(1100),
+            ),
+        );
+    }
 
     Ok(app)
 }
