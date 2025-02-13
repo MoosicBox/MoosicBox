@@ -140,26 +140,84 @@ impl<'de> Deserialize<'de> for Number {
     where
         D: serde::Deserializer<'de>,
     {
-        let value: Value = Value::deserialize(deserializer)?;
-
-        if value.is_number() {
-            if value.is_u64() {
-                #[allow(clippy::cast_possible_wrap)]
-                Ok(Self::Integer(value.as_u64().unwrap() as i64))
-            } else if value.is_f64() {
-                #[allow(clippy::cast_possible_truncation)]
-                Ok(Self::Real(value.as_f64().unwrap() as f32))
-            } else {
-                unreachable!()
-            }
-        } else if value.is_string() {
-            Ok(parse_number(value.as_str().unwrap()).map_err(D::Error::custom)?)
-        } else {
-            Err(D::Error::invalid_type(
-                serde::de::Unexpected::Other(&value.to_string()),
-                &"Numeric type",
-            ))
+        #[derive(Deserialize)]
+        #[serde(rename = "Number")]
+        enum NumberInner {
+            Real(f32),
+            Integer(i64),
+            RealPercent(f32),
+            IntegerPercent(i64),
+            RealDvw(f32),
+            IntegerDvw(i64),
+            RealDvh(f32),
+            IntegerDvh(i64),
+            RealVw(f32),
+            IntegerVw(i64),
+            RealVh(f32),
+            IntegerVh(i64),
+            Calc(Calculation),
         }
+
+        impl From<NumberInner> for Number {
+            fn from(value: NumberInner) -> Self {
+                match value {
+                    NumberInner::Real(x) => Self::Real(x),
+                    NumberInner::Integer(x) => Self::Integer(x),
+                    NumberInner::RealPercent(x) => Self::RealPercent(x),
+                    NumberInner::IntegerPercent(x) => Self::IntegerPercent(x),
+                    NumberInner::RealDvw(x) => Self::RealDvw(x),
+                    NumberInner::IntegerDvw(x) => Self::IntegerDvw(x),
+                    NumberInner::RealDvh(x) => Self::RealDvh(x),
+                    NumberInner::IntegerDvh(x) => Self::IntegerDvh(x),
+                    NumberInner::RealVw(x) => Self::RealVw(x),
+                    NumberInner::IntegerVw(x) => Self::IntegerVw(x),
+                    NumberInner::RealVh(x) => Self::RealVh(x),
+                    NumberInner::IntegerVh(x) => Self::IntegerVh(x),
+                    NumberInner::Calc(calculation) => Self::Calc(calculation),
+                }
+            }
+        }
+
+        log::trace!("attempting to deserialize Number");
+        let value: Value = Value::deserialize(deserializer)?;
+        log::trace!("deserialized Number to {value:?}");
+
+        Ok(if value.is_i64() {
+            #[allow(clippy::cast_possible_wrap)]
+            Self::Integer(value.as_i64().unwrap())
+        } else if value.is_u64() {
+            #[allow(clippy::cast_possible_wrap)]
+            Self::Integer(value.as_u64().unwrap() as i64)
+        } else if value.is_f64() {
+            #[allow(clippy::cast_possible_truncation)]
+            Self::Real(value.as_f64().unwrap() as f32)
+        } else if value.is_string() {
+            parse_number(value.as_str().unwrap()).map_err(D::Error::custom)?
+        } else {
+            serde_json::from_value::<NumberInner>(value)
+                .map_err(D::Error::custom)?
+                .into()
+        })
+    }
+}
+
+#[cfg(test)]
+mod test_number_deserialize {
+    use pretty_assertions::assert_eq;
+    use quickcheck_macros::quickcheck;
+
+    use crate::Number;
+
+    #[quickcheck]
+    #[allow(clippy::needless_pass_by_value)]
+    fn can_serialize_then_deserialize(number: Number) {
+        log::trace!("number={number:?}");
+        let serialized = serde_json::to_string(&number).unwrap();
+        log::trace!("serialized={serialized}");
+        let deserialized = serde_json::from_str(&serialized).unwrap();
+        log::trace!("deserialized={deserialized:?}");
+
+        assert_eq!(number, deserialized);
     }
 }
 

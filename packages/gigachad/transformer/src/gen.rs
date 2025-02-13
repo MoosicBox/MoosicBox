@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use gigachad_transformer_models::{LayoutDirection, LayoutOverflow};
 use moosicbox_gen::{
-    serde::JsonValue,
+    serde::{JsonF32, JsonValue},
     xml::{XmlAttrNameString, XmlString},
 };
 use quickcheck::{Arbitrary, Gen};
@@ -59,17 +59,17 @@ impl Arbitrary for Calculation {
 
 fn one_of_number(g: &mut Gen, types: &[NumberType]) -> Number {
     match *g.choose(types).unwrap() {
-        NumberType::Real => Number::Real(Arbitrary::arbitrary(g)),
+        NumberType::Real => Number::Real(JsonF32::arbitrary(g).0),
         NumberType::Integer => Number::Integer(Arbitrary::arbitrary(g)),
-        NumberType::RealPercent => Number::RealPercent(Arbitrary::arbitrary(g)),
+        NumberType::RealPercent => Number::RealPercent(JsonF32::arbitrary(g).0),
         NumberType::IntegerPercent => Number::IntegerPercent(Arbitrary::arbitrary(g)),
-        NumberType::RealVw => Number::RealVw(Arbitrary::arbitrary(g)),
+        NumberType::RealVw => Number::RealVw(JsonF32::arbitrary(g).0),
         NumberType::IntegerVw => Number::IntegerVw(Arbitrary::arbitrary(g)),
-        NumberType::RealVh => Number::RealVh(Arbitrary::arbitrary(g)),
+        NumberType::RealVh => Number::RealVh(JsonF32::arbitrary(g).0),
         NumberType::IntegerVh => Number::IntegerVh(Arbitrary::arbitrary(g)),
-        NumberType::RealDvw => Number::RealDvw(Arbitrary::arbitrary(g)),
+        NumberType::RealDvw => Number::RealDvw(JsonF32::arbitrary(g).0),
         NumberType::IntegerDvw => Number::IntegerDvw(Arbitrary::arbitrary(g)),
-        NumberType::RealDvh => Number::RealDvh(Arbitrary::arbitrary(g)),
+        NumberType::RealDvh => Number::RealDvh(JsonF32::arbitrary(g).0),
         NumberType::IntegerDvh => Number::IntegerDvh(Arbitrary::arbitrary(g)),
         NumberType::Calc => Number::Calc(Arbitrary::arbitrary(g)),
     }
