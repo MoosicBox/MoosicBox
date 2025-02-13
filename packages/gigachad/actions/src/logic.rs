@@ -584,7 +584,10 @@ pub fn get_responsive(target: impl Into<String>) -> CalcValue {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Responsive(pub String);
+pub enum Responsive {
+    Target(String),
+    Targets(Vec<String>),
+}
 
 impl Responsive {
     #[must_use]
@@ -609,5 +612,11 @@ impl Responsive {
 #[must_use]
 pub fn if_responsive(target: impl Into<String>) -> Responsive {
     let target = target.into();
-    Responsive(target)
+    Responsive::Target(target)
+}
+
+#[must_use]
+pub fn if_responsive_any<T: Into<String>>(targets: impl Into<Vec<T>>) -> Responsive {
+    let targets = targets.into();
+    Responsive::Targets(targets.into_iter().map(Into::into).collect())
 }

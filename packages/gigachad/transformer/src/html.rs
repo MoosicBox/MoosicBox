@@ -551,7 +551,7 @@ fn get_actions(tag: &HTMLTag) -> Vec<Action> {
 /// Parse maybe reactive value
 fn pmrv<
     'a,
-    T: for<'de> Deserialize<'de> + std::fmt::Debug,
+    T: for<'de> Deserialize<'de> + Clone + std::fmt::Debug,
     O: IntoIterator<Item = OverrideItem>,
     E,
 >(
@@ -570,7 +570,7 @@ fn pmrv<
 
 #[allow(unused_variables, clippy::ptr_arg, clippy::needless_pass_by_ref_mut)]
 fn pmrv_inner<
-    T: for<'de> Deserialize<'de> + std::fmt::Debug,
+    T: for<'de> Deserialize<'de> + Clone + std::fmt::Debug,
     O: IntoIterator<Item = OverrideItem>,
     E,
 >(
@@ -587,12 +587,20 @@ fn pmrv_inner<
         .ok()
         .and_then(|x| {
             if let Some(value) = x.value {
-                overrides.push(ConfigOverride {
-                    condition: crate::OverrideCondition::ResponsiveTarget {
-                        name: x.condition.0,
-                    },
-                    overrides: to_overrides(value).into_iter().collect::<Vec<_>>(),
-                });
+                match x.condition {
+                    gigachad_actions::logic::Responsive::Target(target) => {
+                        overrides.push(ConfigOverride {
+                            condition: crate::OverrideCondition::ResponsiveTarget { name: target },
+                            overrides: to_overrides(value).into_iter().collect::<Vec<_>>(),
+                        });
+                    }
+                    gigachad_actions::logic::Responsive::Targets(targets) => {
+                        overrides.extend(targets.into_iter().map(|target| ConfigOverride {
+                            condition: crate::OverrideCondition::ResponsiveTarget { name: target },
+                            overrides: to_overrides(value.clone()).into_iter().collect::<Vec<_>>(),
+                        }));
+                    }
+                }
             }
             x.default
         })
