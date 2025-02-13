@@ -136,7 +136,7 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
         let script = html! { script src={"/js/"(SCRIPT_NAME)} {} };
 
         html! {
-            html {
+            html lang="en" {
                 head {
                     @if let Some(title) = title {
                         title { (title) }

@@ -276,7 +276,7 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
         let responsive_css = std::str::from_utf8(&responsive_css).unwrap();
 
         html! {
-            html {
+            html lang="en" {
                 head {
                     @if let Some(title) = title {
                         title { (title) }
