@@ -37,7 +37,7 @@ pub fn header() -> Markup {
             sx-align-items=(AlignItems::Center)
             sx-background="#080a0b"
         {
-            div sx-padding-x=(20) {
+            div id="header-logo" sx-padding-x=(if_responsive("mobile").then::<i32>(10).or_else(20)) {
                 a
                     sx-color="#fff"
                     sx-dir=(LayoutDirection::Row)
@@ -57,49 +57,33 @@ pub fn header() -> Markup {
                 }
             }
             div
+                id="header-menu-items"
                 sx-dir=(LayoutDirection::Row)
                 sx-align-items=(AlignItems::Center)
                 sx-justify-content=(JustifyContent::End)
                 sx-flex=(1)
-                sx-padding-x=(20)
+                sx-padding-x=(if_responsive("mobile").then::<i32>(10).or_else(20))
+                sx-col-gap=(if_responsive("mobile").then::<i32>(10).or_else(20))
             {
                 a sx-color="#fff" href="/download" {
                     "Download"
                 }
-                a sx-color="#fff" sx-margin-left=(20) href="https://app.moosicbox.com/login" {
+                a sx-color="#fff" href="https://app.moosicbox.com/login" {
                     "Log in"
                 }
                 a
-                    id="try-desktop"
-                    sx-hidden=(
-                        if_responsive("mobile")
-                            .then::<bool>(true)
-                            .or_else(false)
-                    )
                     sx-color="#fff"
                     sx-background="#282a2b"
-                    sx-margin-left=(20)
                     sx-border-radius=(5)
                     sx-padding=(8)
                     href="/try-now"
                 {
-                    "Start Free Trial"
-                }
-                a
-                    id="try-mobile"
-                    sx-hidden=(
-                        if_responsive("mobile")
-                            .then::<bool>(false)
-                            .or_else(true)
-                    )
-                    sx-color="#fff"
-                    sx-background="#282a2b"
-                    sx-margin-left=(20)
-                    sx-border-radius=(5)
-                    sx-padding=(8)
-                    href="/try-now"
-                {
-                    "Try"
+                    span id="try-desktop" sx-hidden=(if_responsive("mobile").then::<bool>(true).or_else(false)) {
+                        "Start Free Trial"
+                    }
+                    span id="try-mobile" sx-hidden=(if_responsive("mobile").then::<bool>(false).or_else(true)) {
+                        "Try"
+                    }
                 }
             }
         }
