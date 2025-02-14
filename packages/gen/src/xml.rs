@@ -42,9 +42,10 @@ impl Arbitrary for XmlAttrNameString {
     fn arbitrary(g: &mut Gen) -> Self {
         let string = loop {
             let string = String::arbitrary(g);
-            if string
-                .chars()
-                .all(|c| matches!(c, '0'..='9' | 'A'..='Z' | 'a'..='z' | '-' | '_'))
+            if !string.is_empty()
+                && string
+                    .chars()
+                    .all(|c| matches!(c, '0'..='9' | 'A'..='Z' | 'a'..='z' | '-' | '_'))
             {
                 break string;
             }
