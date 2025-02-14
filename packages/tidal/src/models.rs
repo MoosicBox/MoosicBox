@@ -1,14 +1,17 @@
 use std::fmt::Display;
 
-use moosicbox_core::sqlite::models::{
-    AlbumSource, ApiAlbum, ApiArtist, ApiSource, ApiSources, TrackApiSource,
-};
 use moosicbox_json_utils::{
+    database::AsModelResult,
     serde_json::{ToNestedValue, ToValue},
     ParseError, ToValueType,
 };
 use moosicbox_music_api::models::ImageCoverSize;
-use moosicbox_search::models::{
+use moosicbox_music_models::{
+    api::{ApiAlbum, ApiArtist},
+    id::TryFromIdError,
+    Album, AlbumSource, ApiSource, ApiSources, Artist, Track, TrackApiSource,
+};
+use moosicbox_search::api::models::{
     ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
     ApiGlobalTrackSearchResult, ApiSearchResultsResponse,
 };
@@ -16,8 +19,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::TidalAlbumType;
-
-use super::{Album, Artist, AsModelResult, Track};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -250,13 +251,15 @@ impl From<TidalAlbum> for ApiAlbum {
     }
 }
 
-impl From<Album> for TidalAlbum {
-    fn from(value: Album) -> Self {
-        Self {
-            id: value.id.into(),
+impl TryFrom<Album> for TidalAlbum {
+    type Error = TryFromIdError;
+
+    fn try_from(value: Album) -> Result<Self, Self::Error> {
+        Ok(Self {
+            id: value.id.try_into()?,
             title: value.title,
             artist: value.artist,
-            artist_id: value.artist_id.into(),
+            artist_id: value.artist_id.try_into()?,
             album_type: value.album_type.try_into().unwrap_or(TidalAlbumType::Lp),
             contains_cover: value.artwork.is_some(),
             audio_quality: "N/A".to_string(),
@@ -268,7 +271,7 @@ impl From<Album> for TidalAlbum {
             popularity: 0,
             release_date: value.date_released,
             media_metadata_tags: vec![],
-        }
+        })
     }
 }
 

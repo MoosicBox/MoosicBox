@@ -11,8 +11,8 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
-moosicbox_core   = { version = "0.1.0", path = "../../core", default-features = false }
+moosicbox_assert       = { version = "0.1.0", path = "../../assert", default-features = false }
+moosicbox_music_models = { version = "0.1.0", path = "../../music/models", default-features = false }
 
 # API Dependencies
 utoipa = { workspace = true, optional = true }
@@ -25,11 +25,11 @@ default = ["all-sources", "api", "openapi"]
 
 fail-on-warnings = []
 
-api     = []
-openapi = ["dep:utoipa", "moosicbox_core/openapi"]
+api     = ["moosicbox_music_models/api"]
+openapi = ["dep:utoipa", "moosicbox_music_models/openapi"]
 
 all-sources = ["qobuz", "tidal", "yt"]
 
-qobuz = ["moosicbox_core/qobuz"]
-tidal = ["moosicbox_core/tidal"]
-yt    = ["moosicbox_core/yt"]
+qobuz = ["moosicbox_music_models/qobuz"]
+tidal = ["moosicbox_music_models/tidal"]
+yt    = ["moosicbox_music_models/yt"]

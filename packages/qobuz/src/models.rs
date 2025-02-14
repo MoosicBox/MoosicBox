@@ -1,16 +1,18 @@
 use std::{fmt::Display, str::FromStr as _};
 
 use chrono::{DateTime, Utc};
-use moosicbox_core::sqlite::models::{
-    Album, AlbumSource, ApiAlbum, ApiArtist, ApiSource, ApiSources, Artist, AsModelResult, Track,
-    TrackApiSource,
-};
 use moosicbox_json_utils::{
+    database::AsModelResult,
     serde_json::{ToNestedValue, ToValue},
     ParseError, ToValueType,
 };
 use moosicbox_music_api::models::ImageCoverSize;
-use moosicbox_search::models::{
+use moosicbox_music_models::{
+    api::{ApiAlbum, ApiArtist},
+    id::TryFromIdError,
+    Album, AlbumSource, ApiSource, ApiSources, Artist, Track, TrackApiSource,
+};
+use moosicbox_search::api::models::{
     ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
     ApiGlobalTrackSearchResult, ApiSearchResultsResponse,
 };
@@ -262,13 +264,15 @@ impl From<QobuzAlbum> for ApiGlobalSearchResult {
     }
 }
 
-impl From<Album> for QobuzAlbum {
-    fn from(value: Album) -> Self {
-        Self {
-            id: value.id.clone().into(),
+impl TryFrom<Album> for QobuzAlbum {
+    type Error = TryFromIdError;
+
+    fn try_from(value: Album) -> Result<Self, Self::Error> {
+        Ok(Self {
+            id: value.id.clone().try_into()?,
             title: value.title,
             artist: value.artist,
-            artist_id: value.artist_id.into(),
+            artist_id: value.artist_id.try_into()?,
             album_type: value.album_type.into(),
             maximum_bit_depth: 0,
             image: value.artwork.map(|x| QobuzImage {
@@ -294,7 +298,7 @@ impl From<Album> for QobuzAlbum {
             },
             maximum_channel_count: 0,
             maximum_sampling_rate: 0.0,
-        }
+        })
     }
 }
 

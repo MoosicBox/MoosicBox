@@ -7,13 +7,14 @@ use actix_web::{
     web::{self, Json},
     HttpRequest, Result, Scope,
 };
-use moosicbox_core::sqlite::models::{
-    ApiAlbum, ApiArtist, ApiSource, ApiSources, ToApi, TrackApiSource,
-};
 #[cfg(feature = "db")]
 use moosicbox_database::profiles::LibraryDatabase;
+use moosicbox_music_models::{
+    api::{ApiAlbum, ApiArtist},
+    ApiSource, ApiSources, TrackApiSource,
+};
 use moosicbox_paging::Page;
-use moosicbox_search::models::ApiSearchResultsResponse;
+use moosicbox_search::api::models::ApiSearchResultsResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
@@ -21,17 +22,17 @@ use strum_macros::{AsRefStr, EnumString};
 use crate::{
     add_favorite_album, add_favorite_artist, add_favorite_track, album, album_tracks, artist,
     artist_albums, device_authorization, device_authorization_token, favorite_albums,
-    favorite_artists, favorite_tracks, remove_favorite_album, remove_favorite_artist,
-    remove_favorite_track, search, track, track_file_url, track_playback_info,
-    AuthenticatedRequestError, SearchType, TidalAddFavoriteAlbumError, TidalAddFavoriteArtistError,
-    TidalAddFavoriteTrackError, TidalAlbumError, TidalAlbumOrder, TidalAlbumOrderDirection,
-    TidalAlbumTracksError, TidalAlbumType, TidalArtistAlbumsError, TidalArtistError,
-    TidalArtistOrder, TidalArtistOrderDirection, TidalAudioQuality, TidalDeviceAuthorizationError,
-    TidalDeviceAuthorizationTokenError, TidalDeviceType, TidalFavoriteAlbumsError,
-    TidalFavoriteArtistsError, TidalFavoriteTracksError, TidalRemoveFavoriteAlbumError,
-    TidalRemoveFavoriteArtistError, TidalRemoveFavoriteTrackError, TidalSearchError, TidalTrack,
-    TidalTrackError, TidalTrackFileUrlError, TidalTrackOrder, TidalTrackOrderDirection,
-    TidalTrackPlaybackInfo, TidalTrackPlaybackInfoError,
+    favorite_artists, favorite_tracks, models::TidalAlbum, remove_favorite_album,
+    remove_favorite_artist, remove_favorite_track, search, track, track_file_url,
+    track_playback_info, AuthenticatedRequestError, SearchType, TidalAddFavoriteAlbumError,
+    TidalAddFavoriteArtistError, TidalAddFavoriteTrackError, TidalAlbumError, TidalAlbumOrder,
+    TidalAlbumOrderDirection, TidalAlbumTracksError, TidalAlbumType, TidalArtistAlbumsError,
+    TidalArtistError, TidalArtistOrder, TidalArtistOrderDirection, TidalAudioQuality,
+    TidalDeviceAuthorizationError, TidalDeviceAuthorizationTokenError, TidalDeviceType,
+    TidalFavoriteAlbumsError, TidalFavoriteArtistsError, TidalFavoriteTracksError,
+    TidalRemoveFavoriteAlbumError, TidalRemoveFavoriteArtistError, TidalRemoveFavoriteTrackError,
+    TidalSearchError, TidalTrack, TidalTrackError, TidalTrackFileUrlError, TidalTrackOrder,
+    TidalTrackOrderDirection, TidalTrackPlaybackInfo, TidalTrackPlaybackInfoError,
 };
 
 pub fn bind_services<
@@ -127,25 +128,25 @@ pub enum ApiTrack {
     Tidal(ApiTidalTrack),
 }
 
-impl ToApi<ApiTrack> for TidalTrack {
-    fn to_api(self) -> ApiTrack {
-        ApiTrack::Tidal(ApiTidalTrack {
-            id: self.id,
-            number: self.track_number,
-            album: self.album.clone(),
-            album_id: self.album_id,
-            album_type: self.album_type,
-            artist: self.artist.clone(),
-            artist_id: self.artist_id,
-            contains_cover: self.album_cover.is_some(),
-            audio_quality: self.audio_quality.clone(),
-            copyright: self.copyright.clone(),
-            duration: self.duration,
-            explicit: self.explicit,
-            isrc: self.isrc.clone(),
-            popularity: self.popularity,
-            title: self.title.clone(),
-            media_metadata_tags: self.media_metadata_tags,
+impl From<TidalTrack> for ApiTrack {
+    fn from(value: TidalTrack) -> Self {
+        Self::Tidal(ApiTidalTrack {
+            contains_cover: value.album_cover.is_some(),
+            id: value.id,
+            number: value.track_number,
+            album: value.album,
+            album_id: value.album_id,
+            album_type: value.album_type,
+            artist: value.artist,
+            artist_id: value.artist_id,
+            audio_quality: value.audio_quality,
+            copyright: value.copyright,
+            duration: value.duration,
+            explicit: value.explicit,
+            isrc: value.isrc,
+            popularity: value.popularity,
+            title: value.title,
+            media_metadata_tags: value.media_metadata_tags,
             api_source: ApiSource::Tidal,
         })
     }
@@ -173,7 +174,7 @@ pub struct ApiTidalTrack {
     pub api_source: ApiSource,
 }
 
-impl From<ApiTidalTrack> for moosicbox_core::sqlite::models::ApiTrack {
+impl From<ApiTidalTrack> for moosicbox_music_models::api::ApiTrack {
     fn from(value: ApiTidalTrack) -> Self {
         Self {
             track_id: value.id.into(),
@@ -1025,26 +1026,25 @@ pub async fn favorite_tracks_endpoint(
     query: web::Query<TidalFavoriteTracksQuery>,
     #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiTrack>>> {
-    Ok(Json(
-        favorite_tracks(
-            #[cfg(feature = "db")]
-            &db,
-            query.offset,
-            query.limit,
-            query.order,
-            query.order_direction,
-            query.country_code.clone(),
-            query.locale.clone(),
-            query.device_type,
-            req.headers()
-                .get(TIDAL_ACCESS_TOKEN_HEADER)
-                .map(|x| x.to_str().unwrap().to_string()),
-            query.user_id,
-        )
-        .await?
-        .to_api()
-        .into(),
-    ))
+    let tracks: Page<TidalTrack> = favorite_tracks(
+        #[cfg(feature = "db")]
+        &db,
+        query.offset,
+        query.limit,
+        query.order,
+        query.order_direction,
+        query.country_code.clone(),
+        query.locale.clone(),
+        query.device_type,
+        req.headers()
+            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+        query.user_id,
+    )
+    .await?
+    .into();
+
+    Ok(Json(tracks.into()))
 }
 
 impl From<TidalArtistAlbumsError> for actix_web::Error {
@@ -1118,25 +1118,24 @@ pub async fn artist_albums_endpoint(
     query: web::Query<TidalArtistAlbumsQuery>,
     #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiAlbum>>> {
-    Ok(Json(
-        artist_albums(
-            #[cfg(feature = "db")]
-            &db,
-            &query.artist_id.into(),
-            query.offset,
-            query.limit,
-            query.album_type.map(Into::into),
-            query.country_code.clone(),
-            query.locale.clone(),
-            query.device_type,
-            req.headers()
-                .get(TIDAL_ACCESS_TOKEN_HEADER)
-                .map(|x| x.to_str().unwrap().to_string()),
-        )
-        .await?
-        .map(Into::into)
-        .into(),
-    ))
+    let albums: Page<TidalAlbum> = artist_albums(
+        #[cfg(feature = "db")]
+        &db,
+        &query.artist_id.into(),
+        query.offset,
+        query.limit,
+        query.album_type.map(Into::into),
+        query.country_code.clone(),
+        query.locale.clone(),
+        query.device_type,
+        req.headers()
+            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+    )
+    .await?
+    .into();
+
+    Ok(Json(albums.into()))
 }
 
 impl From<TidalAlbumTracksError> for actix_web::Error {
@@ -1188,24 +1187,23 @@ pub async fn album_tracks_endpoint(
     query: web::Query<TidalAlbumTracksQuery>,
     #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiTrack>>> {
-    Ok(Json(
-        album_tracks(
-            #[cfg(feature = "db")]
-            &db,
-            &query.album_id.into(),
-            query.offset,
-            query.limit,
-            query.country_code.clone(),
-            query.locale.clone(),
-            query.device_type,
-            req.headers()
-                .get(TIDAL_ACCESS_TOKEN_HEADER)
-                .map(|x| x.to_str().unwrap().to_string()),
-        )
-        .await?
-        .to_api()
-        .into(),
-    ))
+    let tracks: Page<TidalTrack> = album_tracks(
+        #[cfg(feature = "db")]
+        &db,
+        &query.album_id.into(),
+        query.offset,
+        query.limit,
+        query.country_code.clone(),
+        query.locale.clone(),
+        query.device_type,
+        req.headers()
+            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+    )
+    .await?
+    .into();
+
+    Ok(Json(tracks.into()))
 }
 
 impl From<TidalAlbumError> for actix_web::Error {
@@ -1398,7 +1396,7 @@ pub async fn track_endpoint(
     )
     .await?;
 
-    Ok(Json(track.to_api()))
+    Ok(Json(track.into()))
 }
 
 impl From<TidalSearchError> for actix_web::Error {

@@ -8,10 +8,12 @@ use gigachad_actions::{
 };
 use gigachad_transformer_models::Visibility;
 use maud::{html, Markup, PreEscaped};
-use moosicbox_core::sqlite::models::{
-    AlbumSort, AlbumVersionQuality, ApiAlbum, ApiSource, ApiTrack, Id, TrackApiSource,
-};
 use moosicbox_menu_models::api::ApiAlbumVersion;
+use moosicbox_music_models::{
+    api::{ApiAlbum, ApiTrack},
+    id::Id,
+    AlbumSort, AlbumVersionQuality, ApiSource, TrackApiSource,
+};
 use moosicbox_paging::Page;
 
 use crate::{formatting::TimeFormat as _, page, pre_escaped, public_img, state::State, Action};

@@ -4,12 +4,9 @@
 use std::sync::LazyLock;
 
 use moosicbox_audio_zone_models::{ApiPlayer, Player};
-use moosicbox_core::{
-    sqlite::models::{ApiTrack, ToApi},
-    types::PlaybackQuality,
-};
 use moosicbox_database::{AsId, DatabaseValue};
 use moosicbox_json_utils::{database::ToValue as _, ParseError, ToValueType};
+use moosicbox_music_models::{api::ApiTrack, PlaybackQuality};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 
@@ -340,18 +337,18 @@ pub struct ApiSession {
     pub playlist: ApiSessionPlaylist,
 }
 
-impl ToApi<ApiSession> for Session {
-    fn to_api(self) -> ApiSession {
-        ApiSession {
-            session_id: self.id,
-            name: self.name,
-            active: self.active,
-            playing: self.playing,
-            position: self.position,
-            seek: self.seek,
-            volume: self.volume,
-            playback_target: self.playback_target,
-            playlist: self.playlist.to_api(),
+impl From<Session> for ApiSession {
+    fn from(value: Session) -> Self {
+        Self {
+            session_id: value.id,
+            name: value.name,
+            active: value.active,
+            playing: value.playing,
+            position: value.position,
+            seek: value.seek,
+            volume: value.volume,
+            playback_target: value.playback_target,
+            playlist: value.playlist.into(),
         }
     }
 }
@@ -390,11 +387,11 @@ pub struct ApiSessionPlaylist {
     pub tracks: Vec<ApiTrack>,
 }
 
-impl ToApi<ApiSessionPlaylist> for SessionPlaylist {
-    fn to_api(self) -> ApiSessionPlaylist {
-        ApiSessionPlaylist {
-            session_playlist_id: self.id,
-            tracks: self.tracks,
+impl From<SessionPlaylist> for ApiSessionPlaylist {
+    fn from(value: SessionPlaylist) -> Self {
+        Self {
+            session_playlist_id: value.id,
+            tracks: value.tracks,
         }
     }
 }
@@ -445,13 +442,13 @@ pub struct ApiConnection {
     pub players: Vec<ApiPlayer>,
 }
 
-impl ToApi<ApiConnection> for Connection {
-    fn to_api(self) -> ApiConnection {
-        ApiConnection {
-            connection_id: self.id,
-            name: self.name,
+impl From<Connection> for ApiConnection {
+    fn from(value: Connection) -> Self {
+        Self {
+            connection_id: value.id,
+            name: value.name,
             alive: false,
-            players: self.players.iter().map(ToApi::to_api).collect(),
+            players: value.players.into_iter().map(Into::into).collect(),
         }
     }
 }

@@ -7,14 +7,12 @@ use actix_web::{
     web::{self, Json},
     Result, Scope,
 };
-use moosicbox_core::{
-    app::AppState,
-    integer_range::{parse_integer_ranges_to_ids, ParseIntegersError},
-    sqlite::models::{ApiSource, Id, IdType, Track},
-    types::{AudioFormat, PlaybackQuality},
-};
 use moosicbox_database::profiles::api::ProfileName;
 use moosicbox_music_api::{MusicApi, MusicApis, SourceToMusicApi as _};
+use moosicbox_music_models::{
+    id::{parse_integer_ranges_to_ids, Id, IdType, ParseIntegersError},
+    ApiSource, AudioFormat, PlaybackQuality, Track,
+};
 use moosicbox_session::models::PlaybackTarget;
 use serde::Deserialize;
 
@@ -72,7 +70,9 @@ impl From<PlayerError> for actix_web::Error {
             PlayerError::TrackNotFound(track_id) => {
                 ErrorNotFound(format!("Track not found: {track_id}"))
             }
-            PlayerError::Db(err) => ErrorInternalServerError(format!("DB error: {err:?}")),
+            PlayerError::DatabaseFetch(err) => {
+                ErrorInternalServerError(format!("DB error: {err:?}"))
+            }
             PlayerError::Reqwest(err) => ErrorInternalServerError(format!("Reqwest: {err:?}")),
             PlayerError::Parse(err) => ErrorInternalServerError(format!("Parse: {err:?}")),
             PlayerError::TrackNotLocal(track_id) => {
@@ -279,7 +279,6 @@ pub struct PlayAlbumQuery {
 #[post("/play/album")]
 pub async fn play_album_endpoint(
     query: web::Query<PlayAlbumQuery>,
-    _data: web::Data<AppState>,
     profile: ProfileName,
     music_apis: MusicApis,
 ) -> Result<Json<PlaybackStatus>> {
@@ -354,7 +353,6 @@ pub struct PlayTrackQuery {
 #[post("/play/track")]
 pub async fn play_track_endpoint(
     query: web::Query<PlayTrackQuery>,
-    _data: web::Data<AppState>,
     music_apis: MusicApis,
     profile: ProfileName,
 ) -> Result<Json<PlaybackStatus>> {
@@ -434,7 +432,6 @@ pub struct PlayTracksQuery {
 #[post("/play/tracks")]
 pub async fn play_tracks_endpoint(
     query: web::Query<PlayTracksQuery>,
-    _data: web::Data<AppState>,
     profile: ProfileName,
     music_apis: MusicApis,
 ) -> Result<Json<PlaybackStatus>> {
@@ -496,7 +493,6 @@ pub struct StopTrackQuery {
 #[post("/stop")]
 pub async fn stop_track_endpoint(
     query: web::Query<StopTrackQuery>,
-    _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     get_player(query.host.as_deref())
         .await?
@@ -535,7 +531,6 @@ pub struct SeekTrackQuery {
 #[post("/seek")]
 pub async fn seek_track_endpoint(
     query: web::Query<SeekTrackQuery>,
-    _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     get_player(query.host.as_deref())
         .await?
@@ -595,7 +590,6 @@ pub struct UpdatePlaybackQuery {
 #[post("/update-playback")]
 pub async fn update_playback_endpoint(
     query: web::Query<UpdatePlaybackQuery>,
-    _data: web::Data<AppState>,
     profile: ProfileName,
     music_apis: MusicApis,
 ) -> Result<Json<PlaybackStatus>> {
@@ -668,7 +662,6 @@ pub struct NextTrackQuery {
 #[post("/next-track")]
 pub async fn next_track_endpoint(
     query: web::Query<NextTrackQuery>,
-    _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     get_player(query.host.as_deref())
         .await?
@@ -706,7 +699,6 @@ pub struct PauseQuery {
 #[post("/pause")]
 pub async fn pause_playback_endpoint(
     query: web::Query<PauseQuery>,
-    _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     get_player(query.host.as_deref())
         .await?
@@ -744,7 +736,6 @@ pub struct ResumeQuery {
 #[post("/resume")]
 pub async fn resume_playback_endpoint(
     query: web::Query<ResumeQuery>,
-    _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     get_player(query.host.as_deref())
         .await?
@@ -784,7 +775,6 @@ pub struct PreviousTrackQuery {
 #[post("/previous-track")]
 pub async fn previous_track_endpoint(
     query: web::Query<PreviousTrackQuery>,
-    _data: web::Data<AppState>,
 ) -> Result<Json<PlaybackStatus>> {
     get_player(query.host.as_deref())
         .await?

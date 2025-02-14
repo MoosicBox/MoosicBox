@@ -1,9 +1,7 @@
 use std::path::Path;
 
-use moosicbox_core::sqlite::{
-    db::DbError,
-    models::{Album, Artist, Track},
-};
+use moosicbox_json_utils::database::DatabaseFetchError;
+use moosicbox_music_models::{Album, Artist, Track};
 use thiserror::Error;
 use tokio::task::JoinError;
 
@@ -168,7 +166,7 @@ impl AsDeleteTerm for Track {
 #[derive(Debug, Error)]
 pub enum ReindexFromDbError {
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
     RecreateIndex(#[from] RecreateIndexError),
     #[error(transparent)]

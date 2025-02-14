@@ -1,7 +1,4 @@
-use moosicbox_core::{
-    sqlite::models::{ApiAlbumVersionQuality, Id, TrackApiSource},
-    types::AudioFormat,
-};
+use moosicbox_music_models::{api::ApiAlbumVersionQuality, id::Id, AudioFormat, TrackApiSource};
 use serde::Serialize;
 use tantivy::schema::NamedFieldDocument;
 

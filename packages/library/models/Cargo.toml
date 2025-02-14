@@ -15,11 +15,11 @@ ignored = ["strum_macros"]
 
 [dependencies]
 moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
-moosicbox_core = { version = "0.1.0", path = "../../core", default-features = false }
 moosicbox_database = { version = "0.1.0", path = "../../database", optional = true, default-features = false }
 moosicbox_json_utils = { version = "0.1.0", path = "../../json_utils", default-features = false, features = [
     "serde_json",
 ] }
+moosicbox_music_models = { version = "0.1.0", path = "../../music/models", default-features = false }
 
 # API Dependencies
 utoipa = { workspace = true, optional = true }
@@ -36,24 +36,25 @@ default = ["all-formats", "all-sources", "api", "db", "openapi"]
 
 fail-on-warnings = []
 
-api     = ["moosicbox_database/api"]
-openapi = ["dep:utoipa", "moosicbox_core/openapi"]
+api     = ["moosicbox_database/api", "moosicbox_music_models/api"]
+openapi = ["dep:utoipa", "moosicbox_music_models/openapi"]
 
 db = [
     "dep:async-trait",
     "dep:moosicbox_database",
     "moosicbox_json_utils/database",
+    "moosicbox_music_models/db",
 ]
 
 all-formats = ["aac", "flac", "mp3", "opus"]
 
-aac  = ["moosicbox_core/aac"]
-flac = ["moosicbox_core/flac"]
-mp3  = ["moosicbox_core/mp3"]
-opus = ["moosicbox_core/opus"]
+aac  = ["moosicbox_music_models/aac"]
+flac = ["moosicbox_music_models/flac"]
+mp3  = ["moosicbox_music_models/mp3"]
+opus = ["moosicbox_music_models/opus"]
 
 all-sources = ["qobuz", "tidal", "yt"]
 
-qobuz = ["moosicbox_core/qobuz"]
-tidal = ["moosicbox_core/tidal"]
-yt    = ["moosicbox_core/yt"]
+qobuz = ["moosicbox_music_models/qobuz"]
+tidal = ["moosicbox_music_models/tidal"]
+yt    = ["moosicbox_music_models/yt"]

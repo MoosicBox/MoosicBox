@@ -1,18 +1,18 @@
 use std::sync::Arc;
 
 use moosicbox_audio_zone::{db::models::AudioZoneModel, models::Player};
-use moosicbox_core::sqlite::{
-    db::DbError,
-    models::{ApiTrack, Id},
-};
 use moosicbox_database::{
     config::ConfigDatabase,
     profiles::LibraryDatabase,
     query::{select, where_in, FilterableQuery as _, SortDirection},
     Database, DatabaseValue,
 };
-use moosicbox_json_utils::{database::ToValue as _, ToValueType};
+use moosicbox_json_utils::{
+    database::{DatabaseFetchError, ToValue as _},
+    ParseError, ToValueType,
+};
 use moosicbox_library::db::get_tracks;
+use moosicbox_music_models::{api::ApiTrack, id::Id};
 use moosicbox_session_models::Connection;
 
 use crate::models::{
@@ -23,7 +23,7 @@ use crate::models::{
 pub async fn get_session_playlist_tracks(
     db: &LibraryDatabase,
     session_playlist_id: u64,
-) -> Result<Vec<ApiTrack>, DbError> {
+) -> Result<Vec<ApiTrack>, DatabaseFetchError> {
     db.select("session_playlist_tracks")
         .where_eq("session_playlist_id", session_playlist_id)
         .sort("id", SortDirection::Asc)
@@ -31,15 +31,18 @@ pub async fn get_session_playlist_tracks(
         .await?
         .into_iter()
         .filter_map(|x| x.get("data"))
-        .filter_map(|x| x.as_str().map(serde_json::from_str))
+        .filter_map(|x| {
+            x.as_str().map(serde_json::from_str).map(|x| {
+                x.map_err(|e| DatabaseFetchError::Parse(ParseError::Parse(format!("data: {e:?}"))))
+            })
+        })
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|_| DbError::Unknown)
 }
 
 pub async fn get_session_playlist(
     db: &LibraryDatabase,
     session_id: u64,
-) -> Result<Option<SessionPlaylist>, DbError> {
+) -> Result<Option<SessionPlaylist>, DatabaseFetchError> {
     if let Some(ref playlist) = db
         .select("session_playlists")
         .where_eq("id", session_id)
@@ -57,7 +60,7 @@ pub async fn get_session_playlist(
 pub async fn get_session_audio_zone(
     db: &LibraryDatabase,
     session_id: u64,
-) -> Result<Option<AudioZoneModel>, DbError> {
+) -> Result<Option<AudioZoneModel>, DatabaseFetchError> {
     Ok(db
         .select("audio_zones")
         .columns(&["audio_zones.*"])
@@ -72,7 +75,10 @@ pub async fn get_session_audio_zone(
         .transpose()?)
 }
 
-pub async fn get_session_playing(db: &LibraryDatabase, id: u64) -> Result<Option<bool>, DbError> {
+pub async fn get_session_playing(
+    db: &LibraryDatabase,
+    id: u64,
+) -> Result<Option<bool>, DatabaseFetchError> {
     Ok(db
         .select("sessions")
         .columns(&["playing"])
@@ -85,7 +91,10 @@ pub async fn get_session_playing(db: &LibraryDatabase, id: u64) -> Result<Option
         .flatten())
 }
 
-pub async fn get_session(db: &LibraryDatabase, id: u64) -> Result<Option<Session>, DbError> {
+pub async fn get_session(
+    db: &LibraryDatabase,
+    id: u64,
+) -> Result<Option<Session>, DatabaseFetchError> {
     Ok(
         if let Some(ref session) = db
             .select("sessions")
@@ -100,7 +109,7 @@ pub async fn get_session(db: &LibraryDatabase, id: u64) -> Result<Option<Session
     )
 }
 
-pub async fn get_sessions(db: &LibraryDatabase) -> Result<Vec<Session>, DbError> {
+pub async fn get_sessions(db: &LibraryDatabase) -> Result<Vec<Session>, DatabaseFetchError> {
     let mut sessions = vec![];
 
     for ref session in db.select("sessions").execute(db).await? {
@@ -113,7 +122,7 @@ pub async fn get_sessions(db: &LibraryDatabase) -> Result<Vec<Session>, DbError>
 pub async fn create_session(
     db: &LibraryDatabase,
     session: &CreateSession,
-) -> Result<Session, DbError> {
+) -> Result<Session, DatabaseFetchError> {
     let tracks = get_tracks(
         db,
         Some(
@@ -172,7 +181,10 @@ pub async fn create_session(
     })
 }
 
-pub async fn update_session(db: &LibraryDatabase, session: &UpdateSession) -> Result<(), DbError> {
+pub async fn update_session(
+    db: &LibraryDatabase,
+    session: &UpdateSession,
+) -> Result<(), DatabaseFetchError> {
     if session.playlist.is_some() {
         log::trace!("update_session: Deleting existing session_playlist_tracks");
         db.delete("session_playlist_tracks")
@@ -211,7 +223,9 @@ pub async fn update_session(db: &LibraryDatabase, session: &UpdateSession) -> Re
                 .value("type", track.api_source.to_string())
                 .value(
                     "data",
-                    serde_json::to_string(track).map_err(|_| DbError::Unknown)?,
+                    serde_json::to_string(track).map_err(|e| {
+                        DatabaseFetchError::Parse(ParseError::Parse(format!("data: {e:?}")))
+                    })?,
                 )
                 .execute(db)
                 .await?;
@@ -276,7 +290,10 @@ pub async fn update_session(db: &LibraryDatabase, session: &UpdateSession) -> Re
     Ok(())
 }
 
-pub async fn delete_session(db: &LibraryDatabase, session_id: u64) -> Result<(), DbError> {
+pub async fn delete_session(
+    db: &LibraryDatabase,
+    session_id: u64,
+) -> Result<(), DatabaseFetchError> {
     log::debug!("Deleting session_playlist_tracks for session_id={session_id}");
     db.delete("session_playlist_tracks")
         .where_in(
@@ -315,7 +332,7 @@ pub async fn delete_session(db: &LibraryDatabase, session_id: u64) -> Result<(),
         .await?
         .into_iter()
         .next()
-        .ok_or(DbError::NoRow)?;
+        .ok_or(DatabaseFetchError::InvalidRequest)?;
 
     log::debug!("Deleting session_playlists for session_id={session_id}");
     db.delete("session_playlists")
@@ -326,7 +343,9 @@ pub async fn delete_session(db: &LibraryDatabase, session_id: u64) -> Result<(),
     Ok(())
 }
 
-pub async fn get_connections(db: &ConfigDatabase) -> Result<Vec<models::Connection>, DbError> {
+pub async fn get_connections(
+    db: &ConfigDatabase,
+) -> Result<Vec<models::Connection>, DatabaseFetchError> {
     let mut connections = vec![];
 
     for ref connection in db.select("connections").execute(db).await? {
@@ -339,7 +358,7 @@ pub async fn get_connections(db: &ConfigDatabase) -> Result<Vec<models::Connecti
 pub async fn register_connection(
     db: &ConfigDatabase,
     connection: &models::RegisterConnection,
-) -> Result<models::Connection, DbError> {
+) -> Result<models::Connection, DatabaseFetchError> {
     let row: models::Connection = db
         .upsert("connections")
         .where_eq("id", connection.connection_id.clone())
@@ -358,7 +377,10 @@ pub async fn register_connection(
     })
 }
 
-pub async fn delete_connection(db: &ConfigDatabase, connection_id: &str) -> Result<(), DbError> {
+pub async fn delete_connection(
+    db: &ConfigDatabase,
+    connection_id: &str,
+) -> Result<(), DatabaseFetchError> {
     db.delete("players")
         .where_in(
             "players.id",
@@ -378,7 +400,10 @@ pub async fn delete_connection(db: &ConfigDatabase, connection_id: &str) -> Resu
     Ok(())
 }
 
-pub async fn get_players(db: &ConfigDatabase, connection_id: &str) -> Result<Vec<Player>, DbError> {
+pub async fn get_players(
+    db: &ConfigDatabase,
+    connection_id: &str,
+) -> Result<Vec<Player>, DatabaseFetchError> {
     Ok(db
         .select("players")
         .where_eq("connection_id", connection_id)
@@ -391,7 +416,7 @@ pub async fn create_player(
     db: &ConfigDatabase,
     connection_id: &str,
     player: &models::RegisterPlayer,
-) -> Result<Player, DbError> {
+) -> Result<Player, DatabaseFetchError> {
     Ok(db
         .upsert("players")
         .where_eq("connection_id", connection_id)
@@ -408,7 +433,7 @@ pub async fn create_player(
 pub async fn set_session_audio_zone(
     db: &LibraryDatabase,
     set_session_audio_zone: &SetSessionAudioZone,
-) -> Result<(), DbError> {
+) -> Result<(), DatabaseFetchError> {
     db.delete("audio_zone_sessions")
         .where_eq("session_id", set_session_audio_zone.session_id)
         .execute(db)
@@ -423,7 +448,7 @@ pub async fn set_session_audio_zone(
     Ok(())
 }
 
-pub async fn delete_player(db: &ConfigDatabase, player_id: u64) -> Result<(), DbError> {
+pub async fn delete_player(db: &ConfigDatabase, player_id: u64) -> Result<(), DatabaseFetchError> {
     db.delete("players")
         .where_eq("id", player_id)
         .execute(db)
@@ -435,7 +460,7 @@ pub async fn delete_player(db: &ConfigDatabase, player_id: u64) -> Result<(), Db
 pub async fn delete_session_playlist_track_by_track_id(
     db: &LibraryDatabase,
     id: u64,
-) -> Result<Option<ApiTrack>, DbError> {
+) -> Result<Option<ApiTrack>, DatabaseFetchError> {
     Ok(
         delete_session_playlist_tracks_by_track_id(db, Some(&vec![id]))
             .await?
@@ -447,7 +472,7 @@ pub async fn delete_session_playlist_track_by_track_id(
 pub async fn delete_session_playlist_tracks_by_track_id(
     db: &LibraryDatabase,
     ids: Option<&Vec<u64>>,
-) -> Result<Vec<ApiTrack>, DbError> {
+) -> Result<Vec<ApiTrack>, DatabaseFetchError> {
     if ids.is_some_and(Vec::is_empty) {
         return Ok(vec![]);
     }
@@ -459,15 +484,18 @@ pub async fn delete_session_playlist_tracks_by_track_id(
         .await?
         .into_iter()
         .filter_map(|x| x.get("data"))
-        .filter_map(|x| x.as_str().map(serde_json::from_str))
+        .filter_map(|x| {
+            x.as_str().map(serde_json::from_str).map(|x| {
+                x.map_err(|e| DatabaseFetchError::Parse(ParseError::Parse(format!("data: {e:?}"))))
+            })
+        })
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|_| DbError::Unknown)
 }
 
 async fn connection_as_model_query(
     row: &moosicbox_database::Row,
     db: Arc<Box<dyn Database>>,
-) -> Result<Connection, DbError> {
+) -> Result<Connection, DatabaseFetchError> {
     let id = row.to_value::<String>("id")?;
     let players = get_players(&db.clone().into(), &id).await?;
     Ok(Connection {
@@ -482,7 +510,7 @@ async fn connection_as_model_query(
 async fn session_as_model_query(
     row: &moosicbox_database::Row,
     db: Arc<Box<dyn Database>>,
-) -> Result<Session, DbError> {
+) -> Result<Session, DatabaseFetchError> {
     let id = row.to_value("id")?;
     let playback_target_type: Option<String> = row.to_value("playback_target")?;
     let playback_target_type =
@@ -512,14 +540,14 @@ async fn session_as_model_query(
             },
             playlist,
         }),
-        None => Err(DbError::InvalidRequest),
+        None => Err(DatabaseFetchError::InvalidRequest),
     }
 }
 
 async fn session_playlist_as_model_query(
     row: &moosicbox_database::Row,
     db: Arc<Box<dyn Database>>,
-) -> Result<SessionPlaylist, DbError> {
+) -> Result<SessionPlaylist, DatabaseFetchError> {
     let id = row.to_value("id")?;
     let tracks = get_session_playlist_tracks(&db.clone().into(), id).await?;
     log::trace!("Got SessionPlaylistTracks for session_playlist {id}: {tracks:?}");

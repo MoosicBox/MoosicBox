@@ -20,22 +20,14 @@ moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-feat
     "serde_json",
 ] }
 
-async-trait  = { workspace = true }
-log          = { workspace = true }
-serde        = { workspace = true, features = ["derive", "rc"] }
-serde_json   = { workspace = true }
-strum        = { workspace = true }
-strum_macros = { workspace = true }
-tantivy      = { workspace = true, optional = true }
-thiserror    = { workspace = true }
-utoipa       = { workspace = true, optional = true }
-
-[dev-dependencies]
-pretty_assertions = { workspace = true }
-test-log          = { workspace = true }
+async-trait = { workspace = true }
+log         = { workspace = true }
+serde       = { workspace = true, features = ["derive", "rc"] }
+strum       = { workspace = true }
+thiserror   = { workspace = true }
 
 [features]
-default = ["all-formats", "all-sources", "openapi", "tantivy"]
+default = ["all-formats", "all-sources"]
 
 fail-on-warnings = []
 
@@ -45,10 +37,6 @@ mp3  = []
 opus = []
 
 all-formats = ["aac", "flac", "mp3", "opus"]
-
-openapi = ["dep:utoipa"]
-
-tantivy = ["dep:tantivy"]
 
 all-sources = ["qobuz", "tidal", "yt"]
 

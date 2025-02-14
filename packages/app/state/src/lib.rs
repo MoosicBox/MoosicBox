@@ -11,7 +11,7 @@ use std::{
 use moosicbox_app_ws::WsHandle;
 use moosicbox_audio_output::{AudioOutputFactory, AudioOutputScannerError};
 use moosicbox_audio_zone::models::{ApiAudioZoneWithSession, ApiPlayer};
-use moosicbox_core::types::PlaybackQuality;
+use moosicbox_music_models::PlaybackQuality;
 use moosicbox_paging::Page;
 use moosicbox_player::{
     local::LocalPlayer, PlaybackHandler, PlaybackType, PlayerError, PlayerSource,
@@ -51,7 +51,7 @@ pub struct SourceToRemoteLibrary {
 impl moosicbox_music_api::SourceToMusicApi for SourceToRemoteLibrary {
     fn get(
         &self,
-        source: moosicbox_core::sqlite::models::ApiSource,
+        source: moosicbox_music_models::ApiSource,
     ) -> Result<Arc<Box<dyn moosicbox_music_api::MusicApi>>, moosicbox_music_api::MusicApisError>
     {
         Ok(Arc::new(Box::new(

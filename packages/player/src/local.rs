@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use flume::Receiver;
 use moosicbox_audio_decoder::{AudioDecodeError, AudioDecodeHandler};
 use moosicbox_audio_output::{AudioOutput, AudioOutputFactory};
-use moosicbox_core::sqlite::models::{ToApi, TrackApiSource};
+use moosicbox_music_models::TrackApiSource;
 use moosicbox_session::models::UpdateSession;
 use rand::{rng, Rng as _};
 use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
@@ -312,7 +312,7 @@ impl Player for LocalPlayer {
                 .read()
                 .unwrap()
                 .clone()
-                .map(ToApi::to_api),
+                .map(Into::into),
         })
     }
 

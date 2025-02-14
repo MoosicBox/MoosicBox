@@ -15,9 +15,11 @@ ignored = ["strum"]
 
 [dependencies]
 moosicbox_audio_zone_models = { version = "0.1.0", path = "../../audio_zone/models", default-features = false }
-moosicbox_core              = { version = "0.1.0", path = "../../core", default-features = false }
-moosicbox_database          = { version = "0.1.0", path = "../../database", default-features = false }
-moosicbox_json_utils        = { version = "0.1.0", path = "../../json_utils", default-features = false }
+moosicbox_database = { version = "0.1.0", path = "../../database", default-features = false }
+moosicbox_json_utils = { version = "0.1.0", path = "../../json_utils", default-features = false }
+moosicbox_music_models = { version = "0.1.0", path = "../../music/models", default-features = false, features = [
+    "api",
+] }
 
 # API Dependencies
 utoipa = { workspace = true, optional = true }
@@ -36,16 +38,16 @@ api = ["moosicbox_database/api"]
 openapi = [
     "dep:utoipa",
     "moosicbox_audio_zone_models/openapi",
-    "moosicbox_core/openapi",
+    "moosicbox_music_models/openapi",
 ]
 
-aac  = []
-flac = []
-mp3  = []
-opus = []
+aac  = ["moosicbox_music_models/aac"]
+flac = ["moosicbox_music_models/flac"]
+mp3  = ["moosicbox_music_models/mp3"]
+opus = ["moosicbox_music_models/opus"]
 
 all-sources = ["qobuz", "tidal", "yt"]
 
-qobuz = ["moosicbox_core/qobuz"]
-tidal = ["moosicbox_core/tidal"]
-yt    = ["moosicbox_core/yt"]
+qobuz = ["moosicbox_music_models/qobuz"]
+tidal = ["moosicbox_music_models/tidal"]
+yt    = ["moosicbox_music_models/yt"]

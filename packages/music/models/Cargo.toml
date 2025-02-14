@@ -1,0 +1,64 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools"]
+description = "MoosicBox Music models package"
+edition     = "2021"
+keywords    = ["audio", "models", "music"]
+license     = "MPL-2.0"
+name        = "moosicbox_music_models"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[package.metadata.cargo-machete]
+ignored = ["strum_macros"]
+
+[dependencies]
+moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
+moosicbox_database = { version = "0.1.0", path = "../../database", optional = true, default-features = false }
+moosicbox_json_utils = { version = "0.1.0", path = "../../json_utils", default-features = false, features = [
+    "serde_json",
+] }
+moosicbox_parsing_utils = { version = "0.1.0", path = "../../parsing_utils", default-features = false }
+
+# API Dependencies
+utoipa = { workspace = true, optional = true }
+
+# tantivy dependencies
+tantivy = { workspace = true, optional = true }
+
+log          = { workspace = true }
+serde        = { workspace = true, features = ["derive"] }
+serde_json   = { workspace = true }
+strum        = { workspace = true, features = ["derive"] }
+strum_macros = { workspace = true }
+thiserror    = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+test-log          = { workspace = true }
+
+[features]
+default = ["all-formats", "all-sources", "api", "db", "openapi", "tantivy"]
+
+fail-on-warnings = []
+
+api     = ["moosicbox_database/api"]
+openapi = ["dep:utoipa"]
+
+db = ["dep:moosicbox_database", "moosicbox_json_utils/database"]
+
+tantivy = ["dep:tantivy"]
+
+all-formats = ["aac", "flac", "mp3", "opus"]
+
+aac  = []
+flac = []
+mp3  = []
+opus = []
+
+all-sources = ["qobuz", "tidal", "yt"]
+
+qobuz = []
+tidal = []
+yt    = []

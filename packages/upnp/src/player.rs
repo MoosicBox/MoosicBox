@@ -14,7 +14,6 @@ use moosicbox_async_service::CancellationToken;
 use moosicbox_audio_output::{
     AudioOutputError, AudioOutputFactory, AudioWrite, Channels, SignalSpec,
 };
-use moosicbox_core::sqlite::models::ToApi;
 use moosicbox_music_api::SourceToMusicApi;
 use moosicbox_session::models::UpdateSession;
 use rand::{rng, Rng as _};
@@ -305,7 +304,7 @@ impl Player for UpnpPlayer {
                 .read()
                 .unwrap()
                 .clone()
-                .map(ToApi::to_api),
+                .map(Into::into),
         })
     }
 

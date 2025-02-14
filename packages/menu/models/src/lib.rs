@@ -1,10 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use moosicbox_core::{
-    sqlite::models::{Track, TrackApiSource},
-    types::AudioFormat,
-};
+use moosicbox_music_models::{AudioFormat, Track, TrackApiSource};
 
 #[cfg(feature = "api")]
 pub mod api;

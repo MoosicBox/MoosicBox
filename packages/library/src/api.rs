@@ -7,14 +7,11 @@ use actix_web::{
     web::{self, Json},
     Result, Scope,
 };
-use moosicbox_core::{
-    integer_range::parse_integer_ranges_to_ids,
-    sqlite::models::{AlbumSort, ApiAlbum, ToApi},
-};
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_music_api::models::AlbumsRequest;
+use moosicbox_music_models::{api::ApiAlbum, id::parse_integer_ranges_to_ids, AlbumSort};
 use moosicbox_paging::{Page, PagingRequest};
-use moosicbox_search::models::ApiSearchResultsResponse;
+use moosicbox_search::api::models::ApiSearchResultsResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
@@ -92,10 +89,10 @@ pub fn bind_services<
         ApiLibraryAlbum,
         ApiLibraryTrack,
         ApiSearchResultsResponse,
-        moosicbox_search::models::ApiGlobalSearchResult,
-        moosicbox_search::models::ApiGlobalArtistSearchResult,
-        moosicbox_search::models::ApiGlobalAlbumSearchResult,
-        moosicbox_search::models::ApiGlobalTrackSearchResult,
+        moosicbox_search::api::models::ApiGlobalSearchResult,
+        moosicbox_search::api::models::ApiGlobalArtistSearchResult,
+        moosicbox_search::api::models::ApiGlobalAlbumSearchResult,
+        moosicbox_search::api::models::ApiGlobalTrackSearchResult,
         LibraryArtistOrder,
         LibraryArtistOrderDirection,
         LibraryAlbumOrder,
@@ -129,19 +126,19 @@ pub enum ApiTrack {
     Library(ApiLibraryTrack),
 }
 
-impl ToApi<ApiTrack> for LibraryTrack {
-    fn to_api(self) -> ApiTrack {
-        ApiTrack::Library(ApiLibraryTrack {
-            id: self.id,
-            number: self.number,
-            album: self.album,
-            album_id: self.album_id,
-            artist: self.artist,
-            artist_id: self.artist_id,
-            contains_cover: self.artwork.is_some(),
-            duration: self.duration,
+impl From<LibraryTrack> for ApiTrack {
+    fn from(value: LibraryTrack) -> Self {
+        Self::Library(ApiLibraryTrack {
+            id: value.id,
+            number: value.number,
+            album: value.album,
+            album_id: value.album_id,
+            artist: value.artist,
+            artist_id: value.artist_id,
+            contains_cover: value.artwork.is_some(),
+            duration: value.duration,
             explicit: false,
-            title: self.title,
+            title: value.title,
         })
     }
 }
@@ -170,12 +167,12 @@ pub enum ApiArtist {
     Library(ApiLibraryArtist),
 }
 
-impl ToApi<ApiArtist> for LibraryArtist {
-    fn to_api(self) -> ApiArtist {
-        ApiArtist::Library(ApiLibraryArtist {
-            id: self.id,
-            contains_cover: self.cover.is_some(),
-            title: self.title,
+impl From<LibraryArtist> for ApiArtist {
+    fn from(value: LibraryArtist) -> Self {
+        Self::Library(ApiLibraryArtist {
+            id: value.id,
+            contains_cover: value.cover.is_some(),
+            title: value.title,
         })
     }
 }
@@ -366,18 +363,17 @@ pub async fn favorite_artists_endpoint(
     query: web::Query<LibraryFavoriteArtistsQuery>,
     db: LibraryDatabase,
 ) -> Result<Json<Page<ApiArtist>>> {
-    Ok(Json(
-        favorite_artists(
-            &db,
-            query.offset,
-            query.limit,
-            query.order,
-            query.order_direction,
-        )
-        .await?
-        .to_api()
-        .into(),
-    ))
+    let artist: Page<LibraryArtist> = favorite_artists(
+        &db,
+        query.offset,
+        query.limit,
+        query.order,
+        query.order_direction,
+    )
+    .await?
+    .into();
+
+    Ok(Json(artist.into()))
 }
 
 impl From<LibraryAddFavoriteArtistError> for actix_web::Error {
@@ -696,19 +692,18 @@ pub async fn favorite_tracks_endpoint(
         .transpose()
         .map_err(|e| ErrorBadRequest(format!("Invalid track id values: {e:?}")))?;
 
-    Ok(Json(
-        favorite_tracks(
-            &db,
-            track_ids.as_deref(),
-            query.offset,
-            query.limit,
-            query.order,
-            query.order_direction,
-        )
-        .await?
-        .to_api()
-        .into(),
-    ))
+    let tracks: Page<LibraryTrack> = favorite_tracks(
+        &db,
+        track_ids.as_deref(),
+        query.offset,
+        query.limit,
+        query.order,
+        query.order_direction,
+    )
+    .await?
+    .into();
+
+    Ok(Json(tracks.into()))
 }
 
 impl From<LibraryArtistAlbumsError> for actix_web::Error {
@@ -829,19 +824,19 @@ pub async fn album_tracks_endpoint(
     query: web::Query<LibraryAlbumTracksQuery>,
     db: LibraryDatabase,
 ) -> Result<Json<Page<ApiTrack>>> {
-    Ok(Json(
+    let tracks: Page<LibraryTrack> =
         album_tracks(&db, &query.album_id.into(), query.offset, query.limit)
             .await?
-            .to_api()
-            .into(),
-    ))
+            .into();
+
+    Ok(Json(tracks.into()))
 }
 
 impl From<LibraryAlbumError> for actix_web::Error {
     fn from(err: LibraryAlbumError) -> Self {
         log::error!("{err:?}");
         match err {
-            LibraryAlbumError::Db(_) => ErrorInternalServerError(err.to_string()),
+            LibraryAlbumError::DatabaseFetch(_) => ErrorInternalServerError(err.to_string()),
         }
     }
 }
@@ -922,7 +917,7 @@ pub async fn artist_endpoint(
 ) -> Result<Json<ApiArtist>> {
     let artist = artist(&db, &query.artist_id.into()).await?;
 
-    Ok(Json(artist.to_api()))
+    Ok(Json(artist.into()))
 }
 
 impl From<LibraryTrackError> for actix_web::Error {
@@ -967,7 +962,7 @@ pub async fn track_endpoint(
         .await?
         .ok_or_else(|| ErrorNotFound("Track not found"))?;
 
-    Ok(Json(track.to_api()))
+    Ok(Json(track.into()))
 }
 
 impl From<LibrarySearchError> for actix_web::Error {
@@ -1030,7 +1025,7 @@ impl From<ReindexError> for actix_web::Error {
     fn from(err: ReindexError) -> Self {
         log::error!("{err:?}");
         match err {
-            ReindexError::Db(_)
+            ReindexError::DatabaseFetch(_)
             | ReindexError::RecreateIndex(_)
             | ReindexError::PopulateIndex(_) => ErrorInternalServerError(err.to_string()),
         }

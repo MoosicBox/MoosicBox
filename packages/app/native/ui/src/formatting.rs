@@ -1,4 +1,4 @@
-use moosicbox_core::sqlite::models::{AlbumType, ApiSource};
+use moosicbox_music_models::{AlbumType, ApiSource};
 
 pub trait TimeFormat {
     fn into_formatted(self) -> String;

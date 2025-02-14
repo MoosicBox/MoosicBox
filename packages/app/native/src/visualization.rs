@@ -5,7 +5,7 @@ use std::{
     time::SystemTime,
 };
 
-use moosicbox_core::sqlite::models::{ApiSource, Id};
+use moosicbox_music_models::{id::Id, ApiSource};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 

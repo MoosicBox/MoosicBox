@@ -1,6 +1,5 @@
-use moosicbox_core::sqlite::db::DbError;
 use moosicbox_database::{profiles::LibraryDatabase, query::FilterableQuery};
-use moosicbox_json_utils::ToValueType;
+use moosicbox_json_utils::{database::DatabaseFetchError, ToValueType};
 
 use crate::ScanOrigin;
 
@@ -12,7 +11,7 @@ pub mod models;
 ///
 /// * If a database error occurs
 #[cfg(feature = "local")]
-pub async fn add_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), DbError> {
+pub async fn add_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), DatabaseFetchError> {
     db.upsert("scan_locations")
         .where_eq("origin", ScanOrigin::Local.as_ref())
         .where_eq("path", path)
@@ -28,7 +27,7 @@ pub async fn add_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), DbErr
 ///
 /// * If a database error occurs
 #[cfg(feature = "local")]
-pub async fn remove_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), DbError> {
+pub async fn remove_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), DatabaseFetchError> {
     db.delete("scan_locations")
         .where_eq("origin", ScanOrigin::Local.as_ref())
         .where_eq("path", path)
@@ -41,7 +40,10 @@ pub async fn remove_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), Db
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn enable_scan_origin(db: &LibraryDatabase, origin: ScanOrigin) -> Result<(), DbError> {
+pub async fn enable_scan_origin(
+    db: &LibraryDatabase,
+    origin: ScanOrigin,
+) -> Result<(), DatabaseFetchError> {
     db.upsert("scan_locations")
         .where_eq("origin", origin.as_ref())
         .value("origin", origin.as_ref())
@@ -54,7 +56,10 @@ pub async fn enable_scan_origin(db: &LibraryDatabase, origin: ScanOrigin) -> Res
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn disable_scan_origin(db: &LibraryDatabase, origin: ScanOrigin) -> Result<(), DbError> {
+pub async fn disable_scan_origin(
+    db: &LibraryDatabase,
+    origin: ScanOrigin,
+) -> Result<(), DatabaseFetchError> {
     db.delete("scan_locations")
         .where_eq("origin", origin.as_ref())
         .execute(db)
@@ -66,7 +71,9 @@ pub async fn disable_scan_origin(db: &LibraryDatabase, origin: ScanOrigin) -> Re
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn get_enabled_scan_origins(db: &LibraryDatabase) -> Result<Vec<ScanOrigin>, DbError> {
+pub async fn get_enabled_scan_origins(
+    db: &LibraryDatabase,
+) -> Result<Vec<ScanOrigin>, DatabaseFetchError> {
     Ok(db
         .select("scan_locations")
         .distinct()
@@ -79,7 +86,9 @@ pub async fn get_enabled_scan_origins(db: &LibraryDatabase) -> Result<Vec<ScanOr
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn get_scan_locations(db: &LibraryDatabase) -> Result<Vec<ScanLocation>, DbError> {
+pub async fn get_scan_locations(
+    db: &LibraryDatabase,
+) -> Result<Vec<ScanLocation>, DatabaseFetchError> {
     Ok(db
         .select("scan_locations")
         .execute(db)
@@ -93,7 +102,7 @@ pub async fn get_scan_locations(db: &LibraryDatabase) -> Result<Vec<ScanLocation
 pub async fn get_scan_locations_for_origin(
     db: &LibraryDatabase,
     origin: ScanOrigin,
-) -> Result<Vec<ScanLocation>, DbError> {
+) -> Result<Vec<ScanLocation>, DatabaseFetchError> {
     Ok(db
         .select("scan_locations")
         .where_eq("origin", origin.as_ref())

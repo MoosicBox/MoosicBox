@@ -16,10 +16,10 @@ moosicbox_app_ws = { version = "0.1.0", path = "../tauri/ws", default-features =
 moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
 moosicbox_audio_output = { version = "0.1.0", path = "../../audio_output", default-features = false }
 moosicbox_audio_zone = { version = "0.1.0", path = "../../audio_zone", default-features = false }
-moosicbox_core = { version = "0.1.0", path = "../../core", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../../env_utils", default-features = false }
 moosicbox_logging = { version = "0.1.0", path = "../../logging", default-features = false }
 moosicbox_music_api = { version = "0.1.0", path = "../../music_api", default-features = false }
+moosicbox_music_models = { version = "0.1.0", path = "../../music/models", default-features = false }
 moosicbox_paging = { version = "0.1.0", path = "../../paging", default-features = false }
 moosicbox_player = { version = "0.1.0", path = "../../player", default-features = false, features = [
     "local",
@@ -50,13 +50,17 @@ fail-on-warnings = []
 all-sources = ["qobuz", "tidal", "yt"]
 
 qobuz = [
-    "moosicbox_core/qobuz",
+    "moosicbox_music_models/qobuz",
     "moosicbox_player/qobuz",
     "moosicbox_session/qobuz",
 ]
 tidal = [
-    "moosicbox_core/tidal",
+    "moosicbox_music_models/tidal",
     "moosicbox_player/tidal",
     "moosicbox_session/tidal",
 ]
-yt = ["moosicbox_core/yt", "moosicbox_player/yt", "moosicbox_session/yt"]
+yt = [
+    "moosicbox_music_models/yt",
+    "moosicbox_player/yt",
+    "moosicbox_session/yt",
+]

@@ -32,7 +32,6 @@ tokio-util              = { workspace = true, optional = true }
 
 # Player Dependencies
 async-trait         = { workspace = true, optional = true }
-moosicbox_core      = { version = "0.1.0", path = "../core", default-features = false, optional = true }
 moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false, optional = true }
 moosicbox_player    = { version = "0.1.0", path = "../player", default-features = false, optional = true }
 moosicbox_session   = { version = "0.1.0", path = "../session", default-features = false, optional = true }
@@ -73,7 +72,6 @@ player = [
     "dep:async-trait",
     "dep:moosicbox_async_service",
     "dep:moosicbox_audio_output",
-    "dep:moosicbox_core",
     "dep:moosicbox_logging",
     "dep:moosicbox_music_api",
     "dep:moosicbox_player",

@@ -1,53 +1,58 @@
 #![allow(clippy::module_name_repetitions)]
 
-use std::collections::HashMap;
-use std::fs::File;
-use std::io::Cursor;
-use std::sync::{Arc, LazyLock, RwLock};
-use std::time::Duration;
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::Cursor,
+    sync::{Arc, LazyLock, RwLock},
+    time::Duration,
+};
 
 use async_trait::async_trait;
 #[cfg(feature = "base64")]
 use base64::{engine::general_purpose, Engine as _};
 use bytes::Bytes;
-use futures_util::future::ready;
-use futures_util::{future, pin_mut, Future, Stream, StreamExt};
-use moosicbox_audio_decoder::media_sources::remote_bytestream::RemoteByteStreamMediaSource;
-use moosicbox_audio_decoder::AudioDecodeHandler;
-use moosicbox_auth::FetchSignatureError;
-use moosicbox_channel_utils::futures_channel::PrioritizedSender;
-use moosicbox_channel_utils::MoosicBoxSender as _;
-use moosicbox_core::sqlite::models::{ApiSource, Id};
-use moosicbox_core::types::AudioFormat;
-use moosicbox_database::config::ConfigDatabase;
-use moosicbox_database::profiles::PROFILES;
-use moosicbox_env_utils::default_env_usize;
-use moosicbox_files::api::AlbumCoverQuery;
-use moosicbox_files::files::album::{get_album_cover, AlbumCoverError};
-use moosicbox_files::files::track::{
-    audio_format_to_content_type, get_track_id_source, get_track_info,
+use futures_util::{
+    future::{self, ready},
+    pin_mut, Future, Stream, StreamExt,
 };
-use moosicbox_files::range::{parse_ranges, Range};
+use moosicbox_audio_decoder::{
+    media_sources::remote_bytestream::RemoteByteStreamMediaSource, AudioDecodeHandler,
+};
+use moosicbox_auth::FetchSignatureError;
+use moosicbox_channel_utils::{futures_channel::PrioritizedSender, MoosicBoxSender as _};
+use moosicbox_database::{config::ConfigDatabase, profiles::PROFILES};
+use moosicbox_env_utils::default_env_usize;
+use moosicbox_files::{
+    api::AlbumCoverQuery,
+    files::{
+        album::{get_album_cover, AlbumCoverError},
+        track::{audio_format_to_content_type, get_track_id_source, get_track_info},
+    },
+    range::{parse_ranges, Range},
+};
 use moosicbox_music_api::{models::TrackSource, SourceToMusicApi as _};
+use moosicbox_music_models::{id::Id, ApiSource, AudioFormat};
 use moosicbox_player::symphonia::play_media_source_async;
-use moosicbox_stream_utils::remote_bytestream::RemoteByteStream;
-use moosicbox_stream_utils::ByteWriter;
+use moosicbox_stream_utils::{remote_bytestream::RemoteByteStream, ByteWriter};
 use moosicbox_tunnel::{Method, TunnelEncoding, TunnelWsResponse};
 use moosicbox_ws::{PlayerAction, WebsocketContext, WebsocketSendError, WebsocketSender};
 use rand::{rng, Rng as _};
 use regex::Regex;
 use serde_json::Value;
-use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
-use symphonia::core::probe::Hint;
+use symphonia::core::{
+    io::{MediaSourceStream, MediaSourceStreamOptions},
+    probe::Hint,
+};
 use thiserror::Error;
-use tokio::select;
-use tokio::sync::mpsc::error::SendError;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tokio::time::sleep;
-use tokio_tungstenite::tungstenite::Utf8Bytes;
+use tokio::{
+    select,
+    sync::mpsc::{channel, error::SendError, Receiver, Sender},
+    time::sleep,
+};
 use tokio_tungstenite::{
     connect_async,
-    tungstenite::{Error, Message},
+    tungstenite::{Error, Message, Utf8Bytes},
 };
 use tokio_util::sync::CancellationToken;
 

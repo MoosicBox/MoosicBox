@@ -26,12 +26,13 @@ use moosicbox_app_native_ui::{
 };
 use moosicbox_app_state::AppStateError;
 use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
-use moosicbox_core::sqlite::models::{
-    AlbumSort, AlbumType, ApiAlbum, ApiArtist, ApiSource, ApiTrack, TrackApiSource,
-};
 use moosicbox_env_utils::{default_env_usize, option_env_f32, option_env_i32};
 use moosicbox_logging::free_log_client::DynLayer;
 use moosicbox_music_api::{profiles::PROFILES, MusicApi, SourceToMusicApi};
+use moosicbox_music_models::{
+    api::{ApiAlbum, ApiArtist, ApiTrack},
+    AlbumSort, AlbumType, ApiSource, TrackApiSource,
+};
 use moosicbox_paging::Page;
 use moosicbox_player::Playback;
 use moosicbox_remote_library::RemoteLibraryMusicApi;

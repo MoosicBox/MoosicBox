@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
-use moosicbox_core::sqlite::models::Id;
 use moosicbox_json_utils::{serde_json::ToValue, ParseError, ToValueType};
 use moosicbox_music_api::models::TrackAudioQuality;
+use moosicbox_music_models::id::Id;
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 

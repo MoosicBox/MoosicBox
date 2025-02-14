@@ -1,11 +1,11 @@
 use std::str::FromStr;
 
-use moosicbox_core::sqlite::models::{ApiSource, Id, TrackApiSource};
 use moosicbox_database::{AsId, DatabaseValue};
 use moosicbox_json_utils::{
     database::ToValue as _, serde_json::ToValue, MissingValue, ParseError, ToValueType,
 };
 use moosicbox_music_api::models::TrackAudioQuality;
+use moosicbox_music_models::{id::Id, ApiSource, TrackApiSource};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;

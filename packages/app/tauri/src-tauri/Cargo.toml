@@ -30,7 +30,6 @@ moosicbox_app_state = { version = "0.1.0", path = "../../state", default-feature
 ] }
 
 moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
-moosicbox_core = { version = "0.1.0", path = "../../../core", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../../../env_utils", default-features = false }
 moosicbox_logging = { version = "0.1.0", path = "../../../logging", default-features = false, features = [
     "free_log",
@@ -38,6 +37,7 @@ moosicbox_logging = { version = "0.1.0", path = "../../../logging", default-feat
 moosicbox_mdns = { version = "0.1.0", path = "../../../mdns", default-features = false, features = [
     "scanner",
 ] }
+moosicbox_music_models = { version = "0.1.0", path = "../../../music/models", default-features = false }
 moosicbox_player = { version = "0.1.0", path = "../../../player", default-features = false, features = [
     "local",
 ] }
@@ -90,9 +90,9 @@ client  = ["dep:moosicbox_app_client"]
 all-supported-formats = ["aac", "flac", "mp3"]
 
 # Encoders
-aac  = ["moosicbox_app_tauri_bundled?/aac", "moosicbox_core/aac"]
-flac = ["moosicbox_app_tauri_bundled?/flac", "moosicbox_core/flac"]
-mp3  = ["moosicbox_app_tauri_bundled?/mp3", "moosicbox_core/mp3"]
+aac  = ["moosicbox_app_tauri_bundled?/aac", "moosicbox_music_models/aac"]
+flac = ["moosicbox_app_tauri_bundled?/flac", "moosicbox_music_models/flac"]
+mp3  = ["moosicbox_app_tauri_bundled?/mp3", "moosicbox_music_models/mp3"]
 
 # Player audio outputs
 asio                = ["moosicbox_player/asio"]
@@ -108,12 +108,16 @@ all-sources = ["qobuz", "tidal", "yt"]
 
 qobuz = [
     "moosicbox_app_state/qobuz",
-    "moosicbox_core/qobuz",
+    "moosicbox_music_models/qobuz",
     "moosicbox_session/qobuz",
 ]
 tidal = [
     "moosicbox_app_state/tidal",
-    "moosicbox_core/tidal",
+    "moosicbox_music_models/tidal",
     "moosicbox_session/tidal",
 ]
-yt = ["moosicbox_app_state/yt", "moosicbox_core/yt", "moosicbox_session/yt"]
+yt = [
+    "moosicbox_app_state/yt",
+    "moosicbox_music_models/yt",
+    "moosicbox_session/yt",
+]

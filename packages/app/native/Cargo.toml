@@ -45,12 +45,12 @@ moosicbox_app_native_ui = { version = "0.1.0", path = "ui", default-features = f
 moosicbox_app_state = { version = "0.1.0", path = "../state", default-features = false }
 moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
 moosicbox_audio_zone_models = { version = "0.1.0", path = "../../audio_zone/models", default-features = false }
-moosicbox_core = { version = "0.1.0", path = "../../core", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../../env_utils", default-features = false }
 moosicbox_logging = { version = "0.1.0", path = "../../logging", default-features = false, features = [
     "free_log",
 ] }
 moosicbox_music_api = { version = "0.1.0", path = "../../music_api", default-features = false }
+moosicbox_music_models = { version = "0.1.0", path = "../../music/models", default-features = false }
 moosicbox_paging = { version = "0.1.0", path = "../../paging", default-features = false }
 moosicbox_player = { version = "0.1.0", path = "../../player", default-features = false }
 moosicbox_remote_library = { version = "0.1.0", path = "../../remote_library", default-features = false }
@@ -114,28 +114,28 @@ unsafe            = ["moosicbox_app_native_lib/unsafe"]
 
 all-formats = ["aac", "flac", "mp3", "opus"]
 
-aac  = ["moosicbox_core/aac"]
-flac = ["moosicbox_core/flac"]
-mp3  = ["moosicbox_core/mp3"]
-opus = ["moosicbox_core/opus"]
+aac  = ["moosicbox_music_models/aac"]
+flac = ["moosicbox_music_models/flac"]
+mp3  = ["moosicbox_music_models/mp3"]
+opus = ["moosicbox_music_models/opus"]
 
 all-sources = ["qobuz", "tidal", "yt"]
 
 qobuz = [
     "moosicbox_app_native_ui/qobuz",
     "moosicbox_app_state/qobuz",
-    "moosicbox_core/qobuz",
+    "moosicbox_music_models/qobuz",
     "moosicbox_session_models/qobuz",
 ]
 tidal = [
     "moosicbox_app_native_ui/tidal",
     "moosicbox_app_state/tidal",
-    "moosicbox_core/tidal",
+    "moosicbox_music_models/tidal",
     "moosicbox_session_models/tidal",
 ]
 yt = [
     "moosicbox_app_native_ui/yt",
     "moosicbox_app_state/yt",
-    "moosicbox_core/yt",
+    "moosicbox_music_models/yt",
     "moosicbox_session_models/yt",
 ]

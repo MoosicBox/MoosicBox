@@ -9,7 +9,6 @@ use std::{
 
 use async_trait::async_trait;
 use moosicbox_audio_zone::models::CreateAudioZone;
-use moosicbox_core::sqlite::{db::DbError, models::ToApi};
 use moosicbox_database::{
     config::ConfigDatabase,
     profiles::{LibraryDatabase, PROFILES},
@@ -18,8 +17,9 @@ use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_session::{
     get_session_playlist,
     models::{
-        ApiUpdateSession, ApiUpdateSessionPlaylist, Connection, CreateSession, DeleteSession,
-        PlaybackTarget, RegisterConnection, RegisterPlayer, UpdateSession,
+        ApiConnection, ApiSessionPlaylist, ApiUpdateSession, ApiUpdateSessionPlaylist, Connection,
+        CreateSession, DeleteSession, PlaybackTarget, RegisterConnection, RegisterPlayer,
+        UpdateSession,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -51,8 +51,6 @@ pub struct WebsocketContext {
 pub enum WebsocketSendError {
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
-    #[error(transparent)]
-    Db(#[from] DbError),
     #[error("Unknown: {0}")]
     Unknown(String),
     #[error(transparent)]
@@ -106,7 +104,7 @@ pub fn connect(_sender: &impl WebsocketSender, context: &WebsocketContext) -> Re
 #[derive(Debug, Error)]
 pub enum WebsocketDisconnectError {
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
     WebsocketSend(#[from] WebsocketSendError),
     #[error(transparent)]
@@ -183,8 +181,6 @@ pub enum WebsocketMessageError {
     WebsocketSend(#[from] WebsocketSendError),
     #[error(transparent)]
     UpdateSession(#[from] UpdateSessionError),
-    #[error(transparent)]
-    Db(#[from] DbError),
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
     #[error("Unknown {message:?}")]
@@ -345,7 +341,7 @@ pub async fn broadcast_sessions(
         moosicbox_session::get_sessions(db)
             .await?
             .into_iter()
-            .map(ToApi::to_api)
+            .map(Into::into)
             .collect::<Vec<_>>()
     };
 
@@ -380,7 +376,7 @@ async fn get_connections(db: &ConfigDatabase) -> Result<String, WebsocketSendErr
             .into_iter()
             .map(|connection| {
                 let id = connection.id.clone();
-                let mut api = connection.to_api();
+                let mut api: ApiConnection = connection.into();
 
                 api.alive = connection_data.values().any(|c| c.id == id);
 
@@ -520,8 +516,6 @@ pub enum UpdateSessionError {
     #[error(transparent)]
     WebsocketSend(#[from] WebsocketSendError),
     #[error(transparent)]
-    Db(#[from] DbError),
-    #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
@@ -599,8 +593,8 @@ pub async fn update_session(
     let playlist = if payload.playlist.is_some() {
         get_session_playlist(db, payload.session_id)
             .await?
-            .map(ToApi::to_api)
-            .map(|playlist| ApiUpdateSessionPlaylist {
+            .map(Into::into)
+            .map(|playlist: ApiSessionPlaylist| ApiUpdateSessionPlaylist {
                 session_playlist_id: playlist.session_playlist_id,
                 tracks: playlist.tracks,
             })

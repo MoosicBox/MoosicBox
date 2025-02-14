@@ -1,9 +1,8 @@
-use moosicbox_core::sqlite::db::DbError;
 use moosicbox_database::{
     profiles::LibraryDatabase,
     query::{where_eq, FilterableQuery},
 };
-use moosicbox_json_utils::ToValueType;
+use moosicbox_json_utils::{database::DatabaseFetchError, ToValueType};
 
 pub mod models;
 
@@ -13,7 +12,7 @@ use self::models::{CreateDownloadTask, DownloadLocation, DownloadTask};
 pub async fn create_download_location(
     db: &LibraryDatabase,
     path: &str,
-) -> Result<DownloadLocation, DbError> {
+) -> Result<DownloadLocation, DatabaseFetchError> {
     Ok(db
         .upsert("download_locations")
         .where_eq("path", path)
@@ -26,7 +25,7 @@ pub async fn create_download_location(
 pub async fn get_download_location(
     db: &LibraryDatabase,
     id: u64,
-) -> Result<Option<DownloadLocation>, DbError> {
+) -> Result<Option<DownloadLocation>, DatabaseFetchError> {
     Ok(db
         .select("download_locations")
         .where_eq("id", id)
@@ -39,7 +38,7 @@ pub async fn get_download_location(
 #[cfg(feature = "api")]
 pub async fn get_download_locations(
     db: &LibraryDatabase,
-) -> Result<Vec<DownloadLocation>, DbError> {
+) -> Result<Vec<DownloadLocation>, DatabaseFetchError> {
     Ok(db
         .select("download_locations")
         .execute(db)
@@ -50,7 +49,7 @@ pub async fn get_download_locations(
 pub async fn create_download_task(
     db: &LibraryDatabase,
     task: &CreateDownloadTask,
-) -> Result<DownloadTask, DbError> {
+) -> Result<DownloadTask, DatabaseFetchError> {
     let source = task.item.source().as_ref();
     let quality = task.item.quality().map(AsRef::as_ref);
     let track_id = task.item.track_id();
@@ -87,7 +86,9 @@ pub async fn create_download_task(
 }
 
 #[cfg(feature = "api")]
-pub async fn get_download_tasks(db: &LibraryDatabase) -> Result<Vec<DownloadTask>, DbError> {
+pub async fn get_download_tasks(
+    db: &LibraryDatabase,
+) -> Result<Vec<DownloadTask>, DatabaseFetchError> {
     Ok(db
         .select("download_tasks")
         .sort("id", moosicbox_database::query::SortDirection::Desc)

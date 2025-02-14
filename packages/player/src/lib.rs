@@ -18,17 +18,10 @@ use moosicbox_audio_decoder::media_sources::{
     bytestream_source::ByteStreamSource, remote_bytestream::RemoteByteStreamMediaSource,
 };
 use moosicbox_audio_output::AudioOutputFactory;
-use moosicbox_core::sqlite::models::{ApiSource, Track};
-use moosicbox_core::{
-    sqlite::{
-        db::DbError,
-        models::{Id, ToApi},
-    },
-    types::{AudioFormat, PlaybackQuality},
-};
 use moosicbox_database::profiles::LibraryDatabase;
-use moosicbox_json_utils::ParseError;
+use moosicbox_json_utils::{database::DatabaseFetchError, ParseError};
 use moosicbox_music_api::MusicApi;
+use moosicbox_music_models::{id::Id, ApiSource, AudioFormat, PlaybackQuality, Track};
 use moosicbox_session::{
     get_session_playlist,
     models::{ApiSession, PlaybackTarget, Session, UpdateSession, UpdateSessionPlaylist},
@@ -82,7 +75,7 @@ pub enum PlayerError {
     #[error(transparent)]
     Parse(#[from] ParseError),
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
     #[error(transparent)]
@@ -191,13 +184,13 @@ pub struct ApiPlayback {
     pub seek: f64,
 }
 
-impl ToApi<ApiPlayback> for Playback {
-    fn to_api(self) -> ApiPlayback {
-        ApiPlayback {
-            track_ids: self.tracks.iter().map(|t| t.id.to_string()).collect(),
-            playing: self.playing,
-            position: self.position,
-            seek: self.progress,
+impl From<Playback> for ApiPlayback {
+    fn from(value: Playback) -> Self {
+        Self {
+            track_ids: value.tracks.iter().map(|t| t.id.to_string()).collect(),
+            playing: value.playing,
+            position: value.position,
+            seek: value.progress,
         }
     }
 }
@@ -392,7 +385,9 @@ pub async fn get_session_playlist_id_from_session_id(
         Some(
             get_session_playlist(db, session_id)
                 .await?
-                .ok_or(PlayerError::Db(DbError::InvalidRequest))?
+                .ok_or(PlayerError::DatabaseFetch(
+                    DatabaseFetchError::InvalidRequest,
+                ))?
                 .id,
         )
     } else {
@@ -1545,7 +1540,7 @@ async fn track_id_to_playable_stream(
         true,
         #[cfg(feature = "flac")]
         {
-            quality.format == moosicbox_core::types::AudioFormat::Flac
+            quality.format == moosicbox_music_models::AudioFormat::Flac
         },
         #[cfg(not(feature = "flac"))]
         false,

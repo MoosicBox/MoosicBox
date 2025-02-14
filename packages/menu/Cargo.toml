@@ -12,13 +12,16 @@ version     = "0.1.0"
 
 [dependencies]
 moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
-moosicbox_core = { version = "0.1.0", path = "../core", default-features = false }
 moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
+moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
+    "database",
+] }
 moosicbox_library = { version = "0.1.0", path = "../library", default-features = false }
 moosicbox_menu_models = { version = "0.1.0", path = "models", default-features = false }
 moosicbox_music_api = { version = "0.1.0", path = "../music_api", features = [
     "db",
 ] }
+moosicbox_music_models = { version = "0.1.0", path = "../music/models", default-features = false }
 moosicbox_paging = { version = "0.1.0", path = "../paging", default-features = false }
 moosicbox_scan = { version = "0.1.0", path = "../scan", default-features = false }
 moosicbox_search = { version = "0.1.0", path = "../search", default-features = false }
@@ -52,36 +55,36 @@ api = [
 ]
 openapi = [
     "dep:utoipa",
-    "moosicbox_core/openapi",
     "moosicbox_library/openapi",
     "moosicbox_menu_models/openapi",
+    "moosicbox_music_models/openapi",
 ]
 
 all-sources = ["qobuz", "tidal", "yt"]
 
 qobuz = [
     "dep:moosicbox_qobuz",
-    "moosicbox_core/qobuz",
     "moosicbox_library/qobuz",
     "moosicbox_menu_models/qobuz",
+    "moosicbox_music_models/qobuz",
     "moosicbox_qobuz/db",
     "moosicbox_scan/qobuz",
     "moosicbox_session/qobuz",
 ]
 tidal = [
     "dep:moosicbox_tidal",
-    "moosicbox_core/tidal",
     "moosicbox_library/tidal",
     "moosicbox_menu_models/tidal",
+    "moosicbox_music_models/tidal",
     "moosicbox_scan/tidal",
     "moosicbox_session/tidal",
     "moosicbox_tidal/db",
 ]
 yt = [
     "dep:moosicbox_yt",
-    "moosicbox_core/yt",
     "moosicbox_library/yt",
     "moosicbox_menu_models/yt",
+    "moosicbox_music_models/yt",
     "moosicbox_scan/yt",
     "moosicbox_session/yt",
     "moosicbox_yt/db",

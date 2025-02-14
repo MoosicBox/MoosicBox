@@ -1,12 +1,9 @@
 use std::sync::{Arc, PoisonError};
 
-use moosicbox_core::sqlite::{
-    db::DbError,
-    models::{Album, ApiSource, Artist, Id, Track, TrackApiSource},
-};
 use moosicbox_database::{
     profiles::LibraryDatabase, query::FilterableQuery, DatabaseError, DatabaseValue,
 };
+use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_library::{
     db::{delete_track_sizes_by_track_id, delete_tracks},
     models::LibraryAlbum,
@@ -15,6 +12,10 @@ use moosicbox_library::{
 use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_api::{
     models::AlbumsRequest, AlbumsError, ArtistAlbumsError, LibraryAlbumError, MusicApi, TracksError,
+};
+use moosicbox_music_models::{
+    id::{Id, TryFromIdError},
+    Album, ApiSource, Artist, Track, TrackApiSource,
 };
 use moosicbox_paging::Page;
 use moosicbox_scan::{music_api::ScanError, output::ScanOutput};
@@ -32,8 +33,6 @@ use super::{get_albums, GetAlbumError};
 pub enum GetAlbumTracksError {
     #[error("Poison error")]
     Poison,
-    #[error(transparent)]
-    Db(#[from] DbError),
 }
 
 impl<T> From<PoisonError<T>> for GetAlbumTracksError {
@@ -190,8 +189,6 @@ pub async fn get_album_versions_from_source(
 #[derive(Debug, Error)]
 pub enum AddAlbumError {
     #[error(transparent)]
-    Db(#[from] DbError),
-    #[error(transparent)]
     Album(#[from] moosicbox_music_api::AlbumError),
     #[error(transparent)]
     GetAlbum(#[from] GetAlbumError),
@@ -326,9 +323,9 @@ pub async fn add_album(
 #[derive(Debug, Error)]
 pub enum RemoveAlbumError {
     #[error(transparent)]
-    Db(#[from] DbError),
-    #[error(transparent)]
     Database(#[from] DatabaseError),
+    #[error(transparent)]
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
     LibraryAlbum(#[from] LibraryAlbumError),
     #[error(transparent)]
@@ -343,6 +340,8 @@ pub enum RemoveAlbumError {
     NoAlbum,
     #[error("Invalid album_id type")]
     InvalidAlbumIdType,
+    #[error(transparent)]
+    TryFromId(#[from] TryFromIdError),
 }
 
 /// # Errors
@@ -407,17 +406,32 @@ pub async fn remove_album(
     log::debug!("Deleting track db items: {track_ids:?}");
     delete_session_playlist_tracks_by_track_id(
         db,
-        Some(&track_ids.iter().map(Into::into).collect::<Vec<_>>()),
+        Some(
+            &track_ids
+                .iter()
+                .map(TryInto::try_into)
+                .collect::<Result<Vec<_>, _>>()?,
+        ),
     )
     .await?;
     delete_track_sizes_by_track_id(
         db,
-        Some(&track_ids.iter().map(Into::into).collect::<Vec<_>>()),
+        Some(
+            &track_ids
+                .iter()
+                .map(TryInto::try_into)
+                .collect::<Result<Vec<_>, _>>()?,
+        ),
     )
     .await?;
     delete_tracks(
         db,
-        Some(&track_ids.iter().map(Into::into).collect::<Vec<_>>()),
+        Some(
+            &track_ids
+                .iter()
+                .map(TryInto::try_into)
+                .collect::<Result<Vec<_>, _>>()?,
+        ),
     )
     .await?;
 

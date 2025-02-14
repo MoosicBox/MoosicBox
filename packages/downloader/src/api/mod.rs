@@ -1,41 +1,32 @@
-use std::path::PathBuf;
-use std::str::FromStr as _;
-use std::sync::Arc;
-use std::sync::LazyLock;
+use std::{
+    path::PathBuf,
+    str::FromStr as _,
+    sync::{Arc, LazyLock},
+};
 
-use crate::api::models::ApiDownloadLocation;
-use crate::api::models::ApiDownloadTask;
-use crate::api::models::ApiDownloadTaskState;
-use crate::create_download_tasks;
-use crate::db::create_download_location;
-use crate::db::get_download_locations;
-use crate::db::get_download_tasks;
-use crate::db::models::DownloadTaskState;
-use crate::get_create_download_tasks;
-use crate::get_download_path;
-use crate::queue::{DownloadQueue, ProcessDownloadQueueError, ProgressListenerRef};
-use crate::CreateDownloadTasksError;
-use crate::DownloadApiSource;
-use crate::GetCreateDownloadTasksError;
-use crate::GetDownloadPathError;
-use crate::MoosicboxDownloader;
-use actix_web::dev::ServiceFactory;
-use actix_web::dev::ServiceRequest;
-use actix_web::error::ErrorBadRequest;
-use actix_web::error::ErrorInternalServerError;
-use actix_web::error::ErrorNotFound;
-use actix_web::Scope;
+use crate::{
+    api::models::{ApiDownloadLocation, ApiDownloadTask, ApiDownloadTaskState},
+    create_download_tasks,
+    db::{
+        create_download_location, get_download_locations, get_download_tasks,
+        models::DownloadTaskState,
+    },
+    get_create_download_tasks, get_download_path,
+    queue::{DownloadQueue, ProcessDownloadQueueError, ProgressListenerRef},
+    CreateDownloadTasksError, DownloadApiSource, GetCreateDownloadTasksError, GetDownloadPathError,
+    MoosicboxDownloader,
+};
 use actix_web::{
+    dev::{ServiceFactory, ServiceRequest},
+    error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     route,
     web::{self, Json},
-    Result,
+    Result, Scope,
 };
 use moosicbox_database::profiles::LibraryDatabase;
-use moosicbox_music_api::MusicApis;
-use moosicbox_music_api::{models::TrackAudioQuality, SourceToMusicApi as _};
+use moosicbox_music_api::{models::TrackAudioQuality, MusicApis, SourceToMusicApi as _};
 use moosicbox_paging::Page;
-use regex::Captures;
-use regex::Regex;
+use regex::{Captures, Regex};
 use serde::Deserialize;
 use serde_json::Value;
 use tokio::sync::RwLock;
@@ -68,7 +59,7 @@ pub fn bind_services<
     ),
     components(schemas(
         DownloadApiSource,
-        moosicbox_core::sqlite::models::Id,
+        moosicbox_music_models::id::Id,
         TrackAudioQuality
     ))
 )]

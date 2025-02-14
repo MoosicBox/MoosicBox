@@ -7,13 +7,14 @@ use actix_web::{
     web::{self, Json},
     HttpRequest, Result, Scope,
 };
-use moosicbox_core::sqlite::models::{
-    ApiAlbum, ApiArtist, ApiSource, ApiSources, ToApi, TrackApiSource,
-};
 #[cfg(feature = "db")]
 use moosicbox_database::profiles::LibraryDatabase;
+use moosicbox_music_models::{
+    api::{ApiAlbum, ApiArtist},
+    ApiSource, ApiSources, TrackApiSource,
+};
 use moosicbox_paging::Page;
-use moosicbox_search::models::ApiSearchResultsResponse;
+use moosicbox_search::api::models::ApiSearchResultsResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
@@ -125,31 +126,31 @@ pub enum ApiTrack {
     Yt(ApiYtTrack),
 }
 
-impl ToApi<ApiTrack> for YtTrack {
-    fn to_api(self) -> ApiTrack {
-        ApiTrack::Yt(ApiYtTrack {
-            id: self.id,
-            number: self.track_number,
-            album: self.album.clone(),
-            album_id: self.album_id,
-            album_type: self.album_type,
-            artist: self.artist.clone(),
-            artist_id: self.artist_id,
-            contains_cover: self.album_cover.is_some(),
-            audio_quality: self.audio_quality.clone(),
-            copyright: self.copyright.clone(),
-            duration: self.duration,
-            explicit: self.explicit,
-            isrc: self.isrc.clone(),
-            popularity: self.popularity,
-            title: self.title.clone(),
-            media_metadata_tags: self.media_metadata_tags,
+impl From<YtTrack> for ApiTrack {
+    fn from(value: YtTrack) -> Self {
+        Self::Yt(ApiYtTrack {
+            contains_cover: value.album_cover.is_some(),
+            id: value.id,
+            number: value.track_number,
+            album: value.album,
+            album_id: value.album_id,
+            album_type: value.album_type,
+            artist: value.artist,
+            artist_id: value.artist_id,
+            audio_quality: value.audio_quality,
+            copyright: value.copyright,
+            duration: value.duration,
+            explicit: value.explicit,
+            isrc: value.isrc,
+            popularity: value.popularity,
+            title: value.title,
+            media_metadata_tags: value.media_metadata_tags,
             api_source: ApiSource::Yt,
         })
     }
 }
 
-impl From<ApiTrack> for moosicbox_core::sqlite::models::ApiTrack {
+impl From<ApiTrack> for moosicbox_music_models::api::ApiTrack {
     fn from(value: ApiTrack) -> Self {
         let ApiTrack::Yt(track) = value;
         track.into()
@@ -178,7 +179,7 @@ pub struct ApiYtTrack {
     pub api_source: ApiSource,
 }
 
-impl From<ApiYtTrack> for moosicbox_core::sqlite::models::ApiTrack {
+impl From<ApiYtTrack> for moosicbox_music_models::api::ApiTrack {
     fn from(value: ApiYtTrack) -> Self {
         Self {
             track_id: value.id.clone().into(),
@@ -217,7 +218,7 @@ pub struct ApiYtArtist {
     pub api_source: ApiSource,
 }
 
-static TIDAL_ACCESS_TOKEN_HEADER: &str = "x-yt-access-token";
+static YT_ACCESS_TOKEN_HEADER: &str = "x-yt-access-token";
 
 impl From<YtDeviceAuthorizationError> for actix_web::Error {
     fn from(err: YtDeviceAuthorizationError) -> Self {
@@ -368,7 +369,7 @@ pub async fn track_file_url_endpoint(
             query.audio_quality,
             &query.track_id.into(),
             req.headers()
-                .get(TIDAL_ACCESS_TOKEN_HEADER)
+                .get(YT_ACCESS_TOKEN_HEADER)
                 .map(|x| x.to_str().unwrap().to_string()),
         )
         .await?,
@@ -422,7 +423,7 @@ pub async fn track_playback_info_endpoint(
             query.audio_quality,
             &query.track_id.into(),
             req.headers()
-                .get(TIDAL_ACCESS_TOKEN_HEADER)
+                .get(YT_ACCESS_TOKEN_HEADER)
                 .map(|x| x.to_str().unwrap().to_string()),
         )
         .await?,
@@ -493,7 +494,7 @@ pub async fn favorite_artists_endpoint(
             query.locale.clone(),
             query.device_type,
             req.headers()
-                .get(TIDAL_ACCESS_TOKEN_HEADER)
+                .get(YT_ACCESS_TOKEN_HEADER)
                 .map(|x| x.to_str().unwrap().to_string()),
             query.user_id,
         )
@@ -557,7 +558,7 @@ pub async fn add_favorite_artist_endpoint(
         query.locale.clone(),
         query.device_type,
         req.headers()
-            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .get(YT_ACCESS_TOKEN_HEADER)
             .map(|x| x.to_str().unwrap().to_string()),
         query.user_id,
     )
@@ -622,7 +623,7 @@ pub async fn remove_favorite_artist_endpoint(
         query.locale.clone(),
         query.device_type,
         req.headers()
-            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .get(YT_ACCESS_TOKEN_HEADER)
             .map(|x| x.to_str().unwrap().to_string()),
         query.user_id,
     )
@@ -697,7 +698,7 @@ pub async fn favorite_albums_endpoint(
             query.locale.clone(),
             query.device_type,
             req.headers()
-                .get(TIDAL_ACCESS_TOKEN_HEADER)
+                .get(YT_ACCESS_TOKEN_HEADER)
                 .map(|x| x.to_str().unwrap().to_string()),
             query.user_id,
         )
@@ -761,7 +762,7 @@ pub async fn add_favorite_album_endpoint(
         query.locale.clone(),
         query.device_type,
         req.headers()
-            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .get(YT_ACCESS_TOKEN_HEADER)
             .map(|x| x.to_str().unwrap().to_string()),
         query.user_id,
     )
@@ -826,7 +827,7 @@ pub async fn remove_favorite_album_endpoint(
         query.locale.clone(),
         query.device_type,
         req.headers()
-            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .get(YT_ACCESS_TOKEN_HEADER)
             .map(|x| x.to_str().unwrap().to_string()),
         query.user_id,
     )
@@ -891,7 +892,7 @@ pub async fn add_favorite_track_endpoint(
         query.locale.clone(),
         query.device_type,
         req.headers()
-            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .get(YT_ACCESS_TOKEN_HEADER)
             .map(|x| x.to_str().unwrap().to_string()),
         query.user_id,
     )
@@ -956,7 +957,7 @@ pub async fn remove_favorite_track_endpoint(
         query.locale.clone(),
         query.device_type,
         req.headers()
-            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .get(YT_ACCESS_TOKEN_HEADER)
             .map(|x| x.to_str().unwrap().to_string()),
         query.user_id,
     )
@@ -1019,26 +1020,25 @@ pub async fn favorite_tracks_endpoint(
     query: web::Query<YtFavoriteTracksQuery>,
     #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiTrack>>> {
-    Ok(Json(
-        favorite_tracks(
-            #[cfg(feature = "db")]
-            &db,
-            query.offset,
-            query.limit,
-            query.order,
-            query.order_direction,
-            query.country_code.clone(),
-            query.locale.clone(),
-            query.device_type,
-            req.headers()
-                .get(TIDAL_ACCESS_TOKEN_HEADER)
-                .map(|x| x.to_str().unwrap().to_string()),
-            query.user_id,
-        )
-        .await?
-        .to_api()
-        .into(),
-    ))
+    let tracks: Page<YtTrack> = favorite_tracks(
+        #[cfg(feature = "db")]
+        &db,
+        query.offset,
+        query.limit,
+        query.order,
+        query.order_direction,
+        query.country_code.clone(),
+        query.locale.clone(),
+        query.device_type,
+        req.headers()
+            .get(YT_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+        query.user_id,
+    )
+    .await?
+    .into();
+
+    Ok(Json(tracks.into()))
 }
 
 impl From<YtArtistAlbumsError> for actix_web::Error {
@@ -1123,7 +1123,7 @@ pub async fn artist_albums_endpoint(
             query.locale.clone(),
             query.device_type,
             req.headers()
-                .get(TIDAL_ACCESS_TOKEN_HEADER)
+                .get(YT_ACCESS_TOKEN_HEADER)
                 .map(|x| x.to_str().unwrap().to_string()),
         )
         .await?
@@ -1180,24 +1180,23 @@ pub async fn album_tracks_endpoint(
     query: web::Query<YtAlbumTracksQuery>,
     #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiTrack>>> {
-    Ok(Json(
-        album_tracks(
-            #[cfg(feature = "db")]
-            &db,
-            &query.album_id.into(),
-            query.offset,
-            query.limit,
-            query.country_code.clone(),
-            query.locale.clone(),
-            query.device_type,
-            req.headers()
-                .get(TIDAL_ACCESS_TOKEN_HEADER)
-                .map(|x| x.to_str().unwrap().to_string()),
-        )
-        .await?
-        .to_api()
-        .into(),
-    ))
+    let tracks: Page<YtTrack> = album_tracks(
+        #[cfg(feature = "db")]
+        &db,
+        &query.album_id.into(),
+        query.offset,
+        query.limit,
+        query.country_code.clone(),
+        query.locale.clone(),
+        query.device_type,
+        req.headers()
+            .get(YT_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+    )
+    .await?
+    .into();
+
+    Ok(Json(tracks.into()))
 }
 
 impl From<YtAlbumError> for actix_web::Error {
@@ -1262,7 +1261,7 @@ pub async fn album_endpoint(
         query.locale.clone(),
         query.device_type,
         req.headers()
-            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .get(YT_ACCESS_TOKEN_HEADER)
             .map(|x| x.to_str().unwrap().to_string()),
     )
     .await?;
@@ -1322,7 +1321,7 @@ pub async fn artist_endpoint(
         query.locale.clone(),
         query.device_type,
         req.headers()
-            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .get(YT_ACCESS_TOKEN_HEADER)
             .map(|x| x.to_str().unwrap().to_string()),
     )
     .await?;
@@ -1382,12 +1381,12 @@ pub async fn track_endpoint(
         query.locale.clone(),
         query.device_type,
         req.headers()
-            .get(TIDAL_ACCESS_TOKEN_HEADER)
+            .get(YT_ACCESS_TOKEN_HEADER)
             .map(|x| x.to_str().unwrap().to_string()),
     )
     .await?;
 
-    Ok(Json(track.to_api()))
+    Ok(Json(track.into()))
 }
 
 impl From<YtSearchError> for actix_web::Error {

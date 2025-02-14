@@ -1,14 +1,7 @@
-use moosicbox_database::{
-    boxed, config::ConfigDatabase, profiles::LibraryDatabase, query::*, DatabaseError,
-    DatabaseValue,
-};
+use moosicbox_database::{boxed, config::ConfigDatabase, query::*, DatabaseError, DatabaseValue};
 use moosicbox_json_utils::{database::DatabaseFetchError, ParseError, ToValueType as _};
 use std::{fmt::Debug, sync::PoisonError};
 use thiserror::Error;
-
-use crate::types::AudioFormat;
-
-use super::models::{AlbumVersionQuality, TrackApiSource};
 
 impl<T> From<PoisonError<T>> for DbError {
     fn from(_err: PoisonError<T>) -> Self {
@@ -150,80 +143,4 @@ pub async fn save_magic_token(
         .await?;
 
     Ok(())
-}
-
-pub async fn get_all_album_version_qualities(
-    db: &LibraryDatabase,
-    album_ids: Vec<u64>,
-) -> Result<Vec<AlbumVersionQuality>, DbError> {
-    let mut versions: Vec<AlbumVersionQuality> = db
-        .select("albums")
-        .distinct()
-        .columns(&[
-            "albums.id as album_id",
-            "track_sizes.bit_depth",
-            "track_sizes.sample_rate",
-            "track_sizes.channels",
-            "track_sizes.format",
-            "tracks.source",
-        ])
-        .left_join("tracks", "tracks.album_id=albums.id")
-        .left_join("track_sizes", "track_sizes.track_id=tracks.id")
-        .where_in("albums.id", album_ids)
-        .sort("albums.id", SortDirection::Desc)
-        .where_or(boxed![
-            where_not_eq("track_sizes.format", AudioFormat::Source.as_ref()),
-            where_not_eq("tracks.source", TrackApiSource::Local.as_ref())
-        ])
-        .execute(db)
-        .await?
-        .to_value_type()?;
-
-    versions.sort_by(|a: &AlbumVersionQuality, b: &AlbumVersionQuality| {
-        b.sample_rate
-            .unwrap_or_default()
-            .cmp(&a.sample_rate.unwrap_or_default())
-    });
-    versions.sort_by(|a: &AlbumVersionQuality, b: &AlbumVersionQuality| {
-        b.bit_depth
-            .unwrap_or_default()
-            .cmp(&a.bit_depth.unwrap_or_default())
-    });
-
-    Ok(versions)
-}
-
-pub async fn get_album_version_qualities(
-    db: &LibraryDatabase,
-    album_id: u64,
-) -> Result<Vec<AlbumVersionQuality>, DbError> {
-    let mut versions: Vec<AlbumVersionQuality> = db
-        .select("albums")
-        .distinct()
-        .columns(&[
-            "track_sizes.bit_depth",
-            "track_sizes.sample_rate",
-            "track_sizes.channels",
-            "tracks.format",
-            "tracks.source",
-        ])
-        .left_join("tracks", "tracks.album_id=albums.id")
-        .left_join("track_sizes", "track_sizes.track_id=tracks.id")
-        .where_eq("albums.id", album_id)
-        .execute(db)
-        .await?
-        .to_value_type()?;
-
-    versions.sort_by(|a: &AlbumVersionQuality, b: &AlbumVersionQuality| {
-        b.sample_rate
-            .unwrap_or_default()
-            .cmp(&a.sample_rate.unwrap_or_default())
-    });
-    versions.sort_by(|a: &AlbumVersionQuality, b: &AlbumVersionQuality| {
-        b.bit_depth
-            .unwrap_or_default()
-            .cmp(&a.bit_depth.unwrap_or_default())
-    });
-
-    Ok(versions)
 }

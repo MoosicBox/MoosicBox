@@ -1,12 +1,5 @@
 use std::collections::HashMap;
 
-use moosicbox_core::{
-    sqlite::{
-        db::DbError,
-        models::{AsModelResultMapped as _, Id, TrackApiSource, TrackSize},
-    },
-    types::{AudioFormat, PlaybackQuality},
-};
 use moosicbox_database::{
     boxed,
     profiles::LibraryDatabase,
@@ -15,7 +8,11 @@ use moosicbox_database::{
     },
     DatabaseError, DatabaseValue,
 };
-use moosicbox_json_utils::ToValueType;
+use moosicbox_json_utils::{
+    database::{AsModelResultMapped as _, DatabaseFetchError},
+    ToValueType,
+};
+use moosicbox_music_models::{id::Id, AudioFormat, PlaybackQuality, TrackApiSource, TrackSize};
 use thiserror::Error;
 
 pub mod models;
@@ -128,14 +125,14 @@ pub async fn get_library_access_token(
 /// # Errors
 ///
 /// * If there was a database error
-pub async fn get_artists(db: &LibraryDatabase) -> Result<Vec<LibraryArtist>, DbError> {
+pub async fn get_artists(db: &LibraryDatabase) -> Result<Vec<LibraryArtist>, DatabaseFetchError> {
     Ok(db.select("artists").execute(db).await?.to_value_type()?)
 }
 
 /// # Errors
 ///
 /// * If there was a database error
-pub async fn get_albums(db: &LibraryDatabase) -> Result<Vec<LibraryAlbum>, DbError> {
+pub async fn get_albums(db: &LibraryDatabase) -> Result<Vec<LibraryAlbum>, DatabaseFetchError> {
     db.select("albums")
         .distinct()
         .columns(&[
@@ -170,7 +167,7 @@ pub async fn get_artist(
     db: &LibraryDatabase,
     column: &str,
     id: &Id,
-) -> Result<Option<LibraryArtist>, DbError> {
+) -> Result<Option<LibraryArtist>, DatabaseFetchError> {
     Ok(db
         .select("artists")
         .where_eq(column.to_string(), id)
@@ -186,7 +183,7 @@ pub async fn get_artist(
 pub async fn get_artist_by_album_id(
     db: &LibraryDatabase,
     id: u64,
-) -> Result<Option<LibraryArtist>, DbError> {
+) -> Result<Option<LibraryArtist>, DatabaseFetchError> {
     Ok(db
         .select("artists")
         .where_eq("albums.id", id)
@@ -203,7 +200,7 @@ pub async fn get_artist_by_album_id(
 pub async fn get_artists_by_album_ids(
     db: &LibraryDatabase,
     album_ids: &[u64],
-) -> Result<Vec<LibraryArtist>, DbError> {
+) -> Result<Vec<LibraryArtist>, DatabaseFetchError> {
     Ok(db
         .select("artists")
         .distinct()
@@ -220,7 +217,7 @@ pub async fn get_artists_by_album_ids(
 pub async fn get_album_artist(
     db: &LibraryDatabase,
     album_id: u64,
-) -> Result<Option<LibraryArtist>, DbError> {
+) -> Result<Option<LibraryArtist>, DatabaseFetchError> {
     Ok(db
         .select("artists")
         .columns(&["artists.*"])
@@ -238,7 +235,7 @@ pub async fn get_album_artist(
 pub async fn get_tidal_album_artist(
     db: &LibraryDatabase,
     tidal_album_id: u64,
-) -> Result<Option<LibraryArtist>, DbError> {
+) -> Result<Option<LibraryArtist>, DatabaseFetchError> {
     Ok(db
         .select("artists")
         .columns(&["artists.*"])
@@ -256,7 +253,7 @@ pub async fn get_tidal_album_artist(
 pub async fn get_qobuz_album_artist(
     db: &LibraryDatabase,
     qobuz_album_id: &str,
-) -> Result<Option<LibraryArtist>, DbError> {
+) -> Result<Option<LibraryArtist>, DatabaseFetchError> {
     Ok(db
         .select("artists")
         .columns(&["artists.*"])
@@ -275,7 +272,7 @@ pub async fn get_album(
     db: &LibraryDatabase,
     column: &str,
     id: &Id,
-) -> Result<Option<LibraryAlbum>, DbError> {
+) -> Result<Option<LibraryAlbum>, DatabaseFetchError> {
     Ok(db
         .select("albums")
         .columns(&[
@@ -298,7 +295,7 @@ pub async fn get_album(
 pub async fn get_album_tracks(
     db: &LibraryDatabase,
     album_id: &Id,
-) -> Result<Vec<LibraryTrack>, DbError> {
+) -> Result<Vec<LibraryTrack>, DatabaseFetchError> {
     Ok(db
         .select("tracks")
         .columns(&[
@@ -339,7 +336,7 @@ pub async fn get_album_tracks(
 pub async fn get_artist_albums(
     db: &LibraryDatabase,
     artist_id: &Id,
-) -> Result<Vec<LibraryAlbum>, DbError> {
+) -> Result<Vec<LibraryAlbum>, DatabaseFetchError> {
     db.select("albums")
         .distinct()
         .columns(&[
@@ -382,12 +379,8 @@ pub struct SetTrackSize {
 pub async fn set_track_size(
     db: &LibraryDatabase,
     value: SetTrackSize,
-) -> Result<TrackSize, DbError> {
-    Ok(set_track_sizes(db, &[value])
-        .await?
-        .first()
-        .ok_or(DbError::NoRow)?
-        .clone())
+) -> Result<Option<TrackSize>, DatabaseFetchError> {
+    Ok(set_track_sizes(db, &[value]).await?.first().cloned())
 }
 
 /// # Errors
@@ -396,7 +389,7 @@ pub async fn set_track_size(
 pub async fn set_track_sizes(
     db: &LibraryDatabase,
     values: &[SetTrackSize],
-) -> Result<Vec<TrackSize>, DbError> {
+) -> Result<Vec<TrackSize>, DatabaseFetchError> {
     let values = values
         .iter()
         .map(|v| {
@@ -478,7 +471,7 @@ pub async fn get_track_size(
     db: &LibraryDatabase,
     id: &Id,
     quality: &PlaybackQuality,
-) -> Result<Option<u64>, DbError> {
+) -> Result<Option<u64>, DatabaseFetchError> {
     Ok(db
         .select("track_sizes")
         .columns(&["bytes"])
@@ -496,7 +489,10 @@ pub async fn get_track_size(
 /// # Errors
 ///
 /// * If there was a database error
-pub async fn get_track(db: &LibraryDatabase, id: &Id) -> Result<Option<LibraryTrack>, DbError> {
+pub async fn get_track(
+    db: &LibraryDatabase,
+    id: &Id,
+) -> Result<Option<LibraryTrack>, DatabaseFetchError> {
     Ok(get_tracks(db, Some(&[id.to_owned()]))
         .await?
         .into_iter()
@@ -509,7 +505,7 @@ pub async fn get_track(db: &LibraryDatabase, id: &Id) -> Result<Option<LibraryTr
 pub async fn get_tracks(
     db: &LibraryDatabase,
     ids: Option<&[Id]>,
-) -> Result<Vec<LibraryTrack>, DbError> {
+) -> Result<Vec<LibraryTrack>, DatabaseFetchError> {
     if ids.is_some_and(<[Id]>::is_empty) {
         return Ok(vec![]);
     }
@@ -550,7 +546,10 @@ pub async fn get_tracks(
 /// # Errors
 ///
 /// * If there was a database error
-pub async fn delete_track(db: &LibraryDatabase, id: u64) -> Result<Option<LibraryTrack>, DbError> {
+pub async fn delete_track(
+    db: &LibraryDatabase,
+    id: u64,
+) -> Result<Option<LibraryTrack>, DatabaseFetchError> {
     Ok(delete_tracks(db, Some(&vec![id])).await?.into_iter().next())
 }
 
@@ -560,7 +559,7 @@ pub async fn delete_track(db: &LibraryDatabase, id: u64) -> Result<Option<Librar
 pub async fn delete_tracks(
     db: &LibraryDatabase,
     ids: Option<&Vec<u64>>,
-) -> Result<Vec<LibraryTrack>, DbError> {
+) -> Result<Vec<LibraryTrack>, DatabaseFetchError> {
     if ids.is_some_and(Vec::is_empty) {
         return Ok(vec![]);
     }
@@ -579,7 +578,7 @@ pub async fn delete_tracks(
 pub async fn delete_track_size_by_track_id(
     db: &LibraryDatabase,
     id: u64,
-) -> Result<Option<TrackSize>, DbError> {
+) -> Result<Option<TrackSize>, DatabaseFetchError> {
     Ok(delete_track_sizes_by_track_id(db, Some(&vec![id]))
         .await?
         .into_iter()
@@ -592,7 +591,7 @@ pub async fn delete_track_size_by_track_id(
 pub async fn delete_track_sizes_by_track_id(
     db: &LibraryDatabase,
     ids: Option<&Vec<u64>>,
-) -> Result<Vec<TrackSize>, DbError> {
+) -> Result<Vec<TrackSize>, DatabaseFetchError> {
     if ids.is_some_and(Vec::is_empty) {
         return Ok(vec![]);
     }
@@ -611,7 +610,7 @@ pub async fn delete_track_sizes_by_track_id(
 pub async fn add_artist_and_get_artist(
     db: &LibraryDatabase,
     artist: LibraryArtist,
-) -> Result<LibraryArtist, DbError> {
+) -> Result<LibraryArtist, DatabaseFetchError> {
     Ok(add_artists_and_get_artists(db, vec![artist]).await?[0].clone())
 }
 
@@ -621,7 +620,7 @@ pub async fn add_artist_and_get_artist(
 pub async fn add_artist_map_and_get_artist<S: ::std::hash::BuildHasher + Send>(
     db: &LibraryDatabase,
     artist: HashMap<&str, DatabaseValue, S>,
-) -> Result<LibraryArtist, DbError> {
+) -> Result<LibraryArtist, DatabaseFetchError> {
     Ok(add_artist_maps_and_get_artists(db, vec![artist]).await?[0].clone())
 }
 
@@ -631,7 +630,7 @@ pub async fn add_artist_map_and_get_artist<S: ::std::hash::BuildHasher + Send>(
 pub async fn add_artists_and_get_artists(
     db: &LibraryDatabase,
     artists: Vec<LibraryArtist>,
-) -> Result<Vec<LibraryArtist>, DbError> {
+) -> Result<Vec<LibraryArtist>, DatabaseFetchError> {
     add_artist_maps_and_get_artists(
         db,
         artists
@@ -653,12 +652,12 @@ pub async fn add_artists_and_get_artists(
 pub async fn add_artist_maps_and_get_artists<S: ::std::hash::BuildHasher + Send>(
     db: &LibraryDatabase,
     artists: Vec<HashMap<&str, DatabaseValue, S>>,
-) -> Result<Vec<LibraryArtist>, DbError> {
+) -> Result<Vec<LibraryArtist>, DatabaseFetchError> {
     let mut results = vec![];
 
     for artist in artists {
         let Some(title) = artist.get("title") else {
-            return Err(DbError::InvalidRequest);
+            return Err(DatabaseFetchError::InvalidRequest);
         };
 
         let row: LibraryArtist = db
@@ -681,7 +680,7 @@ pub async fn add_artist_maps_and_get_artists<S: ::std::hash::BuildHasher + Send>
 pub async fn add_albums(
     db: &LibraryDatabase,
     albums: Vec<LibraryAlbum>,
-) -> Result<Vec<LibraryAlbum>, DbError> {
+) -> Result<Vec<LibraryAlbum>, DatabaseFetchError> {
     let mut data: Vec<LibraryAlbum> = Vec::new();
 
     for album in albums {
@@ -710,7 +709,7 @@ pub async fn add_albums(
 pub async fn add_album_and_get_album(
     db: &LibraryDatabase,
     album: LibraryAlbum,
-) -> Result<LibraryAlbum, DbError> {
+) -> Result<LibraryAlbum, DatabaseFetchError> {
     Ok(add_albums_and_get_albums(db, vec![album]).await?[0].clone())
 }
 
@@ -720,7 +719,7 @@ pub async fn add_album_and_get_album(
 pub async fn add_album_map_and_get_album<S: ::std::hash::BuildHasher + Send>(
     db: &LibraryDatabase,
     album: HashMap<&str, DatabaseValue, S>,
-) -> Result<LibraryAlbum, DbError> {
+) -> Result<LibraryAlbum, DatabaseFetchError> {
     Ok(add_album_maps_and_get_albums(db, vec![album]).await?[0].clone())
 }
 
@@ -730,7 +729,7 @@ pub async fn add_album_map_and_get_album<S: ::std::hash::BuildHasher + Send>(
 pub async fn add_albums_and_get_albums(
     db: &LibraryDatabase,
     albums: Vec<LibraryAlbum>,
-) -> Result<Vec<LibraryAlbum>, DbError> {
+) -> Result<Vec<LibraryAlbum>, DatabaseFetchError> {
     add_album_maps_and_get_albums(
         db,
         albums
@@ -762,12 +761,12 @@ pub async fn add_albums_and_get_albums(
 pub async fn add_album_maps_and_get_albums<S: ::std::hash::BuildHasher + Send>(
     db: &LibraryDatabase,
     albums: Vec<HashMap<&str, DatabaseValue, S>>,
-) -> Result<Vec<LibraryAlbum>, DbError> {
+) -> Result<Vec<LibraryAlbum>, DatabaseFetchError> {
     let mut values = vec![];
 
     for album in albums {
         if !album.contains_key("artist_id") || !album.contains_key("title") {
-            return Err(DbError::InvalidRequest);
+            return Err(DatabaseFetchError::InvalidRequest);
         }
 
         let mut album_values = album.into_iter().collect::<Vec<_>>();
@@ -799,7 +798,7 @@ pub struct InsertTrack {
 pub async fn add_tracks(
     db: &LibraryDatabase,
     tracks: Vec<InsertTrack>,
-) -> Result<Vec<LibraryTrack>, DbError> {
+) -> Result<Vec<LibraryTrack>, DatabaseFetchError> {
     let values = tracks
         .iter()
         .map(|insert| {

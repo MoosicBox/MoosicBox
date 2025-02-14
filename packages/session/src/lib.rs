@@ -5,9 +5,9 @@ use moosicbox_audio_zone::{
     db::audio_zone_try_from_db,
     models::{AudioZone, Player},
 };
-use moosicbox_core::sqlite::{db::DbError, models::ApiTrack};
 use moosicbox_database::{config::ConfigDatabase, profiles::LibraryDatabase};
 use moosicbox_json_utils::database::DatabaseFetchError;
+use moosicbox_music_models::api::ApiTrack;
 use moosicbox_session_models::{
     CreateSession, PlaybackTarget, Session, SessionPlaylist, SetSessionAudioZone, UpdateSession,
 };
@@ -28,7 +28,7 @@ pub mod events;
 pub async fn get_session_playlist_tracks(
     db: &LibraryDatabase,
     session_playlist_id: u64,
-) -> Result<Vec<ApiTrack>, DbError> {
+) -> Result<Vec<ApiTrack>, DatabaseFetchError> {
     crate::db::get_session_playlist_tracks(db, session_playlist_id).await
 }
 
@@ -38,7 +38,7 @@ pub async fn get_session_playlist_tracks(
 pub async fn get_session_playlist(
     db: &LibraryDatabase,
     session_id: u64,
-) -> Result<Option<SessionPlaylist>, DbError> {
+) -> Result<Option<SessionPlaylist>, DatabaseFetchError> {
     crate::db::get_session_playlist(db, session_id).await
 }
 
@@ -48,7 +48,7 @@ pub async fn get_session_playlist(
 pub async fn get_session_audio_zone(
     db: &LibraryDatabase,
     session_id: u64,
-) -> Result<Option<AudioZone>, DbError> {
+) -> Result<Option<AudioZone>, DatabaseFetchError> {
     Ok(
         if let Some(zone) = crate::db::get_session_audio_zone(db, session_id).await? {
             Some(audio_zone_try_from_db(zone, db.into()).await?)
@@ -64,28 +64,34 @@ pub async fn get_session_audio_zone(
 pub async fn set_session_audio_zone(
     db: &LibraryDatabase,
     set_session_audio_zone: &SetSessionAudioZone,
-) -> Result<(), DbError> {
+) -> Result<(), DatabaseFetchError> {
     crate::db::set_session_audio_zone(db, set_session_audio_zone).await
 }
 
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn get_session_playing(db: &LibraryDatabase, id: u64) -> Result<Option<bool>, DbError> {
+pub async fn get_session_playing(
+    db: &LibraryDatabase,
+    id: u64,
+) -> Result<Option<bool>, DatabaseFetchError> {
     crate::db::get_session_playing(db, id).await
 }
 
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn get_session(db: &LibraryDatabase, id: u64) -> Result<Option<Session>, DbError> {
+pub async fn get_session(
+    db: &LibraryDatabase,
+    id: u64,
+) -> Result<Option<Session>, DatabaseFetchError> {
     crate::db::get_session(db, id).await
 }
 
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn get_sessions(db: &LibraryDatabase) -> Result<Vec<Session>, DbError> {
+pub async fn get_sessions(db: &LibraryDatabase) -> Result<Vec<Session>, DatabaseFetchError> {
     crate::db::get_sessions(db).await
 }
 
@@ -95,28 +101,36 @@ pub async fn get_sessions(db: &LibraryDatabase) -> Result<Vec<Session>, DbError>
 pub async fn create_session(
     db: &LibraryDatabase,
     session: &CreateSession,
-) -> Result<Session, DbError> {
+) -> Result<Session, DatabaseFetchError> {
     crate::db::create_session(db, session).await
 }
 
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn update_session(db: &LibraryDatabase, session: &UpdateSession) -> Result<(), DbError> {
+pub async fn update_session(
+    db: &LibraryDatabase,
+    session: &UpdateSession,
+) -> Result<(), DatabaseFetchError> {
     crate::db::update_session(db, session).await
 }
 
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn delete_session(db: &LibraryDatabase, session_id: u64) -> Result<(), DbError> {
+pub async fn delete_session(
+    db: &LibraryDatabase,
+    session_id: u64,
+) -> Result<(), DatabaseFetchError> {
     crate::db::delete_session(db, session_id).await
 }
 
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn get_connections(db: &ConfigDatabase) -> Result<Vec<models::Connection>, DbError> {
+pub async fn get_connections(
+    db: &ConfigDatabase,
+) -> Result<Vec<models::Connection>, DatabaseFetchError> {
     crate::db::get_connections(db).await
 }
 
@@ -126,7 +140,7 @@ pub async fn get_connections(db: &ConfigDatabase) -> Result<Vec<models::Connecti
 pub async fn register_connection(
     db: &ConfigDatabase,
     connection: &models::RegisterConnection,
-) -> Result<models::Connection, DbError> {
+) -> Result<models::Connection, DatabaseFetchError> {
     let result = crate::db::register_connection(db, connection).await?;
 
     for player in &connection.players {
@@ -147,14 +161,20 @@ pub async fn register_connection(
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn delete_connection(db: &ConfigDatabase, connection_id: &str) -> Result<(), DbError> {
+pub async fn delete_connection(
+    db: &ConfigDatabase,
+    connection_id: &str,
+) -> Result<(), DatabaseFetchError> {
     crate::db::delete_connection(db, connection_id).await
 }
 
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn get_players(db: &ConfigDatabase, connection_id: &str) -> Result<Vec<Player>, DbError> {
+pub async fn get_players(
+    db: &ConfigDatabase,
+    connection_id: &str,
+) -> Result<Vec<Player>, DatabaseFetchError> {
     crate::db::get_players(db, connection_id).await
 }
 
@@ -165,7 +185,7 @@ pub async fn create_player(
     db: &ConfigDatabase,
     connection_id: &str,
     player: &models::RegisterPlayer,
-) -> Result<Player, DbError> {
+) -> Result<Player, DatabaseFetchError> {
     let result = crate::db::create_player(db, connection_id, player).await?;
 
     #[cfg(feature = "events")]
@@ -183,7 +203,7 @@ pub async fn create_player(
 #[derive(Debug, Error)]
 pub enum CreatePlayersError {
     #[error(transparent)]
-    Db(#[from] DbError),
+    Db(#[from] DatabaseFetchError),
     #[error("Invalid connection")]
     InvalidConnection,
 }
@@ -222,7 +242,7 @@ pub async fn create_players(
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn delete_player(db: &ConfigDatabase, player_id: u64) -> Result<(), DbError> {
+pub async fn delete_player(db: &ConfigDatabase, player_id: u64) -> Result<(), DatabaseFetchError> {
     crate::db::delete_player(db, player_id).await?;
 
     #[cfg(feature = "events")]
@@ -243,7 +263,7 @@ pub async fn delete_player(db: &ConfigDatabase, player_id: u64) -> Result<(), Db
 pub async fn delete_session_playlist_track_by_track_id(
     db: &LibraryDatabase,
     id: u64,
-) -> Result<Option<ApiTrack>, DbError> {
+) -> Result<Option<ApiTrack>, DatabaseFetchError> {
     crate::db::delete_session_playlist_track_by_track_id(db, id).await
 }
 
@@ -253,7 +273,7 @@ pub async fn delete_session_playlist_track_by_track_id(
 pub async fn delete_session_playlist_tracks_by_track_id(
     db: &LibraryDatabase,
     ids: Option<&Vec<u64>>,
-) -> Result<Vec<ApiTrack>, DbError> {
+) -> Result<Vec<ApiTrack>, DatabaseFetchError> {
     crate::db::delete_session_playlist_tracks_by_track_id(db, ids).await
 }
 

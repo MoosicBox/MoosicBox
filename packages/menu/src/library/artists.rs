@@ -1,11 +1,9 @@
 #![allow(clippy::module_name_repetitions)]
 
-use moosicbox_core::sqlite::{
-    db::DbError,
-    models::{AlbumSource, ArtistSort},
-};
 use moosicbox_database::profiles::LibraryDatabase;
+use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_library::{db::get_artists, models::LibraryArtist};
+use moosicbox_music_models::{AlbumSource, ArtistSort};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -68,7 +66,7 @@ pub fn sort_artists(
 #[derive(Debug, Error)]
 pub enum GetArtistsError {
     #[error(transparent)]
-    DbError(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
 }
 
 /// # Errors

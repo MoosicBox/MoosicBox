@@ -7,24 +7,25 @@ use actix_web::{
     web::{self, Json},
     HttpRequest, Result, Scope,
 };
-use moosicbox_core::sqlite::models::{
-    ApiAlbum, ApiArtist, ApiSource, ApiSources, ToApi, TrackApiSource,
-};
 #[cfg(feature = "db")]
 use moosicbox_database::profiles::LibraryDatabase;
+use moosicbox_music_models::{
+    api::{ApiAlbum, ApiArtist},
+    ApiSource, ApiSources, TrackApiSource,
+};
 use moosicbox_paging::Page;
-use moosicbox_search::models::ApiSearchResultsResponse;
+use moosicbox_search::api::models::ApiSearchResultsResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 
 use crate::{
     album, album_tracks, artist, artist_albums, favorite_albums, favorite_artists, favorite_tracks,
-    format_title, search, track, track_file_url, user_login, QobuzAlbumError, QobuzAlbumOrder,
-    QobuzAlbumReleaseType, QobuzAlbumSort, QobuzAlbumTracksError, QobuzArtistAlbumsError,
-    QobuzArtistError, QobuzAudioQuality, QobuzFavoriteAlbumsError, QobuzFavoriteArtistsError,
-    QobuzFavoriteTracksError, QobuzRelease, QobuzSearchError, QobuzTrack, QobuzTrackError,
-    QobuzTrackFileUrlError, QobuzUserLoginError,
+    format_title, models::QobuzAlbum, search, track, track_file_url, user_login, QobuzAlbumError,
+    QobuzAlbumOrder, QobuzAlbumReleaseType, QobuzAlbumSort, QobuzAlbumTracksError,
+    QobuzArtistAlbumsError, QobuzArtistError, QobuzAudioQuality, QobuzFavoriteAlbumsError,
+    QobuzFavoriteArtistsError, QobuzFavoriteTracksError, QobuzRelease, QobuzSearchError,
+    QobuzTrack, QobuzTrackError, QobuzTrackFileUrlError, QobuzUserLoginError,
 };
 
 pub fn bind_services<
@@ -85,7 +86,7 @@ impl From<QobuzUserLoginError> for actix_web::Error {
             | QobuzUserLoginError::QobuzFetchAppSecrets(_)
             | QobuzUserLoginError::FailedToFetchAppId => ErrorInternalServerError(err.to_string()),
             #[cfg(feature = "db")]
-            QobuzUserLoginError::Database(_) | QobuzUserLoginError::Db(_) => {
+            QobuzUserLoginError::Database(_) | QobuzUserLoginError::DatabaseFetch(_) => {
                 ErrorInternalServerError(err.to_string())
             }
         }
@@ -185,19 +186,19 @@ pub enum ApiRelease {
     Qobuz(ApiQobuzRelease),
 }
 
-impl ToApi<ApiRelease> for QobuzRelease {
-    fn to_api(self) -> ApiRelease {
-        ApiRelease::Qobuz(ApiQobuzRelease {
-            id: self.id.clone(),
-            artist: self.artist.clone(),
-            artist_id: self.artist_id,
-            album_type: self.album_type,
-            contains_cover: self.cover_url().is_some(),
-            duration: self.duration,
-            title: format_title(&self.title, self.version.as_deref()),
-            parental_warning: self.parental_warning,
-            number_of_tracks: self.tracks_count,
-            date_released: self.release_date_original.clone(),
+impl From<QobuzRelease> for ApiRelease {
+    fn from(value: QobuzRelease) -> Self {
+        Self::Qobuz(ApiQobuzRelease {
+            contains_cover: value.cover_url().is_some(),
+            id: value.id,
+            artist: value.artist,
+            artist_id: value.artist_id,
+            album_type: value.album_type,
+            duration: value.duration,
+            title: format_title(&value.title, value.version.as_deref()),
+            parental_warning: value.parental_warning,
+            number_of_tracks: value.tracks_count,
+            date_released: value.release_date_original,
             api_source: ApiSource::Qobuz,
         })
     }
@@ -210,21 +211,21 @@ pub enum ApiTrack {
     Qobuz(ApiQobuzTrack),
 }
 
-impl ToApi<ApiTrack> for QobuzTrack {
-    fn to_api(self) -> ApiTrack {
-        ApiTrack::Qobuz(ApiQobuzTrack {
-            id: self.id,
-            number: self.track_number,
-            artist: self.artist.clone(),
-            artist_id: self.artist_id,
-            album: self.album.clone(),
-            album_id: self.album_id.clone(),
-            album_type: self.album_type,
-            contains_cover: self.cover_url().is_some(),
-            duration: self.duration,
-            parental_warning: self.parental_warning,
-            isrc: self.isrc.clone(),
-            title: format_title(&self.title, self.version.as_deref()),
+impl From<QobuzTrack> for ApiTrack {
+    fn from(value: QobuzTrack) -> Self {
+        Self::Qobuz(ApiQobuzTrack {
+            contains_cover: value.cover_url().is_some(),
+            id: value.id,
+            number: value.track_number,
+            artist: value.artist,
+            artist_id: value.artist_id,
+            album: value.album,
+            album_id: value.album_id,
+            album_type: value.album_type,
+            duration: value.duration,
+            parental_warning: value.parental_warning,
+            isrc: value.isrc,
+            title: format_title(&value.title, value.version.as_deref()),
             api_source: ApiSource::Qobuz,
         })
     }
@@ -248,7 +249,7 @@ pub struct ApiQobuzTrack {
     pub api_source: ApiSource,
 }
 
-impl From<ApiQobuzTrack> for moosicbox_core::sqlite::models::ApiTrack {
+impl From<ApiQobuzTrack> for moosicbox_music_models::api::ApiTrack {
     fn from(value: ApiQobuzTrack) -> Self {
         Self {
             track_id: value.id.into(),
@@ -571,28 +572,27 @@ pub async fn artist_albums_endpoint(
     query: web::Query<QobuzArtistAlbumsQuery>,
     #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiRelease>>> {
-    Ok(Json(
-        artist_albums(
-            #[cfg(feature = "db")]
-            &db,
-            &query.artist_id.into(),
-            query.offset,
-            query.limit,
-            query.release_type.map(Into::into),
-            query.sort.map(Into::into),
-            query.order.map(Into::into),
-            query.track_size,
-            req.headers()
-                .get(QOBUZ_ACCESS_TOKEN_HEADER)
-                .map(|x| x.to_str().unwrap().to_string()),
-            req.headers()
-                .get(QOBUZ_APP_ID_HEADER)
-                .map(|x| x.to_str().unwrap().to_string()),
-        )
-        .await?
-        .to_api()
-        .into(),
-    ))
+    let albums: Page<QobuzRelease> = artist_albums(
+        #[cfg(feature = "db")]
+        &db,
+        &query.artist_id.into(),
+        query.offset,
+        query.limit,
+        query.release_type.map(Into::into),
+        query.sort.map(Into::into),
+        query.order.map(Into::into),
+        query.track_size,
+        req.headers()
+            .get(QOBUZ_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+        req.headers()
+            .get(QOBUZ_APP_ID_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+    )
+    .await?
+    .into();
+
+    Ok(Json(albums.into()))
 }
 
 impl From<QobuzFavoriteAlbumsError> for actix_web::Error {
@@ -636,24 +636,25 @@ pub async fn favorite_albums_endpoint(
     query: web::Query<QobuzFavoriteAlbumsQuery>,
     #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiAlbum>>> {
-    Ok(Json(
-        favorite_albums(
-            #[cfg(feature = "db")]
-            &db,
-            query.offset,
-            query.limit,
-            query.album_type,
-            req.headers()
-                .get(QOBUZ_ACCESS_TOKEN_HEADER)
-                .map(|x| x.to_str().unwrap().to_string()),
-            req.headers()
-                .get(QOBUZ_APP_ID_HEADER)
-                .map(|x| x.to_str().unwrap().to_string()),
-        )
-        .await?
-        .map(Into::into)
-        .into(),
-    ))
+    let albums: Page<QobuzAlbum> = favorite_albums(
+        #[cfg(feature = "db")]
+        &db,
+        query.offset,
+        query.limit,
+        query.album_type,
+        req.headers()
+            .get(QOBUZ_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+        req.headers()
+            .get(QOBUZ_APP_ID_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+    )
+    .await?
+    .into();
+
+    let albums: Page<ApiAlbum> = albums.map(Into::into);
+
+    Ok(Json(albums.into()))
 }
 
 impl From<QobuzAlbumTracksError> for actix_web::Error {
@@ -697,24 +698,23 @@ pub async fn album_tracks_endpoint(
     query: web::Query<QobuzAlbumTracksQuery>,
     #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiTrack>>> {
-    Ok(Json(
-        album_tracks(
-            #[cfg(feature = "db")]
-            &db,
-            &query.album_id.clone().into(),
-            query.offset,
-            query.limit,
-            req.headers()
-                .get(QOBUZ_ACCESS_TOKEN_HEADER)
-                .map(|x| x.to_str().unwrap().to_string()),
-            req.headers()
-                .get(QOBUZ_APP_ID_HEADER)
-                .map(|x| x.to_str().unwrap().to_string()),
-        )
-        .await?
-        .to_api()
-        .into(),
-    ))
+    let tracks: Page<QobuzTrack> = album_tracks(
+        #[cfg(feature = "db")]
+        &db,
+        &query.album_id.clone().into(),
+        query.offset,
+        query.limit,
+        req.headers()
+            .get(QOBUZ_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+        req.headers()
+            .get(QOBUZ_APP_ID_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+    )
+    .await?
+    .into();
+
+    Ok(Json(tracks.into()))
 }
 
 impl From<QobuzTrackError> for actix_web::Error {
@@ -767,7 +767,7 @@ pub async fn track_endpoint(
     )
     .await?;
 
-    Ok(Json(track.to_api()))
+    Ok(Json(track.into()))
 }
 
 impl From<QobuzFavoriteTracksError> for actix_web::Error {
@@ -809,23 +809,22 @@ pub async fn favorite_tracks_endpoint(
     query: web::Query<QobuzFavoriteTracksQuery>,
     #[cfg(feature = "db")] db: LibraryDatabase,
 ) -> Result<Json<Page<ApiTrack>>> {
-    Ok(Json(
-        favorite_tracks(
-            #[cfg(feature = "db")]
-            &db,
-            query.offset,
-            query.limit,
-            req.headers()
-                .get(QOBUZ_ACCESS_TOKEN_HEADER)
-                .map(|x| x.to_str().unwrap().to_string()),
-            req.headers()
-                .get(QOBUZ_APP_ID_HEADER)
-                .map(|x| x.to_str().unwrap().to_string()),
-        )
-        .await?
-        .to_api()
-        .into(),
-    ))
+    let tracks: Page<QobuzTrack> = favorite_tracks(
+        #[cfg(feature = "db")]
+        &db,
+        query.offset,
+        query.limit,
+        req.headers()
+            .get(QOBUZ_ACCESS_TOKEN_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+        req.headers()
+            .get(QOBUZ_APP_ID_HEADER)
+            .map(|x| x.to_str().unwrap().to_string()),
+    )
+    .await?
+    .into();
+
+    Ok(Json(tracks.into()))
 }
 
 impl From<QobuzTrackFileUrlError> for actix_web::Error {

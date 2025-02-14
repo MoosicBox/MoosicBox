@@ -23,14 +23,6 @@ use futures::StreamExt;
 use id3::Timestamp;
 use moosicbox_audiotags::Tag;
 use moosicbox_config::get_config_dir_path;
-use moosicbox_core::{
-    integer_range::{parse_id_ranges, ParseIdsError, ParseIntegersError},
-    sqlite::{
-        db::DbError,
-        models::{Album, Artist, Id, IdType, Track, TrackApiSource},
-    },
-    types::AudioFormat,
-};
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_files::{
     files::{
@@ -41,10 +33,15 @@ use moosicbox_files::{
     get_content_length, sanitize_filename, save_bytes_stream_to_file_with_speed_listener,
     GetContentLengthError, SaveBytesStreamToFileError,
 };
+use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_music_api::{
     models::{ImageCoverSize, TrackAudioQuality, TrackSource},
     AlbumError, ArtistError, MusicApi, MusicApis, MusicApisError, SourceToMusicApi as _,
     TrackError, TracksError,
+};
+use moosicbox_music_models::{
+    id::{parse_id_ranges, Id, IdType, ParseIdsError},
+    Album, Artist, AudioFormat, Track, TrackApiSource,
 };
 use queue::ProgressListener;
 use regex::{Captures, Regex};
@@ -60,7 +57,7 @@ pub mod queue;
 #[derive(Debug, Error)]
 pub enum GetDownloadPathError {
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error("Failed to get config directory")]
     FailedToGetConfigDirectory,
     #[error("Not found")]
@@ -98,7 +95,7 @@ pub async fn get_download_path(
 #[derive(Debug, Error)]
 pub enum GetCreateDownloadTasksError {
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
     Artist(#[from] ArtistError),
     #[error(transparent)]
@@ -109,8 +106,6 @@ pub enum GetCreateDownloadTasksError {
     ParseInt(#[from] ParseIntError),
     #[error(transparent)]
     ParseIds(#[from] ParseIdsError),
-    #[error(transparent)]
-    ParseIntegers(#[from] ParseIntegersError),
     #[error("Invalid source")]
     InvalidSource,
     #[error("Not found")]
@@ -446,7 +441,7 @@ pub async fn get_create_download_tasks_for_album_ids(
 #[derive(Debug, Error)]
 pub enum CreateDownloadTasksError {
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
 }
 
 /// # Errors
@@ -478,7 +473,7 @@ fn get_filename_for_track(track: &Track) -> String {
 #[derive(Debug, Error)]
 pub enum DownloadTrackError {
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
     MusicApis(#[from] MusicApisError),
     #[error(transparent)]
@@ -573,19 +568,17 @@ async fn download_track(
     .await
     {
         Ok(()) => Ok(()),
-        Err(err) => Err(match err {
-            DownloadTrackInnerError::Db(err) => DownloadTrackError::Db(err),
-            DownloadTrackInnerError::Track(err) => DownloadTrackError::Track(err),
-            DownloadTrackInnerError::TrackSource(err) => DownloadTrackError::TrackSource(err),
-            DownloadTrackInnerError::GetTrackBytes(err) => DownloadTrackError::GetTrackBytes(err),
-            DownloadTrackInnerError::IO(err) => DownloadTrackError::IO(err),
-            DownloadTrackInnerError::GetContentLength(err) => {
-                DownloadTrackError::GetContentLength(err)
+        Err(e) => Err(match e {
+            DownloadTrackInnerError::DatabaseFetch(e) => DownloadTrackError::DatabaseFetch(e),
+            DownloadTrackInnerError::Track(e) => DownloadTrackError::Track(e),
+            DownloadTrackInnerError::TrackSource(e) => DownloadTrackError::TrackSource(e),
+            DownloadTrackInnerError::GetTrackBytes(e) => DownloadTrackError::GetTrackBytes(e),
+            DownloadTrackInnerError::IO(e) => DownloadTrackError::IO(e),
+            DownloadTrackInnerError::GetContentLength(e) => DownloadTrackError::GetContentLength(e),
+            DownloadTrackInnerError::SaveBytesStreamToFile(e) => {
+                DownloadTrackError::SaveBytesStreamToFile(e)
             }
-            DownloadTrackInnerError::SaveBytesStreamToFile(err) => {
-                DownloadTrackError::SaveBytesStreamToFile(err)
-            }
-            DownloadTrackInnerError::TagTrackFile(err) => DownloadTrackError::TagTrackFile(err),
+            DownloadTrackInnerError::TagTrackFile(e) => DownloadTrackError::TagTrackFile(e),
             DownloadTrackInnerError::InvalidSource => DownloadTrackError::InvalidSource,
             DownloadTrackInnerError::NotFound => DownloadTrackError::NotFound,
             DownloadTrackInnerError::Timeout(start) => {
@@ -610,7 +603,7 @@ async fn download_track(
 #[derive(Debug, Error)]
 pub enum DownloadTrackInnerError {
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
     Track(#[from] TrackError),
     #[error(transparent)]
@@ -667,8 +660,8 @@ async fn download_track_inner(
         Ok(None) => {
             return Err(DownloadTrackInnerError::InvalidSource);
         }
-        Err(err) => {
-            let is_timeout = err.source().is_some_and(|source| {
+        Err(e) => {
+            let is_timeout = e.source().is_some_and(|source| {
                 source.downcast_ref::<hyper::Error>().map_or_else(
                     || source.to_string() == "operation timed out",
                     |error| {
@@ -684,7 +677,7 @@ async fn download_track_inner(
                 return Err(DownloadTrackInnerError::Timeout(start));
             }
 
-            return Err(err.into());
+            return Err(e.into());
         }
     };
 
@@ -749,7 +742,7 @@ async fn download_track_inner(
         let result = save_bytes_stream_to_file_with_speed_listener(
             reader.map(|x| match x {
                 Ok(Ok(x)) => Ok(x),
-                Ok(Err(err)) | Err(err) => Err(err),
+                Ok(Err(e)) | Err(e) => Err(e),
             }),
             &track_path,
             start,
@@ -780,18 +773,18 @@ async fn download_track_inner(
 
         speed.store(0.0, std::sync::atomic::Ordering::SeqCst);
 
-        if let Err(err) = result {
+        if let Err(e) = result {
             if let SaveBytesStreamToFileError::Read {
                 bytes_read,
                 ref source,
-            } = err
+            } = e
             {
                 if source.kind() == tokio::io::ErrorKind::TimedOut {
                     return Err(DownloadTrackInnerError::Timeout(Some(bytes_read)));
                 }
             }
 
-            return Err(DownloadTrackInnerError::SaveBytesStreamToFile(err));
+            return Err(DownloadTrackInnerError::SaveBytesStreamToFile(e));
         }
     }
 
@@ -843,7 +836,7 @@ pub fn tag_track_file(track_path: &Path, track: &Track) -> Result<(), TagTrackFi
 #[derive(Debug, Error)]
 pub enum DownloadAlbumError {
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
     MusicApis(#[from] MusicApisError),
     #[error(transparent)]
@@ -974,13 +967,13 @@ pub async fn download_album_cover(
 
     let bytes = match get_album_cover_bytes(api, db, &album, ImageCoverSize::Max, true).await {
         Ok(bytes) => bytes,
-        Err(err) => match err {
+        Err(e) => match e {
             AlbumCoverError::NotFound(_) => {
                 log::debug!("No album cover found");
                 return Ok(album);
             }
             _ => {
-                return Err(DownloadAlbumError::AlbumCover(err));
+                return Err(DownloadAlbumError::AlbumCover(e));
             }
         },
     };
@@ -994,7 +987,7 @@ pub async fn download_album_cover(
     let result = save_bytes_stream_to_file_with_speed_listener(
         bytes.stream.map(|x| match x {
             Ok(Ok(x)) => Ok(x),
-            Ok(Err(err)) | Err(err) => Err(err),
+            Ok(Err(e)) | Err(e) => Err(e),
         }),
         &cover_path,
         None,
@@ -1057,13 +1050,13 @@ pub async fn download_artist_cover(
 
     let bytes = match get_artist_cover_bytes(api, db, &artist, ImageCoverSize::Max, true).await {
         Ok(bytes) => bytes,
-        Err(err) => match err {
+        Err(e) => match e {
             ArtistCoverError::NotFound(..) => {
                 log::debug!("No artist cover found");
                 return Ok(artist);
             }
             _ => {
-                return Err(DownloadAlbumError::ArtistCover(err));
+                return Err(DownloadAlbumError::ArtistCover(e));
             }
         },
     };
@@ -1077,7 +1070,7 @@ pub async fn download_artist_cover(
     let result = save_bytes_stream_to_file_with_speed_listener(
         bytes.stream.map(|x| match x {
             Ok(Ok(x)) => Ok(x),
-            Ok(Err(err)) | Err(err) => Err(err),
+            Ok(Err(e)) | Err(e) => Err(e),
         }),
         &cover_path,
         None,

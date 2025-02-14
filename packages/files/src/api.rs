@@ -9,18 +9,16 @@ use actix_web::{
 };
 use bytes::{Bytes, BytesMut};
 use futures::{StreamExt, TryStreamExt as _};
-use moosicbox_core::{
-    integer_range::{
-        parse_id_ranges, parse_integer_ranges_to_ids, ParseIdsError, ParseIntegersError,
-    },
-    sqlite::models::{ApiSource, Id, IdType},
-    types::AudioFormat,
-};
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_music_api::{
     models::{ImageCoverSize, TrackAudioQuality, TrackSource},
     MusicApis, SourceToMusicApi as _,
 };
+use moosicbox_music_models::{
+    id::{parse_id_ranges, parse_integer_ranges_to_ids, Id, IdType, ParseIdsError},
+    ApiSource, AudioFormat,
+};
+use moosicbox_parsing_utils::integer_range::ParseIntegersError;
 use serde::Deserialize;
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
@@ -89,9 +87,9 @@ impl From<TrackSourceError> for actix_web::Error {
         match e {
             TrackSourceError::NotFound(_) => ErrorNotFound(e.to_string()),
             TrackSourceError::InvalidSource => ErrorBadRequest(e.to_string()),
-            TrackSourceError::Track(_)
-            | TrackSourceError::Db(_)
-            | TrackSourceError::MusicApis(_) => ErrorInternalServerError(e.to_string()),
+            TrackSourceError::Track(_) | TrackSourceError::MusicApis(_) => {
+                ErrorInternalServerError(e.to_string())
+            }
         }
     }
 }
@@ -237,8 +235,7 @@ pub async fn get_silence_endpoint(query: web::Query<GetSilenceQuery>) -> Result<
 impl From<GetTrackBytesError> for actix_web::Error {
     fn from(err: GetTrackBytesError) -> Self {
         match err {
-            GetTrackBytesError::Db(_)
-            | GetTrackBytesError::IO(_)
+            GetTrackBytesError::IO(_)
             | GetTrackBytesError::Reqwest(_)
             | GetTrackBytesError::Acquire(_)
             | GetTrackBytesError::Join(_)
@@ -645,7 +642,6 @@ impl From<ArtistCoverError> for actix_web::Error {
             | ArtistCoverError::FetchCover(_)
             | ArtistCoverError::FetchLocalArtistCover(_)
             | ArtistCoverError::IO(_)
-            | ArtistCoverError::Db(_)
             | ArtistCoverError::Database(_)
             | ArtistCoverError::File(_, _)
             | ArtistCoverError::InvalidSource => ErrorInternalServerError(err.to_string()),
@@ -808,7 +804,6 @@ impl From<AlbumCoverError> for actix_web::Error {
             | AlbumCoverError::FetchCover(_)
             | AlbumCoverError::FetchLocalAlbumCover(_)
             | AlbumCoverError::IO(_)
-            | AlbumCoverError::Db(_)
             | AlbumCoverError::Database(_)
             | AlbumCoverError::File(_, _)
             | AlbumCoverError::InvalidSource => ErrorInternalServerError(err.to_string()),

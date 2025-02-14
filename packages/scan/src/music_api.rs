@@ -1,15 +1,10 @@
 use std::sync::Arc;
 
-use moosicbox_core::{
-    sqlite::{
-        db::DbError,
-        models::{Album, ApiSource, Track},
-    },
-    types::AudioFormat,
-};
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
+use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_music_api::{models::AlbumsRequest, AlbumsError, MusicApi};
+use moosicbox_music_models::{Album, ApiSource, AudioFormat, Track};
 use moosicbox_paging::PagingRequest;
 use thiserror::Error;
 use tokio::{select, sync::RwLock};
@@ -23,7 +18,7 @@ use crate::{
 #[derive(Debug, Error)]
 pub enum ScanError {
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
     Albums(#[from] AlbumsError),
     #[error(transparent)]
@@ -292,11 +287,11 @@ async fn scan_tracks(
                 match source {
                     ApiSource::Library => continue,
                     #[cfg(feature = "tidal")]
-                    ApiSource::Tidal => moosicbox_core::sqlite::models::TrackApiSource::Tidal,
+                    ApiSource::Tidal => moosicbox_music_models::TrackApiSource::Tidal,
                     #[cfg(feature = "qobuz")]
-                    ApiSource::Qobuz => moosicbox_core::sqlite::models::TrackApiSource::Qobuz,
+                    ApiSource::Qobuz => moosicbox_music_models::TrackApiSource::Qobuz,
                     #[cfg(feature = "yt")]
-                    ApiSource::Yt => moosicbox_core::sqlite::models::TrackApiSource::Yt,
+                    ApiSource::Yt => moosicbox_music_models::TrackApiSource::Yt,
                 },
                 &Some(&track.id),
                 source,

@@ -8,14 +8,6 @@ use actix_web::{
     web::{self, Json},
     Result, Scope,
 };
-use moosicbox_core::{
-    integer_range::parse_integer_ranges_to_ids,
-    sqlite::models::{AlbumType, ApiAlbum, ApiArtist, ApiSource, ApiTrack, Id, IdType},
-};
-use moosicbox_core::{
-    integer_range::ParseIntegersError,
-    sqlite::models::{AlbumSort, AlbumSource, ArtistSort, ToApi},
-};
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_library::{
     db::{get_album_tracks, get_tracks},
@@ -25,6 +17,11 @@ use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_music_api::{
     models::{AlbumFilters, AlbumsRequest},
     MusicApis, SourceToMusicApi as _,
+};
+use moosicbox_music_models::{
+    api::{ApiAlbum, ApiArtist, ApiTrack},
+    id::{parse_integer_ranges_to_ids, Id, IdType, ParseIntegersError},
+    AlbumSort, AlbumSource, AlbumType, ApiSource, ArtistSort,
 };
 use moosicbox_paging::{Page, PagingRequest};
 use serde::Deserialize;
@@ -80,7 +77,7 @@ pub fn bind_services<
         ApiArtist,
         ApiTrack,
         ApiAlbumVersion,
-        moosicbox_core::sqlite::models::TrackApiSource,
+        moosicbox_music_models::TrackApiSource,
     ))
 )]
 pub struct Api;
@@ -438,7 +435,7 @@ pub async fn get_album_versions_endpoint(
             .await
             .map_err(|_e| ErrorInternalServerError("Failed to fetch album versions"))?
             .into_iter()
-            .map(ToApi::to_api)
+            .map(Into::into)
             .collect(),
     ))
 }

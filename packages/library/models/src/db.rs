@@ -1,12 +1,17 @@
 use std::str::FromStr as _;
 
-use moosicbox_core::sqlite::db::{get_album_version_qualities, DbError};
-use moosicbox_core::{
-    sqlite::models::{AlbumSource, ApiSource, ApiSources, TrackApiSource},
-    types::AudioFormat,
+use moosicbox_database::{
+    profiles::LibraryDatabase, query::FilterableQuery as _, AsId, Database, DatabaseValue,
 };
-use moosicbox_database::{AsId, Database, DatabaseValue};
-use moosicbox_json_utils::{database::ToValue as _, MissingValue, ParseError, ToValueType};
+use moosicbox_json_utils::{
+    database::{
+        AsModel, AsModelQuery, AsModelResult, AsModelResultMapped, DatabaseFetchError, ToValue as _,
+    },
+    MissingValue, ParseError, ToValueType,
+};
+use moosicbox_music_models::{
+    AlbumSource, AlbumVersionQuality, ApiSource, ApiSources, AudioFormat, TrackApiSource,
+};
 
 use crate::{sort_album_versions, LibraryAlbum, LibraryAlbumType, LibraryArtist, LibraryTrack};
 
@@ -16,9 +21,9 @@ impl AsId for LibraryTrack {
     }
 }
 
-impl moosicbox_core::sqlite::models::AsModel<LibraryArtist> for &moosicbox_database::Row {
+impl AsModel<LibraryArtist> for &moosicbox_database::Row {
     fn as_model(&self) -> LibraryArtist {
-        moosicbox_core::sqlite::models::AsModelResult::as_model(self).unwrap()
+        AsModelResult::as_model(self).unwrap()
     }
 }
 
@@ -35,9 +40,7 @@ impl ToValueType<LibraryArtist> for &moosicbox_database::Row {
     }
 }
 
-impl moosicbox_core::sqlite::models::AsModelResult<LibraryArtist, ParseError>
-    for &moosicbox_database::Row
-{
+impl AsModelResult<LibraryArtist, ParseError> for &moosicbox_database::Row {
     fn as_model(&self) -> Result<LibraryArtist, ParseError> {
         Ok(LibraryArtist {
             id: self.to_value("id")?,
@@ -74,9 +77,9 @@ impl ToValueType<LibraryAlbumType> for DatabaseValue {
     }
 }
 
-impl moosicbox_core::sqlite::models::AsModel<LibraryAlbum> for &moosicbox_database::Row {
+impl AsModel<LibraryAlbum> for &moosicbox_database::Row {
     fn as_model(&self) -> LibraryAlbum {
-        moosicbox_core::sqlite::models::AsModelResult::as_model(self).unwrap()
+        AsModelResult::as_model(self).unwrap()
     }
 }
 
@@ -84,7 +87,7 @@ impl MissingValue<LibraryAlbum> for &moosicbox_database::Row {}
 impl ToValueType<LibraryAlbum> for &moosicbox_database::Row {
     fn to_value_type(self) -> Result<LibraryAlbum, ParseError> {
         #[cfg(any(feature = "tidal", feature = "qobuz", feature = "yt"))]
-        use moosicbox_core::sqlite::models::Id;
+        use moosicbox_music_models::id::Id;
 
         let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
 
@@ -160,12 +163,10 @@ impl ToValueType<LibraryAlbum> for &moosicbox_database::Row {
     }
 }
 
-impl moosicbox_core::sqlite::models::AsModelResult<LibraryAlbum, ParseError>
-    for &moosicbox_database::Row
-{
+impl AsModelResult<LibraryAlbum, ParseError> for &moosicbox_database::Row {
     fn as_model(&self) -> Result<LibraryAlbum, ParseError> {
         #[cfg(any(feature = "tidal", feature = "qobuz", feature = "yt"))]
-        use moosicbox_core::sqlite::models::Id;
+        use moosicbox_music_models::id::Id;
 
         let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
 
@@ -241,20 +242,18 @@ impl moosicbox_core::sqlite::models::AsModelResult<LibraryAlbum, ParseError>
     }
 }
 
-impl moosicbox_core::sqlite::models::AsModelResultMapped<LibraryAlbum, DbError>
-    for Vec<moosicbox_database::Row>
-{
+impl AsModelResultMapped<LibraryAlbum, DatabaseFetchError> for Vec<moosicbox_database::Row> {
     #[allow(clippy::too_many_lines)]
-    fn as_model_mapped(&self) -> Result<Vec<LibraryAlbum>, DbError> {
+    fn as_model_mapped(&self) -> Result<Vec<LibraryAlbum>, DatabaseFetchError> {
         let mut results: Vec<LibraryAlbum> = vec![];
         let mut last_album_id = 0;
 
         for row in self {
             let album_id: u64 = row
                 .get("album_id")
-                .ok_or(DbError::InvalidRequest)?
+                .ok_or(DatabaseFetchError::InvalidRequest)?
                 .try_into()
-                .map_err(|_| DbError::InvalidRequest)?;
+                .map_err(|_| DatabaseFetchError::InvalidRequest)?;
 
             if album_id != last_album_id {
                 if let Some(ref mut album) = results.last_mut() {
@@ -302,15 +301,13 @@ impl moosicbox_core::sqlite::models::AsModelResultMapped<LibraryAlbum, DbError>
                         .iter()
                         .any(|x| x.source == ApiSource::Tidal)
                     {
-                        album
-                            .versions
-                            .push(moosicbox_core::sqlite::models::AlbumVersionQuality {
-                                format: None,
-                                bit_depth: None,
-                                sample_rate: None,
-                                channels: None,
-                                source: TrackApiSource::Tidal,
-                            });
+                        album.versions.push(AlbumVersionQuality {
+                            format: None,
+                            bit_depth: None,
+                            sample_rate: None,
+                            channels: None,
+                            source: TrackApiSource::Tidal,
+                        });
                         log::trace!(
                             "Added Tidal version to album id={} count={}",
                             album.id,
@@ -323,15 +320,13 @@ impl moosicbox_core::sqlite::models::AsModelResultMapped<LibraryAlbum, DbError>
                         .iter()
                         .any(|x| x.source == ApiSource::Qobuz)
                     {
-                        album
-                            .versions
-                            .push(moosicbox_core::sqlite::models::AlbumVersionQuality {
-                                format: None,
-                                bit_depth: None,
-                                sample_rate: None,
-                                channels: None,
-                                source: TrackApiSource::Qobuz,
-                            });
+                        album.versions.push(AlbumVersionQuality {
+                            format: None,
+                            bit_depth: None,
+                            sample_rate: None,
+                            channels: None,
+                            source: TrackApiSource::Qobuz,
+                        });
                         log::trace!(
                             "Added Qobuz version to album id={} count={}",
                             album.id,
@@ -344,15 +339,13 @@ impl moosicbox_core::sqlite::models::AsModelResultMapped<LibraryAlbum, DbError>
                         .iter()
                         .any(|x| x.source == ApiSource::Yt)
                     {
-                        album
-                            .versions
-                            .push(moosicbox_core::sqlite::models::AlbumVersionQuality {
-                                format: None,
-                                bit_depth: None,
-                                sample_rate: None,
-                                channels: None,
-                                source: TrackApiSource::Yt,
-                            });
+                        album.versions.push(AlbumVersionQuality {
+                            format: None,
+                            bit_depth: None,
+                            sample_rate: None,
+                            channels: None,
+                            source: TrackApiSource::Yt,
+                        });
                         log::trace!(
                             "Added Yt version to album id={} count={}",
                             album.id,
@@ -377,13 +370,13 @@ impl moosicbox_core::sqlite::models::AsModelResultMapped<LibraryAlbum, DbError>
 }
 
 #[async_trait::async_trait]
-impl moosicbox_core::sqlite::models::AsModelQuery<LibraryAlbum> for &moosicbox_database::Row {
+impl AsModelQuery<LibraryAlbum> for &moosicbox_database::Row {
     async fn as_model_query(
         &self,
         db: std::sync::Arc<Box<dyn Database>>,
-    ) -> Result<LibraryAlbum, DbError> {
+    ) -> Result<LibraryAlbum, DatabaseFetchError> {
         #[cfg(any(feature = "tidal", feature = "qobuz", feature = "yt"))]
-        use moosicbox_core::sqlite::models::Id;
+        use moosicbox_music_models::id::Id;
 
         #[cfg(feature = "tidal")]
         let tidal_id: Option<Id> = self.to_value("tidal_id")?;
@@ -466,9 +459,9 @@ impl AsId for LibraryAlbum {
     }
 }
 
-impl moosicbox_core::sqlite::models::AsModel<LibraryTrack> for &moosicbox_database::Row {
+impl AsModel<LibraryTrack> for &moosicbox_database::Row {
     fn as_model(&self) -> LibraryTrack {
-        moosicbox_core::sqlite::models::AsModelResult::as_model(self).unwrap()
+        AsModelResult::as_model(self).unwrap()
     }
 }
 
@@ -514,9 +507,7 @@ impl ToValueType<LibraryTrack> for &moosicbox_database::Row {
     }
 }
 
-impl moosicbox_core::sqlite::models::AsModelResult<LibraryTrack, ParseError>
-    for &moosicbox_database::Row
-{
+impl AsModelResult<LibraryTrack, ParseError> for &moosicbox_database::Row {
     fn as_model(&self) -> Result<LibraryTrack, ParseError> {
         let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
         Ok(LibraryTrack {
@@ -556,4 +547,43 @@ impl moosicbox_core::sqlite::models::AsModelResult<LibraryTrack, ParseError>
             yt_id: self.to_value("yt_id")?,
         })
     }
+}
+
+/// # Errors
+///
+/// * If fails to get the data from the database
+/// * If fails to parse the data from the database
+pub async fn get_album_version_qualities(
+    db: &LibraryDatabase,
+    album_id: u64,
+) -> Result<Vec<AlbumVersionQuality>, DatabaseFetchError> {
+    let mut versions: Vec<AlbumVersionQuality> = db
+        .select("albums")
+        .distinct()
+        .columns(&[
+            "track_sizes.bit_depth",
+            "track_sizes.sample_rate",
+            "track_sizes.channels",
+            "tracks.format",
+            "tracks.source",
+        ])
+        .left_join("tracks", "tracks.album_id=albums.id")
+        .left_join("track_sizes", "track_sizes.track_id=tracks.id")
+        .where_eq("albums.id", album_id)
+        .execute(db)
+        .await?
+        .to_value_type()?;
+
+    versions.sort_by(|a: &AlbumVersionQuality, b: &AlbumVersionQuality| {
+        b.sample_rate
+            .unwrap_or_default()
+            .cmp(&a.sample_rate.unwrap_or_default())
+    });
+    versions.sort_by(|a: &AlbumVersionQuality, b: &AlbumVersionQuality| {
+        b.bit_depth
+            .unwrap_or_default()
+            .cmp(&a.bit_depth.unwrap_or_default())
+    });
+
+    Ok(versions)
 }

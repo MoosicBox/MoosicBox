@@ -8,12 +8,10 @@ use std::{path::PathBuf, sync::atomic::AtomicUsize};
 use db::get_enabled_scan_origins;
 use event::{ProgressEvent, ScanTask, PROGRESS_LISTENERS};
 use moosicbox_config::get_cache_dir_path;
-use moosicbox_core::sqlite::{
-    db::DbError,
-    models::{ApiSource, TrackApiSource},
-};
 use moosicbox_database::profiles::LibraryDatabase;
+use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_music_api::{MusicApi, MusicApis, MusicApisError, SourceToMusicApi as _};
+use moosicbox_music_models::{ApiSource, TrackApiSource};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
@@ -128,7 +126,7 @@ impl From<ScanOrigin> for TrackApiSource {
 async fn get_origins_or_default(
     db: &LibraryDatabase,
     origins: Option<Vec<ScanOrigin>>,
-) -> Result<Vec<ScanOrigin>, DbError> {
+) -> Result<Vec<ScanOrigin>, DatabaseFetchError> {
     let enabled_origins = get_enabled_scan_origins(db).await?;
 
     Ok(if let Some(origins) = origins {
@@ -145,7 +143,7 @@ async fn get_origins_or_default(
 #[derive(Debug, Error)]
 pub enum ScanError {
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[cfg(feature = "local")]
     #[error(transparent)]
     Local(#[from] local::ScanError),
@@ -171,7 +169,10 @@ impl Scanner {
     ///
     /// * If a database error occurs
     #[allow(unused, clippy::unused_async)]
-    pub async fn from_origin(db: &LibraryDatabase, origin: ScanOrigin) -> Result<Self, DbError> {
+    pub async fn from_origin(
+        db: &LibraryDatabase,
+        origin: ScanOrigin,
+    ) -> Result<Self, DatabaseFetchError> {
         let task = match origin {
             #[cfg(feature = "local")]
             ScanOrigin::Local => {
@@ -350,14 +351,17 @@ impl Scanner {
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn get_scan_origins(db: &LibraryDatabase) -> Result<Vec<ScanOrigin>, DbError> {
+pub async fn get_scan_origins(db: &LibraryDatabase) -> Result<Vec<ScanOrigin>, DatabaseFetchError> {
     get_enabled_scan_origins(db).await
 }
 
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn enable_scan_origin(db: &LibraryDatabase, origin: ScanOrigin) -> Result<(), DbError> {
+pub async fn enable_scan_origin(
+    db: &LibraryDatabase,
+    origin: ScanOrigin,
+) -> Result<(), DatabaseFetchError> {
     #[cfg(feature = "local")]
     if origin == ScanOrigin::Local {
         return Ok(());
@@ -375,7 +379,10 @@ pub async fn enable_scan_origin(db: &LibraryDatabase, origin: ScanOrigin) -> Res
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn disable_scan_origin(db: &LibraryDatabase, origin: ScanOrigin) -> Result<(), DbError> {
+pub async fn disable_scan_origin(
+    db: &LibraryDatabase,
+    origin: ScanOrigin,
+) -> Result<(), DatabaseFetchError> {
     let locations = db::get_scan_locations(db).await?;
 
     if locations.iter().all(|location| location.origin != origin) {
@@ -417,7 +424,7 @@ pub async fn run_scan(
 ///
 /// * If a database error occurs
 #[cfg(feature = "local")]
-pub async fn get_scan_paths(db: &LibraryDatabase) -> Result<Vec<String>, DbError> {
+pub async fn get_scan_paths(db: &LibraryDatabase) -> Result<Vec<String>, DatabaseFetchError> {
     let locations = db::get_scan_locations_for_origin(db, ScanOrigin::Local).await?;
 
     Ok(locations
@@ -436,7 +443,7 @@ pub async fn get_scan_paths(db: &LibraryDatabase) -> Result<Vec<String>, DbError
 ///
 /// * If a database error occurs
 #[cfg(feature = "local")]
-pub async fn add_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), DbError> {
+pub async fn add_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), DatabaseFetchError> {
     let locations = db::get_scan_locations(db).await?;
 
     if locations
@@ -453,7 +460,7 @@ pub async fn add_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), DbErr
 ///
 /// * If a database error occurs
 #[cfg(feature = "local")]
-pub async fn remove_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), DbError> {
+pub async fn remove_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), DatabaseFetchError> {
     let locations = db::get_scan_locations(db).await?;
 
     if locations

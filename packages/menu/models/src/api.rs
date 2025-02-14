@@ -1,9 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use moosicbox_core::{
-    sqlite::models::{AlbumVersionQuality, ApiTrack, ToApi, TrackApiSource},
-    types::AudioFormat,
-};
+use moosicbox_music_models::{api::ApiTrack, AlbumVersionQuality, AudioFormat, TrackApiSource};
 use serde::{Deserialize, Serialize};
 
 use crate::AlbumVersion;
@@ -67,11 +64,5 @@ impl From<AlbumVersion> for ApiAlbumVersion {
             channels: value.channels,
             source: value.source,
         }
-    }
-}
-
-impl ToApi<ApiAlbumVersion> for AlbumVersion {
-    fn to_api(self) -> ApiAlbumVersion {
-        self.into()
     }
 }

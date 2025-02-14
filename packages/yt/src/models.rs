@@ -1,14 +1,15 @@
 use std::fmt::Display;
 
-use moosicbox_core::sqlite::models::{
-    Album, AlbumSource, ApiAlbum, ApiArtist, ApiSource, ApiSources, Artist, AsModelResult, Track,
-    TrackApiSource,
-};
 use moosicbox_json_utils::{
+    database::AsModelResult,
     serde_json::{ToNestedValue as _, ToValue as _},
     ParseError, ToValueType,
 };
-use moosicbox_search::models::{
+use moosicbox_music_models::{
+    api::{ApiAlbum, ApiArtist},
+    Album, AlbumSource, ApiSource, ApiSources, Artist, Track, TrackApiSource,
+};
+use moosicbox_search::api::models::{
     ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
     ApiGlobalTrackSearchResult, ApiSearchResultsResponse,
 };

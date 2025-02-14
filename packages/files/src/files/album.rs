@@ -4,15 +4,12 @@ use std::path::{Path, PathBuf};
 
 use bytes::BytesMut;
 use futures::{StreamExt, TryStreamExt};
-use moosicbox_core::sqlite::{
-    db::DbError,
-    models::{Album, Id},
-};
 use moosicbox_database::{profiles::LibraryDatabase, query::FilterableQuery, DatabaseError};
 use moosicbox_music_api::{
     models::{ImageCoverSize, ImageCoverSource},
     AlbumError, MusicApi,
 };
+use moosicbox_music_models::{id::Id, Album};
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
 use thiserror::Error;
 use tokio_util::codec::{BytesCodec, FramedRead};
@@ -52,8 +49,6 @@ pub enum AlbumCoverError {
     FetchLocalAlbumCover(#[from] FetchLocalAlbumCoverError),
     #[error(transparent)]
     IO(#[from] tokio::io::Error),
-    #[error(transparent)]
-    Db(#[from] DbError),
     #[error(transparent)]
     Database(#[from] DatabaseError),
     #[error("Failed to read file with path: {0} ({1})")]
@@ -130,8 +125,6 @@ pub async fn get_local_album_cover_bytes(
 pub enum FetchLocalAlbumCoverError {
     #[error(transparent)]
     IO(#[from] std::io::Error),
-    #[error(transparent)]
-    Db(#[from] DbError),
     #[error(transparent)]
     Database(#[from] DatabaseError),
     #[error("No Album Cover")]

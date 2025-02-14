@@ -1,0 +1,23 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools"]
+description = "MoosicBox Parsing utils package"
+edition     = "2021"
+keywords    = ["parsing"]
+license     = "MPL-2.0"
+name        = "moosicbox_parsing_utils"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+thiserror = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+test-log          = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = []

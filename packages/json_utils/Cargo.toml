@@ -23,16 +23,17 @@ tantivy = { workspace = true, optional = true }
 # serde_json dependencies
 serde_json = { workspace = true, optional = true }
 
-chrono    = { workspace = true }
-log       = { workspace = true }
-thiserror = { workspace = true }
+async-trait = { workspace = true, optional = true }
+chrono      = { workspace = true }
+log         = { workspace = true }
+thiserror   = { workspace = true }
 
 [features]
 default = ["database", "rusqlite", "serde_json", "tantivy"]
 
 fail-on-warnings = []
 
-database   = ["dep:moosicbox_database"]
+database   = ["dep:async-trait", "dep:moosicbox_database"]
 rusqlite   = ["dep:rusqlite"]
 serde_json = ["dep:serde_json"]
 tantivy    = ["dep:tantivy"]

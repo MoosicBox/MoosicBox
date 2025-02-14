@@ -14,11 +14,11 @@ version     = "0.1.0"
 ignored = ["strum"]
 
 [dependencies]
-moosicbox_core = { version = "0.1.0", path = "../../core", default-features = false }
 moosicbox_database = { version = "0.1.0", path = "../../database", default-features = false }
 moosicbox_json_utils = { version = "0.1.0", path = "../../json_utils", default-features = false, features = [
     "serde_json",
 ] }
+moosicbox_music_models = { version = "0.1.0", path = "../../music/models", default-features = false }
 moosicbox_paging = { version = "0.1.0", path = "../../paging", default-features = false }
 
 # API Dependencies
@@ -35,8 +35,8 @@ default = ["api", "db", "openapi"]
 
 fail-on-warnings = []
 
-openapi = ["dep:utoipa"]
+openapi = ["dep:utoipa", "moosicbox_music_models/openapi"]
 
-db = ["moosicbox_database/api"]
+db = ["moosicbox_database/api", "moosicbox_music_models/db"]
 
-api = ["moosicbox_database/api"]
+api = ["moosicbox_database/api", "moosicbox_music_models/api"]

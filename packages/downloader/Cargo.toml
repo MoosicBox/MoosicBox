@@ -16,7 +16,6 @@ ignored = ["strum"]
 [dependencies]
 moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
 moosicbox_config = { version = "0.1.0", path = "../config", default-features = false }
-moosicbox_core = { version = "0.1.0", path = "../core", default-features = false }
 moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
 moosicbox_files = { version = "0.1.0", path = "../files", default-features = false, features = [
     "files",
@@ -25,6 +24,7 @@ moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-feat
     "serde_json",
 ] }
 moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false }
+moosicbox_music_models = { version = "0.1.0", path = "../music/models", default-features = false }
 moosicbox_paging = { version = "0.1.0", path = "../paging", default-features = false }
 moosicbox_scan = { version = "0.1.0", path = "../scan", default-features = false, features = [
     "local",
@@ -66,26 +66,26 @@ fail-on-warnings = []
 api = ["dep:actix-web", "moosicbox_database/api", "moosicbox_music_api/api"]
 openapi = [
     "dep:utoipa",
-    "moosicbox_core/openapi",
     "moosicbox_music_api/openapi",
+    "moosicbox_music_models/openapi",
     "moosicbox_paging/openapi",
 ]
 
-aac  = ["moosicbox_core/aac", "moosicbox_files/aac"]
-flac = ["moosicbox_core/flac", "moosicbox_files/flac"]
-mp3  = ["moosicbox_core/mp3", "moosicbox_files/mp3"]
-opus = ["moosicbox_core/opus", "moosicbox_files/opus"]
+aac  = ["moosicbox_files/aac", "moosicbox_music_models/aac"]
+flac = ["moosicbox_files/flac", "moosicbox_music_models/flac"]
+mp3  = ["moosicbox_files/mp3", "moosicbox_music_models/mp3"]
+opus = ["moosicbox_files/opus", "moosicbox_music_models/opus"]
 
 all-sources = ["qobuz", "tidal", "yt"]
 
 qobuz = [
-    "moosicbox_core/qobuz",
     "moosicbox_files/qobuz",
+    "moosicbox_music_models/qobuz",
     "moosicbox_scan/qobuz",
 ]
 tidal = [
-    "moosicbox_core/tidal",
     "moosicbox_files/tidal",
+    "moosicbox_music_models/tidal",
     "moosicbox_scan/tidal",
 ]
-yt = ["moosicbox_core/yt", "moosicbox_files/yt", "moosicbox_scan/yt"]
+yt = ["moosicbox_files/yt", "moosicbox_music_models/yt", "moosicbox_scan/yt"]

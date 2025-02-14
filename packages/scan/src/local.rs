@@ -1,16 +1,11 @@
 use async_recursion::async_recursion;
 use futures::Future;
 use moosicbox_audiotags::Tag;
-use moosicbox_core::{
-    sqlite::{
-        db::DbError,
-        models::{Album, ApiSource, Artist, Track, TrackApiSource},
-    },
-    types::AudioFormat,
-};
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_files::{sanitize_filename, search_for_cover};
+use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_lofty::{AudioFile, ParseOptions};
+use moosicbox_music_models::{Album, ApiSource, Artist, AudioFormat, Track, TrackApiSource};
 use regex::Regex;
 use std::{
     fs::Metadata,
@@ -35,7 +30,7 @@ use crate::{
 #[derive(Debug, Error)]
 pub enum ScanError {
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
     ParseInt(#[from] ParseIntError),
     #[error(transparent)]

@@ -1,10 +1,10 @@
 use std::{collections::HashMap, sync::Arc};
 
 use moosicbox_config::AppType;
-use moosicbox_core::sqlite::models::ApiSource;
 use moosicbox_database::{config::ConfigDatabase, Database};
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_music_api::MusicApi;
+use moosicbox_music_models::ApiSource;
 use moosicbox_profiles::events::{
     on_profiles_updated_event, trigger_profiles_updated_event, BoxErrorSend,
 };

@@ -4,10 +4,10 @@ use std::{path::PathBuf, pin::Pin, str::FromStr as _, sync::Arc, time::Duration}
 
 use futures::Future;
 use lazy_static::lazy_static;
-use moosicbox_core::sqlite::db::DbError;
 use moosicbox_database::{
     profiles::LibraryDatabase, query::FilterableQuery, DatabaseError, DatabaseValue, Row,
 };
+use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_scan::local::ScanItem;
 use thiserror::Error;
 use tokio::{
@@ -38,7 +38,7 @@ pub enum UpdateTaskError {
 #[derive(Debug, Error)]
 pub enum ProcessDownloadQueueError {
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
     Database(#[from] DatabaseError),
     #[error(transparent)]
@@ -541,9 +541,9 @@ impl Drop for DownloadQueue {
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
-    use moosicbox_core::sqlite::models::{Album, Artist, Id, Track};
     use moosicbox_database::{query::*, Database, Row};
     use moosicbox_music_api::models::TrackAudioQuality;
+    use moosicbox_music_models::{id::Id, Album, Artist, Track};
     use pretty_assertions::assert_eq;
 
     use crate::db::models::{DownloadApiSource, DownloadItem, DownloadTaskState};

@@ -14,17 +14,11 @@ use moosicbox_audio_decoder::{
     media_sources::remote_bytestream::RemoteByteStreamMediaSource, DecodeError,
 };
 use moosicbox_audio_output::{AudioOutputError, AudioWrite, Channels, SignalSpec};
-use moosicbox_core::{
-    sqlite::{
-        db::DbError,
-        models::{ApiSource, Id, Track},
-    },
-    types::{AudioFormat, PlaybackQuality},
-};
 use moosicbox_music_api::{
     models::{TrackAudioQuality, TrackSource},
     MusicApi, MusicApis, MusicApisError, SourceToMusicApi as _, TrackError, TracksError,
 };
+use moosicbox_music_models::{id::Id, ApiSource, AudioFormat, PlaybackQuality, Track};
 use moosicbox_stream_utils::{
     new_byte_writer_id, remote_bytestream::RemoteByteStream, stalled_monitor::StalledReadMonitor,
     ByteWriter,
@@ -81,8 +75,6 @@ pub enum TrackSourceError {
     InvalidSource,
     #[error(transparent)]
     Track(#[from] TrackError),
-    #[error(transparent)]
-    Db(#[from] DbError),
     #[error(transparent)]
     MusicApis(#[from] MusicApisError),
 }
@@ -167,8 +159,6 @@ pub async fn get_track_source(
 
 #[derive(Debug, Error)]
 pub enum GetTrackBytesError {
-    #[error(transparent)]
-    Db(#[from] DbError),
     #[error(transparent)]
     ToStr(#[from] reqwest::header::ToStrError),
     #[error(transparent)]
@@ -676,8 +666,6 @@ pub enum TrackInfoError {
     Decode(#[from] DecodeError),
     #[error(transparent)]
     GetTrackBytes(#[from] Box<GetTrackBytesError>),
-    #[error(transparent)]
-    Db(#[from] DbError),
     #[error(transparent)]
     Track(#[from] TrackError),
     #[error(transparent)]

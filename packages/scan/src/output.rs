@@ -7,15 +7,9 @@ use std::{
 };
 
 use futures::future::join_all;
-use moosicbox_core::{
-    sqlite::{
-        db::DbError,
-        models::{Album, ApiSource, Artist, Id, Track, TrackApiSource},
-    },
-    types::{AudioFormat, PlaybackQuality},
-};
 use moosicbox_database::{profiles::LibraryDatabase, DatabaseError, DatabaseValue, TryFromError};
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
+use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_library::{
     db::{
         self, add_album_maps_and_get_albums, add_artist_maps_and_get_artists, add_tracks,
@@ -24,6 +18,10 @@ use moosicbox_library::{
     models::{LibraryAlbum, LibraryArtist, LibraryTrack},
 };
 use moosicbox_music_api::models::ImageCoverSize;
+use moosicbox_music_models::{
+    id::{Id, TryFromIdError},
+    Album, ApiSource, Artist, AudioFormat, PlaybackQuality, Track, TrackApiSource,
+};
 use moosicbox_search::{
     data::AsDataValues as _, populate_global_search_index, PopulateIndexError, RecreateIndexError,
 };
@@ -508,7 +506,7 @@ pub struct UpdateDatabaseResults {
 #[derive(Debug, Error)]
 pub enum UpdateDatabaseError {
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
     Database(#[from] DatabaseError),
     #[error(transparent)]
@@ -521,6 +519,8 @@ pub enum UpdateDatabaseError {
     RecreateIndex(#[from] RecreateIndexError),
     #[error(transparent)]
     Join(#[from] JoinError),
+    #[error(transparent)]
+    TryFromId(#[from] TryFromIdError),
 }
 
 #[derive(Clone)]
@@ -710,7 +710,7 @@ impl ScanOutput {
             |(album, db)| async {
                 join_all(album.tracks.read().await.iter().map(|track| async {
                     let track = track.read().await;
-                    InsertTrack {
+                    Ok::<_, TryFromIdError>(InsertTrack {
                         album_id: db.id,
                         file: track.path.clone(),
                         qobuz_id: match track.api_source {
@@ -718,14 +718,18 @@ impl ScanOutput {
                             #[cfg(feature = "tidal")]
                             ApiSource::Tidal => None,
                             #[cfg(feature = "qobuz")]
-                            ApiSource::Qobuz => track.id.as_ref().map(Into::into),
+                            ApiSource::Qobuz => {
+                                track.id.as_ref().map(TryInto::try_into).transpose()?
+                            }
                             #[cfg(feature = "yt")]
                             ApiSource::Yt => None,
                         },
                         tidal_id: match track.api_source {
                             ApiSource::Library => None,
                             #[cfg(feature = "tidal")]
-                            ApiSource::Tidal => track.id.as_ref().map(Into::into),
+                            ApiSource::Tidal => {
+                                track.id.as_ref().map(TryInto::try_into).transpose()?
+                            }
                             #[cfg(feature = "qobuz")]
                             ApiSource::Qobuz => None,
                             #[cfg(feature = "yt")]
@@ -739,7 +743,7 @@ impl ScanOutput {
                             source: track.source,
                             ..Default::default()
                         },
-                    }
+                    })
                 }))
                 .await
             },
@@ -747,7 +751,7 @@ impl ScanOutput {
         .await
         .into_iter()
         .flatten()
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, _>>()?;
 
         let db_tracks = add_tracks(db, insert_tracks).await?;
 

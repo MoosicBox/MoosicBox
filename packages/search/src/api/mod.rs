@@ -7,20 +7,17 @@ use actix_web::{
     web::{self, Json},
     Result, Scope,
 };
-use moosicbox_core::{
-    sqlite::models::{ApiAlbumVersionQuality, TrackApiSource},
-    types::AudioFormat,
-};
 use moosicbox_json_utils::{tantivy::ToValue, ParseError, ToValueType};
+use moosicbox_music_models::{api::ApiAlbumVersionQuality, AudioFormat, TrackApiSource};
 use serde::Deserialize;
 use tantivy::schema::NamedFieldDocument;
 
-use crate::{
-    models::{
-        ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
-        ApiGlobalTrackSearchResult, ApiRawSearchResultsResponse, ApiSearchResultsResponse,
-    },
-    search_global_search_index,
+pub mod models;
+
+use crate::search_global_search_index;
+use models::{
+    ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
+    ApiGlobalTrackSearchResult, ApiRawSearchResultsResponse, ApiSearchResultsResponse,
 };
 
 pub fn bind_services<

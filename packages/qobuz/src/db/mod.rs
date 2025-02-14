@@ -1,6 +1,5 @@
-use moosicbox_core::sqlite::db::DbError;
 use moosicbox_database::{profiles::LibraryDatabase, query::FilterableQuery};
-use moosicbox_json_utils::ToValueType;
+use moosicbox_json_utils::{database::DatabaseFetchError, ToValueType};
 
 pub mod models;
 
@@ -16,7 +15,7 @@ pub async fn create_qobuz_app_secret(
     qobuz_bundle_id: u32,
     timezone: &str,
     secret: &str,
-) -> Result<(), DbError> {
+) -> Result<(), DatabaseFetchError> {
     db.upsert("qobuz_bundle_secrets")
         .where_eq("qobuz_bundle_id", qobuz_bundle_id)
         .where_eq("timezone", timezone)
@@ -36,7 +35,7 @@ pub async fn create_qobuz_app_config(
     db: &LibraryDatabase,
     bundle_version: &str,
     app_id: &str,
-) -> Result<QobuzAppConfig, DbError> {
+) -> Result<QobuzAppConfig, DatabaseFetchError> {
     Ok(db
         .upsert("qobuz_bundles")
         .value("bundle_version", bundle_version)
@@ -56,7 +55,7 @@ pub async fn create_qobuz_config(
     user_id: u64,
     user_email: &str,
     user_public_id: &str,
-) -> Result<(), DbError> {
+) -> Result<(), DatabaseFetchError> {
     db.upsert("qobuz_config")
         .where_eq("user_id", user_id)
         .value("access_token", access_token)
@@ -72,7 +71,9 @@ pub async fn create_qobuz_config(
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn get_qobuz_app_secrets(db: &LibraryDatabase) -> Result<Vec<QobuzAppSecret>, DbError> {
+pub async fn get_qobuz_app_secrets(
+    db: &LibraryDatabase,
+) -> Result<Vec<QobuzAppSecret>, DatabaseFetchError> {
     Ok(db
         .select("qobuz_bundle_secrets")
         .execute(db)
@@ -83,7 +84,9 @@ pub async fn get_qobuz_app_secrets(db: &LibraryDatabase) -> Result<Vec<QobuzAppS
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn get_qobuz_app_config(db: &LibraryDatabase) -> Result<Option<QobuzAppConfig>, DbError> {
+pub async fn get_qobuz_app_config(
+    db: &LibraryDatabase,
+) -> Result<Option<QobuzAppConfig>, DatabaseFetchError> {
     let app_configs = db
         .select("qobuz_bundles")
         .execute(db)
@@ -96,7 +99,9 @@ pub async fn get_qobuz_app_config(db: &LibraryDatabase) -> Result<Option<QobuzAp
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn get_qobuz_config(db: &LibraryDatabase) -> Result<Option<QobuzConfig>, DbError> {
+pub async fn get_qobuz_config(
+    db: &LibraryDatabase,
+) -> Result<Option<QobuzConfig>, DatabaseFetchError> {
     let configs = db
         .select("qobuz_config")
         .execute(db)
@@ -109,6 +114,8 @@ pub async fn get_qobuz_config(db: &LibraryDatabase) -> Result<Option<QobuzConfig
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn get_qobuz_access_token(db: &LibraryDatabase) -> Result<Option<String>, DbError> {
+pub async fn get_qobuz_access_token(
+    db: &LibraryDatabase,
+) -> Result<Option<String>, DatabaseFetchError> {
     Ok(get_qobuz_config(db).await?.map(|c| c.access_token))
 }

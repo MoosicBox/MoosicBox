@@ -26,8 +26,6 @@ pub mod api;
 #[cfg(feature = "db")]
 pub mod data;
 
-pub mod models;
-
 static SEMAPHORE: LazyLock<Semaphore> = LazyLock::new(|| Semaphore::new(1));
 
 #[cfg(test)]

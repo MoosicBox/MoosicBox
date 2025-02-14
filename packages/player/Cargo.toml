@@ -14,7 +14,6 @@ version     = "0.1.0"
 moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
 moosicbox_audio_decoder = { version = "0.1.0", path = "../audio_decoder", default-features = false }
 moosicbox_audio_output = { version = "0.1.0", path = "../audio_output", default-features = false }
-moosicbox_core = { version = "0.1.0", path = "../core", default-features = false }
 moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
 moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
     "serde_json",
@@ -23,6 +22,7 @@ moosicbox_logging = { version = "0.1.0", path = "../logging", default-features =
     "macros",
 ] }
 moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false }
+moosicbox_music_models = { version = "0.1.0", path = "../music/models", default-features = false }
 moosicbox_resampler = { version = "0.1.0", path = "../resampler", default-features = false }
 moosicbox_session = { version = "0.1.0", path = "../session", default-features = false }
 moosicbox_stream_utils = { version = "0.1.0", path = "../stream_utils", default-features = false }
@@ -75,7 +75,7 @@ profiling = [
 ]
 
 api     = ["dep:actix-web", "moosicbox_music_api/api"]
-openapi = ["dep:utoipa", "moosicbox_core/openapi"]
+openapi = ["dep:utoipa", "moosicbox_music_models/openapi"]
 
 # Player audio outputs
 asio                = ["moosicbox_audio_output/asio"]
@@ -88,22 +88,22 @@ pulseaudio-standard = ["moosicbox_audio_output/pulseaudio-standard"]
 
 aac = [
     "moosicbox_audio_output/aac",
-    "moosicbox_core/aac",
+    "moosicbox_music_models/aac",
     "moosicbox_session/aac",
 ]
 flac = [
     "moosicbox_audio_output/flac",
-    "moosicbox_core/flac",
+    "moosicbox_music_models/flac",
     "moosicbox_session/flac",
 ]
 mp3 = [
     "moosicbox_audio_output/mp3",
-    "moosicbox_core/mp3",
+    "moosicbox_music_models/mp3",
     "moosicbox_session/mp3",
 ]
 opus = [
     "moosicbox_audio_output/opus",
-    "moosicbox_core/opus",
+    "moosicbox_music_models/opus",
     "moosicbox_session/opus",
 ]
 
@@ -111,6 +111,6 @@ local = []
 
 all-sources = ["qobuz", "tidal", "yt"]
 
-qobuz = ["moosicbox_core/qobuz", "moosicbox_session/qobuz"]
-tidal = ["moosicbox_core/tidal", "moosicbox_session/tidal"]
-yt    = ["moosicbox_core/yt", "moosicbox_session/yt"]
+qobuz = ["moosicbox_music_models/qobuz", "moosicbox_session/qobuz"]
+tidal = ["moosicbox_music_models/tidal", "moosicbox_session/tidal"]
+yt    = ["moosicbox_music_models/yt", "moosicbox_session/yt"]

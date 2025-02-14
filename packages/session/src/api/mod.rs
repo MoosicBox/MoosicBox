@@ -6,8 +6,8 @@ use actix_web::{
     Result, Scope,
 };
 use moosicbox_audio_zone::models::{ApiAudioZone, ApiPlayer};
-use moosicbox_core::sqlite::models::{ApiTrack, ToApi};
 use moosicbox_database::{config::ConfigDatabase, profiles::LibraryDatabase};
+use moosicbox_music_models::api::ApiTrack;
 use moosicbox_paging::Page;
 use moosicbox_session_models::{ApiConnection, RegisterConnection};
 use serde::Deserialize;
@@ -144,7 +144,7 @@ pub async fn session_playlist_endpoint(
     let playlist = crate::get_session_playlist(&db, query.session_playlist_id)
         .await
         .map_err(ErrorInternalServerError)?
-        .map(ToApi::to_api);
+        .map(Into::into);
 
     Ok(Json(playlist))
 }
@@ -257,7 +257,7 @@ pub async fn session_endpoint(
     let session = crate::get_session(&db, query.session_id)
         .await
         .map_err(ErrorInternalServerError)?
-        .map(ToApi::to_api);
+        .map(Into::into);
 
     Ok(Json(session))
 }
@@ -304,7 +304,7 @@ pub async fn sessions_endpoint(
         .into_iter()
         .skip(offset as usize)
         .take(limit as usize)
-        .map(ToApi::to_api)
+        .map(Into::into)
         .collect::<Vec<_>>();
 
     Ok(Json(Page::WithTotal {
@@ -360,7 +360,7 @@ pub async fn register_players_endpoint(
     let registered = crate::create_players(&db, &query.connection_id, &players)
         .await?
         .into_iter()
-        .map(ToApi::to_api)
+        .map(Into::into)
         .collect::<Vec<_>>();
 
     Ok(Json(registered))
@@ -394,7 +394,7 @@ pub async fn register_connection_endpoint(
     let registered = crate::register_connection(&db, &connection)
         .await
         .map_err(ErrorInternalServerError)?
-        .to_api();
+        .into();
 
     Ok(Json(registered))
 }

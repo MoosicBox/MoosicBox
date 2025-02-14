@@ -3,7 +3,7 @@
 use gigachad_actions::{logic::get_visibility_self, ActionType};
 use gigachad_transformer_models::Visibility;
 use maud::{html, Markup};
-use moosicbox_core::sqlite::models::ApiTrack;
+use moosicbox_music_models::api::ApiTrack;
 
 use crate::{public_img, state::State};
 

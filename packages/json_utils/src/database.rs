@@ -1,11 +1,16 @@
+use std::sync::Arc;
+
+use async_trait::async_trait;
 use chrono::NaiveDateTime;
-use moosicbox_database::{DatabaseValue, Row};
+use moosicbox_database::{Database, DatabaseValue, Row};
 use thiserror::Error;
 
 use crate::{MissingValue, ParseError, ToValueType};
 
 #[derive(Debug, Error)]
 pub enum DatabaseFetchError {
+    #[error("Invalid Request")]
+    InvalidRequest,
     #[error(transparent)]
     Database(#[from] moosicbox_database::DatabaseError),
     #[error(transparent)]
@@ -543,6 +548,80 @@ impl ToValueType<NaiveDateTime> for DatabaseValue {
             _ => Err(ParseError::ConvertType("NaiveDateTime".into())),
         }
     }
+}
+
+pub trait AsModel<T> {
+    fn as_model(&self) -> T;
+}
+
+pub trait AsModelResult<T, E> {
+    /// # Errors
+    ///
+    /// * If the model fails to be created
+    fn as_model(&self) -> Result<T, E>;
+}
+
+pub trait AsModelResultMapped<T, E> {
+    /// # Errors
+    ///
+    /// * If the model fails to be created
+    fn as_model_mapped(&self) -> Result<Vec<T>, E>;
+}
+
+pub trait AsModelResultMappedMut<T, E> {
+    /// # Errors
+    ///
+    /// * If the model fails to be created
+    fn as_model_mapped_mut(&mut self) -> Result<Vec<T>, E>;
+}
+
+#[async_trait]
+pub trait AsModelResultMappedQuery<T, E> {
+    /// # Errors
+    ///
+    /// * If the model fails to be created
+    async fn as_model_mapped_query(&self, db: Arc<Box<dyn Database>>) -> Result<Vec<T>, E>;
+}
+
+pub trait AsModelResultMut<T, E> {
+    /// # Errors
+    ///
+    /// * If the model fails to be created
+    fn as_model_mut<'a>(&'a mut self) -> Result<Vec<T>, E>
+    where
+        for<'b> &'b moosicbox_database::Row: ToValueType<T>;
+}
+
+impl<T, E> AsModelResultMut<T, E> for Vec<moosicbox_database::Row>
+where
+    E: From<DatabaseFetchError>,
+{
+    fn as_model_mut<'a>(&'a mut self) -> Result<Vec<T>, E>
+    where
+        for<'b> &'b moosicbox_database::Row: ToValueType<T>,
+    {
+        let mut values = vec![];
+
+        for row in self {
+            match row.to_value_type() {
+                Ok(value) => values.push(value),
+                Err(err) => {
+                    if log::log_enabled!(log::Level::Debug) {
+                        log::error!("Row error: {err:?} ({row:?})");
+                    } else {
+                        log::error!("Row error: {err:?}");
+                    }
+                }
+            }
+        }
+
+        Ok(values)
+    }
+}
+
+#[async_trait]
+pub trait AsModelQuery<T> {
+    async fn as_model_query(&self, db: Arc<Box<dyn Database>>) -> Result<T, DatabaseFetchError>;
 }
 
 #[cfg(test)]

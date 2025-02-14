@@ -4,10 +4,6 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use moosicbox_core::{
-    sqlite::models::{Album, AlbumType, ApiAlbum, ApiSource, ApiTrack, Artist, Id, Track},
-    types::PlaybackQuality,
-};
 use moosicbox_menu_models::{api::ApiAlbumVersion, AlbumVersion};
 use moosicbox_music_api::{
     models::{
@@ -18,6 +14,11 @@ use moosicbox_music_api::{
     AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
     ArtistError, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError, RemoveTrackError,
     TrackError, TrackOrId, TracksError,
+};
+use moosicbox_music_models::{
+    api::{ApiAlbum, ApiTrack},
+    id::Id,
+    Album, AlbumType, ApiSource, Artist, PlaybackQuality, Track,
 };
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use reqwest::Client;

@@ -1,12 +1,11 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
+use moosicbox_music_models::{
+    id::Id, AlbumSort, AlbumSource, AlbumType, AudioFormat, TrackApiSource,
+};
 use std::str::FromStr as _;
 
-use moosicbox_core::{
-    sqlite::models::{AlbumSort, AlbumSource, AlbumType, Id, TrackApiSource},
-    types::AudioFormat,
-};
 use moosicbox_database::DatabaseValue;
 use moosicbox_json_utils::{MissingValue, ParseError, ToValueType};
 use moosicbox_paging::PagingRequest;

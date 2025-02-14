@@ -16,7 +16,6 @@ ignored = ["strum"]
 [dependencies]
 moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
 moosicbox_audio_output = { version = "0.1.0", path = "../audio_output", optional = true, default-features = false }
-moosicbox_core = { version = "0.1.0", path = "../core", default-features = false }
 moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
 moosicbox_files = { version = "0.1.0", path = "../files", default-features = false }
 moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
@@ -28,8 +27,10 @@ moosicbox_library_models = { version = "0.1.0", path = "models", default-feature
 ] }
 moosicbox_menu_models = { version = "0.1.0", path = "../menu/models", default-features = false }
 moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false }
+moosicbox_music_models = { version = "0.1.0", path = "../music/models", default-features = false }
 moosicbox_paging = { version = "0.1.0", path = "../paging", default-features = false }
 moosicbox_search = { version = "0.1.0", path = "../search", default-features = false, features = [
+    "api",
     "db",
 ] }
 moosicbox_stream_utils = { version = "0.1.0", path = "../stream_utils", optional = true, default-features = false }
@@ -73,45 +74,49 @@ aac = [
     "dep:moosicbox_audio_output",
     "dep:moosicbox_stream_utils",
     "moosicbox_audio_output/aac",
-    "moosicbox_core/aac",
     "moosicbox_files/aac",
     "moosicbox_library_models/aac",
+    "moosicbox_music_models/aac",
 ]
 flac = [
     "dep:moosicbox_audio_output",
     "dep:moosicbox_stream_utils",
     "moosicbox_audio_output/flac",
-    "moosicbox_core/flac",
     "moosicbox_files/flac",
     "moosicbox_library_models/flac",
+    "moosicbox_music_models/flac",
 ]
 mp3 = [
     "dep:moosicbox_audio_output",
     "dep:moosicbox_stream_utils",
     "moosicbox_audio_output/mp3",
-    "moosicbox_core/mp3",
     "moosicbox_files/mp3",
     "moosicbox_library_models/mp3",
+    "moosicbox_music_models/mp3",
 ]
 opus = [
     "dep:moosicbox_audio_output",
     "dep:moosicbox_stream_utils",
     "moosicbox_audio_output/opus",
-    "moosicbox_core/opus",
     "moosicbox_files/opus",
     "moosicbox_library_models/opus",
+    "moosicbox_music_models/opus",
 ]
 
 all-sources = ["qobuz", "tidal", "yt"]
 
 qobuz = [
-    "moosicbox_core/qobuz",
     "moosicbox_files/qobuz",
     "moosicbox_library_models/qobuz",
+    "moosicbox_music_models/qobuz",
 ]
 tidal = [
-    "moosicbox_core/tidal",
     "moosicbox_files/tidal",
     "moosicbox_library_models/tidal",
+    "moosicbox_music_models/tidal",
 ]
-yt = ["moosicbox_core/yt", "moosicbox_files/yt", "moosicbox_library_models/yt"]
+yt = [
+    "moosicbox_files/yt",
+    "moosicbox_library_models/yt",
+    "moosicbox_music_models/yt",
+]

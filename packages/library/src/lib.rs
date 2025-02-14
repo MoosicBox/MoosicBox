@@ -12,15 +12,9 @@ use models::{LibraryAlbum, LibraryArtist, LibraryTrack};
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
-use moosicbox_core::{
-    sqlite::{
-        db::DbError,
-        models::{Album, AlbumSort, AlbumType, ApiSource, Artist, Id, Track},
-    },
-    types::{AudioFormat, PlaybackQuality},
-};
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_files::get_content_length;
+use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_library_models::{track_source_to_u8, LibraryAlbumType};
 use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_api::{
@@ -33,9 +27,12 @@ use moosicbox_music_api::{
     ArtistError, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError, RemoveTrackError,
     TrackError, TrackOrId, TracksError,
 };
+use moosicbox_music_models::{
+    id::Id, Album, AlbumSort, AlbumType, ApiSource, Artist, AudioFormat, PlaybackQuality, Track,
+};
 use moosicbox_paging::{Page, PagingRequest, PagingResponse, PagingResult};
 use moosicbox_search::{
-    data::AsDataValues as _, models::ApiGlobalSearchResult, populate_global_search_index,
+    api::models::ApiGlobalSearchResult, data::AsDataValues as _, populate_global_search_index,
     PopulateIndexError, RecreateIndexError,
 };
 use regex::{Captures, Regex};
@@ -79,7 +76,7 @@ pub enum LibraryFavoriteArtistsError {
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -126,7 +123,7 @@ pub enum LibraryAddFavoriteArtistError {
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
 }
 
 /// # Errors
@@ -149,7 +146,7 @@ pub enum LibraryRemoveFavoriteArtistError {
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
 }
 
 /// # Errors
@@ -322,7 +319,7 @@ pub enum LibraryFavoriteAlbumsError {
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -380,7 +377,7 @@ pub enum LibraryAddFavoriteAlbumError {
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
 }
 
 /// # Errors
@@ -403,7 +400,7 @@ pub enum LibraryRemoveFavoriteAlbumError {
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
 }
 
 /// # Errors
@@ -443,7 +440,7 @@ pub enum LibraryFavoriteTracksError {
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -503,7 +500,7 @@ pub enum LibraryAddFavoriteTrackError {
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
 }
 
 /// # Errors
@@ -526,7 +523,7 @@ pub enum LibraryRemoveFavoriteTrackError {
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
 }
 
 /// # Errors
@@ -547,7 +544,7 @@ pub enum LibraryArtistAlbumsError {
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -602,7 +599,7 @@ pub enum LibraryAlbumTracksError {
     #[error("Request failed: {0:?}")]
     RequestFailed(String),
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -644,7 +641,7 @@ pub async fn album_tracks(
 #[derive(Debug, Error)]
 pub enum LibraryAlbumError {
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
 }
 
 /// # Errors
@@ -750,7 +747,7 @@ pub enum LibraryArtistError {
     #[error("Not found")]
     NotFound,
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
 }
 
 /// # Errors
@@ -772,7 +769,7 @@ pub enum LibraryTrackError {
     #[error("Not found")]
     NotFound,
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
 }
 
 /// # Errors
@@ -827,7 +824,7 @@ pub enum LibrarySearchType {
 #[derive(Debug, Error)]
 pub enum LibrarySearchError {
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
 }
 
 /// # Errors
@@ -1084,9 +1081,14 @@ impl LibraryMusicApi {
         &self,
         album_id: &Id,
     ) -> Result<Option<LibraryArtist>, ArtistError> {
-        get_artist_by_album_id(&self.db, album_id.into())
-            .await
-            .map_err(|e| ArtistError::Other(e.into()))
+        get_artist_by_album_id(
+            &self.db,
+            album_id
+                .try_into()
+                .map_err(|e| ArtistError::Other(Box::new(e)))?,
+        )
+        .await
+        .map_err(|e| ArtistError::Other(e.into()))
     }
 
     /// # Errors
@@ -1485,7 +1487,10 @@ impl MusicApi for LibraryMusicApi {
         db::set_track_size(
             &self.db,
             SetTrackSize {
-                track_id: track.id().into(),
+                track_id: track
+                    .id()
+                    .try_into()
+                    .map_err(|e| TrackError::Other(Box::new(e)))?,
                 quality,
                 bytes: Some(Some(bytes)),
                 bit_depth: Some(None),
@@ -1505,7 +1510,7 @@ impl MusicApi for LibraryMusicApi {
 #[derive(Debug, Error)]
 pub enum ReindexError {
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
     RecreateIndex(#[from] RecreateIndexError),
     #[error(transparent)]
@@ -1567,8 +1572,8 @@ pub async fn reindex_global_search_index(db: &LibraryDatabase) -> Result<(), Rei
 
 #[cfg(test)]
 mod test {
-    use moosicbox_core::sqlite::models::AlbumSource;
     use moosicbox_music_api::models::AlbumFilters;
+    use moosicbox_music_models::AlbumSource;
 
     use super::*;
 
@@ -1595,7 +1600,7 @@ mod test {
     #[cfg(all(feature = "qobuz", feature = "tidal"))]
     #[test]
     fn filter_albums_filters_albums_of_sources_that_dont_match() {
-        use moosicbox_core::sqlite::models::{AlbumVersionQuality, TrackApiSource};
+        use moosicbox_music_models::{AlbumVersionQuality, TrackApiSource};
 
         let local = LibraryAlbum {
             id: 0,

@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, LazyLock, RwLock},
 };
 
-use moosicbox_core::sqlite::models::ApiSource;
+use moosicbox_music_models::ApiSource;
 
 use crate::{MusicApi, MusicApis};
 

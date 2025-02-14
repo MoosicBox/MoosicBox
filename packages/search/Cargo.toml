@@ -12,10 +12,10 @@ version     = "0.1.0"
 
 [dependencies]
 moosicbox_config = { version = "0.1.0", path = "../config", default-features = false }
-moosicbox_core = { version = "0.1.0", path = "../core", default-features = false, features = [
+moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
     "tantivy",
 ] }
-moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
+moosicbox_music_models = { version = "0.1.0", path = "../music/models", default-features = false, features = [
     "tantivy",
 ] }
 moosicbox_task = { version = "0.1.0", path = "../task" }
@@ -30,7 +30,7 @@ regex     = { workspace = true }
 serde     = { workspace = true }
 tantivy   = { workspace = true }
 thiserror = { workspace = true }
-tokio     = { workspace = true }
+tokio     = { workspace = true, features = ["sync"] }
 
 [dev-dependencies]
 moosicbox_config = { version = "0.1.0", path = "../config", default-features = false, features = [
@@ -47,6 +47,6 @@ default = ["api", "db", "openapi"]
 
 fail-on-warnings = []
 
-api     = ["db", "dep:actix-web"]
-db      = []
-openapi = ["dep:utoipa", "moosicbox_core/openapi"]
+api     = ["db", "dep:actix-web", "moosicbox_music_models/api"]
+db      = ["moosicbox_music_models/db"]
+openapi = ["dep:utoipa", "moosicbox_music_models/openapi"]

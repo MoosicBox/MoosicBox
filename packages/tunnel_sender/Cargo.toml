@@ -18,7 +18,6 @@ moosicbox_auth = { version = "0.1.0", path = "../auth", default-features = false
 moosicbox_channel_utils = { version = "0.1.0", path = "../channel_utils", default-features = false, features = [
     "futures-channel",
 ] }
-moosicbox_core = { version = "0.1.0", path = "../core", default-features = false }
 moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../env_utils", default-features = false }
 moosicbox_files = { version = "0.1.0", path = "../files", default-features = false, features = [
@@ -31,6 +30,7 @@ moosicbox_image = { version = "0.1.0", path = "../image", default-features = fal
     "image",
 ] }
 moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false }
+moosicbox_music_models = { version = "0.1.0", path = "../music/models", default-features = false }
 moosicbox_player = { version = "0.1.0", path = "../player", default-features = false }
 moosicbox_stream_utils = { version = "0.1.0", path = "../stream_utils", default-features = false }
 moosicbox_task = { version = "0.1.0", path = "../task", default-features = false }
@@ -68,39 +68,39 @@ base64 = ["dep:base64", "moosicbox_tunnel/base64"]
 
 aac = [
     "moosicbox_audio_output/aac",
-    "moosicbox_core/aac",
     "moosicbox_files/aac",
+    "moosicbox_music_models/aac",
     "moosicbox_ws/aac",
 ]
 flac = [
     "moosicbox_audio_output/flac",
-    "moosicbox_core/flac",
     "moosicbox_files/flac",
+    "moosicbox_music_models/flac",
     "moosicbox_ws/flac",
 ]
 mp3 = [
     "moosicbox_audio_output/mp3",
-    "moosicbox_core/mp3",
     "moosicbox_files/mp3",
+    "moosicbox_music_models/mp3",
     "moosicbox_ws/mp3",
 ]
 opus = [
     "moosicbox_audio_output/opus",
-    "moosicbox_core/opus",
     "moosicbox_files/opus",
+    "moosicbox_music_models/opus",
     "moosicbox_ws/opus",
 ]
 
 all-sources = ["qobuz", "tidal", "yt"]
 
 qobuz = [
-    "moosicbox_core/qobuz",
     "moosicbox_files/qobuz",
+    "moosicbox_music_models/qobuz",
     "moosicbox_player/qobuz",
 ]
 tidal = [
-    "moosicbox_core/tidal",
     "moosicbox_files/tidal",
+    "moosicbox_music_models/tidal",
     "moosicbox_player/tidal",
 ]
-yt = ["moosicbox_core/yt", "moosicbox_files/yt", "moosicbox_player/yt"]
+yt = ["moosicbox_files/yt", "moosicbox_music_models/yt", "moosicbox_player/yt"]

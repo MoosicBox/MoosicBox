@@ -22,14 +22,10 @@ use moosicbox_database::DatabaseError;
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
-use moosicbox_core::{
-    sqlite::models::{
-        Album, AlbumSort, AlbumType, ApiSource, Artist, AsModelResult, Id, Track, TrackApiSource,
-    },
-    types::{AudioFormat, PlaybackQuality},
-};
 use moosicbox_files::get_content_length;
-use moosicbox_json_utils::{serde_json::ToValue, MissingValue, ParseError, ToValueType};
+use moosicbox_json_utils::{
+    database::AsModelResult as _, serde_json::ToValue, MissingValue, ParseError, ToValueType,
+};
 use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_api::{
     models::{
@@ -40,6 +36,10 @@ use moosicbox_music_api::{
     AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
     ArtistError, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError, RemoveTrackError,
     TrackError, TrackOrId, TracksError,
+};
+use moosicbox_music_models::{
+    id::Id, Album, AlbumSort, AlbumType, ApiSource, Artist, AudioFormat, PlaybackQuality, Track,
+    TrackApiSource,
 };
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use serde::{Deserialize, Serialize};

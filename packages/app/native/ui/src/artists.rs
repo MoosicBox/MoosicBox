@@ -1,7 +1,11 @@
 #![allow(clippy::module_name_repetitions)]
 
 use maud::{html, Markup, PreEscaped};
-use moosicbox_core::sqlite::models::{AlbumType, ApiAlbum, ApiArtist, ApiSource, Id};
+use moosicbox_music_models::{
+    api::{ApiAlbum, ApiArtist},
+    id::Id,
+    AlbumType, ApiSource,
+};
 
 use crate::{
     formatting::{AlbumTypeFormat as _, ApiSourceFormat},

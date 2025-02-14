@@ -10,12 +10,9 @@ use models::{
     ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
     TrackSource,
 };
-use moosicbox_core::{
-    sqlite::models::{Album, AlbumType, ApiSource, Artist, Id, Track},
-    types::PlaybackQuality,
-};
 use moosicbox_menu_models::AlbumVersion;
 pub use moosicbox_music_api_models as models;
+use moosicbox_music_models::{id::Id, Album, AlbumType, ApiSource, Artist, PlaybackQuality, Track};
 use moosicbox_paging::PagingResult;
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
@@ -119,12 +116,6 @@ pub enum ArtistAlbumsError {
 
 #[derive(Debug, Error)]
 pub enum LibraryAlbumError {
-    #[cfg(not(feature = "db"))]
-    #[error("No DB")]
-    NoDb,
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    Db(#[from] moosicbox_core::sqlite::db::DbError),
     #[error(transparent)]
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }

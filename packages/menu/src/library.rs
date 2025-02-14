@@ -2,17 +2,15 @@ pub mod albums;
 pub mod artists;
 
 use albums::propagate_api_sources_from_library_album;
-use moosicbox_core::sqlite::{
-    db::DbError,
-    models::{Album, ApiSource, Artist, Id},
-};
 use moosicbox_database::profiles::LibraryDatabase;
+use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_library::{
     cache::{get_or_set_to_cache, CacheItemType, CacheRequest},
     db,
     models::LibraryAlbum,
 };
 use moosicbox_music_api::{ArtistError, MusicApi};
+use moosicbox_music_models::{id::Id, Album, ApiSource, Artist};
 use std::{
     sync::{Arc, PoisonError},
     time::{Duration, SystemTime},
@@ -56,7 +54,7 @@ pub enum GetAlbumError {
     #[error(transparent)]
     GetAlbums(#[from] GetAlbumsError),
     #[error(transparent)]
-    DbError(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error("Invalid request")]
     InvalidRequest,
 }
@@ -163,7 +161,7 @@ pub enum GetAlbumsError {
     #[error("Poison error")]
     Poison,
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
 }
 
 impl<T> From<PoisonError<T>> for GetAlbumsError {
@@ -205,7 +203,7 @@ pub enum GetArtistAlbumsError {
     #[error("Poison error")]
     Poison,
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
 }
 
 impl<T> From<PoisonError<T>> for GetArtistAlbumsError {

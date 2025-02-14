@@ -9,12 +9,9 @@ use std::{
 use clap::Parser;
 use futures::StreamExt as _;
 use moosicbox_audiotags::Tag;
-use moosicbox_core::{
-    sqlite::models::TrackApiSource,
-    types::{from_extension_to_audio_format, AudioFormat},
-};
 use moosicbox_files::{files::track::get_audio_bytes, save_bytes_stream_to_file};
 use moosicbox_music_api::models::TrackSource;
+use moosicbox_music_models::{from_extension_to_audio_format, AudioFormat, TrackApiSource};
 use thiserror::Error;
 
 #[derive(Parser, Debug)]

@@ -11,14 +11,18 @@ pub mod models;
 use itertools::Itertools;
 use models::{QobuzAlbum, QobuzArtist, QobuzRelease, QobuzSearchResults, QobuzTrack};
 #[cfg(feature = "db")]
-use moosicbox_core::sqlite::db::DbError;
-#[cfg(feature = "db")]
 use moosicbox_database::profiles::LibraryDatabase;
 #[cfg(feature = "db")]
 use moosicbox_database::DatabaseError;
+#[cfg(feature = "db")]
+use moosicbox_json_utils::database::DatabaseFetchError;
 
 use moosicbox_files::get_content_length;
 use moosicbox_menu_models::AlbumVersion;
+use moosicbox_music_models::{
+    id::Id, Album, AlbumType, ApiSource, Artist, AudioFormat, PlaybackQuality, Track,
+    TrackApiSource,
+};
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use reqwest::StatusCode;
 use std::{
@@ -30,10 +34,6 @@ use std::{
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
-use moosicbox_core::{
-    sqlite::models::{Album, AlbumType, ApiSource, Artist, Id, Track, TrackApiSource},
-    types::{AudioFormat, PlaybackQuality},
-};
 use moosicbox_json_utils::{
     serde_json::{ToNestedValue, ToValue},
     MissingValue, ParseError, ToValueType,
@@ -101,7 +101,7 @@ pub enum FetchCredentialsError {
     Database(#[from] DatabaseError),
     #[cfg(feature = "db")]
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error("No access token available")]
     NoAccessTokenAvailable,
 }
@@ -379,7 +379,7 @@ pub enum RefetchAccessTokenError {
     Database(#[from] DatabaseError),
     #[cfg(feature = "db")]
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
@@ -600,7 +600,7 @@ pub enum QobuzUserLoginError {
     Database(#[from] DatabaseError),
     #[cfg(feature = "db")]
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error("No access token available")]
     NoAccessTokenAvailable,
     #[error("No app id available")]
@@ -1383,7 +1383,8 @@ pub async fn album_tracks(
                 artist,
                 artist_id,
                 album,
-                &Into::<String>::into(album_id.clone()),
+                &TryInto::<String>::try_into(album_id.clone())
+                    .map_err(|e| ParseError::Parse(format!("album_id: {e:?}")))?,
                 album_type,
                 version,
                 image.clone(),
@@ -1667,7 +1668,7 @@ pub enum QobuzTrackFileUrlError {
     Database(#[from] DatabaseError),
     #[cfg(feature = "db")]
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error("No app secret available")]
     NoAppSecretAvailable,
     #[error(transparent)]
@@ -1762,7 +1763,7 @@ pub enum QobuzSearchError {
     Database(#[from] DatabaseError),
     #[cfg(feature = "db")]
     #[error(transparent)]
-    Db(#[from] DbError),
+    DatabaseFetch(#[from] DatabaseFetchError),
     #[error("No app secret available")]
     NoAppSecretAvailable,
     #[error(transparent)]

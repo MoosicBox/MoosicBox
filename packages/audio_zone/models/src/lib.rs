@@ -1,7 +1,6 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use moosicbox_core::sqlite::models::ToApi;
 use moosicbox_database::{AsId, DatabaseValue};
 use moosicbox_json_utils::{database::ToValue as _, MissingValue, ParseError, ToValueType};
 use serde::{Deserialize, Serialize};
@@ -44,7 +43,7 @@ impl From<AudioZone> for ApiAudioZone {
             players: value
                 .players
                 .into_iter()
-                .map(ToApi::to_api)
+                .map(Into::into)
                 .collect::<Vec<_>>(),
         }
     }
@@ -92,7 +91,7 @@ impl From<AudioZoneWithSession> for ApiAudioZoneWithSession {
             players: value
                 .players
                 .into_iter()
-                .map(ToApi::to_api)
+                .map(Into::into)
                 .collect::<Vec<_>>(),
         }
     }
@@ -153,13 +152,13 @@ pub struct ApiPlayer {
     pub playing: bool,
 }
 
-impl ToApi<ApiPlayer> for Player {
-    fn to_api(self) -> ApiPlayer {
-        ApiPlayer {
-            player_id: self.id,
-            audio_output_id: self.audio_output_id.clone(),
-            name: self.name.clone(),
-            playing: self.playing,
+impl From<Player> for ApiPlayer {
+    fn from(value: Player) -> Self {
+        Self {
+            player_id: value.id,
+            audio_output_id: value.audio_output_id,
+            name: value.name,
+            playing: value.playing,
         }
     }
 }

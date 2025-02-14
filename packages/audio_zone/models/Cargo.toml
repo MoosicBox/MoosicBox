@@ -12,7 +12,6 @@ version     = "0.1.0"
 
 [dependencies]
 moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
-moosicbox_core = { version = "0.1.0", path = "../../core", default-features = false }
 moosicbox_database = { version = "0.1.0", path = "../../database", default-features = false }
 moosicbox_json_utils = { version = "0.1.0", path = "../../json_utils", default-features = false, features = [
     "database",

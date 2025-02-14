@@ -56,6 +56,7 @@ moosicbox_logging = { version = "0.1.0", path = "../logging", default-features =
 moosicbox_mdns = { version = "0.1.0", path = "../mdns", default-features = false }
 moosicbox_middleware = { version = "0.1.0", path = "../middleware", default-features = false }
 moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false }
+moosicbox_music_models = { version = "0.1.0", path = "../music/models", default-features = false }
 moosicbox_profiles = { version = "0.1.0", path = "../profiles", default-features = false, features = [
     "events",
 ] }
@@ -206,6 +207,7 @@ aac = [
     "moosicbox_files/aac",
     "moosicbox_library?/aac",
     "moosicbox_library?/aac",
+    "moosicbox_music_models/aac",
     "moosicbox_player?/aac",
     "moosicbox_scan?/aac",
     "moosicbox_session/aac",
@@ -218,6 +220,7 @@ flac = [
     "moosicbox_files/flac",
     "moosicbox_library?/flac",
     "moosicbox_library?/flac",
+    "moosicbox_music_models/flac",
     "moosicbox_player?/flac",
     "moosicbox_scan?/flac",
     "moosicbox_session/flac",
@@ -230,6 +233,7 @@ mp3 = [
     "moosicbox_files/mp3",
     "moosicbox_library?/mp3",
     "moosicbox_library?/mp3",
+    "moosicbox_music_models/mp3",
     "moosicbox_player?/mp3",
     "moosicbox_scan?/mp3",
     "moosicbox_session/mp3",
@@ -242,6 +246,7 @@ opus = [
     "moosicbox_files/opus",
     "moosicbox_library?/opus",
     "moosicbox_library?/opus",
+    "moosicbox_music_models/opus",
     "moosicbox_player?/opus",
     "moosicbox_scan?/opus",
     "moosicbox_session/opus",
@@ -295,6 +300,7 @@ qobuz = [
     "moosicbox_files/qobuz",
     "moosicbox_library?/qobuz",
     "moosicbox_menu?/qobuz",
+    "moosicbox_music_models/qobuz",
     "moosicbox_player?/qobuz",
     "moosicbox_qobuz/api",
     "moosicbox_scan?/qobuz",
@@ -310,6 +316,7 @@ tidal = [
     "moosicbox_files/tidal",
     "moosicbox_library?/tidal",
     "moosicbox_menu?/tidal",
+    "moosicbox_music_models/tidal",
     "moosicbox_player?/tidal",
     "moosicbox_scan?/tidal",
     "moosicbox_session/tidal",
@@ -323,6 +330,7 @@ yt = [
     "moosicbox_files/yt",
     "moosicbox_library?/yt",
     "moosicbox_menu?/yt",
+    "moosicbox_music_models/yt",
     "moosicbox_player?/yt",
     "moosicbox_scan?/yt",
     "moosicbox_session/yt",
@@ -382,12 +390,12 @@ openapi = [
     "moosicbox_audio_zone/openapi",
     "moosicbox_auth?/openapi",
     "moosicbox_config/openapi",
-    "moosicbox_core/openapi",
     "moosicbox_downloader?/openapi",
     "moosicbox_files/openapi",
     "moosicbox_library?/openapi",
     "moosicbox_menu?/openapi",
     "moosicbox_music_api/openapi",
+    "moosicbox_music_models/openapi",
     "moosicbox_player?/openapi",
     "moosicbox_qobuz?/openapi",
     "moosicbox_scan?/openapi",
