@@ -25,8 +25,8 @@ fn main() {
         gigachad_js_bundler::bundle(&src_dir.join("index.ts"), &dist_dir.join("index.min.js"));
     } else if cfg!(feature = "esbuild") {
         println!("Bundling using esbuild...");
-        gigachad_js_bundler::run_npm_command(&["install"], &web_dir);
-        gigachad_js_bundler::run_npm_command(&["build"], &web_dir);
+        gigachad_js_bundler::node::run_npm_command(&["install"], &web_dir);
+        gigachad_js_bundler::node::run_npm_command(&["build"], &web_dir);
         gigachad_js_bundler::bundle(&dist_dir.join("index.js"), &dist_dir.join("index.min.js"));
     } else {
         panic!("Invalid features specified for gigachad_renderer_vanilla_js build. Requires at least `swc` or `esbuild`");

@@ -33,9 +33,11 @@ default = ["all-web-toolchains", "esbuild", "swc"]
 
 fail-on-warnings = []
 
-bun  = []
-npm  = []
-pnpm = []
+node = []
+
+bun  = ["node"]
+npm  = ["node"]
+pnpm = ["node"]
 
 all-web-toolchains = ["bun", "npm", "pnpm"]
 
@@ -53,4 +55,4 @@ swc = [
     "dep:swc_ecma_visit",
 ]
 
-esbuild = []
+esbuild = ["node"]
