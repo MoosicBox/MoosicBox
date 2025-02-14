@@ -29,6 +29,12 @@ pub enum ParseAttrError {
     SerdeJson(#[from] serde_json::Error),
 }
 
+#[derive(Debug, Error)]
+pub enum ParseAttrWrapperError {
+    #[error("Invalid attr value for {name}: '{error:?}'")]
+    Parse { name: String, error: ParseAttrError },
+}
+
 impl TryFrom<String> for crate::Container {
     type Error = ParseError;
 
@@ -172,14 +178,24 @@ fn parse_swap(value: &str) -> Result<SwapTarget, ParseAttrError> {
     })
 }
 
-fn get_route(tag: &HTMLTag) -> Result<Option<Route>, ParseAttrError> {
+fn get_route(tag: &HTMLTag) -> Result<Option<Route>, ParseAttrWrapperError> {
     get_tag_attr_value_decoded(tag, "hx-get")
         .as_deref()
-        .map(|x| parse_get_route(x, tag))
+        .map(|x| {
+            parse_get_route(x, tag).map_err(|e| ParseAttrWrapperError::Parse {
+                name: "hx-get".to_string(),
+                error: e,
+            })
+        })
         .or_else(|| {
             get_tag_attr_value_decoded(tag, "hx-post")
                 .as_deref()
-                .map(|x| parse_post_route(x, tag))
+                .map(|x| {
+                    parse_post_route(x, tag).map_err(|e| ParseAttrWrapperError::Parse {
+                        name: "hx-post".to_string(),
+                        error: e,
+                    })
+                })
         })
         .transpose()
 }
@@ -305,19 +321,19 @@ fn parse_position(value: &str) -> Result<Position, ParseAttrError> {
     })
 }
 
-fn get_data_attrs(tag: &HTMLTag) -> Result<HashMap<String, String>, ParseAttrError> {
+fn get_data_attrs(tag: &HTMLTag) -> HashMap<String, String> {
     tag.attributes()
         .iter()
         .filter_map(|(k, v)| v.map(|v| (k, v)))
         .filter_map(|(k, v)| {
             k.strip_prefix("data-").map(|name| {
-                Ok((
+                (
                     name.to_string(),
                     html_escape::decode_html_entities(&v).to_string(),
-                ))
+                )
             })
         })
-        .collect::<Result<HashMap<_, _>, _>>()
+        .collect::<HashMap<_, _>>()
 }
 
 fn parse_text_decoration_lines(value: &str) -> Result<Vec<TextDecorationLine>, ParseAttrError> {
@@ -553,61 +569,88 @@ fn pmrv<
     'a,
     T: for<'de> Deserialize<'de> + Clone + std::fmt::Debug,
     O: IntoIterator<Item = OverrideItem>,
-    E,
+    E: Into<ParseAttrError>,
 >(
     tag: &HTMLTag<'_>,
     mut names: impl Iterator<Item = &'a str>,
     overrides: &mut Vec<ConfigOverride>,
     func: impl Fn(&str) -> Result<T, E>,
     to_overrides: impl Fn(T) -> O,
-) -> Result<Option<T>, E> {
+) -> Result<Option<T>, ParseAttrWrapperError> {
     names
-        .find_map(|name| get_tag_attr_value_decoded(tag, name))
-        .as_deref()
-        .map(|x| pmrv_inner(x, overrides, func, to_overrides))
+        .find_map(|name| get_tag_attr_value_decoded(tag, name).map(|x| (name, x)))
+        .map(|(name, value)| {
+            pmrv_inner(name, value.as_ref(), overrides, func, to_overrides).map_err(|e| {
+                ParseAttrWrapperError::Parse {
+                    name: name.to_string(),
+                    error: e.into(),
+                }
+            })
+        })
         .transpose()
+        .map(Option::flatten)
 }
 
 #[allow(unused_variables, clippy::ptr_arg, clippy::needless_pass_by_ref_mut)]
 fn pmrv_inner<
     T: for<'de> Deserialize<'de> + Clone + std::fmt::Debug,
     O: IntoIterator<Item = OverrideItem>,
-    E,
+    E: Into<ParseAttrError>,
 >(
+    name: &str,
     value: &str,
     overrides: &mut Vec<ConfigOverride>,
     func: impl Fn(&str) -> Result<T, E>,
     to_overrides: impl Fn(T) -> O,
-) -> Result<T, E> {
+) -> Result<Option<T>, E> {
     #[cfg(feature = "logic")]
     {
-        serde_json::from_str::<
-            gigachad_actions::logic::IfExpression<T, gigachad_actions::logic::Responsive>,
-        >(value)
-        .ok()
-        .and_then(|x| {
-            if let Some(value) = x.value {
-                match x.condition {
-                    gigachad_actions::logic::Responsive::Target(target) => {
-                        overrides.push(ConfigOverride {
-                            condition: crate::OverrideCondition::ResponsiveTarget { name: target },
-                            overrides: to_overrides(value).into_iter().collect::<Vec<_>>(),
-                        });
-                    }
-                    gigachad_actions::logic::Responsive::Targets(targets) => {
-                        overrides.extend(targets.into_iter().map(|target| ConfigOverride {
-                            condition: crate::OverrideCondition::ResponsiveTarget { name: target },
-                            overrides: to_overrides(value.clone()).into_iter().collect::<Vec<_>>(),
-                        }));
+        Ok(
+            if let Ok(x) = serde_json::from_str::<
+                gigachad_actions::logic::IfExpression<T, gigachad_actions::logic::Responsive>,
+            >(value)
+            {
+                if let Some(value) = x.value {
+                    match x.condition {
+                        gigachad_actions::logic::Responsive::Target(target) => {
+                            overrides.push(ConfigOverride {
+                                condition: crate::OverrideCondition::ResponsiveTarget {
+                                    name: target,
+                                },
+                                overrides: to_overrides(value).into_iter().collect::<Vec<_>>(),
+                                default: x
+                                    .default
+                                    .clone()
+                                    .and_then(|x| to_overrides(x).into_iter().next()),
+                            });
+                        }
+                        gigachad_actions::logic::Responsive::Targets(targets) => {
+                            overrides.extend(targets.into_iter().map(|target| {
+                                ConfigOverride {
+                                    condition: crate::OverrideCondition::ResponsiveTarget {
+                                        name: target,
+                                    },
+                                    overrides: to_overrides(value.clone())
+                                        .into_iter()
+                                        .collect::<Vec<_>>(),
+                                    default: x
+                                        .default
+                                        .clone()
+                                        .and_then(|x| to_overrides(x).into_iter().next()),
+                                }
+                            }));
+                        }
                     }
                 }
-            }
-            x.default
-        })
-        .map_or_else(|| func(value), Ok)
+
+                x.default
+            } else {
+                Some(func(value)?)
+            },
+        )
     }
     #[cfg(not(feature = "logic"))]
-    func(value)
+    Ok(Some(func(value)?))
 }
 
 macro_rules! iter_once {
@@ -621,7 +664,7 @@ fn parse_element(
     tag: &HTMLTag<'_>,
     node: &Node<'_>,
     parser: &Parser<'_>,
-) -> Result<crate::Container, ParseAttrError> {
+) -> Result<crate::Container, ParseAttrWrapperError> {
     #[cfg(feature = "id")]
     static CURRENT_ID: std::sync::LazyLock<std::sync::Arc<std::sync::atomic::AtomicUsize>> =
         std::sync::LazyLock::new(|| std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(1)));
@@ -663,7 +706,7 @@ fn parse_element(
         once("sx-border-bottom-left-radius"),
         &mut overrides,
         parse_number,
-        iter_once!(OverrideItem::BorderTopLeftRadius),
+        iter_once!(OverrideItem::BorderBottomLeftRadius),
     )?
     .or_else(|| border_radius.clone());
     let border_bottom_right_radius = pmrv(
@@ -939,7 +982,13 @@ fn parse_element(
     Ok(crate::Container {
         #[cfg(feature = "id")]
         id: CURRENT_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-        str_id: get_tag_attr_value_owned(tag, "id"),
+        str_id: pmrv(
+            tag,
+            once("id"),
+            &mut overrides,
+            |x| Ok::<_, ParseAttrError>(x.to_string()),
+            iter_once!(OverrideItem::StrId),
+        )?,
         classes: pmrv(
             tag,
             once("class"),
@@ -948,7 +997,7 @@ fn parse_element(
             iter_once!(OverrideItem::Classes),
         )?
         .unwrap_or_else(Vec::new),
-        data: get_data_attrs(tag)?,
+        data: get_data_attrs(tag),
         direction: pmrv(
             tag,
             once("sx-dir"),
@@ -1021,7 +1070,11 @@ fn parse_element(
         state: get_tag_attr_value_decoded(tag, "state")
             .as_deref()
             .map(parse_state)
-            .transpose()?,
+            .transpose()
+            .map_err(|e| ParseAttrWrapperError::Parse {
+                name: "state".to_string(),
+                error: e,
+            })?,
         hidden: pmrv(
             tag,
             once("sx-hidden"),
@@ -1074,13 +1127,21 @@ fn parse_element(
             iter_once!(OverrideItem::TextAlign),
         )?,
         text_decoration,
-        font_family: get_tag_attr_value_decoded(tag, "sx-font-family").map(|x| {
-            x.split(',')
-                .map(str::trim)
-                .filter(|x| !x.is_empty())
-                .map(ToString::to_string)
-                .collect()
-        }),
+        font_family: pmrv(
+            tag,
+            once("sx-font-family"),
+            &mut overrides,
+            |x| {
+                Ok::<_, ParseAttrError>(
+                    x.split(',')
+                        .map(str::trim)
+                        .filter(|x| !x.is_empty())
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>(),
+                )
+            },
+            iter_once!(OverrideItem::FontFamily),
+        )?,
         children: parse_top_children(node.children(), parser),
         width: pmrv(
             tag,
@@ -1190,13 +1251,14 @@ fn parse_element(
             parse_number,
             iter_once!(OverrideItem::Opacity),
         )?,
-        debug: pmrv(
-            tag,
-            once("debug"),
-            &mut overrides,
-            parse_bool,
-            iter_once!(OverrideItem::Debug),
-        )?,
+        debug: get_tag_attr_value_decoded(tag, "debug")
+            .as_deref()
+            .map(parse_bool)
+            .transpose()
+            .map_err(|e| ParseAttrWrapperError::Parse {
+                name: "state".to_string(),
+                error: e,
+            })?,
         cursor: pmrv(
             tag,
             once("sx-cursor"),
@@ -1382,6 +1444,19 @@ mod test {
             .actions
             .sort_by(|a, b| format!("{:?}", a.trigger).cmp(&format!("{:?}", b.trigger)));
 
+        let mut i = 0;
+        let overrides = container.overrides.clone();
+        container.overrides.retain(|x| {
+            i += 1;
+            overrides
+                .iter()
+                .take(i - 1)
+                .all(|prev| prev.condition != x.condition)
+        });
+        container
+            .overrides
+            .sort_by(|a, b| format!("{:?}", a.condition).cmp(&format!("{:?}", b.condition)));
+
         for child in &mut container.children {
             clean_up_container(child);
         }
@@ -1391,6 +1466,7 @@ mod test {
     fn display_can_display_and_be_parsed_back_to_original_container(
         mut container: Container,
     ) -> bool {
+        log::trace!("container:\n{container:?}");
         clean_up_container(&mut container);
 
         let markup = container
@@ -1402,11 +1478,12 @@ mod test {
                 false,
             )
             .unwrap();
+        log::trace!("markup:\n{markup}");
 
         let re_parsed: Container = markup.clone().try_into().unwrap();
+        log::trace!("re_parsed: {re_parsed} ({re_parsed:?})");
 
         let Some(mut re_parsed) = re_parsed.children.first().cloned() else {
-            log::trace!("re_parsed: {re_parsed} ({re_parsed:?})");
             panic!("failed to get child from markup: {markup} ({container:?})");
         };
 

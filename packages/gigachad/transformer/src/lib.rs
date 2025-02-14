@@ -1,7 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use std::{collections::HashMap, io::Write};
+use std::{any::Any, collections::HashMap, io::Write};
 
 use gigachad_actions::Action;
 use gigachad_color::Color;
@@ -116,7 +116,7 @@ impl std::fmt::Display for Calculation {
     }
 }
 
-#[derive(Clone, Debug, EnumDiscriminants, Serialize)]
+#[derive(Clone, Debug, EnumDiscriminants)]
 #[strum_discriminants(derive(EnumIter))]
 #[strum_discriminants(name(NumberType))]
 pub enum Number {
@@ -133,6 +133,29 @@ pub enum Number {
     RealVh(f32),
     IntegerVh(i64),
     Calc(Calculation),
+}
+
+impl Serialize for Number {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Self::Real(x) => x.serialize(serializer),
+            Self::Integer(x) => x.serialize(serializer),
+            Self::RealPercent(x) => format!("{x}%").serialize(serializer),
+            Self::IntegerPercent(x) => format!("{x}%").serialize(serializer),
+            Self::RealDvw(x) => format!("{x}dvw").serialize(serializer),
+            Self::IntegerDvw(x) => format!("{x}dvw").serialize(serializer),
+            Self::RealDvh(x) => format!("{x}dvh").serialize(serializer),
+            Self::IntegerDvh(x) => format!("{x}dvh").serialize(serializer),
+            Self::RealVw(x) => format!("{x}vw").serialize(serializer),
+            Self::IntegerVw(x) => format!("{x}vw").serialize(serializer),
+            Self::RealVh(x) => format!("{x}vh").serialize(serializer),
+            Self::IntegerVh(x) => format!("{x}vh").serialize(serializer),
+            Self::Calc(calculation) => format!("calc({calculation})").serialize(serializer),
+        }
+    }
 }
 
 impl<'de> Deserialize<'de> for Number {
@@ -384,6 +407,7 @@ pub enum ResponsiveTrigger {
 pub struct ConfigOverride {
     pub condition: OverrideCondition,
     pub overrides: Vec<OverrideItem>,
+    pub default: Option<OverrideItem>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -403,11 +427,12 @@ impl From<&str> for OverrideCondition {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, EnumDiscriminants)]
+#[strum_discriminants(derive(EnumIter))]
+#[strum_discriminants(name(OverrideItemType))]
 pub enum OverrideItem {
     StrId(String),
     Classes(Vec<String>),
-    Data(HashMap<String, String>),
     Direction(LayoutDirection),
     OverflowX(LayoutOverflow),
     OverflowY(LayoutOverflow),
@@ -454,9 +479,451 @@ pub enum OverrideItem {
     FontSize(Number),
     Color(Color),
     Hidden(bool),
-    Debug(bool),
     Visibility(Visibility),
-    Route(Route),
+}
+
+impl OverrideItem {
+    /// # Errors
+    ///
+    /// * If the serialization fails
+    pub fn serialize(&self) -> Result<String, serde_json::Error> {
+        match self {
+            Self::StrId(x) => serde_json::to_string(x),
+            Self::Direction(x) => serde_json::to_string(x),
+            Self::OverflowX(x) | Self::OverflowY(x) => serde_json::to_string(x),
+            Self::JustifyContent(x) => serde_json::to_string(x),
+            Self::AlignItems(x) => serde_json::to_string(x),
+            Self::TextAlign(x) => serde_json::to_string(x),
+            Self::TextDecoration(x) => serde_json::to_string(x),
+            Self::Classes(x) | Self::FontFamily(x) => serde_json::to_string(x),
+            Self::Flex(x) => serde_json::to_string(x),
+            Self::Width(x)
+            | Self::MinWidth(x)
+            | Self::MaxWidth(x)
+            | Self::Height(x)
+            | Self::MinHeight(x)
+            | Self::MaxHeight(x)
+            | Self::ColumnGap(x)
+            | Self::RowGap(x)
+            | Self::Opacity(x)
+            | Self::Left(x)
+            | Self::Right(x)
+            | Self::Top(x)
+            | Self::Bottom(x)
+            | Self::TranslateX(x)
+            | Self::TranslateY(x)
+            | Self::BorderTopLeftRadius(x)
+            | Self::BorderTopRightRadius(x)
+            | Self::BorderBottomLeftRadius(x)
+            | Self::BorderBottomRightRadius(x)
+            | Self::MarginLeft(x)
+            | Self::MarginRight(x)
+            | Self::MarginTop(x)
+            | Self::MarginBottom(x)
+            | Self::PaddingLeft(x)
+            | Self::PaddingRight(x)
+            | Self::PaddingTop(x)
+            | Self::PaddingBottom(x)
+            | Self::FontSize(x) => serde_json::to_string(x),
+            Self::Cursor(x) => serde_json::to_string(x),
+            Self::Position(x) => serde_json::to_string(x),
+            Self::BorderTop(x)
+            | Self::BorderRight(x)
+            | Self::BorderBottom(x)
+            | Self::BorderLeft(x) => serde_json::to_string(x),
+            Self::Background(x) | Self::Color(x) => serde_json::to_string(x),
+            Self::Hidden(x) => serde_json::to_string(x),
+            Self::Visibility(x) => serde_json::to_string(x),
+        }
+    }
+
+    /// # Errors
+    ///
+    /// * If the serialization fails
+    pub fn as_value(&self) -> Result<Value, serde_json::Error> {
+        match self {
+            Self::StrId(x) => serde_json::to_value(x),
+            Self::Direction(x) => serde_json::to_value(x),
+            Self::OverflowX(x) | Self::OverflowY(x) => serde_json::to_value(x),
+            Self::JustifyContent(x) => serde_json::to_value(x),
+            Self::AlignItems(x) => serde_json::to_value(x),
+            Self::TextAlign(x) => serde_json::to_value(x),
+            Self::TextDecoration(x) => serde_json::to_value(x),
+            Self::Classes(x) | Self::FontFamily(x) => serde_json::to_value(x),
+            Self::Flex(x) => serde_json::to_value(x),
+            Self::Width(x)
+            | Self::MinWidth(x)
+            | Self::MaxWidth(x)
+            | Self::Height(x)
+            | Self::MinHeight(x)
+            | Self::MaxHeight(x)
+            | Self::ColumnGap(x)
+            | Self::RowGap(x)
+            | Self::Opacity(x)
+            | Self::Left(x)
+            | Self::Right(x)
+            | Self::Top(x)
+            | Self::Bottom(x)
+            | Self::TranslateX(x)
+            | Self::TranslateY(x)
+            | Self::BorderTopLeftRadius(x)
+            | Self::BorderTopRightRadius(x)
+            | Self::BorderBottomLeftRadius(x)
+            | Self::BorderBottomRightRadius(x)
+            | Self::MarginLeft(x)
+            | Self::MarginRight(x)
+            | Self::MarginTop(x)
+            | Self::MarginBottom(x)
+            | Self::PaddingLeft(x)
+            | Self::PaddingRight(x)
+            | Self::PaddingTop(x)
+            | Self::PaddingBottom(x)
+            | Self::FontSize(x) => serde_json::to_value(x),
+            Self::Cursor(x) => serde_json::to_value(x),
+            Self::Position(x) => serde_json::to_value(x),
+            Self::BorderTop(x)
+            | Self::BorderRight(x)
+            | Self::BorderBottom(x)
+            | Self::BorderLeft(x) => serde_json::to_value(x),
+            Self::Background(x) | Self::Color(x) => serde_json::to_value(x),
+            Self::Hidden(x) => serde_json::to_value(x),
+            Self::Visibility(x) => serde_json::to_value(x),
+        }
+    }
+
+    /// # Errors
+    ///
+    /// * If the serialization fails
+    #[must_use]
+    pub fn as_any<'a>(&'a self) -> Box<dyn Any + 'a> {
+        match self {
+            Self::StrId(x) => Box::new(x),
+            Self::Direction(x) => Box::new(x),
+            Self::OverflowX(x) | Self::OverflowY(x) => Box::new(x),
+            Self::JustifyContent(x) => Box::new(x),
+            Self::AlignItems(x) => Box::new(x),
+            Self::TextAlign(x) => Box::new(x),
+            Self::TextDecoration(x) => Box::new(x),
+            Self::Classes(x) | Self::FontFamily(x) => Box::new(x),
+            Self::Flex(x) => Box::new(x),
+            Self::Width(x)
+            | Self::MinWidth(x)
+            | Self::MaxWidth(x)
+            | Self::Height(x)
+            | Self::MinHeight(x)
+            | Self::MaxHeight(x)
+            | Self::ColumnGap(x)
+            | Self::RowGap(x)
+            | Self::Opacity(x)
+            | Self::Left(x)
+            | Self::Right(x)
+            | Self::Top(x)
+            | Self::Bottom(x)
+            | Self::TranslateX(x)
+            | Self::TranslateY(x)
+            | Self::BorderTopLeftRadius(x)
+            | Self::BorderTopRightRadius(x)
+            | Self::BorderBottomLeftRadius(x)
+            | Self::BorderBottomRightRadius(x)
+            | Self::MarginLeft(x)
+            | Self::MarginRight(x)
+            | Self::MarginTop(x)
+            | Self::MarginBottom(x)
+            | Self::PaddingLeft(x)
+            | Self::PaddingRight(x)
+            | Self::PaddingTop(x)
+            | Self::PaddingBottom(x)
+            | Self::FontSize(x) => Box::new(x),
+            Self::Cursor(x) => Box::new(x),
+            Self::Position(x) => Box::new(x),
+            Self::BorderTop(x)
+            | Self::BorderRight(x)
+            | Self::BorderBottom(x)
+            | Self::BorderLeft(x) => Box::new(x),
+            Self::Background(x) | Self::Color(x) => Box::new(x),
+            Self::Hidden(x) => Box::new(x),
+            Self::Visibility(x) => Box::new(x),
+        }
+    }
+
+    /// # Errors
+    ///
+    /// * If the serialization fails
+    #[cfg(feature = "logic")]
+    #[allow(clippy::too_many_lines)]
+    fn as_json_if_expression_string(
+        &self,
+        responsive: gigachad_actions::logic::Responsive,
+        default: Option<&Self>,
+    ) -> Result<String, serde_json::Error> {
+        match self {
+            Self::StrId(x) => {
+                let mut expr = responsive.then::<&String>(x);
+
+                if let Some(Self::StrId(default)) = default {
+                    expr = expr.or_else(default);
+                }
+
+                serde_json::to_string(&expr)
+            }
+            Self::Direction(x) => {
+                let mut expr = responsive.then::<&LayoutDirection>(x);
+
+                if let Some(Self::Direction(default)) = default {
+                    expr = expr.or_else(default);
+                }
+
+                serde_json::to_string(&expr)
+            }
+            Self::OverflowX(x) | Self::OverflowY(x) => {
+                let mut expr = responsive.then::<&LayoutOverflow>(x);
+
+                if let Some(Self::OverflowX(default) | Self::OverflowY(default)) = default {
+                    expr = expr.or_else(default);
+                }
+
+                serde_json::to_string(&expr)
+            }
+            Self::JustifyContent(x) => {
+                let mut expr = responsive.then::<&JustifyContent>(x);
+
+                if let Some(Self::JustifyContent(default)) = default {
+                    expr = expr.or_else(default);
+                }
+
+                serde_json::to_string(&expr)
+            }
+            Self::AlignItems(x) => {
+                let mut expr = responsive.then::<&AlignItems>(x);
+
+                if let Some(Self::AlignItems(default)) = default {
+                    expr = expr.or_else(default);
+                }
+
+                serde_json::to_string(&expr)
+            }
+            Self::TextAlign(x) => {
+                let mut expr = responsive.then::<&TextAlign>(x);
+
+                if let Some(Self::TextAlign(default)) = default {
+                    expr = expr.or_else(default);
+                }
+
+                serde_json::to_string(&expr)
+            }
+            Self::TextDecoration(x) => {
+                let mut expr = responsive.then::<&TextDecoration>(x);
+
+                if let Some(Self::TextDecoration(default)) = default {
+                    expr = expr.or_else(default);
+                }
+
+                serde_json::to_string(&expr)
+            }
+            Self::Classes(x) | Self::FontFamily(x) => {
+                let mut expr = responsive.then::<&Vec<String>>(x);
+
+                if let Some(Self::Classes(default) | Self::FontFamily(default)) = default {
+                    expr = expr.or_else(default);
+                }
+
+                serde_json::to_string(&expr)
+            }
+            Self::Flex(x) => {
+                let mut expr = responsive.then::<&Flex>(x);
+
+                if let Some(Self::Flex(default)) = default {
+                    expr = expr.or_else(default);
+                }
+
+                serde_json::to_string(&expr)
+            }
+            Self::Width(x)
+            | Self::MinWidth(x)
+            | Self::MaxWidth(x)
+            | Self::Height(x)
+            | Self::MinHeight(x)
+            | Self::MaxHeight(x)
+            | Self::ColumnGap(x)
+            | Self::RowGap(x)
+            | Self::Opacity(x)
+            | Self::Left(x)
+            | Self::Right(x)
+            | Self::Top(x)
+            | Self::Bottom(x)
+            | Self::TranslateX(x)
+            | Self::TranslateY(x)
+            | Self::BorderTopLeftRadius(x)
+            | Self::BorderTopRightRadius(x)
+            | Self::BorderBottomLeftRadius(x)
+            | Self::BorderBottomRightRadius(x)
+            | Self::MarginLeft(x)
+            | Self::MarginRight(x)
+            | Self::MarginTop(x)
+            | Self::MarginBottom(x)
+            | Self::PaddingLeft(x)
+            | Self::PaddingRight(x)
+            | Self::PaddingTop(x)
+            | Self::PaddingBottom(x)
+            | Self::FontSize(x) => {
+                let mut expr = responsive.then::<&Number>(x);
+
+                if let Some(
+                    Self::Width(default)
+                    | Self::MinWidth(default)
+                    | Self::MaxWidth(default)
+                    | Self::Height(default)
+                    | Self::MinHeight(default)
+                    | Self::MaxHeight(default)
+                    | Self::ColumnGap(default)
+                    | Self::RowGap(default)
+                    | Self::Opacity(default)
+                    | Self::Left(default)
+                    | Self::Right(default)
+                    | Self::Top(default)
+                    | Self::Bottom(default)
+                    | Self::TranslateX(default)
+                    | Self::TranslateY(default)
+                    | Self::BorderTopLeftRadius(default)
+                    | Self::BorderTopRightRadius(default)
+                    | Self::BorderBottomLeftRadius(default)
+                    | Self::BorderBottomRightRadius(default)
+                    | Self::MarginLeft(default)
+                    | Self::MarginRight(default)
+                    | Self::MarginTop(default)
+                    | Self::MarginBottom(default)
+                    | Self::PaddingLeft(default)
+                    | Self::PaddingRight(default)
+                    | Self::PaddingTop(default)
+                    | Self::PaddingBottom(default)
+                    | Self::FontSize(default),
+                ) = default
+                {
+                    expr = expr.or_else(default);
+                }
+
+                serde_json::to_string(&expr)
+            }
+            Self::Cursor(x) => {
+                let mut expr = responsive.then::<&Cursor>(x);
+
+                if let Some(Self::Cursor(default)) = default {
+                    expr = expr.or_else(default);
+                }
+
+                serde_json::to_string(&expr)
+            }
+            Self::Position(x) => {
+                let mut expr = responsive.then::<&Position>(x);
+
+                if let Some(Self::Position(default)) = default {
+                    expr = expr.or_else(default);
+                }
+
+                serde_json::to_string(&expr)
+            }
+            Self::BorderTop(x)
+            | Self::BorderRight(x)
+            | Self::BorderBottom(x)
+            | Self::BorderLeft(x) => {
+                let mut expr = responsive.then::<&(Color, Number)>(x);
+
+                if let Some(
+                    Self::BorderTop(default)
+                    | Self::BorderRight(default)
+                    | Self::BorderBottom(default)
+                    | Self::BorderLeft(default),
+                ) = default
+                {
+                    expr = expr.or_else(default);
+                }
+
+                serde_json::to_string(&expr)
+            }
+            Self::Background(x) | Self::Color(x) => {
+                let mut expr = responsive.then::<&Color>(x);
+
+                if let Some(Self::Background(default) | Self::Color(default)) = default {
+                    expr = expr.or_else(default);
+                }
+
+                serde_json::to_string(&expr)
+            }
+            Self::Hidden(x) => {
+                let mut expr = responsive.then::<&bool>(x);
+
+                if let Some(Self::Hidden(default)) = default {
+                    expr = expr.or_else(default);
+                }
+
+                serde_json::to_string(&expr)
+            }
+            Self::Visibility(x) => {
+                let mut expr = responsive.then::<&Visibility>(x);
+
+                if let Some(Self::Visibility(default)) = default {
+                    expr = expr.or_else(default);
+                }
+
+                serde_json::to_string(&expr)
+            }
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! override_item {
+    ($val:expr, $name:ident, $action:expr) => {{
+        match $val {
+            OverrideItem::StrId($name) => $action,
+            OverrideItem::Data($name) => $action,
+            OverrideItem::Direction($name) => $action,
+            OverrideItem::OverflowX($name) | OverrideItem::OverflowY($name) => $action,
+            OverrideItem::JustifyContent($name) => $action,
+            OverrideItem::AlignItems($name) => $action,
+            OverrideItem::TextAlign($name) => $action,
+            OverrideItem::TextDecoration($name) => $action,
+            OverrideItem::Classes($name) | OverrideItem::FontFamily($name) => $action,
+            OverrideItem::Flex($name) => $action,
+            OverrideItem::Width($name)
+            | OverrideItem::MinWidth($name)
+            | OverrideItem::MaxWidth($name)
+            | OverrideItem::Height($name)
+            | OverrideItem::MinHeight($name)
+            | OverrideItem::MaxHeight($name)
+            | OverrideItem::ColumnGap($name)
+            | OverrideItem::RowGap($name)
+            | OverrideItem::Opacity($name)
+            | OverrideItem::Left($name)
+            | OverrideItem::Right($name)
+            | OverrideItem::Top($name)
+            | OverrideItem::Bottom($name)
+            | OverrideItem::TranslateX($name)
+            | OverrideItem::TranslateY($name)
+            | OverrideItem::BorderTopLeftRadius($name)
+            | OverrideItem::BorderTopRightRadius($name)
+            | OverrideItem::BorderBottomLeftRadius($name)
+            | OverrideItem::BorderBottomRightRadius($name)
+            | OverrideItem::MarginLeft($name)
+            | OverrideItem::MarginRight($name)
+            | OverrideItem::MarginTop($name)
+            | OverrideItem::MarginBottom($name)
+            | OverrideItem::PaddingLeft($name)
+            | OverrideItem::PaddingRight($name)
+            | OverrideItem::PaddingTop($name)
+            | OverrideItem::PaddingBottom($name)
+            | OverrideItem::FontSize($name) => $action,
+            OverrideItem::Cursor($name) => $action,
+            OverrideItem::Position($name) => $action,
+            OverrideItem::BorderTop($name)
+            | OverrideItem::BorderRight($name)
+            | OverrideItem::BorderBottom($name)
+            | OverrideItem::BorderLeft($name) => $action,
+            OverrideItem::Background($name) | OverrideItem::Color($name) => $action,
+            OverrideItem::Hidden($name) | OverrideItem::Debug($name) => $action,
+            OverrideItem::Visibility($name) => $action,
+        }
+    }};
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -1066,6 +1533,12 @@ struct Attrs {
     values: Vec<(String, String)>,
 }
 
+#[derive(Debug)]
+pub enum MaybeReplaced<T: std::fmt::Display> {
+    NotReplaced(T),
+    Replaced(String),
+}
+
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Attrs {
     fn new() -> Self {
@@ -1104,6 +1577,37 @@ impl Attrs {
                     .join(" ")
             )
         }
+    }
+
+    #[allow(unused)]
+    fn replace_or_add<V: std::fmt::Display>(&mut self, name: &str, new_value: V) -> Option<String> {
+        match self.replace(name, new_value) {
+            MaybeReplaced::NotReplaced(x) => {
+                self.add(name, x);
+                None
+            }
+            MaybeReplaced::Replaced(x) => Some(x),
+        }
+    }
+
+    #[allow(unused)]
+    fn replace<V: std::fmt::Display>(&mut self, name: &str, new_value: V) -> MaybeReplaced<V> {
+        for (key, value) in &mut self.values {
+            if key == name {
+                let mut encoded =
+                    html_escape::encode_double_quoted_attribute(new_value.to_string().as_str())
+                        .to_string()
+                        .replace('\n', "&#10;");
+
+                std::mem::swap(value, &mut encoded);
+
+                let old_value = encoded;
+
+                return MaybeReplaced::Replaced(old_value);
+            }
+        }
+
+        MaybeReplaced::NotReplaced(new_value)
     }
 
     fn add<K: Into<String>, V: std::fmt::Display>(&mut self, name: K, value: V) {
@@ -1481,6 +1985,51 @@ impl Container {
             }
         }
 
+        #[cfg(feature = "logic")]
+        for config in &self.overrides {
+            for item in &config.overrides {
+                let name = override_item_to_attr_name(item);
+
+                match &config.condition {
+                    OverrideCondition::ResponsiveTarget { name: target } => {
+                        match item {
+                            OverrideItem::Flex(..) => {
+                                attrs.values.retain(|(x, _)| {
+                                    !matches!(
+                                        x.as_str(),
+                                        "sx-flex-grow" | "sx-flex-basis" | "sx-flex-shrink",
+                                    )
+                                });
+                            }
+                            OverrideItem::TextDecoration(..) => {
+                                attrs.values.retain(|(x, _)| {
+                                    !matches!(
+                                        x.as_str(),
+                                        "sx-text-decoration-line"
+                                            | "sx-text-decoration-style"
+                                            | "sx-text-decoration-color"
+                                            | "sx-text-decoration-thickness",
+                                    )
+                                });
+                            }
+                            _ => {}
+                        }
+
+                        attrs.replace_or_add(
+                            name,
+                            item.as_json_if_expression_string(
+                                gigachad_actions::logic::Responsive::Target(target.clone()),
+                                config.default.as_ref(),
+                            )
+                            .unwrap(),
+                        );
+                    }
+                }
+            }
+        }
+
+        attrs.values.sort_by(|(a, _), (b, _)| a.cmp(b));
+
         attrs
     }
 
@@ -1765,6 +2314,61 @@ impl Container {
         }
 
         Ok(xml)
+    }
+}
+
+#[cfg(feature = "logic")]
+const fn override_item_to_attr_name(item: &OverrideItem) -> &'static str {
+    match item {
+        OverrideItem::StrId(..) => "id",
+        OverrideItem::Classes(..) => "class",
+        OverrideItem::Direction(..) => "sx-dir",
+        OverrideItem::OverflowX(..) => "sx-overflow-x",
+        OverrideItem::OverflowY(..) => "sx-overflow-y",
+        OverrideItem::JustifyContent(..) => "sx-justify-content",
+        OverrideItem::AlignItems(..) => "sx-align-items",
+        OverrideItem::TextAlign(..) => "sx-text-align",
+        OverrideItem::TextDecoration(..) => "sx-text-decoration",
+        OverrideItem::FontFamily(..) => "sx-font-family",
+        OverrideItem::Width(..) => "sx-width",
+        OverrideItem::MinWidth(..) => "sx-min-width",
+        OverrideItem::MaxWidth(..) => "sx-max-width",
+        OverrideItem::Height(..) => "sx-height",
+        OverrideItem::MinHeight(..) => "sx-min-height",
+        OverrideItem::MaxHeight(..) => "sx-max-height",
+        OverrideItem::Flex(..) => "sx-flex",
+        OverrideItem::ColumnGap(..) => "sx-column-gap",
+        OverrideItem::RowGap(..) => "sx-row-gap",
+        OverrideItem::Opacity(..) => "sx-opacity",
+        OverrideItem::Left(..) => "sx-left",
+        OverrideItem::Right(..) => "sx-right",
+        OverrideItem::Top(..) => "sx-top",
+        OverrideItem::Bottom(..) => "sx-bottom",
+        OverrideItem::TranslateX(..) => "sx-translate-x",
+        OverrideItem::TranslateY(..) => "sx-translate-y",
+        OverrideItem::Cursor(..) => "sx-cursor",
+        OverrideItem::Position(..) => "sx-position",
+        OverrideItem::Background(..) => "sx-background",
+        OverrideItem::BorderTop(..) => "sx-border-top",
+        OverrideItem::BorderRight(..) => "sx-border-right",
+        OverrideItem::BorderBottom(..) => "sx-border-bottom",
+        OverrideItem::BorderLeft(..) => "sx-border-left",
+        OverrideItem::BorderTopLeftRadius(..) => "sx-border-top-left-radius",
+        OverrideItem::BorderTopRightRadius(..) => "sx-border-top-right-radius",
+        OverrideItem::BorderBottomLeftRadius(..) => "sx-border-bottom-left-radius",
+        OverrideItem::BorderBottomRightRadius(..) => "sx-border-bottom-right-radius",
+        OverrideItem::MarginLeft(..) => "sx-margin-left",
+        OverrideItem::MarginRight(..) => "sx-margin-right",
+        OverrideItem::MarginTop(..) => "sx-margin-top",
+        OverrideItem::MarginBottom(..) => "sx-margin-bottom",
+        OverrideItem::PaddingLeft(..) => "sx-padding-left",
+        OverrideItem::PaddingRight(..) => "sx-padding-right",
+        OverrideItem::PaddingTop(..) => "sx-padding-top",
+        OverrideItem::PaddingBottom(..) => "sx-padding-bottom",
+        OverrideItem::FontSize(..) => "sx-font-size",
+        OverrideItem::Color(..) => "sx-color",
+        OverrideItem::Hidden(..) => "sx-hidden",
+        OverrideItem::Visibility(..) => "sx-visibility",
     }
 }
 

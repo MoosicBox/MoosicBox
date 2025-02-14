@@ -211,7 +211,6 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                     }
                     OverrideItem::StrId(..)
                     | OverrideItem::Classes(..)
-                    | OverrideItem::Data(..)
                     | OverrideItem::OverflowX(..)
                     | OverrideItem::OverflowY(..)
                     | OverrideItem::JustifyContent(..)
@@ -225,9 +224,7 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                     | OverrideItem::BorderRight(..)
                     | OverrideItem::BorderBottom(..)
                     | OverrideItem::BorderLeft(..)
-                    | OverrideItem::Color(..)
-                    | OverrideItem::Debug(..)
-                    | OverrideItem::Route(..) => {}
+                    | OverrideItem::Color(..) => {}
                 }
             }
 
@@ -312,7 +309,6 @@ const fn override_item_to_css_name(item: &OverrideItem) -> &'static [u8] {
     match item {
         OverrideItem::StrId(..) => b"id",
         OverrideItem::Classes(..) => b"classes",
-        OverrideItem::Data(..) => b"data",
         OverrideItem::Direction(..) => b"flex-direction",
         OverrideItem::OverflowX(..) => b"overflow-x",
         OverrideItem::OverflowY(..) => b"overflow-y",
@@ -358,9 +354,7 @@ const fn override_item_to_css_name(item: &OverrideItem) -> &'static [u8] {
         OverrideItem::FontSize(..) => b"font-size",
         OverrideItem::Color(..) => b"color",
         OverrideItem::Hidden(..) => b"display",
-        OverrideItem::Debug(..) => b"debug",
         OverrideItem::Visibility(..) => b"visibility",
-        OverrideItem::Route(..) => b"route",
     }
 }
 
