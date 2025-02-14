@@ -1,7 +1,6 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use moosicbox_core::sqlite::models::ToApi;
 use std::{ops::Deref, pin::Pin, sync::Arc};
 
 use futures::Future;
@@ -656,16 +655,6 @@ impl<T> From<Page<T>> for Vec<T> {
         match value {
             Page::WithTotal { items, .. } | Page::WithHasMore { items, .. } => items,
         }
-    }
-}
-
-impl<In, Out: Send + 'static, E> ToApi<PagingResponse<Out, E>> for PagingResponse<In, E>
-where
-    In: Send + ToApi<Out> + 'static,
-    E: Send + 'static,
-{
-    fn to_api(self) -> PagingResponse<Out, E> {
-        self.map(ToApi::to_api)
     }
 }
 

@@ -7217,7 +7217,6 @@ version = "0.1.0"
 dependencies = [
  "futures",
  "log",
- "moosicbox_core",
  "serde",
  "tokio",
  "utoipa",

@@ -1,33 +1,9 @@
-use std::sync::Arc;
-
 use moosicbox_database::{AsId, DatabaseValue};
 use moosicbox_json_utils::{
     database::{AsModel, AsModelResult, ToValue as _},
     ParseError,
 };
 use serde::{Deserialize, Serialize};
-
-pub trait ToApi<T> {
-    fn to_api(self) -> T;
-}
-
-impl<T, X> ToApi<T> for Arc<X>
-where
-    X: ToApi<T> + Clone,
-{
-    fn to_api(self) -> T {
-        self.as_ref().clone().to_api()
-    }
-}
-
-impl<T, X> ToApi<T> for &X
-where
-    X: ToApi<T> + Clone,
-{
-    fn to_api(self) -> T {
-        self.clone().to_api()
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]

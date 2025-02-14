@@ -11,8 +11,6 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_core = { version = "0.1.0", path = "../core", default-features = false }
-
 # API Dependencies
 utoipa = { workspace = true, optional = true }
 
