@@ -5,11 +5,11 @@ use actix_web::{
     route, web, Scope,
 };
 use maud::{html, Markup};
-use moosicbox_core::sqlite::db::DbError;
 use moosicbox_database::{
     config::ConfigDatabase,
     profiles::{api::ProfileName, PROFILES},
 };
+use moosicbox_json_utils::database::DatabaseFetchError;
 use serde::Deserialize;
 
 pub fn bind_services<
@@ -277,7 +277,7 @@ pub fn profile(profile: &str) -> Markup {
 /// # Errors
 ///
 /// * If fails to fetch the profiles from the database
-pub async fn profiles(db: &ConfigDatabase) -> Result<Markup, DbError> {
+pub async fn profiles(db: &ConfigDatabase) -> Result<Markup, DatabaseFetchError> {
     let profiles = moosicbox_config::get_profiles(db).await?;
 
     Ok(html! {

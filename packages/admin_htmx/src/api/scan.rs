@@ -7,8 +7,8 @@ use actix_web::{
     route, web, Scope,
 };
 use maud::{html, Markup};
-use moosicbox_core::sqlite::db::DbError;
 use moosicbox_database::profiles::LibraryDatabase;
+use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_music_api::MusicApis;
 use moosicbox_scan::ScanOrigin;
 use serde::Deserialize;
@@ -93,7 +93,7 @@ pub async fn get_scans_endpoint(
 /// # Errors
 ///
 /// * If fails to get the scan paths from the database
-pub async fn scan_paths(db: &LibraryDatabase) -> Result<Markup, DbError> {
+pub async fn scan_paths(db: &LibraryDatabase) -> Result<Markup, DatabaseFetchError> {
     let paths = moosicbox_scan::get_scan_paths(db).await?;
 
     Ok(html! {
@@ -118,7 +118,7 @@ pub async fn scan_paths(db: &LibraryDatabase) -> Result<Markup, DbError> {
 /// # Errors
 ///
 /// * If the `scan_paths` fails to render
-pub async fn scan(db: &LibraryDatabase) -> Result<Markup, DbError> {
+pub async fn scan(db: &LibraryDatabase) -> Result<Markup, DatabaseFetchError> {
     Ok(html! {
         (scan_paths(db).await?)
         form

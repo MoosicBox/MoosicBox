@@ -3,8 +3,7 @@ use actix_web::{
     Scope,
 };
 use maud::{html, Markup};
-use moosicbox_core::sqlite::db::DbError;
-use moosicbox_database::config::ConfigDatabase;
+use moosicbox_database::{config::ConfigDatabase, DatabaseError};
 
 pub const fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
@@ -17,7 +16,7 @@ pub const fn bind_services<
 /// # Errors
 ///
 /// * If fails to get the server identity from the database
-pub async fn info(db: &ConfigDatabase) -> Result<Markup, DbError> {
+pub async fn info(db: &ConfigDatabase) -> Result<Markup, DatabaseError> {
     let id = moosicbox_config::get_server_identity(db).await?;
     let id = id.unwrap_or_else(|| "(not set)".to_string());
 

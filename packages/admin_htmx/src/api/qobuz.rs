@@ -5,8 +5,8 @@ use actix_web::{
     route, web, Scope,
 };
 use maud::{html, Markup};
-use moosicbox_core::sqlite::db::DbError;
 use moosicbox_database::profiles::LibraryDatabase;
+use moosicbox_json_utils::database::DatabaseFetchError;
 #[cfg(feature = "scan")]
 use moosicbox_music_api::MusicApis;
 #[cfg(feature = "scan")]
@@ -152,7 +152,7 @@ pub fn settings_logged_out(message: Option<Markup>) -> Markup {
 pub async fn settings(
     db: &LibraryDatabase,
     #[cfg(feature = "scan")] show_scan: bool,
-) -> Result<Markup, DbError> {
+) -> Result<Markup, DatabaseFetchError> {
     let logged_in = moosicbox_qobuz::db::get_qobuz_config(db).await?.is_some();
 
     Ok(if logged_in {

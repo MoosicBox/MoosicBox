@@ -15,9 +15,11 @@ moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = f
 moosicbox_config = { version = "0.1.0", path = "../config", default-features = false, features = [
     "db",
 ] }
-moosicbox_core = { version = "0.1.0", path = "../core", default-features = false }
 moosicbox_database = { version = "0.1.0", path = "../database", default-features = false, features = [
     "api",
+] }
+moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
+    "database",
 ] }
 moosicbox_music_api = { version = "0.1.0", path = "../music_api", optional = true, default-features = false }
 moosicbox_scan = { version = "0.1.0", path = "../scan", optional = true, default-features = false, features = [
@@ -50,14 +52,12 @@ fail-on-warnings = []
 qobuz = [
     "dep:moosicbox_music_api",
     "dep:moosicbox_qobuz",
-    "moosicbox_core/qobuz",
     "moosicbox_scan/qobuz",
 ]
 tidal = [
     "base64",
     "dep:moosicbox_music_api",
     "dep:moosicbox_tidal",
-    "moosicbox_core/tidal",
     "moosicbox_scan/tidal",
 ]
 
