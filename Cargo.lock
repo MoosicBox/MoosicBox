@@ -7213,8 +7213,6 @@ dependencies = [
 name = "moosicbox_parsing_utils"
 version = "0.1.0"
 dependencies = [
- "pretty_assertions",
- "test-log",
  "thiserror 2.0.11",
 ]
 
