@@ -109,6 +109,49 @@ pub async fn init(
     }
 }
 
+/// # Panics
+///
+/// * If invalid features are specified for the crate
+///
+/// # Errors
+///
+/// * If fails to initialize the generic database connection
+#[allow(clippy::branches_sharing_code, clippy::unused_async)]
+pub async fn init_default_non_sqlite(
+    #[allow(unused)] creds: Option<Credentials>,
+) -> Result<Box<dyn Database>, InitDbError> {
+    if cfg!(all(
+        feature = "postgres-native-tls",
+        feature = "postgres-raw"
+    )) {
+        #[cfg(all(feature = "postgres-native-tls", feature = "postgres-raw"))]
+        return Ok(
+            init_postgres_raw_native_tls(creds.ok_or(InitDbError::CredentialsRequired)?).await?,
+        );
+        #[cfg(not(all(feature = "postgres-native-tls", feature = "postgres-raw")))]
+        panic!("Invalid database features")
+    } else if cfg!(all(feature = "postgres-openssl", feature = "postgres-raw")) {
+        #[cfg(all(feature = "postgres-openssl", feature = "postgres-raw"))]
+        return Ok(
+            init_postgres_raw_openssl(creds.ok_or(InitDbError::CredentialsRequired)?).await?,
+        );
+        #[cfg(not(all(feature = "postgres-openssl", feature = "postgres-raw")))]
+        panic!("Invalid database features")
+    } else if cfg!(feature = "postgres-raw") {
+        #[cfg(feature = "postgres-raw")]
+        return Ok(init_postgres_raw_no_tls(creds.ok_or(InitDbError::CredentialsRequired)?).await?);
+        #[cfg(not(feature = "postgres-raw"))]
+        panic!("Invalid database features")
+    } else if cfg!(feature = "postgres-sqlx") {
+        #[cfg(feature = "postgres-sqlx")]
+        return Ok(init_postgres_sqlx(creds.ok_or(InitDbError::CredentialsRequired)?).await?);
+        #[cfg(not(feature = "postgres-sqlx"))]
+        panic!("Invalid database features")
+    }
+
+    panic!("Invalid database features")
+}
+
 #[cfg(feature = "sqlite-rusqlite")]
 #[derive(Debug, Error)]
 pub enum InitSqliteRusqliteError {

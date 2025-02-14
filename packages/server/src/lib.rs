@@ -37,12 +37,49 @@ static CONFIG_DB: LazyLock<std::sync::RwLock<Option<ConfigDatabase>>> =
 
 static SERVER_ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
-#[allow(
-    clippy::too_many_arguments,
-    clippy::too_many_lines,
-    clippy::missing_panics_doc,
-    clippy::missing_errors_doc
-)]
+/// # Errors
+///
+/// * If the server fails to start
+/// * If the server fails during execution
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+pub async fn run_basic(
+    #[allow(unused)] app_type: AppType,
+    addr: &str,
+    service_port: u16,
+    actix_workers: Option<usize>,
+    on_startup: impl FnOnce() + Send,
+) -> std::io::Result<()> {
+    #[cfg(feature = "telemetry")]
+    let otel = std::sync::Arc::new(
+        moosicbox_telemetry::Otel::new()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?,
+    );
+
+    run(
+        app_type,
+        addr,
+        service_port,
+        actix_workers,
+        #[cfg(feature = "player")]
+        false,
+        #[cfg(feature = "upnp")]
+        false,
+        #[cfg(feature = "telemetry")]
+        otel,
+        on_startup,
+    )
+    .await
+}
+
+/// # Errors
+///
+/// * If the server fails to start
+/// * If the server fails during execution
+///
+/// # Panics
+///
+/// * If cannot create config paths
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub async fn run(
     #[allow(unused)] app_type: AppType,
     addr: &str,

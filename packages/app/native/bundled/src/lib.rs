@@ -96,7 +96,7 @@ impl Context {
         let server_handle = moosicbox_task::spawn_on(
             "moosicbox_app_tauri_bundled server",
             handle,
-            moosicbox_server::run(AppType::App, addr, port, None, move || {
+            moosicbox_server::run_basic(AppType::App, addr, port, None, move || {
                 log::info!("App server listening on {addr}:{port}");
                 if let Err(e) = sender.send(()) {
                     log::error!("Failed to send on_startup response: {e:?}");

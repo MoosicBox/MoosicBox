@@ -57,7 +57,7 @@ pub async fn init() -> Result<(), DatabaseError> {
 
     #[cfg(not(feature = "sqlite"))]
     {
-        binding.replace(moosicbox_database_connection::init(creds).await?);
+        binding.replace(moosicbox_database_connection::init_default_non_sqlite(creds).await?);
 
         Ok(())
     }
