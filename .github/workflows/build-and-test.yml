@@ -58,7 +58,7 @@ jobs:
                       cargo run -p clippier \
                           features \
                           . \
-                          --chunked 5 \
+                          --chunked 7 \
                           -o json \
                           --spread \
                           | jq -rc \
