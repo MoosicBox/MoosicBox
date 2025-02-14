@@ -1,0 +1,45 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["gui", "web-programming"]
+description = "HyperChad actions package"
+edition     = "2021"
+keywords    = ["actions", "gui", "web"]
+license     = "MPL-2.0"
+name        = "hyperchad_actions"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+hyperchad_transformer_models = { version = "0.1.0", path = "../transformer/models", default-features = false }
+moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
+moosicbox_gen = { path = "../../gen", default-features = false, optional = true, features = [
+    "serde",
+    "xml",
+] }
+
+log        = { workspace = true }
+quickcheck = { workspace = true, optional = true }
+serde      = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+
+
+[dev-dependencies]
+hyperchad_transformer_models = { version = "0.1.0", path = "../transformer/models", default-features = false, features = [
+    "gen",
+] }
+moosicbox_gen = { path = "../../gen", default-features = false, features = [
+    "serde",
+    "xml",
+] }
+
+[features]
+default = ["gen", "id", "logic", "serde"]
+
+fail-on-warnings = []
+
+gen   = ["dep:moosicbox_gen", "dep:quickcheck", "hyperchad_transformer_models/gen"]
+id    = []
+logic = []
+
+serde = ["dep:serde", "dep:serde_json", "hyperchad_transformer_models/serde"]

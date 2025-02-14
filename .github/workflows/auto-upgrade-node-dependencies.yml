@@ -31,10 +31,10 @@ jobs:
                       label: marketing_site
                       sst: true
                       validate: true
-                    - directory: packages/gigachad/js_bundler
+                    - directory: packages/hyperchad/js_bundler
                       label: js_bundler
-                    - directory: packages/gigachad/renderer/vanilla_js/web
-                      label: gigachad vanilla-js renderer
+                    - directory: packages/hyperchad/renderer/vanilla_js/web
+                      label: hyperchad vanilla-js renderer
                       validate: true
 
         runs-on: ubuntu-latest

@@ -7,7 +7,7 @@
 
 use std::sync::{Arc, LazyLock};
 
-use gigachad_renderer_html::lambda::lambda_http::tracing;
+use hyperchad_renderer_html::lambda::lambda_http::tracing;
 use tokio::runtime::Runtime;
 
 static RUNTIME: LazyLock<Arc<Runtime>> = LazyLock::new(|| {

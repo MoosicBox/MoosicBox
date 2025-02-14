@@ -1,0 +1,39 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools", "gui", "web-programming"]
+description = "HyperChad Router package"
+edition     = "2021"
+keywords    = ["dom", "hyperchad", "router", "web"]
+license     = "MPL-2.0"
+name        = "hyperchad_router"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+hyperchad_renderer = { version = "0.1.0", path = "../renderer", default-features = false }
+hyperchad_transformer = { version = "0.1.0", path = "../transformer", default-features = false, features = [
+    "html",
+] }
+moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
+moosicbox_task = { version = "0.1.0", path = "../../task", default-features = false }
+
+flume     = { workspace = true }
+futures   = { workspace = true }
+log       = { workspace = true }
+qstring   = { workspace = true }
+thiserror = { workspace = true }
+tokio     = { workspace = true, features = ["rt-multi-thread", "sync"] }
+
+[features]
+default = ["format", "id", "static-routes"]
+
+fail-on-warnings = []
+
+simd = ["hyperchad_transformer/simd"]
+
+format = ["hyperchad_transformer/format"]
+
+static-routes = []
+
+id = []

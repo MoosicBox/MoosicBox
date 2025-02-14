@@ -3989,268 +3989,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gigachad"
-version = "0.1.0"
-dependencies = [
- "gigachad_transformer",
-]
-
-[[package]]
-name = "gigachad_actions"
-version = "0.1.0"
-dependencies = [
- "gigachad_transformer_models",
- "log",
- "moosicbox_assert",
- "moosicbox_gen",
- "quickcheck",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "gigachad_color"
-version = "0.1.0"
-dependencies = [
- "color-hex",
- "egui",
- "log",
- "moosicbox_assert",
- "pretty_assertions",
- "quickcheck",
- "serde",
- "test-log",
- "thiserror 2.0.11",
-]
-
-[[package]]
-name = "gigachad_js_bundler"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "log",
- "swc_bundler",
- "swc_common",
- "swc_ecma_ast",
- "swc_ecma_codegen",
- "swc_ecma_loader",
- "swc_ecma_minifier",
- "swc_ecma_parser",
- "swc_ecma_transforms_base",
- "swc_ecma_transforms_typescript",
- "swc_ecma_visit",
-]
-
-[[package]]
-name = "gigachad_renderer"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bytes",
- "gigachad_color",
- "gigachad_transformer",
- "log",
- "maud",
- "tokio",
-]
-
-[[package]]
-name = "gigachad_renderer_datastar"
-version = "0.1.0"
-dependencies = [
- "gigachad_renderer",
- "gigachad_renderer_html",
- "gigachad_router",
- "gigachad_transformer",
- "log",
- "maud",
-]
-
-[[package]]
-name = "gigachad_renderer_egui"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "eframe",
- "egui_extras",
- "flume",
- "gigachad_actions",
- "gigachad_color",
- "gigachad_renderer",
- "gigachad_router",
- "gigachad_transformer",
- "image",
- "itertools 0.14.0",
- "log",
- "moosicbox_app_native_image",
- "moosicbox_assert",
- "moosicbox_logging",
- "moosicbox_task",
- "profiling",
- "puffin",
- "puffin_http",
- "reqwest",
- "tracing-subscriber",
- "tracy-client 0.18.0",
-]
-
-[[package]]
-name = "gigachad_renderer_fltk"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bytes",
- "fltk",
- "flume",
- "gigachad_actions",
- "gigachad_renderer",
- "gigachad_transformer",
- "image",
- "log",
- "moosicbox_app_native_image",
- "moosicbox_assert",
- "moosicbox_logging",
- "moosicbox_task",
- "reqwest",
- "thiserror 2.0.11",
- "tokio",
-]
-
-[[package]]
-name = "gigachad_renderer_html"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "flume",
- "gigachad_renderer",
- "gigachad_renderer_html_actix",
- "gigachad_renderer_html_lambda",
- "gigachad_router",
- "gigachad_transformer",
- "log",
- "maud",
- "moosicbox_assert",
- "moosicbox_env_utils",
- "moosicbox_logging",
- "tokio",
- "uaparser",
-]
-
-[[package]]
-name = "gigachad_renderer_html_actix"
-version = "0.1.0"
-dependencies = [
- "actix-cors",
- "actix-files",
- "actix-web",
- "async-trait",
- "gigachad_renderer",
- "log",
- "moosicbox_assert",
- "moosicbox_env_utils",
- "moosicbox_middleware",
- "moosicbox_task",
- "tokio",
-]
-
-[[package]]
-name = "gigachad_renderer_html_lambda"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "flate2",
- "gigachad_renderer",
- "lambda_http",
- "lambda_runtime",
- "log",
- "moosicbox_assert",
- "moosicbox_env_utils",
- "moosicbox_task",
- "tokio",
-]
-
-[[package]]
-name = "gigachad_renderer_htmx"
-version = "0.1.0"
-dependencies = [
- "gigachad_renderer",
- "gigachad_renderer_html",
- "gigachad_transformer",
- "log",
- "maud",
-]
-
-[[package]]
-name = "gigachad_renderer_vanilla_js"
-version = "0.1.0"
-dependencies = [
- "const_format",
- "gigachad_js_bundler",
- "gigachad_renderer",
- "gigachad_renderer_html",
- "gigachad_transformer",
- "log",
- "maud",
- "md5",
-]
-
-[[package]]
-name = "gigachad_router"
-version = "0.1.0"
-dependencies = [
- "flume",
- "futures",
- "gigachad_renderer",
- "gigachad_transformer",
- "log",
- "moosicbox_assert",
- "moosicbox_task",
- "qstring",
- "thiserror 2.0.11",
- "tokio",
-]
-
-[[package]]
-name = "gigachad_transformer"
-version = "0.1.0"
-dependencies = [
- "bumpalo",
- "gigachad_actions",
- "gigachad_color",
- "gigachad_transformer_models",
- "html-escape",
- "itertools 0.14.0",
- "log",
- "maud",
- "moosicbox_assert",
- "moosicbox_gen",
- "moosicbox_logging",
- "pretty_assertions",
- "profiling",
- "quickcheck",
- "quickcheck_macros",
- "serde",
- "serde_json",
- "strum 0.27.0",
- "syntect",
- "test-log",
- "thiserror 2.0.11",
- "tl",
- "xml",
-]
-
-[[package]]
-name = "gigachad_transformer_models"
-version = "0.1.0"
-dependencies = [
- "log",
- "moosicbox_assert",
- "moosicbox_gen",
- "quickcheck",
- "serde",
-]
-
-[[package]]
 name = "gimli"
 version = "0.31.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5003,6 +4741,268 @@ dependencies = [
  "tokio",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "hyperchad"
+version = "0.1.0"
+dependencies = [
+ "hyperchad_transformer",
+]
+
+[[package]]
+name = "hyperchad_actions"
+version = "0.1.0"
+dependencies = [
+ "hyperchad_transformer_models",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_gen",
+ "quickcheck",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "hyperchad_color"
+version = "0.1.0"
+dependencies = [
+ "color-hex",
+ "egui",
+ "log",
+ "moosicbox_assert",
+ "pretty_assertions",
+ "quickcheck",
+ "serde",
+ "test-log",
+ "thiserror 2.0.11",
+]
+
+[[package]]
+name = "hyperchad_js_bundler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "log",
+ "swc_bundler",
+ "swc_common",
+ "swc_ecma_ast",
+ "swc_ecma_codegen",
+ "swc_ecma_loader",
+ "swc_ecma_minifier",
+ "swc_ecma_parser",
+ "swc_ecma_transforms_base",
+ "swc_ecma_transforms_typescript",
+ "swc_ecma_visit",
+]
+
+[[package]]
+name = "hyperchad_renderer"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "hyperchad_color",
+ "hyperchad_transformer",
+ "log",
+ "maud",
+ "tokio",
+]
+
+[[package]]
+name = "hyperchad_renderer_datastar"
+version = "0.1.0"
+dependencies = [
+ "hyperchad_renderer",
+ "hyperchad_renderer_html",
+ "hyperchad_router",
+ "hyperchad_transformer",
+ "log",
+ "maud",
+]
+
+[[package]]
+name = "hyperchad_renderer_egui"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "eframe",
+ "egui_extras",
+ "flume",
+ "hyperchad_actions",
+ "hyperchad_color",
+ "hyperchad_renderer",
+ "hyperchad_router",
+ "hyperchad_transformer",
+ "image",
+ "itertools 0.14.0",
+ "log",
+ "moosicbox_app_native_image",
+ "moosicbox_assert",
+ "moosicbox_logging",
+ "moosicbox_task",
+ "profiling",
+ "puffin",
+ "puffin_http",
+ "reqwest",
+ "tracing-subscriber",
+ "tracy-client 0.18.0",
+]
+
+[[package]]
+name = "hyperchad_renderer_fltk"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "fltk",
+ "flume",
+ "hyperchad_actions",
+ "hyperchad_renderer",
+ "hyperchad_transformer",
+ "image",
+ "log",
+ "moosicbox_app_native_image",
+ "moosicbox_assert",
+ "moosicbox_logging",
+ "moosicbox_task",
+ "reqwest",
+ "thiserror 2.0.11",
+ "tokio",
+]
+
+[[package]]
+name = "hyperchad_renderer_html"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "flume",
+ "hyperchad_renderer",
+ "hyperchad_renderer_html_actix",
+ "hyperchad_renderer_html_lambda",
+ "hyperchad_router",
+ "hyperchad_transformer",
+ "log",
+ "maud",
+ "moosicbox_assert",
+ "moosicbox_env_utils",
+ "moosicbox_logging",
+ "tokio",
+ "uaparser",
+]
+
+[[package]]
+name = "hyperchad_renderer_html_actix"
+version = "0.1.0"
+dependencies = [
+ "actix-cors",
+ "actix-files",
+ "actix-web",
+ "async-trait",
+ "hyperchad_renderer",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_env_utils",
+ "moosicbox_middleware",
+ "moosicbox_task",
+ "tokio",
+]
+
+[[package]]
+name = "hyperchad_renderer_html_lambda"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "flate2",
+ "hyperchad_renderer",
+ "lambda_http",
+ "lambda_runtime",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_env_utils",
+ "moosicbox_task",
+ "tokio",
+]
+
+[[package]]
+name = "hyperchad_renderer_htmx"
+version = "0.1.0"
+dependencies = [
+ "hyperchad_renderer",
+ "hyperchad_renderer_html",
+ "hyperchad_transformer",
+ "log",
+ "maud",
+]
+
+[[package]]
+name = "hyperchad_renderer_vanilla_js"
+version = "0.1.0"
+dependencies = [
+ "const_format",
+ "hyperchad_js_bundler",
+ "hyperchad_renderer",
+ "hyperchad_renderer_html",
+ "hyperchad_transformer",
+ "log",
+ "maud",
+ "md5",
+]
+
+[[package]]
+name = "hyperchad_router"
+version = "0.1.0"
+dependencies = [
+ "flume",
+ "futures",
+ "hyperchad_renderer",
+ "hyperchad_transformer",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_task",
+ "qstring",
+ "thiserror 2.0.11",
+ "tokio",
+]
+
+[[package]]
+name = "hyperchad_transformer"
+version = "0.1.0"
+dependencies = [
+ "bumpalo",
+ "html-escape",
+ "hyperchad_actions",
+ "hyperchad_color",
+ "hyperchad_transformer_models",
+ "itertools 0.14.0",
+ "log",
+ "maud",
+ "moosicbox_assert",
+ "moosicbox_gen",
+ "moosicbox_logging",
+ "pretty_assertions",
+ "profiling",
+ "quickcheck",
+ "quickcheck_macros",
+ "serde",
+ "serde_json",
+ "strum 0.27.0",
+ "syntect",
+ "test-log",
+ "thiserror 2.0.11",
+ "tl",
+ "xml",
+]
+
+[[package]]
+name = "hyperchad_transformer_models"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "moosicbox_assert",
+ "moosicbox_gen",
+ "quickcheck",
+ "serde",
 ]
 
 [[package]]
@@ -6268,12 +6268,12 @@ dependencies = [
 name = "moosicbox"
 version = "0.1.0"
 dependencies = [
- "gigachad_actions",
- "gigachad_color",
- "gigachad_renderer",
- "gigachad_renderer_egui",
- "gigachad_renderer_fltk",
- "gigachad_transformer",
+ "hyperchad_actions",
+ "hyperchad_color",
+ "hyperchad_renderer",
+ "hyperchad_renderer_egui",
+ "hyperchad_renderer_fltk",
+ "hyperchad_transformer",
  "moosicbox_admin_htmx",
  "moosicbox_app_native_lib",
  "moosicbox_app_native_ui",
@@ -6427,7 +6427,7 @@ version = "0.1.0"
 dependencies = [
  "console-subscriber",
  "flume",
- "gigachad_actions",
+ "hyperchad_actions",
  "log",
  "moosicbox_app_native_bundled",
  "moosicbox_app_native_lib",
@@ -6482,15 +6482,15 @@ name = "moosicbox_app_native_lib"
 version = "0.1.0"
 dependencies = [
  "flume",
- "gigachad_actions",
- "gigachad_renderer",
- "gigachad_renderer_datastar",
- "gigachad_renderer_egui",
- "gigachad_renderer_fltk",
- "gigachad_renderer_html",
- "gigachad_renderer_htmx",
- "gigachad_renderer_vanilla_js",
- "gigachad_router",
+ "hyperchad_actions",
+ "hyperchad_renderer",
+ "hyperchad_renderer_datastar",
+ "hyperchad_renderer_egui",
+ "hyperchad_renderer_fltk",
+ "hyperchad_renderer_html",
+ "hyperchad_renderer_htmx",
+ "hyperchad_renderer_vanilla_js",
+ "hyperchad_router",
  "log",
  "moosicbox_assert",
  "moosicbox_env_utils",
@@ -6504,8 +6504,8 @@ dependencies = [
 name = "moosicbox_app_native_ui"
 version = "0.1.0"
 dependencies = [
- "gigachad_actions",
- "gigachad_transformer_models",
+ "hyperchad_actions",
+ "hyperchad_transformer_models",
  "log",
  "maud",
  "moosicbox_app_native_image",
@@ -7052,9 +7052,9 @@ dependencies = [
  "chrono",
  "clap 4.5.29",
  "console-subscriber",
- "gigachad_renderer",
- "gigachad_renderer_html",
- "gigachad_renderer_vanilla_js",
+ "hyperchad_renderer",
+ "hyperchad_renderer_html",
+ "hyperchad_renderer_vanilla_js",
  "log",
  "moosicbox_app_native_lib",
  "moosicbox_assert",
@@ -7074,8 +7074,8 @@ version = "0.1.0"
 dependencies = [
  "bytesize",
  "chrono",
- "gigachad_actions",
- "gigachad_transformer_models",
+ "hyperchad_actions",
+ "hyperchad_transformer_models",
  "log",
  "maud",
  "moosicbox_app_native_image",

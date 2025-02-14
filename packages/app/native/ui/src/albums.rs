@@ -1,12 +1,12 @@
 #![allow(clippy::module_name_repetitions)]
 
-use gigachad_actions::{
+use hyperchad_actions::{
     logic::{
         get_data_attr_value_self, get_event_value, get_visibility_self, get_visibility_str_id,
     },
     ActionType,
 };
-use gigachad_transformer_models::Visibility;
+use hyperchad_transformer_models::Visibility;
 use maud::{html, Markup, PreEscaped};
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_music_models::{

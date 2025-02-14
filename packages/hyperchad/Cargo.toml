@@ -1,0 +1,17 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools", "gui", "web-programming"]
+description = "HyperChad package"
+edition     = "2021"
+keywords    = ["hyperchad"]
+license     = "MPL-2.0"
+name        = "hyperchad"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+hyperchad_transformer = { version = "0.1.0", path = "transformer", default-features = false }
+
+[features]
+fail-on-warnings = []

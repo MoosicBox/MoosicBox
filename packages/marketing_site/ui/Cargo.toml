@@ -11,11 +11,11 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-gigachad_actions = { version = "0.1.0", path = "../../gigachad/actions", default-features = false, features = [
+hyperchad_actions = { version = "0.1.0", path = "../../hyperchad/actions", default-features = false, features = [
     "logic",
     "serde",
 ] }
-gigachad_transformer_models = { version = "0.1.0", path = "../../gigachad/transformer/models", default-features = false, features = [
+hyperchad_transformer_models = { version = "0.1.0", path = "../../hyperchad/transformer/models", default-features = false, features = [
     "serde",
 ] }
 moosicbox_app_native_image = { version = "0.1.0", path = "../../app/native/image", default-features = false }

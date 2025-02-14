@@ -1,12 +1,12 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-pub use gigachad_actions;
-pub use gigachad_color;
-pub use gigachad_renderer;
-pub use gigachad_renderer_egui;
-pub use gigachad_renderer_fltk;
-pub use gigachad_transformer;
+pub use hyperchad_actions;
+pub use hyperchad_color;
+pub use hyperchad_renderer;
+pub use hyperchad_renderer_egui;
+pub use hyperchad_renderer_fltk;
+pub use hyperchad_transformer;
 pub use moosicbox_admin_htmx as admin_htmx;
 pub use moosicbox_app_native_lib as app_native_lib;
 pub use moosicbox_app_native_ui as app_native_ui;

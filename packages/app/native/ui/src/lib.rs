@@ -13,14 +13,14 @@ pub mod state;
 
 use albums::album_cover_img_from_album;
 use formatting::TimeFormat;
-use gigachad_actions::{
+use hyperchad_actions::{
     logic::{
         get_height_px_str_id, get_mouse_x_self, get_mouse_y_str_id, get_visibility_str_id,
         get_width_px_self,
     },
     ActionType,
 };
-use gigachad_transformer_models::{JustifyContent, Visibility};
+use hyperchad_transformer_models::{JustifyContent, Visibility};
 use maud::{html, Markup};
 use moosicbox_music_models::{api::ApiTrack, id::Id, AlbumSort, ApiSource, TrackApiSource};
 use moosicbox_session_models::{ApiSession, ApiUpdateSession};
@@ -89,7 +89,7 @@ pub enum Action {
     },
 }
 
-impl From<Action> for gigachad_actions::Action {
+impl From<Action> for hyperchad_actions::Action {
     fn from(value: Action) -> Self {
         ActionType::Custom {
             action: value.to_string(),

@@ -46,9 +46,9 @@ no-build      = false
 product-name  = "MoosicBoxMarketingSite"
 
 [dependencies]
-gigachad_renderer = { version = "0.1.0", path = "../gigachad/renderer", default-features = false, optional = true }
-gigachad_renderer_html = { version = "0.1.0", path = "../gigachad/renderer/html", default-features = false, optional = true }
-gigachad_renderer_vanilla_js = { version = "0.1.0", path = "../gigachad/renderer/vanilla_js", default-features = false, optional = true, features = [
+hyperchad_renderer = { version = "0.1.0", path = "../hyperchad/renderer", default-features = false, optional = true }
+hyperchad_renderer_html = { version = "0.1.0", path = "../hyperchad/renderer/html", default-features = false, optional = true }
+hyperchad_renderer_vanilla_js = { version = "0.1.0", path = "../hyperchad/renderer/vanilla_js", default-features = false, optional = true, features = [
     "hash",
     "script",
     "swc",
@@ -98,23 +98,23 @@ egui-glow = ["egui", "moosicbox_app_native_lib/egui-glow"]
 egui-wgpu = ["egui", "moosicbox_app_native_lib/egui-wgpu"]
 fltk = ["moosicbox_app_native_lib/fltk"]
 html = [
-    "dep:gigachad_renderer_html",
-    "gigachad_renderer/html",
+    "dep:hyperchad_renderer_html",
+    "hyperchad_renderer/html",
     "moosicbox_app_native_lib/html",
 ]
 htmx = ["html", "moosicbox_app_native_lib/htmx"]
 vanilla-js = [
-    "dep:gigachad_renderer_vanilla_js",
+    "dep:hyperchad_renderer_vanilla_js",
     "html",
     "moosicbox_app_native_lib/vanilla-js",
 ]
 
-actix = ["gigachad_renderer_html?/actix", "moosicbox_app_native_lib/actix"]
+actix = ["hyperchad_renderer_html?/actix", "moosicbox_app_native_lib/actix"]
 
 wayland = ["moosicbox_app_native_lib/wayland"]
 x11     = ["moosicbox_app_native_lib/x11"]
 
-lambda = ["gigachad_renderer_html?/lambda", "moosicbox_app_native_lib/lambda"]
+lambda = ["hyperchad_renderer_html?/lambda", "moosicbox_app_native_lib/lambda"]
 
 windows-console = []
 
@@ -127,7 +127,7 @@ unsafe            = ["moosicbox_app_native_lib/unsafe"]
 
 assets = [
     "dep:async-recursion",
-    "dep:gigachad_renderer",
+    "dep:hyperchad_renderer",
     "moosicbox_app_native_lib/assets",
 ]
 static-routes = ["moosicbox_app_native_lib/static-routes"]

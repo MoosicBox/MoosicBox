@@ -1,0 +1,37 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["gui"]
+description = "HyperChad Datastar renderer package"
+edition     = "2021"
+keywords    = ["datastar", "gui", "render", "renderer", "web"]
+license     = "MPL-2.0"
+name        = "hyperchad_renderer_datastar"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[package.metadata.cargo-machete]
+ignored = ["image"]
+
+[dependencies]
+hyperchad_renderer = { version = "0.1.0", path = "..", default-features = false, features = [
+    "canvas",
+    "html",
+] }
+hyperchad_renderer_html = { version = "0.1.0", path = "../html", default-features = false, features = [
+    "assets",
+] }
+hyperchad_router = { version = "0.1.0", path = "../../../hyperchad/router", default-features = false }
+hyperchad_transformer = { version = "0.1.0", path = "../../transformer", default-features = false, features = [
+    "html",
+] }
+
+log  = { workspace = true }
+maud = { workspace = true }
+
+[features]
+default = ["debug"]
+
+fail-on-warnings = []
+
+debug = []

@@ -1,8 +1,8 @@
 use std::sync::LazyLock;
 
 use chrono::NaiveDateTime;
-use gigachad_actions::logic::if_responsive;
-use gigachad_transformer_models::{AlignItems, LayoutDirection};
+use hyperchad_actions::logic::if_responsive;
+use hyperchad_transformer_models::{AlignItems, LayoutDirection};
 use maud::{html, Markup};
 use regex::Regex;
 

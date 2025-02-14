@@ -4,8 +4,8 @@
 
 pub mod download;
 
-use gigachad_actions::logic::if_responsive;
-use gigachad_transformer_models::{
+use hyperchad_actions::logic::if_responsive;
+use hyperchad_transformer_models::{
     AlignItems, JustifyContent, LayoutDirection, LayoutOverflow, Position, TextAlign,
 };
 use maud::{html, Markup};

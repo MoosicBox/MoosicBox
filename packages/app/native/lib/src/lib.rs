@@ -3,21 +3,21 @@
 
 use std::sync::Arc;
 
-use gigachad_renderer::{transformer::ResponsiveTrigger, Color, Handle, RenderRunner, Renderer};
-use gigachad_router::Router;
+use hyperchad_renderer::{transformer::ResponsiveTrigger, Color, Handle, RenderRunner, Renderer};
+use hyperchad_router::Router;
 use moosicbox_env_utils::default_env_usize;
 use thiserror::Error;
 use tokio::runtime::Runtime;
 
-pub use gigachad_renderer as renderer;
-pub use gigachad_router as router;
+pub use hyperchad_renderer as renderer;
+pub use hyperchad_router as router;
 
 #[cfg(any(feature = "egui", feature = "fltk"))]
-pub static CLIENT_INFO: std::sync::LazyLock<Arc<gigachad_router::ClientInfo>> =
+pub static CLIENT_INFO: std::sync::LazyLock<Arc<hyperchad_router::ClientInfo>> =
     std::sync::LazyLock::new(|| {
         let os_name = os_info::get().os_type().to_string();
-        Arc::new(gigachad_router::ClientInfo {
-            os: gigachad_router::ClientOs { name: os_name },
+        Arc::new(hyperchad_router::ClientInfo {
+            os: hyperchad_router::ClientOs { name: os_name },
         })
     });
 
@@ -32,7 +32,7 @@ pub enum NativeAppError {
 #[cfg(feature = "logic")]
 type ActionHandler = Box<
     dyn Fn(
-            (&str, Option<&gigachad_actions::logic::Value>),
+            (&str, Option<&hyperchad_actions::logic::Value>),
         ) -> Result<bool, Box<dyn std::error::Error>>
         + Send
         + Sync,
@@ -56,7 +56,7 @@ pub struct NativeAppBuilder {
     action_handlers: Vec<Arc<ActionHandler>>,
     resize_listeners: Vec<Arc<ResizeListener>>,
     #[cfg(feature = "assets")]
-    static_asset_routes: Vec<gigachad_renderer::assets::StaticAssetRoute>,
+    static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
 }
 
 impl Default for NativeAppBuilder {
@@ -68,17 +68,17 @@ impl Default for NativeAppBuilder {
 #[derive(Clone)]
 pub enum RendererType {
     #[cfg(feature = "egui")]
-    Egui(gigachad_renderer_egui::EguiRenderer),
+    Egui(hyperchad_renderer_egui::EguiRenderer),
     #[cfg(feature = "fltk")]
-    Fltk(gigachad_renderer_fltk::FltkRenderer),
+    Fltk(hyperchad_renderer_fltk::FltkRenderer),
     #[cfg(feature = "html")]
     #[cfg(feature = "actix")]
     Html(
-        gigachad_renderer_html::HtmlRenderer<
-            gigachad_renderer_html::actix::ActixApp<
-                gigachad_renderer_html::actix::PreparedRequest,
-                gigachad_renderer_html::actix::HtmlActixResponseProcessor<
-                    gigachad_renderer_html::DefaultHtmlTagRenderer,
+        hyperchad_renderer_html::HtmlRenderer<
+            hyperchad_renderer_html::actix::ActixApp<
+                hyperchad_renderer_html::actix::PreparedRequest,
+                hyperchad_renderer_html::actix::HtmlActixResponseProcessor<
+                    hyperchad_renderer_html::DefaultHtmlTagRenderer,
                 >,
             >,
         >,
@@ -86,49 +86,51 @@ pub enum RendererType {
     #[cfg(feature = "html")]
     #[cfg(feature = "lambda")]
     HtmlLambda(
-        gigachad_renderer_html::HtmlRenderer<
-            gigachad_renderer_html::lambda::LambdaApp<
-                gigachad_renderer_html::lambda::PreparedRequest,
-                gigachad_renderer_html::lambda::HtmlLambdaResponseProcessor<
-                    gigachad_renderer_html::DefaultHtmlTagRenderer,
+        hyperchad_renderer_html::HtmlRenderer<
+            hyperchad_renderer_html::lambda::LambdaApp<
+                hyperchad_renderer_html::lambda::PreparedRequest,
+                hyperchad_renderer_html::lambda::HtmlLambdaResponseProcessor<
+                    hyperchad_renderer_html::DefaultHtmlTagRenderer,
                 >,
             >,
         >,
     ),
     #[cfg(feature = "html")]
     HtmlStub(
-        gigachad_renderer_html::HtmlRenderer<
-            gigachad_renderer_html::stub::StubApp<gigachad_renderer_html::DefaultHtmlTagRenderer>,
+        hyperchad_renderer_html::HtmlRenderer<
+            hyperchad_renderer_html::stub::StubApp<hyperchad_renderer_html::DefaultHtmlTagRenderer>,
         >,
     ),
     #[cfg(feature = "datastar")]
     DatastarStub(
-        gigachad_renderer_html::HtmlRenderer<
-            gigachad_renderer_html::stub::StubApp<gigachad_renderer_datastar::DatastarTagRenderer>,
+        hyperchad_renderer_html::HtmlRenderer<
+            hyperchad_renderer_html::stub::StubApp<
+                hyperchad_renderer_datastar::DatastarTagRenderer,
+            >,
         >,
     ),
     #[cfg(feature = "htmx")]
     HtmxStub(
-        gigachad_renderer_html::HtmlRenderer<
-            gigachad_renderer_html::stub::StubApp<gigachad_renderer_htmx::HtmxTagRenderer>,
+        hyperchad_renderer_html::HtmlRenderer<
+            hyperchad_renderer_html::stub::StubApp<hyperchad_renderer_htmx::HtmxTagRenderer>,
         >,
     ),
     #[cfg(feature = "vanilla-js")]
     VanillaJsStub(
-        gigachad_renderer_html::HtmlRenderer<
-            gigachad_renderer_html::stub::StubApp<
-                gigachad_renderer_vanilla_js::VanillaJsTagRenderer,
+        hyperchad_renderer_html::HtmlRenderer<
+            hyperchad_renderer_html::stub::StubApp<
+                hyperchad_renderer_vanilla_js::VanillaJsTagRenderer,
             >,
         >,
     ),
     #[cfg(feature = "htmx")]
     #[cfg(feature = "actix")]
     Htmx(
-        gigachad_renderer_html::HtmlRenderer<
-            gigachad_renderer_html::actix::ActixApp<
-                gigachad_renderer_html::actix::PreparedRequest,
-                gigachad_renderer_html::actix::HtmlActixResponseProcessor<
-                    gigachad_renderer_htmx::HtmxTagRenderer,
+        hyperchad_renderer_html::HtmlRenderer<
+            hyperchad_renderer_html::actix::ActixApp<
+                hyperchad_renderer_html::actix::PreparedRequest,
+                hyperchad_renderer_html::actix::HtmlActixResponseProcessor<
+                    hyperchad_renderer_htmx::HtmxTagRenderer,
                 >,
             >,
         >,
@@ -136,11 +138,11 @@ pub enum RendererType {
     #[cfg(feature = "htmx")]
     #[cfg(feature = "lambda")]
     HtmxLambda(
-        gigachad_renderer_html::HtmlRenderer<
-            gigachad_renderer_html::lambda::LambdaApp<
-                gigachad_renderer_html::lambda::PreparedRequest,
-                gigachad_renderer_html::lambda::HtmlLambdaResponseProcessor<
-                    gigachad_renderer_htmx::HtmxTagRenderer,
+        hyperchad_renderer_html::HtmlRenderer<
+            hyperchad_renderer_html::lambda::LambdaApp<
+                hyperchad_renderer_html::lambda::PreparedRequest,
+                hyperchad_renderer_html::lambda::HtmlLambdaResponseProcessor<
+                    hyperchad_renderer_htmx::HtmxTagRenderer,
                 >,
             >,
         >,
@@ -148,11 +150,11 @@ pub enum RendererType {
     #[cfg(feature = "datastar")]
     #[cfg(feature = "actix")]
     Datastar(
-        gigachad_renderer_html::HtmlRenderer<
-            gigachad_renderer_html::actix::ActixApp<
-                gigachad_renderer_html::actix::PreparedRequest,
-                gigachad_renderer_html::actix::HtmlActixResponseProcessor<
-                    gigachad_renderer_datastar::DatastarTagRenderer,
+        hyperchad_renderer_html::HtmlRenderer<
+            hyperchad_renderer_html::actix::ActixApp<
+                hyperchad_renderer_html::actix::PreparedRequest,
+                hyperchad_renderer_html::actix::HtmlActixResponseProcessor<
+                    hyperchad_renderer_datastar::DatastarTagRenderer,
                 >,
             >,
         >,
@@ -160,11 +162,11 @@ pub enum RendererType {
     #[cfg(feature = "datastar")]
     #[cfg(feature = "lambda")]
     DatastarLambda(
-        gigachad_renderer_html::HtmlRenderer<
-            gigachad_renderer_html::lambda::LambdaApp<
-                gigachad_renderer_html::lambda::PreparedRequest,
-                gigachad_renderer_html::lambda::HtmlLambdaResponseProcessor<
-                    gigachad_renderer_datastar::DatastarTagRenderer,
+        hyperchad_renderer_html::HtmlRenderer<
+            hyperchad_renderer_html::lambda::LambdaApp<
+                hyperchad_renderer_html::lambda::PreparedRequest,
+                hyperchad_renderer_html::lambda::HtmlLambdaResponseProcessor<
+                    hyperchad_renderer_datastar::DatastarTagRenderer,
                 >,
             >,
         >,
@@ -172,11 +174,11 @@ pub enum RendererType {
     #[cfg(feature = "vanilla-js")]
     #[cfg(feature = "actix")]
     VanillaJs(
-        gigachad_renderer_html::HtmlRenderer<
-            gigachad_renderer_html::actix::ActixApp<
-                gigachad_renderer_html::actix::PreparedRequest,
-                gigachad_renderer_html::actix::HtmlActixResponseProcessor<
-                    gigachad_renderer_vanilla_js::VanillaJsTagRenderer,
+        hyperchad_renderer_html::HtmlRenderer<
+            hyperchad_renderer_html::actix::ActixApp<
+                hyperchad_renderer_html::actix::PreparedRequest,
+                hyperchad_renderer_html::actix::HtmlActixResponseProcessor<
+                    hyperchad_renderer_vanilla_js::VanillaJsTagRenderer,
                 >,
             >,
         >,
@@ -184,11 +186,11 @@ pub enum RendererType {
     #[cfg(feature = "vanilla-js")]
     #[cfg(feature = "lambda")]
     VanillaJsLambda(
-        gigachad_renderer_html::HtmlRenderer<
-            gigachad_renderer_html::lambda::LambdaApp<
-                gigachad_renderer_html::lambda::PreparedRequest,
-                gigachad_renderer_html::lambda::HtmlLambdaResponseProcessor<
-                    gigachad_renderer_vanilla_js::VanillaJsTagRenderer,
+        hyperchad_renderer_html::HtmlRenderer<
+            hyperchad_renderer_html::lambda::LambdaApp<
+                hyperchad_renderer_html::lambda::PreparedRequest,
+                hyperchad_renderer_html::lambda::HtmlLambdaResponseProcessor<
+                    hyperchad_renderer_vanilla_js::VanillaJsTagRenderer,
                 >,
             >,
         >,
@@ -292,7 +294,7 @@ impl RendererType {
         handle: Handle,
     ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
         renderer!(self, value, {
-            use gigachad_renderer::ToRenderRunner as _;
+            use hyperchad_renderer::ToRenderRunner as _;
             value.to_runner(handle)
         })
     }
@@ -304,7 +306,7 @@ impl RendererType {
 }
 
 #[cfg(feature = "html")]
-impl From<RendererType> for Option<Box<dyn gigachad_renderer::HtmlTagRenderer + Send + Sync>> {
+impl From<RendererType> for Option<Box<dyn hyperchad_renderer::HtmlTagRenderer + Send + Sync>> {
     fn from(value: RendererType) -> Self {
         Some(match value {
             #[cfg(feature = "egui")]
@@ -454,7 +456,7 @@ impl NativeAppBuilder {
     #[must_use]
     pub fn with_action_handler<E: std::error::Error + 'static>(
         mut self,
-        func: impl Fn(&str, Option<&gigachad_actions::logic::Value>) -> Result<bool, E>
+        func: impl Fn(&str, Option<&hyperchad_actions::logic::Value>) -> Result<bool, E>
             + Send
             + Sync
             + 'static,
@@ -493,9 +495,9 @@ impl NativeAppBuilder {
     #[must_use]
     fn listen_actions(
         action_handlers: Vec<Arc<ActionHandler>>,
-    ) -> flume::Sender<(String, Option<gigachad_actions::logic::Value>)> {
+    ) -> flume::Sender<(String, Option<hyperchad_actions::logic::Value>)> {
         let (action_tx, action_rx) =
-            flume::unbounded::<(String, Option<gigachad_actions::logic::Value>)>();
+            flume::unbounded::<(String, Option<hyperchad_actions::logic::Value>)>();
 
         moosicbox_task::spawn("action listener", {
             async move {
@@ -548,7 +550,7 @@ impl NativeAppBuilder {
     #[must_use]
     pub fn with_static_asset_route(
         mut self,
-        path: impl Into<gigachad_renderer::assets::StaticAssetRoute>,
+        path: impl Into<hyperchad_renderer::assets::StaticAssetRoute>,
     ) -> Self {
         self.static_asset_routes.push(path.into());
         self
@@ -560,7 +562,7 @@ impl NativeAppBuilder {
     /// * If the asset path type is an invalid path type (not a file or directory)
     #[cfg(feature = "assets")]
     pub fn with_static_asset_route_result<
-        Path: TryInto<gigachad_renderer::assets::StaticAssetRoute>,
+        Path: TryInto<hyperchad_renderer::assets::StaticAssetRoute>,
     >(
         mut self,
         path: Path,
@@ -617,7 +619,7 @@ impl NativeAppBuilder {
                 let router = self.router.unwrap();
                 let action_tx = Self::listen_actions(self.action_handlers);
                 let resize_tx = Self::listen_resize(self.resize_listeners);
-                let renderer = gigachad_renderer_egui::EguiRenderer::new(
+                let renderer = hyperchad_renderer_egui::EguiRenderer::new(
                     router.clone(),
                     #[cfg(feature = "logic")]
                     action_tx,
@@ -632,7 +634,7 @@ impl NativeAppBuilder {
                             if let Err(e) = router
                                 .navigate_send(
                                     &path,
-                                    gigachad_router::RequestInfo {
+                                    hyperchad_router::RequestInfo {
                                         client: CLIENT_INFO.clone(),
                                     },
                                 )
@@ -652,7 +654,7 @@ impl NativeAppBuilder {
             {
                 let router = self.router.unwrap();
                 let action_tx = Self::listen_actions(self.action_handlers);
-                let renderer = gigachad_renderer_fltk::FltkRenderer::new(action_tx);
+                let renderer = hyperchad_renderer_fltk::FltkRenderer::new(action_tx);
                 moosicbox_task::spawn("fltk navigation listener", {
                     let renderer = renderer.clone();
                     async move {
@@ -660,7 +662,7 @@ impl NativeAppBuilder {
                             if let Err(e) = router
                                 .navigate_send(
                                     &path,
-                                    gigachad_router::RequestInfo {
+                                    hyperchad_router::RequestInfo {
                                         client: CLIENT_INFO.clone(),
                                     },
                                 )
@@ -679,8 +681,8 @@ impl NativeAppBuilder {
             #[cfg(all(feature = "actix", feature = "datastar"))]
             {
                 let router = self.router.unwrap();
-                let renderer = gigachad_renderer_html::router_to_actix(
-                    gigachad_renderer_datastar::DatastarTagRenderer::default(),
+                let renderer = hyperchad_renderer_html::router_to_actix(
+                    hyperchad_renderer_datastar::DatastarTagRenderer::default(),
                     router,
                 );
 
@@ -695,8 +697,8 @@ impl NativeAppBuilder {
             #[cfg(all(feature = "lambda", feature = "datastar"))]
             {
                 let router = self.router.unwrap();
-                let renderer = gigachad_renderer_html::router_to_lambda(
-                    gigachad_renderer_datastar::DatastarTagRenderer::default(),
+                let renderer = hyperchad_renderer_html::router_to_lambda(
+                    hyperchad_renderer_datastar::DatastarTagRenderer::default(),
                     router,
                 );
 
@@ -711,8 +713,8 @@ impl NativeAppBuilder {
             #[cfg(all(feature = "actix", feature = "htmx"))]
             {
                 let router = self.router.unwrap();
-                let renderer = gigachad_renderer_html::router_to_actix(
-                    gigachad_renderer_htmx::HtmxTagRenderer::default(),
+                let renderer = hyperchad_renderer_html::router_to_actix(
+                    hyperchad_renderer_htmx::HtmxTagRenderer::default(),
                     router,
                 );
 
@@ -727,8 +729,8 @@ impl NativeAppBuilder {
             #[cfg(all(feature = "lambda", feature = "htmx"))]
             {
                 let router = self.router.unwrap();
-                let renderer = gigachad_renderer_html::router_to_lambda(
-                    gigachad_renderer_htmx::HtmxTagRenderer::default(),
+                let renderer = hyperchad_renderer_html::router_to_lambda(
+                    hyperchad_renderer_htmx::HtmxTagRenderer::default(),
                     router,
                 );
 
@@ -743,8 +745,8 @@ impl NativeAppBuilder {
             #[cfg(all(feature = "actix", feature = "vanilla-js"))]
             {
                 let router = self.router.unwrap();
-                let renderer = gigachad_renderer_html::router_to_actix(
-                    gigachad_renderer_vanilla_js::VanillaJsTagRenderer::default(),
+                let renderer = hyperchad_renderer_html::router_to_actix(
+                    hyperchad_renderer_vanilla_js::VanillaJsTagRenderer::default(),
                     router,
                 );
 
@@ -759,8 +761,8 @@ impl NativeAppBuilder {
             #[cfg(all(feature = "lambda", feature = "vanilla-js"))]
             {
                 let router = self.router.unwrap();
-                let renderer = gigachad_renderer_html::router_to_lambda(
-                    gigachad_renderer_vanilla_js::VanillaJsTagRenderer::default(),
+                let renderer = hyperchad_renderer_html::router_to_lambda(
+                    hyperchad_renderer_vanilla_js::VanillaJsTagRenderer::default(),
                     router,
                 );
 
@@ -775,8 +777,8 @@ impl NativeAppBuilder {
             #[cfg(all(feature = "actix", feature = "html"))]
             {
                 let router = self.router.unwrap();
-                let renderer = gigachad_renderer_html::router_to_actix(
-                    gigachad_renderer_html::DefaultHtmlTagRenderer::default(),
+                let renderer = hyperchad_renderer_html::router_to_actix(
+                    hyperchad_renderer_html::DefaultHtmlTagRenderer::default(),
                     router,
                 );
 
@@ -791,8 +793,8 @@ impl NativeAppBuilder {
             #[cfg(all(feature = "lambda", feature = "html"))]
             {
                 let router = self.router.unwrap();
-                let renderer = gigachad_renderer_html::router_to_lambda(
-                    gigachad_renderer_html::DefaultHtmlTagRenderer::default(),
+                let renderer = hyperchad_renderer_html::router_to_lambda(
+                    hyperchad_renderer_html::DefaultHtmlTagRenderer::default(),
                     router,
                 );
 
@@ -809,9 +811,9 @@ impl NativeAppBuilder {
                 if cfg!(feature = "datastar") {
                     #[cfg(feature = "datastar")]
                     {
-                        RendererType::DatastarStub(gigachad_renderer_html::HtmlRenderer::new(
-                            gigachad_renderer_html::stub::StubApp::new(
-                                gigachad_renderer_datastar::DatastarTagRenderer::default(),
+                        RendererType::DatastarStub(hyperchad_renderer_html::HtmlRenderer::new(
+                            hyperchad_renderer_html::stub::StubApp::new(
+                                hyperchad_renderer_datastar::DatastarTagRenderer::default(),
                             ),
                         ))
                     }
@@ -820,9 +822,9 @@ impl NativeAppBuilder {
                 } else if cfg!(feature = "htmx") {
                     #[cfg(feature = "htmx")]
                     {
-                        RendererType::HtmxStub(gigachad_renderer_html::HtmlRenderer::new(
-                            gigachad_renderer_html::stub::StubApp::new(
-                                gigachad_renderer_htmx::HtmxTagRenderer::default(),
+                        RendererType::HtmxStub(hyperchad_renderer_html::HtmlRenderer::new(
+                            hyperchad_renderer_html::stub::StubApp::new(
+                                hyperchad_renderer_htmx::HtmxTagRenderer::default(),
                             ),
                         ))
                     }
@@ -831,18 +833,18 @@ impl NativeAppBuilder {
                 } else if cfg!(feature = "vanilla-js") {
                     #[cfg(feature = "vanilla-js")]
                     {
-                        RendererType::VanillaJsStub(gigachad_renderer_html::HtmlRenderer::new(
-                            gigachad_renderer_html::stub::StubApp::new(
-                                gigachad_renderer_vanilla_js::VanillaJsTagRenderer::default(),
+                        RendererType::VanillaJsStub(hyperchad_renderer_html::HtmlRenderer::new(
+                            hyperchad_renderer_html::stub::StubApp::new(
+                                hyperchad_renderer_vanilla_js::VanillaJsTagRenderer::default(),
                             ),
                         ))
                     }
                     #[cfg(not(feature = "vanilla-js"))]
                     unreachable!()
                 } else {
-                    RendererType::HtmlStub(gigachad_renderer_html::HtmlRenderer::new(
-                        gigachad_renderer_html::stub::StubApp::new(
-                            gigachad_renderer_html::DefaultHtmlTagRenderer::default(),
+                    RendererType::HtmlStub(hyperchad_renderer_html::HtmlRenderer::new(
+                        hyperchad_renderer_html::stub::StubApp::new(
+                            hyperchad_renderer_html::DefaultHtmlTagRenderer::default(),
                         ),
                     ))
                 }

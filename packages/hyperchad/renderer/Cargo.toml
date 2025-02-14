@@ -1,0 +1,54 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["gui"]
+description = "HyperChad renderer package"
+edition     = "2021"
+keywords    = ["desktop", "gui", "render", "renderer"]
+license     = "MPL-2.0"
+name        = "hyperchad_renderer"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+hyperchad_color = { version = "0.1.0", path = "../color", default-features = false }
+hyperchad_transformer = { version = "0.1.0", path = "../transformer", default-features = false, features = [
+    "html",
+] }
+
+async-trait = { workspace = true }
+bytes       = { workspace = true, optional = true }
+log         = { workspace = true }
+maud        = { workspace = true, optional = true }
+tokio       = { workspace = true, features = ["rt"] }
+
+[features]
+default = [
+    "assets",
+    "canvas",
+    "html",
+    "maud",
+    "viewport",
+    "viewport-immediate",
+    "viewport-retained",
+]
+
+fail-on-warnings = []
+
+maud = ["dep:maud", "hyperchad_transformer/maud"]
+
+canvas = ["hyperchad_transformer/canvas"]
+
+profiling-puffin  = ["hyperchad_transformer/profiling-puffin"]
+profiling-tracing = ["hyperchad_transformer/profiling-tracing"]
+profiling-tracy   = ["hyperchad_transformer/profiling-tracy"]
+
+viewport           = []
+viewport-immediate = ["viewport"]
+viewport-retained  = ["viewport"]
+
+html = []
+
+assets = ["dep:bytes"]
+
+logic = ["hyperchad_transformer/logic"]

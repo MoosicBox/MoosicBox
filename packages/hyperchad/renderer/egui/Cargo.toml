@@ -1,0 +1,77 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["gui"]
+description = "HyperChad egui renderer package"
+edition     = "2021"
+keywords    = ["desktop", "egui", "gui", "render", "renderer"]
+license     = "MPL-2.0"
+name        = "hyperchad_renderer_egui"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[package.metadata.cargo-machete]
+ignored = ["hyperchad_color", "image", "tracy-client"]
+
+[dependencies]
+hyperchad_actions = { version = "0.1.0", path = "../../actions", default-features = false, features = [
+    "id",
+    "logic",
+] }
+hyperchad_color = { version = "0.1.0", path = "../../color", default-features = false, features = [
+    "egui",
+] }
+hyperchad_renderer = { version = "0.1.0", path = "../", default-features = false, features = [
+    "canvas",
+    "viewport-immediate",
+] }
+hyperchad_router = { version = "0.1.0", path = "../../router", default-features = false }
+hyperchad_transformer = { version = "0.1.0", path = "../../transformer", default-features = false, features = [
+    "calc",
+    "html",
+    "id",
+    "logic",
+] }
+moosicbox_app_native_image = { version = "0.1.0", path = "../../../app/native/image", default-features = false }
+moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
+moosicbox_logging = { version = "0.1.0", path = "../../../logging", default-features = false, features = [
+    "macros",
+] }
+moosicbox_task = { version = "0.1.0", path = "../../../task", default-features = false }
+
+async-trait = { workspace = true }
+eframe = { workspace = true, default-features = false, features = [
+    "__screenshot",
+    "default",
+] }
+egui_extras = { workspace = true, features = ["image", "svg"] }
+flume = { workspace = true }
+image = { workspace = true, features = ["webp"] }
+itertools = { workspace = true }
+log = { workspace = true }
+profiling = { workspace = true, optional = true }
+puffin = { workspace = true, optional = true }
+puffin_http = { workspace = true, optional = true }
+reqwest = { workspace = true }
+tracing-subscriber = { workspace = true, optional = true }
+tracy-client = { workspace = true, default-features = false, optional = true, features = [
+    "enable",
+] }
+
+[features]
+default = ["debug", "wgpu"]
+
+fail-on-warnings = []
+
+glow = ["eframe/glow"]
+wgpu = ["eframe/wgpu"]
+
+wayland = ["eframe/wayland"]
+x11     = ["eframe/x11"]
+
+profiling         = ["dep:profiling"]
+profiling-puffin  = ["dep:puffin", "dep:puffin_http", "profiling"]
+profiling-tracing = ["dep:tracing-subscriber", "profiling"]
+profiling-tracy   = ["dep:tracy-client", "profiling"]
+
+debug = []

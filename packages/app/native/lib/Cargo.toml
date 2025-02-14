@@ -11,19 +11,19 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-gigachad_actions = { version = "0.1.0", path = "../../../gigachad/actions", default-features = false }
-gigachad_renderer = { version = "0.1.0", path = "../../../gigachad/renderer", default-features = false }
-gigachad_renderer_datastar = { version = "0.1.0", path = "../../../gigachad/renderer/datastar", optional = true, default-features = false }
-gigachad_renderer_egui = { version = "0.1.0", path = "../../../gigachad/renderer/egui", optional = true, default-features = false }
-gigachad_renderer_fltk = { version = "0.1.0", path = "../../../gigachad/renderer/fltk", optional = true, default-features = false }
-gigachad_renderer_html = { version = "0.1.0", path = "../../../gigachad/renderer/html", optional = true, default-features = false, features = [
+hyperchad_actions = { version = "0.1.0", path = "../../../hyperchad/actions", default-features = false }
+hyperchad_renderer = { version = "0.1.0", path = "../../../hyperchad/renderer", default-features = false }
+hyperchad_renderer_datastar = { version = "0.1.0", path = "../../../hyperchad/renderer/datastar", optional = true, default-features = false }
+hyperchad_renderer_egui = { version = "0.1.0", path = "../../../hyperchad/renderer/egui", optional = true, default-features = false }
+hyperchad_renderer_fltk = { version = "0.1.0", path = "../../../hyperchad/renderer/fltk", optional = true, default-features = false }
+hyperchad_renderer_html = { version = "0.1.0", path = "../../../hyperchad/renderer/html", optional = true, default-features = false, features = [
     "actix",
 ] }
-gigachad_renderer_htmx = { version = "0.1.0", path = "../../../gigachad/renderer/htmx", optional = true, default-features = false }
-gigachad_renderer_vanilla_js = { version = "0.1.0", path = "../../../gigachad/renderer/vanilla_js", optional = true, default-features = false, features = [
+hyperchad_renderer_htmx = { version = "0.1.0", path = "../../../hyperchad/renderer/htmx", optional = true, default-features = false }
+hyperchad_renderer_vanilla_js = { version = "0.1.0", path = "../../../hyperchad/renderer/vanilla_js", optional = true, default-features = false, features = [
     "swc",
 ] }
-gigachad_router = { version = "0.1.0", path = "../../../gigachad/router", default-features = false }
+hyperchad_router = { version = "0.1.0", path = "../../../hyperchad/router", default-features = false }
 moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../../../env_utils", default-features = false }
 moosicbox_task = { version = "0.1.0", path = "../../../task", default-features = false }
@@ -52,41 +52,41 @@ default = [
 
 fail-on-warnings = []
 
-maud = ["gigachad_renderer/maud"]
+maud = ["hyperchad_renderer/maud"]
 
-datastar   = ["dep:gigachad_renderer_datastar", "html"]
-egui       = ["dep:gigachad_renderer_egui", "logic"]
-egui-glow  = ["egui", "gigachad_renderer_egui/glow"]
-egui-wgpu  = ["egui", "gigachad_renderer_egui/wgpu"]
-fltk       = ["dep:gigachad_renderer_fltk", "logic"]
-html       = ["dep:gigachad_renderer_html"]
-htmx       = ["dep:gigachad_renderer_htmx", "html"]
-vanilla-js = ["dep:gigachad_renderer_vanilla_js", "html"]
+datastar   = ["dep:hyperchad_renderer_datastar", "html"]
+egui       = ["dep:hyperchad_renderer_egui", "logic"]
+egui-glow  = ["egui", "hyperchad_renderer_egui/glow"]
+egui-wgpu  = ["egui", "hyperchad_renderer_egui/wgpu"]
+fltk       = ["dep:hyperchad_renderer_fltk", "logic"]
+html       = ["dep:hyperchad_renderer_html"]
+htmx       = ["dep:hyperchad_renderer_htmx", "html"]
+vanilla-js = ["dep:hyperchad_renderer_vanilla_js", "html"]
 
-logic = ["gigachad_actions/logic", "gigachad_renderer/logic"]
+logic = ["hyperchad_actions/logic", "hyperchad_renderer/logic"]
 
-actix  = ["gigachad_renderer_html?/actix"]
-lambda = ["gigachad_renderer_html?/lambda"]
+actix  = ["hyperchad_renderer_html?/actix"]
+lambda = ["hyperchad_renderer_html?/lambda"]
 
-wayland = ["gigachad_renderer_egui?/wayland"]
-x11     = ["gigachad_renderer_egui?/x11"]
+wayland = ["hyperchad_renderer_egui?/wayland"]
+x11     = ["hyperchad_renderer_egui?/x11"]
 
-debug = ["gigachad_renderer_egui?/debug", "gigachad_renderer_fltk?/debug"]
-format = ["gigachad_renderer_fltk?/format", "gigachad_router/format"]
+debug = ["hyperchad_renderer_egui?/debug", "hyperchad_renderer_fltk?/debug"]
+format = ["hyperchad_renderer_fltk?/format", "hyperchad_router/format"]
 profiling-puffin = [
-    "gigachad_renderer/profiling-puffin",
-    "gigachad_renderer_egui?/profiling-puffin",
+    "hyperchad_renderer/profiling-puffin",
+    "hyperchad_renderer_egui?/profiling-puffin",
 ]
 profiling-tracing = [
-    "gigachad_renderer/profiling-tracing",
-    "gigachad_renderer_egui?/profiling-tracing",
+    "hyperchad_renderer/profiling-tracing",
+    "hyperchad_renderer_egui?/profiling-tracing",
 ]
 profiling-tracy = [
-    "gigachad_renderer/profiling-tracy",
-    "gigachad_renderer_egui?/profiling-tracy",
+    "hyperchad_renderer/profiling-tracy",
+    "hyperchad_renderer_egui?/profiling-tracy",
 ]
-unsafe = ["gigachad_renderer_fltk?/unsafe"]
+unsafe = ["hyperchad_renderer_fltk?/unsafe"]
 
-assets = ["gigachad_renderer/assets", "gigachad_renderer_html?/assets"]
+assets = ["hyperchad_renderer/assets", "hyperchad_renderer_html?/assets"]
 
-static-routes = ["gigachad_router/static-routes"]
+static-routes = ["hyperchad_router/static-routes"]

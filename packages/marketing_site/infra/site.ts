@@ -1,4 +1,4 @@
-import { createGigaChadSite } from 'gigachad/GigaChadSite';
+import { createHyperChadSite } from 'hyperchad/HyperChadSite';
 
 function getCustomDomain() {
     return {
@@ -15,7 +15,7 @@ const domainName = `${subdomain}${domain}`;
 
 const customDomain = getCustomDomain();
 
-const { staticSite } = createGigaChadSite(
+const { staticSite } = createHyperChadSite(
     'MoosicBoxMarketingSite',
     'vanillaJs',
     {

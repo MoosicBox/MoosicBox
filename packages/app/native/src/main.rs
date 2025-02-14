@@ -14,7 +14,7 @@ use std::{
 };
 
 use flume::SendError;
-use gigachad_actions::logic::Value;
+use hyperchad_actions::logic::Value;
 use moosicbox_app_native_lib::{
     renderer::{Color, PartialView, Renderer, View},
     router::{Container, RouteRequest, Router},
@@ -801,7 +801,7 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
                         .expect("Missing volume value")
                         .as_f32(
                             None::<
-                                &Box<dyn Fn(&gigachad_actions::logic::CalcValue) -> Option<Value>>,
+                                &Box<dyn Fn(&hyperchad_actions::logic::CalcValue) -> Option<Value>>,
                             >,
                         )
                         .expect("Invalid volume value");
@@ -842,7 +842,7 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
                         .expect("Missing seek value")
                         .as_f32(
                             None::<
-                                &Box<dyn Fn(&gigachad_actions::logic::CalcValue) -> Option<Value>>,
+                                &Box<dyn Fn(&hyperchad_actions::logic::CalcValue) -> Option<Value>>,
                             >,
                         )
                         .expect("Invalid seek value");

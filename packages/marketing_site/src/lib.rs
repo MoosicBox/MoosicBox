@@ -41,17 +41,17 @@ pub static ROUTER: LazyLock<Router> = LazyLock::new(|| {
 });
 
 #[cfg(feature = "assets")]
-pub static ASSETS: LazyLock<Vec<gigachad_renderer::assets::StaticAssetRoute>> =
+pub static ASSETS: LazyLock<Vec<hyperchad_renderer::assets::StaticAssetRoute>> =
     LazyLock::new(|| {
         vec![
             #[cfg(feature = "vanilla-js")]
             moosicbox_app_native_lib::renderer::assets::StaticAssetRoute {
                 route: format!(
                     "js/{}",
-                    gigachad_renderer_vanilla_js::SCRIPT_NAME_HASHED.as_str()
+                    hyperchad_renderer_vanilla_js::SCRIPT_NAME_HASHED.as_str()
                 ),
-                target: gigachad_renderer::assets::AssetPathTarget::FileContents(
-                    gigachad_renderer_vanilla_js::SCRIPT.as_bytes().into(),
+                target: hyperchad_renderer::assets::AssetPathTarget::FileContents(
+                    hyperchad_renderer_vanilla_js::SCRIPT.as_bytes().into(),
                 ),
             },
             moosicbox_app_native_lib::renderer::assets::StaticAssetRoute {
@@ -105,14 +105,14 @@ pub async fn start(builder: NativeAppBuilder) -> Result<NativeApp, NativeAppErro
     {
         app.renderer.add_responsive_trigger(
             "mobile".into(),
-            gigachad_renderer::transformer::ResponsiveTrigger::MaxWidth(
-                gigachad_renderer::transformer::Number::Integer(600),
+            hyperchad_renderer::transformer::ResponsiveTrigger::MaxWidth(
+                hyperchad_renderer::transformer::Number::Integer(600),
             ),
         );
         app.renderer.add_responsive_trigger(
             "mobile-large".into(),
-            gigachad_renderer::transformer::ResponsiveTrigger::MaxWidth(
-                gigachad_renderer::transformer::Number::Integer(1100),
+            hyperchad_renderer::transformer::ResponsiveTrigger::MaxWidth(
+                hyperchad_renderer::transformer::Number::Integer(1100),
             ),
         );
     }
@@ -140,8 +140,8 @@ pub async fn gen(
 
     #[cfg(all(feature = "html", feature = "static-routes"))]
     {
-        use gigachad_renderer::HtmlTagRenderer;
-        use gigachad_renderer_html::html::container_element_to_html_response;
+        use hyperchad_renderer::HtmlTagRenderer;
+        use hyperchad_renderer_html::html::container_element_to_html_response;
         use moosicbox_app_native_lib::router::{ClientInfo, ClientOs, RequestInfo, RouteRequest};
         use tokio::io::AsyncWriteExt as _;
 

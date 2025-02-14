@@ -36,7 +36,7 @@ no-build      = false
 product-name  = "MoosicBox"
 
 [dependencies]
-gigachad_actions = { version = "0.1.0", path = "../../gigachad/actions", default-features = false }
+hyperchad_actions = { version = "0.1.0", path = "../../hyperchad/actions", default-features = false }
 moosicbox_app_native_lib = { version = "0.1.0", path = "lib", default-features = false, features = [
     "logic",
     "maud",

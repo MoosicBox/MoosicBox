@@ -1,1 +1,0 @@
-# MoosicBox GigaChad Color crate

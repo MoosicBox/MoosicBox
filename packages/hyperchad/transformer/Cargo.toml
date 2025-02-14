@@ -1,0 +1,102 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools", "gui", "web-programming"]
+description = "HyperChad Transformer package"
+edition     = "2021"
+keywords    = ["dom", "hyperchad", "gui", "transformer", "web"]
+license     = "MPL-2.0"
+name        = "hyperchad_transformer"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+hyperchad_actions = { path = "../actions", default-features = false, features = [
+    "serde",
+] }
+hyperchad_color = { path = "../color", default-features = false, features = [
+    "serde",
+] }
+hyperchad_transformer_models = { path = "models", default-features = false }
+moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
+moosicbox_logging = { version = "0.1.0", path = "../../logging", default-features = false, features = [
+    "macros",
+] }
+
+bumpalo     = { workspace = true, features = ["collections"], optional = true }
+html-escape = { workspace = true }
+itertools   = { workspace = true, optional = true }
+log         = { workspace = true }
+maud        = { workspace = true, optional = true }
+profiling   = { workspace = true, optional = true }
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+strum       = { workspace = true, features = ["derive"] }
+syntect     = { workspace = true, optional = true }
+thiserror   = { workspace = true }
+tl          = { workspace = true, optional = true }
+xml         = { workspace = true, optional = true }
+
+[dev-dependencies]
+hyperchad_actions = { path = "../actions", default-features = false, features = [
+    "gen",
+    "serde",
+] }
+hyperchad_color = { path = "../color", default-features = false, features = [
+    "gen",
+] }
+hyperchad_transformer_models = { path = "models", default-features = false, features = [
+    "gen",
+] }
+maud = { workspace = true }
+moosicbox_gen = { path = "../../gen", default-features = false, features = [
+    "css",
+    "serde",
+    "xml",
+] }
+pretty_assertions = { workspace = true }
+quickcheck = { workspace = true }
+quickcheck_macros = { workspace = true }
+test-log = { workspace = true }
+tl = { workspace = true }
+
+[features]
+default = [
+    "calc",
+    "canvas",
+    "format",
+    "html",
+    "id",
+    "logic",
+    "maud",
+    "syntax-highlighting",
+]
+
+fail-on-warnings = []
+
+canvas = []
+
+profiling = ["dep:profiling"]
+profiling-puffin = [
+    "profiling",
+    "profiling/profile-with-puffin",
+    "profiling/puffin",
+]
+profiling-tracing = [
+    "profiling",
+    "profiling/profile-with-tracing",
+    "profiling/tracing",
+]
+profiling-tracy = ["profiling", "profiling/profile-with-tracy"]
+
+calc  = ["dep:bumpalo", "dep:itertools", "hyperchad_transformer_models/calc"]
+logic = ["hyperchad_actions/logic"]
+maud  = ["dep:maud", "html"]
+
+html = ["dep:tl", "hyperchad_actions/serde"]
+simd = ["tl?/simd"]
+
+format              = ["dep:xml"]
+syntax-highlighting = ["dep:syntect"]
+
+id = []

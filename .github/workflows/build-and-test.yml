@@ -16,9 +16,9 @@ on:
             - '!packages/marketing_site/*.js'
             - '!packages/marketing_site/*.md'
             - '!packages/marketing_site/.prettierignore'
-            - '!packages/marketing_site/gigachad/**'
+            - '!packages/marketing_site/hyperchad/**'
             - '!packages/marketing_site/infra/**'
-            - '!packages/gigachad/renderer/vanilla_js/web/**'
+            - '!packages/hyperchad/renderer/vanilla_js/web/**'
             - '!**/*.nix'
     pull_request:
         branches: ['master']
