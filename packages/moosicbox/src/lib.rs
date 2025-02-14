@@ -20,7 +20,6 @@ pub use moosicbox_audio_zone_models as audio_zone_models;
 pub use moosicbox_auth as auth;
 pub use moosicbox_channel_utils as channel_utils;
 pub use moosicbox_config as config;
-pub use moosicbox_core as core;
 pub use moosicbox_database as database;
 pub use moosicbox_database_connection as database_connection;
 pub use moosicbox_downloader as downloader;

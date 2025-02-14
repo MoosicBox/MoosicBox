@@ -1,1 +1,0 @@
-# MoosicBox core crate

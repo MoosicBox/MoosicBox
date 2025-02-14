@@ -6287,7 +6287,6 @@ dependencies = [
  "moosicbox_auth",
  "moosicbox_channel_utils",
  "moosicbox_config",
- "moosicbox_core",
  "moosicbox_database",
  "moosicbox_database_connection",
  "moosicbox_downloader",
@@ -6757,19 +6756,6 @@ dependencies = [
  "serde",
  "thiserror 2.0.11",
  "utoipa",
-]
-
-[[package]]
-name = "moosicbox_core"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "log",
- "moosicbox_database",
- "moosicbox_json_utils",
- "serde",
- "strum 0.27.0",
- "thiserror 2.0.11",
 ]
 
 [[package]]
@@ -7427,7 +7413,6 @@ dependencies = [
  "moosicbox_audio_zone",
  "moosicbox_auth",
  "moosicbox_config",
- "moosicbox_core",
  "moosicbox_database",
  "moosicbox_database_connection",
  "moosicbox_downloader",

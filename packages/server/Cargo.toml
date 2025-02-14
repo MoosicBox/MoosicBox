@@ -34,7 +34,6 @@ moosicbox_config = { version = "0.1.0", path = "../config", default-features = f
     "api",
     "db",
 ] }
-moosicbox_core = { version = "0.1.0", path = "../core", default-features = false }
 moosicbox_database = { version = "0.1.0", path = "../database", default-features = false, features = [
     "api",
 ] }
@@ -203,7 +202,6 @@ static-token-auth = ["dep:qstring"]
 all-formats = ["aac", "flac", "mp3", "opus"]
 
 aac = [
-    "moosicbox_core/aac",
     "moosicbox_downloader?/aac",
     "moosicbox_files/aac",
     "moosicbox_library?/aac",
@@ -216,7 +214,6 @@ aac = [
     "moosicbox_tunnel_sender?/aac",
 ]
 flac = [
-    "moosicbox_core/flac",
     "moosicbox_downloader?/flac",
     "moosicbox_files/flac",
     "moosicbox_library?/flac",
@@ -229,7 +226,6 @@ flac = [
     "moosicbox_tunnel_sender?/flac",
 ]
 mp3 = [
-    "moosicbox_core/mp3",
     "moosicbox_downloader?/mp3",
     "moosicbox_files/mp3",
     "moosicbox_library?/mp3",
@@ -242,7 +238,6 @@ mp3 = [
     "moosicbox_tunnel_sender?/mp3",
 ]
 opus = [
-    "moosicbox_core/opus",
     "moosicbox_downloader?/opus",
     "moosicbox_files/opus",
     "moosicbox_library?/opus",
@@ -296,7 +291,6 @@ library = ["moosicbox_library/api"]
 player = ["dep:moosicbox_library", "dep:moosicbox_player"]
 qobuz = [
     "moosicbox_admin_htmx?/qobuz",
-    "moosicbox_core/qobuz",
     "moosicbox_downloader?/qobuz",
     "moosicbox_files/qobuz",
     "moosicbox_library?/qobuz",
@@ -312,7 +306,6 @@ scan = ["dep:throttle", "moosicbox_scan/api"]
 search = ["moosicbox_search/api"]
 tidal = [
     "moosicbox_admin_htmx?/tidal",
-    "moosicbox_core/tidal",
     "moosicbox_downloader?/tidal",
     "moosicbox_files/tidal",
     "moosicbox_library?/tidal",
@@ -326,7 +319,6 @@ tidal = [
 ]
 upnp = ["dep:moosicbox_upnp", "player"]
 yt = [
-    "moosicbox_core/yt",
     "moosicbox_downloader?/yt",
     "moosicbox_files/yt",
     "moosicbox_library?/yt",

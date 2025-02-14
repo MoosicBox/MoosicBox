@@ -11,12 +11,12 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-hyperchad_actions              = { version = "0.1.0", path = "../hyperchad/actions", default-features = false }
-hyperchad_color                = { version = "0.1.0", path = "../hyperchad/color", default-features = false }
-hyperchad_renderer             = { version = "0.1.0", path = "../hyperchad/renderer", default-features = false }
-hyperchad_renderer_egui        = { version = "0.1.0", path = "../hyperchad/renderer/egui", default-features = false }
-hyperchad_renderer_fltk        = { version = "0.1.0", path = "../hyperchad/renderer/fltk", default-features = false }
-hyperchad_transformer          = { version = "0.1.0", path = "../hyperchad/transformer", default-features = false }
+hyperchad_actions             = { version = "0.1.0", path = "../hyperchad/actions", default-features = false }
+hyperchad_color               = { version = "0.1.0", path = "../hyperchad/color", default-features = false }
+hyperchad_renderer            = { version = "0.1.0", path = "../hyperchad/renderer", default-features = false }
+hyperchad_renderer_egui       = { version = "0.1.0", path = "../hyperchad/renderer/egui", default-features = false }
+hyperchad_renderer_fltk       = { version = "0.1.0", path = "../hyperchad/renderer/fltk", default-features = false }
+hyperchad_transformer         = { version = "0.1.0", path = "../hyperchad/transformer", default-features = false }
 moosicbox_admin_htmx          = { version = "0.1.0", path = "../admin_htmx", default-features = false }
 moosicbox_app_native_lib      = { version = "0.1.0", path = "../app/native/lib", default-features = false }
 moosicbox_app_native_ui       = { version = "0.1.0", path = "../app/native/ui", default-features = false }
@@ -30,7 +30,6 @@ moosicbox_audio_zone_models   = { version = "0.1.0", path = "../audio_zone/model
 moosicbox_auth                = { version = "0.1.0", path = "../auth", default-features = false }
 moosicbox_channel_utils       = { version = "0.1.0", path = "../channel_utils", default-features = false }
 moosicbox_config              = { version = "0.1.0", path = "../config", default-features = false }
-moosicbox_core                = { version = "0.1.0", path = "../core", default-features = false }
 moosicbox_database            = { version = "0.1.0", path = "../database", default-features = false }
 moosicbox_database_connection = { version = "0.1.0", path = "../database_connection", default-features = false }
 moosicbox_downloader          = { version = "0.1.0", path = "../downloader", default-features = false }
@@ -79,7 +78,6 @@ all-sources = ["qobuz", "tidal", "yt"]
 qobuz = [
     "dep:moosicbox_qobuz",
     "moosicbox_app_native_ui/qobuz",
-    "moosicbox_core/qobuz",
     "moosicbox_downloader/qobuz",
     "moosicbox_files/qobuz",
     "moosicbox_library/qobuz",
@@ -92,7 +90,6 @@ qobuz = [
 tidal = [
     "dep:moosicbox_tidal",
     "moosicbox_app_native_ui/tidal",
-    "moosicbox_core/tidal",
     "moosicbox_downloader/tidal",
     "moosicbox_files/tidal",
     "moosicbox_library/tidal",
@@ -105,7 +102,6 @@ tidal = [
 yt = [
     "dep:moosicbox_yt",
     "moosicbox_app_native_ui/yt",
-    "moosicbox_core/yt",
     "moosicbox_downloader/yt",
     "moosicbox_files/yt",
     "moosicbox_library/yt",
