@@ -5,8 +5,8 @@ use actix_web::{
     web::{self, Json},
     Result, Scope,
 };
-use moosicbox_core::app::AppState;
 use moosicbox_database::config::ConfigDatabase;
+use moosicbox_middleware::tunnel_info::TunnelInfo;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use url::form_urlencoded;
@@ -99,11 +99,11 @@ pub struct CreateMagicTokenQuery {
 #[route("/magic-token", method = "POST")]
 pub async fn create_magic_token_endpoint(
     query: web::Query<CreateMagicTokenQuery>,
-    data: web::Data<AppState>,
+    tunnel_info: TunnelInfo,
     db: ConfigDatabase,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
-    let token = create_magic_token(&db, data.tunnel_host.clone())
+    let token = create_magic_token(&db, tunnel_info.host.as_ref().clone())
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to create magic token: {e:?}")))?;
 
@@ -111,7 +111,7 @@ pub async fn create_magic_token_endpoint(
 
     query_string.append_pair("magicToken", &token);
 
-    if let Some(tunnel_host) = &data.tunnel_host {
+    if let Some(tunnel_host) = &*tunnel_info.host {
         query_string.append_pair("apiUrl", tunnel_host);
     }
 

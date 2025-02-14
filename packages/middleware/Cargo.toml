@@ -14,9 +14,14 @@ version     = "0.1.0"
 moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
 
 actix-web    = { workspace = true }
+futures      = { workspace = true }
 futures-util = { workspace = true }
 log          = { workspace = true }
 tracing      = { workspace = true }
 
 [features]
+default = ["tunnel"]
+
 fail-on-warnings = []
+
+tunnel = []

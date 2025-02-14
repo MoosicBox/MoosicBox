@@ -6719,9 +6719,9 @@ dependencies = [
  "actix-web",
  "futures",
  "log",
- "moosicbox_core",
  "moosicbox_database",
  "moosicbox_json_utils",
+ "moosicbox_middleware",
  "reqwest",
  "serde",
  "serde_json",
@@ -7150,6 +7150,7 @@ name = "moosicbox_middleware"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "futures",
  "futures-util",
  "log",
  "moosicbox_assert",

@@ -19,7 +19,7 @@ use futures_util::{
 use moosicbox_audio_decoder::{
     media_sources::remote_bytestream::RemoteByteStreamMediaSource, AudioDecodeHandler,
 };
-use moosicbox_auth::FetchSignatureError;
+use moosicbox_auth::AuthError;
 use moosicbox_channel_utils::{futures_channel::PrioritizedSender, MoosicBoxSender as _};
 use moosicbox_database::{config::ConfigDatabase, profiles::PROFILES};
 use moosicbox_env_utils::default_env_usize;
@@ -310,7 +310,7 @@ impl TunnelSender {
                     Ok(None) => {
                         log::error!("Failed to fetch token, no response");
                     }
-                    Err(FetchSignatureError::Unauthorized) => {
+                    Err(AuthError::Unauthorized) => {
                         log::error!("Unauthorized response from fetch_signature_token");
                     }
                     Err(err) => {

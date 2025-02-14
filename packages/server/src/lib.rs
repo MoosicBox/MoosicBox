@@ -14,9 +14,8 @@ mod tunnel;
 mod ws;
 
 use actix_cors::Cors;
-use actix_web::{http, middleware, web, App};
+use actix_web::{http, middleware, App};
 use moosicbox_config::{get_or_init_server_identity, AppType};
-use moosicbox_core::app::AppState;
 use moosicbox_database::{config::ConfigDatabase, profiles::PROFILES, Database};
 use moosicbox_files::files::track_pool::service::Commander as _;
 use std::sync::{Arc, LazyLock};
@@ -248,14 +247,6 @@ pub async fn run(
 
     let app = {
         move || {
-            let app_data = AppState {
-                #[cfg(feature = "tunnel")]
-                tunnel_host: tunnel_host.clone(),
-                #[cfg(not(feature = "tunnel"))]
-                tunnel_host: None,
-                service_port,
-            };
-
             let cors = Cors::default()
                 .allow_any_origin()
                 .allowed_methods(vec!["GET", "POST", "OPTIONS", "DELETE", "PUT", "PATCH"])
@@ -303,16 +294,26 @@ pub async fn run(
                 std::env!("STATIC_TOKEN").into(),
             ));
 
+            #[cfg(feature = "tunnel")]
+            let app = app.app_data(moosicbox_middleware::tunnel_info::init(
+                moosicbox_middleware::tunnel_info::TunnelInfo {
+                    host: Arc::new(tunnel_host.clone()),
+                },
+            ));
+
+            let app = app.app_data(moosicbox_middleware::service_info::init(
+                moosicbox_middleware::service_info::ServiceInfo { port: service_port },
+            ));
+
             let app = app
                 .wrap(middleware::Compress::default())
                 .wrap(moosicbox_middleware::api_logger::ApiLogger::default())
-                .app_data(web::Data::new(app_data))
                 .service(api::health_endpoint)
                 .service(api::websocket);
 
             #[cfg(feature = "openapi")]
             let app = app.service(api::openapi::bind_services(
-                web::scope("/openapi"),
+                actix_web::web::scope("/openapi"),
                 &openapi,
             ));
 
@@ -320,67 +321,89 @@ pub async fn run(
             let app = app.wrap(actix_htmx::HtmxMiddleware {});
 
             #[cfg(feature = "admin-htmx-api")]
-            let app = app.service(moosicbox_admin_htmx::api::bind_services(web::scope(
-                "/admin",
-            )));
+            let app = app.service(moosicbox_admin_htmx::api::bind_services(
+                actix_web::web::scope("/admin"),
+            ));
 
             #[cfg(feature = "audio-output-api")]
-            let app = app.service(moosicbox_audio_output::api::bind_services(web::scope(
-                "/audio-output",
-            )));
+            let app = app.service(moosicbox_audio_output::api::bind_services(
+                actix_web::web::scope("/audio-output"),
+            ));
 
             #[cfg(feature = "audio-zone-api")]
-            let app = app.service(moosicbox_audio_zone::api::bind_services(web::scope(
-                "/audio-zone",
-            )));
+            let app = app.service(moosicbox_audio_zone::api::bind_services(
+                actix_web::web::scope("/audio-zone"),
+            ));
 
             #[cfg(feature = "auth-api")]
-            let app = app.service(moosicbox_auth::api::bind_services(web::scope("/auth")));
+            let app = app.service(moosicbox_auth::api::bind_services(actix_web::web::scope(
+                "/auth",
+            )));
 
             #[cfg(feature = "config-api")]
-            let app = app.service(moosicbox_config::api::bind_services(web::scope("/config")));
+            let app = app.service(moosicbox_config::api::bind_services(actix_web::web::scope(
+                "/config",
+            )));
 
             #[cfg(feature = "downloader-api")]
-            let app = app.service(moosicbox_downloader::api::bind_services(web::scope(
-                "/downloader",
-            )));
+            let app = app.service(moosicbox_downloader::api::bind_services(
+                actix_web::web::scope("/downloader"),
+            ));
 
             #[cfg(feature = "files-api")]
-            let app = app.service(moosicbox_files::api::bind_services(web::scope("/files")));
+            let app = app.service(moosicbox_files::api::bind_services(actix_web::web::scope(
+                "/files",
+            )));
 
             #[cfg(feature = "menu-api")]
-            let app = app.service(moosicbox_menu::api::bind_services(web::scope("/menu")));
+            let app = app.service(moosicbox_menu::api::bind_services(actix_web::web::scope(
+                "/menu",
+            )));
 
             #[cfg(feature = "player-api")]
-            let app = app.service(moosicbox_player::api::bind_services(web::scope("/player")));
+            let app = app.service(moosicbox_player::api::bind_services(actix_web::web::scope(
+                "/player",
+            )));
 
             #[cfg(feature = "search-api")]
-            let app = app.service(moosicbox_search::api::bind_services(web::scope("/search")));
+            let app = app.service(moosicbox_search::api::bind_services(actix_web::web::scope(
+                "/search",
+            )));
 
             #[cfg(feature = "library-api")]
-            let app = app.service(moosicbox_library::api::bind_services(web::scope(
-                "/library",
-            )));
+            let app = app.service(moosicbox_library::api::bind_services(
+                actix_web::web::scope("/library"),
+            ));
 
             #[cfg(feature = "tidal-api")]
-            let app = app.service(moosicbox_tidal::api::bind_services(web::scope("/tidal")));
-
-            #[cfg(feature = "qobuz-api")]
-            let app = app.service(moosicbox_qobuz::api::bind_services(web::scope("/qobuz")));
-
-            #[cfg(feature = "session-api")]
-            let app = app.service(moosicbox_session::api::bind_services(web::scope(
-                "/session",
+            let app = app.service(moosicbox_tidal::api::bind_services(actix_web::web::scope(
+                "/tidal",
             )));
 
+            #[cfg(feature = "qobuz-api")]
+            let app = app.service(moosicbox_qobuz::api::bind_services(actix_web::web::scope(
+                "/qobuz",
+            )));
+
+            #[cfg(feature = "session-api")]
+            let app = app.service(moosicbox_session::api::bind_services(
+                actix_web::web::scope("/session"),
+            ));
+
             #[cfg(feature = "scan-api")]
-            let app = app.service(moosicbox_scan::api::bind_services(web::scope("/scan")));
+            let app = app.service(moosicbox_scan::api::bind_services(actix_web::web::scope(
+                "/scan",
+            )));
 
             #[cfg(feature = "upnp-api")]
-            let app = app.service(moosicbox_upnp::api::bind_services(web::scope("/upnp")));
+            let app = app.service(moosicbox_upnp::api::bind_services(actix_web::web::scope(
+                "/upnp",
+            )));
 
             #[cfg(feature = "yt-api")]
-            let app = app.service(moosicbox_yt::api::bind_services(web::scope("/yt")));
+            let app = app.service(moosicbox_yt::api::bind_services(actix_web::web::scope(
+                "/yt",
+            )));
 
             app
         }

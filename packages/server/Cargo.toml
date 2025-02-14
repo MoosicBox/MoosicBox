@@ -187,6 +187,7 @@ tunnel = [
     "dep:moosicbox_auth",
     "dep:moosicbox_tunnel",
     "dep:moosicbox_tunnel_sender",
+    "moosicbox_middleware/tunnel",
 ]
 
 # Player audio outputs

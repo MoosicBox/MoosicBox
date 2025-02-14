@@ -2,7 +2,6 @@
 
 use async_trait::async_trait;
 
-pub mod app;
 pub mod sqlite;
 
 #[async_trait]

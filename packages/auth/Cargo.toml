@@ -11,10 +11,13 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_core = { version = "0.1.0", path = "../core", default-features = false }
 moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
 moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
+    "database",
     "serde_json",
+] }
+moosicbox_middleware = { version = "0.1.0", path = "../middleware", default-features = false, features = [
+    "tunnel",
 ] }
 
 # API Dependencies

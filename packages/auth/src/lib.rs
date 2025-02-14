@@ -4,23 +4,39 @@
 #[cfg(feature = "api")]
 pub mod api;
 
+mod db;
+
 use actix_web::{dev::Payload, error::ErrorUnauthorized, http, FromRequest, HttpRequest};
 use futures::future::{err, ok, Ready};
 use moosicbox_database::config::ConfigDatabase;
-use moosicbox_json_utils::{serde_json::ToValue, ParseError};
+use moosicbox_json_utils::{database::DatabaseFetchError, serde_json::ToValue, ParseError};
 use serde_json::Value;
 use thiserror::Error;
 use uuid::Uuid;
 
-use moosicbox_core::sqlite::db::{create_client_access_token, get_client_access_token, DbError};
+use crate::db::{create_client_access_token, get_client_access_token};
+
+#[derive(Debug, Error)]
+pub enum AuthError {
+    #[error(transparent)]
+    DatabaseFetch(#[from] DatabaseFetchError),
+    #[error(transparent)]
+    Parse(#[from] ParseError),
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+    #[error("Failed to register client")]
+    RegisterClient,
+    #[error("Unauthorized")]
+    Unauthorized,
+}
 
 #[cfg(feature = "api")]
 pub(crate) async fn get_credentials_from_magic_token(
     db: &ConfigDatabase,
     magic_token: &str,
-) -> Result<Option<(String, String)>, DbError> {
+) -> Result<Option<(String, String)>, DatabaseFetchError> {
     if let Some((client_id, access_token)) =
-        moosicbox_core::sqlite::db::get_credentials_from_magic_token(db, magic_token).await?
+        crate::db::get_credentials_from_magic_token(db, magic_token).await?
     {
         Ok(Some((client_id, access_token)))
     } else {
@@ -34,7 +50,7 @@ async fn tunnel_magic_token(
     client_id: &str,
     access_token: &str,
     magic_token: &str,
-) -> Result<bool, reqwest::Error> {
+) -> Result<bool, AuthError> {
     let url =
         format!("{tunnel_host}/auth/magic-token?clientId={client_id}&magicToken={magic_token}");
     let value: Value = reqwest::Client::new()
@@ -54,20 +70,14 @@ async fn tunnel_magic_token(
 pub(crate) async fn create_magic_token(
     db: &ConfigDatabase,
     tunnel_host: Option<String>,
-) -> Result<String, DbError> {
+) -> Result<String, AuthError> {
     let magic_token = Uuid::new_v4().to_string();
 
     if let Some((client_id, access_token)) = { get_client_access_token(db).await? } {
         if let Some(tunnel_host) = tunnel_host {
-            if let Err(err) =
-                tunnel_magic_token(&tunnel_host, &client_id, &access_token, &magic_token).await
-            {
-                log::error!("Failed to register magic token to the tunnel: {err:?}");
-                return Err(DbError::Unknown);
-            }
+            tunnel_magic_token(&tunnel_host, &client_id, &access_token, &magic_token).await?;
         }
-        moosicbox_core::sqlite::db::save_magic_token(db, &magic_token, &client_id, &access_token)
-            .await?;
+        crate::db::save_magic_token(db, &magic_token, &client_id, &access_token).await?;
     }
 
     Ok(magic_token)
@@ -83,16 +93,15 @@ fn create_client_id() -> String {
 pub async fn get_client_id_and_access_token(
     db: &ConfigDatabase,
     host: &str,
-) -> Result<(String, String), DbError> {
+) -> Result<(String, String), AuthError> {
     if let Ok(Some((client_id, token))) = get_client_access_token(db).await {
         Ok((client_id, token))
     } else {
         let client_id = create_client_id();
 
         let token = register_client(host, &client_id)
-            .await
-            .map_err(|_| DbError::Unknown)?
-            .ok_or(DbError::Unknown)?;
+            .await?
+            .ok_or(AuthError::RegisterClient)?;
 
         create_client_access_token(db, &client_id, &token).await?;
 
@@ -100,18 +109,7 @@ pub async fn get_client_id_and_access_token(
     }
 }
 
-#[derive(Debug, Error)]
-pub enum RegisterClientError {
-    #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
-async fn register_client(
-    host: &str,
-    client_id: &str,
-) -> Result<Option<String>, RegisterClientError> {
+async fn register_client(host: &str, client_id: &str) -> Result<Option<String>, AuthError> {
     let url = format!("{host}/auth/register-client?clientId={client_id}");
 
     Ok(reqwest::Client::new()
@@ -156,16 +154,6 @@ fn is_authorized(req: &HttpRequest) -> bool {
     true
 }
 
-#[derive(Debug, Error)]
-pub enum FetchSignatureError {
-    #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-    #[error("Unauthorized")]
-    Unauthorized,
-}
-
 /// # Errors
 ///
 /// * If the request is unauthorized
@@ -175,7 +163,7 @@ pub async fn fetch_signature_token(
     host: &str,
     client_id: &str,
     access_token: &str,
-) -> Result<Option<String>, FetchSignatureError> {
+) -> Result<Option<String>, AuthError> {
     let url = format!("{host}/auth/signature-token?clientId={client_id}");
 
     log::debug!("Fetching signature token for client_id={client_id}");
@@ -186,7 +174,7 @@ pub async fn fetch_signature_token(
         .await?;
 
     if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-        return Err(FetchSignatureError::Unauthorized);
+        return Err(AuthError::Unauthorized);
     }
 
     Ok(response.json::<Value>().await?.to_value("token")?)
