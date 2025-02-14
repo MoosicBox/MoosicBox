@@ -50,6 +50,7 @@ gigachad_transformer_models = { path = "models", default-features = false, featu
 ] }
 maud = { workspace = true }
 moosicbox_gen = { path = "../../gen", default-features = false, features = [
+    "css",
     "serde",
     "xml",
 ] }

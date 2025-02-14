@@ -20,9 +20,10 @@ serde_json = { workspace = true, optional = true }
 [dev-dependencies]
 
 [features]
-default = ["serde", "xml"]
+default = ["css", "serde", "xml"]
 
 fail-on-warnings = []
 
+css   = []
 serde = ["dep:serde_json", "xml"]
 xml   = []
