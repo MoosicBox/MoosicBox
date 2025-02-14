@@ -689,6 +689,10 @@ pub fn element_to_html(
     tag_renderer: &dyn HtmlTagRenderer,
     is_flex_child: bool,
 ) -> Result<(), std::io::Error> {
+    if container.debug == Some(true) {
+        log::info!("element_to_html: DEBUG {container}");
+    }
+
     match &container.element {
         Element::Raw { value } => {
             f.write_all(value.as_bytes())?;
