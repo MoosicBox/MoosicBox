@@ -9,7 +9,14 @@ impl Arbitrary for XmlString {
     fn arbitrary(g: &mut Gen) -> Self {
         let string = loop {
             let string = String::arbitrary(g);
-            if string.chars().all(is_valid_xml_char) {
+            if std::option_env!("ALPHANUMERIC_STRINGS") == Some("1") {
+                if string
+                    .chars()
+                    .all(|c| matches!(c, '0'..='9' | 'A'..='Z' | 'a'..='z' | '-' | '_'))
+                {
+                    break string;
+                }
+            } else if string.chars().all(is_valid_xml_char) {
                 break string;
             }
         };
