@@ -11,7 +11,6 @@
 !/packages/auth
 !/packages/channel_utils
 !/packages/config
-!/packages/core
 !/packages/database
 !/packages/database_connection
 !/packages/downloader

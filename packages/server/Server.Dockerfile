@@ -19,7 +19,6 @@ RUN cat Cargo.toml | \
     \"packages\/auth\",\r\
     \"packages\/channel_utils\",\r\
     \"packages\/config\",\r\
-    \"packages\/core\",\r\
     \"packages\/database\",\r\
     \"packages\/database_connection\",\r\
     \"packages\/downloader\",\r\
@@ -70,7 +69,6 @@ COPY packages/audio_zone/models/Cargo.toml packages/audio_zone/models/Cargo.toml
 COPY packages/auth/Cargo.toml packages/auth/Cargo.toml
 COPY packages/channel_utils/Cargo.toml packages/channel_utils/Cargo.toml
 COPY packages/config/Cargo.toml packages/config/Cargo.toml
-COPY packages/core/Cargo.toml packages/core/Cargo.toml
 COPY packages/database/Cargo.toml packages/database/Cargo.toml
 COPY packages/database_connection/Cargo.toml packages/database_connection/Cargo.toml
 COPY packages/downloader/Cargo.toml packages/downloader/Cargo.toml
@@ -124,7 +122,6 @@ packages/audio_zone/models|\
 packages/auth|\
 packages/channel_utils|\
 packages/config|\
-packages/core|\
 packages/database|\
 packages/database_connection|\
 packages/downloader|\
