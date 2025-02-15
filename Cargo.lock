@@ -6368,7 +6368,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_app"
-version = "0.15.1"
+version = "0.15.2"
 dependencies = [
  "app-tauri-plugin-player",
  "console-subscriber",
