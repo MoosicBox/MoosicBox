@@ -1032,45 +1032,11 @@ impl AppState {
         players: &[RegisterPlayer],
     ) -> Result<Vec<ApiPlayer>, AppStateError> {
         let connection_id = self.connection_id.read().await.clone().unwrap();
-        let api_token = self.api_token.read().await.clone();
-        let client_id = self
-            .client_id
-            .read()
-            .await
-            .clone()
-            .filter(|x| !x.is_empty());
-        let client_id = client_id.as_deref();
-        let client_id_param = client_id
-            .map(|x| format!("&clientId={x}"))
-            .unwrap_or_default();
 
-        let profile = { self.profile.read().await.clone() };
-        let Some(profile) = profile else {
-            return Err(RegisterPlayersError::MissingProfile.into());
-        };
-
-        let mut headers = serde_json::Map::new();
-
-        headers.insert(
-            "moosicbox-profile".to_string(),
-            serde_json::Value::String(profile),
-        );
-
-        if let Some(api_token) = api_token {
-            headers.insert(
-                "Authorization".to_string(),
-                serde_json::Value::String(format!("bearer {api_token}")),
-            );
-        }
-
-        let url = format!("session/register-players?connectionId={connection_id}{client_id_param}");
+        let url = format!("session/register-players?connectionId={connection_id}");
         let body = Some(serde_json::to_value(players).map_err(RegisterPlayersError::Serde)?);
-        let headers = Some(serde_json::Value::Object(headers));
 
-        let response = match self
-            .api_proxy_post(url.clone(), body.clone(), headers.clone())
-            .await
-        {
+        let response = match self.api_proxy_post(url.clone(), body.clone(), None).await {
             Ok(value) => serde_json::from_value(value).unwrap(),
             Err(e) => {
                 let AppStateError::ProxyRequest(ProxyRequestError::FailureResponse {
@@ -1088,13 +1054,10 @@ impl AppState {
                         "Connection name required to create a connection",
                     ));
                 };
-                let client_id_param = client_id
-                    .map(|x| format!("?clientId={x}"))
-                    .unwrap_or_default();
 
                 let response = self
                     .api_proxy_post(
-                        format!("session/register-connection{client_id_param}"),
+                        "session/register-connection".to_string(),
                         Some(
                             serde_json::to_value(RegisterConnection {
                                 connection_id,
@@ -1103,7 +1066,7 @@ impl AppState {
                             })
                             .map_err(RegisterPlayersError::Serde)?,
                         ),
-                        headers.clone(),
+                        None,
                     )
                     .await?;
 
@@ -1124,35 +1087,12 @@ impl AppState {
     ///
     /// * If any of the required state properties are missing
     /// * If the headers object is not a valid JSON object
-    pub async fn api_proxy_post(
+    pub async fn api_proxy_get(
         &self,
         url: String,
-        body: Option<serde_json::Value>,
-        headers: Option<serde_json::Value>,
+        headers: Option<HashMap<String, String>>,
     ) -> Result<serde_json::Value, AppStateError> {
-        let url = format!(
-            "{}/{url}",
-            self.api_url
-                .read()
-                .await
-                .clone()
-                .ok_or_else(|| AppStateError::unknown(format!("API_URL not set ({url})")))?
-        );
-        log::info!("Posting url from proxy: {url}");
-
-        let mut builder = PROXY_CLIENT.post(url);
-
-        if let Some(headers) = headers {
-            for header in headers.as_object().unwrap() {
-                builder = builder.header(header.0, header.1.as_str().unwrap().to_string());
-            }
-        }
-
-        if let Some(body) = body {
-            builder = builder.json(&body);
-        }
-
-        Ok(self.send_request_builder(builder).await?)
+        self.api_proxy("get", url, None, headers).await
     }
 
     /// # Errors
@@ -1163,27 +1103,77 @@ impl AppState {
     ///
     /// * If any of the required state properties are missing
     /// * If the headers object is not a valid JSON object
-    pub async fn api_proxy_get(
+    pub async fn api_proxy_post(
         &self,
         url: String,
-        headers: Option<serde_json::Value>,
+        body: Option<serde_json::Value>,
+        headers: Option<HashMap<String, String>>,
     ) -> Result<serde_json::Value, AppStateError> {
+        self.api_proxy("post", url, body, headers).await
+    }
+
+    /// # Errors
+    ///
+    /// * If the `api_url` is not set in the state
+    ///
+    /// # Panics
+    ///
+    /// * If any of the required state properties are missing
+    /// * If the headers object is not a valid JSON object
+    pub async fn api_proxy(
+        &self,
+        method: &str,
+        url: String,
+        body: Option<serde_json::Value>,
+        headers: Option<HashMap<String, String>>,
+    ) -> Result<serde_json::Value, AppStateError> {
+        let mut headers = headers.unwrap_or_default();
+
+        if !headers.contains_key("moosicbox-profile") {
+            let profile = { self.profile.read().await.clone() };
+            let Some(profile) = profile else {
+                return Err(RegisterPlayersError::MissingProfile.into());
+            };
+            headers.insert("moosicbox-profile".to_string(), profile);
+        }
+
+        let api_token = self.api_token.read().await;
+        if let Some(api_token) = api_token.as_ref() {
+            headers.insert("Authorization".to_string(), format!("bearer {api_token}"));
+        }
+        drop(api_token);
+
+        let client_id = self
+            .client_id
+            .read()
+            .await
+            .clone()
+            .filter(|x| !x.is_empty())
+            .map(|x| format!("{}clientId={x}", if url.contains('?') { '&' } else { '?' }))
+            .unwrap_or_default();
+
         let url = format!(
-            "{}/{url}",
+            "{}/{url}{client_id}",
             self.api_url
                 .read()
                 .await
                 .clone()
                 .ok_or_else(|| AppStateError::unknown(format!("API_URL not set ({url})")))?
         );
-        log::info!("Fetching url from proxy: {url}");
+        log::info!("Posting url from proxy: {url}");
 
-        let mut builder = PROXY_CLIENT.get(url);
+        let mut builder = match method {
+            "get" => PROXY_CLIENT.get(url),
+            "post" => PROXY_CLIENT.post(url),
+            _ => return Err(AppStateError::unknown(format!("Invalid method '{method}'"))),
+        };
 
-        if let Some(headers) = headers {
-            for header in headers.as_object().unwrap() {
-                builder = builder.header(header.0, header.1.as_str().unwrap().to_string());
-            }
+        for header in headers {
+            builder = builder.header(header.0, header.1);
+        }
+
+        if let Some(body) = body {
+            builder = builder.json(&body);
         }
 
         Ok(self.send_request_builder(builder).await?)
@@ -1694,6 +1684,21 @@ impl AppState {
         moosicbox_task::spawn("set_state: init_ws_connection", {
             let state = self.clone();
             async move {
+                if state.signature_token.read().await.is_none() {
+                    let response = state
+                        .api_proxy_post("auth/signature-token".to_string(), None, None)
+                        .await?;
+                    let token = response
+                        .get("token")
+                        .ok_or_else(|| AppStateError::unknown("Missing token"))?
+                        .as_str()
+                        .ok_or_else(|| AppStateError::unknown("Invalid token"))?
+                        .to_string();
+                    let mut signature_token = state.signature_token.write().await;
+
+                    *signature_token = Some(token);
+                }
+
                 log::debug!("Attempting to init_ws_connection...");
                 state.init_ws_connection().await
             }
@@ -1708,40 +1713,8 @@ impl AppState {
     /// * If the http response fails to deserialize
     /// * If the audio zones fail to update
     pub async fn fetch_audio_zones(&self) -> Result<(), AppStateError> {
-        let api_token = self.api_token.read().await.clone();
-        let client_id = self
-            .client_id
-            .read()
-            .await
-            .clone()
-            .filter(|x| !x.is_empty())
-            .map(|x| format!("?clientId={x}"))
-            .unwrap_or_default();
-
-        let profile = { self.profile.read().await.clone() };
-        let Some(profile) = profile else {
-            return Err(FetchAudioZonesError::MissingProfile.into());
-        };
-
-        let mut headers = serde_json::Map::new();
-
-        headers.insert(
-            "moosicbox-profile".to_string(),
-            serde_json::Value::String(profile),
-        );
-
-        if let Some(api_token) = api_token {
-            headers.insert(
-                "Authorization".to_string(),
-                serde_json::Value::String(format!("bearer {api_token}")),
-            );
-        }
-
         let response = self
-            .api_proxy_get(
-                format!("audio-zone/with-session{client_id}",),
-                Some(serde_json::Value::Object(headers)),
-            )
+            .api_proxy_get("audio-zone/with-session".to_string(), None)
             .await?;
 
         log::debug!("fetch_audio_zones: audio_zones={response}");

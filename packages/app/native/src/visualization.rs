@@ -206,21 +206,13 @@ pub async fn update_visualization(
 
     clear_canvas().await;
 
-    let mut headers = serde_json::Map::new();
-    let profile = "master";
-
-    headers.insert(
-        "moosicbox-profile".to_string(),
-        serde_json::Value::String(profile.to_string()),
-    );
-
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     let max = (visualization_width / (BAR_WIDTH + GAP)).round() as usize;
 
     let resp = STATE
         .api_proxy_get(
             format!("files/track/visualization?trackId={track_id}&source={api_source}&max={max}"),
-            Some(serde_json::Value::Object(headers)),
+            None,
         )
         .await;
     let Ok(value) = resp else {

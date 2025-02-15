@@ -2,6 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::{
+    collections::HashMap,
     env,
     fmt::Debug,
     sync::{LazyLock, OnceLock},
@@ -309,7 +310,18 @@ async fn api_proxy_get(
     url: String,
     headers: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, TauriPlayerError> {
-    Ok(STATE.api_proxy_get(url, headers).await?)
+    Ok(STATE
+        .api_proxy_get(
+            url,
+            headers.map(|headers| {
+                let mut map = HashMap::new();
+                for (name, value) in headers.as_object().unwrap() {
+                    map.insert(name.to_string(), value.as_str().unwrap().to_string());
+                }
+                map
+            }),
+        )
+        .await?)
 }
 
 #[tauri::command]
@@ -318,7 +330,19 @@ async fn api_proxy_post(
     body: Option<serde_json::Value>,
     headers: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, TauriPlayerError> {
-    Ok(STATE.api_proxy_post(url, body, headers).await?)
+    Ok(STATE
+        .api_proxy_post(
+            url,
+            body,
+            headers.map(|headers| {
+                let mut map = HashMap::new();
+                for (name, value) in headers.as_object().unwrap() {
+                    map.insert(name.to_string(), value.as_str().unwrap().to_string());
+                }
+                map
+            }),
+        )
+        .await?)
 }
 
 async fn propagate_playback_event(update: UpdateSession, to_plugin: bool) -> Result<(), AppError> {
