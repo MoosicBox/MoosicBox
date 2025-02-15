@@ -1,5 +1,6 @@
 [package]
 authors     = ["Braden Steffaniak"]
+build       = "build.rs"
 categories  = ["multimedia"]
 description = "MoosicBox server package"
 edition     = "2021"

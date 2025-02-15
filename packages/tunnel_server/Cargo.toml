@@ -1,5 +1,6 @@
 [package]
 authors     = ["Braden Steffaniak"]
+build       = "build.rs"
 categories  = ["network-programming"]
 default-run = "moosicbox_tunnel_server"
 description = "MoosicBox tunnel server package"

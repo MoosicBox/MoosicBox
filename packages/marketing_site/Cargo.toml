@@ -1,5 +1,6 @@
 [package]
 authors     = ["Braden Steffaniak"]
+build       = "build.rs"
 categories  = ["gui"]
 description = "MoosicBox Marketing Website"
 edition     = "2021"

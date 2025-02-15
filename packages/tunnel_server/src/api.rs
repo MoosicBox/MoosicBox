@@ -39,7 +39,10 @@ use crate::WS_SERVER_HANDLE;
 #[route("/health", method = "GET")]
 pub async fn health_endpoint() -> Result<Json<Value>> {
     info!("Healthy");
-    Ok(Json(json!({"healthy": true})))
+    Ok(Json(json!({
+        "healthy": true,
+        "hash": std::env!("GIT_HASH"),
+    })))
 }
 
 #[derive(Debug, Deserialize, Clone)]

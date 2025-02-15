@@ -15,7 +15,10 @@ pub mod openapi;
 #[route("/health", method = "GET")]
 pub async fn health_endpoint() -> Result<Json<Value>> {
     info!("Healthy");
-    Ok(Json(json!({"healthy": true})))
+    Ok(Json(json!({
+        "healthy": true,
+        "hash": std::env!("GIT_HASH"),
+    })))
 }
 
 #[cfg_attr(feature = "profiling", profiling::function)]

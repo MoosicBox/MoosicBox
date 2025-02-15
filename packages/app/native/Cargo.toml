@@ -1,5 +1,6 @@
 [package]
 authors     = ["Braden Steffaniak"]
+build       = "build.rs"
 categories  = ["gui"]
 description = "MoosicBox native App package"
 edition     = "2021"
