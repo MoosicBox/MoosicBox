@@ -11,5 +11,6 @@
 !/packages/middleware
 !/packages/profiles
 !/packages/task
+!/packages/telemetry
 !/packages/tunnel
 !/packages/tunnel_server
