@@ -36,7 +36,7 @@ impl DatabaseProfiles {
     /// Will panic if `RwLock` is poisoned or the profile somehow wasn't added to the list of
     /// profiles
     #[must_use]
-    pub fn fetch_add(&self, profile: &str, database: Arc<Box<dyn Database>>) -> LibraryDatabase {
+    pub fn add_fetch(&self, profile: &str, database: Arc<Box<dyn Database>>) -> LibraryDatabase {
         self.add(profile.to_owned(), database);
         self.get(profile).unwrap()
     }

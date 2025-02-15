@@ -40,7 +40,7 @@ async fn add_profile(
 
     #[allow(unused)]
     let library_database =
-        moosicbox_database::profiles::PROFILES.fetch_add(profile, library_database.clone());
+        moosicbox_database::profiles::PROFILES.add_fetch(profile, library_database.clone());
 
     #[allow(clippy::redundant_clone)]
     #[cfg(feature = "library")]

@@ -36,7 +36,7 @@ impl LibraryMusicApiProfiles {
     /// Will panic if `RwLock` is poisoned or the profile somehow wasn't added to the list of
     /// profiles
     #[must_use]
-    pub fn fetch_add(&self, profile: &str, db: LibraryDatabase) -> LibraryMusicApi {
+    pub fn add_fetch(&self, profile: &str, db: LibraryDatabase) -> LibraryMusicApi {
         self.add(profile.to_owned(), db);
         self.get(profile).unwrap()
     }

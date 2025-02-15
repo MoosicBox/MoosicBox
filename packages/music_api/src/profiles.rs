@@ -45,7 +45,7 @@ impl<S: ::std::hash::BuildHasher + Clone> MusicApisProfiles<S> {
     /// Will panic if `RwLock` is poisoned or the profile somehow wasn't added to the list of
     /// profiles
     #[must_use]
-    pub fn fetch_add(
+    pub fn add_fetch(
         &self,
         profile: &str,
         music_apis: Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>, S>>,
