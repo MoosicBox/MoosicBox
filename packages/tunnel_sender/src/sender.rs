@@ -513,7 +513,7 @@ impl TunnelSender {
                             if let Ok(body) =
                                 std::str::from_utf8(response.body().as_ref().unwrap_or(&vec![]))
                             {
-                                log::error!("body: {}", body);
+                                log::error!("error ({}): {body}", response.status());
                             } else {
                                 log::error!("body: (unable to get body)");
                             }
