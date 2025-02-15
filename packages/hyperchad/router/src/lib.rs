@@ -187,8 +187,8 @@ impl From<Vec<String>> for RoutePath {
 pub enum NavigateError {
     #[error("Invalid path")]
     InvalidPath,
-    #[error("Handler error")]
-    Handler,
+    #[error("Handler error: {0:?}")]
+    Handler(Box<dyn std::error::Error + Send + Sync>),
     #[error("Sender error")]
     Sender,
 }
@@ -356,7 +356,10 @@ impl Router {
                 Ok(view) => view,
                 Err(e) => {
                     log::error!("Failed to fetch route view: {e:?}");
-                    return Err(NavigateError::Handler);
+                    return Err(NavigateError::Handler(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        e.to_string(),
+                    ))));
                 }
             }
         } else {
@@ -384,7 +387,10 @@ impl Router {
                     Ok(view) => view,
                     Err(e) => {
                         log::error!("Failed to fetch route view: {e:?}");
-                        return Err(NavigateError::Handler);
+                        return Err(NavigateError::Handler(Box::new(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            e.to_string(),
+                        ))));
                     }
                 }
             } else {
