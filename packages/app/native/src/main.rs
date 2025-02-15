@@ -514,9 +514,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .unwrap_or("http://localhost:8500")
                         .to_string(),
                 ),
-                client_id: None,
-                signature_token: None,
-                api_token: None,
+                client_id: std::env::var("MOOSICBOX_CLIENT_ID").ok(),
+                signature_token: std::env::var("MOOSICBOX_SIGNATURE_TOKEN").ok(),
+                api_token: std::env::var("MOOSICBOX_API_TOKEN").ok(),
                 profile: Some(PROFILE.to_string()),
                 playback_target: None,
                 current_session_id: None,
