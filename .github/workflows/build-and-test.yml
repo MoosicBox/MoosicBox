@@ -20,6 +20,9 @@ on:
             - '!packages/marketing_site/infra/**'
             - '!packages/hyperchad/renderer/vanilla_js/web/**'
             - '!**/*.nix'
+            - '!**/Dockerfile'
+            - '!**/*.Dockerfile'
+            - '!**/*.dockerignore'
     pull_request:
         branches: ['master']
 
