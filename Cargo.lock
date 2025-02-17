@@ -1731,9 +1731,9 @@ dependencies = [
 
 [[package]]
 name = "built"
-version = "0.7.6"
+version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73848a43c5d63a1251d17adf6c2bf78aa94830e60a335a95eeea45d6ba9e1e4d"
+checksum = "56ed6191a7e78c36abdb16ab65341eefd73d64d303fffccdbb00d51e4205967b"
 
 [[package]]
 name = "bumpalo"
@@ -2923,9 +2923,9 @@ dependencies = [
 
 [[package]]
 name = "document-features"
-version = "0.2.10"
+version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb6969eaabd2421f8a2775cfd2471a2b634372b4a25d41e3bd647b79912850a0"
+checksum = "95249b50c6c185bee49034bcb378a49dc2b5dff0be90ff6616d31d64febab05d"
 dependencies = [
  "litrs",
 ]
@@ -4986,7 +4986,7 @@ dependencies = [
  "quickcheck_macros",
  "serde",
  "serde_json",
- "strum 0.27.0",
+ "strum 0.27.1",
  "syntect",
  "test-log",
  "thiserror 2.0.11",
@@ -6390,8 +6390,8 @@ dependencies = [
  "moosicbox_ws",
  "serde",
  "serde_json",
- "strum 0.27.0",
- "strum_macros 0.27.0",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
@@ -6446,7 +6446,7 @@ dependencies = [
  "moosicbox_ws",
  "reqwest",
  "serde_json",
- "strum 0.27.0",
+ "strum 0.27.1",
  "thiserror 2.0.11",
  "tokio",
  "tokio-util",
@@ -6462,8 +6462,8 @@ dependencies = [
  "moosicbox_config",
  "moosicbox_server",
  "moosicbox_task",
- "strum 0.27.0",
- "strum_macros 0.27.0",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "tauri",
  "thiserror 2.0.11",
  "tokio",
@@ -6555,8 +6555,8 @@ dependencies = [
  "moosicbox_config",
  "moosicbox_server",
  "moosicbox_task",
- "strum 0.27.0",
- "strum_macros 0.27.0",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "tauri",
  "thiserror 2.0.11",
  "tokio",
@@ -6827,8 +6827,8 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "strum 0.27.0",
- "strum_macros 0.27.0",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "test-log",
  "thiserror 2.0.11",
  "tokio",
@@ -6876,8 +6876,8 @@ dependencies = [
  "regex",
  "reqwest",
  "serde",
- "strum 0.27.0",
- "strum_macros 0.27.0",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "symphonia",
  "thiserror 2.0.11",
  "tokio",
@@ -6907,8 +6907,8 @@ dependencies = [
  "log",
  "moosicbox_task",
  "profiling",
- "strum 0.27.0",
- "strum_macros 0.27.0",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "thiserror 2.0.11",
  "tokio",
  "webp",
@@ -6953,8 +6953,8 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "strum 0.27.0",
- "strum_macros 0.27.0",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "thiserror 2.0.11",
  "tokio",
  "utoipa",
@@ -6972,8 +6972,8 @@ dependencies = [
  "moosicbox_music_models",
  "serde",
  "serde_json",
- "strum 0.27.0",
- "strum_macros 0.27.0",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "utoipa",
 ]
 
@@ -7079,7 +7079,7 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_async_service",
  "moosicbox_task",
- "strum_macros 0.27.0",
+ "strum_macros 0.27.1",
  "thiserror 2.0.11",
 ]
 
@@ -7173,8 +7173,8 @@ dependencies = [
  "moosicbox_paging",
  "serde",
  "serde_json",
- "strum 0.27.0",
- "strum_macros 0.27.0",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "utoipa",
 ]
 
@@ -7190,8 +7190,8 @@ dependencies = [
  "pretty_assertions",
  "serde",
  "serde_json",
- "strum 0.27.0",
- "strum_macros 0.27.0",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "tantivy",
  "test-log",
  "thiserror 2.0.11",
@@ -7288,8 +7288,8 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "strum 0.27.0",
- "strum_macros 0.27.0",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "thiserror 2.0.11",
  "tokio",
  "url",
@@ -7349,8 +7349,8 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "strum 0.27.0",
- "strum_macros 0.27.0",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "thiserror 2.0.11",
  "tokio",
  "tokio-util",
@@ -7447,8 +7447,8 @@ dependencies = [
  "rand 0.9.0",
  "rcgen",
  "serde_json",
- "strum 0.27.0",
- "strum_macros 0.27.0",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "thiserror 2.0.11",
  "throttle",
  "tokio",
@@ -7495,8 +7495,8 @@ dependencies = [
  "moosicbox_json_utils",
  "moosicbox_music_models",
  "serde",
- "strum 0.27.0",
- "strum_macros 0.27.0",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "utoipa",
 ]
 
@@ -7566,8 +7566,8 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "strum 0.27.0",
- "strum_macros 0.27.0",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "thiserror 2.0.11",
  "tokio",
  "url",
@@ -7585,8 +7585,8 @@ dependencies = [
  "moosicbox_assert",
  "serde",
  "serde_json",
- "strum 0.27.0",
- "strum_macros 0.27.0",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "thiserror 2.0.11",
  "tokio",
  "tokio-util",
@@ -7660,8 +7660,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "strum 0.27.0",
- "strum_macros 0.27.0",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "thiserror 2.0.11",
  "tokio",
  "tokio-util",
@@ -7695,8 +7695,8 @@ dependencies = [
  "roxmltree 0.20.0",
  "rupnp",
  "serde",
- "strum 0.27.0",
- "strum_macros 0.27.0",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "symphonia",
  "thiserror 2.0.11",
  "tokio",
@@ -7719,8 +7719,8 @@ dependencies = [
  "moosicbox_session",
  "serde",
  "serde_json",
- "strum 0.27.0",
- "strum_macros 0.27.0",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "thiserror 2.0.11",
 ]
 
@@ -7747,8 +7747,8 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "strum 0.27.0",
- "strum_macros 0.27.0",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "thiserror 2.0.11",
  "tokio",
  "url",
@@ -9988,7 +9988,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3779b94aeb87e8bd4e834cee3650289ee9e0d5677f976ecdb6d219e5f4f6cd94"
 dependencies = [
  "rand_chacha 0.9.0",
- "rand_core 0.9.0",
+ "rand_core 0.9.1",
  "zerocopy 0.8.18",
 ]
 
@@ -10019,7 +10019,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3022b5f1df60f26e1ffddd6c66e8aa15de382ae63b3a0c1bfc0e4d3e3f325cb"
 dependencies = [
  "ppv-lite86",
- "rand_core 0.9.0",
+ "rand_core 0.9.1",
 ]
 
 [[package]]
@@ -10042,9 +10042,9 @@ dependencies = [
 
 [[package]]
 name = "rand_core"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b08f3c9802962f7e1b25113931d94f43ed9725bebc59db9d0c3e9a23b67e15ff"
+checksum = "a88e0da7a2c97baa202165137c158d0a2e824ac465d13d81046727b34cb247d3"
 dependencies = [
  "getrandom 0.3.1",
  "zerocopy 0.8.18",
@@ -10771,9 +10771,9 @@ checksum = "6ea1a2d0a644769cc99faa24c3ad26b379b786fe7c36fd3c546254801650e6dd"
 
 [[package]]
 name = "ryu-js"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad97d4ce1560a5e27cec89519dc8300d1aa6035b099821261c651486a19e44d5"
+checksum = "dd29631678d6fb0903b69223673e122c32e9ae559d0960a38d574695ebc0ea15"
 
 [[package]]
 name = "same-file"
@@ -11827,11 +11827,11 @@ dependencies = [
 
 [[package]]
 name = "strum"
-version = "0.27.0"
+version = "0.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce1475c515a4f03a8a7129bb5228b81a781a86cb0b3fbbc19e1c556d491a401f"
+checksum = "f64def088c51c9510a8579e3c5d67c65349dcf755e5479ad3d010aa6454e2c32"
 dependencies = [
- "strum_macros 0.27.0",
+ "strum_macros 0.27.1",
 ]
 
 [[package]]
@@ -11849,9 +11849,9 @@ dependencies = [
 
 [[package]]
 name = "strum_macros"
-version = "0.27.0"
+version = "0.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9688894b43459159c82bfa5a5fa0435c19cbe3c9b427fa1dd7b1ce0c279b18a7"
+checksum = "c77a8c5abcaf0f9ce05d62342b7d298c346515365c36b673df4ebe3ced01fde8"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -13149,9 +13149,9 @@ dependencies = [
 
 [[package]]
 name = "tempfile"
-version = "3.16.0"
+version = "3.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38c246215d7d24f48ae091a2902398798e05d978b24315d6efbc00ede9a8bb91"
+checksum = "a40f762a77d2afa88c2d919489e390a12bdd261ed568e60cfa7e48d4e20f0d33"
 dependencies = [
  "cfg-if",
  "fastrand",

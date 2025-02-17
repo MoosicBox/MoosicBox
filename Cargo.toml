@@ -284,8 +284,8 @@ sqlx-postgres = { version = "0.8.3", default-features = false, features = [
     "chrono",
 ] }
 static_init = "1.0.3"
-strum = "0.27.0"
-strum_macros = "0.27.0"
+strum = "0.27.1"
+strum_macros = "0.27.1"
 swc_bundler = "9.0.0"
 swc_common = { version = "6.1.1", features = ["tty-emitter"] }
 swc_ecma_ast = "6.1.0"
