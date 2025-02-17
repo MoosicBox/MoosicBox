@@ -286,16 +286,16 @@ sqlx-postgres = { version = "0.8.3", default-features = false, features = [
 static_init = "1.0.3"
 strum = "0.27.1"
 strum_macros = "0.27.1"
-swc_bundler = "9.0.0"
-swc_common = { version = "6.1.1", features = ["tty-emitter"] }
-swc_ecma_ast = "6.1.0"
-swc_ecma_codegen = "6.1.0"
-swc_ecma_loader = { version = "6.0.0", features = ["cache", "node"] }
-swc_ecma_minifier = "10.2.1"
-swc_ecma_parser = "8.0.2"
-swc_ecma_transforms_base = "9.0.1"
-swc_ecma_transforms_typescript = "9.0.0"
-swc_ecma_visit = "6.0.0"
+swc_bundler = "10.0.0"
+swc_common = { version = "7.0.0", features = ["tty-emitter"] }
+swc_ecma_ast = "7.0.0"
+swc_ecma_codegen = "7.0.0"
+swc_ecma_loader = { version = "7.0.0", features = ["cache", "node"] }
+swc_ecma_minifier = "11.0.0"
+swc_ecma_parser = "9.0.0"
+swc_ecma_transforms_base = "10.0.0"
+swc_ecma_transforms_typescript = "10.0.0"
+swc_ecma_visit = "7.0.0"
 symphonia = { version = "0.5.4", features = ["all"] }
 syntect = "5.2.0"
 tantivy = "0.22.0"
