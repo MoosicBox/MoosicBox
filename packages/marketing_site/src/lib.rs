@@ -36,6 +36,9 @@ pub static ROUTER: LazyLock<Router> = LazyLock::new(|| {
         .with_static_route(&["/download"], |_| async {
             moosicbox_marketing_site_ui::download::download()
         })
+        .with_static_route(&["/try-now"], |_| async {
+            moosicbox_marketing_site_ui::try_now()
+        })
         .with_route_result(&["/releases"], |req| async {
             download::releases_route(req).await
         })

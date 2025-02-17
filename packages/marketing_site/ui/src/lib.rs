@@ -100,6 +100,13 @@ pub fn main(slot: &Markup) -> Markup {
 }
 
 #[must_use]
+pub fn try_now() -> Markup {
+    page(&html! {
+        "Try now"
+    })
+}
+
+#[must_use]
 pub fn not_found() -> Markup {
     page(&html! {
         "Page not found"
