@@ -39,6 +39,9 @@ enum Commands {
         max: Option<u16>,
 
         #[arg(long)]
+        max_parallel: Option<u16>,
+
+        #[arg(long)]
         chunked: Option<u16>,
 
         #[arg(short, long)]
@@ -68,7 +71,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             file,
             offset,
             max,
-            chunked,
+            max_parallel,
+            mut chunked,
             spread,
             features: specific_features,
             skip_features,
@@ -92,43 +96,56 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             match output {
                 OutputType::Json => {
-                    if let Some(workspace_members) = value
-                        .get("workspace")
-                        .and_then(|x| x.get("members"))
-                        .and_then(|x| x.as_array())
-                        .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
-                    {
-                        let mut packages = vec![];
+                    let packages = loop {
+                        let packages = if let Some(workspace_members) = value
+                            .get("workspace")
+                            .and_then(|x| x.get("members"))
+                            .and_then(|x| x.as_array())
+                            .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
+                        {
+                            let mut packages = vec![];
 
-                        assert!(
-                            output != OutputType::Raw,
-                            "workspace Cargo.toml is not supported for raw output"
-                        );
+                            assert!(
+                                output != OutputType::Raw,
+                                "workspace Cargo.toml is not supported for raw output"
+                            );
 
-                        for file in workspace_members {
-                            let path = PathBuf::from_str(file)?;
+                            for file in workspace_members {
+                                let path = PathBuf::from_str(file)?;
 
-                            packages.extend(process_configs(
+                                packages.extend(process_configs(
+                                    &path,
+                                    offset,
+                                    max,
+                                    chunked,
+                                    spread,
+                                    specific_features.as_deref(),
+                                )?);
+                            }
+
+                            packages
+                        } else {
+                            process_configs(
                                 &path,
                                 offset,
                                 max,
                                 chunked,
                                 spread,
                                 specific_features.as_deref(),
-                            )?);
+                            )?
+                        };
+
+                        if let (Some(max_parallel), Some(chunked)) = (max_parallel, &mut chunked) {
+                            if packages.len() > max_parallel as usize {
+                                *chunked += 1;
+                                continue;
+                            }
                         }
-                        println!("{}", serde_json::to_value(packages).unwrap());
-                    } else {
-                        let value: serde_json::Value = serde_json::to_value(process_configs(
-                            &path,
-                            offset,
-                            max,
-                            chunked,
-                            spread,
-                            specific_features.as_deref(),
-                        )?)?;
-                        println!("{value}");
-                    }
+
+                        break packages;
+                    };
+
+                    println!("{}", serde_json::to_value(packages).unwrap());
                 }
                 OutputType::Raw => {
                     let features = fetch_features(
