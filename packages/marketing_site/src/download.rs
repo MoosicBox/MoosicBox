@@ -1,4 +1,4 @@
-use std::sync::LazyLock;
+use std::{future::Future, sync::LazyLock};
 
 use chrono::NaiveDateTime;
 use moosicbox_app_native_lib::{renderer::View, router::RouteRequest};
@@ -146,13 +146,16 @@ pub async fn releases_route(req: RouteRequest) -> Result<View, Box<dyn std::erro
     log::debug!("releases_route: os={os:?}");
     log::debug!("releases_route: requesting GitHub releases");
 
-    let response = CLIENT
-        .get("https://api.github.com/repos/MoosicBox/MoosicBox/releases")
-        .header(USER_AGENT, "moosicbox-marketing-site")
-        .send()
-        .await?
-        .text()
-        .await?;
+    let response: String = with_retry(3, || async {
+        CLIENT
+            .get("https://api.github.com/repos/MoosicBox/MoosicBox/releases")
+            .header(USER_AGENT, "moosicbox-marketing-site")
+            .send()
+            .await?
+            .text()
+            .await
+    })
+    .await?;
 
     log::debug!("releases_route: received GitHub releases response");
     log::trace!("releases_route: GitHub releases response: '{response}'");
@@ -173,4 +176,22 @@ pub async fn releases_route(req: RouteRequest) -> Result<View, Box<dyn std::erro
             moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
             Box::new(e) as Box<dyn std::error::Error>
         })
+}
+
+async fn with_retry<T: Sized, E, F: Future<Output = Result<T, E>> + Send, U: (Fn() -> F) + Send>(
+    max_retries: u8,
+    func: U,
+) -> Result<T, E> {
+    let mut attempt = 1;
+    loop {
+        match func().await {
+            Ok(x) => return Ok(x),
+            Err(e) => {
+                if attempt >= max_retries {
+                    break Err(e);
+                }
+                attempt += 1;
+            }
+        }
+    }
 }
