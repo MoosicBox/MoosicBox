@@ -1,16 +1,24 @@
 export const EVENT = {
-    domLoaded: 'DOM_LOADED',
-};
+    domLoad: 'DOM_LOAD',
+} as const;
 
 export type EventPayloads = {
-    domLoaded: {
+    domLoad: {
         initial: boolean;
+        navigation: boolean;
         element: HTMLElement;
+    };
+    onAttr: {
+        element: HTMLElement;
+        attr: string;
     };
 };
 
 export type EventType = keyof typeof EVENT;
-export type Handler<T extends EventType> = (payload: EventPayloads[T]) => void;
+export type EventPayloadType = keyof EventPayloads;
+export type Handler<T extends EventPayloadType> = (
+    payload: EventPayloads[T],
+) => void;
 
 type Handlers = { [K in EventType]: Handler<K>[] };
 
@@ -27,7 +35,22 @@ export function on<T extends EventType>(event: T, handler: Handler<T>): void {
     array.push(handler);
 }
 
-function triggerHandlers<T extends EventType>(
+type AttrHandlers = { [attr: string]: Handler<'onAttr'>[] };
+
+const attrHandlers: AttrHandlers = {} as AttrHandlers;
+
+export function onAttr(attr: string, handler: Handler<'onAttr'>): void {
+    let array = attrHandlers[attr];
+
+    if (!array) {
+        array = [];
+        attrHandlers[attr] = array;
+    }
+
+    array.push(handler);
+}
+
+export function triggerHandlers<T extends EventType>(
     event: T,
     payload: EventPayloads[T],
 ): void {
@@ -39,7 +62,11 @@ function triggerHandlers<T extends EventType>(
 document.addEventListener('DOMContentLoaded', (event) => {
     const document = event.target as Document;
     const html = document.children[0] as HTMLHtmlElement;
-    triggerHandlers('domLoaded', { initial: true, element: html });
+    triggerHandlers('domLoad', {
+        initial: true,
+        navigation: false,
+        element: html,
+    });
 });
 
 function removeElementStyles(triggerId: string | undefined): void {
@@ -50,7 +77,7 @@ function removeElementStyles(triggerId: string | undefined): void {
     }
 }
 
-function htmlToStyle(html: string, triggerId: string): HTMLStyleElement {
+export function htmlToStyle(html: string, triggerId: string): HTMLStyleElement {
     const styleContainer = document.createElement('div');
     styleContainer.innerHTML = html;
     const style = styleContainer.children[0] as HTMLStyleElement;
@@ -58,7 +85,7 @@ function htmlToStyle(html: string, triggerId: string): HTMLStyleElement {
     return style;
 }
 
-function htmlToElement(
+export function htmlToElement(
     html: string,
     triggerId: string | undefined,
 ): HTMLElement {
@@ -81,17 +108,19 @@ function htmlToElement(
     return element;
 }
 
-function processElement(element: HTMLElement) {
-    triggerHandlers('domLoaded', { initial: false, element });
-}
-
-function processElementChildren(element: HTMLElement) {
+export function processElement(element: HTMLElement) {
+    for (const key in attrHandlers) {
+        const attr = element.getAttribute(key);
+        if (attr) {
+            attrHandlers[key].forEach((handler) => handler({ element, attr }));
+        }
+    }
     for (const child of element.children) {
         processElement(child as HTMLElement);
     }
 }
 
-function swapOuterHtml(element: HTMLElement, html: string) {
+export function swapOuterHtml(element: HTMLElement, html: string) {
     const children = element.parentNode?.children;
     if (!children) return;
 
@@ -112,13 +141,21 @@ function swapOuterHtml(element: HTMLElement, html: string) {
         );
     }
 
-    processElementChildren(newElement);
+    triggerHandlers('domLoad', {
+        initial: true,
+        navigation: false,
+        element: newElement,
+    });
 }
 
-function swapInnerHtml(element: HTMLElement, html: string) {
+export function swapInnerHtml(element: HTMLElement, html: string) {
     const newElement = htmlToElement(html, element.id);
     element.innerHTML = newElement.innerHTML;
-    processElementChildren(element);
+    triggerHandlers('domLoad', {
+        initial: true,
+        navigation: false,
+        element: newElement,
+    });
 }
 
 function handleResponse(element: HTMLElement, html: string): boolean {
@@ -181,28 +218,11 @@ function processRoute(element: HTMLElement): boolean {
     return true;
 }
 
-function handleTrigger(trigger: string, element: HTMLElement): boolean {
-    if (trigger === 'load') {
+onAttr('hx-trigger', ({ element, attr }) => {
+    if (attr === 'load') {
         return processRoute(element);
     }
-
-    return true;
-}
-
-function checkTriggers(element: HTMLElement): void {
-    const trigger = element.getAttribute('hx-trigger');
-
-    if (trigger) {
-        if (!handleTrigger(trigger, element)) {
-            return;
-        }
-    }
-
-    for (const child of element.children) {
-        checkTriggers(child as HTMLElement);
-    }
-}
-
-on('domLoaded', ({ element }) => {
-    checkTriggers(element);
+});
+on('domLoad', ({ element }) => {
+    processElement(element);
 });
