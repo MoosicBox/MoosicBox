@@ -21,6 +21,7 @@ function isSelfTarget(target: string | null): boolean {
 onAttr('href', ({ element, attr }) => {
     if (attr[0] !== '/') return; // Only handle links for this site
     if (!isSelfTarget(element.getAttribute('target'))) return; // Don't handle for new tab
+    if (element.getAttribute('hx-preload') === 'false') return;
 
     element.addEventListener('mouseenter', (_event) => {
         const existing = typeof cache[attr] === 'string' || pending[attr];
