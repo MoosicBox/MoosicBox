@@ -64,6 +64,14 @@ export function createHyperChadSite(
     const staticSite = new sst.aws.StaticSite(
         staticSiteName,
         {
+            assets: {
+                fileOptions: [
+                    {
+                        files: ['**/*'],
+                        cacheControl: 'max-age=31536000,public,immutable',
+                    },
+                ],
+            },
             transform: {
                 ...args.transform,
                 cdn: (args) => {
