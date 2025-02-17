@@ -796,28 +796,36 @@ impl EguiApp {
                                 if trigger.as_deref() == Some("load") {
                                     let info = RequestInfo { client };
                                     match router.navigate(&route, info).await {
-                                        Ok(result) => {
+                                        Ok(content) => {
                                             let Some(ctx) = ctx.read().unwrap().clone() else {
                                                 moosicbox_assert::die_or_panic!(
                                                     "Context was not set"
                                                 )
                                             };
-                                            Self::swap_elements(
-                                                &swap,
-                                                &ctx,
-                                                &container,
-                                                container_id,
-                                                result.immediate,
-                                            );
-                                            if let Some(future) = result.future {
-                                                let result = future.await;
-                                                Self::swap_elements(
-                                                    &swap,
-                                                    &ctx,
-                                                    &container,
-                                                    container_id,
-                                                    result,
-                                                );
+                                            #[allow(clippy::match_wildcard_for_single_variants)]
+                                            match content {
+                                                Content::View(view) => {
+                                                    Self::swap_elements(
+                                                        &swap,
+                                                        &ctx,
+                                                        &container,
+                                                        container_id,
+                                                        view.immediate,
+                                                    );
+                                                    if let Some(future) = view.future {
+                                                        let view = future.await;
+                                                        Self::swap_elements(
+                                                            &swap,
+                                                            &ctx,
+                                                            &container,
+                                                            container_id,
+                                                            view,
+                                                        );
+                                                    }
+                                                }
+                                                _ => {
+                                                    unimplemented!();
+                                                }
                                             }
                                         }
                                         Err(e) => {

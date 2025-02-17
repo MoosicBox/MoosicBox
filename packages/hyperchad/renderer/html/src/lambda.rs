@@ -4,7 +4,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use hyperchad_renderer::{Color, HtmlTagRenderer};
+use hyperchad_renderer::{Color, HtmlTagRenderer, PartialView, View};
 use hyperchad_router::{ClientInfo, ClientOs, RequestInfo, Router};
 use hyperchad_transformer::ResponsiveTrigger;
 use lambda_http::{http::header::USER_AGENT, Request, RequestExt as _};
@@ -165,36 +165,47 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
         })
     }
 
-    async fn to_html(&self, req: PreparedRequest) -> Result<String, lambda_runtime::Error> {
+    async fn to_response(&self, req: PreparedRequest) -> Result<Content, lambda_runtime::Error> {
         static HEADERS: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
 
-        let view = self
+        let content = self
             .router
             .navigate(&req.path, req.info)
             .await
             .map_err(|e| Box::new(e) as lambda_runtime::Error)?;
 
-        let content = container_element_to_html(&view.immediate, &self.tag_renderer)
-            .map_err(|e| Box::new(e) as lambda_runtime::Error)?;
+        Ok(match content {
+            hyperchad_renderer::Content::View(View {
+                immediate: view, ..
+            })
+            | hyperchad_renderer::Content::PartialView(PartialView {
+                container: view, ..
+            }) => {
+                let content = container_element_to_html(&view, &self.tag_renderer)
+                    .map_err(|e| Box::new(e) as lambda_runtime::Error)?;
 
-        Ok(if req.full {
-            self.tag_renderer.root_html(
-                &HEADERS,
-                &view.immediate,
-                content,
-                self.viewport.as_deref(),
-                self.background,
-                self.title.as_deref(),
-                self.description.as_deref(),
-            )
-        } else {
-            self.tag_renderer.partial_html(
-                &HEADERS,
-                &view.immediate,
-                content,
-                self.viewport.as_deref(),
-                self.background,
-            )
+                Content::Html(if req.full {
+                    self.tag_renderer.root_html(
+                        &HEADERS,
+                        &view,
+                        content,
+                        self.viewport.as_deref(),
+                        self.background,
+                        self.title.as_deref(),
+                        self.description.as_deref(),
+                    )
+                } else {
+                    self.tag_renderer.partial_html(
+                        &HEADERS,
+                        &view,
+                        content,
+                        self.viewport.as_deref(),
+                        self.background,
+                    )
+                })
+            }
+            #[cfg(feature = "json")]
+            hyperchad_renderer::Content::Json(value) => Content::Json(value),
         })
     }
 }

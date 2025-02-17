@@ -9,6 +9,7 @@ use moosicbox_app_native_lib::{
     NativeApp, NativeAppBuilder, NativeAppError, RendererType,
 };
 use moosicbox_env_utils::option_env_f32;
+use serde_json::json;
 
 mod download;
 
@@ -37,6 +38,12 @@ pub static ROUTER: LazyLock<Router> = LazyLock::new(|| {
         })
         .with_route_result(&["/releases"], |req| async {
             download::releases_route(req).await
+        })
+        .with_route(&["/health"], |_| async {
+            json!({
+                "healthy": true,
+                "hash": std::env!("GIT_HASH"),
+            })
         })
 });
 
@@ -140,7 +147,7 @@ pub async fn gen(
 
     #[cfg(all(feature = "html", feature = "static-routes"))]
     {
-        use hyperchad_renderer::HtmlTagRenderer;
+        use hyperchad_renderer::{Content, HtmlTagRenderer, PartialView, View};
         use hyperchad_renderer_html::html::container_element_to_html_response;
         use moosicbox_app_native_lib::router::{ClientInfo, ClientOs, RequestInfo, RouteRequest};
         use tokio::io::AsyncWriteExt as _;
@@ -192,22 +199,13 @@ pub async fn gen(
             };
 
             match handler(req).await {
-                Ok(view) => {
-                    let html = container_element_to_html_response(
-                        &std::collections::HashMap::new(),
-                        &view.immediate,
-                        Some(&*VIEWPORT),
-                        Some(*BACKGROUND_COLOR),
-                        Some("MoosicBox"),
-                        Some("MoosicBox: A music app for cows"),
-                        &*tag_renderer,
-                    )?;
+                Ok(content) => {
                     let output_path = output_path.join(format!("{path_str}.html"));
                     tokio::fs::create_dir_all(&output_path.parent().unwrap())
                         .await
                         .expect("Failed to create dirs");
 
-                    log::debug!("gen path={path_str} -> {output_path:?}\n{html}");
+                    log::debug!("gen path={path_str} -> {output_path:?}");
 
                     let mut file = tokio::fs::File::options()
                         .truncate(true)
@@ -217,9 +215,41 @@ pub async fn gen(
                         .await
                         .expect("Failed to open file");
 
-                    file.write_all(html.as_bytes())
-                        .await
-                        .expect("Failed to write file");
+                    match content {
+                        Content::View(View {
+                            immediate: view, ..
+                        })
+                        | Content::PartialView(PartialView {
+                            container: view, ..
+                        }) => {
+                            let html = container_element_to_html_response(
+                                &std::collections::HashMap::new(),
+                                &view,
+                                Some(&*VIEWPORT),
+                                Some(*BACKGROUND_COLOR),
+                                Some("MoosicBox"),
+                                Some("MoosicBox: A music app for cows"),
+                                &*tag_renderer,
+                            )?;
+
+                            log::debug!("gen path={path_str} -> {output_path:?}\n{html}");
+
+                            file.write_all(html.as_bytes())
+                                .await
+                                .expect("Failed to write file");
+                        }
+                        Content::Json(value) => {
+                            log::debug!("gen path={path_str} -> {output_path:?}\n{value}");
+
+                            file.write_all(
+                                serde_json::to_string(&value)
+                                    .expect("Failed to stringify JSON")
+                                    .as_bytes(),
+                            )
+                            .await
+                            .expect("Failed to write file");
+                        }
+                    }
                 }
                 Err(e) => {
                     return Err(e);

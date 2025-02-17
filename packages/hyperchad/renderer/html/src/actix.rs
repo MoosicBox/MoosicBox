@@ -3,8 +3,9 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
+use actix_web::{http::header::ContentType, HttpResponse};
 use async_trait::async_trait;
-use hyperchad_renderer::{Color, HtmlTagRenderer};
+use hyperchad_renderer::{Color, HtmlTagRenderer, PartialView, View};
 use hyperchad_renderer_html_actix::actix_web::{
     error::ErrorInternalServerError, http::header::USER_AGENT,
 };
@@ -170,36 +171,53 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
         })
     }
 
-    async fn to_html(&self, req: PreparedRequest) -> Result<String, actix_web::Error> {
+    async fn to_response(&self, req: PreparedRequest) -> Result<HttpResponse, actix_web::Error> {
         static HEADERS: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
 
-        let view = self
+        let content = self
             .router
             .navigate(&req.path, req.info)
             .await
             .map_err(ErrorInternalServerError)?;
 
-        let content = container_element_to_html(&view.immediate, &self.tag_renderer)
-            .map_err(ErrorInternalServerError)?;
+        match content {
+            hyperchad_renderer::Content::View(View {
+                immediate: view, ..
+            })
+            | hyperchad_renderer::Content::PartialView(PartialView {
+                container: view, ..
+            }) => {
+                let content = container_element_to_html(&view, &self.tag_renderer)
+                    .map_err(ErrorInternalServerError)?;
 
-        Ok(if req.full {
-            self.tag_renderer.root_html(
-                &HEADERS,
-                &view.immediate,
-                content,
-                self.viewport.as_deref(),
-                self.background,
-                self.title.as_deref(),
-                self.description.as_deref(),
-            )
-        } else {
-            self.tag_renderer.partial_html(
-                &HEADERS,
-                &view.immediate,
-                content,
-                self.viewport.as_deref(),
-                self.background,
-            )
-        })
+                let body = if req.full {
+                    self.tag_renderer.root_html(
+                        &HEADERS,
+                        &view,
+                        content,
+                        self.viewport.as_deref(),
+                        self.background,
+                        self.title.as_deref(),
+                        self.description.as_deref(),
+                    )
+                } else {
+                    self.tag_renderer.partial_html(
+                        &HEADERS,
+                        &view,
+                        content,
+                        self.viewport.as_deref(),
+                        self.background,
+                    )
+                };
+
+                Ok(HttpResponse::Ok()
+                    .content_type(ContentType::html())
+                    .body(body))
+            }
+            #[cfg(feature = "json")]
+            hyperchad_renderer::Content::Json(x) => Ok(HttpResponse::Ok()
+                .content_type(ContentType::json())
+                .body(serde_json::to_string(&x).map_err(ErrorInternalServerError)?)),
+        }
     }
 }

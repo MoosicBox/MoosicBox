@@ -23,13 +23,16 @@ flate2         = { workspace = true }
 lambda_http    = { workspace = true }
 lambda_runtime = { workspace = true }
 log            = { workspace = true }
+serde_json     = { workspace = true, optional = true }
 tokio          = { workspace = true }
 
 [features]
-default = ["assets", "debug"]
+default = ["assets", "debug", "json"]
 
 fail-on-warnings = []
 
 debug = []
+
+json = ["dep:serde_json", "hyperchad_renderer/json"]
 
 assets = ["hyperchad_renderer/assets"]

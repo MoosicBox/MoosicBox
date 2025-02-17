@@ -907,9 +907,20 @@ impl NativeApp {
             async move {
                 log::debug!("app_native_lib::start: router listening");
                 #[allow(unused_variables, clippy::never_loop)]
-                while let Some(element) = router.wait_for_navigation().await {
-                    log::debug!("app_native_lib::start: router received element");
-                    renderer!(&renderer, value, value.render(element).await?);
+                while let Some(content) = router.wait_for_navigation().await {
+                    log::debug!("app_native_lib::start: router received content");
+                    match content {
+                        hyperchad_renderer::Content::View(view) => {
+                            renderer!(&renderer, value, value.render(view).await?);
+                        }
+                        hyperchad_renderer::Content::PartialView(..) => {
+                            moosicbox_assert::die_or_warn!("Received invalid content type");
+                        }
+                        #[cfg(feature = "json")]
+                        hyperchad_renderer::Content::Json(..) => {
+                            moosicbox_assert::die_or_warn!("Received invalid content type");
+                        }
+                    }
                 }
                 Ok::<_, NativeAppError>(())
             }

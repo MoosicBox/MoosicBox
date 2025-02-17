@@ -55,6 +55,7 @@ hyperchad_renderer_vanilla_js = { version = "0.1.0", path = "../hyperchad/render
     "swc",
 ] }
 moosicbox_app_native_lib = { version = "0.1.0", path = "../app/native/lib", default-features = false, features = [
+    "json",
     "logic",
     "maud",
 ] }

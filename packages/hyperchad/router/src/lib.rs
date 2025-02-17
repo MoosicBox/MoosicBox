@@ -9,7 +9,7 @@ use std::{
 
 use flume::{Receiver, Sender};
 use futures::Future;
-use hyperchad_renderer::View;
+use hyperchad_renderer::Content;
 pub use hyperchad_transformer::{Container, Element};
 use qstring::QString;
 use thiserror::Error;
@@ -20,7 +20,7 @@ pub type RouteFunc = Arc<
         dyn (Fn(
                 RouteRequest,
             )
-                -> Pin<Box<dyn Future<Output = Result<View, Box<dyn std::error::Error>>> + Send>>)
+                -> Pin<Box<dyn Future<Output = Result<Content, Box<dyn std::error::Error>>> + Send>>)
             + Send
             + Sync,
     >,
@@ -198,8 +198,8 @@ pub struct Router {
     #[cfg(feature = "static-routes")]
     pub static_routes: Arc<RwLock<Vec<(RoutePath, RouteFunc)>>>,
     pub routes: Arc<RwLock<Vec<(RoutePath, RouteFunc)>>>,
-    sender: Sender<View>,
-    pub receiver: Receiver<View>,
+    sender: Sender<Content>,
+    pub receiver: Receiver<Content>,
 }
 
 impl Default for Router {
@@ -227,7 +227,7 @@ impl Router {
     /// Will panic if routes `RwLock` is poisoned.
     #[must_use]
     pub fn with_route_result<
-        Response: TryInto<View>,
+        Response: TryInto<Content>,
         F: Future<Output = Result<Response, BoxE>> + Send + 'static,
         BoxE: Into<Box<dyn std::error::Error>>,
     >(
@@ -251,7 +251,7 @@ impl Router {
     #[allow(clippy::needless_pass_by_value)]
     #[must_use]
     pub fn with_static_route_result<
-        Response: TryInto<View>,
+        Response: TryInto<Content>,
         F: Future<Output = Result<Response, BoxE>> + Send + 'static,
         BoxE: Into<Box<dyn std::error::Error>>,
     >(
@@ -274,7 +274,7 @@ impl Router {
     ///
     /// Will panic if routes `RwLock` is poisoned.
     #[must_use]
-    pub fn with_route<Response: TryInto<View>, F: Future<Output = Response> + Send + 'static>(
+    pub fn with_route<Response: TryInto<Content>, F: Future<Output = Response> + Send + 'static>(
         self,
         route: impl Into<RoutePath>,
         handler: impl Fn(RouteRequest) -> F + Send + Sync + Clone + 'static,
@@ -295,7 +295,7 @@ impl Router {
     #[allow(clippy::needless_pass_by_value)]
     #[must_use]
     pub fn with_static_route<
-        Response: TryInto<View>,
+        Response: TryInto<Content>,
         F: Future<Output = Response> + Send + 'static,
     >(
         self,
@@ -345,7 +345,7 @@ impl Router {
     /// # Panics
     ///
     /// Will panic if routes `RwLock` is poisoned.
-    pub async fn navigate(&self, path: &str, info: RequestInfo) -> Result<View, NavigateError> {
+    pub async fn navigate(&self, path: &str, info: RequestInfo) -> Result<Content, NavigateError> {
         log::debug!("navigate: path={path}");
 
         let req = RouteRequest::from_path(path, info);
@@ -444,12 +444,12 @@ impl Router {
     }
 
     #[must_use]
-    pub async fn wait_for_navigation(&self) -> Option<View> {
+    pub async fn wait_for_navigation(&self) -> Option<Content> {
         self.receiver.recv_async().await.ok()
     }
 }
 
-fn gen_route_func<Response: TryInto<View>, F: Future<Output = Response> + Send + 'static>(
+fn gen_route_func<Response: TryInto<Content>, F: Future<Output = Response> + Send + 'static>(
     handler: impl Fn(RouteRequest) -> F + Send + Sync + Clone + 'static,
 ) -> RouteFunc
 where
@@ -459,7 +459,7 @@ where
         Box::pin({
             let handler = handler.clone();
             async move {
-                let resp: Result<View, Box<dyn std::error::Error>> =
+                let resp: Result<Content, Box<dyn std::error::Error>> =
                     handler(req).await.try_into().map_err(|e| {
                         log::error!("Failed to handle route: {e:?}");
                         Box::new(e) as Box<dyn std::error::Error>
@@ -471,7 +471,7 @@ where
 }
 
 fn gen_route_func_result<
-    Response: TryInto<View>,
+    Response: TryInto<Content>,
     F: Future<Output = Result<Response, BoxE>> + Send + 'static,
     BoxE: Into<Box<dyn std::error::Error>>,
 >(
@@ -487,7 +487,7 @@ where
                 let resp: Result<Response, Box<dyn std::error::Error>> =
                     handler(req).await.map_err(Into::into);
                 match resp.map(|x| {
-                    let x: Result<View, Box<dyn std::error::Error>> =
+                    let x: Result<Content, Box<dyn std::error::Error>> =
                         x.try_into().map_err(Into::into);
                     x
                 }) {

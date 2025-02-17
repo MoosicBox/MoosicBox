@@ -25,7 +25,7 @@ pub trait ActixResponseProcessor<T: Send + Sync + Clone> {
     /// * If the request fails to prepare
     fn prepare_request(&self, req: HttpRequest) -> Result<T, actix_web::Error>;
 
-    async fn to_html(&self, data: T) -> Result<String, actix_web::Error>;
+    async fn to_response(&self, data: T) -> Result<HttpResponse, actix_web::Error>;
 }
 
 #[derive(Clone)]
@@ -208,13 +208,7 @@ impl<
 
                 let catchall = move |req: HttpRequest, app: web::Data<ActixApp<T, R>>| async move {
                     let data = app.processor.prepare_request(req)?;
-                    let body = app.processor.to_html(data).await?;
-
-                    Ok::<_, actix_web::Error>(
-                        HttpResponse::Ok()
-                            .content_type("text/html; charset=utf-8")
-                            .body(body),
-                    )
+                    app.processor.to_response(data).await
                 };
 
                 app.service(

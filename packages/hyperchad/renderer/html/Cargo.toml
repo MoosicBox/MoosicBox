@@ -31,11 +31,12 @@ async-trait = { workspace = true }
 flume       = { workspace = true }
 log         = { workspace = true }
 maud        = { workspace = true }
+serde_json  = { workspace = true, optional = true }
 tokio       = { workspace = true }
 uaparser    = { workspace = true }
 
 [features]
-default = ["actix", "assets", "debug", "lambda"]
+default = ["actix", "assets", "debug", "json", "lambda"]
 
 fail-on-warnings = []
 
@@ -43,6 +44,13 @@ debug = []
 
 actix  = ["dep:hyperchad_renderer_html_actix"]
 lambda = ["dep:hyperchad_renderer_html_lambda"]
+
+json = [
+    "dep:serde_json",
+    "hyperchad_renderer/json",
+    "hyperchad_renderer_html_lambda?/json",
+    "hyperchad_router/json",
+]
 
 assets = [
     "hyperchad_renderer/assets",

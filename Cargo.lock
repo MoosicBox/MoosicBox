@@ -4806,6 +4806,7 @@ dependencies = [
  "hyperchad_transformer",
  "log",
  "maud",
+ "serde_json",
  "tokio",
 ]
 
@@ -4887,6 +4888,7 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_logging",
+ "serde_json",
  "tokio",
  "uaparser",
 ]
@@ -4921,6 +4923,7 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_task",
+ "serde_json",
  "tokio",
 ]
 

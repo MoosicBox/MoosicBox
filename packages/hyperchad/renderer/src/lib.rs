@@ -21,6 +21,13 @@ pub use tokio::runtime::Handle;
 
 pub use hyperchad_transformer as transformer;
 
+pub enum Content {
+    View(View),
+    PartialView(PartialView),
+    #[cfg(feature = "json")]
+    Json(serde_json::Value),
+}
+
 #[derive(Default, Debug, Clone)]
 pub struct PartialView {
     pub target: String,
@@ -31,6 +38,67 @@ pub struct PartialView {
 pub struct View {
     pub future: Option<Pin<Box<dyn Future<Output = Container> + Send>>>,
     pub immediate: Container,
+}
+
+#[cfg(feature = "json")]
+impl TryFrom<serde_json::Value> for Content {
+    type Error = serde_json::Error;
+
+    fn try_from(value: serde_json::Value) -> Result<Self, Self::Error> {
+        Ok(Self::Json(value))
+    }
+}
+
+#[cfg(feature = "maud")]
+impl TryFrom<maud::Markup> for Content {
+    type Error = ParseError;
+
+    fn try_from(value: maud::Markup) -> Result<Self, Self::Error> {
+        Ok(Self::View(value.into_string().try_into()?))
+    }
+}
+
+impl<'a> TryFrom<&'a str> for Content {
+    type Error = ParseError;
+
+    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        Ok(Self::View(View {
+            future: None,
+            immediate: value.try_into()?,
+        }))
+    }
+}
+
+impl TryFrom<String> for Content {
+    type Error = ParseError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Ok(Self::View(View {
+            future: None,
+            immediate: value.try_into()?,
+        }))
+    }
+}
+
+impl From<Container> for Content {
+    fn from(value: Container) -> Self {
+        Self::View(View {
+            future: None,
+            immediate: value,
+        })
+    }
+}
+
+impl From<View> for Content {
+    fn from(value: View) -> Self {
+        Self::View(value)
+    }
+}
+
+impl From<PartialView> for Content {
+    fn from(value: PartialView) -> Self {
+        Self::PartialView(value)
+    }
 }
 
 #[cfg(feature = "maud")]

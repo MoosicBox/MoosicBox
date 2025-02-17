@@ -43,6 +43,7 @@ default = [
     "format",
     "html",
     "htmx",
+    "json",
     "lambda",
     "logic",
     "maud",
@@ -62,6 +63,12 @@ fltk       = ["dep:hyperchad_renderer_fltk", "logic"]
 html       = ["dep:hyperchad_renderer_html"]
 htmx       = ["dep:hyperchad_renderer_htmx", "html"]
 vanilla-js = ["dep:hyperchad_renderer_vanilla_js", "html"]
+
+json = [
+    "hyperchad_renderer/json",
+    "hyperchad_renderer_html?/json",
+    "hyperchad_router/json",
+]
 
 logic = ["hyperchad_actions/logic", "hyperchad_renderer/logic"]
 

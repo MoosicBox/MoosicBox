@@ -15,6 +15,12 @@ use tokio::runtime::Handle;
 pub use lambda_http;
 pub use lambda_runtime;
 
+pub enum Content {
+    Html(String),
+    #[cfg(feature = "json")]
+    Json(serde_json::Value),
+}
+
 #[async_trait]
 pub trait LambdaResponseProcessor<T: Send + Sync + Clone> {
     /// # Errors
@@ -22,7 +28,7 @@ pub trait LambdaResponseProcessor<T: Send + Sync + Clone> {
     /// * If the request fails to prepare
     fn prepare_request(&self, req: Request) -> Result<T, lambda_runtime::Error>;
 
-    async fn to_html(&self, data: T) -> Result<String, lambda_runtime::Error>;
+    async fn to_response(&self, data: T) -> Result<Content, lambda_runtime::Error>;
 }
 
 #[derive(Clone)]
@@ -82,15 +88,29 @@ impl<
             let app = app.clone();
             async move {
                 let data = app.processor.prepare_request(event)?;
-                let html = app.processor.to_html(data).await?;
+                let content = app.processor.to_response(data).await?;
+
+                let mut response = Response::builder()
+                    .status(200)
+                    .header(CONTENT_ENCODING, "gzip");
+
                 let mut gz = GzEncoder::new(vec![], Compression::default());
-                gz.write_all(html.as_bytes())?;
+
+                response = match content {
+                    Content::Html(x) => {
+                        gz.write_all(x.as_bytes())?;
+                        response.header(CONTENT_TYPE, "text/html")
+                    }
+                    #[cfg(feature = "json")]
+                    Content::Json(x) => {
+                        gz.write_all(serde_json::to_string(&x)?.as_bytes())?;
+                        response.header(CONTENT_TYPE, "application/json")
+                    }
+                };
+
                 let gzip = gz.finish()?;
 
-                let response = Response::builder()
-                    .status(200)
-                    .header(CONTENT_TYPE, "text/html")
-                    .header(CONTENT_ENCODING, "gzip")
+                let response = response
                     .body(lambda_http::Body::Binary(gzip))
                     .map_err(Box::new)?;
 
