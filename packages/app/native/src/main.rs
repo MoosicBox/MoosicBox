@@ -55,6 +55,48 @@ static STATE: LazyLock<moosicbox_app_state::AppState> = LazyLock::new(|| {
 static ROUTER: OnceLock<Router> = OnceLock::new();
 static RENDERER: OnceLock<Box<dyn Renderer>> = OnceLock::new();
 
+#[cfg(feature = "assets")]
+mod assets {
+    use std::{path::PathBuf, sync::LazyLock};
+
+    use moosicbox_app_native_lib::renderer;
+
+    static CARGO_MANIFEST_DIR: LazyLock<Option<std::path::PathBuf>> =
+        LazyLock::new(|| std::option_env!("CARGO_MANIFEST_DIR").map(Into::into));
+
+    static ASSETS_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+        CARGO_MANIFEST_DIR.as_ref().map_or_else(
+            || <PathBuf as std::str::FromStr>::from_str("public").unwrap(),
+            |dir| dir.join("public"),
+        )
+    });
+
+    pub static ASSETS: LazyLock<Vec<renderer::assets::StaticAssetRoute>> = LazyLock::new(|| {
+        vec![
+            #[cfg(feature = "vanilla-js")]
+            renderer::assets::StaticAssetRoute {
+                route: format!(
+                    "js/{}",
+                    moosicbox_app_native_lib::renderer_vanilla_js::SCRIPT_NAME_HASHED.as_str()
+                ),
+                target: renderer::assets::AssetPathTarget::FileContents(
+                    moosicbox_app_native_lib::renderer_vanilla_js::SCRIPT
+                        .as_bytes()
+                        .into(),
+                ),
+            },
+            renderer::assets::StaticAssetRoute {
+                route: "favicon.ico".to_string(),
+                target: ASSETS_DIR.join("favicon.ico").try_into().unwrap(),
+            },
+            renderer::assets::StaticAssetRoute {
+                route: "public".to_string(),
+                target: ASSETS_DIR.clone().try_into().unwrap(),
+            },
+        ]
+    });
+}
+
 async fn convert_state(app_state: &moosicbox_app_state::AppState) -> state::State {
     let mut state = state::State::default();
 
@@ -547,6 +589,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             option_env_f32("WINDOW_WIDTH").unwrap().unwrap_or(1000.0),
             option_env_f32("WINDOW_HEIGHT").unwrap().unwrap_or(600.0),
         );
+
+    #[cfg(feature = "assets")]
+    {
+        for assets in assets::ASSETS.iter().cloned() {
+            app = app.with_static_asset_route_result(assets).unwrap();
+        }
+    }
 
     #[cfg(feature = "_calculated_canvas")]
     {

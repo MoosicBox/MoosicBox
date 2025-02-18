@@ -6430,6 +6430,7 @@ dependencies = [
  "console-subscriber",
  "flume",
  "hyperchad_actions",
+ "hyperchad_renderer_vanilla_js",
  "log",
  "moosicbox_app_native_bundled",
  "moosicbox_app_native_lib",
