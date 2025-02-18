@@ -55,7 +55,7 @@
         "prettier": "^3.5.1",
         "prettier-plugin-astro": "^0.13.0",
         "solid-js": "^1.7.11",
-        "sst": "^3.9.4",
+        "sst": "^3.9.7",
         "typescript": "^5.7.3",
         "vite": "^5.4.14",
         "vitest": "^1.6.1"
@@ -64,7 +64,7 @@
         "@astrojs/check": "^0.9.4",
         "@astrojs/node": "^9.1.0",
         "@astrojs/solid-js": "^5.0.4",
-        "@aws-sdk/client-ssm": "^3.749.0",
+        "@aws-sdk/client-ssm": "^3.750.0",
         "@hotwired/turbo": "^8.0.12",
         "@nanostores/persistent": "^0.9.1",
         "@nanostores/solid": "^0.4.2",
