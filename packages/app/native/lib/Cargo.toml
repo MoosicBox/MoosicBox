@@ -16,9 +16,7 @@ hyperchad_renderer = { version = "0.1.0", path = "../../../hyperchad/renderer", 
 hyperchad_renderer_datastar = { version = "0.1.0", path = "../../../hyperchad/renderer/datastar", optional = true, default-features = false }
 hyperchad_renderer_egui = { version = "0.1.0", path = "../../../hyperchad/renderer/egui", optional = true, default-features = false }
 hyperchad_renderer_fltk = { version = "0.1.0", path = "../../../hyperchad/renderer/fltk", optional = true, default-features = false }
-hyperchad_renderer_html = { version = "0.1.0", path = "../../../hyperchad/renderer/html", optional = true, default-features = false, features = [
-    "actix",
-] }
+hyperchad_renderer_html = { version = "0.1.0", path = "../../../hyperchad/renderer/html", optional = true, default-features = false }
 hyperchad_renderer_htmx = { version = "0.1.0", path = "../../../hyperchad/renderer/htmx", optional = true, default-features = false }
 hyperchad_renderer_vanilla_js = { version = "0.1.0", path = "../../../hyperchad/renderer/vanilla_js", optional = true, default-features = false, features = [
     "swc",
