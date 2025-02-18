@@ -199,8 +199,10 @@ pub fn player(state: &State) -> Markup {
                 {}
             }
             div sx-height=(100) sx-dir="row" {
-                (player_current_album_from_state(state, 70))
-                div sx-align-items="center" {
+                div sx-flex=(1) {
+                    (player_current_album_from_state(state, 70))
+                }
+                div sx-flex=(2) sx-align-items="center" {
                     @let button_size = 40;
                     @let progress_size = 20;
                     div sx-height=(button_size + progress_size) {
@@ -246,7 +248,7 @@ pub fn player(state: &State) -> Markup {
                         }
                     }
                 }
-                div sx-dir="row" sx-justify-content="end" sx-align-items="center" sx-padding-right=(20) {
+                div sx-flex=(1) sx-dir="row" sx-justify-content="end" sx-align-items="center" sx-padding-right=(20) {
                     (volume(state, FOOTER_ICON_SIZE))
                     button
                         sx-width=(FOOTER_ICON_SIZE)
