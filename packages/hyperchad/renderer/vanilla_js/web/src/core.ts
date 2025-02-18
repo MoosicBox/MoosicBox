@@ -210,7 +210,7 @@ function processRoute(element: HTMLElement): boolean {
     for (const method of METHODS) {
         const route = element.getAttribute(`hx-${method}`);
         if (route) {
-            options.method = 'GET';
+            options.method = method;
             handleHtmlResponse(element, fetch(route, options));
         }
     }
