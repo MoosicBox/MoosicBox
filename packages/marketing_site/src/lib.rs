@@ -58,10 +58,12 @@ pub static ASSETS: LazyLock<Vec<hyperchad_renderer::assets::StaticAssetRoute>> =
             moosicbox_app_native_lib::renderer::assets::StaticAssetRoute {
                 route: format!(
                     "js/{}",
-                    hyperchad_renderer_vanilla_js::SCRIPT_NAME_HASHED.as_str()
+                    moosicbox_app_native_lib::renderer_vanilla_js::SCRIPT_NAME_HASHED.as_str()
                 ),
                 target: hyperchad_renderer::assets::AssetPathTarget::FileContents(
-                    hyperchad_renderer_vanilla_js::SCRIPT.as_bytes().into(),
+                    moosicbox_app_native_lib::renderer_vanilla_js::SCRIPT
+                        .as_bytes()
+                        .into(),
                 ),
             },
             moosicbox_app_native_lib::renderer::assets::StaticAssetRoute {

@@ -49,11 +49,6 @@ product-name  = "MoosicBoxMarketingSite"
 [dependencies]
 hyperchad_renderer = { version = "0.1.0", path = "../hyperchad/renderer", default-features = false, optional = true }
 hyperchad_renderer_html = { version = "0.1.0", path = "../hyperchad/renderer/html", default-features = false, optional = true }
-hyperchad_renderer_vanilla_js = { version = "0.1.0", path = "../hyperchad/renderer/vanilla_js", default-features = false, optional = true, features = [
-    "hash",
-    "script",
-    "swc",
-] }
 moosicbox_app_native_lib = { version = "0.1.0", path = "../app/native/lib", default-features = false, features = [
     "json",
     "logic",
@@ -108,11 +103,7 @@ html = [
     "moosicbox_app_native_lib/html",
 ]
 htmx = ["html", "moosicbox_app_native_lib/htmx"]
-vanilla-js = [
-    "dep:hyperchad_renderer_vanilla_js",
-    "html",
-    "moosicbox_app_native_lib/vanilla-js",
-]
+vanilla-js = ["html", "moosicbox_app_native_lib/vanilla-js"]
 
 actix = ["hyperchad_renderer_html?/actix", "moosicbox_app_native_lib/actix"]
 

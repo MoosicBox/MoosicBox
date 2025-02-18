@@ -38,11 +38,6 @@ product-name  = "MoosicBox"
 
 [dependencies]
 hyperchad_actions = { version = "0.1.0", path = "../../hyperchad/actions", default-features = false }
-hyperchad_renderer_vanilla_js = { version = "0.1.0", path = "../../hyperchad/renderer/vanilla_js", default-features = false, optional = true, features = [
-    "hash",
-    "script",
-    "swc",
-] }
 moosicbox_app_native_lib = { version = "0.1.0", path = "lib", default-features = false, features = [
     "logic",
     "maud",
@@ -99,19 +94,14 @@ console-subscriber = ["dep:console-subscriber"]
 _calculated_canvas = ["_canvas"]
 _canvas            = []
 
-datastar = ["_canvas", "moosicbox_app_native_lib/datastar"]
-egui = ["_calculated_canvas", "moosicbox_app_native_lib/egui"]
-egui-glow = ["egui", "moosicbox_app_native_lib/egui-glow"]
-egui-wgpu = ["egui", "moosicbox_app_native_lib/egui-wgpu"]
-fltk = ["_calculated_canvas", "moosicbox_app_native_lib/fltk"]
-html = ["_canvas", "moosicbox_app_native_lib/html"]
-htmx = ["_canvas", "moosicbox_app_native_lib/htmx"]
-vanilla-js = [
-    "_canvas",
-    "dep:hyperchad_renderer_vanilla_js",
-    "html",
-    "moosicbox_app_native_lib/vanilla-js",
-]
+datastar   = ["_canvas", "moosicbox_app_native_lib/datastar"]
+egui       = ["_calculated_canvas", "moosicbox_app_native_lib/egui"]
+egui-glow  = ["egui", "moosicbox_app_native_lib/egui-glow"]
+egui-wgpu  = ["egui", "moosicbox_app_native_lib/egui-wgpu"]
+fltk       = ["_calculated_canvas", "moosicbox_app_native_lib/fltk"]
+html       = ["_canvas", "moosicbox_app_native_lib/html"]
+htmx       = ["_canvas", "moosicbox_app_native_lib/htmx"]
+vanilla-js = ["_canvas", "html", "moosicbox_app_native_lib/vanilla-js"]
 
 actix  = ["moosicbox_app_native_lib/actix"]
 lambda = ["moosicbox_app_native_lib/lambda"]
