@@ -32,6 +32,8 @@ tokio-util = { workspace = true }
 [features]
 default = []
 
+fail-on-warnings = []
+
 profiling = ["dep:profiling"]
 
-fail-on-warnings = []
+blocking = ["reqwest/blocking"]
