@@ -58,10 +58,13 @@ onAttr('href', ({ element, attr }) => {
         const request = pending[attr];
 
         if (request) {
+            console.debug('Awaiting pending request', attr);
             request.then((html) => {
                 if (typeof html === 'string') {
                     swap(html);
+                    return;
                 }
+                console.debug('Invalid response', attr, html);
             });
             return false;
         }
