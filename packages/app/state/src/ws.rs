@@ -61,15 +61,14 @@ impl AppState {
     /// # Errors
     ///
     /// * If the existing websocket connection fails to close
+    /// * If the websocket connection is `UNAUTHORIZED`
     /// * If the request is missing a `MoosicBox` profile
     ///
     /// # Panics
     ///
     /// * If any of the required state properties are missing
     #[allow(clippy::too_many_lines)]
-    pub async fn init_ws_connection(&self) -> Result<(), AppStateError> {
-        self.close_ws_connection().await?;
-
+    pub async fn start_ws_connection(&self) -> Result<(), AppStateError> {
         log::debug!("init_ws_connection: attempting to connect to ws");
         {
             if self.api_url.as_ref().read().await.is_none() {
@@ -111,93 +110,92 @@ impl AppState {
         let client = client.with_cancellation_token(token.clone());
         let state = self.clone();
 
-        self.ws_join_handle
-            .write()
-            .await
-            .replace(moosicbox_task::spawn("moosicbox_app_state: ws", {
-                let state = state.clone();
-                async move {
-                    let mut rx = client.start(client_id, signature_token, profile, {
-                        let handle = handle.clone();
-                        let state = state.clone();
-                        move || {
-                            moosicbox_task::spawn("moosicbox_app_state: ws GetConnectionId", {
-                                let handle = handle.clone();
-                                let state = state.clone();
-                                async move {
-                                    log::debug!("Sending GetConnectionId");
-                                    if let Err(e) = state
-                                        .send_ws_message(
-                                            &handle,
-                                            InboundPayload::GetConnectionId(EmptyPayload {}),
-                                            true,
-                                        )
-                                        .await
-                                    {
-                                        log::error!(
-                                            "Failed to send GetConnectionId WS message: {e:?}"
-                                        );
-                                    }
-                                    if let Err(e) = state.flush_ws_message_buffer().await {
-                                        log::error!("Failed to flush WS message buffer: {e:?}");
-                                    }
-                                }
-                            });
-                        }
-                    });
+        let (tx, mut rx) = tokio::sync::mpsc::channel(1024);
 
-                    while let Some(m) = tokio::select! {
-                        resp = rx.recv() => {
-                            resp
-                        }
-                        () = token.cancelled() => {
-                            None
-                        }
-                    } {
-                        match m {
-                            WsMessage::TextMessage(message) => {
-                                match serde_json::from_str::<OutboundPayload>(&message) {
-                                    Ok(message) => {
-                                        if let Err(e) = state.handle_ws_message(message).await {
-                                            log::error!("Failed to handle_ws_message: {e:?}");
-                                        }
-                                    }
-                                    Err(e) => {
-                                        moosicbox_assert::die_or_error!(
-                                            "got invalid message: {message}: {e:?}"
-                                        );
-                                    }
+        moosicbox_task::spawn("ws message loop", async move {
+            while let Some(m) = tokio::select! {
+                resp = rx.recv() => {
+                    resp
+                }
+                () = token.cancelled() => {
+                    log::debug!("message loop cancelled");
+                    None
+                }
+            } {
+                match m {
+                    WsMessage::TextMessage(message) => {
+                        match serde_json::from_str::<OutboundPayload>(&message) {
+                            Ok(message) => {
+                                if let Err(e) = state.handle_ws_message(message).await {
+                                    log::error!("Failed to handle_ws_message: {e:?}");
                                 }
                             }
-                            WsMessage::Message(bytes) => match String::from_utf8(bytes.into()) {
-                                Ok(message) => {
-                                    match serde_json::from_str::<OutboundPayload>(&message) {
-                                        Ok(message) => {
-                                            if let Err(e) = state.handle_ws_message(message).await {
-                                                log::error!("Failed to handle_ws_message: {e:?}");
-                                            }
-                                        }
-                                        Err(e) => {
-                                            moosicbox_assert::die_or_error!(
-                                                "got invalid message: {message}: {e:?}"
-                                            );
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    log::error!("Failed to read ws message: {e:?}");
-                                }
-                            },
-                            WsMessage::Ping => {
-                                log::debug!("got ping");
+                            Err(e) => {
+                                moosicbox_assert::die_or_error!(
+                                    "got invalid message: {message}: {e:?}"
+                                );
                             }
                         }
                     }
-                    log::debug!("Exiting ws message loop");
+                    WsMessage::Message(bytes) => match String::from_utf8(bytes.into()) {
+                        Ok(message) => match serde_json::from_str::<OutboundPayload>(&message) {
+                            Ok(message) => {
+                                if let Err(e) = state.handle_ws_message(message).await {
+                                    log::error!("Failed to handle_ws_message: {e:?}");
+                                }
+                            }
+                            Err(e) => {
+                                moosicbox_assert::die_or_error!(
+                                    "got invalid message: {message}: {e:?}"
+                                );
+                            }
+                        },
+                        Err(e) => {
+                            log::error!("Failed to read ws message: {e:?}");
+                        }
+                    },
+                    WsMessage::Ping => {
+                        log::debug!("got ping");
+                    }
                 }
-            }));
+            }
+            log::debug!("Exiting ws message loop");
+        });
 
-        Ok(())
+        Ok(client
+            .start(
+                client_id,
+                signature_token,
+                profile,
+                {
+                    let handle = handle.clone();
+                    let state = self.clone();
+                    move || {
+                        moosicbox_task::spawn("moosicbox_app_state: ws GetConnectionId", {
+                            let handle = handle.clone();
+                            let state = state.clone();
+                            async move {
+                                log::debug!("Sending GetConnectionId");
+                                if let Err(e) = state
+                                    .send_ws_message(
+                                        &handle,
+                                        InboundPayload::GetConnectionId(EmptyPayload {}),
+                                        true,
+                                    )
+                                    .await
+                                {
+                                    log::error!("Failed to send GetConnectionId WS message: {e:?}");
+                                }
+                                if let Err(e) = state.flush_ws_message_buffer().await {
+                                    log::error!("Failed to flush WS message buffer: {e:?}");
+                                }
+                            }
+                        });
+                    }
+                },
+                tx,
+            )
+            .await?)
     }
 
     /// # Errors

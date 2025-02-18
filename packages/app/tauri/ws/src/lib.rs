@@ -12,8 +12,9 @@ use futures_util::{future, pin_mut, StreamExt as _};
 use thiserror::Error;
 use tokio::select;
 use tokio::sync::mpsc::error::SendError;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::mpsc::Sender;
 use tokio::time::sleep;
+use tokio_tungstenite::tungstenite::http::StatusCode;
 use tokio_tungstenite::{
     connect_async,
     tungstenite::{Error, Message},
@@ -30,6 +31,12 @@ pub enum SendBytesError {
 pub enum SendMessageError {
     #[error("Unknown {0:?}")]
     Unknown(String),
+}
+
+#[derive(Debug, Error)]
+pub enum ConnectWsError {
+    #[error("Unauthorized")]
+    Unauthorized,
 }
 
 pub enum WsMessage {
@@ -147,195 +154,205 @@ impl WsClient {
         .await
     }
 
-    pub fn start(
+    /// # Errors
+    ///
+    /// * If the ws connection is `UNAUTHORIZED`
+    pub async fn start(
         &self,
         client_id: Option<String>,
         signature_token: Option<String>,
         profile: String,
         on_start: impl Fn() + Send + 'static,
-    ) -> Receiver<WsMessage> {
+        tx: Sender<WsMessage>,
+    ) -> Result<(), ConnectWsError> {
         self.start_handler(
             client_id,
             signature_token,
             profile,
             Self::message_handler,
             on_start,
+            tx,
         )
+        .await
     }
 
     #[allow(clippy::too_many_lines)]
-    fn start_handler<T, O>(
+    async fn start_handler<T, O>(
         &self,
         client_id: Option<String>,
         signature_token: Option<String>,
         profile: String,
         handler: fn(sender: Sender<T>, m: Message) -> O,
         on_start: impl Fn() + Send + 'static,
-    ) -> Receiver<T>
+        tx: Sender<T>,
+    ) -> Result<(), ConnectWsError>
     where
         T: Send + 'static,
         O: Future<Output = Result<(), SendError<T>>> + Send + 'static,
     {
-        let (tx, rx) = channel(1024);
-
         let url = self.url.clone();
         let sender_arc = self.sender.clone();
         let cancellation_token = self.cancellation_token.clone();
 
-        moosicbox_task::spawn("ws", async move {
-            let mut just_retried = false;
+        let mut just_retried = false;
 
-            loop {
-                let close_token = CancellationToken::new();
+        loop {
+            let close_token = CancellationToken::new();
 
-                let (txf, rxf) = futures_channel::mpsc::unbounded();
+            let (txf, rxf) = futures_channel::mpsc::unbounded();
 
-                sender_arc.write().unwrap().replace(txf.clone());
+            sender_arc.write().unwrap().replace(txf.clone());
 
-                let profile_param = format!("?moosicboxProfile={profile}");
-                let client_id_param = client_id
+            let profile_param = format!("?moosicboxProfile={profile}");
+            let client_id_param = client_id
+                .as_ref()
+                .map_or_else(String::new, |id| format!("&clientId={id}"));
+            let signature_token_param = if client_id.is_some() {
+                signature_token
                     .as_ref()
-                    .map_or_else(String::new, |id| format!("&clientId={id}"));
-                let signature_token_param = if client_id.is_some() {
-                    signature_token
-                        .as_ref()
-                        .map_or_else(String::new, |token| format!("&signature={token}"))
-                } else {
-                    String::new()
-                };
-                log::debug!("Connecting to websocket...");
-                #[allow(clippy::redundant_pub_crate)]
-                match select!(
-                    resp = connect_async(format!("{url}{profile_param}{client_id_param}{signature_token_param}")) => resp,
-                    () = cancellation_token.cancelled() => {
-                        log::debug!("Cancelling connect");
-                        break;
+                    .map_or_else(String::new, |token| format!("&signature={token}"))
+            } else {
+                String::new()
+            };
+            let url = format!("{url}{profile_param}{client_id_param}{signature_token_param}");
+            log::debug!("Connecting to websocket '{url}'...");
+            #[allow(clippy::redundant_pub_crate)]
+            match select!(
+                resp = connect_async(url) => resp,
+                () = cancellation_token.cancelled() => {
+                    log::debug!("Cancelling connect");
+                    break;
+                }
+            ) {
+                Ok((ws_stream, _)) => {
+                    log::debug!("WebSocket handshake has been successfully completed");
+                    on_start();
+
+                    if just_retried {
+                        log::info!("WebSocket successfully reconnected");
+                        just_retried = false;
                     }
-                ) {
-                    Ok((ws_stream, _)) => {
-                        log::debug!("WebSocket handshake has been successfully completed");
-                        on_start();
 
-                        if just_retried {
-                            log::info!("WebSocket successfully reconnected");
-                            just_retried = false;
-                        }
+                    let (write, read) = ws_stream.split();
 
-                        let (write, read) = ws_stream.split();
+                    let ws_writer = rxf
+                        .map(|message| match message {
+                            WsMessage::TextMessage(message) => {
+                                moosicbox_logging::debug_or_trace!(
+                                    ("Sending text packet from request"),
+                                    ("Sending text packet from request message={message}")
+                                );
+                                Ok(Message::Text(message.into()))
+                            }
+                            WsMessage::Message(bytes) => {
+                                log::debug!("Sending packet from request",);
+                                Ok(Message::Binary(bytes.to_vec().into()))
+                            }
+                            WsMessage::Ping => {
+                                log::trace!("Sending ping");
+                                Ok(Message::Ping(vec![].into()))
+                            }
+                        })
+                        .forward(write);
 
-                        let ws_writer = rxf
-                            .map(|message| match message {
-                                WsMessage::TextMessage(message) => {
-                                    moosicbox_logging::debug_or_trace!(
-                                        ("Sending text packet from request"),
-                                        ("Sending text packet from request message={message}")
-                                    );
-                                    Ok(Message::Text(message.into()))
-                                }
-                                WsMessage::Message(bytes) => {
-                                    log::debug!("Sending packet from request",);
-                                    Ok(Message::Binary(bytes.to_vec().into()))
-                                }
-                                WsMessage::Ping => {
-                                    log::trace!("Sending ping");
-                                    Ok(Message::Ping(vec![].into()))
-                                }
-                            })
-                            .forward(write);
+                    let ws_reader = read.for_each(|m| async {
+                        let m = match m {
+                            Ok(m) => m,
+                            Err(e) => {
+                                log::error!("Send Loop error: {:?}", e);
+                                close_token.cancel();
+                                return;
+                            }
+                        };
 
-                        let ws_reader = read.for_each(|m| async {
-                            let m = match m {
-                                Ok(m) => m,
-                                Err(e) => {
-                                    log::error!("Send Loop error: {:?}", e);
-                                    close_token.cancel();
-                                    return;
-                                }
-                            };
-
-                            moosicbox_task::spawn("ws: Process WS message", {
-                                let tx = tx.clone();
-                                let close_token = close_token.clone();
-
-                                async move {
-                                    if let Err(e) = handler(tx.clone(), m).await {
-                                        log::error!("Handler Send Loop error: {e:?}");
-                                        close_token.cancel();
-                                    }
-                                }
-                            });
-                        });
-
-                        let pinger = moosicbox_task::spawn("ws: pinger", {
-                            let txf = txf.clone();
+                        moosicbox_task::spawn("ws: Process WS message", {
+                            let tx = tx.clone();
                             let close_token = close_token.clone();
-                            let cancellation_token = cancellation_token.clone();
 
                             async move {
-                                loop {
-                                    select!(
-                                        () = close_token.cancelled() => { break; }
-                                        () = cancellation_token.cancelled() => { break; }
-                                        () = tokio::time::sleep(std::time::Duration::from_millis(5000)) => {
-                                            log::trace!("Sending ping to server");
-                                            if let Err(e) = txf.unbounded_send(WsMessage::Ping) {
-                                                log::error!("Pinger Send Loop error: {e:?}");
-                                                close_token.cancel();
-                                                break;
-                                            }
-                                        }
-                                    );
+                                if let Err(e) = handler(tx.clone(), m).await {
+                                    log::error!("Handler Send Loop error: {e:?}");
+                                    close_token.cancel();
                                 }
                             }
                         });
+                    });
 
-                        pin_mut!(ws_writer, ws_reader);
-                        select!(
-                            () = close_token.cancelled() => {}
-                            () = cancellation_token.cancelled() => {}
-                            _ = future::select(ws_writer, ws_reader) => {}
-                        );
-                        if !close_token.is_cancelled() {
-                            close_token.cancel();
-                        }
-                        log::debug!("start_handler: Waiting for pinger to finish...");
-                        if let Err(e) = pinger.await {
-                            log::warn!("start_handler: Pinger failed to finish: {e:?}");
-                        }
-                        log::info!("WebSocket connection closed");
-                    }
-                    Err(err) => {
-                        if let Error::Http(response) = err {
-                            if let Ok(body) =
-                                std::str::from_utf8(response.body().as_ref().unwrap_or(&vec![]))
-                            {
-                                log::error!("error ({}): {body}", response.status());
-                            } else {
-                                log::error!("body: (unable to get body)");
+                    let pinger = moosicbox_task::spawn("ws: pinger", {
+                        let txf = txf.clone();
+                        let close_token = close_token.clone();
+                        let cancellation_token = cancellation_token.clone();
+
+                        async move {
+                            loop {
+                                select!(
+                                    () = close_token.cancelled() => { break; }
+                                    () = cancellation_token.cancelled() => { break; }
+                                    () = tokio::time::sleep(std::time::Duration::from_millis(5000)) => {
+                                        log::trace!("Sending ping to server");
+                                        if let Err(e) = txf.unbounded_send(WsMessage::Ping) {
+                                            log::error!("Pinger Send Loop error: {e:?}");
+                                            close_token.cancel();
+                                            break;
+                                        }
+                                    }
+                                );
                             }
-                        } else {
-                            log::error!("Failed to connect to websocket server: {err:?}");
                         }
-                    }
-                }
+                    });
 
-                #[allow(clippy::redundant_pub_crate)]
-                if just_retried {
+                    pin_mut!(ws_writer, ws_reader);
                     select!(
-                        () = sleep(Duration::from_millis(5000)) => {}
-                        () = cancellation_token.cancelled() => {
-                            log::debug!("Cancelling retry");
-                            break;
-                        }
+                        () = close_token.cancelled() => {}
+                        () = cancellation_token.cancelled() => {}
+                        _ = future::select(ws_writer, ws_reader) => {}
                     );
-                } else {
-                    just_retried = true;
+                    if !close_token.is_cancelled() {
+                        close_token.cancel();
+                    }
+                    log::debug!("start_handler: Waiting for pinger to finish...");
+                    if let Err(e) = pinger.await {
+                        log::warn!("start_handler: Pinger failed to finish: {e:?}");
+                    }
+                    log::info!("WebSocket connection closed");
+                }
+                Err(err) => {
+                    log::error!("Websocket error: {err:?}");
+                    if let Error::Http(response) = err {
+                        if response.status() == StatusCode::UNAUTHORIZED {
+                            log::error!("Unauthorized ws connection");
+                            return Err(ConnectWsError::Unauthorized);
+                        }
+
+                        if let Ok(body) =
+                            std::str::from_utf8(response.body().as_ref().unwrap_or(&vec![]))
+                        {
+                            log::error!("error ({}): {body}", response.status());
+                        } else {
+                            log::error!("body: (unable to get body)");
+                        }
+                    } else {
+                        log::error!("Failed to connect to websocket server: {err:?}");
+                    }
                 }
             }
 
-            log::debug!("Handler closed");
-        });
+            #[allow(clippy::redundant_pub_crate)]
+            if just_retried {
+                select!(
+                    () = sleep(Duration::from_millis(5000)) => {}
+                    () = cancellation_token.cancelled() => {
+                        log::debug!("Cancelling retry");
+                        break;
+                    }
+                );
+            } else {
+                just_retried = true;
+            }
+        }
 
-        rx
+        log::debug!("Handler closed");
+
+        Ok(())
     }
 }

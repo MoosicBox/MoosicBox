@@ -8,7 +8,7 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use moosicbox_app_ws::WsHandle;
+use moosicbox_app_ws::{ConnectWsError, WsHandle};
 use moosicbox_audio_output::{AudioOutputFactory, AudioOutputScannerError};
 use moosicbox_audio_zone::models::{ApiAudioZoneWithSession, ApiPlayer};
 use moosicbox_music_models::PlaybackQuality;
@@ -132,6 +132,10 @@ pub enum AppStateError {
     FetchAudioZones(#[from] FetchAudioZonesError),
     #[error(transparent)]
     ProxyRequest(#[from] ProxyRequestError),
+    #[error(transparent)]
+    ConnectWs(#[from] ConnectWsError),
+    #[error(transparent)]
+    Join(#[from] tokio::task::JoinError),
 }
 
 impl AppStateError {
@@ -209,7 +213,8 @@ pub struct AppState {
     pub api_token: Arc<RwLock<Option<String>>>,
     pub ws_token: Arc<RwLock<Option<CancellationToken>>>,
     pub ws_handle: Arc<RwLock<Option<WsHandle>>>,
-    pub ws_join_handle: Arc<RwLock<Option<JoinHandle<()>>>>,
+    #[allow(clippy::type_complexity)]
+    pub ws_join_handle: Arc<RwLock<Option<JoinHandle<Result<(), AppStateError>>>>>,
     pub audio_zone_active_api_players: Arc<RwLock<HashMap<u64, Vec<ApiPlayersMap>>>>,
     pub active_players: Arc<RwLock<Vec<PlaybackTargetSessionPlayer>>>,
     pub playback_quality: Arc<RwLock<Option<PlaybackQuality>>>,
@@ -1681,28 +1686,60 @@ impl AppState {
             });
         }
 
-        moosicbox_task::spawn("set_state: init_ws_connection", {
+        self.close_ws_connection().await?;
+
+        let ws = moosicbox_task::spawn("set_state: init_ws_connection", {
             let state = self.clone();
             async move {
-                if state.signature_token.read().await.is_none() {
-                    let response = state
-                        .api_proxy_post("auth/signature-token".to_string(), None, None)
-                        .await?;
-                    let token = response
-                        .get("token")
-                        .ok_or_else(|| AppStateError::unknown("Missing token"))?
-                        .as_str()
-                        .ok_or_else(|| AppStateError::unknown("Invalid token"))?
-                        .to_string();
-                    let mut signature_token = state.signature_token.write().await;
+                loop {
+                    log::debug!("Attempting to init_ws_connection...");
+                    match state.start_ws_connection().await {
+                        Ok(()) => {
+                            log::debug!("ws connection closed");
+                            break;
+                        }
+                        Err(e) => {
+                            if matches!(e, AppStateError::ConnectWs(ConnectWsError::Unauthorized)) {
+                                if state.signature_token.read().await.is_none() {
+                                    state.fetch_signature_token().await?;
+                                    continue;
+                                }
 
-                    *signature_token = Some(token);
+                                log::error!("ws connection Unauthorized: {e:?}");
+                                return Err(e);
+                            }
+
+                            log::error!("ws connection error: {e:?}");
+
+                            return Err(e);
+                        }
+                    }
                 }
 
-                log::debug!("Attempting to init_ws_connection...");
-                state.init_ws_connection().await
+                Ok::<_, AppStateError>(())
             }
         });
+
+        self.ws_join_handle.write().await.replace(ws);
+
+        Ok(())
+    }
+
+    async fn fetch_signature_token(&self) -> Result<(), AppStateError> {
+        if self.signature_token.read().await.is_none() {
+            let response = self
+                .api_proxy_post("auth/signature-token".to_string(), None, None)
+                .await?;
+            let token = response
+                .get("token")
+                .ok_or_else(|| AppStateError::unknown("Missing token"))?
+                .as_str()
+                .ok_or_else(|| AppStateError::unknown("Invalid token"))?
+                .to_string();
+            let mut signature_token = self.signature_token.write().await;
+
+            *signature_token = Some(token);
+        }
 
         Ok(())
     }
