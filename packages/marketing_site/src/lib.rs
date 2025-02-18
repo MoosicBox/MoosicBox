@@ -17,14 +17,6 @@ static DEFAULT_OUTPUT_DIR: &str = "gen";
 static CARGO_MANIFEST_DIR: LazyLock<Option<std::path::PathBuf>> =
     LazyLock::new(|| std::option_env!("CARGO_MANIFEST_DIR").map(Into::into));
 
-#[cfg(feature = "assets")]
-static ASSETS_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
-    CARGO_MANIFEST_DIR.as_ref().map_or_else(
-        || <PathBuf as std::str::FromStr>::from_str("public").unwrap(),
-        |dir| dir.join("public"),
-    )
-});
-
 pub static ROUTER: LazyLock<Router> = LazyLock::new(|| {
     Router::new()
         .with_static_route(&["/", "/home"], |_| async {
@@ -48,6 +40,14 @@ pub static ROUTER: LazyLock<Router> = LazyLock::new(|| {
                 "hash": std::env!("GIT_HASH"),
             })
         })
+});
+
+#[cfg(feature = "assets")]
+static ASSETS_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+    CARGO_MANIFEST_DIR.as_ref().map_or_else(
+        || <PathBuf as std::str::FromStr>::from_str("public").unwrap(),
+        |dir| dir.join("public"),
+    )
 });
 
 #[cfg(feature = "assets")]
