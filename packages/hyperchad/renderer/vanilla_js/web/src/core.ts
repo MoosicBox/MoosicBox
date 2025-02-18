@@ -130,32 +130,40 @@ export function swapOuterHtml(element: HTMLElement, html: string) {
 
     const parent = element.parentNode;
     const child = newElement.lastChild;
+    const newChildren = [];
     if (child) {
-        element.replaceWith(newElement.removeChild(child));
+        const newChild = newElement.removeChild(child) as HTMLElement;
+        element.replaceWith(newChild);
+        newChildren.push(newChild);
     }
 
     while (newElement.children.length > 0) {
-        parent.insertBefore(
-            newElement.removeChild(newElement.lastChild!),
-            child,
-        );
+        const newChild = newElement.removeChild(
+            newElement.lastChild!,
+        ) as HTMLElement;
+        parent.insertBefore(newChild, child);
+        newChildren.push(newChild);
     }
 
-    triggerHandlers('domLoad', {
-        initial: true,
-        navigation: false,
-        element: newElement,
-    });
+    for (const element of newChildren) {
+        triggerHandlers('domLoad', {
+            initial: false,
+            navigation: false,
+            element,
+        });
+    }
 }
 
 export function swapInnerHtml(element: HTMLElement, html: string) {
     const newElement = htmlToElement(html, element.id);
     element.innerHTML = newElement.innerHTML;
-    triggerHandlers('domLoad', {
-        initial: true,
-        navigation: false,
-        element: newElement,
-    });
+    for (const child of element.children) {
+        triggerHandlers('domLoad', {
+            initial: false,
+            navigation: false,
+            element: child as HTMLElement,
+        });
+    }
 }
 
 function handleResponse(element: HTMLElement, html: string): boolean {
@@ -223,6 +231,7 @@ onAttr('hx-trigger', ({ element, attr }) => {
         return processRoute(element);
     }
 });
+
 on('domLoad', ({ element }) => {
     processElement(element);
 });
