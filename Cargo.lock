@@ -2041,9 +2041,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.29"
+version = "4.5.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8acebd8ad879283633b343856142139f2da2317c96b05b4dd6181c61e2480184"
+checksum = "92b7b18d71fad5313a1e320fa9897994228ce274b60faa4d694fe0ea89cd9e6d"
 dependencies = [
  "clap_builder",
  "clap_derive 4.5.28",
@@ -2051,9 +2051,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.29"
+version = "4.5.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6ba32cbda51c7e1dfd49acc1457ba1a7dec5b64fe360e828acb13ca8dc9c2f9"
+checksum = "a35db2071778a7344791a4fb4f95308b5673d219dee3ae348b86642574ecc90c"
 dependencies = [
  "anstream",
  "anstyle",
@@ -2114,7 +2114,7 @@ dependencies = [
 name = "clippier"
 version = "0.1.0"
 dependencies = [
- "clap 4.5.29",
+ "clap 4.5.30",
  "itertools 0.14.0",
  "log",
  "moosicbox_logging",
@@ -6333,7 +6333,7 @@ dependencies = [
 name = "moosicbox_aconverter"
 version = "0.1.0"
 dependencies = [
- "clap 4.5.29",
+ "clap 4.5.30",
  "futures",
  "log",
  "moosicbox_assert",
@@ -6415,7 +6415,7 @@ dependencies = [
 name = "moosicbox_app_create_config"
 version = "0.1.0"
 dependencies = [
- "clap 4.5.29",
+ "clap 4.5.30",
  "log",
  "moosicbox_assert",
  "moosicbox_logging",
@@ -6904,7 +6904,7 @@ name = "moosicbox_image"
 version = "0.1.0"
 dependencies = [
  "bytes",
- "clap 4.5.29",
+ "clap 4.5.30",
  "image",
  "libvips",
  "log",
@@ -7039,7 +7039,7 @@ version = "0.1.0"
 dependencies = [
  "async-recursion",
  "chrono",
- "clap 4.5.29",
+ "clap 4.5.30",
  "console-subscriber",
  "hyperchad_renderer",
  "hyperchad_renderer_html",
@@ -13152,9 +13152,9 @@ dependencies = [
 
 [[package]]
 name = "tempfile"
-version = "3.17.0"
+version = "3.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a40f762a77d2afa88c2d919489e390a12bdd261ed568e60cfa7e48d4e20f0d33"
+checksum = "22e5a0acb1f3f55f65cc4a866c361b2fb2a0ff6366785ae6fbb5f85df07ba230"
 dependencies = [
  "cfg-if",
  "fastrand",
@@ -14265,9 +14265,9 @@ dependencies = [
 
 [[package]]
 name = "uuid"
-version = "1.13.1"
+version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ced87ca4be083373936a67f8de945faa23b6b42384bd5b64434850802c6dccd0"
+checksum = "8c1f41ffb7cf259f1ecc2876861a17e7142e63ead296f671f81f6ae85903e0d6"
 dependencies = [
  "getrandom 0.3.1",
  "serde",
