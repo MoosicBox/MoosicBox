@@ -9,6 +9,7 @@ async function initiateFetchDocument(url: string): Promise<string | void> {
         const html = await response.text();
         cache[url] = html;
         delete pending[url];
+        return html;
     } catch (e) {
         console.error('Failed to fetch document', url, e);
     }
