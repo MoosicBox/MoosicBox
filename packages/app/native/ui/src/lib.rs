@@ -38,7 +38,7 @@ static CURRENT_ALBUM_SIZE: u16 = 70;
 #[macro_export]
 macro_rules! public_img {
     ($path:expr $(,)?) => {
-        moosicbox_app_native_image::image!(concat!("../../../../../app-website/public/img/", $path))
+        moosicbox_app_native_image::image!(concat!("../../public/img/", $path))
     };
 }
 
