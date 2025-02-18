@@ -269,7 +269,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut layers = vec![];
 
         #[cfg(feature = "console-subscriber")]
-        if std::env::var("TOKIO_CONSOLE") == Ok("1".to_string()) {
+        if std::env::var("TOKIO_CONSOLE").as_deref() == Ok("1") {
             use moosicbox_logging::free_log_client::DynLayer;
 
             layers.push(Box::new(console_subscriber::spawn()) as DynLayer);
