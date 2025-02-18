@@ -19,6 +19,8 @@ hyperchad_renderer_fltk = { version = "0.1.0", path = "../../../hyperchad/render
 hyperchad_renderer_html = { version = "0.1.0", path = "../../../hyperchad/renderer/html", optional = true, default-features = false }
 hyperchad_renderer_htmx = { version = "0.1.0", path = "../../../hyperchad/renderer/htmx", optional = true, default-features = false }
 hyperchad_renderer_vanilla_js = { version = "0.1.0", path = "../../../hyperchad/renderer/vanilla_js", optional = true, default-features = false, features = [
+    "hash",
+    "script",
     "swc",
 ] }
 hyperchad_router = { version = "0.1.0", path = "../../../hyperchad/router", default-features = false }
