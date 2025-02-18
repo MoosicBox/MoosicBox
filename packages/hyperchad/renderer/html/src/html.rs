@@ -111,13 +111,13 @@ pub fn calc_to_css_string(calc: &Calculation, px: bool) -> String {
         Calculation::Number(number) => number_to_html_string(number, px),
         Calculation::Add(left, right) => format!(
             "{} + {}",
-            calc_to_css_string(left, false),
-            calc_to_css_string(right, false)
+            calc_to_css_string(left, px),
+            calc_to_css_string(right, px)
         ),
         Calculation::Subtract(left, right) => format!(
             "{} - {}",
-            calc_to_css_string(left, false),
-            calc_to_css_string(right, false)
+            calc_to_css_string(left, px),
+            calc_to_css_string(right, px)
         ),
         Calculation::Multiply(left, right) => format!(
             "{} * {}",
