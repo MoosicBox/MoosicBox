@@ -12,6 +12,24 @@ use tokio::runtime::Runtime;
 pub use hyperchad_renderer as renderer;
 pub use hyperchad_router as router;
 
+#[cfg(feature = "egui")]
+pub use hyperchad_renderer_egui as renderer_egui;
+
+#[cfg(feature = "fltk")]
+pub use hyperchad_renderer_fltk as renderer_fltk;
+
+#[cfg(feature = "vanilla-js")]
+pub use hyperchad_renderer_vanilla_js as renderer_vanilla_js;
+
+#[cfg(feature = "html")]
+pub use hyperchad_renderer_html as renderer_html;
+
+#[cfg(feature = "datastar")]
+pub use hyperchad_renderer_datastar as renderer_datastar;
+
+#[cfg(feature = "htmx")]
+pub use hyperchad_renderer_htmx as renderer_htmx;
+
 #[cfg(any(feature = "egui", feature = "fltk"))]
 pub static CLIENT_INFO: std::sync::LazyLock<Arc<hyperchad_router::ClientInfo>> =
     std::sync::LazyLock::new(|| {
