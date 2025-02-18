@@ -562,7 +562,7 @@ pub fn footer(state: &State) -> Markup {
 #[must_use]
 pub fn main(slot: &Markup) -> Markup {
     html! {
-        main class="main-content" sx-overflow-y="auto" {
+        main class="main-content" sx-overflow-y="auto" sx-flex-grow=(1) {
             (slot)
         }
     }
