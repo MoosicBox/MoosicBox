@@ -62,7 +62,7 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                             write_attr(f, b"hx-swap", b"outerHTML")?;
                         }
                         hyperchad_transformer::models::SwapTarget::Children => {
-                            write_attr(f, b"hx-swap", b"in 'nerHTML")?;
+                            write_attr(f, b"hx-swap", b"innerHTML")?;
                         }
                     }
                     write_attr(f, b"hx-get", route.as_bytes())?;
