@@ -62,7 +62,7 @@ moosicbox_ws = { version = "0.1.0", path = "../../ws", default-features = false 
 # Bundled dependencies
 moosicbox_app_native_bundled = { version = "0.1.0", path = "bundled", optional = true, default-features = false }
 
-console-subscriber = { workspace = true }
+console-subscriber = { workspace = true, optional = true }
 flume              = { workspace = true }
 log                = { workspace = true }
 reqwest            = { workspace = true, features = ["json"] }
@@ -76,6 +76,7 @@ tokio-util         = { workspace = true }
 default = [
     "all-formats",
     "all-sources",
+    "console-subscriber",
     "datastar",
     "egui-wgpu",
     "fltk",
@@ -86,6 +87,8 @@ default = [
 ]
 
 fail-on-warnings = []
+
+console-subscriber = ["dep:console-subscriber"]
 
 _calculated_canvas = ["_canvas"]
 _canvas            = []

@@ -10,7 +10,6 @@ use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
 use moosicbox_env_utils::{default_env_usize, option_env_f32, option_env_i32};
-use moosicbox_logging::free_log_client::DynLayer;
 use moosicbox_marketing_site::VIEWPORT;
 
 #[derive(Parser, Debug)]
@@ -39,9 +38,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if cfg!(feature = "profiling-tracing") {
         // no global tracing defined here
     } else {
+        #[allow(unused_mut)]
         let mut layers = vec![];
 
+        #[cfg(feature = "console-subscriber")]
         if std::env::var("TOKIO_CONSOLE") == Ok("1".to_string()) {
+            use moosicbox_logging::free_log_client::DynLayer;
+
             layers.push(Box::new(console_subscriber::spawn()) as DynLayer);
         }
 

@@ -27,7 +27,6 @@ use moosicbox_app_native_ui::{
 use moosicbox_app_state::AppStateError;
 use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
 use moosicbox_env_utils::{default_env_usize, option_env_f32, option_env_i32};
-use moosicbox_logging::free_log_client::DynLayer;
 use moosicbox_music_api::{profiles::PROFILES, MusicApi, SourceToMusicApi};
 use moosicbox_music_models::{
     api::{ApiAlbum, ApiArtist, ApiTrack},
@@ -266,9 +265,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if cfg!(feature = "profiling-tracing") {
         // no global tracing defined here
     } else {
+        #[allow(unused_mut)]
         let mut layers = vec![];
 
+        #[cfg(feature = "console-subscriber")]
         if std::env::var("TOKIO_CONSOLE") == Ok("1".to_string()) {
+            use moosicbox_logging::free_log_client::DynLayer;
+
             layers.push(Box::new(console_subscriber::spawn()) as DynLayer);
         }
 
