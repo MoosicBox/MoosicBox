@@ -2995,7 +2995,7 @@ checksum = "feeef44e73baff3a26d371801df019877a9866a8c493d315ab00177843314f35"
 [[package]]
 name = "ecolor"
 version = "0.31.0"
-source = "git+https://github.com/BSteffaniak/egui#b42a203254767737599a23057f56f4fce9542846"
+source = "git+https://github.com/BSteffaniak/egui#652d75d4acde1922735fdbc64cf3680879672a0a"
 dependencies = [
  "bytemuck",
  "emath",
@@ -3004,7 +3004,7 @@ dependencies = [
 [[package]]
 name = "eframe"
 version = "0.31.0"
-source = "git+https://github.com/BSteffaniak/egui#b42a203254767737599a23057f56f4fce9542846"
+source = "git+https://github.com/BSteffaniak/egui#652d75d4acde1922735fdbc64cf3680879672a0a"
 dependencies = [
  "ahash",
  "bytemuck",
@@ -3041,7 +3041,7 @@ dependencies = [
 [[package]]
 name = "egui"
 version = "0.31.0"
-source = "git+https://github.com/BSteffaniak/egui#b42a203254767737599a23057f56f4fce9542846"
+source = "git+https://github.com/BSteffaniak/egui#652d75d4acde1922735fdbc64cf3680879672a0a"
 dependencies = [
  "accesskit",
  "ahash",
@@ -3056,7 +3056,7 @@ dependencies = [
 [[package]]
 name = "egui-wgpu"
 version = "0.31.0"
-source = "git+https://github.com/BSteffaniak/egui#b42a203254767737599a23057f56f4fce9542846"
+source = "git+https://github.com/BSteffaniak/egui#652d75d4acde1922735fdbc64cf3680879672a0a"
 dependencies = [
  "ahash",
  "bytemuck",
@@ -3075,7 +3075,7 @@ dependencies = [
 [[package]]
 name = "egui-winit"
 version = "0.31.0"
-source = "git+https://github.com/BSteffaniak/egui#b42a203254767737599a23057f56f4fce9542846"
+source = "git+https://github.com/BSteffaniak/egui#652d75d4acde1922735fdbc64cf3680879672a0a"
 dependencies = [
  "accesskit_winit",
  "ahash",
@@ -3094,7 +3094,7 @@ dependencies = [
 [[package]]
 name = "egui_extras"
 version = "0.31.0"
-source = "git+https://github.com/BSteffaniak/egui#b42a203254767737599a23057f56f4fce9542846"
+source = "git+https://github.com/BSteffaniak/egui#652d75d4acde1922735fdbc64cf3680879672a0a"
 dependencies = [
  "ahash",
  "egui",
@@ -3108,7 +3108,7 @@ dependencies = [
 [[package]]
 name = "egui_glow"
 version = "0.31.0"
-source = "git+https://github.com/BSteffaniak/egui#b42a203254767737599a23057f56f4fce9542846"
+source = "git+https://github.com/BSteffaniak/egui#652d75d4acde1922735fdbc64cf3680879672a0a"
 dependencies = [
  "ahash",
  "bytemuck",
@@ -3134,7 +3134,7 @@ dependencies = [
 [[package]]
 name = "emath"
 version = "0.31.0"
-source = "git+https://github.com/BSteffaniak/egui#b42a203254767737599a23057f56f4fce9542846"
+source = "git+https://github.com/BSteffaniak/egui#652d75d4acde1922735fdbc64cf3680879672a0a"
 dependencies = [
  "bytemuck",
 ]
@@ -3262,7 +3262,7 @@ dependencies = [
 [[package]]
 name = "epaint"
 version = "0.31.0"
-source = "git+https://github.com/BSteffaniak/egui#b42a203254767737599a23057f56f4fce9542846"
+source = "git+https://github.com/BSteffaniak/egui#652d75d4acde1922735fdbc64cf3680879672a0a"
 dependencies = [
  "ab_glyph",
  "ahash",
@@ -3279,7 +3279,7 @@ dependencies = [
 [[package]]
 name = "epaint_default_fonts"
 version = "0.31.0"
-source = "git+https://github.com/BSteffaniak/egui#b42a203254767737599a23057f56f4fce9542846"
+source = "git+https://github.com/BSteffaniak/egui#652d75d4acde1922735fdbc64cf3680879672a0a"
 
 [[package]]
 name = "equivalent"
@@ -4291,9 +4291,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.4.7"
+version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccae279728d634d083c00f6099cb58f01cc99c145b84b8be2f6c74618d79922e"
+checksum = "5017294ff4bb30944501348f6f8e42e6ad28f42c8bbef7a74029aff064a4e3c2"
 dependencies = [
  "atomic-waker",
  "bytes",
@@ -4501,9 +4501,9 @@ dependencies = [
 
 [[package]]
 name = "hstr"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e963d8fe690aa5ecd16d270b18362b28643862474f7fceabf105fd4c9b3a6a42"
+checksum = "4032fdbefb72a4538180ef5dec6d0970e642f30f2e639c4d27e477afb5d97036"
 dependencies = [
  "hashbrown 0.14.5",
  "new_debug_unreachable",
@@ -4665,7 +4665,7 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-util",
- "h2 0.4.7",
+ "h2 0.4.8",
  "http 1.2.0",
  "http-body 1.0.1",
  "httparse",
@@ -9191,7 +9191,7 @@ dependencies = [
  "daemonize",
  "flate2",
  "futures",
- "h2 0.4.7",
+ "h2 0.4.8",
  "http 1.2.0",
  "httparse",
  "httpdate",
@@ -9341,7 +9341,7 @@ dependencies = [
  "bytes",
  "clap 3.2.25",
  "futures",
- "h2 0.4.7",
+ "h2 0.4.8",
  "http 1.2.0",
  "log",
  "once_cell",
@@ -13505,9 +13505,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-tungstenite"
-version = "0.26.1"
+version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be4bf6fecd69fcdede0ec680aaf474cdab988f9de6bc73d3758f0160e3b7025a"
+checksum = "7a9daff607c6d2bf6c16fd681ccb7eecc83e4e2cdc1ca067ffaadfca5de7f084"
 dependencies = [
  "futures-util",
  "log",
@@ -13613,7 +13613,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "bytes",
- "h2 0.4.7",
+ "h2 0.4.8",
  "http 1.2.0",
  "http-body 1.0.1",
  "http-body-util",
@@ -13888,17 +13888,16 @@ checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
 
 [[package]]
 name = "tungstenite"
-version = "0.26.1"
+version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "413083a99c579593656008130e29255e54dcaae495be556cc26888f211648c24"
+checksum = "4793cb5e56680ecbb1d843515b23b6de9a75eb04b66643e256a396d43be33c13"
 dependencies = [
- "byteorder",
  "bytes",
  "data-encoding",
  "http 1.2.0",
  "httparse",
  "log",
- "rand 0.8.5",
+ "rand 0.9.0",
  "rustls 0.23.23",
  "rustls-pki-types",
  "sha1",
@@ -13929,9 +13928,9 @@ checksum = "0e13db2e0ccd5e14a544e8a246ba2312cd25223f616442d7f2cb0e3db614236e"
 
 [[package]]
 name = "typenum"
-version = "1.17.0"
+version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
+checksum = "1dccffe3ce07af9386bfd29e80c0ab1a8205a2fc34e4bcd40364df902cfa8f3f"
 
 [[package]]
 name = "uaparser"
@@ -14025,9 +14024,9 @@ checksum = "2f322b60f6b9736017344fa0635d64be2f458fbc04eef65f6be22976dd1ffd5b"
 
 [[package]]
 name = "unicode-ident"
-version = "1.0.16"
+version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a210d160f08b701c8721ba1c726c11662f877ea6b7094007e1ca9a1041945034"
+checksum = "00e2473a93778eb0bad35909dff6a10d28e63f792f16ed15e404fca9d5eeedbe"
 
 [[package]]
 name = "unicode-normalization"
