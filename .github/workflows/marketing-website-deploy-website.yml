@@ -21,8 +21,19 @@ jobs:
                   version: 9
                   run_install: false
 
+            - name: pnpm install
+              working-directory: packages/marketing_site
+              shell: bash
+              run: |
+                  pnpm install
+
+            - name: sst install
+              working-directory: packages/marketing_site
+              run: |
+                  pnpm sst install --verbose --print-logs
+
             - name: Deploy
-              working-directory: marketing-website
+              working-directory: packages/marketing_site
               shell: bash
               env:
                   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -30,8 +41,6 @@ jobs:
                   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
                   AWS_REGION: us-east-1
               run: |
-                  pnpm install
-                  pnpm sst install
                   pnpm sst deploy --stage ${{ github.event.inputs.stage }} --verbose
 
             - name: Upload log
@@ -39,6 +48,6 @@ jobs:
               if: always()
               with:
                   name: log
-                  path: marketing-website/.sst/log
+                  path: packages/marketing_site/.sst/log
                   if-no-files-found: error
                   retention-days: 90

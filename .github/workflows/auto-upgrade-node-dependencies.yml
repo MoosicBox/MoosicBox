@@ -24,9 +24,6 @@ jobs:
                     - directory: app-website
                       sst: true
                       validate: true
-                    - directory: marketing-website
-                      sst: true
-                      validate: true
                     - directory: packages/marketing_site
                       label: marketing_site
                       sst: true
