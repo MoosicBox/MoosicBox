@@ -21,6 +21,33 @@ jobs:
                   version: 9
                   run_install: false
 
+            - name: Checkout sst
+              uses: actions/checkout@v4
+              with:
+                  repository: BSteffaniak/sst
+                  ref: pnpm
+                  path: sst
+
+            - uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: latest
+
+            - name: Install SST
+              working-directory: sst
+              shell: bash
+              run: |
+                  bun install
+                  go mod tidy
+                  (cd platform; bun run build)
+                  go build ./cmd/sst
+
+            - uses: goto-bus-stop/setup-zig@v2
+
+            - name: Install cargo-lambda
+              shell: bash
+              run: |
+                  cargo install --locked cargo-lambda
+
             - name: pnpm install
               working-directory: packages/marketing_site
               shell: bash
@@ -30,7 +57,7 @@ jobs:
             - name: sst install
               working-directory: packages/marketing_site
               run: |
-                  pnpm sst install --verbose --print-logs
+                  ../../sst/sst install --verbose --print-logs
 
             - name: Deploy
               working-directory: packages/marketing_site
@@ -41,7 +68,7 @@ jobs:
                   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
                   AWS_REGION: us-east-1
               run: |
-                  pnpm sst deploy --stage ${{ github.event.inputs.stage }} --verbose
+                  ../../sst/sst deploy --stage ${{ github.event.inputs.stage }} --verbose
 
             - name: Upload log
               uses: actions/upload-artifact@v4
