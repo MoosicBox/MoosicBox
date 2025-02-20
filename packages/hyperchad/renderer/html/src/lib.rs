@@ -39,6 +39,9 @@ pub mod actix;
 #[cfg(feature = "lambda")]
 pub mod lambda;
 
+#[cfg(feature = "extend")]
+pub mod extend;
+
 #[derive(Default, Clone)]
 pub struct DefaultHtmlTagRenderer {
     pub responsive_triggers: HashMap<String, ResponsiveTrigger>,
@@ -395,6 +398,8 @@ pub struct HtmlRenderer<T: HtmlApp + ToRenderRunner + Send + Sync> {
     y: Option<i32>,
     pub app: T,
     receiver: Receiver<String>,
+    #[cfg(feature = "extend")]
+    extend: Option<std::sync::Arc<Box<dyn extend::ExtendHtmlRenderer + Send + Sync>>>,
 }
 
 impl<T: HtmlApp + ToRenderRunner + Send + Sync> HtmlRenderer<T> {
@@ -409,6 +414,8 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> HtmlRenderer<T> {
             y: None,
             app,
             receiver: rx,
+            #[cfg(feature = "extend")]
+            extend: None,
         }
     }
 
@@ -442,6 +449,16 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> HtmlRenderer<T> {
         paths: impl Into<Vec<hyperchad_renderer::assets::StaticAssetRoute>>,
     ) -> Self {
         self.app = self.app.with_static_asset_routes(paths);
+        self
+    }
+
+    #[cfg(feature = "extend")]
+    #[must_use]
+    pub fn with_extend_html_renderer(
+        mut self,
+        renderer: impl extend::ExtendHtmlRenderer + Send + Sync + 'static,
+    ) -> Self {
+        self.extend = Some(std::sync::Arc::new(Box::new(renderer)));
         self
     }
 }
@@ -516,6 +533,11 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
             ("render: start {:?}", elements.immediate)
         );
 
+        #[cfg(feature = "extend")]
+        if let Some(extend) = self.extend.as_ref() {
+            extend.render(elements).await?;
+        }
+
         log::debug!("render: finished");
 
         Ok(())
@@ -537,6 +559,13 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
             ("render_partial: start {:?}", view)
         );
 
+        #[cfg(feature = "extend")]
+        if let Some(extend) = self.extend.as_ref() {
+            extend.render_partial(view).await?;
+        }
+
+        log::debug!("render_partial: finished");
+
         Ok(())
     }
 
@@ -547,11 +576,19 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
     /// # Panics
     ///
     /// Will panic if elements `Mutex` is poisoned.
+    #[allow(unused_variables)]
     async fn render_canvas(
         &self,
-        _update: CanvasUpdate,
+        update: CanvasUpdate,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         log::trace!("render_canvas");
+
+        #[cfg(feature = "extend")]
+        if let Some(extend) = self.extend.as_ref() {
+            extend.render_canvas(update).await?;
+        }
+
+        log::debug!("render_canvas: finished");
 
         Ok(())
     }

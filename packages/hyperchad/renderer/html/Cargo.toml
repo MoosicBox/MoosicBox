@@ -36,7 +36,7 @@ tokio       = { workspace = true }
 uaparser    = { workspace = true }
 
 [features]
-default = ["actix", "assets", "debug", "json", "lambda"]
+default = ["actix", "assets", "debug", "extend", "json", "lambda"]
 
 fail-on-warnings = []
 
@@ -57,3 +57,5 @@ assets = [
     "hyperchad_renderer_html_actix?/assets",
     "hyperchad_renderer_html_lambda?/assets",
 ]
+
+extend = []
