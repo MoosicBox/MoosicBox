@@ -863,6 +863,7 @@ pub fn element_to_html(
         Element::TBody => Some("tbody"),
         Element::TR => Some("tr"),
         Element::TD => Some("td"),
+        Element::Canvas => Some("canvas"),
         _ => None,
     };
 
