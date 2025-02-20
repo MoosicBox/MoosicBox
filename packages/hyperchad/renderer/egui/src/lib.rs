@@ -2485,18 +2485,21 @@ impl EguiApp {
                 let ctx = self.ctx.read().unwrap().clone().unwrap();
                 let sender = self.sender.clone();
                 self.add_event_handler(event_name.to_string(), move |render_context, value| {
-                    Self::handle_action(
-                        &action.action,
-                        Some(&action),
-                        StyleTrigger::CustomEvent,
-                        render_context,
-                        &ctx,
-                        id,
-                        &sender,
-                        &request_action,
-                        value,
-                        None,
-                    );
+                    let effect = &action;
+                    if let ActionType::Event { action, .. } = &action.action {
+                        Self::handle_action(
+                            action,
+                            Some(effect),
+                            StyleTrigger::CustomEvent,
+                            render_context,
+                            &ctx,
+                            id,
+                            &sender,
+                            &request_action,
+                            value,
+                            None,
+                        );
+                    }
                 });
             }
         }
