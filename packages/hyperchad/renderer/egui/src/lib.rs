@@ -2512,7 +2512,6 @@ impl EguiApp {
         rect: Option<egui::Rect>,
         response: Option<&Response>,
     ) {
-        log::trace!("handle_element_side_effects");
         if let Some(response) = response {
             #[cfg(feature = "profiling")]
             profiling::scope!("button and anchor side effects");
