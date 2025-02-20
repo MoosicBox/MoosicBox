@@ -150,20 +150,20 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                         meta name="description" content=(description);
                     }
                     style {(format!(r"
-                            body {{
-                                margin: 0;{background};
-                                overflow: hidden;
-                            }}
-                            .remove-button-styles {{
-                                background: none;
-                                color: inherit;
-                                border: none;
-                                padding: 0;
-                                font: inherit;
-                                cursor: pointer;
-                                outline: inherit;
-                            }}
-                        "))}
+                        body {{
+                            margin: 0;{background};
+                            overflow: hidden;
+                        }}
+                        .remove-button-styles {{
+                            background: none;
+                            color: inherit;
+                            border: none;
+                            padding: 0;
+                            font: inherit;
+                            cursor: pointer;
+                            outline: inherit;
+                        }}
+                    "))}
                     (script)
                     (PreEscaped(responsive_css))
                     @if let Some(content) = viewport {
