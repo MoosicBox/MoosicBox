@@ -766,7 +766,8 @@ impl NativeAppBuilder {
                 let renderer = hyperchad_renderer_html::router_to_actix(
                     hyperchad_renderer_vanilla_js::VanillaJsTagRenderer::default(),
                     router,
-                );
+                )
+                .with_extend_html_renderer(hyperchad_renderer_vanilla_js::VanillaJsRenderer {});
 
                 #[cfg(feature = "assets")]
                 let renderer = renderer.with_static_asset_routes(self.static_asset_routes);

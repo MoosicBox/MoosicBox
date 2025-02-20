@@ -55,14 +55,18 @@ fail-on-warnings = []
 
 maud = ["hyperchad_renderer/maud"]
 
-datastar   = ["dep:hyperchad_renderer_datastar", "html"]
-egui       = ["dep:hyperchad_renderer_egui", "logic"]
-egui-glow  = ["egui", "hyperchad_renderer_egui/glow"]
-egui-wgpu  = ["egui", "hyperchad_renderer_egui/wgpu"]
-fltk       = ["dep:hyperchad_renderer_fltk", "logic"]
-html       = ["dep:hyperchad_renderer_html"]
-htmx       = ["dep:hyperchad_renderer_htmx", "html"]
-vanilla-js = ["dep:hyperchad_renderer_vanilla_js", "html"]
+datastar = ["dep:hyperchad_renderer_datastar", "html"]
+egui = ["dep:hyperchad_renderer_egui", "logic"]
+egui-glow = ["egui", "hyperchad_renderer_egui/glow"]
+egui-wgpu = ["egui", "hyperchad_renderer_egui/wgpu"]
+fltk = ["dep:hyperchad_renderer_fltk", "logic"]
+html = ["dep:hyperchad_renderer_html"]
+htmx = ["dep:hyperchad_renderer_htmx", "html"]
+vanilla-js = [
+    "dep:hyperchad_renderer_vanilla_js",
+    "html",
+    "hyperchad_renderer_html/extend",
+]
 
 json = [
     "hyperchad_renderer/json",

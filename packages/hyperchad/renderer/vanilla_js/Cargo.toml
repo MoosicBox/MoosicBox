@@ -26,11 +26,13 @@ hyperchad_renderer = { version = "0.1.0", path = "..", default-features = false,
 ] }
 hyperchad_renderer_html = { version = "0.1.0", path = "../html", default-features = false, features = [
     "assets",
+    "extend",
 ] }
 hyperchad_transformer = { version = "0.1.0", path = "../../transformer", default-features = false, features = [
     "html",
 ] }
 
+async-trait  = { workspace = true }
 const_format = { workspace = true }
 log          = { workspace = true }
 maud         = { workspace = true }

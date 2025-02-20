@@ -4942,6 +4942,7 @@ dependencies = [
 name = "hyperchad_renderer_vanilla_js"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "const_format",
  "hyperchad_js_bundler",
  "hyperchad_renderer",

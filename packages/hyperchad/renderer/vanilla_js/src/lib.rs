@@ -3,9 +3,12 @@
 
 use std::{collections::HashMap, io::Write};
 
+use async_trait::async_trait;
 use const_format::concatcp;
-use hyperchad_renderer::{Color, HtmlTagRenderer};
-use hyperchad_renderer_html::{html::write_attr, DefaultHtmlTagRenderer};
+use hyperchad_renderer::{canvas, Color, HtmlTagRenderer, PartialView, View};
+use hyperchad_renderer_html::{
+    extend::ExtendHtmlRenderer, html::write_attr, DefaultHtmlTagRenderer,
+};
 use hyperchad_transformer::{models::Route, Container, ResponsiveTrigger};
 use maud::{html, PreEscaped, DOCTYPE};
 
@@ -173,5 +176,48 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
             }
         }
         .into_string()
+    }
+}
+
+pub struct VanillaJsRenderer {}
+
+#[async_trait]
+impl ExtendHtmlRenderer for VanillaJsRenderer {
+    /// # Errors
+    ///
+    /// Will error if `VanillaJsRenderer` fails to emit the event.
+    async fn emit_event(
+        &self,
+        _event_name: String,
+        _event_value: Option<String>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// Will error if `VanillaJsRenderer` fails to render the view.
+    async fn render(&self, _view: View) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// Will error if `VanillaJsRenderer` fails to render the partial elements.
+    async fn render_partial(
+        &self,
+        _partial: PartialView,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// Will error if `VanillaJsRenderer` fails to render the canvas update.
+    async fn render_canvas(
+        &self,
+        _update: canvas::CanvasUpdate,
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        Ok(())
     }
 }
