@@ -141,7 +141,7 @@ actix-web-opentelemetry = { git = "https://github.com/BSteffaniak/actix-web-open
     "prometheus",
 ] }
 actix-ws = "0.3.0"
-anyhow = "1.0.95"
+anyhow = "1.0.96"
 arrayvec = "0.7.6"
 async-once-cell = "0.5.4"
 async-recursion = "1.1.1"
@@ -222,7 +222,7 @@ mysql = { version = "26.0.0", features = [
 ], default-features = false }
 mysql_common = { version = "0.34.1", default-features = false }
 nanoid = "0.4.0"
-native-tls = "0.2.13"
+native-tls = "0.2.14"
 ndk-context = "0.1.1"
 ogg = "0.9.2"
 open = "5.3.2"
@@ -269,7 +269,7 @@ rusqlite = { version = "=0.32.1", features = ["bundled"] }
 rustls = "0.23"
 serde = { version = "1", features = ["derive"] }
 serde-aux = "4.6.0"
-serde_json = "1.0.138"
+serde_json = "1.0.139"
 serial_test = "3.2.0"
 sha2 = "0.10.8"
 sqlx = { version = "0.8.3", default-features = false, features = [
