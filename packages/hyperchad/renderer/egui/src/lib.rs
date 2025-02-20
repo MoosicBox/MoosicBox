@@ -389,6 +389,7 @@ impl Renderer for EguiRenderer {
             *app.container.write().unwrap() = element;
             app.images.write().unwrap().clear();
             app.backgrounds.write().unwrap().clear();
+            app.visibilities.write().unwrap().clear();
             app.viewport_listeners.write().unwrap().clear();
             app.route_requests.write().unwrap().clear();
             app.checkboxes.write().unwrap().clear();
@@ -447,7 +448,7 @@ impl Renderer for EguiRenderer {
                 let mut visibilities = app.visibilities.write().unwrap();
                 if let Some(visibility) = visibilities.remove(&removed.id) {
                     for id in &ids {
-                        visibilities.insert(*id, visibility);
+                        visibilities.insert(*id, visibility.clone());
                     }
                 }
                 drop(visibilities);
@@ -569,7 +570,7 @@ struct RenderContext<'a> {
     images: &'a mut HashMap<String, AppImage>,
     canvas_actions: &'a mut HashMap<String, Vec<CanvasAction>>,
     route_requests: &'a mut Vec<usize>,
-    visibilities: &'a mut HashMap<usize, Visibility>,
+    visibilities: &'a mut HashMap<usize, Vec<StyleOverride<Option<Visibility>>>>,
     displays: &'a mut HashMap<usize, bool>,
     backgrounds: &'a mut HashMap<usize, Vec<StyleOverride<Option<Color>>>>,
     checkboxes: &'a mut HashMap<egui::Id, bool>,
@@ -593,7 +594,7 @@ struct EguiApp {
     images: Arc<RwLock<HashMap<String, AppImage>>>,
     canvas_actions: Arc<RwLock<HashMap<String, Vec<CanvasAction>>>>,
     route_requests: Arc<RwLock<Vec<usize>>>,
-    visibilities: Arc<RwLock<HashMap<usize, Visibility>>>,
+    visibilities: Arc<RwLock<HashMap<usize, Vec<StyleOverride<Option<Visibility>>>>>>,
     displays: Arc<RwLock<HashMap<usize, bool>>>,
     backgrounds: Arc<RwLock<HashMap<usize, Vec<StyleOverride<Option<Color>>>>>>,
     checkboxes: Arc<RwLock<HashMap<egui::Id, bool>>>,
@@ -1032,10 +1033,9 @@ impl EguiApp {
 
     #[cfg_attr(feature = "profiling", profiling::function)]
     fn container_hidden(render_context: &mut RenderContext, container: &Container) -> bool {
-        render_context
-            .visibilities
-            .get(&container.id)
+        Self::get_container_style_override(container, render_context.visibilities)
             .copied()
+            .flatten()
             .unwrap_or_else(|| container.visibility.unwrap_or_default())
             == Visibility::Hidden
     }
@@ -1751,20 +1751,14 @@ impl EguiApp {
         .response
     }
 
-    fn get_container_background(
-        container: &Container,
-        backgrounds: &HashMap<usize, Vec<StyleOverride<Option<Color>>>>,
-    ) -> Option<Color> {
-        if let Some(overrides) = backgrounds.get(&container.id) {
-            if let Some(StyleOverride {
-                value: Some(background),
-                ..
-            }) = overrides.last()
-            {
-                return Some(*background);
+    fn get_container_style_override<'a, T>(
+        container: &'a Container,
+        overrides: &'a HashMap<usize, Vec<StyleOverride<T>>>,
+    ) -> Option<&'a T> {
+        if let Some(overrides) = overrides.get(&container.id) {
+            if let Some(StyleOverride { value, .. }) = overrides.last() {
+                return Some(value);
             }
-        } else if let Some(background) = container.background {
-            return Some(background);
         }
 
         None
@@ -1807,7 +1801,9 @@ impl EguiApp {
                 });
 
                 if let Some(background) =
-                    Self::get_container_background(container, render_context.backgrounds)
+                    Self::get_container_style_override(container, render_context.backgrounds)
+                        .copied()
+                        .unwrap_or(container.background)
                 {
                     frame = frame.fill(background.into());
                 }
@@ -2583,11 +2579,9 @@ impl EguiApp {
         let calc_func = |calc_value: &CalcValue| match calc_value {
             CalcValue::Visibility { target } => Some(Value::Visibility(
                 Self::map_element_target(target, id, render_context.container, |element| {
-                    render_context
-                        .visibilities
-                        .get(&element.id)
+                    Self::get_container_style_override(element, render_context.visibilities)
                         .copied()
-                        .or(element.visibility)
+                        .unwrap_or(element.visibility)
                         .unwrap_or_default()
                 })
                 .unwrap_or_default(),
@@ -2934,8 +2928,14 @@ impl EguiApp {
                         if let Some(id) =
                             Self::get_element_target_id(target, id, render_context.container)
                         {
-                            if render_context.visibilities.contains_key(&id) {
-                                render_context.visibilities.remove(&id);
+                            if let Some(overrides) = render_context.visibilities.get_mut(&id) {
+                                overrides.retain(|x| x.trigger != trigger);
+
+                                // TODO: don't delete the corresponding entry. just check for if it
+                                // is empty in places this is read from.
+                                if overrides.is_empty() {
+                                    render_context.visibilities.remove(&id);
+                                }
                             }
                         }
                     }
@@ -3087,14 +3087,26 @@ impl EguiApp {
         trigger: StyleTrigger,
         id: usize,
         container: &Container,
-        visibilities: &mut HashMap<usize, Visibility>,
+        visibilities: &mut HashMap<usize, Vec<StyleOverride<Option<Visibility>>>>,
         displays: &mut HashMap<usize, bool>,
         backgrounds: &mut HashMap<usize, Vec<StyleOverride<Option<Color>>>>,
     ) -> bool {
         match action {
             StyleAction::SetVisibility(visibility) => {
                 if let Some(id) = Self::get_element_target_id(target, id, container) {
-                    visibilities.insert(id, *visibility);
+                    log::trace!("handle_style_action: set visibility id={id} visibility={visibility} trigger={trigger:?}");
+                    let style_override = StyleOverride {
+                        trigger,
+                        value: Some(*visibility),
+                    };
+                    match visibilities.entry(id) {
+                        std::collections::hash_map::Entry::Occupied(mut entry) => {
+                            entry.get_mut().push(style_override);
+                        }
+                        std::collections::hash_map::Entry::Vacant(entry) => {
+                            entry.insert(vec![style_override]);
+                        }
+                    }
                 }
 
                 true
@@ -3422,7 +3434,10 @@ impl EguiApp {
         end: bool,
         backgrounds: &HashMap<usize, Vec<StyleOverride<Option<Color>>>>,
     ) -> egui::Frame {
-        if let Some(background) = Self::get_container_background(container, backgrounds) {
+        if let Some(background) = Self::get_container_style_override(container, backgrounds)
+            .copied()
+            .unwrap_or(container.background)
+        {
             frame = frame.fill(background.into());
         }
 
