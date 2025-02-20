@@ -46,7 +46,7 @@ jobs:
             - name: Install cargo-lambda
               shell: bash
               run: |
-                  cargo install --locked cargo-lambda
+                  pip3 install cargo-lambda
 
             - name: pnpm install
               working-directory: packages/marketing_site
