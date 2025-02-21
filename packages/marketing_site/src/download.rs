@@ -13,22 +13,22 @@ static CLIENT: LazyLock<reqwest::Client> =
 #[allow(clippy::too_many_lines)]
 pub async fn releases_route(req: RouteRequest) -> Result<View, Box<dyn std::error::Error>> {
     #[derive(Deserialize)]
-    struct GitHubRelease<'a> {
-        name: &'a str,
-        html_url: &'a str,
-        published_at: &'a str,
-        assets: Vec<GitHubAsset<'a>>,
+    struct GitHubRelease {
+        name: String,
+        html_url: String,
+        published_at: String,
+        assets: Vec<GitHubAsset>,
     }
 
     #[derive(Deserialize)]
-    struct GitHubAsset<'a> {
-        browser_download_url: &'a str,
-        name: &'a str,
+    struct GitHubAsset {
+        browser_download_url: String,
+        name: String,
         size: u64,
     }
 
     fn github_release_into_os_release<'a>(
-        value: &GitHubRelease<'a>,
+        value: &'a GitHubRelease,
         os: &Os<'a>,
     ) -> Result<OsRelease<'a>, Box<dyn std::error::Error>> {
         static WINDOWS_ASSET_PATTERN: LazyLock<Regex> =
@@ -52,8 +52,8 @@ pub async fn releases_route(req: RouteRequest) -> Result<View, Box<dyn std::erro
                 .iter()
                 .filter(|a| {
                     a.name != asset_name
-                        && asset_matcher.is_match(a.name)
-                        && asset_not_matcher.is_none_or(|x| !x.is_match(a.name))
+                        && asset_matcher.is_match(&a.name)
+                        && asset_not_matcher.is_none_or(|x| !x.is_match(&a.name))
                 })
                 .map(Into::into)
                 .collect();
@@ -116,22 +116,22 @@ pub async fn releases_route(req: RouteRequest) -> Result<View, Box<dyn std::erro
             }
         });
 
-        let published_at = NaiveDateTime::parse_from_str(value.published_at, "%Y-%m-%dT%H:%M:%SZ")
+        let published_at = NaiveDateTime::parse_from_str(&value.published_at, "%Y-%m-%dT%H:%M:%SZ")
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
         Ok(OsRelease {
-            version: value.name,
+            version: &value.name,
             published_at,
-            url: value.html_url,
+            url: &value.html_url,
             assets,
         })
     }
 
-    impl<'a> From<&GitHubAsset<'a>> for FileAsset<'a> {
-        fn from(value: &GitHubAsset<'a>) -> Self {
+    impl<'a> From<&'a GitHubAsset> for FileAsset<'a> {
+        fn from(value: &'a GitHubAsset) -> Self {
             Self {
-                browser_download_url: value.browser_download_url,
-                name: value.name,
+                browser_download_url: &value.browser_download_url,
+                name: &value.name,
                 size: value.size,
             }
         }
@@ -146,23 +146,26 @@ pub async fn releases_route(req: RouteRequest) -> Result<View, Box<dyn std::erro
     log::debug!("releases_route: os={os:?}");
     log::debug!("releases_route: requesting GitHub releases");
 
-    let response: String = with_retry(3, || async {
-        CLIENT
+    let mut releases: Vec<GitHubRelease> = with_retry(3, || async {
+        let response = CLIENT
             .get("https://api.github.com/repos/MoosicBox/MoosicBox/releases")
             .header(USER_AGENT, "moosicbox-marketing-site")
             .send()
             .await?
             .text()
-            .await
+            .await?;
+
+        log::debug!("releases_route: received GitHub releases response");
+        log::trace!("releases_route: GitHub releases response: '{response}'");
+
+        Ok::<_, Box<dyn std::error::Error>>(serde_json::from_str(&response).map_err(|e| {
+            log::warn!("Failed to parse response: {e:?}");
+            e
+        })?)
     })
     .await?;
 
-    log::debug!("releases_route: received GitHub releases response");
-    log::trace!("releases_route: GitHub releases response: '{response}'");
-
-    let mut releases: Vec<GitHubRelease> = serde_json::from_str(&response)?;
-
-    releases.sort_by(|a, b| b.published_at.cmp(a.published_at));
+    releases.sort_by(|a, b| b.published_at.cmp(&a.published_at));
 
     let releases: Vec<OsRelease<'_>> = releases
         .iter()
