@@ -121,6 +121,7 @@ async fn current_sessions_updated(sessions: Vec<ApiSession>) {
 
     let session_id = *STATE.current_session_id.read().await;
 
+    #[allow(clippy::collapsible_else_if)]
     if let Some(session_id) = session_id {
         if let Some(session) = sessions.into_iter().find(|x| x.session_id == session_id) {
             log::debug!("current_sessions_updated: setting current_session_id to matching session");
@@ -131,12 +132,30 @@ async fn current_sessions_updated(sessions: Vec<ApiSession>) {
             );
             STATE.current_session_id.write().await.take();
         }
-    } else if let Some(first) = sessions.into_iter().next() {
-        log::debug!("current_sessions_updated: setting current_session_id to first session");
-        set_current_session(first).await;
     } else {
-        log::debug!("current_sessions_updated: no sessions");
-        STATE.current_session_id.write().await.take();
+        #[cfg(any(feature = "egui", feature = "fltk"))]
+        {
+            log::debug!("app_native: navigating to home");
+            ROUTER
+                .get()
+                .unwrap()
+                .navigate_spawn(
+                    "/",
+                    moosicbox_app_native_lib::router::RequestInfo {
+                        client: moosicbox_app_native_lib::CLIENT_INFO.clone(),
+                    },
+                )
+                .await
+                .expect("Failed to navigate to home")
+                .expect("Failed to navigate to home");
+        }
+        if let Some(first) = sessions.into_iter().next() {
+            log::debug!("current_sessions_updated: setting current_session_id to first session");
+            set_current_session(first).await;
+        } else {
+            log::debug!("current_sessions_updated: no sessions");
+            STATE.current_session_id.write().await.take();
+        }
     }
 }
 
@@ -682,17 +701,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             RENDERER.set(app.renderer.clone().into()).is_ok(),
             "Already set RENDERER"
         );
-
-        #[cfg(any(feature = "egui", feature = "fltk"))]
-        {
-            log::debug!("app_native: navigating to home");
-            let _handle = app.router.navigate_spawn(
-                "/",
-                moosicbox_app_native_lib::router::RequestInfo {
-                    client: moosicbox_app_native_lib::CLIENT_INFO.clone(),
-                },
-            );
-        }
 
         #[cfg(feature = "bundled")]
         {
