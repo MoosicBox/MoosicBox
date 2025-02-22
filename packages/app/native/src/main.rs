@@ -567,29 +567,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     moosicbox_assert::assert_or_panic!(ROUTER.set(router.clone()).is_ok(), "Already set ROUTER");
 
-    moosicbox_task::spawn_on("Initialize AppState", runtime.handle(), async move {
-        STATE
-            .set_state(moosicbox_app_state::UpdateAppState {
-                connection_id: Some("123".into()),
-                connection_name: Some("Test Egui".into()),
-                api_url: Some(
-                    std::env::var("MOOSICBOX_HOST")
-                        .as_deref()
-                        .unwrap_or("http://localhost:8500")
-                        .to_string(),
-                ),
-                client_id: std::env::var("MOOSICBOX_CLIENT_ID").ok(),
-                signature_token: std::env::var("MOOSICBOX_SIGNATURE_TOKEN").ok(),
-                api_token: std::env::var("MOOSICBOX_API_TOKEN").ok(),
-                profile: Some(PROFILE.to_string()),
-                playback_target: None,
-                current_session_id: None,
-            })
-            .await?;
-
-        Ok::<_, moosicbox_app_state::AppStateError>(())
-    });
-
     let (action_tx, action_rx) = flume::unbounded();
 
     let width = option_env_f32("WINDOW_WIDTH").unwrap().unwrap_or(1000.0);
@@ -667,16 +644,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         log::debug!("app_native: setting up routes");
 
-        log::debug!("app_native: starting app");
-        let app = app
-            .start()
-            .await
+        log::debug!("app_native: creating app");
+        let mut app = app
+            .create()
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
 
         moosicbox_assert::assert_or_panic!(
             RENDERER.set(app.renderer.clone().into()).is_ok(),
             "Already set RENDERER"
         );
+
+        moosicbox_task::spawn("Initialize AppState", async move {
+            STATE
+                .set_state(moosicbox_app_state::UpdateAppState {
+                    connection_id: Some("123".into()),
+                    connection_name: Some("Test Egui".into()),
+                    api_url: Some(
+                        std::env::var("MOOSICBOX_HOST")
+                            .as_deref()
+                            .unwrap_or("http://localhost:8500")
+                            .to_string(),
+                    ),
+                    client_id: std::env::var("MOOSICBOX_CLIENT_ID").ok(),
+                    signature_token: std::env::var("MOOSICBOX_SIGNATURE_TOKEN").ok(),
+                    api_token: std::env::var("MOOSICBOX_API_TOKEN").ok(),
+                    profile: Some(PROFILE.to_string()),
+                    playback_target: None,
+                    current_session_id: None,
+                })
+                .await?;
+
+            Ok::<_, moosicbox_app_state::AppStateError>(())
+        });
+
+        log::debug!("app_native: starting app");
+        app.start()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
 
         #[cfg(feature = "bundled")]
         {
