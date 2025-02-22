@@ -592,6 +592,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (action_tx, action_rx) = flume::unbounded();
 
+    let width = option_env_f32("WINDOW_WIDTH").unwrap().unwrap_or(1000.0);
+    let height = option_env_f32("WINDOW_HEIGHT").unwrap().unwrap_or(600.0);
+
     let mut app = moosicbox_app_native_lib::NativeAppBuilder::new()
         .with_router(router)
         .with_runtime_arc(runtime.clone())
@@ -604,10 +607,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 false
             })
         })
-        .with_size(
-            option_env_f32("WINDOW_WIDTH").unwrap().unwrap_or(1000.0),
-            option_env_f32("WINDOW_HEIGHT").unwrap().unwrap_or(600.0),
-        );
+        .with_size(width, height);
+
+    visualization::set_dimensions(width, height);
 
     #[cfg(feature = "assets")]
     {
