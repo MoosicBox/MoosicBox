@@ -1867,6 +1867,9 @@ impl Container {
                 hyperchad_actions::ActionTrigger::Change => {
                     attrs.add("fx-change", action.action.to_string());
                 }
+                hyperchad_actions::ActionTrigger::Resize => {
+                    attrs.add("fx-resize", action.action.to_string());
+                }
                 hyperchad_actions::ActionTrigger::Immediate => {
                     attrs.add("fx-immediate", action.action.to_string());
                 }

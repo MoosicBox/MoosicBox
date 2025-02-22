@@ -31,6 +31,7 @@ pub enum ActionTrigger {
     MouseDown,
     Hover,
     Change,
+    Resize,
     Event(String),
     #[default]
     Immediate,
@@ -45,6 +46,7 @@ impl ActionTrigger {
             Self::MouseDown => "MouseDown",
             Self::Hover => "Hover",
             Self::Change => "Change",
+            Self::Resize => "Resize",
             Self::Event(_) => "Event",
             Self::Immediate => "Immediate",
         }

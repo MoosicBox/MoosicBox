@@ -610,6 +610,7 @@ struct EguiApp {
     on_resize: Sender<(f32, f32)>,
     side_effects: Arc<Mutex<VecDeque<Handler>>>,
     event_handlers: Arc<RwLock<Vec<(String, EventHandler)>>>,
+    resize_handlers: Arc<RwLock<Vec<Handler>>>,
     client_info: Arc<ClientInfo>,
 }
 
@@ -654,6 +655,7 @@ impl EguiApp {
             on_resize,
             side_effects: Arc::new(Mutex::new(VecDeque::new())),
             event_handlers: Arc::new(RwLock::new(vec![])),
+            resize_handlers: Arc::new(RwLock::new(vec![])),
             client_info,
         }
     }
@@ -897,7 +899,7 @@ impl EguiApp {
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
-    fn check_frame_resize(&self, ctx: &egui::Context) {
+    fn check_frame_resize(&self, ctx: &egui::Context) -> bool {
         ctx.input(move |i| {
             let width = i.screen_rect.width();
             let height = i.screen_rect.height();
@@ -912,8 +914,11 @@ impl EguiApp {
                         "Failed to send on_resize message: {width}, {height}: {e:?}"
                     );
                 }
+                true
+            } else {
+                false
             }
-        });
+        })
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
@@ -2466,6 +2471,30 @@ impl EguiApp {
                             true
                         });
                     }
+                    ActionTrigger::Resize => {
+                        let request_action = self.request_action.clone();
+                        let action = fx_action.action.clone();
+                        let id = container.id;
+                        let ctx = self.ctx.read().unwrap().clone().unwrap();
+                        let sender = self.sender.clone();
+                        self.add_resize_handler(move |render_context| {
+                            if !Self::handle_action(
+                                &action.action,
+                                Some(&action),
+                                StyleTrigger::CustomEvent,
+                                render_context,
+                                &ctx,
+                                id,
+                                &sender,
+                                &request_action,
+                                None,
+                                None,
+                            ) {
+                                return false;
+                            }
+                            true
+                        });
+                    }
                     ActionTrigger::Immediate | ActionTrigger::Event(..) => {}
                 }
             }
@@ -3667,6 +3696,17 @@ impl EguiApp {
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
+    fn add_resize_handler(
+        &self,
+        handler: impl Fn(&mut RenderContext) -> bool + Send + Sync + 'static,
+    ) {
+        self.resize_handlers
+            .write()
+            .unwrap()
+            .push(Box::new(handler));
+    }
+
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn trigger_side_effect(
         &self,
         handler: impl Fn(&mut RenderContext) -> bool + Send + Sync + 'static,
@@ -3678,8 +3718,9 @@ impl EguiApp {
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
+    #[allow(clippy::too_many_lines)]
     fn paint(&self, ctx: &egui::Context) {
-        self.check_frame_resize(ctx);
+        let resized = self.check_frame_resize(ctx);
 
         self.event_handlers.write().unwrap().clear();
 
@@ -3725,6 +3766,14 @@ impl EguiApp {
                 action_delay_off: &mut action_delay_off,
                 action_throttle: &mut action_throttle,
             };
+
+            if resized {
+                for handler in self.resize_handlers.write().unwrap().drain(..) {
+                    handler(&mut render_context);
+                }
+            } else {
+                self.resize_handlers.write().unwrap().clear();
+            }
 
             ctx.memory_mut(|x| {
                 x.options.line_scroll_speed = 100.0;
