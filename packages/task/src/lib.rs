@@ -151,6 +151,43 @@ where
 
 /// # Panics
 ///
+/// * If fails to `spawn_on` the `tokio` task
+#[cfg(tokio_unstable)]
+pub fn spawn_on_opt<Fut>(
+    name: &str,
+    handle: Option<&tokio::runtime::Handle>,
+    future: Fut,
+) -> tokio::task::JoinHandle<Fut::Output>
+where
+    Fut: futures::Future + Send + 'static,
+    Fut::Output: Send + 'static,
+{
+    if let Some(handle) = handle {
+        spawn_on(name, handle, future)
+    } else {
+        spawn(name, future)
+    }
+}
+
+#[cfg(not(tokio_unstable))]
+pub fn spawn_on_opt<Fut>(
+    name: &str,
+    handle: Option<&tokio::runtime::Handle>,
+    future: Fut,
+) -> tokio::task::JoinHandle<Fut::Output>
+where
+    Fut: futures::Future + Send + 'static,
+    Fut::Output: Send + 'static,
+{
+    if let Some(handle) = handle {
+        spawn_on(name, handle, future)
+    } else {
+        spawn(name, future)
+    }
+}
+
+/// # Panics
+///
 /// * If fails to `spawn_blocking_on` the `tokio` task
 #[cfg(tokio_unstable)]
 pub fn spawn_blocking_on<Function, Output>(
