@@ -595,10 +595,10 @@ impl NativeAppBuilder {
     ///
     /// # Errors
     ///
-    /// * If there was an error starting the app
+    /// * If there was an error creating the app
     #[allow(clippy::too_many_lines)]
-    pub async fn start(self) -> Result<NativeApp, NativeAppError> {
-        let mut app = NativeApp {
+    pub fn create(self) -> Result<NativeApp, NativeAppError> {
+        Ok(NativeApp {
             x: self.x,
             y: self.y,
             background: self.background,
@@ -615,7 +615,19 @@ impl NativeAppBuilder {
             } else {
                 self.get_renderer()?
             },
-        };
+        })
+    }
+
+    /// # Panics
+    ///
+    /// * If missing router
+    ///
+    /// # Errors
+    ///
+    /// * If there was an error starting the app
+    #[allow(clippy::too_many_lines)]
+    pub async fn start(self) -> Result<NativeApp, NativeAppError> {
+        let mut app = self.create()?;
         app.start().await?;
         Ok(app)
     }
@@ -892,7 +904,14 @@ pub struct NativeApp {
 }
 
 impl NativeApp {
-    async fn start(&mut self) -> Result<(), NativeAppError> {
+    /// # Panics
+    ///
+    /// * If failed to create new tokio runtime
+    ///
+    /// # Errors
+    ///
+    /// * If there was an error creating the app
+    pub async fn start(&mut self) -> Result<(), NativeAppError> {
         self.renderer
             .init(
                 self.width.unwrap_or(800.0),
