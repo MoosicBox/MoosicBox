@@ -133,6 +133,13 @@ async fn current_sessions_updated(sessions: Vec<ApiSession>) {
             STATE.current_session_id.write().await.take();
         }
     } else {
+        if let Some(first) = sessions.into_iter().next() {
+            log::debug!("current_sessions_updated: setting current_session_id to first session");
+            set_current_session(first).await;
+        } else {
+            log::debug!("current_sessions_updated: no sessions");
+            STATE.current_session_id.write().await.take();
+        }
         #[cfg(any(feature = "egui", feature = "fltk"))]
         {
             log::debug!("app_native: navigating to home");
@@ -148,13 +155,6 @@ async fn current_sessions_updated(sessions: Vec<ApiSession>) {
                 .await
                 .expect("Failed to navigate to home")
                 .expect("Failed to navigate to home");
-        }
-        if let Some(first) = sessions.into_iter().next() {
-            log::debug!("current_sessions_updated: setting current_session_id to first session");
-            set_current_session(first).await;
-        } else {
-            log::debug!("current_sessions_updated: no sessions");
-            STATE.current_session_id.write().await.take();
         }
     }
 }
