@@ -246,12 +246,14 @@ async fn handle_playback_update(update: ApiUpdateSession) {
 }
 
 async fn handle_session_update(state: &State, update: &ApiUpdateSession, session: &ApiSession) {
+    let renderer = RENDERER.get().unwrap();
+
     for (id, markup) in moosicbox_app_native_ui::session_updated(state, update, session) {
         let view = PartialView {
             target: id,
             container: markup.try_into().unwrap(),
         };
-        let response = RENDERER.get().unwrap().render_partial(view).await;
+        let response = renderer.render_partial(view).await;
         if let Err(e) = response {
             log::error!("Failed to render_partial: {e:?}");
         }
@@ -266,8 +268,6 @@ async fn handle_session_update(state: &State, update: &ApiUpdateSession, session
             .playlist
             .tracks
             .get(session.position.unwrap_or(0) as usize);
-
-        let renderer = RENDERER.get().unwrap();
 
         if let Some(track) = track {
             if let Err(e) = renderer
