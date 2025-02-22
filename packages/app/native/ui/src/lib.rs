@@ -197,6 +197,8 @@ pub fn player(state: &State) -> Markup {
                     id="visualization"
                     sx-cursor="pointer"
                     fx-click=(get_mouse_x_self().divide(get_width_px_self()).then_pass_to(Action::SeekCurrentTrackPercent))
+                    fx-resize=(Action::RefreshVisualization)
+                    fx-immediate=(Action::RefreshVisualization)
                 {}
             }
             div sx-height=(100) sx-dir="row" {
