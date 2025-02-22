@@ -395,6 +395,7 @@ impl Renderer for EguiRenderer {
             app.checkboxes.write().unwrap().clear();
             app.positions.write().unwrap().clear();
             app.action_delay_off.write().unwrap().clear();
+            app.immediate_elements_handled.write().unwrap().clear();
 
             log::debug!("render: finished");
             if let Some(ctx) = &*app.ctx.read().unwrap() {
@@ -611,6 +612,8 @@ struct EguiApp {
     side_effects: Arc<Mutex<VecDeque<Handler>>>,
     event_handlers: Arc<RwLock<Vec<(String, EventHandler)>>>,
     resize_handlers: Arc<RwLock<Vec<Handler>>>,
+    immediate_handlers: Arc<RwLock<Vec<Handler>>>,
+    immediate_elements_handled: Arc<RwLock<HashSet<usize>>>,
     client_info: Arc<ClientInfo>,
 }
 
@@ -656,6 +659,8 @@ impl EguiApp {
             side_effects: Arc::new(Mutex::new(VecDeque::new())),
             event_handlers: Arc::new(RwLock::new(vec![])),
             resize_handlers: Arc::new(RwLock::new(vec![])),
+            immediate_handlers: Arc::new(RwLock::new(vec![])),
+            immediate_elements_handled: Arc::new(RwLock::new(HashSet::new())),
             client_info,
         }
     }
@@ -2495,7 +2500,31 @@ impl EguiApp {
                             true
                         });
                     }
-                    ActionTrigger::Immediate | ActionTrigger::Event(..) => {}
+                    ActionTrigger::Immediate => {
+                        let request_action = self.request_action.clone();
+                        let action = fx_action.action.clone();
+                        let id = container.id;
+                        let ctx = self.ctx.read().unwrap().clone().unwrap();
+                        let sender = self.sender.clone();
+                        self.add_immediate_handler(id, move |render_context| {
+                            if !Self::handle_action(
+                                &action.action,
+                                Some(&action),
+                                StyleTrigger::CustomEvent,
+                                render_context,
+                                &ctx,
+                                id,
+                                &sender,
+                                &request_action,
+                                None,
+                                None,
+                            ) {
+                                return false;
+                            }
+                            true
+                        });
+                    }
+                    ActionTrigger::Event(..) => {}
                 }
             }
         }
@@ -3707,6 +3736,26 @@ impl EguiApp {
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
+    fn add_immediate_handler(
+        &self,
+        id: usize,
+        handler: impl Fn(&mut RenderContext) -> bool + Send + Sync + 'static,
+    ) {
+        if !self
+            .immediate_elements_handled
+            .read()
+            .unwrap()
+            .contains(&id)
+        {
+            self.immediate_elements_handled.write().unwrap().insert(id);
+            self.immediate_handlers
+                .write()
+                .unwrap()
+                .push(Box::new(handler));
+        }
+    }
+
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn trigger_side_effect(
         &self,
         handler: impl Fn(&mut RenderContext) -> bool + Send + Sync + 'static,
@@ -3811,6 +3860,12 @@ impl EguiApp {
                             );
                         });
                 });
+
+            for handler in self.immediate_handlers.write().unwrap().drain(..) {
+                if !handler(&mut render_context) {
+                    break;
+                }
+            }
 
             let mut handlers_count = 0;
 
