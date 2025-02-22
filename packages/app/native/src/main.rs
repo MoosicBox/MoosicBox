@@ -618,32 +618,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    #[cfg(feature = "_calculated_canvas")]
-    {
-        app = app.with_on_resize({
-            let handle = runtime.handle().clone();
-            move |_, _| {
-                moosicbox_task::spawn_on("check_visualization_update", &handle, async move {
-                    let renderer = RENDERER.get().unwrap();
-                    let (width, height) = if let Some(visualization) =
-                        renderer.container().find_element_by_str_id("visualization")
-                    {
-                        (
-                            visualization.calculated_width.unwrap(),
-                            visualization.calculated_height.unwrap(),
-                        )
-                    } else {
-                        return;
-                    };
-
-                    visualization::set_dimensions(width, height);
-                    visualization::check_visualization_update().await;
-                });
-                Ok::<_, RouteError>(())
-            }
-        });
-    }
-
     #[cfg(not(feature = "bundled"))]
     let runner_runtime = runtime;
     #[cfg(feature = "bundled")]
@@ -739,6 +713,28 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
     log::debug!("handle_action: {action:?}");
 
     match &action {
+        Action::RefreshVisualization => {
+            #[cfg(feature = "_calculated_canvas")]
+            {
+                let renderer = RENDERER.get().unwrap();
+                let (width, height) = if let Some(visualization) =
+                    renderer.container().find_element_by_str_id("visualization")
+                {
+                    (
+                        visualization.calculated_width.unwrap(),
+                        visualization.calculated_height.unwrap(),
+                    )
+                } else {
+                    return Ok(());
+                };
+
+                log::debug!("handle_action: updating visualization width={width} height={height}");
+
+                visualization::set_dimensions(width, height);
+                visualization::check_visualization_update().await;
+            }
+            Ok(())
+        }
         Action::TogglePlayback
         | Action::PreviousTrack
         | Action::NextTrack
@@ -766,6 +762,7 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
             };
 
             match &action {
+                Action::RefreshVisualization | Action::FilterAlbums { .. } => unreachable!(),
                 Action::TogglePlayback => {
                     STATE
                         .queue_ws_message(
@@ -1107,7 +1104,6 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
                         )
                         .await
                 }
-                Action::FilterAlbums { .. } => unreachable!(),
             }
         }
         Action::FilterAlbums {

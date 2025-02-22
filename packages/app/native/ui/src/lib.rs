@@ -52,6 +52,7 @@ macro_rules! pre_escaped {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Action {
+    RefreshVisualization,
     TogglePlayback,
     PreviousTrack,
     NextTrack,
