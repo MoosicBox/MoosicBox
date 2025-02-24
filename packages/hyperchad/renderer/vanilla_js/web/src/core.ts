@@ -77,7 +77,12 @@ function removeElementStyles(triggerId: string | undefined): void {
     }
 }
 
-export function htmlToStyle(html: string, triggerId: string): HTMLStyleElement {
+export function htmlToStyle(
+    html: string,
+    triggerId: string,
+): HTMLStyleElement | undefined {
+    if (html === '<style></style>') return undefined;
+
     const styleContainer = document.createElement('div');
     styleContainer.innerHTML = html;
     const style = styleContainer.children[0] as HTMLStyleElement;
@@ -85,25 +90,31 @@ export function htmlToStyle(html: string, triggerId: string): HTMLStyleElement {
     return style;
 }
 
-export function htmlToElement(
-    html: string,
-    triggerId: string | undefined,
-): HTMLElement {
+export function htmlToElement(html: string): HTMLElement {
     const start = html.indexOf('\n\n');
 
     let elementText = html;
+    let styleText;
 
     if (start > 0) {
         elementText = html.substring(start + 2);
-
-        if (triggerId) {
-            const styleText = html.substring(0, start);
-            document.head.appendChild(htmlToStyle(styleText, triggerId));
-        }
+        styleText = html.substring(0, start);
     }
 
     const element = document.createElement('div');
     element.innerHTML = elementText;
+
+    if (styleText && element.children.length === 1) {
+        const triggerId = element.children[0].id;
+
+        if (triggerId) {
+            removeElementStyles(triggerId);
+            const style = htmlToStyle(styleText, triggerId);
+            if (style) {
+                document.head.appendChild(style);
+            }
+        }
+    }
 
     return element;
 }
@@ -126,7 +137,7 @@ export function swapOuterHtml(element: HTMLElement, html: string) {
 
     removeElementStyles(element.id);
 
-    const newElement = htmlToElement(html, element.id);
+    const newElement = htmlToElement(html);
 
     const parent = element.parentNode;
     const child = newElement.lastChild;
@@ -155,7 +166,7 @@ export function swapOuterHtml(element: HTMLElement, html: string) {
 }
 
 export function swapInnerHtml(element: HTMLElement, html: string) {
-    const newElement = htmlToElement(html, element.id);
+    const newElement = htmlToElement(html);
     element.innerHTML = newElement.innerHTML;
     for (const child of element.children) {
         triggerHandlers('domLoad', {
