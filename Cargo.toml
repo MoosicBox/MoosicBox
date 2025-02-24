@@ -331,3 +331,16 @@ uuid = { version = "1.14.0", features = ["v4"] }
 webp = "0.3.0"
 whoami = "1.5.2"
 xml = "0.8.20"
+
+# [patch.crates-io]
+# actix-files            = { path = "../actix-web/actix-files" }
+# actix-http             = { path = "../actix-web/actix-http" }
+# actix-http-test        = { path = "../actix-web/actix-http-test" }
+# actix-multipart        = { path = "../actix-web/actix-multipart" }
+# actix-multipart-derive = { path = "../actix-web/actix-multipart-derive" }
+# actix-router           = { path = "../actix-web/actix-router" }
+# actix-test             = { path = "../actix-web/actix-test" }
+# actix-web              = { path = "../actix-web/actix-web" }
+# actix-web-actors       = { path = "../actix-web/actix-web-actors" }
+# actix-web-codegen      = { path = "../actix-web/actix-web-codegen" }
+# awc                    = { path = "../actix-web/awc" }
