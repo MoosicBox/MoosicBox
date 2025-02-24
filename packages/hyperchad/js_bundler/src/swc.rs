@@ -132,6 +132,8 @@ impl swc_bundler::Hook for Hook {
     ) -> Result<Vec<KeyValueProp>, Error> {
         let file_name = module_record.file_name.to_string();
 
+        println!("get_import_meta_props: file_name={file_name}");
+
         Ok(vec![
             KeyValueProp {
                 key: PropName::Ident(IdentName::new("url".into(), span)),
@@ -169,6 +171,8 @@ impl Load for Loader {
         let FileName::Real(path) = f else {
             unreachable!()
         };
+
+        println!("load: loading file {}", path.display());
 
         let syntax = match path.extension().and_then(|x| x.to_str()) {
             Some("ts") => Syntax::Typescript(TsSyntax {
@@ -210,6 +214,7 @@ impl Load for Loader {
         };
 
         let module = module.unwrap_or_else(|| {
+            println!("load: module was None");
             parse_file_as_module(&fm, syntax, EsVersion::Es2020, None, &mut Vec::new()).unwrap()
         });
 
