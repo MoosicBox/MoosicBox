@@ -573,6 +573,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let height = option_env_f32("WINDOW_HEIGHT").unwrap().unwrap_or(600.0);
 
     let mut app = moosicbox_app_native_lib::NativeAppBuilder::new()
+        .with_title("MoosicBox".to_string())
+        .with_description("A music app for cows".to_string())
         .with_router(router)
         .with_runtime_arc(runtime.clone())
         .with_background(Color::from_hex("#181a1b"))
