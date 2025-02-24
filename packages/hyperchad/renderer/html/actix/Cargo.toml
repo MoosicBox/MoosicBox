@@ -31,10 +31,12 @@ log          = { workspace = true }
 tokio        = { workspace = true }
 
 [features]
-default = ["assets", "debug"]
+default = ["assets", "debug", "sse"]
 
 fail-on-warnings = []
 
 debug = []
 
 assets = ["dep:actix-files", "hyperchad_renderer/assets"]
+
+sse = []

@@ -1,4 +1,19 @@
+use std::io::Write as _;
+
+use actix_web::{
+    error::ErrorInternalServerError,
+    http::header::{CacheControl, CacheDirective, ContentEncoding},
+    web, HttpRequest, HttpResponse, Responder,
+};
 use bytes::{BufMut as _, Bytes, BytesMut};
+use flate2::{
+    write::{DeflateEncoder, GzEncoder, ZlibEncoder},
+    Compression,
+};
+use futures_util::StreamExt as _;
+use hyperchad_renderer::{Content, RendererEvent};
+
+use crate::{ActixApp, ActixResponseProcessor};
 
 #[must_use]
 #[derive(Debug, Clone)]
@@ -70,4 +85,93 @@ impl Event {
 
         buf.freeze()
     }
+}
+
+#[allow(clippy::future_not_send)]
+pub async fn handle_sse<
+    T: Send + Sync + Clone + 'static,
+    R: ActixResponseProcessor<T> + Send + Sync + Clone + 'static,
+>(
+    req: HttpRequest,
+    app: web::Data<ActixApp<T, R>>,
+) -> impl Responder {
+    log::debug!("handle_sse: initializing sse connection");
+    let data = app
+        .processor
+        .prepare_request(req)
+        .map_err(ErrorInternalServerError)?;
+
+    let encoding = ContentEncoding::Identity;
+
+    let stream = app
+        .renderer_event_rx
+        .clone()
+        .into_stream()
+        .then(move |event| {
+            let app = app.clone();
+            let data = data.clone();
+            async move {
+                log::debug!("handle_sse: received renderer_event_rx event: event={event:?}");
+                Ok::<_, actix_web::Error>(match event {
+                    RendererEvent::View(view) => {
+                        log::debug!("handle_sse: SSE sending view={view:?}");
+                        let body = app.processor.to_body(Content::View(view), data).await?;
+
+                        crate::sse::EventData::new(body).event("view")
+                    }
+                    RendererEvent::Partial(partial_view) => {
+                        log::debug!("handle_sse: SSE sending partial_view={partial_view:?}");
+                        let body = app
+                            .processor
+                            .to_body(Content::PartialView(partial_view), data)
+                            .await?;
+
+                        crate::sse::EventData::new(body).event("partial_view")
+                    }
+                    RendererEvent::CanvasUpdate(_canvas_update) => {
+                        log::debug!("handle_sse: SSE sending canvas_update");
+                        crate::sse::EventData::new("canvas_update").event("canvas_update")
+                    }
+                    RendererEvent::Event { name, value } => {
+                        log::debug!("handle_sse: SSE sending event name={name} value={value:?}");
+                        crate::sse::EventData::new(format!("{name}\n{}", value.unwrap_or_default()))
+                            .event("event")
+                    }
+                })
+            }
+        })
+        .map(move |x| {
+            x.map(crate::sse::Event::Data)
+                .map(crate::sse::Event::into_bytes)
+                .map(|x| match encoding {
+                    ContentEncoding::Gzip => {
+                        let mut encoder = GzEncoder::new(vec![], Compression::default());
+                        encoder.write_all(&x).unwrap();
+                        Bytes::from(encoder.finish().unwrap())
+                    }
+                    ContentEncoding::Zstd => {
+                        let mut ecnoder = ZlibEncoder::new(vec![], Compression::default());
+                        ecnoder.write_all(&x).unwrap();
+                        Bytes::from(ecnoder.flush_finish().unwrap())
+                    }
+                    ContentEncoding::Deflate => {
+                        let mut ecnoder = DeflateEncoder::new(vec![], Compression::default());
+                        ecnoder.write_all(&x).unwrap();
+                        Bytes::from(ecnoder.flush_finish().unwrap())
+                    }
+                    ContentEncoding::Identity | ContentEncoding::Brotli | _ => x,
+                })
+        });
+
+    Ok::<_, actix_web::Error>(
+        HttpResponse::Ok()
+            .content_type("text/event-stream")
+            .insert_header(if encoding == ContentEncoding::Zstd {
+                ContentEncoding::Deflate
+            } else {
+                encoding
+            })
+            .insert_header(CacheControl(vec![CacheDirective::NoCache]))
+            .streaming(stream),
+    )
 }
