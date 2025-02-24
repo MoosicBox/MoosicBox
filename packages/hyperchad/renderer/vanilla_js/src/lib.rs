@@ -5,7 +5,7 @@ use std::{collections::HashMap, io::Write};
 
 use async_trait::async_trait;
 use const_format::concatcp;
-use hyperchad_renderer::{canvas, Color, HtmlTagRenderer, PartialView, View};
+use hyperchad_renderer::{canvas, Color, HtmlTagRenderer, PartialView, RendererEvent, View};
 use hyperchad_renderer_html::{
     extend::{ExtendHtmlRenderer, HtmlRendererEventPub},
     html::write_attr,
@@ -190,10 +190,16 @@ impl ExtendHtmlRenderer for VanillaJsRenderer {
     /// Will error if `VanillaJsRenderer` fails to emit the event.
     async fn emit_event(
         &self,
-        _publisher: HtmlRendererEventPub,
-        _event_name: String,
-        _event_value: Option<String>,
+        publisher: HtmlRendererEventPub,
+        event_name: String,
+        event_value: Option<String>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        publisher
+            .publish(RendererEvent::Event {
+                name: event_name,
+                value: event_value,
+            })
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
         Ok(())
     }
 
@@ -202,9 +208,12 @@ impl ExtendHtmlRenderer for VanillaJsRenderer {
     /// Will error if `VanillaJsRenderer` fails to render the view.
     async fn render(
         &self,
-        _publisher: HtmlRendererEventPub,
-        _view: View,
+        publisher: HtmlRendererEventPub,
+        view: View,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        publisher
+            .publish(RendererEvent::View(view))
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
         Ok(())
     }
 
@@ -213,10 +222,12 @@ impl ExtendHtmlRenderer for VanillaJsRenderer {
     /// Will error if `VanillaJsRenderer` fails to render the partial elements.
     async fn render_partial(
         &self,
-        _publisher: HtmlRendererEventPub,
-        _partial: PartialView,
+        publisher: HtmlRendererEventPub,
+        partial: PartialView,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
-        log::warn!("render_partial: partial={_partial:?}");
+        publisher
+            .publish(RendererEvent::Partial(partial))
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
         Ok(())
     }
 
@@ -225,9 +236,12 @@ impl ExtendHtmlRenderer for VanillaJsRenderer {
     /// Will error if `VanillaJsRenderer` fails to render the canvas update.
     async fn render_canvas(
         &self,
-        _publisher: HtmlRendererEventPub,
-        _update: canvas::CanvasUpdate,
+        publisher: HtmlRendererEventPub,
+        update: canvas::CanvasUpdate,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        publisher
+            .publish(RendererEvent::CanvasUpdate(update))
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
         Ok(())
     }
 }

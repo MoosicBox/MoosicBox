@@ -1,24 +1,25 @@
 use async_trait::async_trait;
 use flume::{Receiver, Sender};
-use hyperchad_renderer::{canvas, PartialView, View};
+use hyperchad_renderer::{
+    canvas::{self},
+    PartialView, RendererEvent, View,
+};
 use thiserror::Error;
-
-pub enum HtmlRendererEvent {}
 
 #[derive(Clone)]
 pub struct HtmlRendererEventPub {
-    sender: Sender<HtmlRendererEvent>,
+    sender: Sender<RendererEvent>,
 }
 
 #[derive(Debug, Error)]
 pub enum HtmlRendererEventPubError {
     #[error(transparent)]
-    Sender(#[from] flume::SendError<HtmlRendererEvent>),
+    Sender(#[from] flume::SendError<RendererEvent>),
 }
 
 impl HtmlRendererEventPub {
     #[must_use]
-    pub fn new() -> (Self, Receiver<HtmlRendererEvent>) {
+    pub fn new() -> (Self, Receiver<RendererEvent>) {
         let (tx, rx) = flume::unbounded();
 
         (Self { sender: tx }, rx)
@@ -27,7 +28,7 @@ impl HtmlRendererEventPub {
     /// # Errors
     ///
     /// * If the sender failed to send the event
-    pub fn publish(&self, event: HtmlRendererEvent) -> Result<(), HtmlRendererEventPubError> {
+    pub fn publish(&self, event: RendererEvent) -> Result<(), HtmlRendererEventPubError> {
         Ok(self.sender.send(event)?)
     }
 }

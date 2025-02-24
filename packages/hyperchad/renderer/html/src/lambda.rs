@@ -107,6 +107,21 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
         self.processor.background = background;
     }
 
+    #[cfg(feature = "extend")]
+    fn with_html_renderer_event_rx(
+        self,
+        _rx: flume::Receiver<hyperchad_renderer::RendererEvent>,
+    ) -> Self {
+        self
+    }
+
+    #[cfg(feature = "extend")]
+    fn set_html_renderer_event_rx(
+        &mut self,
+        _rx: flume::Receiver<hyperchad_renderer::RendererEvent>,
+    ) {
+    }
+
     #[cfg(feature = "assets")]
     #[must_use]
     fn with_static_asset_routes(
@@ -166,13 +181,21 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
     }
 
     async fn to_response(&self, req: PreparedRequest) -> Result<Content, lambda_runtime::Error> {
-        static HEADERS: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
-
         let content = self
             .router
-            .navigate(&req.path, req.info)
+            .navigate(&req.path, req.info.clone())
             .await
             .map_err(|e| Box::new(e) as lambda_runtime::Error)?;
+
+        self.to_body(content, req).await
+    }
+
+    async fn to_body(
+        &self,
+        content: hyperchad_renderer::Content,
+        req: PreparedRequest,
+    ) -> Result<Content, lambda_runtime::Error> {
+        static HEADERS: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
 
         Ok(match content {
             hyperchad_renderer::Content::View(View {

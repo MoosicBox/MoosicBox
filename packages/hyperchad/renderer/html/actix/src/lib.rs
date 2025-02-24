@@ -1,22 +1,35 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use std::marker::PhantomData;
+use std::{io::Write as _, marker::PhantomData};
 
 use actix_cors::Cors;
 pub use actix_web::http::header::HeaderMap;
 use actix_web::{
-    http::{self},
+    error::ErrorInternalServerError,
+    http::{
+        self,
+        header::{CacheControl, CacheDirective, ContentEncoding},
+    },
     middleware,
     web::{self, Data},
     App, HttpRequest, HttpResponse,
 };
 use async_trait::async_trait;
-use hyperchad_renderer::{RenderRunner, ToRenderRunner};
+use bytes::Bytes;
+use flate2::{
+    write::{DeflateEncoder, GzEncoder, ZlibEncoder},
+    Compression,
+};
+use flume::Receiver;
+use futures_util::StreamExt;
+use hyperchad_renderer::{Content, RenderRunner, RendererEvent, ToRenderRunner};
 use moosicbox_env_utils::default_env_u16;
 use tokio::runtime::Handle;
 
 pub use actix_web;
+
+mod sse;
 
 #[async_trait]
 pub trait ActixResponseProcessor<T: Send + Sync + Clone> {
@@ -26,20 +39,24 @@ pub trait ActixResponseProcessor<T: Send + Sync + Clone> {
     fn prepare_request(&self, req: HttpRequest) -> Result<T, actix_web::Error>;
 
     async fn to_response(&self, data: T) -> Result<HttpResponse, actix_web::Error>;
+
+    async fn to_body(&self, content: Content, data: T) -> Result<String, actix_web::Error>;
 }
 
 #[derive(Clone)]
 pub struct ActixApp<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone> {
     pub processor: R,
+    pub renderer_event_rx: Receiver<RendererEvent>,
     #[cfg(feature = "assets")]
     pub static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
     _phantom: PhantomData<T>,
 }
 
 impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone> ActixApp<T, R> {
-    pub const fn new(to_html: R) -> Self {
+    pub const fn new(processor: R, renderer_event_rx: Receiver<RendererEvent>) -> Self {
         Self {
-            processor: to_html,
+            processor,
+            renderer_event_rx,
             #[cfg(feature = "assets")]
             static_asset_routes: vec![],
             _phantom: PhantomData,
@@ -205,6 +222,101 @@ impl<
                         }
                     }
                 }
+
+                let sse = move |req: HttpRequest, app: web::Data<ActixApp<T, R>>| async move {
+                    log::debug!("Initializing sse connection");
+                    let data = app
+                        .processor
+                        .prepare_request(req)
+                        .map_err(ErrorInternalServerError)?;
+
+                    let encoding = ContentEncoding::Identity;
+
+                    let stream = app
+                        .renderer_event_rx
+                        .clone()
+                        .into_stream()
+                        .then(move |event| {
+                            let app = app.clone();
+                            let data = data.clone();
+                            async move {
+                                log::debug!("Received renderer_event_rx event: event={event:?}");
+                                Ok::<_, actix_web::Error>(match event {
+                                    RendererEvent::View(view) => {
+                                        log::debug!("SSE sending view={view:?}");
+                                        let body = app
+                                            .processor
+                                            .to_body(Content::View(view), data)
+                                            .await?;
+
+                                        sse::EventData::new(body).event("view")
+                                    }
+                                    RendererEvent::Partial(partial_view) => {
+                                        log::debug!("SSE sending partial_view={partial_view:?}");
+                                        let body = app
+                                            .processor
+                                            .to_body(Content::PartialView(partial_view), data)
+                                            .await?;
+
+                                        sse::EventData::new(body).event("partial_view")
+                                    }
+                                    RendererEvent::CanvasUpdate(_canvas_update) => {
+                                        log::debug!("SSE sending canvas_update");
+                                        sse::EventData::new("canvas_update").event("canvas_update")
+                                    }
+                                    RendererEvent::Event { name, value } => {
+                                        log::debug!(
+                                            "SSE sending event name={name} value={value:?}"
+                                        );
+                                        sse::EventData::new(format!(
+                                            "{name}\n{}",
+                                            value.unwrap_or_default()
+                                        ))
+                                        .event("event")
+                                    }
+                                })
+                            }
+                        })
+                        .map(move |x| {
+                            x.map(sse::Event::Data)
+                                .map(sse::Event::into_bytes)
+                                .map(|x| match encoding {
+                                    ContentEncoding::Gzip => {
+                                        let mut encoder =
+                                            GzEncoder::new(vec![], Compression::default());
+                                        encoder.write_all(&x).unwrap();
+                                        Bytes::from(encoder.finish().unwrap())
+                                    }
+                                    ContentEncoding::Zstd => {
+                                        let mut ecnoder =
+                                            ZlibEncoder::new(vec![], Compression::default());
+                                        ecnoder.write_all(&x).unwrap();
+                                        Bytes::from(ecnoder.flush_finish().unwrap())
+                                    }
+                                    ContentEncoding::Deflate => {
+                                        let mut ecnoder =
+                                            DeflateEncoder::new(vec![], Compression::default());
+                                        ecnoder.write_all(&x).unwrap();
+                                        Bytes::from(ecnoder.flush_finish().unwrap())
+                                    }
+                                    ContentEncoding::Identity | ContentEncoding::Brotli | _ => x,
+                                })
+                        });
+
+                    Ok::<_, actix_web::Error>(
+                        HttpResponse::Ok()
+                            .content_type("text/event-stream")
+                            .insert_header(if encoding == ContentEncoding::Zstd {
+                                ContentEncoding::Deflate
+                            } else {
+                                encoding
+                            })
+                            .insert_header(CacheControl(vec![CacheDirective::NoCache]))
+                            .streaming(stream),
+                    )
+                };
+
+                let app = app.service(web::resource("/$sse").route(web::get().to(sse)));
 
                 let catchall = move |req: HttpRequest, app: web::Data<ActixApp<T, R>>| async move {
                     let data = app.processor.prepare_request(req)?;

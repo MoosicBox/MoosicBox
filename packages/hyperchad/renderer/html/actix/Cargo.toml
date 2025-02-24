@@ -19,12 +19,16 @@ moosicbox_env_utils = { version = "0.1.0", path = "../../../../env_utils", defau
 moosicbox_middleware = { version = "0.1.0", path = "../../../../middleware", default-features = false }
 moosicbox_task = { version = "0.1.0", path = "../../../../task", default-features = false }
 
-actix-cors  = { workspace = true }
-actix-files = { workspace = true, optional = true }
-actix-web   = { workspace = true }
-async-trait = { workspace = true }
-log         = { workspace = true }
-tokio       = { workspace = true }
+actix-cors   = { workspace = true }
+actix-files  = { workspace = true, optional = true }
+actix-web    = { workspace = true }
+async-trait  = { workspace = true }
+bytes        = { workspace = true }
+flate2       = { workspace = true }
+flume        = { workspace = true }
+futures-util = { workspace = true }
+log          = { workspace = true }
+tokio        = { workspace = true }
 
 [features]
 default = ["assets", "debug"]

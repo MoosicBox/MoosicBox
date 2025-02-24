@@ -55,6 +55,21 @@ impl<T: HtmlTagRenderer> HtmlApp for StubApp<T> {
     }
 
     fn set_background(&mut self, _background: Option<Color>) {}
+
+    #[cfg(feature = "extend")]
+    fn with_html_renderer_event_rx(
+        self,
+        _rx: flume::Receiver<hyperchad_renderer::RendererEvent>,
+    ) -> Self {
+        self
+    }
+
+    #[cfg(feature = "extend")]
+    fn set_html_renderer_event_rx(
+        &mut self,
+        _rx: flume::Receiver<hyperchad_renderer::RendererEvent>,
+    ) {
+    }
 }
 
 #[derive(Clone)]

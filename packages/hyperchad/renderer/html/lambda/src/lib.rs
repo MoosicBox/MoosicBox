@@ -29,6 +29,12 @@ pub trait LambdaResponseProcessor<T: Send + Sync + Clone> {
     fn prepare_request(&self, req: Request) -> Result<T, lambda_runtime::Error>;
 
     async fn to_response(&self, data: T) -> Result<Content, lambda_runtime::Error>;
+
+    async fn to_body(
+        &self,
+        content: hyperchad_renderer::Content,
+        data: T,
+    ) -> Result<Content, lambda_runtime::Error>;
 }
 
 #[derive(Clone)]

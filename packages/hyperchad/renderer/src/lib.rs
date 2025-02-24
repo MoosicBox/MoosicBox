@@ -21,6 +21,18 @@ pub use tokio::runtime::Handle;
 
 pub use hyperchad_transformer as transformer;
 
+#[derive(Debug)]
+pub enum RendererEvent {
+    View(View),
+    Partial(PartialView),
+    #[cfg(feature = "canvas")]
+    CanvasUpdate(canvas::CanvasUpdate),
+    Event {
+        name: String,
+        value: Option<String>,
+    },
+}
+
 pub enum Content {
     View(View),
     PartialView(PartialView),
@@ -38,6 +50,15 @@ pub struct PartialView {
 pub struct View {
     pub future: Option<Pin<Box<dyn Future<Output = Container> + Send>>>,
     pub immediate: Container,
+}
+
+impl std::fmt::Debug for View {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("View")
+            .field("future", &self.future.is_some())
+            .field("immediate", &self.immediate)
+            .finish()
+    }
 }
 
 #[cfg(feature = "json")]

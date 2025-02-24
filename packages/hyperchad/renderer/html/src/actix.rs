@@ -5,7 +5,8 @@ use std::{
 
 use actix_web::{http::header::ContentType, HttpResponse};
 use async_trait::async_trait;
-use hyperchad_renderer::{Color, HtmlTagRenderer, PartialView, View};
+use flume::Receiver;
+use hyperchad_renderer::{Color, Content, HtmlTagRenderer, PartialView, RendererEvent, View};
 use hyperchad_renderer_html_actix::actix_web::{
     error::ErrorInternalServerError, http::header::USER_AGENT,
 };
@@ -24,9 +25,13 @@ pub fn router_to_actix<T: HtmlTagRenderer + Clone + Send + Sync + 'static>(
 ) -> HtmlRenderer<
     hyperchad_renderer_html_actix::ActixApp<PreparedRequest, HtmlActixResponseProcessor<T>>,
 > {
+    let (publisher, event_rx) = crate::extend::HtmlRendererEventPub::new();
+
     HtmlRenderer::new(hyperchad_renderer_html_actix::ActixApp::new(
         HtmlActixResponseProcessor::new(tag_renderer, value),
+        event_rx,
     ))
+    .with_html_renderer_event_pub(publisher)
 }
 
 #[derive(Clone)]
@@ -110,6 +115,16 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
         self.processor.background = background;
     }
 
+    #[must_use]
+    fn with_html_renderer_event_rx(mut self, rx: Receiver<RendererEvent>) -> Self {
+        self.renderer_event_rx = rx;
+        self
+    }
+
+    fn set_html_renderer_event_rx(&mut self, rx: Receiver<RendererEvent>) {
+        self.renderer_event_rx = rx;
+    }
+
     #[cfg(feature = "assets")]
     #[must_use]
     fn with_static_asset_routes(
@@ -161,7 +176,7 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
             };
 
         Ok(PreparedRequest {
-            full: req.headers().get("hx-request").is_none(),
+            full: req.path() != "/$sse" && req.headers().get("hx-request").is_none(),
             path,
             info: RequestInfo {
                 client: Arc::new(ClientInfo {
@@ -172,15 +187,38 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
     }
 
     async fn to_response(&self, req: PreparedRequest) -> Result<HttpResponse, actix_web::Error> {
-        static HEADERS: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
-
         let content = self
             .router
-            .navigate(&req.path, req.info)
+            .navigate(&req.path, req.info.clone())
             .await
             .map_err(ErrorInternalServerError)?;
 
-        match content {
+        match &content {
+            hyperchad_renderer::Content::View(..)
+            | hyperchad_renderer::Content::PartialView(..) => {
+                let body = self.to_body(content, req).await?;
+                Ok(HttpResponse::Ok()
+                    .content_type(ContentType::html())
+                    .body(body))
+            }
+            #[cfg(feature = "json")]
+            hyperchad_renderer::Content::Json(..) => {
+                let body = self.to_body(content, req).await?;
+                Ok(HttpResponse::Ok()
+                    .content_type(ContentType::json())
+                    .body(body))
+            }
+        }
+    }
+
+    async fn to_body(
+        &self,
+        content: Content,
+        req: PreparedRequest,
+    ) -> Result<String, actix_web::Error> {
+        static HEADERS: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
+
+        Ok(match content {
             hyperchad_renderer::Content::View(View {
                 immediate: view, ..
             })
@@ -190,7 +228,7 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                 let content = container_element_to_html(&view, &self.tag_renderer)
                     .map_err(ErrorInternalServerError)?;
 
-                let body = if req.full {
+                if req.full {
                     self.tag_renderer.root_html(
                         &HEADERS,
                         &view,
@@ -208,16 +246,12 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                         self.viewport.as_deref(),
                         self.background,
                     )
-                };
-
-                Ok(HttpResponse::Ok()
-                    .content_type(ContentType::html())
-                    .body(body))
+                }
             }
             #[cfg(feature = "json")]
-            hyperchad_renderer::Content::Json(x) => Ok(HttpResponse::Ok()
-                .content_type(ContentType::json())
-                .body(serde_json::to_string(&x).map_err(ErrorInternalServerError)?)),
-        }
+            hyperchad_renderer::Content::Json(x) => {
+                serde_json::to_string(&x).map_err(ErrorInternalServerError)?
+            }
+        })
     }
 }

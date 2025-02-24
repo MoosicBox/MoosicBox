@@ -43,7 +43,7 @@ fail-on-warnings = []
 
 debug = []
 
-actix  = ["dep:hyperchad_renderer_html_actix"]
+actix  = ["dep:hyperchad_renderer_html_actix", "extend"]
 lambda = ["dep:hyperchad_renderer_html_lambda"]
 
 json = [
