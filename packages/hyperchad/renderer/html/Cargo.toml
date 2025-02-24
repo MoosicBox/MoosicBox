@@ -32,6 +32,7 @@ flume       = { workspace = true }
 log         = { workspace = true }
 maud        = { workspace = true }
 serde_json  = { workspace = true, optional = true }
+thiserror   = { workspace = true, optional = true }
 tokio       = { workspace = true }
 uaparser    = { workspace = true }
 
@@ -58,4 +59,4 @@ assets = [
     "hyperchad_renderer_html_lambda?/assets",
 ]
 
-extend = []
+extend = ["dep:thiserror"]

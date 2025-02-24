@@ -400,12 +400,17 @@ pub struct HtmlRenderer<T: HtmlApp + ToRenderRunner + Send + Sync> {
     receiver: Receiver<String>,
     #[cfg(feature = "extend")]
     extend: Option<std::sync::Arc<Box<dyn extend::ExtendHtmlRenderer + Send + Sync>>>,
+    #[cfg(feature = "extend")]
+    publisher: extend::HtmlRendererEventPub,
 }
 
 impl<T: HtmlApp + ToRenderRunner + Send + Sync> HtmlRenderer<T> {
     #[must_use]
     pub fn new(app: T) -> Self {
         let (_tx, rx) = flume::unbounded();
+
+        #[cfg(feature = "extend")]
+        let (publisher, _event_rx) = extend::HtmlRendererEventPub::new();
 
         Self {
             width: None,
@@ -416,6 +421,8 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> HtmlRenderer<T> {
             receiver: rx,
             #[cfg(feature = "extend")]
             extend: None,
+            #[cfg(feature = "extend")]
+            publisher,
         }
     }
 
@@ -518,6 +525,13 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         log::trace!("emit_event: event_name={event_name} event_value={event_value:?}");
 
+        #[cfg(feature = "extend")]
+        if let Some(extend) = self.extend.as_ref() {
+            extend
+                .emit_event(self.publisher.clone(), event_name, event_value)
+                .await?;
+        }
+
         Ok(())
     }
 
@@ -535,7 +549,7 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
 
         #[cfg(feature = "extend")]
         if let Some(extend) = self.extend.as_ref() {
-            extend.render(elements).await?;
+            extend.render(self.publisher.clone(), elements).await?;
         }
 
         log::debug!("render: finished");
@@ -561,7 +575,7 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
 
         #[cfg(feature = "extend")]
         if let Some(extend) = self.extend.as_ref() {
-            extend.render_partial(view).await?;
+            extend.render_partial(self.publisher.clone(), view).await?;
         }
 
         log::debug!("render_partial: finished");
@@ -585,7 +599,7 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
 
         #[cfg(feature = "extend")]
         if let Some(extend) = self.extend.as_ref() {
-            extend.render_canvas(update).await?;
+            extend.render_canvas(self.publisher.clone(), update).await?;
         }
 
         log::debug!("render_canvas: finished");
