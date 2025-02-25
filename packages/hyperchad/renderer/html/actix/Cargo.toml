@@ -28,6 +28,7 @@ flate2       = { workspace = true }
 flume        = { workspace = true }
 futures-util = { workspace = true }
 log          = { workspace = true }
+serde_json   = { workspace = true, optional = true }
 tokio        = { workspace = true }
 
 [features]
@@ -39,4 +40,4 @@ debug = []
 
 assets = ["dep:actix-files", "hyperchad_renderer/assets"]
 
-sse = []
+sse = ["dep:serde_json", "hyperchad_renderer/serde"]

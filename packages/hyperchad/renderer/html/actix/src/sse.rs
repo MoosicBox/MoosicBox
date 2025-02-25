@@ -128,9 +128,10 @@ pub async fn handle_sse<
 
                         crate::sse::EventData::new(body).event("partial_view")
                     }
-                    RendererEvent::CanvasUpdate(_canvas_update) => {
+                    RendererEvent::CanvasUpdate(canvas_update) => {
                         log::debug!("handle_sse: SSE sending canvas_update");
-                        crate::sse::EventData::new("canvas_update").event("canvas_update")
+                        crate::sse::EventData::new(serde_json::to_string(&canvas_update).unwrap())
+                            .event("canvas_update")
                     }
                     RendererEvent::Event { name, value } => {
                         log::debug!("handle_sse: SSE sending event name={name} value={value:?}");
