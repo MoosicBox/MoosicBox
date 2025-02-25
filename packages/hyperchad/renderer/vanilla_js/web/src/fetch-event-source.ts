@@ -313,7 +313,7 @@ export function fetchEventSource(
         });
 
         const fetch = inputFetch ?? window.fetch;
-        const onopen = inputOnOpen ?? function defaultOnOpen() { };
+        const onopen = inputOnOpen ?? function defaultOnOpen() {};
 
         async function create() {
             curRequestController = new AbortController();
@@ -355,7 +355,8 @@ export function fetchEventSource(
                     // if we haven't aborted the request ourselves:
                     try {
                         // check if we need to retry:
-                        const interval: number = onerror?.(err) ?? retryInterval;
+                        const interval: number =
+                            onerror?.(err) ?? retryInterval;
                         window.clearTimeout(retryTimer);
                         retryTimer = window.setTimeout(create, interval);
                         retryInterval *= retryScaler; // exponential backoff
