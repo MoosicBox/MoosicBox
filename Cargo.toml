@@ -149,9 +149,9 @@ async-trait = "0.1.86"
 atomic_float = "1.1.0"
 audiopus = "0.2.0"
 awc = "3.5.1"
-aws-config = "1.5.16"
-aws-sdk-apigatewaymanagement = "1.59.0"
-aws-sdk-ssm = "1.65.0"
+aws-config = "1.5.17"
+aws-sdk-apigatewaymanagement = "1.60.0"
+aws-sdk-ssm = "1.66.0"
 base64 = "0.22.1"
 bumpalo = "3.17.0"
 bytes = "1.10.0"
@@ -160,7 +160,7 @@ chrono = { version = "0.4.39", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = { version = "4.5.30", features = ["derive"] }
+clap = { version = "4.5.31", features = ["derive"] }
 color-hex = "0.2.0"
 colored = { version = "3.0.0" }
 console-subscriber = "0.4.1"
@@ -179,7 +179,7 @@ enum-as-inner = "0.6.1"
 env_logger = "0.11"
 fdk-aac = "0.7.0"
 flacenc = "0.4.0"
-flate2 = "1.0.35"
+flate2 = "1.1.0"
 fltk = "1.5.4"
 fltk-sys = "1.5.4"
 flume = "0.11.1"
