@@ -589,7 +589,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .with_size(width, height);
 
-    visualization::set_dimensions(width, height);
+    visualization::set_dimensions(width, f32::from(moosicbox_app_native_ui::VIZ_HEIGHT));
 
     #[cfg(feature = "assets")]
     {
