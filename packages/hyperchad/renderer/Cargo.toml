@@ -20,6 +20,7 @@ async-trait = { workspace = true }
 bytes       = { workspace = true, optional = true }
 log         = { workspace = true }
 maud        = { workspace = true, optional = true }
+serde       = { workspace = true, optional = true }
 serde_json  = { workspace = true, optional = true }
 tokio       = { workspace = true, features = ["rt"] }
 
@@ -54,3 +55,5 @@ json = ["dep:serde_json"]
 assets = ["dep:bytes"]
 
 logic = ["hyperchad_transformer/logic"]
+
+serde = ["dep:serde", "hyperchad_color/serde"]
