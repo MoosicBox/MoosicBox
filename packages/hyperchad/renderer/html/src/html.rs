@@ -218,8 +218,6 @@ pub fn element_style_to_html(
     let is_flex = is_flex_container(container);
     let is_grid = !is_flex && is_grid_container(container);
 
-    write_css_attr!(b"box-sizing", b"border-box");
-
     if is_flex {
         write_css_attr!(b"display", b"flex");
 
