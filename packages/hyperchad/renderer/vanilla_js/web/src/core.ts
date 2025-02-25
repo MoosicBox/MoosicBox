@@ -177,6 +177,19 @@ export function swapInnerHtml(element: HTMLElement, html: string) {
     }
 }
 
+export function swapDom(html: string, url?: string | undefined) {
+    if (typeof url === 'string') {
+        console.debug('Navigating to', url);
+        history.pushState({}, '', url);
+    }
+    document.documentElement.innerHTML = html;
+    triggerHandlers('domLoad', {
+        initial: true,
+        navigation: false,
+        element: document.documentElement,
+    });
+}
+
 function handleResponse(element: HTMLElement, html: string): boolean {
     const swap = element.getAttribute('hx-swap');
     const swapLower = swap?.toLowerCase();

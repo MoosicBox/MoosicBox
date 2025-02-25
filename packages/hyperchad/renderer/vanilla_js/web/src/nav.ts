@@ -1,4 +1,4 @@
-import { onAttr, triggerHandlers } from './core';
+import { onAttr, swapDom } from './core';
 
 const cache: { [url: string]: string } = {};
 const pending: { [url: string]: Promise<string | void> } = {};
@@ -39,19 +39,8 @@ onAttr('href', ({ element, attr }) => {
 
         const existing = cache[attr];
 
-        function swap(html: string) {
-            console.debug('Navigating to', attr);
-            history.pushState({}, '', attr);
-            document.documentElement.innerHTML = html;
-            triggerHandlers('domLoad', {
-                initial: true,
-                navigation: false,
-                element: document.documentElement,
-            });
-        }
-
         if (typeof existing === 'string') {
-            swap(existing);
+            swapDom(existing, attr);
             return false;
         }
 
@@ -61,7 +50,7 @@ onAttr('href', ({ element, attr }) => {
             console.debug('Awaiting pending request', attr);
             request.then((html) => {
                 if (typeof html === 'string') {
-                    swap(html);
+                    swapDom(html, attr);
                     return;
                 }
                 console.debug('Invalid response', attr, html);
