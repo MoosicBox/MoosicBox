@@ -2,7 +2,7 @@
 
 use std::{
     sync::{LazyLock, RwLock},
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 
 use moosicbox_app_native_lib::renderer::{
@@ -15,6 +15,8 @@ use tokio_util::sync::CancellationToken;
 
 use crate::STATE;
 
+static INTERVAL_PERIOD: LazyLock<RwLock<Duration>> =
+    LazyLock::new(|| RwLock::new(Duration::from_millis(16)));
 static DIMENSIONS: LazyLock<RwLock<(f32, f32)>> = LazyLock::new(|| RwLock::new((0.0, 0.0)));
 
 pub fn get_dimensions() -> (f32, f32) {
@@ -24,6 +26,11 @@ pub fn get_dimensions() -> (f32, f32) {
 #[allow(unused)]
 pub fn set_dimensions(width: f32, height: f32) {
     *DIMENSIONS.write().unwrap() = (width, height);
+}
+
+#[allow(unused)]
+pub fn set_interval_period(period: Duration) {
+    *INTERVAL_PERIOD.write().unwrap() = period;
 }
 
 #[derive(Debug, Clone)]
@@ -328,7 +335,7 @@ pub async fn check_visualization_update() {
                         .unwrap()
                         .replace(tokio::task::spawn(async move {
                             let mut interval =
-                                tokio::time::interval(std::time::Duration::from_millis(16));
+                                tokio::time::interval(*INTERVAL_PERIOD.read().unwrap());
 
                             while !token.is_cancelled() {
                                 tokio::select! {
