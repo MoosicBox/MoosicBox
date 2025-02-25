@@ -67,7 +67,7 @@ fn get_os_header(asset: &str) -> &str {
 }
 
 fn format_size(size: u64) -> String {
-    bytesize::to_string(size, true)
+    bytesize::ByteSize::b(size).to_string()
 }
 
 fn format_date(date: &NaiveDateTime) -> String {
