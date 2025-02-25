@@ -1,12 +1,6 @@
 import { htmlToElement, triggerHandlers } from './core';
 import { fetchEventSource } from './fetch-event-source';
 
-async function decompressGzip(base64Data: string) {
-    const compressedData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-    const decompressed = await new Response(compressedData).arrayBuffer();
-    return new TextDecoder().decode(decompressed);
-}
-
 fetchEventSource('$sse', {
     method: 'GET',
     onopen: async (response: Response) => {
@@ -17,7 +11,6 @@ fetchEventSource('$sse', {
     },
     onmessage: (e) => {
         console.log('SSE event', e);
-
 
         switch (e.event) {
             case 'partial_view': {
