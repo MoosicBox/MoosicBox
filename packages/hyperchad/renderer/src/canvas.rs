@@ -16,6 +16,7 @@ pub enum CanvasAction {
     Line(Pos, Pos),
     FillRect(Pos, Pos),
     Clear,
+    ClearRect(Pos, Pos),
 }
 
 #[derive(Default, Debug, Clone)]
