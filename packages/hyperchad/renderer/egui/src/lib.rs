@@ -532,11 +532,36 @@ impl Renderer for EguiRenderer {
 
 fn compact_canvas_actions(actions: &mut Vec<CanvasAction>) {
     let len = actions.len();
+    let mut cleared = vec![];
     for i in 0..len {
         let i = len - 1 - i;
-        if matches!(actions[i], CanvasAction::Clear) {
-            actions.drain(..=i);
-            return;
+        let Some(action) = actions.get(i) else {
+            continue;
+        };
+        match action {
+            CanvasAction::StrokeSize(..)
+            | CanvasAction::StrokeColor(..)
+            | CanvasAction::Line(..) => {}
+            CanvasAction::Clear => {
+                actions.drain(..=i);
+                return;
+            }
+            CanvasAction::ClearRect(canvas::Pos(x1, y1), canvas::Pos(x2, y2)) => {
+                cleared.push(egui::Rect::from_min_max(
+                    egui::Pos2 { x: *x1, y: *y1 },
+                    egui::Pos2 { x: *x2, y: *y2 },
+                ));
+            }
+            CanvasAction::FillRect(canvas::Pos(x1, y1), canvas::Pos(x2, y2)) => {
+                let rect = egui::Rect::from_min_max(
+                    egui::Pos2 { x: *x1, y: *y1 },
+                    egui::Pos2 { x: *x2, y: *y2 },
+                );
+
+                if cleared.iter().any(|x| x.intersects(rect)) {
+                    actions.remove(i);
+                }
+            }
         }
     }
 }
@@ -3444,7 +3469,7 @@ impl EguiApp {
 
                 for action in actions {
                     match action {
-                        CanvasAction::Clear => {}
+                        CanvasAction::Clear | CanvasAction::ClearRect(..) => {}
                         CanvasAction::StrokeSize(size) => {
                             stroke.width = *size;
                         }
