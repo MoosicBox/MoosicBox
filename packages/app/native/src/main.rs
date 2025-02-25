@@ -41,8 +41,8 @@ use moosicbox_session_models::{
 };
 use moosicbox_ws::models::{InboundPayload, UpdateSessionPayload};
 use thiserror::Error;
-use visualization::get_dimensions;
 
+#[cfg(feature = "_canvas")]
 mod visualization;
 
 static STATE: LazyLock<moosicbox_app_state::AppState> = LazyLock::new(|| {
@@ -212,6 +212,7 @@ async fn set_current_session(session: ApiSession) {
 
     handle_session_update(&state, &update, &session).await;
 
+    #[cfg(feature = "_canvas")]
     visualization::check_visualization_update().await;
 }
 
@@ -243,6 +244,7 @@ async fn handle_playback_update(update: ApiUpdateSession) {
         },
     );
 
+    #[cfg(feature = "_canvas")]
     visualization::check_visualization_update().await;
 }
 
@@ -589,6 +591,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .with_size(width, height);
 
+    #[cfg(feature = "_canvas")]
     visualization::set_dimensions(width, f32::from(moosicbox_app_native_ui::VIZ_HEIGHT));
 
     #[cfg(feature = "assets")]
@@ -721,26 +724,33 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
 
     match &action {
         Action::RefreshVisualization => {
-            static EPSILON: f32 = 0.001;
+            #[cfg(feature = "_canvas")]
+            {
+                static EPSILON: f32 = 0.001;
 
-            log::debug!("handle_action: RefreshVisualization: {value:?}");
+                log::debug!("handle_action: RefreshVisualization: {value:?}");
 
-            let width = value
-                .expect("Missing width value")
-                .as_f32(None::<&Box<dyn Fn(&hyperchad_actions::logic::CalcValue) -> Option<Value>>>)
-                .expect("Invalid width value");
+                let width = value
+                    .expect("Missing width value")
+                    .as_f32(
+                        None::<&Box<dyn Fn(&hyperchad_actions::logic::CalcValue) -> Option<Value>>>,
+                    )
+                    .expect("Invalid width value");
 
-            let height = moosicbox_app_native_ui::VIZ_HEIGHT;
-            let height = f32::from(height);
+                let height = moosicbox_app_native_ui::VIZ_HEIGHT;
+                let height = f32::from(height);
 
-            let (ew, eh) = get_dimensions();
+                let (ew, eh) = visualization::get_dimensions();
 
-            if (ew - width).abs() >= EPSILON || (eh - height).abs() >= EPSILON {
-                log::debug!("handle_action: updating visualization width={width} height={height}");
-                visualization::set_dimensions(width, height);
+                if (ew - width).abs() >= EPSILON || (eh - height).abs() >= EPSILON {
+                    log::debug!(
+                        "handle_action: updating visualization width={width} height={height}"
+                    );
+                    visualization::set_dimensions(width, height);
+                }
+
+                visualization::check_visualization_update().await;
             }
-
-            visualization::check_visualization_update().await;
 
             Ok(())
         }
