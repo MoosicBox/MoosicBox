@@ -192,7 +192,7 @@ pub fn sidebar_navigation() -> Markup {
 pub fn player(state: &State) -> Markup {
     html! {
         div sx-height=(FOOTER_HEIGHT) sx-border-top={(FOOTER_BORDER_SIZE)", #222"} {
-            div sx-height=(VIZ_HEIGHT) sx-padding-y=(VIZ_PADDING) sx-dir="row" {
+            div sx-height=(VIZ_HEIGHT + VIZ_PADDING * 2) sx-padding-y=(VIZ_PADDING) sx-dir="row" {
                 canvas
                     id="visualization"
                     sx-cursor="pointer"
