@@ -26,7 +26,7 @@ fn main() {
     let index = src_dir.join("index.ts");
 
     if index.is_file() {
-        panic!("{} already exists", index.display());
+        std::fs::remove_file(&index).unwrap();
     }
 
     let plugins: Vec<&str> = vec![
