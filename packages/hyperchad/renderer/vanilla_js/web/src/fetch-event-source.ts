@@ -369,7 +369,7 @@ export function fetchEventSource(
                             reject();
                         } else {
                             console.error(
-                                `Datastar failed to reach ${rest.method}: ${input.toString()} retry in ${interval}ms`,
+                                `Failed to reach ${rest.method}: ${input.toString()} retry in ${interval}ms`,
                             );
                         }
                     } catch (innerErr) {
