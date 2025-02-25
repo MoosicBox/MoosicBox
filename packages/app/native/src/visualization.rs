@@ -41,7 +41,6 @@ static INTERVAL: LazyLock<RwLock<Option<JoinHandle<()>>>> = LazyLock::new(|| RwL
 static CANCEL_INTERVAL: LazyLock<RwLock<CancellationToken>> =
     LazyLock::new(|| RwLock::new(CancellationToken::new()));
 
-#[cfg(feature = "_calculated_canvas")]
 #[allow(clippy::too_many_arguments)]
 async fn visualization_updated(
     cursor_width: f32,
@@ -125,7 +124,6 @@ async fn visualization_updated(
     }
 }
 
-#[cfg(feature = "_calculated_canvas")]
 async fn clear_canvas() {
     use moosicbox_app_native_lib::renderer::canvas;
 
@@ -141,16 +139,6 @@ async fn clear_canvas() {
     }
 }
 
-#[cfg(not(feature = "_calculated_canvas"))]
-#[allow(clippy::unused_async)]
-pub async fn update_visualization(
-    _visualization_width: f32,
-    _visualization_height: f32,
-    _track: CurrentTrack,
-) {
-}
-
-#[cfg(feature = "_calculated_canvas")]
 pub async fn update_visualization(
     visualization_width: f32,
     visualization_height: f32,

@@ -41,6 +41,7 @@ use moosicbox_session_models::{
 };
 use moosicbox_ws::models::{InboundPayload, UpdateSessionPayload};
 use thiserror::Error;
+use visualization::get_dimensions;
 
 mod visualization;
 
@@ -720,25 +721,27 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
 
     match &action {
         Action::RefreshVisualization => {
-            #[cfg(feature = "_calculated_canvas")]
-            {
-                let renderer = RENDERER.get().unwrap();
-                let (width, height) = if let Some(visualization) =
-                    renderer.container().find_element_by_str_id("visualization")
-                {
-                    (
-                        visualization.calculated_width.unwrap(),
-                        visualization.calculated_height.unwrap(),
-                    )
-                } else {
-                    return Ok(());
-                };
+            static EPSILON: f32 = 0.001;
 
+            log::debug!("handle_action: RefreshVisualization: {value:?}");
+
+            let width = value
+                .expect("Missing width value")
+                .as_f32(None::<&Box<dyn Fn(&hyperchad_actions::logic::CalcValue) -> Option<Value>>>)
+                .expect("Invalid width value");
+
+            let height = moosicbox_app_native_ui::VIZ_HEIGHT;
+            let height = f32::from(height);
+
+            let (ew, eh) = get_dimensions();
+
+            if (ew - width).abs() >= EPSILON || (eh - height).abs() >= EPSILON {
                 log::debug!("handle_action: updating visualization width={width} height={height}");
-
                 visualization::set_dimensions(width, height);
-                visualization::check_visualization_update().await;
             }
+
+            visualization::check_visualization_update().await;
+
             Ok(())
         }
         Action::TogglePlayback
