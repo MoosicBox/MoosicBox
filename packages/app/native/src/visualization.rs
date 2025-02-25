@@ -5,6 +5,10 @@ use std::{
     time::SystemTime,
 };
 
+use moosicbox_app_native_lib::renderer::{
+    canvas::{self, CanvasAction, Pos},
+    Color,
+};
 use moosicbox_music_models::{id::Id, ApiSource};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -36,10 +40,30 @@ pub struct CurrentTrack {
     time: SystemTime,
 }
 
+static PREV_CURSOR_X: LazyLock<RwLock<Option<f32>>> = LazyLock::new(|| RwLock::new(None));
 static CURRENT_TRACK: LazyLock<RwLock<Option<CurrentTrack>>> = LazyLock::new(|| RwLock::new(None));
 static INTERVAL: LazyLock<RwLock<Option<JoinHandle<()>>>> = LazyLock::new(|| RwLock::new(None));
 static CANCEL_INTERVAL: LazyLock<RwLock<CancellationToken>> =
     LazyLock::new(|| RwLock::new(CancellationToken::new()));
+static CURRENT_STROKE_COLOR: LazyLock<RwLock<Color>> = LazyLock::new(|| RwLock::new(Color::BLACK));
+
+fn stroke_color(color: Color, canvas_actions: &mut Vec<CanvasAction>) {
+    let current_color = *CURRENT_STROKE_COLOR.read().unwrap();
+    if current_color != color {
+        let len = canvas_actions.len();
+        // compress stroke color actions
+        for i in 1..=len {
+            if canvas_actions[len - i].is_draw_action() {
+                break;
+            }
+            if matches!(canvas_actions[len - i], CanvasAction::StrokeColor { .. }) {
+                canvas_actions.remove(len - i);
+            }
+        }
+        *CURRENT_STROKE_COLOR.write().unwrap() = color;
+        canvas_actions.push(canvas::CanvasAction::StrokeColor(color));
+    }
+}
 
 #[allow(clippy::too_many_arguments)]
 async fn visualization_updated(
@@ -51,39 +75,63 @@ async fn visualization_updated(
     visualization_width: f32,
     visualization_height: f32,
     duration: f32,
+    prev_cursor_x: Option<f32>,
     last_update: SystemTime,
     progress_percent: f32,
     visualization: &[u8],
 ) {
-    use moosicbox_app_native_lib::renderer::{
-        canvas::{self, Pos},
-        Color,
-    };
-
     use crate::RENDERER;
+
+    static BUFFER_WIDTH: f32 = 2.0f32;
 
     log::trace!("visualization_updated");
 
-    let mut canvas_actions = Vec::with_capacity(visualization.len());
+    let mut canvas_actions = if prev_cursor_x.is_some() {
+        Vec::with_capacity(1)
+    } else {
+        Vec::with_capacity(visualization.len())
+    };
 
-    canvas_actions.push(canvas::CanvasAction::Clear);
-
+    let cursor_half_width = cursor_width / 2.0;
     let step_1_second = visualization_width / duration;
     let delta = SystemTime::now()
         .duration_since(last_update)
         .unwrap()
         .as_secs_f32()
         * step_1_second;
-    let cursor_x = visualization_width.mul_add(progress_percent, -(cursor_width / 2.0)) + delta;
+    let cursor_x = visualization_width.mul_add(progress_percent, -cursor_half_width) + delta;
     let bar_y_offset = (visualization_height - bar_height) / 2.0;
 
-    canvas_actions.push(canvas::CanvasAction::StrokeColor(Color::from_hex("222")));
+    let clear_buffer = cursor_half_width + BUFFER_WIDTH;
+    let left_cursor = prev_cursor_x.map(|x| if x < cursor_x { x } else { cursor_x });
+    let right_cursor = prev_cursor_x.map_or(cursor_x, |x| if x > cursor_x { x } else { cursor_x });
+    let clear_buffer_left = left_cursor.map(|x| x - clear_buffer);
+    let clear_buffer_right = right_cursor + clear_buffer;
+
+    if let Some(left) = clear_buffer_left {
+        canvas_actions.push(canvas::CanvasAction::ClearRect(
+            Pos(left, 0.0),
+            Pos(clear_buffer_right, visualization_height),
+        ));
+    }
+
+    stroke_color(Color::from_hex("222"), &mut canvas_actions);
 
     let mut past = true;
 
     for (i, point) in visualization.iter().enumerate() {
         #[allow(clippy::cast_precision_loss)]
         let x = (i as f32) * (bar_width + gap);
+
+        if let Some(left) = clear_buffer_left {
+            if x + bar_width + gap < left {
+                continue;
+            }
+            if x > clear_buffer_right {
+                break;
+            }
+        }
+
         let height = f32::from(*point);
         let height = (height / 255.0) * bar_height;
         let height = if height < 2.0 { 2.0 } else { height };
@@ -92,7 +140,7 @@ async fn visualization_updated(
         if past && x >= cursor_x {
             past = false;
 
-            canvas_actions.push(canvas::CanvasAction::StrokeColor(Color::WHITE));
+            stroke_color(Color::WHITE, &mut canvas_actions);
         }
 
         canvas_actions.push(canvas::CanvasAction::FillRect(
@@ -107,12 +155,14 @@ async fn visualization_updated(
         let x = cursor_x;
         let y = cursor_y_offset;
         let height = cursor_height;
-        canvas_actions.push(canvas::CanvasAction::StrokeColor(Color::WHITE));
+        stroke_color(Color::WHITE, &mut canvas_actions);
         canvas_actions.push(canvas::CanvasAction::FillRect(
             Pos(x, y),
             Pos(x + cursor_width, y + height),
         ));
     }
+
+    PREV_CURSOR_X.write().unwrap().replace(cursor_x);
 
     let view = canvas::CanvasUpdate {
         target: "visualization".to_string(),
@@ -139,7 +189,7 @@ async fn clear_canvas() {
     }
 }
 
-pub async fn update_visualization(
+async fn update_visualization(
     visualization_width: f32,
     visualization_height: f32,
     track: CurrentTrack,
@@ -159,7 +209,8 @@ pub async fn update_visualization(
     let api_source = track.api_source;
     let seek = track.seek;
     let duration = track.duration;
-    let time = track.time;
+    let last_update = track.time;
+    let prev_cursor_x = *PREV_CURSOR_X.read().unwrap();
     let bar_height = visualization_height - 5.0;
     let cursor_height = visualization_height;
 
@@ -168,13 +219,12 @@ pub async fn update_visualization(
     #[allow(clippy::cast_possible_truncation)]
     let duration = duration as f32;
 
-    log::trace!("update_visualization: track_id={track_id} api_source={api_source} seek={seek}");
+    log::trace!("update_visualization: track_id={track_id} api_source={api_source} seek={seek} visualization_width={visualization_width} visualization_height={visualization_height}");
 
     let key = format!("{api_source}|{track_id}|{visualization_width}|{visualization_height}");
 
     let mut binding = CACHE.write().await;
     if let Some(data) = binding.get(&key) {
-        #[cfg(feature = "_canvas")]
         visualization_updated(
             CURSOR_WIDTH,
             cursor_height,
@@ -184,7 +234,8 @@ pub async fn update_visualization(
             visualization_width,
             visualization_height,
             duration,
-            time,
+            prev_cursor_x,
+            last_update,
             progress_percent,
             data,
         )
@@ -193,6 +244,9 @@ pub async fn update_visualization(
     }
 
     clear_canvas().await;
+
+    *PREV_CURSOR_X.write().unwrap() = None;
+    let prev_cursor_x = None;
 
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     let max = (visualization_width / (BAR_WIDTH + GAP)).round() as usize;
@@ -221,7 +275,6 @@ pub async fn update_visualization(
 
     drop(binding);
 
-    #[cfg(feature = "_canvas")]
     visualization_updated(
         CURSOR_WIDTH,
         cursor_height,
@@ -231,14 +284,15 @@ pub async fn update_visualization(
         visualization_width,
         visualization_height,
         duration,
-        time,
+        prev_cursor_x,
+        last_update,
         progress_percent,
         &buf,
     )
     .await;
 }
 
-pub async fn tick_visualization() {
+async fn tick_visualization() {
     let Some(current_track) = CURRENT_TRACK.read().unwrap().clone() else {
         moosicbox_assert::die_or_panic!("Current track not set");
     };
