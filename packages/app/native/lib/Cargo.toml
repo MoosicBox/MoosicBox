@@ -103,3 +103,6 @@ unsafe = ["hyperchad_renderer_fltk?/unsafe"]
 assets = ["hyperchad_renderer/assets", "hyperchad_renderer_html?/assets"]
 
 static-routes = ["hyperchad_router/static-routes"]
+
+plugin-nav = ["hyperchad_renderer_vanilla_js?/plugin-nav"]
+plugin-sse = ["hyperchad_renderer_vanilla_js?/plugin-sse"]

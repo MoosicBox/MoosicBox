@@ -103,7 +103,11 @@ html = [
     "moosicbox_app_native_lib/html",
 ]
 htmx = ["html", "moosicbox_app_native_lib/htmx"]
-vanilla-js = ["html", "moosicbox_app_native_lib/vanilla-js"]
+vanilla-js = [
+    "html",
+    "moosicbox_app_native_lib/plugin-nav",
+    "moosicbox_app_native_lib/vanilla-js",
+]
 
 actix = ["hyperchad_renderer_html?/actix", "moosicbox_app_native_lib/actix"]
 

@@ -35,7 +35,15 @@ pub const SCRIPT: &str = include_str!("../web/dist/index.min.js");
 
 #[cfg(all(feature = "hash", feature = "script"))]
 pub static SCRIPT_NAME_HASHED: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
-    let digest = md5::compute(SCRIPT.as_bytes());
+    #[allow(unused_mut)]
+    let mut bytes = SCRIPT.as_bytes().to_vec();
+
+    #[cfg(feature = "plugin-nav")]
+    bytes.extend(b"nav;");
+    #[cfg(feature = "plugin-sse")]
+    bytes.extend(b"sse;");
+
+    let digest = md5::compute(&bytes);
     let digest = format!("{digest:x}");
     let hash = &digest[..10];
     format!("{SCRIPT_NAME_STEM}-{hash}.{SCRIPT_NAME_EXTENSION}")

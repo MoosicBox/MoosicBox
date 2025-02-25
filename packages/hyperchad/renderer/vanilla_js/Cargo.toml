@@ -50,3 +50,6 @@ script = []
 
 esbuild = []
 swc     = []
+
+plugin-nav = []
+plugin-sse = []
