@@ -347,6 +347,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         moosicbox_logging::init(filename, Some(layers)).expect("Failed to initialize FreeLog");
     }
 
+    #[cfg(all(feature = "html", feature = "_canvas"))]
+    visualization::set_interval_period(std::time::Duration::from_millis(1000));
+
     moosicbox_player::on_playback_event(on_playback_event);
 
     let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
