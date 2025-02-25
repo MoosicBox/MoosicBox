@@ -10,8 +10,6 @@ fetchEventSource('$sse', {
         }
     },
     onmessage: (e) => {
-        console.log('SSE event', e);
-
         switch (e.event) {
             case 'partial_view': {
                 const element = htmlToElement(e.data);
