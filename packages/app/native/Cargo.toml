@@ -41,6 +41,7 @@ hyperchad_actions = { version = "0.1.0", path = "../../hyperchad/actions", defau
 moosicbox_app_native_lib = { version = "0.1.0", path = "lib", default-features = false, features = [
     "logic",
     "maud",
+    "sse",
 ] }
 moosicbox_app_native_ui = { version = "0.1.0", path = "ui", default-features = false }
 moosicbox_app_state = { version = "0.1.0", path = "../state", default-features = false }

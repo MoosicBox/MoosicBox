@@ -66,8 +66,9 @@ vanilla-js = [
     "dep:hyperchad_renderer_vanilla_js",
     "html",
     "hyperchad_renderer_html/extend",
-    "hyperchad_renderer_html/sse",
 ]
+
+sse = ["hyperchad_renderer_html?/sse"]
 
 json = [
     "hyperchad_renderer/json",
