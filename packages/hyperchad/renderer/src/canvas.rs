@@ -19,6 +19,16 @@ pub enum CanvasAction {
     ClearRect(Pos, Pos),
 }
 
+impl CanvasAction {
+    #[must_use]
+    pub const fn is_draw_action(&self) -> bool {
+        !matches!(
+            self,
+            Self::StrokeSize(..) | Self::StrokeColor(..) | Self::Clear | Self::ClearRect(..)
+        )
+    }
+}
+
 #[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
