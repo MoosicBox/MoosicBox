@@ -1,4 +1,4 @@
-import { htmlToElement, triggerHandlers } from './core';
+import { htmlToElement, swapDom, triggerHandlers } from './core';
 import { fetchEventSource } from './fetch-event-source';
 
 fetchEventSource('$sse', {
@@ -11,6 +11,10 @@ fetchEventSource('$sse', {
     },
     onmessage: (e) => {
         switch (e.event) {
+            case 'view': {
+                swapDom(e.data);
+                break;
+            }
             case 'partial_view': {
                 const element = htmlToElement(e.data);
                 if (element.children.length === 1) {
