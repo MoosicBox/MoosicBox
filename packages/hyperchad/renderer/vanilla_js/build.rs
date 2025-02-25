@@ -1,8 +1,15 @@
 use std::env;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::str::FromStr;
 
 fn main() {
+    let output = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    let git_hash = String::from_utf8(output.stdout).unwrap().trim().to_string();
+
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let manifest_dir = PathBuf::from_str(&manifest_dir).unwrap();
     let web_dir = manifest_dir.join("web");
@@ -32,7 +39,7 @@ fn main() {
     std::fs::write(
         &index,
         format!(
-            "import './core';\n{}\nconsole.debug('hyperchad.js');",
+            "import './core';\n{}\nconsole.debug('hyperchad.js {git_hash}');",
             plugins
                 .into_iter()
                 .map(|x| format!("import './{x}';\n"))
