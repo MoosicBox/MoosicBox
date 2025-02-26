@@ -11,7 +11,6 @@ export function triggerAction(action: {
 
 export function evaluate<T>(
     script: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     c: Record<string, unknown> & {
         element: HTMLElement;
         event?: Event | undefined;
@@ -45,6 +44,29 @@ export function evaluate<T>(
             x.style[name] = x.dataset[dataName] as CSSStyleDeclaration[T];
         });
     }
+
+    const throttles: { [id: string]: { last: number; value: T } } = {};
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    function throttle(f: () => T, duration: number): T | undefined {
+        if (!c.element.id) return;
+
+        const existing = throttles[c.element.id];
+        const now = Date.now();
+
+        if (!existing) {
+            const t = { last: now, value: f() };
+            throttles[c.element.id] = t;
+            return t.value;
+        }
+
+        if (now - existing.last >= duration) {
+            existing.last = now;
+            existing.value = f();
+        }
+
+        return existing.value;
+    }
+
     return eval(script);
 }
 

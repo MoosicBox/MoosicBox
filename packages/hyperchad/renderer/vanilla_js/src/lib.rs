@@ -198,6 +198,12 @@ fn action_effect_to_js_attr(effect: &ActionEffect) -> String {
         reset
     };
 
+    let action = if let Some(throttle) = effect.throttle {
+        format!("throttle(()=>{{{action}}},{throttle});")
+    } else {
+        action
+    };
+
     format!(
         "{action}{}",
         reset.map_or_else(String::new, |reset| format!("`{reset}`"))
