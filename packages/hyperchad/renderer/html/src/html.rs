@@ -264,6 +264,12 @@ pub fn element_style_to_html(
             }
             Position::Absolute => {
                 write_css_attr!(b"position", b"absolute");
+                if container.top.is_none() && container.bottom.is_none() {
+                    write_css_attr!(b"top", b"0");
+                }
+                if container.left.is_none() && container.right.is_none() {
+                    write_css_attr!(b"left", b"0");
+                }
             }
             Position::Fixed => {
                 write_css_attr!(b"position", b"fixed");
