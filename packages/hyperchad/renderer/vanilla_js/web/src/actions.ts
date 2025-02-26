@@ -67,6 +67,9 @@ export function evaluate<T>(
         return existing.value;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const delay = setTimeout;
+
     return eval(script);
 }
 
