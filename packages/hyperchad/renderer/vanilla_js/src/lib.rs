@@ -103,9 +103,9 @@ fn calc_value_to_js(value: &CalcValue, serializable: bool) -> String {
                 "c.value".to_string()
             };
         }
-        CalcValue::Reactive { .. }
-        | CalcValue::MouseX { target: None }
-        | CalcValue::MouseY { target: None } => None,
+        CalcValue::MouseX { target: None } => return "c.event.clientX".to_string(),
+        CalcValue::MouseY { target: None } => return "c.event.clientY".to_string(),
+        CalcValue::Reactive { .. } => None,
         CalcValue::Visibility { target }
         | CalcValue::Id { target }
         | CalcValue::DataAttrValue { target, .. }
@@ -124,6 +124,9 @@ fn calc_value_to_js(value: &CalcValue, serializable: bool) -> String {
     target.map_or_else(
         || "null".to_string(),
         |target| match value {
+            CalcValue::EventValue
+            | CalcValue::MouseX { target: None }
+            | CalcValue::MouseY { target: None } => unreachable!(),
             CalcValue::Visibility { .. } => {
                 format!("{target}[0]?.style.visibility")
             }
@@ -136,7 +139,6 @@ fn calc_value_to_js(value: &CalcValue, serializable: bool) -> String {
 
                 format!("{target}[0]?.dataset.{camel_case_attr}")
             }
-            CalcValue::EventValue => unreachable!(),
             CalcValue::WidthPx { .. } => {
                 format!("{target}[0]?.clientWidth")
             }
@@ -149,8 +151,12 @@ fn calc_value_to_js(value: &CalcValue, serializable: bool) -> String {
             CalcValue::PositionY { .. } => {
                 format!("{target}[0]?.getBoundingClientRect().top")
             }
-            CalcValue::MouseX { .. } => "c.event.clientX".to_string(),
-            CalcValue::MouseY { .. } => "c.event.clientY".to_string(),
+            CalcValue::MouseX { .. } => {
+                format!("(c.event.clientX-{target}[0]?.getBoundingClientRect().left)")
+            }
+            CalcValue::MouseY { .. } => {
+                format!("(c.event.clientY-{target}[0]?.getBoundingClientRect().top)")
+            }
             CalcValue::Reactive { .. } => "null".to_string(),
         },
     )
