@@ -348,8 +348,10 @@ fn volume_slider(size: u16, volume_percent: f64) -> Markup {
             sx-background="#181a1b"
             sx-cursor="pointer"
             fx-mouse-down=(
-                get_height_px_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID)
-                    .minus(get_mouse_y_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID))
+                hyperchad_actions::logic::Arithmetic::group(
+                    get_height_px_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID)
+                        .minus(get_mouse_y_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID))
+                )
                     .divide(get_height_px_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID))
                     .clamp(0.0, 1.0)
                     .then_pass_to(Action::SetVolume)
