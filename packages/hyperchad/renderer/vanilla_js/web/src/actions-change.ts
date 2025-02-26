@@ -2,7 +2,10 @@ import { evaluate } from './actions';
 import { handleError, onAttr } from './core';
 
 onAttr('v-onchange', ({ element, attr }) => {
-    element.onchange = (event) => {
-        handleError('onchange', () => evaluate(attr, { element, event }));
+    const eventName =
+        element.getAttribute('type') === 'text' ? 'oninput' : 'onchange';
+    element[eventName] = (event) => {
+        const value = (event.target as HTMLInputElement).value;
+        handleError(eventName, () => evaluate(attr, { element, event, value }));
     };
 });
