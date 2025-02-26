@@ -6,7 +6,7 @@ use hyperchad_renderer::{Color, HtmlTagRenderer};
 use hyperchad_router::Container;
 use hyperchad_transformer::{
     models::{
-        AlignItems, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, LinkTarget,
+        AlignItems, Cursor, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, LinkTarget,
         Position, TextAlign, TextDecorationLine, TextDecorationStyle, Visibility,
     },
     Calculation, Element, HeaderSize, Input, Number,
@@ -634,6 +634,39 @@ pub fn element_style_to_html(
 
     if let Some(font_family) = &container.font_family {
         write_css_attr!(b"font-family", font_family.join(",").as_bytes());
+    }
+
+    if let Some(cursor) = &container.cursor {
+        write_css_attr!(
+            b"cursor",
+            match cursor {
+                Cursor::Auto => b"auto",
+                Cursor::Pointer => b"pointer",
+                Cursor::Text => b"text",
+                Cursor::Crosshair => b"crosshair",
+                Cursor::Move => b"move",
+                Cursor::NotAllowed => b"not-allowed",
+                Cursor::NoDrop => b"no-drop",
+                Cursor::Grab => b"grab",
+                Cursor::Grabbing => b"grabbing",
+                Cursor::AllScroll => b"all-scroll",
+                Cursor::ColResize => b"col-resize",
+                Cursor::RowResize => b"row-resize",
+                Cursor::NResize => b"n-resize",
+                Cursor::EResize => b"e-resize",
+                Cursor::SResize => b"s-resize",
+                Cursor::WResize => b"w-resize",
+                Cursor::NeResize => b"ne-resize",
+                Cursor::NwResize => b"nw-resize",
+                Cursor::SeResize => b"se-resize",
+                Cursor::SwResize => b"sw-resize",
+                Cursor::EwResize => b"ew-resize",
+                Cursor::NsResize => b"ns-resize",
+                Cursor::NeswResize => b"nesw-resize",
+                Cursor::ZoomIn => b"zoom-in",
+                Cursor::ZoomOut => b"zoom-out",
+            }
+        );
     }
 
     if printed_start {
