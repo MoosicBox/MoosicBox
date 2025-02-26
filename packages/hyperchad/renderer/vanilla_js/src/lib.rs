@@ -337,6 +337,11 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
         ActionType::Parameterized { action, value } => {
             let (action, reset) = action_to_js(action);
 
+            let action = action
+                .strip_prefix("{action:")
+                .and_then(|x| x.strip_suffix("}"))
+                .unwrap_or(action.as_str());
+
             let action = html_escape::encode_double_quoted_attribute(&action)
                 .to_string()
                 .replace('\n', "&#10;");
