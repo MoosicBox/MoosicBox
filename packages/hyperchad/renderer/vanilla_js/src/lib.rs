@@ -192,6 +192,12 @@ fn action_effect_to_js_attr(effect: &ActionEffect) -> String {
         action = format!("triggerAction({action})");
     }
 
+    let reset = if let Some(delay) = effect.delay_off {
+        reset.map(|x| format!("setTimeout(()=>{{{x}}},{delay});"))
+    } else {
+        reset
+    };
+
     format!(
         "{action}{}",
         reset.map_or_else(String::new, |reset| format!("`{reset}`"))
