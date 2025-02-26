@@ -879,6 +879,7 @@ pub fn element_to_html(
                     }
                 }
             }
+            tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;
             f.write_all(b"></")?;
             f.write_all(TAG_NAME)?;
             f.write_all(b">")?;
