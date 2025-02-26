@@ -85,8 +85,10 @@ fn arithmetic_to_js(value: &Arithmetic) -> String {
 
 fn calc_value_to_js(value: &CalcValue) -> String {
     let target = match value {
-        CalcValue::EventValue
-        | CalcValue::Reactive { .. }
+        CalcValue::EventValue => {
+            return "value".to_string();
+        }
+        CalcValue::Reactive { .. }
         | CalcValue::MouseX { target: None }
         | CalcValue::MouseY { target: None } => None,
         CalcValue::Visibility { target }
@@ -116,7 +118,7 @@ fn calc_value_to_js(value: &CalcValue) -> String {
             CalcValue::DataAttrValue { attr, .. } => {
                 format!("{target}[0]?.dataset.{attr}")
             }
-            CalcValue::EventValue => "value".to_string(),
+            CalcValue::EventValue => unreachable!(),
             CalcValue::WidthPx { .. } => {
                 format!("{target}[0]?.clientWidth")
             }
