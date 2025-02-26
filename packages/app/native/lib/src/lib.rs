@@ -521,7 +521,7 @@ impl NativeAppBuilder {
             async move {
                 while let Ok((action, value)) = action_rx.recv_async().await {
                     log::debug!(
-                        "Received action: {action} for {} handler(s)",
+                        "Received action: action={action} value={value:?} for {} handler(s)",
                         action_handlers.len()
                     );
                     for handler in &action_handlers {

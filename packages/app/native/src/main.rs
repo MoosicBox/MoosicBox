@@ -585,11 +585,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_runtime_arc(runtime.clone())
         .with_background(Color::from_hex("#181a1b"))
         .with_action_handler(move |x, value| {
-            Ok::<_, SendError<(Action, Option<Value>)>>(if let Ok(action) = Action::try_from(x) {
-                action_tx.send((action, value.cloned()))?;
-                true
-            } else {
-                false
+            Ok::<_, SendError<(Action, Option<Value>)>>(match Action::try_from(x) {
+                Ok(action) => {
+                    action_tx.send((action, value.cloned()))?;
+                    true
+                }
+                Err(e) => {
+                    log::error!("Failed to handle action: {e:?}");
+                    false
+                }
             })
         })
         .with_size(width, height);
@@ -723,7 +727,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[allow(clippy::too_many_lines)]
 async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppStateError> {
-    log::debug!("handle_action: {action:?}");
+    log::debug!("handle_action: action={action:?} value={value:?}");
 
     match &action {
         Action::RefreshVisualization => {
