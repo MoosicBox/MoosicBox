@@ -25,6 +25,8 @@ export function navigate(url: string) {
     if (typeof existing === 'string') {
         swapDom(existing, url);
         return false;
+    } else if (typeof cache[url] !== 'string' && !pending[url]) {
+        pending[url] = initiateFetchDocument(url);
     }
 
     const request = pending[url];
