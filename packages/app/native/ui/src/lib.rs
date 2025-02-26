@@ -20,7 +20,7 @@ use hyperchad_actions::{
     },
     ActionType,
 };
-use hyperchad_transformer_models::{JustifyContent, Visibility};
+use hyperchad_transformer_models::{AlignItems, JustifyContent, Visibility};
 use maud::{html, Markup};
 use moosicbox_music_models::{api::ApiTrack, id::Id, AlbumSort, ApiSource, TrackApiSource};
 use moosicbox_session_models::{ApiSession, ApiUpdateSession};
@@ -616,57 +616,18 @@ pub static AUDIO_ZONES_CONTENT_ID: &str = "audio-zones-content";
 
 #[must_use]
 pub fn audio_zones() -> Markup {
-    html! {
-        div
-            id=(AUDIO_ZONES_ID)
-            sx-visibility=(Visibility::Hidden)
-            sx-position="fixed"
-            sx-width="100%"
-            sx-height="100%"
-            sx-padding-x="calc(20%)"
-            sx-padding-y="calc(20%)"
-        {
-            div
-                sx-background="#080a0b"
-                sx-overflow-y="auto"
-                sx-border-radius=(15)
-                fx-click-outside=(
-                    get_visibility_str_id(AUDIO_ZONES_ID)
-                        .eq(Visibility::Visible)
-                        .then(ActionType::hide_str_id(AUDIO_ZONES_ID))
-                )
-            {
-                div sx-padding-x=(30) sx-padding-y=(20) {
-                    div sx-dir="row" {
-                        div sx-dir="row" {
-                            h1 { "Audio Zones" }
-                            button { "New" }
-                        }
-                        div sx-dir="row" sx-justify-content=(JustifyContent::End) {
-                            @let icon_size = 20;
-                            button
-                                sx-width=(icon_size)
-                                sx-height=(icon_size)
-                                fx-click=(
-                                    get_visibility_str_id(AUDIO_ZONES_ID)
-                                        .eq(Visibility::Visible)
-                                        .then(ActionType::hide_str_id(AUDIO_ZONES_ID))
-                                )
-                            {
-                                img
-                                    sx-width=(icon_size)
-                                    sx-height=(icon_size)
-                                    src=(public_img!("cross-white.svg"));
-                            }
-                        }
-                    }
-                    div hx-get=(pre_escaped!("/audio-zones")) hx-trigger="load" {
-                        "Loading..."
-                    }
-                }
+    modal(
+        AUDIO_ZONES_ID,
+        &html! {
+            h1 { "Audio Zones" }
+            button { "New" }
+        },
+        &html! {
+            div hx-get=(pre_escaped!("/audio-zones")) hx-trigger="load" {
+                "Loading..."
             }
-        }
-    }
+        },
+    )
 }
 
 pub static PLAYBACK_SESSIONS_ID: &str = "playback-sessions";
@@ -674,31 +635,49 @@ pub static PLAYBACK_SESSIONS_CONTENT_ID: &str = "playback-sessions-content";
 
 #[must_use]
 pub fn playback_sessions() -> Markup {
+    modal(
+        PLAYBACK_SESSIONS_ID,
+        &html! {
+            h1 { "Playback Sessions" }
+            button { "New" }
+        },
+        &html! {
+            div hx-get=(pre_escaped!("/playback-sessions")) hx-trigger="load" {
+                "Loading..."
+            }
+        },
+    )
+}
+
+#[must_use]
+pub fn modal(id: &str, header: &Markup, content: &Markup) -> Markup {
     html! {
         div
-            id=(PLAYBACK_SESSIONS_ID)
+            id=(id)
             sx-visibility=(Visibility::Hidden)
+            sx-dir="row"
             sx-position="fixed"
             sx-width="100%"
             sx-height="100%"
-            sx-padding-x="calc(20%)"
-            sx-padding-y="calc(20%)"
+            sx-align-items=(AlignItems::Center)
         {
             div
+                sx-flex=(1)
                 sx-background="#080a0b"
                 sx-overflow-y="auto"
+                sx-margin-x="calc(20vw)"
+                sx-min-height="calc(min(90vh, 300px))"
                 sx-border-radius=(15)
                 fx-click-outside=(
-                    get_visibility_str_id(PLAYBACK_SESSIONS_ID)
+                    get_visibility_str_id(id)
                         .eq(Visibility::Visible)
-                        .then(ActionType::hide_str_id(PLAYBACK_SESSIONS_ID))
+                        .then(ActionType::hide_str_id(id))
                 )
             {
                 div sx-padding-x=(30) sx-padding-y=(20) {
-                    div sx-dir="row" {
+                    div sx-dir="row" sx-justify-content=(JustifyContent::SpaceBetween) {
                         div sx-dir="row" {
-                            h1 { "Playback Sessions" }
-                            button { "New" }
+                            (header)
                         }
                         div sx-dir="row" sx-justify-content=(JustifyContent::End) {
                             @let icon_size = 20;
@@ -706,9 +685,9 @@ pub fn playback_sessions() -> Markup {
                                 sx-width=(icon_size)
                                 sx-height=(icon_size)
                                 fx-click=(
-                                    get_visibility_str_id(PLAYBACK_SESSIONS_ID)
+                                    get_visibility_str_id(id)
                                         .eq(Visibility::Visible)
-                                        .then(ActionType::hide_str_id(PLAYBACK_SESSIONS_ID))
+                                        .then(ActionType::hide_str_id(id))
                                 )
                             {
                                 img
@@ -718,9 +697,7 @@ pub fn playback_sessions() -> Markup {
                             }
                         }
                     }
-                    div hx-get=(pre_escaped!("/playback-sessions")) hx-trigger="load" {
-                        "Loading..."
-                    }
+                    (content)
                 }
             }
         }
