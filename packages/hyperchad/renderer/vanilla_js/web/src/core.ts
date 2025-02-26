@@ -225,17 +225,11 @@ function handleResponse(element: HTMLElement, html: string): boolean {
     return true;
 }
 
-function handleHtmlResponse(
+async function handleHtmlResponse(
     element: HTMLElement,
     response: Promise<Response>,
-): void {
-    response
-        .then((response) => {
-            return response.text();
-        })
-        .then((html) => {
-            handleResponse(element, html);
-        });
+): Promise<void> {
+    handleResponse(element, await (await response).text());
 }
 
 const METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'] as const;
