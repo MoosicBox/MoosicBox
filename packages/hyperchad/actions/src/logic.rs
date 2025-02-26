@@ -297,6 +297,7 @@ pub enum Arithmetic {
     Divide(Value, Value),
     Min(Value, Value),
     Max(Value, Value),
+    Grouping(Box<Arithmetic>),
 }
 
 impl Arithmetic {
@@ -321,6 +322,7 @@ impl Arithmetic {
             Self::Max(a, b) => a
                 .as_f32(calc_func)
                 .and_then(|a| b.as_f32(calc_func).map(|b| if b > a { b } else { a })),
+            Self::Grouping(x) => x.as_f32(calc_func),
         }
     }
 
@@ -365,6 +367,11 @@ impl Arithmetic {
     #[must_use]
     pub fn max(self, other: impl Into<Value>) -> Self {
         Self::Max(self.into(), other.into())
+    }
+
+    #[must_use]
+    pub fn group(value: impl Into<Self>) -> Self {
+        Self::Grouping(Box::new(value.into()))
     }
 
     #[must_use]

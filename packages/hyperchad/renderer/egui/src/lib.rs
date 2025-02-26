@@ -213,6 +213,9 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
                             check_value(a, root, watch_positions, id);
                             check_value(b, root, watch_positions, id);
                         }
+                        hyperchad_actions::logic::Arithmetic::Grouping(x) => {
+                            check_arithmetic(x, root, watch_positions, id);
+                        }
                     }
                 }
 

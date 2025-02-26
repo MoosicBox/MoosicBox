@@ -90,6 +90,7 @@ fn arithmetic_to_js(value: &Arithmetic) -> String {
             value_to_js(a, false),
             value_to_js(b, false)
         ),
+        Arithmetic::Grouping(x) => format!("({})", arithmetic_to_js(x)),
     }
 }
 
