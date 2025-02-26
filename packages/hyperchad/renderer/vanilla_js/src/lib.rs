@@ -260,10 +260,10 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
                 },
             )
         }
-        ActionType::Event { name, action } => {
-            let (action, reset) = action_to_js(action);
-            (format!("{name}:{action}"), reset)
-        }
+        ActionType::Event {
+            name: _name,
+            action,
+        } => action_to_js(action),
         ActionType::Logic(logic) => {
             let expr = match &logic.condition {
                 Condition::Eq(a, b) => {
