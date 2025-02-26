@@ -41,6 +41,13 @@ pub trait ActixResponseProcessor<T: Send + Sync + Clone> {
 pub struct ActixApp<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone> {
     pub processor: R,
     pub renderer_event_rx: Receiver<RendererEvent>,
+    #[cfg(feature = "actions")]
+    pub action_tx: Option<
+        flume::Sender<(
+            String,
+            Option<hyperchad_renderer::transformer::actions::logic::Value>,
+        )>,
+    >,
     #[cfg(feature = "assets")]
     pub static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
     _phantom: PhantomData<T>,
@@ -51,10 +58,36 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
         Self {
             processor,
             renderer_event_rx,
+            #[cfg(feature = "actions")]
+            action_tx: None,
             #[cfg(feature = "assets")]
             static_asset_routes: vec![],
             _phantom: PhantomData,
         }
+    }
+
+    #[cfg(feature = "actions")]
+    #[must_use]
+    pub fn with_action_tx(
+        mut self,
+        tx: flume::Sender<(
+            String,
+            Option<hyperchad_renderer::transformer::actions::logic::Value>,
+        )>,
+    ) -> Self {
+        self.action_tx = Some(tx);
+        self
+    }
+
+    #[cfg(feature = "actions")]
+    pub fn set_action_tx(
+        &mut self,
+        tx: flume::Sender<(
+            String,
+            Option<hyperchad_renderer::transformer::actions::logic::Value>,
+        )>,
+    ) {
+        self.action_tx = Some(tx);
     }
 }
 

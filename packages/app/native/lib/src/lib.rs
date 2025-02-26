@@ -775,11 +775,18 @@ impl NativeAppBuilder {
             #[cfg(all(feature = "actix", feature = "vanilla-js"))]
             {
                 let router = self.router.unwrap();
-                let renderer = hyperchad_renderer_html::router_to_actix(
+                #[allow(unused_mut)]
+                let mut renderer = hyperchad_renderer_html::router_to_actix(
                     hyperchad_renderer_vanilla_js::VanillaJsTagRenderer::default(),
                     router,
                 )
                 .with_extend_html_renderer(hyperchad_renderer_vanilla_js::VanillaJsRenderer {});
+
+                #[cfg(feature = "actions")]
+                {
+                    let action_tx = Self::listen_actions(self.action_handlers);
+                    renderer.app.set_action_tx(action_tx);
+                }
 
                 #[cfg(feature = "assets")]
                 let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
