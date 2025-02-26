@@ -74,19 +74,33 @@ pub static SCRIPT_NAME_HASHED: std::sync::LazyLock<String> = std::sync::LazyLock
 
 fn arithmetic_to_js(value: &Arithmetic) -> String {
     match value {
-        Arithmetic::Plus(a, b) => format!("{}+{}", value_to_js(a), value_to_js(b)),
-        Arithmetic::Minus(a, b) => format!("{}-{}", value_to_js(a), value_to_js(b)),
-        Arithmetic::Multiply(a, b) => format!("{}*{}", value_to_js(a), value_to_js(b)),
-        Arithmetic::Divide(a, b) => format!("{}/{}", value_to_js(a), value_to_js(b)),
-        Arithmetic::Min(a, b) => format!("Math.min({},{})", value_to_js(a), value_to_js(b)),
-        Arithmetic::Max(a, b) => format!("Math.max({},{})", value_to_js(a), value_to_js(b)),
+        Arithmetic::Plus(a, b) => format!("{}+{}", value_to_js(a, false), value_to_js(b, false)),
+        Arithmetic::Minus(a, b) => format!("{}-{}", value_to_js(a, false), value_to_js(b, false)),
+        Arithmetic::Multiply(a, b) => {
+            format!("{}*{}", value_to_js(a, false), value_to_js(b, false))
+        }
+        Arithmetic::Divide(a, b) => format!("{}/{}", value_to_js(a, false), value_to_js(b, false)),
+        Arithmetic::Min(a, b) => format!(
+            "Math.min({},{})",
+            value_to_js(a, false),
+            value_to_js(b, false)
+        ),
+        Arithmetic::Max(a, b) => format!(
+            "Math.max({},{})",
+            value_to_js(a, false),
+            value_to_js(b, false)
+        ),
     }
 }
 
-fn calc_value_to_js(value: &CalcValue) -> String {
+fn calc_value_to_js(value: &CalcValue, serializable: bool) -> String {
     let target = match value {
         CalcValue::EventValue => {
-            return "c.value".to_string();
+            return if serializable {
+                "{String:c.value}".to_string()
+            } else {
+                "c.value".to_string()
+            };
         }
         CalcValue::Reactive { .. }
         | CalcValue::MouseX { target: None }
@@ -141,9 +155,9 @@ fn calc_value_to_js(value: &CalcValue) -> String {
     )
 }
 
-fn value_to_js(value: &Value) -> String {
+fn value_to_js(value: &Value, serializable: bool) -> String {
     match value {
-        Value::Calc(calc_value) => calc_value_to_js(calc_value),
+        Value::Calc(calc_value) => calc_value_to_js(calc_value, serializable),
         Value::Arithmetic(arithmetic) => arithmetic_to_js(arithmetic),
         Value::Real(x) => x.to_string(),
         Value::Visibility(visibility) => match visibility {
@@ -154,7 +168,13 @@ fn value_to_js(value: &Value) -> String {
             LayoutDirection::Row => "'row'".to_string(),
             LayoutDirection::Column => "'column'".to_string(),
         },
-        Value::String(x) => format!("'{x}'"),
+        Value::String(x) => {
+            if serializable {
+                format!("{{String:'{x}'}}")
+            } else {
+                format!("'{x}'")
+            }
+        }
     }
 }
 
@@ -264,7 +284,7 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
         ActionType::Logic(logic) => {
             let expr = match &logic.condition {
                 Condition::Eq(a, b) => {
-                    format!("{}==={}", value_to_js(a), value_to_js(b))
+                    format!("{}==={}", value_to_js(a, false), value_to_js(b, false))
                 }
             };
             let if_true = logic
@@ -322,7 +342,7 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
                 .replace('\n', "&#10;");
 
             (
-                format!("{{action:{action},value:{}}}", value_to_js(value)),
+                format!("{{action:{action},value:{}}}", value_to_js(value, true)),
                 reset,
             )
         }
