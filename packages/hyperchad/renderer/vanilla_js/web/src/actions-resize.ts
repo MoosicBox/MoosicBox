@@ -1,3 +1,4 @@
+import { evaluate } from './actions';
 import { handleError, onAttr } from './core';
 
 onAttr('v-onresize', ({ element, attr }) => {
@@ -5,7 +6,6 @@ onAttr('v-onresize', ({ element, attr }) => {
     let lastHeight = element.clientHeight;
 
     // FIXME: unsubscribe from this when element detached
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     window.addEventListener('resize', (event) => {
         let resized = false;
 
@@ -20,6 +20,6 @@ onAttr('v-onresize', ({ element, attr }) => {
 
         if (!resized) return;
 
-        handleError('onresize', () => eval(attr));
+        handleError('onresize', () => evaluate(attr, { element, event }));
     });
 });

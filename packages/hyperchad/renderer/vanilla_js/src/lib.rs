@@ -86,7 +86,7 @@ fn arithmetic_to_js(value: &Arithmetic) -> String {
 fn calc_value_to_js(value: &CalcValue) -> String {
     let target = match value {
         CalcValue::EventValue => {
-            return "value".to_string();
+            return "c.value".to_string();
         }
         CalcValue::Reactive { .. }
         | CalcValue::MouseX { target: None }
@@ -134,8 +134,8 @@ fn calc_value_to_js(value: &CalcValue) -> String {
             CalcValue::PositionY { .. } => {
                 format!("{target}[0]?.getBoundingClientRect().top")
             }
-            CalcValue::MouseX { .. } => "event.clientX".to_string(),
-            CalcValue::MouseY { .. } => "event.clientY".to_string(),
+            CalcValue::MouseX { .. } => "c.event.clientX".to_string(),
+            CalcValue::MouseY { .. } => "c.event.clientY".to_string(),
             CalcValue::Reactive { .. } => "null".to_string(),
         },
     )
@@ -185,11 +185,11 @@ fn element_target_to_js(target: &ElementTarget) -> String {
             format!("[document.getElementById('{id}')]")
         }
         ElementTarget::ChildClass(class) => {
-            format!("Array.from(element.querySelectorAll('.{class}'))")
+            format!("Array.from(c.element.querySelectorAll('.{class}'))")
         }
-        ElementTarget::SelfTarget => "[element]".to_string(),
+        ElementTarget::SelfTarget => "[c.element]".to_string(),
         ElementTarget::LastChild => {
-            "(element.children.length>0?[element.children[element.children.length-1]]:[])"
+            "(c.element.children.length>0?[c.element.children[c.element.children.length-1]]:[])"
                 .to_string()
         }
         #[allow(unreachable_patterns)]
@@ -209,35 +209,29 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
             match action {
                 StyleAction::SetVisibility(visibility) => (
                     format!(
-                        "{target}.filter(x=>!!x).forEach(x=>{{x.dataset.vResetVisibility=x.style.visibility;x.style.visibility={}}});",
+                        "s({target},'visibility',{});",
                         match visibility {
                             Visibility::Visible => "'visible'",
                             Visibility::Hidden => "'hidden'",
                         },
                     ),
-                    Some(format!(
-                        "{target}.filter(x=>!!x).forEach(x=>x.style.visibility=x.dataset.vResetVisibility);"
-                    )),
+                    Some(format!("r({target},'visibility');")),
                 ),
                 StyleAction::SetDisplay(display) => (
                     format!(
-                        "{target}.filter(x=>!!x).forEach(x=>{{x.dataset.vResetDisplay=x.style.display;x.style.display={}}});",
+                        "s({target},'display',{});",
                         if *display { "'initial'" } else { "null" }
                     ),
-                    Some(format!(
-                        "{target}.filter(x=>!!x).forEach(x=>x.style.display=x.dataset.vResetDisplay);"
-                    )),
+                    Some(format!("r({target},'display');")),
                 ),
                 StyleAction::SetBackground(background) => (
                     format!(
-                        "{target}.filter(x=>!!x).forEach(x=>{{x.dataset.vResetBackground=x.style.background;x.style.background={}}});",
+                        "s({target},'background',{});",
                         background
                             .as_ref()
                             .map_or_else(|| "null".to_string(), |color| format!("'{color}'"))
                     ),
-                    Some(format!(
-                        "{target}.filter(x=>!!x).forEach(x=>x.style.background=x.dataset.vResetBackground);"
-                    )),
+                    Some(format!("r({target},'background');")),
                 ),
             }
         }

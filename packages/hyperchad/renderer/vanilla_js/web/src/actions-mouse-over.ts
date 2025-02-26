@@ -1,13 +1,16 @@
+import { evaluate } from './actions';
 import { handleError, onAttr } from './core';
 
 onAttr('v-onmouseover', ({ element, attr }) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     element.onmouseenter = (event) => {
-        const reset = handleError('onmouseenter', () => eval(attr));
+        const reset = handleError('onmouseenter', () =>
+            evaluate<string>(attr, { element, event }),
+        );
         if (reset) {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             element.onmouseleave = (event) => {
-                handleError('onmouseleave', () => eval(reset));
+                handleError('onmouseleave', () =>
+                    evaluate(reset, { element, event }),
+                );
             };
         }
     };
