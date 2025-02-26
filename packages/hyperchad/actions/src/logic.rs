@@ -17,7 +17,6 @@ pub enum CalcValue {
     PositionY { target: ElementTarget },
     MouseX { target: Option<ElementTarget> },
     MouseY { target: Option<ElementTarget> },
-    Reactive { target: String },
 }
 
 impl CalcValue {
@@ -632,13 +631,6 @@ pub const fn get_mouse_y_id(id: usize) -> CalcValue {
 pub const fn get_mouse_y_self() -> CalcValue {
     CalcValue::MouseY {
         target: Some(ElementTarget::SelfTarget),
-    }
-}
-
-#[must_use]
-pub fn get_responsive(target: impl Into<String>) -> CalcValue {
-    CalcValue::Reactive {
-        target: target.into(),
     }
 }
 

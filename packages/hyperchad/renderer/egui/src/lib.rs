@@ -186,9 +186,6 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
                         watch_positions.insert(id);
                     }
                 }
-                hyperchad_actions::logic::CalcValue::Reactive { target } => {
-                    unimplemented!("CalcValue::Reactive not implemented for target={target}");
-                }
             }
         }
 
@@ -2751,9 +2748,6 @@ impl EguiApp {
                     log::debug!("calc_value: got global_position={global_position:?}");
                     global_position
                 }
-            }
-            hyperchad_actions::logic::CalcValue::Reactive { target } => {
-                unimplemented!("CalcValue::Reactive not implemented for target={target}");
             }
         };
 

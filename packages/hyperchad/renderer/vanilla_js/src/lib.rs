@@ -105,7 +105,6 @@ fn calc_value_to_js(value: &CalcValue, serializable: bool) -> String {
         }
         CalcValue::MouseX { target: None } => return "c.event.clientX".to_string(),
         CalcValue::MouseY { target: None } => return "c.event.clientY".to_string(),
-        CalcValue::Reactive { .. } => None,
         CalcValue::Visibility { target }
         | CalcValue::Id { target }
         | CalcValue::DataAttrValue { target, .. }
@@ -157,7 +156,6 @@ fn calc_value_to_js(value: &CalcValue, serializable: bool) -> String {
             CalcValue::MouseY { .. } => {
                 format!("(c.event.clientY-{target}[0]?.getBoundingClientRect().top)")
             }
-            CalcValue::Reactive { .. } => "null".to_string(),
         },
     )
 }
