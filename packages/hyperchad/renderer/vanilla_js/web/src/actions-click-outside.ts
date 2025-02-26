@@ -1,8 +1,13 @@
-import { onAttr } from './core';
+import { evaluate } from './actions';
+import { handleError, onAttr } from './core';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 onAttr('v-onclickoutside', ({ element, attr }) => {
-    // element.onclickoutside = (event) => {
-    //     handleError('onclickoutside', () => evaluate(attr, { element, event }));
-    // };
+    // FIXME: unsubscribe from this when element detached
+    document.addEventListener('click', (event: MouseEvent) => {
+        if (event.target && !element.contains(event.target as Node)) {
+            handleError('onclickoutside', () =>
+                evaluate(attr, { element, event }),
+            );
+        }
+    });
 });
