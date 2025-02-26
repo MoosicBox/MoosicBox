@@ -82,6 +82,14 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
         element_style_to_html(f, container, is_flex_child)?;
         element_classes_to_html(f, container)?;
 
+        for (key, value) in &container.data {
+            f.write_all(b" data-")?;
+            f.write_all(key.as_bytes())?;
+            f.write_all(b"=\"")?;
+            f.write_all(html_escape::encode_quoted_attribute(value).as_bytes())?;
+            f.write_all(b"\"")?;
+        }
+
         Ok(())
     }
 

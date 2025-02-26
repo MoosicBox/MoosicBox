@@ -4889,6 +4889,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "flume",
+ "html-escape",
  "hyperchad_renderer",
  "hyperchad_renderer_html_actix",
  "hyperchad_renderer_html_lambda",
