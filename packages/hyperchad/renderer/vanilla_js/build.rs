@@ -34,6 +34,22 @@ fn main() {
         "nav",
         #[cfg(feature = "plugin-sse")]
         "sse",
+        #[cfg(feature = "plugin-actions-change")]
+        "actions-change",
+        #[cfg(feature = "plugin-actions-click")]
+        "actions-click",
+        #[cfg(feature = "plugin-actions-click-outside")]
+        "actions-click-outside",
+        #[cfg(feature = "plugin-actions-event")]
+        "actions-event",
+        #[cfg(feature = "plugin-actions-immediate")]
+        "actions-immediate",
+        #[cfg(feature = "plugin-actions-mouse-down")]
+        "actions-mouse-down",
+        #[cfg(feature = "plugin-actions-mouse-over")]
+        "actions-mouse-over",
+        #[cfg(feature = "plugin-actions-resize")]
+        "actions-resize",
     ];
 
     std::fs::write(

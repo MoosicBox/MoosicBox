@@ -11,7 +11,14 @@ use hyperchad_renderer_html::{
     html::write_attr,
     DefaultHtmlTagRenderer,
 };
-use hyperchad_transformer::{models::Route, Container, ResponsiveTrigger};
+use hyperchad_transformer::{
+    actions::{
+        logic::{Arithmetic, CalcValue, Condition, Value},
+        ActionEffect, ActionTrigger, ActionType, ElementTarget, LogLevel, StyleAction,
+    },
+    models::{LayoutDirection, Route, Visibility},
+    Container, ResponsiveTrigger,
+};
 use maud::{html, PreEscaped, DOCTYPE};
 
 #[derive(Default, Clone)]
@@ -42,6 +49,22 @@ pub static SCRIPT_NAME_HASHED: std::sync::LazyLock<String> = std::sync::LazyLock
     bytes.extend(b"nav;");
     #[cfg(feature = "plugin-sse")]
     bytes.extend(b"sse;");
+    #[cfg(feature = "plugin-actions-change")]
+    bytes.extend(b"actions-change");
+    #[cfg(feature = "plugin-actions-click")]
+    bytes.extend(b"actions-click");
+    #[cfg(feature = "plugin-actions-click-outside")]
+    bytes.extend(b"actions-click-outside");
+    #[cfg(feature = "plugin-actions-event")]
+    bytes.extend(b"actions-event");
+    #[cfg(feature = "plugin-actions-immediate")]
+    bytes.extend(b"actions-immediate");
+    #[cfg(feature = "plugin-actions-mouse-down")]
+    bytes.extend(b"actions-mouse-down");
+    #[cfg(feature = "plugin-actions-mouse-over")]
+    bytes.extend(b"actions-mouse-over");
+    #[cfg(feature = "plugin-actions-resize")]
+    bytes.extend(b"actions-resize");
 
     let digest = md5::compute(&bytes);
     let digest = format!("{digest:x}");
@@ -49,11 +72,292 @@ pub static SCRIPT_NAME_HASHED: std::sync::LazyLock<String> = std::sync::LazyLock
     format!("{SCRIPT_NAME_STEM}-{hash}.{SCRIPT_NAME_EXTENSION}")
 });
 
+fn arithmetic_to_js(value: &Arithmetic) -> String {
+    match value {
+        Arithmetic::Plus(a, b) => format!("{}+{}", value_to_js(a), value_to_js(b)),
+        Arithmetic::Minus(a, b) => format!("{}-{}", value_to_js(a), value_to_js(b)),
+        Arithmetic::Multiply(a, b) => format!("{}*{}", value_to_js(a), value_to_js(b)),
+        Arithmetic::Divide(a, b) => format!("{}/{}", value_to_js(a), value_to_js(b)),
+        Arithmetic::Min(a, b) => format!("Math.min({},{})", value_to_js(a), value_to_js(b)),
+        Arithmetic::Max(a, b) => format!("Math.max({},{})", value_to_js(a), value_to_js(b)),
+    }
+}
+
+fn calc_value_to_js(value: &CalcValue) -> String {
+    let target = match value {
+        CalcValue::EventValue
+        | CalcValue::Reactive { .. }
+        | CalcValue::MouseX { target: None }
+        | CalcValue::MouseY { target: None } => None,
+        CalcValue::Visibility { target }
+        | CalcValue::Id { target }
+        | CalcValue::DataAttrValue { target, .. }
+        | CalcValue::WidthPx { target }
+        | CalcValue::HeightPx { target }
+        | CalcValue::PositionX { target }
+        | CalcValue::PositionY { target }
+        | CalcValue::MouseX {
+            target: Some(target),
+        }
+        | CalcValue::MouseY {
+            target: Some(target),
+        } => Some(element_target_to_js(target)),
+    };
+
+    target.map_or_else(
+        || "null".to_string(),
+        |target| match value {
+            CalcValue::Visibility { .. } => {
+                format!("{target}[0]?.style.visibility")
+            }
+            CalcValue::Id { .. } => {
+                format!("{target}[0]?.id")
+            }
+            CalcValue::DataAttrValue { attr, .. } => {
+                format!("{target}[0]?.dataset.{attr}")
+            }
+            CalcValue::EventValue => "value".to_string(),
+            CalcValue::WidthPx { .. } => {
+                format!("{target}[0]?.clientWidth")
+            }
+            CalcValue::HeightPx { .. } => {
+                format!("{target}[0]?.clientHeight")
+            }
+            CalcValue::PositionX { .. } => {
+                format!("{target}[0]?.getBoundingClientRect().left")
+            }
+            CalcValue::PositionY { .. } => {
+                format!("{target}[0]?.getBoundingClientRect().top")
+            }
+            CalcValue::MouseX { .. } => "event.clientX".to_string(),
+            CalcValue::MouseY { .. } => "event.clientY".to_string(),
+            CalcValue::Reactive { .. } => "null".to_string(),
+        },
+    )
+}
+
+fn value_to_js(value: &Value) -> String {
+    match value {
+        Value::Calc(calc_value) => calc_value_to_js(calc_value),
+        Value::Arithmetic(arithmetic) => arithmetic_to_js(arithmetic),
+        Value::Real(x) => x.to_string(),
+        Value::Visibility(visibility) => match visibility {
+            Visibility::Visible => "'visible'".to_string(),
+            Visibility::Hidden => "'hidden'".to_string(),
+        },
+        Value::LayoutDirection(layout_direction) => match layout_direction {
+            LayoutDirection::Row => "'row'".to_string(),
+            LayoutDirection::Column => "'column'".to_string(),
+        },
+        Value::String(x) => format!("'{x}'"),
+    }
+}
+
+fn action_effect_to_js(effect: &ActionEffect) -> (String, Option<String>) {
+    action_to_js(&effect.action)
+}
+
+fn action_effect_to_js_attr(effect: &ActionEffect) -> String {
+    let (mut action, reset) = action_effect_to_js(effect);
+
+    if matches!(
+        &effect.action,
+        ActionType::Custom { .. } | ActionType::Parameterized { .. }
+    ) {
+        action = format!("triggerAction({action})");
+    }
+
+    format!(
+        "{action}{}",
+        reset.map_or_else(String::new, |reset| format!("`{reset}`"))
+    )
+}
+
+fn element_target_to_js(target: &ElementTarget) -> String {
+    #[allow(clippy::match_wildcard_for_single_variants)]
+    match target {
+        ElementTarget::StrId(id) => {
+            format!("[document.getElementById('{id}')]")
+        }
+        ElementTarget::ChildClass(class) => {
+            format!("Array.from(element.querySelectorAll('.{class}'))")
+        }
+        ElementTarget::SelfTarget => "[element]".to_string(),
+        ElementTarget::LastChild => {
+            "(element.children.length>0?[element.children[element.children.length-1]]:[])"
+                .to_string()
+        }
+        #[allow(unreachable_patterns)]
+        _ => {
+            unreachable!();
+        }
+    }
+}
+
+#[allow(clippy::too_many_lines)]
+fn action_to_js(action: &ActionType) -> (String, Option<String>) {
+    match action {
+        ActionType::NoOp => (String::new(), None),
+        ActionType::Style { target, action } => {
+            let target = element_target_to_js(target);
+
+            match action {
+                StyleAction::SetVisibility(visibility) => (
+                    format!(
+                        "{target}.filter(x=>!!x).forEach(x=>{{x.dataset.vResetVisibility=x.style.visibility;x.style.visibility={}}});",
+                        match visibility {
+                            Visibility::Visible => "'visible'",
+                            Visibility::Hidden => "'hidden'",
+                        },
+                    ),
+                    Some(format!(
+                        "{target}.filter(x=>!!x).forEach(x=>x.style.visibility=x.dataset.vResetVisibility);"
+                    )),
+                ),
+                StyleAction::SetDisplay(display) => (
+                    format!(
+                        "{target}.filter(x=>!!x).forEach(x=>{{x.dataset.vResetDisplay=x.style.display;x.style.display={}}});",
+                        if *display { "'initial'" } else { "null" }
+                    ),
+                    Some(format!(
+                        "{target}.filter(x=>!!x).forEach(x=>x.style.display=x.dataset.vResetDisplay);"
+                    )),
+                ),
+                StyleAction::SetBackground(background) => (
+                    format!(
+                        "{target}.filter(x=>!!x).forEach(x=>{{x.dataset.vResetBackground=x.style.background;x.style.background={}}});",
+                        background
+                            .as_ref()
+                            .map_or_else(|| "null".to_string(), |color| format!("'{color}'"))
+                    ),
+                    Some(format!(
+                        "{target}.filter(x=>!!x).forEach(x=>x.style.background=x.dataset.vResetBackground);"
+                    )),
+                ),
+            }
+        }
+        ActionType::Multi(vec) => {
+            let actions = vec.iter().map(action_to_js).collect::<Vec<_>>();
+            let all_actions = actions
+                .iter()
+                .map(|(action, _)| action.as_str())
+                .collect::<Vec<_>>()
+                .join("");
+            let all_reset = actions
+                .iter()
+                .filter_map(|(_, reset)| reset.as_ref().map(String::as_str))
+                .collect::<Vec<_>>()
+                .join("");
+
+            (
+                all_actions,
+                if all_reset.is_empty() {
+                    None
+                } else {
+                    Some(all_reset)
+                },
+            )
+        }
+        ActionType::Event { name, action } => {
+            let (action, reset) = action_to_js(action);
+            (format!("{name}:{action}"), reset)
+        }
+        ActionType::Logic(logic) => {
+            let expr = match &logic.condition {
+                Condition::Eq(a, b) => {
+                    format!("{}==={}", value_to_js(a), value_to_js(b))
+                }
+            };
+            let if_true = logic
+                .actions
+                .iter()
+                .map(|x| &x.action)
+                .map(action_effect_to_js)
+                .collect::<Vec<_>>();
+
+            let true_reset = if_true
+                .iter()
+                .filter_map(|(_, reset)| reset.as_ref().map(String::as_str))
+                .collect::<Vec<_>>()
+                .join("");
+
+            let if_true = if_true
+                .iter()
+                .map(|(action, _)| action.as_str())
+                .collect::<Vec<_>>()
+                .join("");
+
+            let if_false = logic
+                .else_actions
+                .iter()
+                .map(|x| &x.action)
+                .map(action_effect_to_js)
+                .collect::<Vec<_>>();
+
+            let false_reset = if_false
+                .iter()
+                .filter_map(|(_, reset)| reset.as_ref().map(String::as_str))
+                .collect::<Vec<_>>()
+                .join("");
+
+            let if_false = if_false
+                .iter()
+                .map(|(action, _)| action.as_str())
+                .collect::<Vec<_>>()
+                .join("");
+
+            (
+                format!("if({expr}){{{if_true}}}else{{{if_false}}}"),
+                if true_reset.is_empty() && false_reset.is_empty() {
+                    None
+                } else {
+                    Some(String::new())
+                },
+            )
+        }
+        ActionType::Parameterized { action, value } => {
+            let (action, reset) = action_to_js(action);
+
+            let action = html_escape::encode_double_quoted_attribute(&action)
+                .to_string()
+                .replace('\n', "&#10;");
+
+            (
+                format!("{{action:{action},value:{}}}", value_to_js(value)),
+                reset,
+            )
+        }
+        ActionType::Custom { action } => {
+            let action = html_escape::encode_double_quoted_attribute(&action)
+                .to_string()
+                .replace('\n', "&#10;");
+
+            (format!("{{action:{action}}}"), None)
+        }
+        ActionType::Log { message, level } => (
+            format!(
+                "console.{}(`{}`)",
+                match level {
+                    LogLevel::Error => "error",
+                    LogLevel::Warn => "warn",
+                    LogLevel::Info => "log",
+                    LogLevel::Debug => "debug",
+                    LogLevel::Trace => "trace",
+                },
+                message.replace('"', "&quot;")
+            ),
+            None,
+        ),
+        ActionType::Navigate { url } => (format!("navigate({url})"), None),
+    }
+}
+
 impl HtmlTagRenderer for VanillaJsTagRenderer {
     fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger) {
         self.default.responsive_triggers.insert(name, trigger);
     }
 
+    #[allow(clippy::too_many_lines)]
     fn element_attrs_to_html(
         &self,
         f: &mut dyn Write,
@@ -101,6 +405,67 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                     if let Some(trigger) = trigger {
                         write_attr(f, b"hx-trigger", trigger.as_bytes())?;
                     }
+                }
+            }
+        }
+
+        for action in &container.actions {
+            match &action.trigger {
+                ActionTrigger::Click => {
+                    write_attr(
+                        f,
+                        b"v-onclick",
+                        action_effect_to_js_attr(&action.action).as_bytes(),
+                    )?;
+                }
+                ActionTrigger::ClickOutside => {
+                    write_attr(
+                        f,
+                        b"v-onclickoutside",
+                        action_effect_to_js_attr(&action.action).as_bytes(),
+                    )?;
+                }
+                ActionTrigger::MouseDown => {
+                    write_attr(
+                        f,
+                        b"v-onmousedown",
+                        action_effect_to_js_attr(&action.action).as_bytes(),
+                    )?;
+                }
+                ActionTrigger::Hover => {
+                    write_attr(
+                        f,
+                        b"v-onmouseover",
+                        action_effect_to_js_attr(&action.action).as_bytes(),
+                    )?;
+                }
+                ActionTrigger::Change => {
+                    write_attr(
+                        f,
+                        b"v-onchange",
+                        action_effect_to_js_attr(&action.action).as_bytes(),
+                    )?;
+                }
+                ActionTrigger::Resize => {
+                    write_attr(
+                        f,
+                        b"v-onresize",
+                        action_effect_to_js_attr(&action.action).as_bytes(),
+                    )?;
+                }
+                ActionTrigger::Event(name) => {
+                    write_attr(
+                        f,
+                        b"v-onevent",
+                        format!("{name}:{}", action_effect_to_js_attr(&action.action)).as_bytes(),
+                    )?;
+                }
+                ActionTrigger::Immediate => {
+                    write_attr(
+                        f,
+                        b"v-onload",
+                        action_effect_to_js_attr(&action.action).as_bytes(),
+                    )?;
                 }
             }
         }

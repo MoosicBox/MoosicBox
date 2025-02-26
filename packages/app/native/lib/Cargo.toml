@@ -104,5 +104,23 @@ assets = ["hyperchad_renderer/assets", "hyperchad_renderer_html?/assets"]
 
 static-routes = ["hyperchad_router/static-routes"]
 
+plugin-actions = ["hyperchad_renderer_vanilla_js?/plugin-actions"]
+plugin-actions-change = ["hyperchad_renderer_vanilla_js?/plugin-actions-change"]
+plugin-actions-click = ["hyperchad_renderer_vanilla_js?/plugin-actions-click"]
+plugin-actions-click-outside = [
+    "hyperchad_renderer_vanilla_js?/plugin-actions-click-outside",
+]
+plugin-actions-event = ["hyperchad_renderer_vanilla_js?/plugin-actions-event"]
+plugin-actions-immediate = [
+    "hyperchad_renderer_vanilla_js?/plugin-actions-immediate",
+]
+plugin-actions-mouse-down = [
+    "hyperchad_renderer_vanilla_js?/plugin-actions-mouse-down",
+]
+plugin-actions-mouse-over = [
+    "hyperchad_renderer_vanilla_js?/plugin-actions-mouse-over",
+]
+plugin-actions-resize = ["hyperchad_renderer_vanilla_js?/plugin-actions-resize"]
+
 plugin-nav = ["hyperchad_renderer_vanilla_js?/plugin-nav"]
 plugin-sse = ["hyperchad_renderer_vanilla_js?/plugin-sse"]

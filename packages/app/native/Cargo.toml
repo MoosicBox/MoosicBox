@@ -105,6 +105,7 @@ htmx = ["_canvas", "moosicbox_app_native_lib/htmx"]
 vanilla-js = [
     "_canvas",
     "html",
+    "moosicbox_app_native_lib/plugin-actions",
     "moosicbox_app_native_lib/plugin-nav",
     "moosicbox_app_native_lib/plugin-sse",
     "moosicbox_app_native_lib/vanilla-js",

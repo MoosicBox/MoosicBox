@@ -19,6 +19,31 @@ function isSelfTarget(target: string | null): boolean {
     return target === null || target === 'self';
 }
 
+export function navigate(url: string) {
+    const existing = cache[url];
+
+    if (typeof existing === 'string') {
+        swapDom(existing, url);
+        return false;
+    }
+
+    const request = pending[url];
+
+    if (request) {
+        console.debug('Awaiting pending request', url);
+        request.then((html) => {
+            if (typeof html === 'string') {
+                swapDom(html, url);
+                return;
+            }
+            console.debug('Invalid response', url, html);
+        });
+        return false;
+    }
+
+    console.debug('no document for anchor');
+}
+
 onAttr('href', ({ element, attr }) => {
     if (attr[0] !== '/') return; // Only handle links for this site
     if (!isSelfTarget(element.getAttribute('target'))) return; // Don't handle for new tab
@@ -37,27 +62,6 @@ onAttr('href', ({ element, attr }) => {
 
         event.preventDefault();
 
-        const existing = cache[attr];
-
-        if (typeof existing === 'string') {
-            swapDom(existing, attr);
-            return false;
-        }
-
-        const request = pending[attr];
-
-        if (request) {
-            console.debug('Awaiting pending request', attr);
-            request.then((html) => {
-                if (typeof html === 'string') {
-                    swapDom(html, attr);
-                    return;
-                }
-                console.debug('Invalid response', attr, html);
-            });
-            return false;
-        }
-
-        console.debug('no document for anchor');
+        return navigate(attr);
     });
 });

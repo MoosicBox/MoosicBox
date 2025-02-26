@@ -92,6 +92,17 @@ fetchEventSource('$sse', {
 
                 break;
             }
+            case 'event': {
+                const splitIndex = e.data.indexOf(':');
+                if (splitIndex === -1) return;
+                const eventName = e.data.slice(0, splitIndex);
+                const eventValue = e.data.slice(splitIndex + 1);
+                const event = new CustomEvent(`v-${eventName}`, {
+                    detail: eventValue,
+                });
+                dispatchEvent(event);
+                break;
+            }
         }
     },
     onerror: (error) => {

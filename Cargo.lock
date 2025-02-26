@@ -4961,6 +4961,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "const_format",
+ "html-escape",
  "hyperchad_js_bundler",
  "hyperchad_renderer",
  "hyperchad_renderer_html",

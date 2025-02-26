@@ -30,10 +30,12 @@ hyperchad_renderer_html = { version = "0.1.0", path = "../html", default-feature
 ] }
 hyperchad_transformer = { version = "0.1.0", path = "../../transformer", default-features = false, features = [
     "html",
+    "logic",
 ] }
 
 async-trait  = { workspace = true }
 const_format = { workspace = true }
+html-escape  = { workspace = true }
 log          = { workspace = true }
 maud         = { workspace = true }
 md5          = { workspace = true, optional = true }
@@ -50,6 +52,25 @@ script = []
 
 esbuild = []
 swc     = []
+
+plugin-actions = [
+    "plugin-actions-change",
+    "plugin-actions-click",
+    "plugin-actions-click-outside",
+    "plugin-actions-event",
+    "plugin-actions-immediate",
+    "plugin-actions-mouse-down",
+    "plugin-actions-mouse-over",
+    "plugin-actions-resize",
+]
+plugin-actions-change = []
+plugin-actions-click = []
+plugin-actions-click-outside = []
+plugin-actions-event = []
+plugin-actions-immediate = []
+plugin-actions-mouse-down = []
+plugin-actions-mouse-over = []
+plugin-actions-resize = []
 
 plugin-nav = []
 plugin-sse = []

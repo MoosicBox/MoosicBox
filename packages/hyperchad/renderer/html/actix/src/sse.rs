@@ -135,7 +135,7 @@ pub async fn handle_sse<
                     }
                     RendererEvent::Event { name, value } => {
                         log::debug!("handle_sse: SSE sending event name={name} value={value:?}");
-                        crate::sse::EventData::new(format!("{name}\n{}", value.unwrap_or_default()))
+                        crate::sse::EventData::new(format!("{name}:{}", value.unwrap_or_default()))
                             .event("event")
                     }
                 })

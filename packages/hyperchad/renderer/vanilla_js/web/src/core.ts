@@ -119,11 +119,19 @@ export function htmlToElement(html: string): HTMLElement {
     return element;
 }
 
+export function decodeHtml(html: string) {
+    const txt = document.createElement('textarea');
+    txt.innerHTML = html;
+    return txt.value;
+}
+
 export function processElement(element: HTMLElement) {
     for (const key in attrHandlers) {
         const attr = element.getAttribute(key);
         if (attr) {
-            attrHandlers[key].forEach((handler) => handler({ element, attr }));
+            attrHandlers[key].forEach((handler) =>
+                handler({ element, attr: decodeHtml(attr) }),
+            );
         }
     }
     for (const child of element.children) {
