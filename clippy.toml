@@ -5,6 +5,7 @@ allowed-duplicate-crates = [
     "bitflags",
     "block2",
     "brotli-decompressor",
+    "convert_case",
     "cookie",
     "core-foundation",
     "crc",

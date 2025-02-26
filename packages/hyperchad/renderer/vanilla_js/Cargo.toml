@@ -35,6 +35,7 @@ hyperchad_transformer = { version = "0.1.0", path = "../../transformer", default
 
 async-trait  = { workspace = true }
 const_format = { workspace = true }
+convert_case = { workspace = true }
 html-escape  = { workspace = true }
 log          = { workspace = true }
 maud         = { workspace = true }

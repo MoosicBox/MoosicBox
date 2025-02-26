@@ -116,7 +116,10 @@ fn calc_value_to_js(value: &CalcValue) -> String {
                 format!("{target}[0]?.id")
             }
             CalcValue::DataAttrValue { attr, .. } => {
-                format!("{target}[0]?.dataset.{attr}")
+                use convert_case::{Case, Casing as _};
+                let camel_case_attr = attr.to_case(Case::Camel);
+
+                format!("{target}[0]?.dataset.{camel_case_attr}")
             }
             CalcValue::EventValue => unreachable!(),
             CalcValue::WidthPx { .. } => {
