@@ -19,6 +19,9 @@ use tokio::runtime::Handle;
 
 pub use actix_web;
 
+#[cfg(feature = "actions")]
+mod actions;
+
 #[cfg(feature = "sse")]
 mod sse;
 
@@ -217,6 +220,11 @@ impl<
                 #[cfg(feature = "sse")]
                 let app = app
                     .service(web::resource("/$sse").route(web::get().to(sse::handle_sse::<T, R>)));
+
+                #[cfg(feature = "actions")]
+                let app = app.service(
+                    web::resource("/$action").route(web::post().to(actions::handle_action::<T, R>)),
+                );
 
                 let catchall = move |req: HttpRequest, app: web::Data<ActixApp<T, R>>| async move {
                     let data = app.processor.prepare_request(req)?;

@@ -32,7 +32,7 @@ serde_json   = { workspace = true, optional = true }
 tokio        = { workspace = true }
 
 [features]
-default = ["assets", "debug", "sse"]
+default = ["actions", "assets", "debug", "sse"]
 
 fail-on-warnings = []
 
@@ -40,4 +40,5 @@ debug = []
 
 assets = ["dep:actix-files", "hyperchad_renderer/assets"]
 
-sse = ["dep:serde_json", "hyperchad_renderer/serde"]
+actions = ["dep:serde_json"]
+sse     = ["dep:serde_json", "hyperchad_renderer/serde"]

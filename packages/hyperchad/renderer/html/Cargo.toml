@@ -59,6 +59,7 @@ assets = [
     "hyperchad_renderer_html_lambda?/assets",
 ]
 
-sse = ["hyperchad_renderer_html_actix?/sse"]
+actions = ["hyperchad_renderer_html_actix?/actions"]
+sse     = ["hyperchad_renderer_html_actix?/sse"]
 
 extend = ["dep:thiserror"]
