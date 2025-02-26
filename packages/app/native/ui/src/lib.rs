@@ -344,7 +344,7 @@ fn volume_slider(size: u16, volume_percent: f64) -> Markup {
             sx-margin-y=(5)
             sx-align-items="center"
             sx-justify-content="center"
-            sx-border-radius="100%"
+            sx-border-radius=(30)
             sx-background="#181a1b"
             sx-cursor="pointer"
             fx-mouse-down=(
@@ -364,7 +364,7 @@ fn volume_slider(size: u16, volume_percent: f64) -> Markup {
                 sx-position="relative"
                 sx-width=(3)
                 sx-height="100%"
-                sx-border-radius="100%"
+                sx-border-radius=(30)
                 sx-background="#444"
             {
                 (volume_slider_value(size, volume_percent))
@@ -383,7 +383,7 @@ fn volume_slider_value(size: u16, volume_percent: f64) -> Markup {
             sx-left=(0)
             sx-width="100%"
             sx-height=(format!("{height_percent}%"))
-            sx-border-radius="100%"
+            sx-border-radius=(30)
             sx-background="#fff"
         {
             div sx-position="relative" {
@@ -394,7 +394,7 @@ fn volume_slider_value(size: u16, volume_percent: f64) -> Markup {
                     sx-left=(format!("calc(50% - {})", slider_top_width / 2.0))
                     sx-width=(slider_top_width)
                     sx-height=(3)
-                    sx-border-radius="100%"
+                    sx-border-radius=(30)
                     sx-background="#fff"
                 {}
             }
