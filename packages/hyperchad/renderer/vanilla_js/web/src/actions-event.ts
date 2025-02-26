@@ -1,4 +1,4 @@
-import { onAttr } from './core';
+import { handleError, onAttr } from './core';
 
 onAttr('v-onevent', (event) => {
     const { attr } = event;
@@ -11,10 +11,6 @@ onAttr('v-onevent', (event) => {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             value = event.detail;
         }
-        try {
-            eval(eventAction);
-        } catch (e) {
-            console.error('onevent failed', e);
-        }
+        handleError('onevent', () => eval(eventAction));
     });
 });

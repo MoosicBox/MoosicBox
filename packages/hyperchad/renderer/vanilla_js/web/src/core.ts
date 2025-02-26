@@ -252,6 +252,14 @@ function processRoute(element: HTMLElement): boolean {
     return true;
 }
 
+export function handleError<T>(type: string, func: () => T): T | undefined {
+    try {
+        return func();
+    } catch (e) {
+        console.error(`${type} failed`, e);
+    }
+}
+
 onAttr('hx-trigger', ({ element, attr }) => {
     if (attr === 'load') {
         return processRoute(element);

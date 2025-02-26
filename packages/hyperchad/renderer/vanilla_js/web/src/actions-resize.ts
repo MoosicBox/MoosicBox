@@ -1,4 +1,4 @@
-import { onAttr } from './core';
+import { handleError, onAttr } from './core';
 
 onAttr('v-onresize', ({ element, attr }) => {
     let lastWidth = element.clientWidth;
@@ -20,10 +20,6 @@ onAttr('v-onresize', ({ element, attr }) => {
 
         if (!resized) return;
 
-        try {
-            eval(attr);
-        } catch (e) {
-            console.error('onresize failed', e);
-        }
+        handleError('onresize', () => eval(attr));
     });
 });
