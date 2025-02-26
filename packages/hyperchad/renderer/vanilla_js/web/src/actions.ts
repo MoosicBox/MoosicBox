@@ -29,8 +29,10 @@ export function evaluate<T>(
         value: CSSStyleDeclaration[T],
     ) {
         a(elements, (x) => {
-            const dataName = `${(name as string)[0].toUpperCase()}${(name as string).slice(1)}`;
-            x.dataset[`vReset${dataName}`] = x.style[name] as string;
+            const dataName = `vReset${(name as string)[0].toUpperCase()}${(name as string).slice(1)}`;
+            if (typeof x.dataset[dataName] === 'undefined') {
+                x.dataset[dataName] = x.style[name] as string;
+            }
             x.style[name] = value;
         });
     }
@@ -39,10 +41,8 @@ export function evaluate<T>(
         T extends Exclude<keyof CSSStyleDeclaration, 'length' | 'parentRule'>,
     >(elements: (HTMLElement | null)[], name: T) {
         a(elements, (x) => {
-            const dataName = `${(name as string)[0].toUpperCase()}${(name as string).slice(1)}`;
-            x.style[name] = x.dataset[
-                `vReset${dataName}`
-            ] as CSSStyleDeclaration[T];
+            const dataName = `vReset${(name as string)[0].toUpperCase()}${(name as string).slice(1)}`;
+            x.style[name] = x.dataset[dataName] as CSSStyleDeclaration[T];
         });
     }
     return eval(script);
