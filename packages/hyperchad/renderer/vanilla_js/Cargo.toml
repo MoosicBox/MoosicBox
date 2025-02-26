@@ -53,6 +53,7 @@ script = []
 esbuild = []
 swc     = []
 
+_actions = []
 plugin-actions = [
     "plugin-actions-change",
     "plugin-actions-click",
@@ -63,14 +64,14 @@ plugin-actions = [
     "plugin-actions-mouse-over",
     "plugin-actions-resize",
 ]
-plugin-actions-change = []
-plugin-actions-click = []
-plugin-actions-click-outside = []
-plugin-actions-event = []
-plugin-actions-immediate = []
-plugin-actions-mouse-down = []
-plugin-actions-mouse-over = []
-plugin-actions-resize = []
+plugin-actions-change = ["_actions"]
+plugin-actions-click = ["_actions"]
+plugin-actions-click-outside = ["_actions"]
+plugin-actions-event = ["_actions"]
+plugin-actions-immediate = ["_actions"]
+plugin-actions-mouse-down = ["_actions"]
+plugin-actions-mouse-over = ["_actions"]
+plugin-actions-resize = ["_actions"]
 
 plugin-nav = []
 plugin-sse = []

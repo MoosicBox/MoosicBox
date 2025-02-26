@@ -34,6 +34,8 @@ fn main() {
         "nav",
         #[cfg(feature = "plugin-sse")]
         "sse",
+        #[cfg(feature = "_actions")]
+        "actions",
         #[cfg(feature = "plugin-actions-change")]
         "actions-change",
         #[cfg(feature = "plugin-actions-click")]
