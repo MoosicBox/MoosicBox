@@ -4,7 +4,8 @@ import { fetchEventSource } from './fetch-event-source';
 type CanvasAction =
     | 'clear'
     | { strokeColor: { r: number; g: number; b: number; a: number | null } }
-    | { fillRect: [[number, number], [number, number]] };
+    | { fillRect: [[number, number], [number, number]] }
+    | { clearRect: [[number, number], [number, number]] };
 
 type CanvasUpdate = {
     target: string;
@@ -51,8 +52,6 @@ fetchEventSource('$sse', {
                 if (!element) return;
 
                 const canvas = element as HTMLCanvasElement;
-                const ctx = canvas.getContext('2d');
-                if (!ctx) return;
 
                 const attrWidth = canvas.getAttribute('width');
                 const attrHeight = canvas.getAttribute('height');
@@ -66,9 +65,17 @@ fetchEventSource('$sse', {
                     canvas.dataset.vNoHeight = 'true';
                 }
 
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return;
+
                 for (const action of update.canvasActions) {
                     if (action === 'clear') {
                         ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        continue;
+                    }
+                    if ('clearRect' in action) {
+                        const [[x1, y1], [x2, y2]] = action.clearRect;
+                        ctx.clearRect(x1, y1, x2, y2);
                         continue;
                     }
                     if ('strokeColor' in action) {
