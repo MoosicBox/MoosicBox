@@ -9,6 +9,8 @@ export function triggerAction(action: {
     });
 }
 
+const throttles: { [id: string]: { last: number } } = {};
+
 export function evaluate<T>(
     script: string,
     c: Record<string, unknown> & {
@@ -45,7 +47,6 @@ export function evaluate<T>(
         });
     }
 
-    const throttles: { [id: string]: { last: number; value: T } } = {};
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     function throttle(f: () => T, duration: number): T | undefined {
         if (!c.element.id) return;
@@ -54,17 +55,15 @@ export function evaluate<T>(
         const now = Date.now();
 
         if (!existing) {
-            const t = { last: now, value: f() };
+            const t = { last: now };
             throttles[c.element.id] = t;
-            return t.value;
+            return f();
         }
 
         if (now - existing.last >= duration) {
             existing.last = now;
-            existing.value = f();
+            return f();
         }
-
-        return existing.value;
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
