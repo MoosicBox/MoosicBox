@@ -71,7 +71,7 @@ impl CalcValue {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum Value {
     Calc(CalcValue),
     Arithmetic(Box<Arithmetic>),
@@ -79,6 +79,59 @@ pub enum Value {
     Visibility(Visibility),
     LayoutDirection(LayoutDirection),
     String(String),
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for Value {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error as _;
+
+        #[derive(Deserialize)]
+        #[serde(rename = "Value")]
+        enum ValueInner {
+            Calc(CalcValue),
+            Arithmetic(Box<Arithmetic>),
+            Real(f32),
+            Visibility(Visibility),
+            LayoutDirection(LayoutDirection),
+            String(String),
+        }
+
+        impl From<ValueInner> for Value {
+            fn from(value: ValueInner) -> Self {
+                match value {
+                    ValueInner::Calc(x) => Self::Calc(x),
+                    ValueInner::Arithmetic(x) => Self::Arithmetic(x),
+                    ValueInner::Real(x) => Self::Real(x),
+                    ValueInner::Visibility(x) => Self::Visibility(x),
+                    ValueInner::LayoutDirection(x) => Self::LayoutDirection(x),
+                    ValueInner::String(x) => Self::String(x),
+                }
+            }
+        }
+
+        log::trace!("attempting to deserialize Value");
+        let value: serde_json::Value = serde_json::Value::deserialize(deserializer)?;
+        log::trace!("deserialized Value to {value:?}");
+
+        Ok(if value.is_i64() {
+            #[allow(clippy::cast_precision_loss)]
+            Self::Real(value.as_i64().unwrap() as f32)
+        } else if value.is_u64() {
+            #[allow(clippy::cast_precision_loss)]
+            Self::Real(value.as_u64().unwrap() as f32)
+        } else if value.is_f64() {
+            #[allow(clippy::cast_possible_truncation)]
+            Self::Real(value.as_f64().unwrap() as f32)
+        } else {
+            serde_json::from_value::<ValueInner>(value)
+                .map_err(D::Error::custom)?
+                .into()
+        })
+    }
 }
 
 impl Value {
