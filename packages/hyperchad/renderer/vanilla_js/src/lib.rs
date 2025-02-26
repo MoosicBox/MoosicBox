@@ -372,7 +372,7 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
             ),
             None,
         ),
-        ActionType::Navigate { url } => (format!("navigate({url})"), None),
+        ActionType::Navigate { url } => (format!("navigate(`{url}`)"), None),
     }
 }
 
