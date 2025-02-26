@@ -1,8 +1,6 @@
 import { handleError, onAttr } from './core';
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 onAttr('v-onload', ({ element, attr }) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    element.onload = (event) => {
-        handleError('onload', () => eval(attr));
-    };
+    handleError('onload', () => eval(attr));
 });
