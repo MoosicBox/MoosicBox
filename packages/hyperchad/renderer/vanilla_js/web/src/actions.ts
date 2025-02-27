@@ -18,11 +18,19 @@ export function evaluate<T>(
         event?: Event | undefined;
     },
 ): T {
+    // for all non-null elements
     function a(elements: (HTMLElement | null)[], f: (x: HTMLElement) => void) {
         elements.filter((x) => !!x).forEach(f);
     }
+
+    // data_reset_name
+    function drn(name: string): string {
+        return `vReset${name[0].toUpperCase()}${name.slice(1)}`;
+    }
+
+    // set_style
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    function s<
+    function ss<
         T extends Exclude<keyof CSSStyleDeclaration, 'length' | 'parentRule'>,
     >(
         elements: (HTMLElement | null)[],
@@ -30,20 +38,22 @@ export function evaluate<T>(
         value: CSSStyleDeclaration[T],
     ) {
         a(elements, (x) => {
-            const dataName = `vReset${(name as string)[0].toUpperCase()}${(name as string).slice(1)}`;
+            const dataName = drn(name as string);
             if (typeof x.dataset[dataName] === 'undefined') {
                 x.dataset[dataName] = x.style[name] as string;
             }
             x.style[name] = value;
         });
     }
+    // reset_style
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    function r<
+    function rs<
         T extends Exclude<keyof CSSStyleDeclaration, 'length' | 'parentRule'>,
     >(elements: (HTMLElement | null)[], name: T) {
         a(elements, (x) => {
-            const dataName = `vReset${(name as string)[0].toUpperCase()}${(name as string).slice(1)}`;
-            x.style[name] = x.dataset[dataName] as CSSStyleDeclaration[T];
+            x.style[name] = x.dataset[
+                drn(name as string)
+            ] as CSSStyleDeclaration[T];
         });
     }
 

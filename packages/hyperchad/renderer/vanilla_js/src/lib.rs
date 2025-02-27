@@ -246,29 +246,29 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
             match action {
                 StyleAction::SetVisibility(visibility) => (
                     format!(
-                        "s({target},'visibility',{});",
+                        "ss({target},'visibility',{});",
                         match visibility {
                             Visibility::Visible => "'visible'",
                             Visibility::Hidden => "'hidden'",
                         },
                     ),
-                    Some(format!("r({target},'visibility');")),
+                    Some(format!("rs({target},'visibility');")),
                 ),
                 StyleAction::SetDisplay(display) => (
                     format!(
-                        "s({target},'display',{});",
+                        "ss({target},'display',{});",
                         if *display { "'initial'" } else { "null" }
                     ),
-                    Some(format!("r({target},'display');")),
+                    Some(format!("rs({target},'display');")),
                 ),
                 StyleAction::SetBackground(background) => (
                     format!(
-                        "s({target},'background',{});",
+                        "ss({target},'background',{});",
                         background
                             .as_ref()
                             .map_or_else(|| "null".to_string(), |color| format!("'{color}'"))
                     ),
-                    Some(format!("r({target},'background');")),
+                    Some(format!("rs({target},'background');")),
                 ),
             }
         }
