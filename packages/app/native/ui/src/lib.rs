@@ -309,14 +309,20 @@ pub fn player(state: &State) -> Markup {
     }
 }
 
+pub const VOLUME_SLIDER_CONTAINER_ID: &str = "volume-slider-container";
+pub const VOLUME_SLIDER_ID: &str = "volume-slider";
+pub const VOLUME_SLIDER_VALUE_CONTAINER_ID: &str = "volume-slider-value-container";
+pub const VOLUME_SLIDER_VALUE_ID: &str = "volume-slider-value";
+
 fn volume(state: &State, size: u16) -> Markup {
     let volume_percent = state.player.playback.as_ref().map_or(1.0, |x| x.volume);
     html! {
         div
+            id=(VOLUME_SLIDER_CONTAINER_ID)
             sx-width=(size)
             sx-height=(size)
             sx-position="relative"
-            fx-hover=(ActionType::show_str_id("volume-slider").delay_off(400))
+            fx-hover=(ActionType::show_str_id(VOLUME_SLIDER_ID).delay_off(400))
         {
             button {
                 img
@@ -330,10 +336,9 @@ fn volume(state: &State, size: u16) -> Markup {
 }
 
 fn volume_slider(size: u16, volume_percent: f64) -> Markup {
-    const VOLUME_SLIDER_VALUE_CONTAINER_ID: &str = "volume-slider-value-container";
     html! {
         div
-            id="volume-slider"
+            id=(VOLUME_SLIDER_ID)
             sx-visibility=(Visibility::Hidden)
             sx-width=(30)
             sx-height=(130)
@@ -377,7 +382,7 @@ fn volume_slider_value(size: u16, volume_percent: f64) -> Markup {
     let height_percent = volume_percent * 100.0;
     html! {
         div
-            id="volume-slider-value"
+            id=(VOLUME_SLIDER_VALUE_ID)
             sx-position="absolute"
             sx-bottom=(0)
             sx-left=(0)
@@ -551,7 +556,7 @@ pub fn session_updated(
     if let Some(volume) = update.volume {
         log::debug!("session_updated: rendering volume");
         partials.push((
-            "volume-slider-value".to_string(),
+            VOLUME_SLIDER_VALUE_ID.to_string(),
             volume_slider_value(FOOTER_ICON_SIZE, volume),
         ));
     }
