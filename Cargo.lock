@@ -2290,9 +2290,9 @@ checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
 
 [[package]]
 name = "convert_case"
-version = "0.7.1"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb402b8d4c85569410425650ce3eddc7d698ed96d39a73f941b08fb63082f1e7"
+checksum = "baaaa0ecca5b51987b9423ccdc971514dd8b0bb7b4060b983d3664dad3f1f89f"
 dependencies = [
  "unicode-segmentation",
 ]
@@ -4921,7 +4921,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "const_format",
- "convert_case 0.7.1",
+ "convert_case 0.8.0",
  "html-escape",
  "hyperchad_js_bundler",
  "hyperchad_renderer",
@@ -12258,9 +12258,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_transforms_base"
-version = "11.1.0"
+version = "11.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04434877d7529c9067def1a15ad436d6f65d0997657bd1c56430af70914064dc"
+checksum = "53f823fb2ba61099c06f1557f4d7bc3a957147f2e39f92419204682aa62b46fc"
 dependencies = [
  "better_scoped_tls",
  "bitflags 2.8.0",
@@ -12318,9 +12318,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_transforms_react"
-version = "11.0.0"
+version = "12.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc1707dd7cf4699336e081a9a764409532139990b4e9f733feb74a17c647606a"
+checksum = "311218980029ea376a1f53292418d852d50b461d15d9d39f830abf0d1c3bdd6c"
 dependencies = [
  "base64 0.21.7",
  "dashmap",
@@ -12344,9 +12344,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_transforms_typescript"
-version = "11.0.0"
+version = "12.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06b455ded4b426c1d8016807b8fab11bd36607d5f1dabeb07e3ab94976e6b528"
+checksum = "19c32ebb3dd1942d35142de60c9dc0f3c034d26567de7eb8b3ad6de426f5b0e9"
 dependencies = [
  "once_cell",
  "rustc-hash 2.1.1",
