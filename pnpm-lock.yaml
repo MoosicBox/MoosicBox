@@ -48,8 +48,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.9.10
-        version: 3.9.10
+        specifier: ^3.9.15
+        version: 3.9.15
       typescript:
         specifier: ^5.7.3
         version: 5.7.3
@@ -970,8 +970,8 @@ packages:
   fast-levenshtein@2.0.6:
     resolution: {integrity: sha512-DCXu6Ifhqcks7TZKY3Hxp3y6qphY5SJZmrWMDrKcERSOXWQdMhU9Ig/PYrzyw/ul9jOIyh0N4M0tbC5hodg8dw==}
 
-  fastq@1.19.0:
-    resolution: {integrity: sha512-7SFSRCNjBQIZH/xZR3iy5iQYR8aGBE0h3VG6/cwlbrpdciNYBMotQav8c1XI3HjHH+NikUpP53nPdlZSdWmFzA==}
+  fastq@1.19.1:
+    resolution: {integrity: sha512-GwLTyxkCXjXbxqIhTsMI2Nui8huMPtnxg7krajPJAjnEG/iiOS7i+zCtWGZR9G0NBKbXKh6X9m9UIsYX/N6vvQ==}
 
   fdir@6.4.3:
     resolution: {integrity: sha512-PMXmW2y1hDDfTSRc9gaXIuCCRpuoz3Kaz8cUelp3smouvfT632ozg2vrT6lJsHKKOF59YLbOGfAWGUcKEfRMQw==}
@@ -1970,33 +1970,33 @@ packages:
     resolution: {integrity: sha512-MGrFH9Z4NP9Iyhqn16sDtBpRRNJ0Y2hNa6D65h736fVSaPCHr4DM4sWUNvVaSuC+0OBGhwsrydQwmgfg5LncqQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
-  sst-darwin-arm64@3.9.10:
-    resolution: {integrity: sha512-X+fLAd7SbX+Al17NqAijFUke1ZkD5/l/Go8+vjxKWhDc2QvzmZu9Yk9csK4K7Y7iYt6F0RnjW5bFhBMlq6/P2g==}
+  sst-darwin-arm64@3.9.15:
+    resolution: {integrity: sha512-86ATu7V9gsud0WNcv8Lnckqhx07imLVYC2k7ppd2+UhJczhLNzgDV+7PKFpOySJ0JKIVp06wJThuBbMI9hFjSg==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.9.10:
-    resolution: {integrity: sha512-hSJTjgsS5b70Jld+N2dmgFOej5oQYOsoFWvawuuqEFg2lirQOvczy+KKGlv+99ceAyONIRksCiOFu3gY3OOsbQ==}
+  sst-darwin-x64@3.9.15:
+    resolution: {integrity: sha512-vEMy1W6Q1F3tx6EMZkJaBcyD5LUx1FB1UmzAaIefjZ08xbFr/d37+LDXocts2bexE8vXOreHkTQDcM+HFpzEUw==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.9.10:
-    resolution: {integrity: sha512-CzwlaVbxNf3j9OU42MuvupcAfx+cQcJJBi4GU0aF738/nasOoGN+2Nz3+F4zYuAWqxRyIc6gjRs69X5Qx9k/0A==}
+  sst-linux-arm64@3.9.15:
+    resolution: {integrity: sha512-ZLuICXqUqdizGWjoU2xbPgBkokdjlXWxfz8t+Sh9xno6ZVGVRYkct29EQ3HPoDjJ4kcEeq877Ii/24NKiteoww==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.9.10:
-    resolution: {integrity: sha512-4M6Jt7t6eUDFLjXfVcJhksDyNI1R6DYCG8p1ELl4Eu9QIEFrXBncUssY3UdIkjzOXBOUubmp1W7XkLYELs0DKw==}
+  sst-linux-x64@3.9.15:
+    resolution: {integrity: sha512-naVEwAS47h2rbs6HzVLlj/xkrkVCQRGVyPRVxrJieQx3/26ej3OQHC4w1QPL4+bjGO347WmWvW9bqXP7SRlByQ==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.9.10:
-    resolution: {integrity: sha512-6KTIbnndKHH8UrpbuSHuOgLRDMbr8tkjoboa+O6Z68JDjNSIf+Qnkw92n6nROA4io+yPmcACtH5AfOK3oe0WhQ==}
+  sst-linux-x86@3.9.15:
+    resolution: {integrity: sha512-SuaSB0mnpuY0p6yQ24R7kPAg+n8cnnkf1Tt8/qt6478Fm63bST3pZ4egZJr8uRdnAaGjZ5Xg1cYluM0vsmKzOw==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.9.10:
-    resolution: {integrity: sha512-+BH2p6T12+kvPR5DbXZGtYPQfscXHmZ0NgMUIvfXIZxr8dhh9pcHv8Dzm4YEguJ5ZTudRTgkkQX0y3qJZPnBNA==}
+  sst@3.9.15:
+    resolution: {integrity: sha512-4FoAzY0MYGZjri+jwsB5fehAaQaq47IT3W94a5rRaWpEOu4mI/H03XhcH4I+HU1TLJJ9v0gXXtwEY1tkvNNkNg==}
     hasBin: true
 
   string-width@4.2.3:
@@ -2310,7 +2310,7 @@ snapshots:
   '@nodelib/fs.walk@1.2.8':
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
-      fastq: 1.19.0
+      fastq: 1.19.1
 
   '@npmcli/agent@2.2.2':
     dependencies:
@@ -3403,7 +3403,7 @@ snapshots:
 
   fast-levenshtein@2.0.6: {}
 
-  fastq@1.19.0:
+  fastq@1.19.1:
     dependencies:
       reusify: 1.1.0
 
@@ -4476,32 +4476,32 @@ snapshots:
     dependencies:
       minipass: 7.1.2
 
-  sst-darwin-arm64@3.9.10:
+  sst-darwin-arm64@3.9.15:
     optional: true
 
-  sst-darwin-x64@3.9.10:
+  sst-darwin-x64@3.9.15:
     optional: true
 
-  sst-linux-arm64@3.9.10:
+  sst-linux-arm64@3.9.15:
     optional: true
 
-  sst-linux-x64@3.9.10:
+  sst-linux-x64@3.9.15:
     optional: true
 
-  sst-linux-x86@3.9.10:
+  sst-linux-x86@3.9.15:
     optional: true
 
-  sst@3.9.10:
+  sst@3.9.15:
     dependencies:
       aws4fetch: 1.0.20
       jose: 5.2.3
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.9.10
-      sst-darwin-x64: 3.9.10
-      sst-linux-arm64: 3.9.10
-      sst-linux-x64: 3.9.10
-      sst-linux-x86: 3.9.10
+      sst-darwin-arm64: 3.9.15
+      sst-darwin-x64: 3.9.15
+      sst-linux-arm64: 3.9.15
+      sst-linux-x64: 3.9.15
+      sst-linux-x86: 3.9.15
 
   string-width@4.2.3:
     dependencies:
