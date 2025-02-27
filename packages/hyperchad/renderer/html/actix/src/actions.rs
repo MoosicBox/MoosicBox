@@ -29,5 +29,5 @@ pub async fn handle_action<
         .map_err(ErrorInternalServerError)?;
     }
 
-    Ok::<_, actix_web::Error>(HttpResponse::Ok())
+    Ok::<_, actix_web::Error>(HttpResponse::NoContent())
 }
