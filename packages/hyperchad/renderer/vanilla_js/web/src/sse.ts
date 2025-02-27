@@ -76,7 +76,7 @@ fetchEventSource('$sse', {
                     }
                     if ('clearRect' in action) {
                         const [[x1, y1], [x2, y2]] = action.clearRect;
-                        ctx.clearRect(x1, y1, x2, y2);
+                        ctx.clearRect(x1, y1, x2 - x1, y2 - y1);
                         continue;
                     }
                     if ('strokeColor' in action) {
