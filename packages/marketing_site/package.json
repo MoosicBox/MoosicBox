@@ -40,7 +40,7 @@
         "eslint-plugin-node": "^11.1.0",
         "globals": "^15.15.0",
         "prettier": "^3.5.2",
-        "sst": "^3.9.10",
+        "sst": "^3.9.15",
         "typescript": "^5.7.3"
     }
 }
