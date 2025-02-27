@@ -15,8 +15,8 @@ use tokio_util::sync::CancellationToken;
 
 use crate::STATE;
 
-static INTERVAL_PERIOD: LazyLock<RwLock<Duration>> =
-    LazyLock::new(|| RwLock::new(Duration::from_millis(16)));
+static INTERVAL_PERIOD: LazyLock<RwLock<Option<Duration>>> =
+    LazyLock::new(|| RwLock::new(Some(Duration::from_millis(16))));
 static DIMENSIONS: LazyLock<RwLock<(f32, f32)>> = LazyLock::new(|| RwLock::new((0.0, 0.0)));
 
 pub fn get_dimensions() -> (f32, f32) {
@@ -30,7 +30,12 @@ pub fn set_dimensions(width: f32, height: f32) {
 
 #[allow(unused)]
 pub fn set_interval_period(period: Duration) {
-    *INTERVAL_PERIOD.write().unwrap() = period;
+    *INTERVAL_PERIOD.write().unwrap() = Some(period);
+}
+
+#[allow(unused)]
+pub fn disable_interval() {
+    *INTERVAL_PERIOD.write().unwrap() = None;
 }
 
 #[derive(Debug, Clone)]
@@ -327,7 +332,7 @@ pub async fn check_visualization_update() {
                     time: SystemTime::now(),
                 });
 
-                {
+                if let Some(interval_period) = { *INTERVAL_PERIOD.read().unwrap() } {
                     let mut interval = INTERVAL.write().unwrap();
                     let mut cancel_interval = CANCEL_INTERVAL.write().unwrap();
                     if playing && !interval.is_some() {
@@ -336,8 +341,7 @@ pub async fn check_visualization_update() {
                         *cancel_interval = token.clone();
                         drop(cancel_interval);
                         interval.replace(tokio::task::spawn(async move {
-                            let mut interval =
-                                tokio::time::interval(*INTERVAL_PERIOD.read().unwrap());
+                            let mut interval = tokio::time::interval(interval_period);
 
                             while !token.is_cancelled() {
                                 tokio::select! {

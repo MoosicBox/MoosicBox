@@ -348,7 +348,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     #[cfg(all(feature = "html", feature = "_canvas"))]
-    visualization::set_interval_period(std::time::Duration::from_millis(1000));
+    visualization::disable_interval();
 
     moosicbox_player::on_playback_event(on_playback_event);
 
