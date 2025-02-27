@@ -326,14 +326,16 @@ pub async fn check_visualization_update() {
                     duration,
                     time: SystemTime::now(),
                 });
-                let has_interval = { INTERVAL.read().unwrap().is_some() };
-                if playing && !has_interval {
-                    let token = CancellationToken::new();
-                    *CANCEL_INTERVAL.write().unwrap() = token.clone();
-                    INTERVAL
-                        .write()
-                        .unwrap()
-                        .replace(tokio::task::spawn(async move {
+
+                {
+                    let mut interval = INTERVAL.write().unwrap();
+                    let mut cancel_interval = CANCEL_INTERVAL.write().unwrap();
+                    if playing && !interval.is_some() {
+                        cancel_interval.cancel();
+                        let token = CancellationToken::new();
+                        *cancel_interval = token.clone();
+                        drop(cancel_interval);
+                        interval.replace(tokio::task::spawn(async move {
                             let mut interval =
                                 tokio::time::interval(*INTERVAL_PERIOD.read().unwrap());
 
@@ -347,10 +349,17 @@ pub async fn check_visualization_update() {
                                 tick_visualization().await;
                             }
                         }));
-                } else if !playing && has_interval {
-                    INTERVAL.write().unwrap().take();
-                    CANCEL_INTERVAL.read().unwrap().cancel();
+                    } else {
+                        if !playing && interval.is_some() {
+                            interval.take();
+                            cancel_interval.cancel();
+                        }
+                        drop(cancel_interval);
+                    }
+
+                    drop(interval);
                 }
+
                 tick_visualization().await;
             }
         }
