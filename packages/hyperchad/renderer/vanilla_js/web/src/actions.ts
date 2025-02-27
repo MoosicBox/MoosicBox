@@ -10,6 +10,7 @@ export function triggerAction(action: {
 }
 
 const throttles: { [id: string]: { last: number } } = {};
+const styleOverrides: { [id: string]: Set<string> } = {};
 
 export function evaluate<T>(
     script: string,
@@ -43,14 +44,27 @@ export function evaluate<T>(
                 x.dataset[dataName] = x.style[name] as string;
             }
             x.style[name] = value;
+
+            if (x.id && c.element.id) {
+                (styleOverrides[x.id] = styleOverrides[x.id] ?? new Set()).add(
+                    c.element.id,
+                );
+            }
         });
     }
+
     // reset_style
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     function rs<
         T extends Exclude<keyof CSSStyleDeclaration, 'length' | 'parentRule'>,
     >(elements: (HTMLElement | null)[], name: T) {
         a(elements, (x) => {
+            if (x.id && c.element.id) {
+                const o = styleOverrides[x.id];
+                o?.delete(c.element.id);
+                if ((o?.size ?? 0) > 0) return;
+            }
+
             x.style[name] = x.dataset[
                 drn(name as string)
             ] as CSSStyleDeclaration[T];
