@@ -29,13 +29,14 @@ fetchEventSource('$sse', {
             case 'partial_view': {
                 const element = htmlToElement(e.data);
                 if (element.children.length === 1) {
+                    const replacement = element.children[0] as HTMLElement;
                     const target = document.getElementById(
                         element.children[0].id,
                     );
                     if (target) {
-                        target.replaceWith(element);
+                        target.replaceWith(replacement);
                         triggerHandlers('domLoad', {
-                            element,
+                            element: replacement,
                             initial: false,
                             navigation: false,
                         });
