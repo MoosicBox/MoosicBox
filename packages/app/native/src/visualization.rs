@@ -10,6 +10,8 @@ use moosicbox_app_native_lib::renderer::{
     Color,
 };
 use moosicbox_music_models::{id::Id, ApiSource};
+use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 
 use crate::STATE;
 
@@ -47,6 +49,9 @@ pub struct CurrentTrack {
 
 static PREV_CURSOR_X: LazyLock<RwLock<Option<f32>>> = LazyLock::new(|| RwLock::new(None));
 static CURRENT_TRACK: LazyLock<RwLock<Option<CurrentTrack>>> = LazyLock::new(|| RwLock::new(None));
+static INTERVAL: LazyLock<RwLock<Option<JoinHandle<()>>>> = LazyLock::new(|| RwLock::new(None));
+static CANCEL_INTERVAL: LazyLock<RwLock<CancellationToken>> =
+    LazyLock::new(|| RwLock::new(CancellationToken::new()));
 static CURRENT_STROKE_COLOR: LazyLock<RwLock<Color>> = LazyLock::new(|| RwLock::new(Color::BLACK));
 
 fn stroke_color(color: Color, canvas_actions: &mut Vec<CanvasAction>) {
@@ -312,6 +317,7 @@ pub async fn check_visualization_update() {
                 let duration = track.duration;
                 let api_source = track.api_source;
                 let seek = session.seek.unwrap_or_default();
+                let playing = session.playing;
                 drop(session);
                 CURRENT_TRACK.write().unwrap().replace(CurrentTrack {
                     id: track_id,
@@ -320,6 +326,39 @@ pub async fn check_visualization_update() {
                     duration,
                     time: SystemTime::now(),
                 });
+
+                {
+                    let mut interval = INTERVAL.write().unwrap();
+                    let mut cancel_interval = CANCEL_INTERVAL.write().unwrap();
+                    if playing && !interval.is_some() {
+                        cancel_interval.cancel();
+                        let token = CancellationToken::new();
+                        *cancel_interval = token.clone();
+                        drop(cancel_interval);
+                        interval.replace(tokio::task::spawn(async move {
+                            let mut interval =
+                                tokio::time::interval(*INTERVAL_PERIOD.read().unwrap());
+
+                            while !token.is_cancelled() {
+                                tokio::select! {
+                                    _ = interval.tick() => {}
+                                    () = token.cancelled() => {
+                                        break;
+                                    }
+                                };
+                                tick_visualization().await;
+                            }
+                        }));
+                    } else {
+                        if !playing && interval.is_some() {
+                            interval.take();
+                            cancel_interval.cancel();
+                        }
+                        drop(cancel_interval);
+                    }
+
+                    drop(interval);
+                }
 
                 tick_visualization().await;
             }

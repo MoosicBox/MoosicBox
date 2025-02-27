@@ -211,6 +211,9 @@ async fn set_current_session(session: ApiSession) {
     let state = convert_state(&STATE).await;
 
     handle_session_update(&state, &update, &session).await;
+
+    #[cfg(feature = "_canvas")]
+    visualization::check_visualization_update().await;
 }
 
 fn on_playback_event(update: &UpdateSession, _current: &Playback) {
