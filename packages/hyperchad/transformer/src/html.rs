@@ -495,6 +495,7 @@ fn parse_event_action(action: &str) -> (String, ActionEffect) {
         action: ActionType::Event { name, action },
         delay_off,
         throttle,
+        unique,
     }) = parse_std_action(action)
     {
         return (
@@ -503,6 +504,7 @@ fn parse_event_action(action: &str) -> (String, ActionEffect) {
                 action: ActionType::Event { name, action },
                 delay_off,
                 throttle,
+                unique,
             },
         );
     }

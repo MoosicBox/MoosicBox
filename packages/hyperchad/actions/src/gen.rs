@@ -148,6 +148,7 @@ impl Arbitrary for Action {
                     },
                     delay_off: Option::arbitrary(g),
                     throttle: Option::arbitrary(g),
+                    unique: Option::arbitrary(g),
                 },
             }
         } else {
@@ -157,6 +158,7 @@ impl Arbitrary for Action {
                     action: ActionType::arbitrary(g),
                     delay_off: Option::arbitrary(g),
                     throttle: Option::arbitrary(g),
+                    unique: Option::arbitrary(g),
                 },
             }
         }

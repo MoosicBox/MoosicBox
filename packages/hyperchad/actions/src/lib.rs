@@ -73,8 +73,12 @@ impl std::fmt::Display for Action {
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub struct ActionEffect {
     pub action: ActionType,
+    #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
     pub delay_off: Option<u64>,
+    #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
     pub throttle: Option<u64>,
+    #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
+    pub unique: Option<bool>,
 }
 
 impl ActionEffect {
@@ -89,6 +93,12 @@ impl ActionEffect {
         self.throttle = Some(millis);
         self
     }
+
+    #[must_use]
+    pub const fn unique(mut self) -> Self {
+        self.unique = Some(true);
+        self
+    }
 }
 
 impl From<ActionType> for ActionEffect {
@@ -97,6 +107,7 @@ impl From<ActionType> for ActionEffect {
             action: value,
             delay_off: None,
             throttle: None,
+            unique: None,
         }
     }
 }
@@ -380,6 +391,7 @@ impl ActionType {
             action: self,
             throttle: Some(millis),
             delay_off: None,
+            unique: None,
         }
     }
 
@@ -389,6 +401,17 @@ impl ActionType {
             action: self,
             throttle: None,
             delay_off: Some(millis),
+            unique: None,
+        }
+    }
+
+    #[must_use]
+    pub const fn unique(self) -> ActionEffect {
+        ActionEffect {
+            action: self,
+            throttle: None,
+            delay_off: None,
+            unique: Some(true),
         }
     }
 }
@@ -408,6 +431,7 @@ impl From<ActionType> for Action {
                 action: value,
                 delay_off: None,
                 throttle: None,
+                unique: None,
             },
         }
     }
