@@ -110,6 +110,7 @@ vanilla-js = [
     "moosicbox_app_native_lib/plugin-canvas",
     "moosicbox_app_native_lib/plugin-event",
     "moosicbox_app_native_lib/plugin-nav",
+    "moosicbox_app_native_lib/plugin-routing",
     "moosicbox_app_native_lib/plugin-sse",
     "moosicbox_app_native_lib/vanilla-js",
 ]

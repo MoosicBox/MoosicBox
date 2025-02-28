@@ -106,6 +106,7 @@ htmx = ["html", "moosicbox_app_native_lib/htmx"]
 vanilla-js = [
     "html",
     "moosicbox_app_native_lib/plugin-nav",
+    "moosicbox_app_native_lib/plugin-routing",
     "moosicbox_app_native_lib/vanilla-js",
 ]
 

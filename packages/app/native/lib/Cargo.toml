@@ -125,7 +125,8 @@ plugin-actions-mouse-over = [
 ]
 plugin-actions-resize = ["hyperchad_renderer_vanilla_js?/plugin-actions-resize"]
 
-plugin-canvas = ["hyperchad_renderer_vanilla_js?/plugin-canvas"]
-plugin-event  = ["hyperchad_renderer_vanilla_js?/plugin-event"]
-plugin-nav    = ["hyperchad_renderer_vanilla_js?/plugin-nav"]
-plugin-sse    = ["hyperchad_renderer_vanilla_js?/plugin-sse"]
+plugin-canvas  = ["hyperchad_renderer_vanilla_js?/plugin-canvas"]
+plugin-event   = ["hyperchad_renderer_vanilla_js?/plugin-event"]
+plugin-nav     = ["hyperchad_renderer_vanilla_js?/plugin-nav"]
+plugin-routing = ["hyperchad_renderer_vanilla_js?/plugin-routing"]
+plugin-sse     = ["hyperchad_renderer_vanilla_js?/plugin-sse"]
