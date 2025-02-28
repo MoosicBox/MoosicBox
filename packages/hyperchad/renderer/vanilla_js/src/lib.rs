@@ -104,13 +104,13 @@ fn calc_value_to_js(value: &CalcValue, serializable: bool) -> String {
     let target = match value {
         CalcValue::EventValue => {
             return if serializable {
-                "{String:c.value}".to_string()
+                "{String:ctx.value}".to_string()
             } else {
-                "c.value".to_string()
+                "ctx.value".to_string()
             };
         }
-        CalcValue::MouseX { target: None } => return "c.event.clientX".to_string(),
-        CalcValue::MouseY { target: None } => return "c.event.clientY".to_string(),
+        CalcValue::MouseX { target: None } => return "ctx.event.clientX".to_string(),
+        CalcValue::MouseY { target: None } => return "ctx.event.clientY".to_string(),
         CalcValue::Visibility { target }
         | CalcValue::Id { target }
         | CalcValue::DataAttrValue { target, .. }
@@ -157,10 +157,10 @@ fn calc_value_to_js(value: &CalcValue, serializable: bool) -> String {
                 format!("{target}[0]?.getBoundingClientRect().top")
             }
             CalcValue::MouseX { .. } => {
-                format!("(c.event.clientX-{target}[0]?.getBoundingClientRect().left)")
+                format!("(ctx.event.clientX-{target}[0]?.getBoundingClientRect().left)")
             }
             CalcValue::MouseY { .. } => {
-                format!("(c.event.clientY-{target}[0]?.getBoundingClientRect().top)")
+                format!("(ctx.event.clientY-{target}[0]?.getBoundingClientRect().top)")
             }
         },
     )
@@ -228,11 +228,11 @@ fn element_target_to_js(target: &ElementTarget) -> String {
             format!("[document.getElementById('{id}')]")
         }
         ElementTarget::ChildClass(class) => {
-            format!("Array.from(c.element.querySelectorAll('.{class}'))")
+            format!("Array.from(ctx.element.querySelectorAll('.{class}'))")
         }
-        ElementTarget::SelfTarget => "[c.element]".to_string(),
+        ElementTarget::SelfTarget => "[ctx.element]".to_string(),
         ElementTarget::LastChild => {
-            "(c.element.children.length>0?[c.element.children[c.element.children.length-1]]:[])"
+            "(ctx.element.children.length>0?[ctx.element.children[ctx.element.children.length-1]]:[])"
                 .to_string()
         }
         #[allow(unreachable_patterns)]
@@ -252,29 +252,29 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
             match action {
                 StyleAction::SetVisibility(visibility) => (
                     format!(
-                        "ss({target},'visibility',{});",
+                        "ctx.ss({target},'visibility',{});",
                         match visibility {
                             Visibility::Visible => "'visible'",
                             Visibility::Hidden => "'hidden'",
                         },
                     ),
-                    Some(format!("rs({target},'visibility');")),
+                    Some(format!("ctx.rs({target},'visibility');")),
                 ),
                 StyleAction::SetDisplay(display) => (
                     format!(
-                        "ss({target},'display',{});",
+                        "ctx.ss({target},'display',{});",
                         if *display { "'initial'" } else { "null" }
                     ),
-                    Some(format!("rs({target},'display');")),
+                    Some(format!("ctx.rs({target},'display');")),
                 ),
                 StyleAction::SetBackground(background) => (
                     format!(
-                        "ss({target},'background',{});",
+                        "ctx.ss({target},'background',{});",
                         background
                             .as_ref()
                             .map_or_else(|| "null".to_string(), |color| format!("'{color}'"))
                     ),
-                    Some(format!("rs({target},'background');")),
+                    Some(format!("ctx.rs({target},'background');")),
                 ),
             }
         }

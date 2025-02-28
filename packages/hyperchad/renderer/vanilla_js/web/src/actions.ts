@@ -17,6 +17,7 @@ export function evaluate<T>(
     c: Record<string, unknown> & {
         element: HTMLElement;
         event?: Event | undefined;
+        value?: unknown;
     },
 ): T {
     // for all non-null elements
@@ -30,7 +31,6 @@ export function evaluate<T>(
     }
 
     // set_style
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     function ss<
         T extends Exclude<keyof CSSStyleDeclaration, 'length' | 'parentRule'>,
     >(
@@ -54,7 +54,6 @@ export function evaluate<T>(
     }
 
     // reset_style
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     function rs<
         T extends Exclude<keyof CSSStyleDeclaration, 'length' | 'parentRule'>,
     >(elements: (HTMLElement | null)[], name: T) {
@@ -71,7 +70,6 @@ export function evaluate<T>(
         });
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     function throttle(f: () => T, duration: number): T | undefined {
         if (!c.element.id) return;
 
@@ -90,10 +88,21 @@ export function evaluate<T>(
         }
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const delay = setTimeout;
+    // prettier-ignore
+    // get_context
+    const g = () => ({
+        'a': a,
+        'drn': drn,
+        'ss': ss,
+        'rs': rs,
+        'throttle': throttle,
+        'delay': setTimeout,
+        'element': c.element,
+        'event': c.event,
+        'value': c.value,
+    });
 
-    return eval(script);
+    return eval(`const ctx=${g.name}();${script}`);
 }
 
 declare global {
