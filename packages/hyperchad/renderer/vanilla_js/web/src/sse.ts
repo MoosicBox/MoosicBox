@@ -57,17 +57,21 @@ fetchEventSource('$sse', {
                 const attrWidth = canvas.getAttribute('width');
                 const attrHeight = canvas.getAttribute('height');
 
-                if (!attrWidth || canvas.dataset.vNoWidth === 'true') {
-                    if (canvas.width !== canvas.clientWidth) {
-                        canvas.width = canvas.clientWidth;
-                        canvas.dataset.vNoWidth = 'true';
-                    }
+                if (
+                    !attrWidth ||
+                    (canvas.dataset.vNoWidth === 'true' &&
+                        canvas.width !== canvas.clientWidth)
+                ) {
+                    canvas.width = canvas.clientWidth;
+                    canvas.dataset.vNoWidth = 'true';
                 }
-                if (!attrHeight || canvas.dataset.vNoHeight === 'true') {
-                    if (canvas.height !== canvas.clientHeight) {
-                        canvas.height = canvas.clientHeight;
-                        canvas.dataset.vNoHeight = 'true';
-                    }
+                if (
+                    !attrHeight ||
+                    (canvas.dataset.vNoHeight === 'true' &&
+                        canvas.height !== canvas.clientHeight)
+                ) {
+                    canvas.height = canvas.clientHeight;
+                    canvas.dataset.vNoHeight = 'true';
                 }
 
                 const ctx = canvas.getContext('2d');
