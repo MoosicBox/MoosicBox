@@ -42,7 +42,7 @@ maud         = { workspace = true }
 md5          = { workspace = true, optional = true }
 
 [features]
-default = ["debug", "esbuild", "swc"]
+default = ["all-plugins", "debug", "esbuild", "swc"]
 
 fail-on-warnings = []
 
@@ -53,6 +53,14 @@ script = []
 
 esbuild = []
 swc     = []
+
+all-plugins = [
+    "plugin-actions",
+    "plugin-canvas",
+    "plugin-event",
+    "plugin-nav",
+    "plugin-sse",
+]
 
 _actions = []
 plugin-actions = [
@@ -74,5 +82,7 @@ plugin-actions-mouse-down = ["_actions"]
 plugin-actions-mouse-over = ["_actions"]
 plugin-actions-resize = ["_actions"]
 
-plugin-nav = []
-plugin-sse = []
+plugin-canvas = []
+plugin-event  = []
+plugin-nav    = []
+plugin-sse    = []

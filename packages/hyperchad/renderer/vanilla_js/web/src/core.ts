@@ -50,6 +50,28 @@ export function onAttr(attr: string, handler: Handler<'onAttr'>): void {
     array.push(handler);
 }
 
+export type MessageHandler = (data: string) => void;
+type MessageHandlers = { [type: string]: MessageHandler[] };
+
+const messageHandlers: MessageHandlers = {} as MessageHandlers;
+
+export function onMessage(type: string, handler: MessageHandler): void {
+    let array = messageHandlers[type];
+
+    if (!array) {
+        array = [];
+        messageHandlers[type] = array;
+    }
+
+    array.push(handler);
+}
+
+export function triggerMessage(type: string, data: string): void {
+    messageHandlers[type]?.forEach((handler) => {
+        handler(data);
+    });
+}
+
 export function triggerHandlers<T extends EventType>(
     event: T,
     payload: EventPayloads[T],
@@ -268,4 +290,21 @@ onAttr('hx-trigger', ({ element, attr }) => {
 
 on('domLoad', ({ element }) => {
     processElement(element);
+});
+
+onMessage('view', swapDom);
+onMessage('partial_view', (data) => {
+    const element = htmlToElement(data);
+    if (element.children.length === 1) {
+        const replacement = element.children[0] as HTMLElement;
+        const target = document.getElementById(element.children[0].id);
+        if (target) {
+            target.replaceWith(replacement);
+            triggerHandlers('domLoad', {
+                element: replacement,
+                initial: false,
+                navigation: false,
+            });
+        }
+    }
 });
