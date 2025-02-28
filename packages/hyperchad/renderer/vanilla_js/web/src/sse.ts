@@ -54,24 +54,26 @@ fetchEventSource('$sse', {
 
                 const canvas = element as HTMLCanvasElement;
 
-                const attrWidth = canvas.getAttribute('width');
-                const attrHeight = canvas.getAttribute('height');
+                if (!canvas.dataset.vNoWidth) {
+                    canvas.dataset.vNoWidth = canvas.getAttribute('width')
+                        ? 'false'
+                        : 'true';
+                    canvas.dataset.vNoHeight = canvas.getAttribute('height')
+                        ? 'false'
+                        : 'true';
+                }
 
                 if (
-                    !attrWidth ||
-                    (canvas.dataset.vNoWidth === 'true' &&
-                        canvas.width !== canvas.clientWidth)
+                    canvas.dataset.vNoWidth &&
+                    canvas.width !== canvas.clientWidth
                 ) {
                     canvas.width = canvas.clientWidth;
-                    canvas.dataset.vNoWidth = 'true';
                 }
                 if (
-                    !attrHeight ||
-                    (canvas.dataset.vNoHeight === 'true' &&
-                        canvas.height !== canvas.clientHeight)
+                    canvas.dataset.vNoHeight &&
+                    canvas.height !== canvas.clientHeight
                 ) {
                     canvas.height = canvas.clientHeight;
-                    canvas.dataset.vNoHeight = 'true';
                 }
 
                 const ctx = canvas.getContext('2d');
