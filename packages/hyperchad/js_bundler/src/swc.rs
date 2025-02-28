@@ -69,6 +69,7 @@ pub fn bundle(target: &Path, out: &Path, minify: bool) {
                             }),
                             mangle: Some(MangleOptions {
                                 top_level: Some(true),
+                                eval: true,
                                 ..Default::default()
                             }),
                             ..Default::default()
