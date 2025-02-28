@@ -125,6 +125,8 @@ async fn visualization_updated(
             Pos(left, 0.0),
             Pos(clear_buffer_right, visualization_height),
         ));
+    } else {
+        canvas_actions.push(canvas::CanvasAction::Clear);
     }
 
     stroke_color(Color::from_hex("222"), &mut canvas_actions);
