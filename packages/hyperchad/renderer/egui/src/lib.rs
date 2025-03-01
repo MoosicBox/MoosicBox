@@ -1529,7 +1529,7 @@ impl EguiApp {
                     Self::get_relative_render_rect(render_context, ui, container)
                 }
             }
-            Some(Position::Fixed) => {
+            Some(Position::Fixed | Position::Sticky) => {
                 let rect = egui::Rect::from_min_size(
                     egui::pos2(
                         container.calculated_x.unwrap(),
@@ -1573,7 +1573,7 @@ impl EguiApp {
                 );
                 relative_container = Some((egui::Rect::from_min_size(pos, size), container));
             }
-            Some(Position::Absolute | Position::Fixed) => {
+            Some(Position::Absolute | Position::Fixed | Position::Sticky) => {
                 let abs_rect =
                     Self::get_render_rect(render_context, ui, container, relative_container);
 

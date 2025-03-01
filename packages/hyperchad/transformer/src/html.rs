@@ -312,6 +312,7 @@ fn parse_cursor(value: &str) -> Result<Cursor, ParseAttrError> {
 fn parse_position(value: &str) -> Result<Position, ParseAttrError> {
     Ok(match value {
         "static" => Position::Static,
+        "sticky" => Position::Sticky,
         "relative" => Position::Relative,
         "absolute" => Position::Absolute,
         "fixed" => Position::Fixed,

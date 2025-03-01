@@ -776,7 +776,7 @@ impl Container {
         direction: LayoutDirection,
         size: f32,
     ) {
-        if self.position == Some(Position::Fixed) {
+        if self.is_fixed() {
             self.calculated_width.replace(0.0);
             self.calculated_height.replace(0.0);
             return;

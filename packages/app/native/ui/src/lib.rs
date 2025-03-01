@@ -20,7 +20,9 @@ use hyperchad_actions::{
     },
     ActionType,
 };
-use hyperchad_transformer_models::{AlignItems, JustifyContent, LayoutOverflow, Visibility};
+use hyperchad_transformer_models::{
+    AlignItems, JustifyContent, LayoutOverflow, Position, Visibility,
+};
 use maud::{html, Markup};
 use moosicbox_music_models::{api::ApiTrack, id::Id, AlbumSort, ApiSource, TrackApiSource};
 use moosicbox_session_models::{ApiSession, ApiUpdateSession};
@@ -688,6 +690,8 @@ pub fn modal(id: &str, header: &Markup, content: &Markup) -> Markup {
                     sx-padding-x=(30)
                     sx-padding-top=(20)
                     sx-justify-content=(JustifyContent::SpaceBetween)
+                    sx-position=(Position::Sticky)
+                    sx-top=(0)
                 {
                     div sx-dir="row" { (header) }
                     div sx-dir="row" sx-justify-content=(JustifyContent::End) {

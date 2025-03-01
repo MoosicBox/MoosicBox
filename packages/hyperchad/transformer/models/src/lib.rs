@@ -254,6 +254,7 @@ pub enum Position {
     Static,
     Relative,
     Absolute,
+    Sticky,
     Fixed,
 }
 
@@ -262,7 +263,7 @@ impl Position {
     pub const fn is_relative(self) -> bool {
         match self {
             Self::Static | Self::Relative => true,
-            Self::Absolute | Self::Fixed => false,
+            Self::Absolute | Self::Fixed | Self::Sticky => false,
         }
     }
 }
@@ -273,6 +274,7 @@ impl std::fmt::Display for Position {
             Self::Static => f.write_str("static"),
             Self::Relative => f.write_str("relative"),
             Self::Absolute => f.write_str("absolute"),
+            Self::Sticky => f.write_str("sticky"),
             Self::Fixed => f.write_str("fixed"),
         }
     }

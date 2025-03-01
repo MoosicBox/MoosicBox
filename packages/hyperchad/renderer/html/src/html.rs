@@ -280,6 +280,9 @@ pub fn element_style_to_html(
                     write_css_attr!(b"left", b"0");
                 }
             }
+            Position::Sticky => {
+                write_css_attr!(b"position", b"sticky");
+            }
             Position::Static => {
                 write_css_attr!(b"position", b"static");
             }
