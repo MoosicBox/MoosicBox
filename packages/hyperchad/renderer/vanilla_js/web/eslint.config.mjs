@@ -1,3 +1,4 @@
+import globals from 'globals';
 import typescriptEslint from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
 import path from 'node:path';
@@ -71,7 +72,14 @@ export default [
     },
     {
         files: [...jsFiles, ...tsFiles],
+        languageOptions: {
+            globals: {
+                ...globals.node,
+                ...globals.browser,
+            },
+        },
         rules: {
+            '@typescript-eslint/ban-ts-comment': 'off',
             '@typescript-eslint/naming-convention': [
                 'error',
                 {

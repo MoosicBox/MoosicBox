@@ -8,6 +8,7 @@
         "moduleResolution": "node",
         "jsxImportSource": "solid-js",
         "jsx": "preserve",
+        "allowJs": true,
         "strict": true,
         "baseUrl": ".",
         "outDir": "./dist",

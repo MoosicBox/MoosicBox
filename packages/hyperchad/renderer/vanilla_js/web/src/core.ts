@@ -1,23 +1,28 @@
 export const EVENT = {
     domLoad: 'DOM_LOAD',
     swapDom: 'SWAP_DOM',
-    swap: 'SWAP',
+    swapHtml: 'SWAP_HTML',
+    swapStyle: 'SWAP_STYLE',
 } as const;
 
 export type EventPayloads = {
     domLoad: {
         initial: boolean;
         navigation: boolean;
-        element: HTMLElement;
+        elements: HTMLElement[];
     };
     swapDom: {
         html: string | HTMLElement;
         url?: string | undefined;
     };
-    swap: {
+    swapHtml: {
         target: string | HTMLElement;
         html: string | HTMLElement;
         inner: boolean;
+    };
+    swapStyle: {
+        id: string;
+        style: string | HTMLElement;
     };
     onAttr: {
         element: HTMLElement;
@@ -61,7 +66,7 @@ export function onAttr(attr: string, handler: Handler<'onAttr'>): void {
     array.push(handler);
 }
 
-export type MessageHandler = (data: string) => void;
+export type MessageHandler = (data: string, id?: string | undefined) => void;
 type MessageHandlers = { [type: string]: MessageHandler[] };
 
 const messageHandlers: MessageHandlers = {} as MessageHandlers;
@@ -98,9 +103,44 @@ document.addEventListener('DOMContentLoaded', (event) => {
     triggerHandlers('domLoad', {
         initial: true,
         navigation: false,
-        element: html,
+        elements: [html],
     });
 });
+
+export function removeElementStyles(triggerId: string | undefined): void {
+    if (triggerId) {
+        document.querySelectorAll(`[v-id="${triggerId}"]`).forEach((style) => {
+            style.remove();
+        });
+    }
+}
+
+export function htmlToStyle(
+    html: string,
+    triggerId: string,
+): HTMLStyleElement | undefined {
+    const styleContainer = document.createElement('div');
+    styleContainer.innerHTML = html;
+    const style = styleContainer.children[0] as HTMLStyleElement;
+    style.setAttribute('v-id', triggerId);
+    return style;
+}
+
+export function splitHtml(html: string): {
+    html: string;
+    style?: string | undefined;
+} {
+    const start = html.indexOf('\n\n');
+
+    if (start > 0) {
+        return {
+            html: html.substring(start + 2),
+            style: html.substring(0, start),
+        };
+    }
+
+    return { html };
+}
 
 export function decodeHtml(html: string) {
     const txt = document.createElement('textarea');
@@ -111,11 +151,12 @@ export function decodeHtml(html: string) {
 export function processElement(element: HTMLElement) {
     for (const key in attrHandlers) {
         const attr = element.getAttribute(key);
-        if (attr) {
-            attrHandlers[key].forEach((handler) =>
-                handler({ element, attr: decodeHtml(attr) }),
-            );
-        }
+
+        if (!attr) continue;
+
+        attrHandlers[key].forEach((handler) =>
+            handler({ element, attr: decodeHtml(attr) }),
+        );
     }
     for (const child of element.children) {
         processElement(child as HTMLElement);
@@ -130,6 +171,28 @@ export function handleError<T>(type: string, func: () => T): T | undefined {
     }
 }
 
-on('domLoad', ({ element }) => {
-    processElement(element);
+on('domLoad', ({ elements }) => elements.forEach(processElement));
+on('swapStyle', ({ id, style }) => {
+    removeElementStyles(id);
+
+    if (!style) return;
+
+    const styleElement =
+        typeof style === 'string' ? htmlToStyle(style, id) : style;
+
+    if (!styleElement) return;
+
+    document.head.appendChild(styleElement);
+});
+onMessage('view', (html) => triggerHandlers('swapDom', { html }));
+onMessage('partial_view', (data, id) => {
+    if (!id) return;
+
+    const { html, style } = splitHtml(data);
+
+    if (style && style !== '<style></style>') {
+        triggerHandlers('swapStyle', { style, id });
+    }
+
+    triggerHandlers('swapHtml', { html, inner: false, target: id });
 });

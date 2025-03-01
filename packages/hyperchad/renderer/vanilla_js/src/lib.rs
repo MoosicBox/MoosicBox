@@ -47,6 +47,8 @@ pub static SCRIPT_NAME_HASHED: std::sync::LazyLock<String> = std::sync::LazyLock
 
     #[cfg(feature = "plugin-nav")]
     bytes.extend(b"nav;");
+    #[cfg(feature = "plugin-idiomorph")]
+    bytes.extend(b"idiomorph;");
     #[cfg(feature = "plugin-sse")]
     bytes.extend(b"sse;");
     #[cfg(feature = "plugin-routing")]

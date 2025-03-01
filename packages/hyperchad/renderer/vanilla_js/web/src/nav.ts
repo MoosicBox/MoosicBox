@@ -57,19 +57,19 @@ onAttr('href', ({ element, attr }) => {
     if (!isSelfTarget(element.getAttribute('target'))) return; // Don't handle for new tab
     if (element.getAttribute('hx-preload') === 'false') return;
 
-    element.addEventListener('mouseenter', (_event) => {
+    element.onmouseenter = (_event) => {
         const existing = typeof cache[attr] === 'string' || pending[attr];
 
         if (!existing) {
             pending[attr] = initiateFetchDocument(attr);
         }
-    });
+    };
 
-    element.addEventListener('click', (event) => {
+    element.onclick = (event) => {
         if (event.ctrlKey) return; // Don't handle for new tab
 
         event.preventDefault();
 
         return navigate(attr);
-    });
+    };
 });

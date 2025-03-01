@@ -30,6 +30,9 @@ fn main() {
     }
 
     let plugins: Vec<&str> = vec![
+        #[cfg(feature = "plugin-idiomorph")]
+        "idiomorph",
+        #[cfg(not(feature = "plugin-idiomorph"))]
         "replace",
         #[cfg(feature = "plugin-nav")]
         "nav",
