@@ -1,10 +1,5 @@
 [[config]]
-os                = 'ubuntu'
-required-features = ["swc"]
-
-[[config]]
-os                = 'ubuntu'
-required-features = ["esbuild"]
+os = 'ubuntu'
 
 [[config.dependencies]]
 toolchain = 'pnpm'

@@ -21,7 +21,6 @@ hyperchad_renderer_htmx = { version = "0.1.0", path = "../../../hyperchad/render
 hyperchad_renderer_vanilla_js = { version = "0.1.0", path = "../../../hyperchad/renderer/vanilla_js", optional = true, default-features = false, features = [
     "hash",
     "script",
-    "swc",
 ] }
 hyperchad_router = { version = "0.1.0", path = "../../../hyperchad/router", default-features = false }
 moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }

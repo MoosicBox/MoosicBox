@@ -77,7 +77,7 @@ fn main() {
     )
     .unwrap();
 
-    let resp = bundle(&index, &dist_dir, &web_dir);
+    let resp = bundle(&index, &dist_dir);
 
     std::fs::remove_file(&index).unwrap();
 
@@ -97,19 +97,10 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 }
 
-fn bundle(index: &Path, dist_dir: &Path, web_dir: &Path) -> Result<(), &'static str> {
-    if cfg!(feature = "swc") {
-        println!("Bundling using swc...");
-        hyperchad_js_bundler::swc::bundle(index, &dist_dir.join("index.js"), false);
-        hyperchad_js_bundler::bundle(index, &dist_dir.join("index.min.js"));
-    } else if cfg!(feature = "esbuild") {
-        println!("Bundling using esbuild...");
-        hyperchad_js_bundler::node::run_npm_command(&["install"], web_dir);
-        hyperchad_js_bundler::node::run_npm_command(&["build"], web_dir);
-        hyperchad_js_bundler::bundle(&dist_dir.join("index.js"), &dist_dir.join("index.min.js"));
-    } else {
-        return Err("Invalid features specified for hyperchad_renderer_vanilla_js build. Requires at least `swc` or `esbuild`");
-    };
+fn bundle(index: &Path, dist_dir: &Path) -> Result<(), &'static str> {
+    println!("Bundling using swc...");
+    hyperchad_js_bundler::swc::bundle(index, &dist_dir.join("index.js"), false);
+    hyperchad_js_bundler::bundle(index, &dist_dir.join("index.min.js"));
 
     Ok(())
 }
