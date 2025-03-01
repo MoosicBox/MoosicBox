@@ -301,6 +301,24 @@ impl std::fmt::Display for Visibility {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
+pub enum ImageLoading {
+    #[default]
+    Eager,
+    Lazy,
+}
+
+impl std::fmt::Display for ImageLoading {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Eager => f.write_str("eager"),
+            Self::Lazy => f.write_str("lazy"),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum ImageFit {
     #[default]
     Default,

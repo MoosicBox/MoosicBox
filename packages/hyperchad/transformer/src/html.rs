@@ -3,8 +3,9 @@ use std::{borrow::Cow, collections::HashMap, iter::once};
 use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
 use hyperchad_color::{Color, ParseHexError};
 use hyperchad_transformer_models::{
-    AlignItems, Cursor, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, LinkTarget,
-    Position, Route, SwapTarget, TextAlign, TextDecorationLine, TextDecorationStyle, Visibility,
+    AlignItems, Cursor, ImageFit, ImageLoading, JustifyContent, LayoutDirection, LayoutOverflow,
+    LinkTarget, Position, Route, SwapTarget, TextAlign, TextDecorationLine, TextDecorationStyle,
+    Visibility,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -458,6 +459,16 @@ fn parse_image_fit(value: &str) -> Result<ImageFit, ParseAttrError> {
         "cover" => ImageFit::Cover,
         "fill" => ImageFit::Fill,
         "none" => ImageFit::None,
+        value => {
+            return Err(ParseAttrError::InvalidValue(value.to_string()));
+        }
+    })
+}
+
+fn parse_image_loading(value: &str) -> Result<ImageLoading, ParseAttrError> {
+    Ok(match value {
+        "eager" => ImageLoading::Eager,
+        "lazy" => ImageLoading::Lazy,
         value => {
             return Err(ParseAttrError::InvalidValue(value.to_string()));
         }
@@ -1342,6 +1353,11 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                         fit: get_tag_attr_value_decoded(tag, "sx-fit")
                             .as_deref()
                             .map(parse_image_fit)
+                            .transpose()
+                            .unwrap(),
+                        loading: get_tag_attr_value_decoded(tag, "loading")
+                            .as_deref()
+                            .map(parse_image_loading)
                             .transpose()
                             .unwrap(),
                         source_set: get_tag_attr_value_owned(tag, "srcset"),

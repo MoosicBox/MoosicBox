@@ -1,5 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
+use hyperchad_transformer_models::ImageLoading;
 use maud::{html, Markup, PreEscaped};
 use moosicbox_music_models::{
     api::{ApiAlbum, ApiArtist},
@@ -38,7 +39,7 @@ fn artist_cover_img(artist: &ApiArtist, size: u16) -> Markup {
     let request_size = (f64::from(size) * 1.33).round() as u16;
 
     html! {
-        img src=(artist_cover_url(&artist, request_size, request_size)) sx-width=(size) sx-height=(size);
+        img loading=(ImageLoading::Lazy) src=(artist_cover_url(&artist, request_size, request_size)) sx-width=(size) sx-height=(size);
     }
 }
 
@@ -122,7 +123,7 @@ pub fn artists_page_content(artists: &[ApiArtist]) -> Markup {
             @for artist in artists {
                 a href=(artist_page_url(&artist.artist_id.to_string())) sx-width=(size) sx-height=(size + 30) {
                     div sx-width=(size) sx-height=(size + 30) {
-                        img src=(artist_cover_url(artist, request_size, request_size)) sx-width=(size) sx-height=(size);
+                        img loading=(ImageLoading::Lazy) src=(artist_cover_url(artist, request_size, request_size)) sx-width=(size) sx-height=(size);
                         (artist.title)
                     }
                 }

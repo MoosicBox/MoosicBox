@@ -6,8 +6,8 @@ use std::{any::Any, collections::HashMap, io::Write};
 use hyperchad_actions::Action;
 use hyperchad_color::Color;
 use hyperchad_transformer_models::{
-    AlignItems, Cursor, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, LinkTarget,
-    Position, Route, TextAlign, TextDecorationLine, TextDecorationStyle, Visibility,
+    AlignItems, Cursor, ImageFit, ImageLoading, JustifyContent, LayoutDirection, LayoutOverflow,
+    LinkTarget, Position, Route, TextAlign, TextDecorationLine, TextDecorationStyle, Visibility,
 };
 use parse::parse_number;
 use serde::{de::Error, Deserialize, Serialize};
@@ -1513,6 +1513,7 @@ pub enum Element {
         fit: Option<ImageFit>,
         source_set: Option<String>,
         sizes: Option<Number>,
+        loading: Option<ImageLoading>,
     },
     Anchor {
         target: Option<LinkTarget>,
@@ -1654,9 +1655,11 @@ impl Container {
                 source_set,
                 sizes,
                 alt,
+                loading,
                 ..
             } => {
                 attrs.add_opt("sx-fit", *fit);
+                attrs.add_opt("loading", *loading);
                 attrs.add_opt("srcset", source_set.as_ref());
                 attrs.add_opt("sizes", sizes.as_ref());
                 attrs.add_opt("alt", alt.as_ref());

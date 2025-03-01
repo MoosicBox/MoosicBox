@@ -6,8 +6,9 @@ use hyperchad_renderer::{Color, HtmlTagRenderer};
 use hyperchad_router::Container;
 use hyperchad_transformer::{
     models::{
-        AlignItems, Cursor, ImageFit, JustifyContent, LayoutDirection, LayoutOverflow, LinkTarget,
-        Position, TextAlign, TextDecorationLine, TextDecorationStyle, Visibility,
+        AlignItems, Cursor, ImageFit, ImageLoading, JustifyContent, LayoutDirection,
+        LayoutOverflow, LinkTarget, Position, TextAlign, TextDecorationLine, TextDecorationStyle,
+        Visibility,
     },
     Calculation, Element, HeaderSize, Input, Number,
 };
@@ -749,6 +750,7 @@ pub fn element_to_html(
             alt,
             source_set,
             sizes,
+            loading,
             ..
         } => {
             const TAG_NAME: &[u8] = b"img";
@@ -772,6 +774,14 @@ pub fn element_to_html(
             if let Some(alt) = alt {
                 f.write_all(b" alt=\"")?;
                 f.write_all(alt.as_bytes())?;
+                f.write_all(b"\"")?;
+            }
+            if let Some(loading) = loading {
+                f.write_all(b" loading=\"")?;
+                f.write_all(match loading {
+                    ImageLoading::Eager => b"eager",
+                    ImageLoading::Lazy => b"lazy",
+                })?;
                 f.write_all(b"\"")?;
             }
             tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;

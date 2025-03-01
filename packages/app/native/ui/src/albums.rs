@@ -6,7 +6,7 @@ use hyperchad_actions::{
     },
     ActionType,
 };
-use hyperchad_transformer_models::Visibility;
+use hyperchad_transformer_models::{ImageLoading, Visibility};
 use maud::{html, Markup, PreEscaped};
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_music_models::{
@@ -69,7 +69,7 @@ pub fn album_cover_img_from_album(album: &ApiAlbum, size: u16) -> Markup {
     let request_size = (f64::from(size) * 1.33).round() as u16;
 
     html! {
-        img src=(PreEscaped(album_cover_url_from_album(album, request_size, request_size))) sx-width=(size) sx-height=(size);
+        img loading=(ImageLoading::Lazy) src=(PreEscaped(album_cover_url_from_album(album, request_size, request_size))) sx-width=(size) sx-height=(size);
     }
 }
 
@@ -80,7 +80,7 @@ pub fn album_cover_img_from_track(track: &ApiTrack, size: u16) -> Markup {
     let request_size = (f64::from(size) * 1.33).round() as u16;
 
     html! {
-        img src=(PreEscaped(album_cover_url_from_track(track, request_size, request_size))) sx-width=(size) sx-height=(size);
+        img loading=(ImageLoading::Lazy) src=(PreEscaped(album_cover_url_from_track(track, request_size, request_size))) sx-width=(size) sx-height=(size);
     }
 }
 
@@ -110,7 +110,7 @@ pub fn album_page_immediate(
             div sx-dir="row" {
                 @let size = 200;
                 div sx-width=(size) sx-height=(size + 30) {
-                    img src=(public_img!("album.svg")) sx-width=(size) sx-height=(size);
+                    img loading=(ImageLoading::Lazy) src=(public_img!("album.svg")) sx-width=(size) sx-height=(size);
                 }
                 div {
                     h1 { "loading..." }
@@ -834,7 +834,7 @@ pub fn load_albums(
         {
             @for _ in 0..100 {
                 div sx-width=(size) sx-height=(size + 30) {
-                    img src=(public_img!("album.svg")) sx-width=(size) sx-height=(size);
+                    img loading=(ImageLoading::Lazy) src=(public_img!("album.svg")) sx-width=(size) sx-height=(size);
                 }
             }
         }
