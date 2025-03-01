@@ -1,5 +1,5 @@
 import { triggerMessage } from './core';
-import { fetchEventSource } from './fetch-event-source';
+import { fetchEventSource } from './vendored/fetch-event-source';
 
 fetchEventSource('$sse', {
     method: 'GET',
