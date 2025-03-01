@@ -88,6 +88,10 @@ export function evaluate<T>(
         }
     }
 
+    function delay(f: () => void, ms: number) {
+        setTimeout(f, ms);
+    }
+
     // prettier-ignore
     // get_context
     const g = () => ({
@@ -96,7 +100,7 @@ export function evaluate<T>(
         'ss': ss,
         'rs': rs,
         'throttle': throttle,
-        'delay': setTimeout,
+        'delay': delay,
         'element': c.element,
         'event': c.event,
         'value': c.value,
