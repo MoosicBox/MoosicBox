@@ -1,4 +1,4 @@
-import { onAttr, swapInnerHtml, swapOuterHtml } from './core';
+import { onAttr, triggerHandlers } from './core';
 
 const METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'] as const;
 
@@ -8,11 +8,11 @@ function handleResponse(element: HTMLElement, html: string): boolean {
 
     switch (swapLower) {
         case 'outerhtml': {
-            swapOuterHtml(element, html);
+            triggerHandlers('swap', { target: element, html, inner: false });
             return false;
         }
         case 'innerhtml': {
-            swapInnerHtml(element, html);
+            triggerHandlers('swap', { target: element, html, inner: true });
             return false;
         }
         default: {
@@ -20,7 +20,7 @@ function handleResponse(element: HTMLElement, html: string): boolean {
                 const target = document.querySelector(swap) as HTMLElement;
 
                 if (target) {
-                    swapOuterHtml(target, html);
+                    triggerHandlers('swap', { target, html, inner: false });
                 }
             }
         }

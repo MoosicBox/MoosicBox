@@ -1,4 +1,4 @@
-import { onAttr, swapDom } from './core';
+import { onAttr, triggerHandlers } from './core';
 
 const cache: { [url: string]: string } = {};
 const pending: { [url: string]: Promise<string | void> } = {};
@@ -23,7 +23,10 @@ export function navigate(url: string) {
     const existing = cache[url];
 
     if (typeof existing === 'string') {
-        swapDom(existing, url);
+        triggerHandlers('swapDom', {
+            html: existing,
+            url,
+        });
         return false;
     } else if (typeof cache[url] !== 'string' && !pending[url]) {
         pending[url] = initiateFetchDocument(url);
@@ -35,7 +38,10 @@ export function navigate(url: string) {
         console.debug('Awaiting pending request', url);
         request.then((html) => {
             if (typeof html === 'string') {
-                swapDom(html, url);
+                triggerHandlers('swapDom', {
+                    html,
+                    url,
+                });
                 return;
             }
             console.debug('Invalid response', url, html);

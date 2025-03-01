@@ -1,5 +1,7 @@
 export const EVENT = {
     domLoad: 'DOM_LOAD',
+    swapDom: 'SWAP_DOM',
+    swap: 'SWAP',
 } as const;
 
 export type EventPayloads = {
@@ -7,6 +9,15 @@ export type EventPayloads = {
         initial: boolean;
         navigation: boolean;
         element: HTMLElement;
+    };
+    swapDom: {
+        html: string | HTMLElement;
+        url?: string | undefined;
+    };
+    swap: {
+        target: string | HTMLElement;
+        html: string | HTMLElement;
+        inner: boolean;
     };
     onAttr: {
         element: HTMLElement;
@@ -91,56 +102,6 @@ document.addEventListener('DOMContentLoaded', (event) => {
     });
 });
 
-function removeElementStyles(triggerId: string | undefined): void {
-    if (triggerId) {
-        document.querySelectorAll(`[v-id="${triggerId}"]`).forEach((style) => {
-            style.remove();
-        });
-    }
-}
-
-export function htmlToStyle(
-    html: string,
-    triggerId: string,
-): HTMLStyleElement | undefined {
-    if (html === '<style></style>') return undefined;
-
-    const styleContainer = document.createElement('div');
-    styleContainer.innerHTML = html;
-    const style = styleContainer.children[0] as HTMLStyleElement;
-    style.setAttribute('v-id', triggerId);
-    return style;
-}
-
-export function htmlToElement(html: string): HTMLElement {
-    const start = html.indexOf('\n\n');
-
-    let elementText = html;
-    let styleText;
-
-    if (start > 0) {
-        elementText = html.substring(start + 2);
-        styleText = html.substring(0, start);
-    }
-
-    const element = document.createElement('div');
-    element.innerHTML = elementText;
-
-    if (styleText && element.children.length === 1) {
-        const triggerId = element.children[0].id;
-
-        if (triggerId) {
-            removeElementStyles(triggerId);
-            const style = htmlToStyle(styleText, triggerId);
-            if (style) {
-                document.head.appendChild(style);
-            }
-        }
-    }
-
-    return element;
-}
-
 export function decodeHtml(html: string) {
     const txt = document.createElement('textarea');
     txt.innerHTML = html;
@@ -161,65 +122,6 @@ export function processElement(element: HTMLElement) {
     }
 }
 
-export function swapOuterHtml(element: HTMLElement, html: string) {
-    const children = element.parentNode?.children;
-    if (!children) return;
-
-    removeElementStyles(element.id);
-
-    const newElement = htmlToElement(html);
-
-    const parent = element.parentNode;
-    const child = newElement.lastChild;
-    const newChildren = [];
-    if (child) {
-        const newChild = newElement.removeChild(child) as HTMLElement;
-        element.replaceWith(newChild);
-        newChildren.push(newChild);
-    }
-
-    while (newElement.children.length > 0) {
-        const newChild = newElement.removeChild(
-            newElement.lastChild!,
-        ) as HTMLElement;
-        parent.insertBefore(newChild, child);
-        newChildren.push(newChild);
-    }
-
-    for (const element of newChildren) {
-        triggerHandlers('domLoad', {
-            initial: false,
-            navigation: false,
-            element,
-        });
-    }
-}
-
-export function swapInnerHtml(element: HTMLElement, html: string) {
-    const newElement = htmlToElement(html);
-    element.innerHTML = newElement.innerHTML;
-    for (const child of element.children) {
-        triggerHandlers('domLoad', {
-            initial: false,
-            navigation: false,
-            element: child as HTMLElement,
-        });
-    }
-}
-
-export function swapDom(html: string, url?: string | undefined) {
-    if (typeof url === 'string') {
-        console.debug('Navigating to', url);
-        history.pushState({}, '', url);
-    }
-    document.documentElement.innerHTML = html;
-    triggerHandlers('domLoad', {
-        initial: true,
-        navigation: false,
-        element: document.documentElement,
-    });
-}
-
 export function handleError<T>(type: string, func: () => T): T | undefined {
     try {
         return func();
@@ -230,21 +132,4 @@ export function handleError<T>(type: string, func: () => T): T | undefined {
 
 on('domLoad', ({ element }) => {
     processElement(element);
-});
-
-onMessage('view', swapDom);
-onMessage('partial_view', (data) => {
-    const element = htmlToElement(data);
-    if (element.children.length === 1) {
-        const replacement = element.children[0] as HTMLElement;
-        const target = document.getElementById(element.children[0].id);
-        if (target) {
-            target.replaceWith(replacement);
-            triggerHandlers('domLoad', {
-                element: replacement,
-                initial: false,
-                navigation: false,
-            });
-        }
-    }
 });

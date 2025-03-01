@@ -30,6 +30,7 @@ fn main() {
     }
 
     let plugins: Vec<&str> = vec![
+        "replace",
         #[cfg(feature = "plugin-nav")]
         "nav",
         #[cfg(feature = "plugin-sse")]
