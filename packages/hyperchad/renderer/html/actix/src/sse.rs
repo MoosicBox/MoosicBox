@@ -19,6 +19,7 @@ use crate::{ActixApp, ActixResponseProcessor};
 #[derive(Debug, Clone)]
 pub struct EventData {
     event: Option<String>,
+    id: Option<String>,
     data: String,
 }
 
@@ -26,8 +27,15 @@ impl EventData {
     pub fn new(data: impl Into<String>) -> Self {
         Self {
             event: None,
+            id: None,
             data: data.into(),
         }
+    }
+
+    /// Sets `id` name field, returning a new data message.
+    pub fn id(mut self, id: impl Into<String>) -> Self {
+        self.id = Some(id.into());
+        self
     }
 
     /// Sets `event` name field, returning a new data message.
@@ -69,7 +77,12 @@ impl Event {
         let mut buf = BytesMut::new();
 
         match self {
-            Self::Data(EventData { event, data }) => {
+            Self::Data(EventData { id, event, data }) => {
+                if let Some(text) = id {
+                    buf.put_slice(b"id: ");
+                    buf.put_slice(text.as_bytes());
+                    buf.put_u8(b'\n');
+                }
                 if let Some(text) = event {
                     buf.put_slice(b"event: ");
                     buf.put_slice(text.as_bytes());
@@ -121,16 +134,21 @@ pub async fn handle_sse<
                     }
                     RendererEvent::Partial(partial_view) => {
                         log::debug!("handle_sse: SSE sending partial_view={partial_view:?}");
+                        let id = partial_view.target.to_string();
                         let body = app
                             .processor
                             .to_body(Content::PartialView(partial_view), data)
                             .await?;
 
-                        crate::sse::EventData::new(body).event("partial_view")
+                        crate::sse::EventData::new(body)
+                            .id(id)
+                            .event("partial_view")
                     }
                     RendererEvent::CanvasUpdate(canvas_update) => {
                         log::debug!("handle_sse: SSE sending canvas_update");
+                        let id = canvas_update.target.clone();
                         crate::sse::EventData::new(serde_json::to_string(&canvas_update).unwrap())
+                            .id(id)
                             .event("canvas_update")
                     }
                     RendererEvent::Event { name, value } => {
