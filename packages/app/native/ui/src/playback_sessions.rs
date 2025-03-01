@@ -1,5 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
+use hyperchad_transformer_models::AlignItems;
 use maud::{html, Markup};
 use moosicbox_session_models::ApiSession;
 
@@ -25,7 +26,12 @@ pub fn playback_sessions(sessions: &[ApiSession]) -> Markup {
                                     track.sample_rate,
                                     track.bit_depth,
                                 );
-                                a href=(album_page_url) sx-width=(icon_size) sx-height=(icon_size) {
+                                a
+                                    href=(album_page_url)
+                                    sx-align-items=(AlignItems::Center)
+                                    sx-width=(icon_size)
+                                    sx-height=(icon_size)
+                                {
                                     (crate::albums::album_cover_img_from_track(track, icon_size))
                                 }
                                 (track.title)

@@ -20,7 +20,7 @@ use hyperchad_actions::{
     },
     ActionType,
 };
-use hyperchad_transformer_models::{AlignItems, JustifyContent, Visibility};
+use hyperchad_transformer_models::{AlignItems, JustifyContent, LayoutOverflow, Visibility};
 use maud::{html, Markup};
 use moosicbox_music_models::{api::ApiTrack, id::Id, AlbumSort, ApiSource, TrackApiSource};
 use moosicbox_session_models::{ApiSession, ApiUpdateSession};
@@ -671,39 +671,47 @@ pub fn modal(id: &str, header: &Markup, content: &Markup) -> Markup {
             div
                 sx-flex=(1)
                 sx-background="#080a0b"
-                sx-overflow-y="auto"
                 sx-margin-x="calc(20vw)"
                 sx-min-height="calc(min(90vh, 300px))"
+                sx-max-height="90vh"
                 sx-border-radius=(15)
                 fx-click-outside=(
                     get_visibility_str_id(id)
                         .eq(Visibility::Visible)
                         .then(ActionType::hide_str_id(id))
                 )
+                sx-overflow-y=(LayoutOverflow::Auto)
             {
-                div sx-padding-x=(30) sx-padding-y=(20) {
-                    div sx-dir="row" sx-justify-content=(JustifyContent::SpaceBetween) {
-                        div sx-dir="row" {
-                            (header)
-                        }
-                        div sx-dir="row" sx-justify-content=(JustifyContent::End) {
-                            @let icon_size = 20;
-                            button
+                div
+                    sx-dir="row"
+                    sx-background="#080a0b"
+                    sx-padding-x=(30)
+                    sx-padding-top=(20)
+                    sx-justify-content=(JustifyContent::SpaceBetween)
+                {
+                    div sx-dir="row" { (header) }
+                    div sx-dir="row" sx-justify-content=(JustifyContent::End) {
+                        @let icon_size = 20;
+                        button
+                            sx-width=(icon_size)
+                            sx-height=(icon_size)
+                            fx-click=(
+                                get_visibility_str_id(id)
+                                    .eq(Visibility::Visible)
+                                    .then(ActionType::hide_str_id(id))
+                            )
+                        {
+                            img
                                 sx-width=(icon_size)
                                 sx-height=(icon_size)
-                                fx-click=(
-                                    get_visibility_str_id(id)
-                                        .eq(Visibility::Visible)
-                                        .then(ActionType::hide_str_id(id))
-                                )
-                            {
-                                img
-                                    sx-width=(icon_size)
-                                    sx-height=(icon_size)
-                                    src=(public_img!("cross-white.svg"));
-                            }
+                                src=(public_img!("cross-white.svg"));
                         }
                     }
+                }
+                div
+                    sx-padding-x=(30)
+                    sx-padding-bottom=(20)
+                {
                     (content)
                 }
             }
