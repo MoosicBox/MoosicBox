@@ -1120,6 +1120,13 @@ fn fixed_positioned_elements_mut(
     visible_elements_mut(elements).filter(|x| x.is_fixed())
 }
 
+impl Container {
+    #[must_use]
+    pub const fn is_fixed(&self) -> bool {
+        matches!(self.position, Some(Position::Fixed | Position::Sticky))
+    }
+}
+
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Container {
     #[must_use]
@@ -1130,11 +1137,6 @@ impl Container {
     #[must_use]
     pub fn is_hidden(&self) -> bool {
         self.hidden == Some(true)
-    }
-
-    #[must_use]
-    pub const fn is_fixed(&self) -> bool {
-        matches!(self.position, Some(Position::Fixed | Position::Sticky))
     }
 
     pub fn visible_elements(&self) -> impl Iterator<Item = &Self> {
