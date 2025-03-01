@@ -204,13 +204,13 @@ fn action_effect_to_js_attr(effect: &ActionEffect) -> String {
     }
 
     let reset = if let Some(delay) = effect.delay_off {
-        reset.map(|x| format!("delay(()=>{{{x}}},{delay});"))
+        reset.map(|x| format!("ctx.delay(()=>{{{x}}},{delay});"))
     } else {
         reset
     };
 
     let action = if let Some(throttle) = effect.throttle {
-        format!("throttle(()=>{{{action}}},{throttle});")
+        format!("ctx.throttle(()=>{{{action}}},{throttle});")
     } else {
         action
     };
