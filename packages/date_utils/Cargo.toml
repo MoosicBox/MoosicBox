@@ -1,0 +1,23 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools"]
+description = "MoosicBox date utils package"
+edition     = "2021"
+keywords    = ["date", "time"]
+license     = "MPL-2.0"
+name        = "moosicbox_date_utils"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+log = { workspace = true }
+
+chrono = { workspace = true, optional = true }
+
+[features]
+default = ["chrono"]
+
+chrono = ["dep:chrono"]
+
+fail-on-warnings = []

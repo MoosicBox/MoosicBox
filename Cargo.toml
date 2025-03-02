@@ -27,6 +27,7 @@ members = [
     "packages/config",
     "packages/database",
     "packages/database_connection",
+    "packages/date_utils",
     "packages/downloader",
     "packages/env_utils",
     "packages/files",

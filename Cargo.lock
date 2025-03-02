@@ -6783,6 +6783,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_date_utils"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "log",
+]
+
+[[package]]
 name = "moosicbox_downloader"
 version = "0.1.0"
 dependencies = [
