@@ -48,8 +48,8 @@ importers:
         specifier: ^3.5.2
         version: 3.5.2
       sst:
-        specifier: ^3.9.19
-        version: 3.9.19
+        specifier: ^3.9.20
+        version: 3.9.20
       typescript:
         specifier: ^5.8.2
         version: 5.8.2
@@ -402,8 +402,8 @@ packages:
   '@types/keyv@3.1.4':
     resolution: {integrity: sha512-BQ5aZNSCpj7D6K2ksrRCTmKRLEpnPvWDiLPfoGyhZ++8YtiK9d/3DBKPJgry359X/P1PfruyYwvnvwFjuEiEIg==}
 
-  '@types/node@22.13.7':
-    resolution: {integrity: sha512-oU2q+BsQldB9lYxHNp/5aZO+/Bs0Usa74Abo9mAKulz4ahQyXRHK6UVKYIN8KSC8HXwhWSi7b49JnX+txuac0w==}
+  '@types/node@22.13.8':
+    resolution: {integrity: sha512-G3EfaZS+iOGYWLLRCEAXdWK9my08oHNZ+FHluRiggIYJPOXzhOiDgpVCUHaUvyIC5/fj7C/p637jdzC666AOKQ==}
 
   '@types/responselike@1.0.3':
     resolution: {integrity: sha512-H/+L+UkTV33uf49PH5pCAUBVPNj2nDBXTN+qS1dOwyyg24l3CcicicCA7ca+HMvJBZcFgl5r8e+RR6elsb4Lyw==}
@@ -1813,33 +1813,33 @@ packages:
     resolution: {integrity: sha512-MGrFH9Z4NP9Iyhqn16sDtBpRRNJ0Y2hNa6D65h736fVSaPCHr4DM4sWUNvVaSuC+0OBGhwsrydQwmgfg5LncqQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
-  sst-darwin-arm64@3.9.19:
-    resolution: {integrity: sha512-9svQqI6DvEk/QXjMxSEQkRhoMDjMUsSYahN1f8Oc0npsFiD1Egdw1DziPy5Zdh74tPvi4lnnujF8Qq+eM7QKnQ==}
+  sst-darwin-arm64@3.9.20:
+    resolution: {integrity: sha512-R4iU3X3YREbwFM7Zuu2t5u4H+oSMqd6KioYzelZ3vxRAhhUvCevbVkZBixnDmxTO9dJSEWruP3ZFqppwCf3DJA==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.9.19:
-    resolution: {integrity: sha512-1W86ofb8PkriyzYznAF7WUa4xI51pXNtdXCX58x0xgnRUw0t7S7pemvMuiMgZzcPhjdlS9JKaPurHLhsWkFdWQ==}
+  sst-darwin-x64@3.9.20:
+    resolution: {integrity: sha512-XU/YMiXx8pJT6m8t4YumGju6JGeA7GvO6tEMCQx5SwHIU6DTO5737+PydOL1scgz+9uL0jiJNzMYvFt7/kb0kw==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.9.19:
-    resolution: {integrity: sha512-dgB6ClCsB59PJQJahcYdsmSgQNA2Q+hKed+X8QQAbPiWu5gmJEQBBmMt/UC5X7/2Gn3BNZRbTXruTrvr8crN7w==}
+  sst-linux-arm64@3.9.20:
+    resolution: {integrity: sha512-tHsgTJkd1/a0+v3QR63LJQzLs+8MUgBbsD2/6kPbakE9RViWpOe1sTiYa9GfQi3MCkK356Xsagh/czk6pRYr5A==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.9.19:
-    resolution: {integrity: sha512-Hf7TtnKx08myhcbwIesSMQ9bX9sRGAzzpHQLZclSgJOatgCqg7ayhKCxT3BiTRFZ26BfRGoJbUVLc5NSiZtviQ==}
+  sst-linux-x64@3.9.20:
+    resolution: {integrity: sha512-SfO/ZrDJdHsXn0D812+yx0hy90rBqEUR6jeDtNN93GwO5IkXjx7R+Phvi5E953+l+2Vet3cy6SnbZd6eWHcoEQ==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.9.19:
-    resolution: {integrity: sha512-RiQqW2LEWjSzhBdY37bf3YAgx5Sv2tHCQQ5Fj9rnuCMbYtdhMX0CdklCvicZLk57qkYezCrQfc8RTrC+np2zaw==}
+  sst-linux-x86@3.9.20:
+    resolution: {integrity: sha512-mhxgKz8J6hVk1mJTVsII6dogSxpOgCWu09X+2YtU8cdMVrCEq8AcUv+3QAdjlDAyZSCxlzZUyaVL0RNnapECcw==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.9.19:
-    resolution: {integrity: sha512-iZHxIRcsSaogzc+5j+1NEbBeJ31egBZJurdAHeuvCm/i9PYDbwgur44GLs1HPhb0x/3Um8V1yBE6nphQImCJDQ==}
+  sst@3.9.20:
+    resolution: {integrity: sha512-txmYYBjnPLXZkpw2cs9h4pLqX5V5W+cfE9nU0BVtB7tjHkkCrGIMBY02bIKLv+M2Vk3MOxingtHWimWQ4FgSZQ==}
     hasBin: true
 
   string-width@4.2.3:
@@ -2484,7 +2484,7 @@ snapshots:
     dependencies:
       '@types/http-cache-semantics': 4.0.4
       '@types/keyv': 3.1.4
-      '@types/node': 22.13.7
+      '@types/node': 22.13.8
       '@types/responselike': 1.0.3
 
   '@types/estree@1.0.6': {}
@@ -2499,15 +2499,15 @@ snapshots:
 
   '@types/keyv@3.1.4':
     dependencies:
-      '@types/node': 22.13.7
+      '@types/node': 22.13.8
 
-  '@types/node@22.13.7':
+  '@types/node@22.13.8':
     dependencies:
       undici-types: 6.20.0
 
   '@types/responselike@1.0.3':
     dependencies:
-      '@types/node': 22.13.7
+      '@types/node': 22.13.8
 
   '@types/semver@7.5.8': {}
 
@@ -3898,7 +3898,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
-      '@types/node': 22.13.7
+      '@types/node': 22.13.8
       long: 5.3.1
 
   pump@3.0.2:
@@ -4118,32 +4118,32 @@ snapshots:
     dependencies:
       minipass: 7.1.2
 
-  sst-darwin-arm64@3.9.19:
+  sst-darwin-arm64@3.9.20:
     optional: true
 
-  sst-darwin-x64@3.9.19:
+  sst-darwin-x64@3.9.20:
     optional: true
 
-  sst-linux-arm64@3.9.19:
+  sst-linux-arm64@3.9.20:
     optional: true
 
-  sst-linux-x64@3.9.19:
+  sst-linux-x64@3.9.20:
     optional: true
 
-  sst-linux-x86@3.9.19:
+  sst-linux-x86@3.9.20:
     optional: true
 
-  sst@3.9.19:
+  sst@3.9.20:
     dependencies:
       aws4fetch: 1.0.20
       jose: 5.2.3
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.9.19
-      sst-darwin-x64: 3.9.19
-      sst-linux-arm64: 3.9.19
-      sst-linux-x64: 3.9.19
-      sst-linux-x86: 3.9.19
+      sst-darwin-arm64: 3.9.20
+      sst-darwin-x64: 3.9.20
+      sst-linux-arm64: 3.9.20
+      sst-linux-x64: 3.9.20
+      sst-linux-x86: 3.9.20
 
   string-width@4.2.3:
     dependencies:
