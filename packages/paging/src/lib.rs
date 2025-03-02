@@ -293,6 +293,45 @@ impl<T> Page<T> {
             },
         }
     }
+
+    /// # Errors
+    ///
+    /// * If any of the items fail to `try_into`
+    pub fn try_into<TU>(self) -> Result<Page<TU>, T::Error>
+    where
+        T: TryInto<TU> + 'static,
+    {
+        Ok(match self {
+            Self::WithTotal {
+                items,
+                offset,
+                limit,
+                total,
+            } => Page::WithTotal {
+                items: items
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<_>, _>>()?,
+                offset,
+                limit,
+                total,
+            },
+            Self::WithHasMore {
+                items,
+                offset,
+                limit,
+                has_more,
+            } => Page::WithHasMore {
+                items: items
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<_>, _>>()?,
+                offset,
+                limit,
+                has_more,
+            },
+        })
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -636,6 +675,115 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
         }
     }
 
+    /// # Errors
+    ///
+    /// * If the `try_into` call fails
+    pub fn inner_try_into<TU: Send + 'static, EU: Send + 'static>(
+        self,
+    ) -> Result<PagingResponse<TU, EU>, T::Error>
+    where
+        T: TryInto<TU> + Send + 'static,
+        T::Error: Into<EU>,
+        E: Into<EU> + Send + 'static,
+    {
+        let page = self.page.try_into()?;
+
+        let fetch = self.fetch;
+
+        Ok(PagingResponse {
+            page,
+            fetch: Arc::new(Mutex::new(Box::new(move |offset, count| {
+                let fetch = fetch.clone();
+
+                let closure = async move {
+                    let x: Result<Self, E> = {
+                        let mut fetch = fetch.lock().await;
+                        fetch(offset, count).await
+                    };
+
+                    let x: Result<Result<PagingResponse<TU, EU>, T::Error>, E> =
+                        x.map(Self::inner_try_into);
+
+                    let x: Result<Result<PagingResponse<TU, EU>, T::Error>, EU> =
+                        x.map_err(Into::into);
+
+                    let x: Result<Result<PagingResponse<TU, EU>, EU>, EU> = match x {
+                        Ok(x) => match x {
+                            Ok(x) => Ok(Ok(x)),
+                            Err(e) => Err(e.into()),
+                        },
+                        Err(e) => Ok(Err(e)),
+                    };
+
+                    match x {
+                        Ok(x) => match x {
+                            Ok(x) => Ok(x),
+                            Err(e) => Err(e),
+                        },
+                        Err(e) => Err(e),
+                    }
+                };
+
+                Box::pin(closure)
+            }))),
+        })
+    }
+
+    /// # Errors
+    ///
+    /// * If the `try_into` call fails
+    pub fn inner_try_into_map_err<TU: Send + 'static, EU: Send + 'static, F>(
+        self,
+        map_err: F,
+    ) -> Result<PagingResponse<TU, EU>, EU>
+    where
+        T: TryInto<TU> + Send + 'static,
+        E: Into<EU> + Send + 'static,
+        F: FnMut(T::Error) -> EU + Send + Clone + 'static,
+    {
+        let page = self.page.try_into().map_err(map_err.clone())?;
+
+        let fetch = self.fetch;
+
+        Ok(PagingResponse {
+            page,
+            fetch: Arc::new(Mutex::new(Box::new(move |offset, count| {
+                let fetch = fetch.clone();
+                let map_err = map_err.clone();
+
+                let closure = async move {
+                    let x: Result<Self, E> = {
+                        let mut fetch = fetch.lock().await;
+                        fetch(offset, count).await
+                    };
+
+                    let x: Result<Result<PagingResponse<TU, EU>, EU>, E> =
+                        x.map(|e| Self::inner_try_into_map_err(e, map_err));
+
+                    let x: Result<Result<PagingResponse<TU, EU>, EU>, EU> = x.map_err(Into::into);
+
+                    let x: Result<Result<PagingResponse<TU, EU>, EU>, EU> = match x {
+                        Ok(x) => match x {
+                            Ok(x) => Ok(Ok(x)),
+                            Err(e) => Err(e),
+                        },
+                        Err(e) => Ok(Err(e)),
+                    };
+
+                    match x {
+                        Ok(x) => match x {
+                            Ok(x) => Ok(x),
+                            Err(e) => Err(e),
+                        },
+                        Err(e) => Err(e),
+                    }
+                };
+
+                Box::pin(closure)
+            }))),
+        })
+    }
+
     #[must_use]
     pub fn ok_into<TU: Send + 'static>(self) -> PagingResponse<TU, E>
     where
@@ -659,6 +807,92 @@ impl<T: Send, E: Send> PagingResponse<T, E> {
                 Box::pin(closure)
             }))),
         }
+    }
+
+    /// # Errors
+    ///
+    /// * If the `try_into` call fails
+    pub fn ok_try_into<TU: Send + 'static>(self) -> Result<PagingResponse<TU, E>, T::Error>
+    where
+        T: TryInto<TU> + Send + 'static,
+        T::Error: Into<E>,
+        E: Send + 'static,
+    {
+        let page = self.page.try_into()?;
+
+        let fetch = self.fetch;
+
+        Ok(PagingResponse {
+            page,
+            fetch: Arc::new(Mutex::new(Box::new(move |offset, count| {
+                let fetch = fetch.clone();
+
+                let closure = async move {
+                    let x: Result<Self, E> = {
+                        let mut fetch = fetch.lock().await;
+                        fetch(offset, count).await
+                    };
+
+                    let x: Result<Result<PagingResponse<TU, E>, E>, E> =
+                        x.map(|e| Self::ok_try_into(e).map_err(Into::into));
+
+                    match x {
+                        Ok(x) => match x {
+                            Ok(x) => Ok(x),
+                            Err(e) => Err(e),
+                        },
+                        Err(e) => Err(e),
+                    }
+                };
+
+                Box::pin(closure)
+            }))),
+        })
+    }
+
+    /// # Errors
+    ///
+    /// * If the `try_into` call fails
+    pub fn ok_try_into_map_err<TU: Send + 'static, F>(
+        self,
+        map_err: F,
+    ) -> Result<PagingResponse<TU, E>, E>
+    where
+        T: TryInto<TU> + Send + 'static,
+        E: Send + 'static,
+        F: FnMut(T::Error) -> E + Send + Clone + 'static,
+    {
+        let page = self.page.try_into().map_err(map_err.clone())?;
+
+        let fetch = self.fetch;
+
+        Ok(PagingResponse {
+            page,
+            fetch: Arc::new(Mutex::new(Box::new(move |offset, count| {
+                let fetch = fetch.clone();
+                let map_err = map_err.clone();
+
+                let closure = async move {
+                    let x: Result<Self, E> = {
+                        let mut fetch = fetch.lock().await;
+                        fetch(offset, count).await
+                    };
+
+                    let x: Result<Result<PagingResponse<TU, E>, E>, E> =
+                        x.map(|e| Self::ok_try_into_map_err(e, map_err));
+
+                    match x {
+                        Ok(x) => match x {
+                            Ok(x) => Ok(x),
+                            Err(e) => Err(e),
+                        },
+                        Err(e) => Err(e),
+                    }
+                };
+
+                Box::pin(closure)
+            }))),
+        })
     }
 
     #[must_use]
