@@ -462,7 +462,7 @@ fn scan_album_cover(
                     .await
                     .add_album(
                         &album.title,
-                        &album.date_released,
+                        &album.date_released.map(|x| x.and_utc().to_rfc3339()),
                         path.parent().and_then(|x| x.to_str()),
                         &None,
                         ApiSource::Library,

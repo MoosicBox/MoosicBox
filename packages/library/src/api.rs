@@ -315,7 +315,7 @@ pub async fn favorite_albums_endpoint(
             },
         )
         .await?
-        .ok_into()
+        .ok_try_into_map_err(|e| LibraryFavoriteAlbumsError::RequestFailed(format!("{e:?}")))?
         .into(),
     ))
 }
@@ -1027,7 +1027,8 @@ impl From<ReindexError> for actix_web::Error {
         match err {
             ReindexError::DatabaseFetch(_)
             | ReindexError::RecreateIndex(_)
-            | ReindexError::PopulateIndex(_) => ErrorInternalServerError(err.to_string()),
+            | ReindexError::PopulateIndex(_)
+            | ReindexError::GetAlbums(_) => ErrorInternalServerError(err.to_string()),
         }
     }
 }

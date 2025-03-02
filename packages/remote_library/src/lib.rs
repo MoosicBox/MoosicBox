@@ -130,7 +130,11 @@ impl MusicApi for RemoteLibraryMusicApi {
             .await
             .map_err(|e| AlbumError::Other(Box::new(e)))?;
 
-        Ok(Some(value.into()))
+        Ok(Some(
+            value
+                .try_into()
+                .map_err(|e| AlbumError::Other(Box::new(e)))?,
+        ))
     }
 
     async fn album_versions(

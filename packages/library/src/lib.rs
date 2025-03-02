@@ -1200,11 +1200,19 @@ impl MusicApi for LibraryMusicApi {
     }
 
     async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
-        Ok(self.library_albums(request).await?.inner_into())
+        Ok(self
+            .library_albums(request)
+            .await?
+            .inner_try_into_map_err(|e| AlbumsError::Other(Box::new(e)))?)
     }
 
     async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError> {
-        Ok(self.library_album(album_id).await?.map(Into::into))
+        Ok(self
+            .library_album(album_id)
+            .await?
+            .map(TryInto::try_into)
+            .transpose()
+            .map_err(|e| AlbumError::Other(Box::new(e)))?)
     }
 
     async fn album_versions(
@@ -1271,7 +1279,7 @@ impl MusicApi for LibraryMusicApi {
                 Some(album_type.into()),
             )
             .await?
-            .inner_into()
+            .inner_try_into_map_err(|e| ArtistAlbumsError::Other(Box::new(e)))?
         } else {
             let pages = futures::future::join_all(
                 vec![
@@ -1318,7 +1326,7 @@ impl MusicApi for LibraryMusicApi {
                     })
                 }))),
             }
-            .inner_into()
+            .inner_try_into_map_err(|e| ArtistAlbumsError::Other(Box::new(e)))?
         })
     }
 
@@ -1515,6 +1523,8 @@ pub enum ReindexError {
     RecreateIndex(#[from] RecreateIndexError),
     #[error(transparent)]
     PopulateIndex(#[from] PopulateIndexError),
+    #[error("Failed to get albums: {0:?}")]
+    GetAlbums(Box<dyn std::error::Error>),
 }
 
 /// # Panics
@@ -1543,9 +1553,10 @@ pub async fn reindex_global_search_index(db: &LibraryDatabase) -> Result<(), Rei
     let albums = db::get_albums(db)
         .await?
         .into_iter()
-        .map(Into::into)
-        .map(|album: Album| album.as_data_values())
-        .collect::<Vec<_>>();
+        .map(TryInto::try_into)
+        .map(|album: Result<Album, _>| album.map(|x| x.as_data_values()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| ReindexError::GetAlbums(Box::new(e)))?;
 
     populate_global_search_index(&albums, false).await?;
 

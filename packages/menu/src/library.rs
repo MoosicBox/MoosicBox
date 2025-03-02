@@ -3,6 +3,7 @@ pub mod artists;
 
 use albums::propagate_api_sources_from_library_album;
 use moosicbox_database::profiles::LibraryDatabase;
+use moosicbox_date_utils::chrono;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_library::{
     cache::{get_or_set_to_cache, CacheItemType, CacheRequest},
@@ -57,6 +58,8 @@ pub enum GetAlbumError {
     DatabaseFetch(#[from] DatabaseFetchError),
     #[error("Invalid request")]
     InvalidRequest,
+    #[error(transparent)]
+    ChronoParse(#[from] chrono::ParseError),
 }
 
 impl<T> From<PoisonError<T>> for GetAlbumError {
@@ -80,24 +83,25 @@ pub async fn get_album_from_source(
                 .iter()
                 .find(|album| &Into::<Id>::into(album.id) == album_id)
                 .cloned()
-                .map(Into::into)
+                .map(TryInto::try_into)
         }
         #[cfg(feature = "tidal")]
         ApiSource::Tidal => moosicbox_tidal::album(db, album_id, None, None, None, None)
             .await
             .ok()
-            .map(Into::into),
+            .map(TryInto::try_into),
         #[cfg(feature = "qobuz")]
         ApiSource::Qobuz => moosicbox_qobuz::album(db, album_id, None, None)
             .await
             .ok()
-            .map(Into::into),
+            .map(TryInto::try_into),
         #[cfg(feature = "yt")]
         ApiSource::Yt => moosicbox_yt::album(db, album_id, None, None, None, None)
             .await
             .ok()
-            .map(Into::into),
-    };
+            .map(TryInto::try_into),
+    }
+    .transpose()?;
 
     if let Some(album) = &mut album {
         let library_albums = get_albums(db).await?;

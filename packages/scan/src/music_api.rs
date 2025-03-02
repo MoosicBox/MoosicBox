@@ -155,7 +155,7 @@ pub async fn scan_albums(
                 .await
                 .add_album(
                     album.title.as_str(),
-                    &album.date_released.clone(),
+                    &album.date_released.map(|x| x.and_utc().to_rfc3339()),
                     None,
                     &Some(&album.id),
                     api.source(),

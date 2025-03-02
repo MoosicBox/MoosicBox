@@ -1,3 +1,4 @@
+use moosicbox_date_utils::chrono::{self, parse_date_time};
 use moosicbox_music_models::{
     api::{ApiAlbum, ApiAlbumVersionQuality, ApiArtist, ApiTrack},
     Album, AlbumSource, ApiSource, ApiSources, Artist, AudioFormat, Track, TrackApiSource,
@@ -15,15 +16,28 @@ impl From<LibraryArtist> for ApiArtist {
 
 impl From<&LibraryAlbum> for ApiAlbum {
     fn from(value: &LibraryAlbum) -> Self {
-        let album: Album = value.clone().into();
-        album.into()
+        value.clone().into()
     }
 }
 
 impl From<LibraryAlbum> for ApiAlbum {
     fn from(value: LibraryAlbum) -> Self {
-        let album: Album = value.into();
-        album.into()
+        Self {
+            album_id: value.id.into(),
+            title: value.title,
+            artist: value.artist,
+            artist_id: value.artist_id.into(),
+            album_type: value.album_type.into(),
+            date_released: value.date_released,
+            date_added: value.date_added,
+            contains_cover: value.artwork.is_some(),
+            blur: value.blur,
+            versions: value.versions,
+            album_source: value.source,
+            api_source: ApiSource::Library,
+            artist_sources: value.artist_sources,
+            album_sources: value.album_sources,
+        }
     }
 }
 
@@ -71,16 +85,26 @@ impl From<ApiLibraryAlbum> for ApiAlbum {
     }
 }
 
-impl From<ApiLibraryAlbum> for Album {
-    fn from(value: ApiLibraryAlbum) -> Self {
-        Self {
+impl TryFrom<ApiLibraryAlbum> for Album {
+    type Error = chrono::ParseError;
+
+    fn try_from(value: ApiLibraryAlbum) -> Result<Self, Self::Error> {
+        Ok(Self {
             id: value.album_id.into(),
             title: value.title,
             artist: value.artist,
             artist_id: value.artist_id.into(),
             album_type: value.album_type.into(),
-            date_released: value.date_released,
-            date_added: value.date_added,
+            date_released: value
+                .date_released
+                .as_deref()
+                .map(parse_date_time)
+                .transpose()?,
+            date_added: value
+                .date_added
+                .as_deref()
+                .map(parse_date_time)
+                .transpose()?,
             artwork: if value.contains_cover {
                 Some(value.album_id.to_string())
             } else {
@@ -93,7 +117,7 @@ impl From<ApiLibraryAlbum> for Album {
             api_source: ApiSource::Library,
             album_sources: value.album_sources,
             artist_sources: value.artist_sources,
-        }
+        })
     }
 }
 

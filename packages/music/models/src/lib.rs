@@ -4,6 +4,7 @@
 use std::{ops::Deref, path::PathBuf, str::FromStr, sync::LazyLock};
 
 use id::Id;
+use moosicbox_date_utils::chrono::{self, parse_date_time, NaiveDateTime};
 use moosicbox_json_utils::{ParseError, ToValueType};
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, EnumString};
@@ -427,15 +428,14 @@ impl std::fmt::Display for AlbumType {
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Album {
     pub id: Id,
     pub title: String,
     pub artist: String,
     pub artist_id: Id,
     pub album_type: AlbumType,
-    pub date_released: Option<String>,
-    pub date_added: Option<String>,
+    pub date_released: Option<NaiveDateTime>,
+    pub date_added: Option<NaiveDateTime>,
     pub artwork: Option<String>,
     pub directory: Option<String>,
     pub blur: bool,
@@ -446,23 +446,35 @@ pub struct Album {
     pub album_sources: ApiSources,
 }
 
-impl From<&Track> for Album {
-    fn from(value: &Track) -> Self {
-        value.clone().into()
+impl TryFrom<&Track> for Album {
+    type Error = chrono::ParseError;
+
+    fn try_from(value: &Track) -> Result<Self, Self::Error> {
+        value.clone().try_into()
     }
 }
 
-impl From<Track> for Album {
-    fn from(value: Track) -> Self {
-        Self {
+impl TryFrom<Track> for Album {
+    type Error = chrono::ParseError;
+
+    fn try_from(value: Track) -> Result<Self, Self::Error> {
+        Ok(Self {
             directory: value.directory(),
             id: value.album_id,
             title: value.album,
             artist: value.artist,
             artist_id: value.artist_id,
             album_type: value.album_type,
-            date_released: value.date_released,
-            date_added: value.date_added,
+            date_released: value
+                .date_released
+                .as_deref()
+                .map(parse_date_time)
+                .transpose()?,
+            date_added: value
+                .date_added
+                .as_deref()
+                .map(parse_date_time)
+                .transpose()?,
             artwork: value.artwork,
             blur: value.blur,
             versions: vec![],
@@ -470,7 +482,7 @@ impl From<Track> for Album {
             api_source: value.api_source,
             artist_sources: value.sources.clone(),
             album_sources: value.sources,
-        }
+        })
     }
 }
 

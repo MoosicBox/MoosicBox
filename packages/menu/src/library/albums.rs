@@ -3,6 +3,7 @@ use std::sync::{Arc, PoisonError};
 use moosicbox_database::{
     profiles::LibraryDatabase, query::FilterableQuery, DatabaseError, DatabaseValue,
 };
+use moosicbox_date_utils::chrono;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_library::{
     db::{delete_track_sizes_by_track_id, delete_tracks},
@@ -202,6 +203,8 @@ pub enum AddAlbumError {
     Scan(#[from] ScanError),
     #[error(transparent)]
     PopulateIndex(#[from] PopulateIndexError),
+    #[error(transparent)]
+    ChronoParse(#[from] chrono::ParseError),
     #[error("No album")]
     NoAlbum,
     #[error("Invalid album_id type")]
@@ -274,9 +277,9 @@ pub async fn add_album(
         &albums
             .clone()
             .into_iter()
-            .map(Into::into)
-            .map(|album: Album| album.as_data_values())
-            .collect::<Vec<_>>(),
+            .map(TryInto::try_into)
+            .map(|album: Result<Album, _>| album.map(|x| x.as_data_values()))
+            .collect::<Result<Vec<_>, _>>()?,
         false,
     )
     .await?;
@@ -336,6 +339,8 @@ pub enum RemoveAlbumError {
     RemoveAlbum(#[from] moosicbox_music_api::RemoveAlbumError),
     #[error(transparent)]
     DeleteFromIndex(#[from] DeleteFromIndexError),
+    #[error(transparent)]
+    ChronoParse(#[from] chrono::ParseError),
     #[error("No album")]
     NoAlbum,
     #[error("Invalid album_id type")]
@@ -495,7 +500,7 @@ pub async fn remove_album(
         .await?;
 
     {
-        let album: Album = album.clone().into();
+        let album: Album = album.clone().try_into()?;
 
         moosicbox_search::delete_from_global_search_index(&[album.as_delete_term()])?;
     }
@@ -519,6 +524,8 @@ pub enum ReFavoriteAlbumError {
     Albums(#[from] moosicbox_music_api::AlbumsError),
     #[error(transparent)]
     ArtistAlbums(#[from] moosicbox_music_api::ArtistAlbumsError),
+    #[error(transparent)]
+    ChronoParse(#[from] chrono::ParseError),
     #[error("Missing album")]
     MissingAlbum,
     #[error("Missing artist")]
@@ -548,7 +555,8 @@ pub async fn refavorite_album(
     let existing: Option<Album> = library_api
         .library_album_from_source(album_id, api.source())
         .await?
-        .map(Into::into);
+        .map(TryInto::try_into)
+        .transpose()?;
 
     let (artist, album) = if let Some(album) = existing {
         if let Some(artist_id) = album.artist_sources.get(api.source()) {

@@ -453,7 +453,7 @@ pub async fn album_endpoint(
     )
     .await?;
 
-    Ok(Json(album.into()))
+    Ok(Json(album.try_into().map_err(ErrorInternalServerError)?))
 }
 
 impl From<QobuzArtistAlbumsError> for actix_web::Error {
@@ -652,7 +652,10 @@ pub async fn favorite_albums_endpoint(
     .await?
     .into();
 
-    let albums: Page<ApiAlbum> = albums.map(Into::into);
+    let albums: Page<ApiAlbum> = albums
+        .map(TryInto::try_into)
+        .transpose()
+        .map_err(ErrorInternalServerError)?;
 
     Ok(Json(albums.into()))
 }

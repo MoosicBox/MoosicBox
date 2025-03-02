@@ -8,6 +8,7 @@ use std::{
 
 use futures::future::join_all;
 use moosicbox_database::{profiles::LibraryDatabase, DatabaseError, DatabaseValue, TryFromError};
+use moosicbox_date_utils::chrono;
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_library::{
@@ -521,6 +522,8 @@ pub enum UpdateDatabaseError {
     Join(#[from] JoinError),
     #[error(transparent)]
     TryFromId(#[from] TryFromIdError),
+    #[error(transparent)]
+    ChronoParse(#[from] chrono::ParseError),
 }
 
 #[derive(Clone)]
@@ -850,9 +853,9 @@ impl ScanOutput {
         let albums = db::get_albums(db)
             .await?
             .into_iter()
-            .map(Into::into)
-            .map(|album: Album| album.as_data_values())
-            .collect::<Vec<_>>();
+            .map(TryInto::try_into)
+            .map(|album: Result<Album, _>| album.map(|x| x.as_data_values()))
+            .collect::<Result<Vec<_>, _>>()?;
 
         populate_global_search_index(&albums, false).await?;
 

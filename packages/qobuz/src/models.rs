@@ -1,6 +1,7 @@
 use std::{fmt::Display, str::FromStr as _};
 
 use chrono::{DateTime, Utc};
+use moosicbox_date_utils::chrono::parse_date_time;
 use moosicbox_json_utils::{
     database::AsModelResult,
     serde_json::{ToNestedValue, ToValue},
@@ -217,16 +218,18 @@ pub struct QobuzAlbum {
     pub maximum_sampling_rate: f32,
 }
 
-impl From<QobuzAlbum> for Album {
-    fn from(value: QobuzAlbum) -> Self {
+impl TryFrom<QobuzAlbum> for Album {
+    type Error = chrono::ParseError;
+
+    fn try_from(value: QobuzAlbum) -> Result<Self, Self::Error> {
         let artwork = value.cover_url();
-        Self {
+        Ok(Self {
             id: value.id.as_str().into(),
             title: format_title(value.title.as_str(), value.version.as_deref()),
             artist: value.artist,
             artist_id: value.artist_id.into(),
             album_type: value.album_type.into(),
-            date_released: Some(value.release_date_original),
+            date_released: Some(parse_date_time(&value.release_date_original)?),
             date_added: None,
             artwork,
             directory: None,
@@ -237,14 +240,16 @@ impl From<QobuzAlbum> for Album {
             artist_sources: ApiSources::default()
                 .with_source(ApiSource::Qobuz, value.artist_id.into()),
             album_sources: ApiSources::default().with_source(ApiSource::Qobuz, value.id.into()),
-        }
+        })
     }
 }
 
-impl From<QobuzAlbum> for ApiAlbum {
-    fn from(value: QobuzAlbum) -> Self {
-        let album: Album = value.into();
-        album.into()
+impl TryFrom<QobuzAlbum> for ApiAlbum {
+    type Error = <QobuzAlbum as TryInto<Album>>::Error;
+
+    fn try_from(value: QobuzAlbum) -> Result<Self, Self::Error> {
+        let album: Album = value.try_into()?;
+        Ok(album.into())
     }
 }
 
@@ -286,7 +291,10 @@ impl TryFrom<Album> for QobuzAlbum {
             version: None,
             qobuz_id: 0,
             released_at: 0,
-            release_date_original: value.date_released.unwrap_or_default(),
+            release_date_original: value
+                .date_released
+                .map(|x| x.and_utc().to_rfc3339())
+                .unwrap_or_default(),
             duration: 0,
             parental_warning: false,
             popularity: 0,
@@ -674,17 +682,21 @@ impl From<QobuzRelease> for QobuzAlbum {
     }
 }
 
-impl From<QobuzRelease> for Album {
-    fn from(value: QobuzRelease) -> Self {
+impl TryFrom<QobuzRelease> for Album {
+    type Error = <QobuzAlbum as TryInto<Self>>::Error;
+
+    fn try_from(value: QobuzRelease) -> Result<Self, Self::Error> {
         let album: QobuzAlbum = value.into();
-        album.into()
+        album.try_into()
     }
 }
 
-impl From<QobuzRelease> for ApiAlbum {
-    fn from(value: QobuzRelease) -> Self {
-        let album: Album = value.into();
-        album.into()
+impl TryFrom<QobuzRelease> for ApiAlbum {
+    type Error = <QobuzRelease as TryInto<Album>>::Error;
+
+    fn try_from(value: QobuzRelease) -> Result<Self, Self::Error> {
+        let album: Album = value.try_into()?;
+        Ok(album.into())
     }
 }
 

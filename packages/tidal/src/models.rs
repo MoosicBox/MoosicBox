@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use moosicbox_date_utils::chrono::{self, parse_date_time};
 use moosicbox_json_utils::{
     database::AsModelResult,
     serde_json::{ToNestedValue, ToValue},
@@ -219,17 +220,23 @@ pub struct TidalAlbum {
     pub media_metadata_tags: Vec<String>,
 }
 
-impl From<TidalAlbum> for Album {
-    fn from(value: TidalAlbum) -> Self {
+impl TryFrom<TidalAlbum> for Album {
+    type Error = chrono::ParseError;
+
+    fn try_from(value: TidalAlbum) -> Result<Self, Self::Error> {
         let artwork = value.cover_url(TidalAlbumImageSize::Max);
 
-        Self {
+        Ok(Self {
             id: value.id.into(),
             title: value.title,
             artist: value.artist,
             artist_id: value.artist_id.into(),
             album_type: value.album_type.into(),
-            date_released: value.release_date,
+            date_released: value
+                .release_date
+                .as_deref()
+                .map(parse_date_time)
+                .transpose()?,
             date_added: None,
             artwork,
             directory: None,
@@ -240,14 +247,16 @@ impl From<TidalAlbum> for Album {
             artist_sources: ApiSources::default()
                 .with_source(ApiSource::Tidal, value.artist_id.into()),
             album_sources: ApiSources::default().with_source(ApiSource::Tidal, value.id.into()),
-        }
+        })
     }
 }
 
-impl From<TidalAlbum> for ApiAlbum {
-    fn from(value: TidalAlbum) -> Self {
-        let album: Album = value.into();
-        album.into()
+impl TryFrom<TidalAlbum> for ApiAlbum {
+    type Error = <Album as TryFrom<TidalAlbum>>::Error;
+
+    fn try_from(value: TidalAlbum) -> Result<Self, Self::Error> {
+        let album: Album = value.try_into()?;
+        Ok(album.into())
     }
 }
 
@@ -269,7 +278,7 @@ impl TryFrom<Album> for TidalAlbum {
             explicit: false,
             number_of_tracks: 0,
             popularity: 0,
-            release_date: value.date_released,
+            release_date: value.date_released.map(|x| x.and_utc().to_rfc3339()),
             media_metadata_tags: vec![],
         })
     }

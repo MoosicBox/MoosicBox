@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use moosicbox_date_utils::chrono::parse_date_time;
 use moosicbox_json_utils::{
     database::AsModelResult,
     serde_json::{ToNestedValue as _, ToValue as _},
@@ -179,15 +180,21 @@ pub struct YtAlbum {
     pub media_metadata_tags: Vec<String>,
 }
 
-impl From<YtAlbum> for Album {
-    fn from(value: YtAlbum) -> Self {
-        Self {
+impl TryFrom<YtAlbum> for Album {
+    type Error = chrono::ParseError;
+
+    fn try_from(value: YtAlbum) -> Result<Self, Self::Error> {
+        Ok(Self {
             id: value.id.as_str().into(),
             title: value.title,
             artist: value.artist,
             artist_id: value.artist_id.as_str().into(),
             album_type: value.album_type.into(),
-            date_released: value.release_date,
+            date_released: value
+                .release_date
+                .as_deref()
+                .map(parse_date_time)
+                .transpose()?,
             date_added: None,
             artwork: value.cover,
             directory: None,
@@ -198,14 +205,16 @@ impl From<YtAlbum> for Album {
             artist_sources: ApiSources::default()
                 .with_source(ApiSource::Yt, value.artist_id.into()),
             album_sources: ApiSources::default().with_source(ApiSource::Yt, value.id.into()),
-        }
+        })
     }
 }
 
-impl From<YtAlbum> for ApiAlbum {
-    fn from(value: YtAlbum) -> Self {
-        let album: Album = value.into();
-        album.into()
+impl TryFrom<YtAlbum> for ApiAlbum {
+    type Error = <YtAlbum as TryInto<Album>>::Error;
+
+    fn try_from(value: YtAlbum) -> Result<Self, Self::Error> {
+        let album: Album = value.try_into()?;
+        Ok(album.into())
     }
 }
 

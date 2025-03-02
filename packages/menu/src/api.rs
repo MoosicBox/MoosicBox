@@ -473,10 +473,11 @@ pub async fn get_artist_albums_endpoint(
     Ok(Json(
         get_artist_albums(&query.artist_id.into(), &db)
             .await
-            .map_err(|_e| ErrorInternalServerError("Failed to fetch albums"))?
+            .map_err(ErrorInternalServerError)?
             .iter()
-            .map(Into::into)
-            .collect(),
+            .map(TryInto::try_into)
+            .collect::<Result<_, _>>()
+            .map_err(ErrorInternalServerError)?,
     ))
 }
 

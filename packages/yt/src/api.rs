@@ -703,7 +703,13 @@ pub async fn favorite_albums_endpoint(
             query.user_id,
         )
         .await?
-        .map(Into::into)
+        .map(|x| {
+            x.try_into()
+                .map_err(|e| YtFavoriteAlbumsError::RequestFailed(format!("{e:?}")))
+                as Result<ApiAlbum, YtFavoriteAlbumsError>
+        })
+        .transpose()
+        .map_err(ErrorInternalServerError)?
         .into(),
     ))
 }
@@ -1127,7 +1133,13 @@ pub async fn artist_albums_endpoint(
                 .map(|x| x.to_str().unwrap().to_string()),
         )
         .await?
-        .map(Into::into)
+        .map(|x| {
+            x.try_into()
+                .map_err(|e| YtArtistAlbumsError::RequestFailed(format!("{e:?}")))
+                as Result<ApiAlbum, YtArtistAlbumsError>
+        })
+        .transpose()
+        .map_err(ErrorInternalServerError)?
         .into(),
     ))
 }
@@ -1266,7 +1278,7 @@ pub async fn album_endpoint(
     )
     .await?;
 
-    Ok(Json(album.into()))
+    Ok(Json(album.try_into().map_err(ErrorInternalServerError)?))
 }
 
 impl From<YtArtistError> for actix_web::Error {

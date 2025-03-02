@@ -16,6 +16,9 @@ ignored = ["strum"]
 [dependencies]
 moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
 moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
+moosicbox_date_utils = { version = "0.1.0", path = "../date_utils", default-features = false, features = [
+    "chrono",
+] }
 moosicbox_files = { version = "0.1.0", path = "../files", default-features = false, features = [
     "flac",
     "qobuz",

@@ -50,11 +50,19 @@ impl AsDataValues for Album {
             ("blur", DataValue::Bool(self.blur)),
             (
                 "date_released",
-                DataValue::String(self.date_released.clone().unwrap_or_default()),
+                DataValue::String(
+                    self.date_released
+                        .map(|x| x.and_utc().to_rfc3339())
+                        .unwrap_or_default(),
+                ),
             ),
             (
                 "date_added",
-                DataValue::String(self.date_added.clone().unwrap_or_default()),
+                DataValue::String(
+                    self.date_added
+                        .map(|x| x.and_utc().to_rfc3339())
+                        .unwrap_or_default(),
+                ),
             ),
         ];
 

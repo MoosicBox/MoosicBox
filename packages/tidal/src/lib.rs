@@ -2496,7 +2496,8 @@ impl MusicApi for TidalMusicApi {
             None,
         )
         .await?
-        .inner_into())
+        .map_err(|e| AlbumsError::Other(Box::new(e)))
+        .inner_try_into_map_err(|e| AlbumsError::Other(Box::new(e)))?)
     }
 
     async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError> {
@@ -2511,7 +2512,8 @@ impl MusicApi for TidalMusicApi {
                 None,
             )
             .await?
-            .into(),
+            .try_into()
+            .map_err(|e| AlbumError::Other(Box::new(e)))?,
         ))
     }
 
@@ -2592,7 +2594,7 @@ impl MusicApi for TidalMusicApi {
                 None,
             )
             .await?
-            .inner_into()
+            .inner_try_into_map_err(|e| ArtistAlbumsError::Other(Box::new(e)))?
         } else {
             let pages = futures::future::join_all(
                 vec![
@@ -2658,7 +2660,7 @@ impl MusicApi for TidalMusicApi {
                     })
                 }))),
             }
-            .inner_into()
+            .inner_try_into_map_err(|e| ArtistAlbumsError::Other(Box::new(e)))?
         })
     }
 

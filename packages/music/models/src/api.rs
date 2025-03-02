@@ -1,3 +1,4 @@
+use moosicbox_date_utils::chrono::{self, parse_date_time};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -199,8 +200,8 @@ impl From<Album> for ApiAlbum {
             artist: value.artist,
             artist_id: value.artist_id,
             album_type: value.album_type,
-            date_released: value.date_released,
-            date_added: value.date_added,
+            date_released: value.date_released.map(|x| x.and_utc().to_rfc3339()),
+            date_added: value.date_added.map(|x| x.and_utc().to_rfc3339()),
             contains_cover: value.artwork.is_some(),
             blur: value.blur,
             versions: value.versions,
@@ -212,16 +213,26 @@ impl From<Album> for ApiAlbum {
     }
 }
 
-impl From<ApiAlbum> for Album {
-    fn from(value: ApiAlbum) -> Self {
-        Self {
+impl TryFrom<ApiAlbum> for Album {
+    type Error = chrono::ParseError;
+
+    fn try_from(value: ApiAlbum) -> Result<Self, Self::Error> {
+        Ok(Self {
             id: value.album_id.clone(),
             title: value.title,
             artist: value.artist,
             artist_id: value.artist_id,
             album_type: value.album_type,
-            date_released: value.date_released,
-            date_added: value.date_added,
+            date_released: value
+                .date_released
+                .as_deref()
+                .map(parse_date_time)
+                .transpose()?,
+            date_added: value
+                .date_added
+                .as_deref()
+                .map(parse_date_time)
+                .transpose()?,
             artwork: if value.contains_cover {
                 Some(value.album_id.to_string())
             } else {
@@ -234,7 +245,7 @@ impl From<ApiAlbum> for Album {
             artist_sources: value.artist_sources,
             album_sources: value.album_sources,
             ..Default::default()
-        }
+        })
     }
 }
 

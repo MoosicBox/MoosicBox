@@ -16,6 +16,9 @@ ignored = ["strum_macros"]
 [dependencies]
 moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
 moosicbox_database = { version = "0.1.0", path = "../../database", optional = true, default-features = false }
+moosicbox_date_utils = { version = "0.1.0", path = "../../date_utils", default-features = false, features = [
+    "chrono",
+] }
 moosicbox_json_utils = { version = "0.1.0", path = "../../json_utils", default-features = false, features = [
     "serde_json",
 ] }

@@ -704,7 +704,13 @@ pub async fn favorite_albums_endpoint(
             query.user_id,
         )
         .await?
-        .map(Into::into)
+        .map(|x| {
+            x.try_into()
+                .map_err(|e| TidalFavoriteAlbumsError::RequestFailed(format!("{e:?}")))
+                as Result<ApiAlbum, TidalFavoriteAlbumsError>
+        })
+        .transpose()
+        .map_err(ErrorInternalServerError)?
         .into(),
     ))
 }
@@ -1135,7 +1141,7 @@ pub async fn artist_albums_endpoint(
     .await?
     .into();
 
-    Ok(Json(albums.into()))
+    Ok(Json(albums.try_into().map_err(ErrorInternalServerError)?))
 }
 
 impl From<TidalAlbumTracksError> for actix_web::Error {
@@ -1274,7 +1280,7 @@ pub async fn album_endpoint(
     )
     .await?;
 
-    Ok(Json(album.into()))
+    Ok(Json(album.try_into().map_err(ErrorInternalServerError)?))
 }
 
 impl From<TidalArtistError> for actix_web::Error {

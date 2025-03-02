@@ -9,6 +9,7 @@ pub mod db;
 
 use std::{path::PathBuf, str::FromStr as _};
 
+use moosicbox_date_utils::chrono::{self, parse_date_time};
 use moosicbox_json_utils::{ParseError, ToValueType};
 use moosicbox_music_models::{
     id::TryFromIdError, Album, AlbumSource, AlbumType, AlbumVersionQuality, ApiSource, ApiSources,
@@ -136,16 +137,26 @@ pub struct LibraryAlbum {
     pub artist_sources: ApiSources,
 }
 
-impl From<LibraryAlbum> for Album {
-    fn from(value: LibraryAlbum) -> Self {
-        Self {
+impl TryFrom<LibraryAlbum> for Album {
+    type Error = chrono::ParseError;
+
+    fn try_from(value: LibraryAlbum) -> Result<Self, Self::Error> {
+        Ok(Self {
             id: value.id.into(),
             title: value.title,
             artist: value.artist,
             artist_id: value.artist_id.into(),
             album_type: value.album_type.into(),
-            date_released: value.date_released,
-            date_added: value.date_added,
+            date_released: value
+                .date_released
+                .as_deref()
+                .map(parse_date_time)
+                .transpose()?,
+            date_added: value
+                .date_added
+                .as_deref()
+                .map(parse_date_time)
+                .transpose()?,
             artwork: value.artwork,
             directory: value.directory,
             blur: value.blur,
@@ -154,7 +165,7 @@ impl From<LibraryAlbum> for Album {
             api_source: ApiSource::Library,
             artist_sources: value.artist_sources,
             album_sources: value.album_sources,
-        }
+        })
     }
 }
 
@@ -168,8 +179,8 @@ impl TryFrom<Album> for LibraryAlbum {
             artist: value.artist,
             artist_id: value.artist_id.try_into()?,
             album_type: value.album_type.into(),
-            date_released: value.date_released,
-            date_added: value.date_added,
+            date_released: value.date_released.map(|x| x.and_utc().to_rfc3339()),
+            date_added: value.date_added.map(|x| x.and_utc().to_rfc3339()),
             artwork: value.artwork,
             directory: value.directory,
             blur: value.blur,
