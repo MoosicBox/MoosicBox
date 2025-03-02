@@ -16,7 +16,13 @@ use moosicbox_music_models::{
 };
 use moosicbox_paging::Page;
 
-use crate::{formatting::TimeFormat as _, page, pre_escaped, public_img, state::State, Action};
+use crate::{
+    artists::artist_page_url,
+    formatting::{format_date_string, TimeFormat as _},
+    page, pre_escaped, public_img,
+    state::State,
+    Action,
+};
 
 #[must_use]
 pub fn album_cover_url(
@@ -169,6 +175,9 @@ pub fn album_page_content(
                     h1 { (album.title) }
                     a href=(pre_escaped!("/artists?artistId={}&source={}", album.artist_id, album.api_source)) {
                         h2 { (album.artist) }
+                    }
+                    @if let Some(date_released) = &album.date_released{
+                        h2 { (format_date_string(date_released, "%B %d, %Y")) }
                     }
                     div sx-dir="row" {
                         @for version in &album.versions {
@@ -475,6 +484,7 @@ pub fn albums_list(albums: &Page<ApiAlbum>, size: u16) -> Markup {
     show_albums(albums.iter(), size)
 }
 
+#[allow(clippy::too_many_lines)]
 #[must_use]
 pub fn album_display(
     album: &ApiAlbum,
@@ -482,8 +492,26 @@ pub fn album_display(
     show_details: bool,
     show_media_controls: bool,
 ) -> Markup {
+    let album_page_url = album_page_url(&album.album_id.to_string(), false, None, None, None, None);
+
     let details = if show_details {
-        html! { (album.title) }
+        let artist_page_url = artist_page_url(&album.artist_id.to_string());
+
+        html! {
+            div {
+                div {
+                    a href=(album_page_url) { (album.title) }
+                }
+                div {
+                    a href=(artist_page_url) { (album.artist) }
+                }
+                @if let Some(date_released) = &album.date_released {
+                    div {
+                        (format_date_string(date_released, "%Y"))
+                    }
+                }
+            }
+        }
     } else {
         html! {}
     };
@@ -562,8 +590,10 @@ pub fn album_display(
     };
 
     html! {
-        div sx-width=(size) sx-height=(size + if show_details { 30 } else { 0 }) {
-            (album_cover)
+        div sx-width=(size) {
+            a href=(album_page_url) sx-width=(size) {
+                (album_cover)
+            }
             (details)
         }
     }
@@ -634,13 +664,7 @@ pub fn album_page_url(
 pub fn show_albums<'a>(albums: impl Iterator<Item = &'a ApiAlbum>, size: u16) -> Markup {
     html! {
         @for album in albums {
-            a
-                href=(album_page_url(&album.album_id.to_string(), false, None, None, None, None))
-                sx-width=(size)
-                sx-height=(size + 30)
-            {
-                (album_display(album, size, true, true))
-            }
+            (album_display(album, size, true, true))
         }
     }
 }

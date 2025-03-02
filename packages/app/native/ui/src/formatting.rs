@@ -1,3 +1,4 @@
+use moosicbox_date_utils::chrono::{parse_date_time, NaiveDateTime};
 use moosicbox_music_models::{AlbumType, ApiSource};
 
 pub trait TimeFormat {
@@ -64,4 +65,19 @@ impl AlbumTypeFormat for AlbumType {
             Self::Other => "Other Albums".to_string(),
         }
     }
+}
+
+#[must_use]
+pub fn format_date_string(date_string: &str, format: &str) -> String {
+    // January 08, 2025
+    let Ok(date) = parse_date_time(date_string) else {
+        return "n/a".to_string();
+    };
+    format_date(&date, format)
+}
+
+#[must_use]
+pub fn format_date(date: &NaiveDateTime, format: &str) -> String {
+    // January 08, 2025
+    date.format(format).to_string()
 }
