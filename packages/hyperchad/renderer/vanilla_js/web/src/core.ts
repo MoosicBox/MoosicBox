@@ -82,9 +82,13 @@ export function onMessage(type: string, handler: MessageHandler): void {
     array.push(handler);
 }
 
-export function triggerMessage(type: string, data: string): void {
+export function triggerMessage(
+    type: string,
+    data: string,
+    id?: string | undefined,
+): void {
     messageHandlers[type]?.forEach((handler) => {
-        handler(data);
+        handler(data, id);
     });
 }
 
@@ -194,5 +198,5 @@ onMessage('partial_view', (data, id) => {
         triggerHandlers('swapStyle', { style, id });
     }
 
-    triggerHandlers('swapHtml', { html, inner: false, target: id });
+    triggerHandlers('swapHtml', { html, inner: false, target: `#${id}` });
 });

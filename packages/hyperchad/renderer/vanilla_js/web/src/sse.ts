@@ -9,7 +9,7 @@ fetchEventSource('$sse', {
             console.error('Failed to open SSE', { status });
         }
     },
-    onmessage: (e) => triggerMessage(e.event, e.data),
+    onmessage: (e) => triggerMessage(e.event, e.data, e.id),
     onerror: (error) => {
         if (error) {
             if (typeof error === 'object' && 'message' in error) {
