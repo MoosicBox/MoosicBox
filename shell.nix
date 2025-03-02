@@ -57,6 +57,10 @@ pkgs.mkShellNoCC {
     gtk3-x11.dev
     gsettings-desktop-schemas
     glib
+
+    vips
+    postgresql
+    pulseaudio
   ];
 
   shellHook = ''
