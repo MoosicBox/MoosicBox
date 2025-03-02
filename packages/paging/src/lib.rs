@@ -132,6 +132,41 @@ impl<T: Serialize> Serialize for Page<T> {
     }
 }
 
+impl<T, E> Page<Result<T, E>> {
+    /// # Errors
+    ///
+    /// * If any of the items are `Err`, they will bubble up to the top-level
+    pub fn transpose(self) -> Result<Page<T>, E>
+    where
+        T: 'static,
+    {
+        Ok(match self {
+            Self::WithTotal {
+                items,
+                offset,
+                limit,
+                total,
+            } => Page::WithTotal {
+                items: items.into_iter().collect::<Result<Vec<_>, _>>()?,
+                offset,
+                limit,
+                total,
+            },
+            Self::WithHasMore {
+                items,
+                offset,
+                limit,
+                has_more,
+            } => Page::WithHasMore {
+                items: items.into_iter().collect::<Result<Vec<_>, _>>()?,
+                offset,
+                limit,
+                has_more,
+            },
+        })
+    }
+}
+
 impl<T> Page<T> {
     #[must_use]
     pub const fn offset(&self) -> u32 {
@@ -280,6 +315,35 @@ impl<T: std::fmt::Debug, E> std::fmt::Debug for PagingResponse<T, E> {
         f.debug_struct("PagingResponse")
             .field("page", &self.page)
             .finish_non_exhaustive()
+    }
+}
+
+impl<T: Send, E: Send> PagingResponse<Result<T, E>, E> {
+    /// # Errors
+    ///
+    /// * If any of the items are `Err`, they will bubble up to the top-level
+    pub fn transpose(self) -> Result<PagingResponse<T, E>, E>
+    where
+        T: 'static,
+        E: 'static,
+    {
+        let page = self.page.transpose()?;
+
+        let fetch = self.fetch;
+
+        Ok(PagingResponse {
+            page,
+            fetch: Arc::new(Mutex::new(Box::new(move |offset, count| {
+                let fetch = fetch.clone();
+
+                let closure = async move {
+                    let mut fetch = fetch.lock().await;
+                    fetch(offset, count).await.map(Self::transpose)?
+                };
+
+                Box::pin(closure)
+            }))),
+        })
     }
 }
 
