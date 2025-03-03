@@ -92,7 +92,10 @@ fn main() {
             .unwrap();
     }
 
-    println!("cargo:rerun-if-changed={}", src_dir.display());
+    for entry in std::fs::read_dir(src_dir).unwrap().filter_map(Result::ok) {
+        println!("cargo:rerun-if-changed={}", entry.path().display());
+    }
+
     println!("cargo:rerun-if-changed={}", checksum_file.display());
     println!("cargo:rerun-if-changed=build.rs");
 }
