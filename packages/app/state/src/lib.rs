@@ -14,7 +14,7 @@ use moosicbox_audio_zone::models::{ApiAudioZoneWithSession, ApiPlayer};
 use moosicbox_music_models::PlaybackQuality;
 use moosicbox_paging::Page;
 use moosicbox_player::{
-    local::LocalPlayer, PlaybackHandler, PlaybackType, PlayerError, PlayerSource,
+    PlaybackHandler, PlaybackType, PlayerError, PlayerSource, local::LocalPlayer,
 };
 pub use moosicbox_session::models::PlaybackTarget;
 use moosicbox_session::models::{
@@ -739,7 +739,9 @@ impl AppState {
 
         for (i, (playback_target, session_id, player, ptype)) in ids.into_iter().enumerate() {
             let output = player.output.as_ref().unwrap().lock().unwrap().clone();
-            log::debug!("reinit_players: playback_target={playback_target:?} session_id={session_id} output={output:?}");
+            log::debug!(
+                "reinit_players: playback_target={playback_target:?} session_id={session_id} output={output:?}"
+            );
             let mut created_player = self
                 .new_player(session_id, playback_target.clone(), output, ptype.clone())
                 .await?;
@@ -793,9 +795,9 @@ impl AppState {
         players: Vec<(ApiPlayer, PlayerType, AudioOutputFactory)>,
     ) -> Result<(), AppStateError> {
         log::debug!(
-        "set_audio_zone_active_players: session_id={session_id} audio_zone_id={audio_zone_id} {:?}",
-        players.iter().map(|(x, _, _)| x).collect::<Vec<_>>()
-    );
+            "set_audio_zone_active_players: session_id={session_id} audio_zone_id={audio_zone_id} {:?}",
+            players.iter().map(|(x, _, _)| x).collect::<Vec<_>>()
+        );
 
         let mut api_players_map = self.audio_zone_active_api_players.write().await;
         api_players_map.insert(audio_zone_id, players.clone());
@@ -824,9 +826,9 @@ impl AppState {
 
                     if !different_session && same_output {
                         log::debug!(
-                        "Skipping existing player for audio_zone_id={audio_zone_id} audio_output_id={}",
-                        player.audio_output_id
-                    );
+                            "Skipping existing player for audio_zone_id={audio_zone_id} audio_output_id={}",
+                            player.audio_output_id
+                        );
                         continue;
                     }
                 }
@@ -841,8 +843,8 @@ impl AppState {
                     )
                     .await?;
                 log::debug!(
-                "set_audio_zone_active_players: audio_zone_id={audio_zone_id} session_id={session_id:?}"
-            );
+                    "set_audio_zone_active_players: audio_zone_id={audio_zone_id} session_id={session_id:?}"
+                );
                 let playback_target_session_player = PlaybackTargetSessionPlayer {
                     playback_target,
                     session_id,
@@ -1268,7 +1270,9 @@ impl AppState {
                 output_id: output.id.clone(),
             };
             let output_id = &output.id;
-            log::debug!("update_connection_outputs: ApiPlaybackTarget::ConnectionOutput current_connection_id={current_connection_id} output_id={output_id}");
+            log::debug!(
+                "update_connection_outputs: ApiPlaybackTarget::ConnectionOutput current_connection_id={current_connection_id} output_id={output_id}"
+            );
 
             let binding = self.current_players.read().await;
             let current_players: &[(ApiPlayer, PlayerType, AudioOutputFactory)] = binding.as_ref();

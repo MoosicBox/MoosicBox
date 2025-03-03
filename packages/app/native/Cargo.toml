@@ -165,3 +165,6 @@ assets        = ["moosicbox_app_native_lib/assets"]
 static-routes = ["moosicbox_app_native_lib/static-routes"]
 
 dev = ["assets", "static-routes"]
+
+calc     = ["moosicbox_app_native_lib/calc"]
+retained = ["moosicbox_app_native_lib/retained"]

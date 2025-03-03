@@ -14,7 +14,8 @@ version     = "0.1.0"
 hyperchad_actions = { version = "0.1.0", path = "../../../hyperchad/actions", default-features = false }
 hyperchad_renderer = { version = "0.1.0", path = "../../../hyperchad/renderer", default-features = false }
 hyperchad_renderer_datastar = { version = "0.1.0", path = "../../../hyperchad/renderer/datastar", optional = true, default-features = false }
-hyperchad_renderer_egui = { version = "0.1.0", path = "../../../hyperchad/renderer/egui", optional = true, default-features = false }
+hyperchad_renderer_egui = { version = "0.1.0", path = "../../../hyperchad/renderer/egui", optional = true, default-features = false, features = [
+] }
 hyperchad_renderer_fltk = { version = "0.1.0", path = "../../../hyperchad/renderer/fltk", optional = true, default-features = false }
 hyperchad_renderer_html = { version = "0.1.0", path = "../../../hyperchad/renderer/html", optional = true, default-features = false }
 hyperchad_renderer_htmx = { version = "0.1.0", path = "../../../hyperchad/renderer/htmx", optional = true, default-features = false }
@@ -36,6 +37,7 @@ tokio     = { workspace = true, features = ["rt-multi-thread", "sync"] }
 [features]
 default = [
     "actix",
+    "calc",
     "datastar",
     "egui-wgpu",
     "fltk",
@@ -46,6 +48,7 @@ default = [
     "lambda",
     "logic",
     "maud",
+    "retained",
     "static-routes",
     "vanilla-js",
 ]
@@ -130,3 +133,6 @@ plugin-idiomorph = ["hyperchad_renderer_vanilla_js?/plugin-idiomorph"]
 plugin-nav       = ["hyperchad_renderer_vanilla_js?/plugin-nav"]
 plugin-routing   = ["hyperchad_renderer_vanilla_js?/plugin-routing"]
 plugin-sse       = ["hyperchad_renderer_vanilla_js?/plugin-sse"]
+
+calc     = ["hyperchad_renderer_egui?/calc"]
+retained = ["hyperchad_renderer_egui?/retained"]

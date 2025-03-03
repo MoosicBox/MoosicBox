@@ -10,7 +10,7 @@ use hyperchad_transformer_models::{
     LinkTarget, Position, Route, TextAlign, TextDecorationLine, TextDecorationStyle, Visibility,
 };
 use parse::parse_number;
-use serde::{Deserialize, Serialize, de::Error};
+use serde::{de::Error, Deserialize, Serialize};
 use serde_json::Value;
 
 pub use hyperchad_actions as actions;
@@ -83,12 +83,20 @@ impl Calculation {
             Self::Min(left, right) => {
                 let a = left.calc(container, view_width, view_height);
                 let b = right.calc(container, view_width, view_height);
-                if a > b { b } else { a }
+                if a > b {
+                    b
+                } else {
+                    a
+                }
             }
             Self::Max(left, right) => {
                 let a = left.calc(container, view_width, view_height);
                 let b = right.calc(container, view_width, view_height);
-                if a > b { a } else { b }
+                if a > b {
+                    a
+                } else {
+                    b
+                }
             }
         }
     }
@@ -1342,12 +1350,7 @@ impl Container {
     ///
     /// * If the `Container` is not properly attached to the tree
     #[cfg(feature = "id")]
-    pub fn replace_id_children_with_elements(
-        &mut self,
-        replacement: Vec<Self>,
-        id: usize,
-        #[cfg(feature = "calc")] calc: bool,
-    ) -> bool {
+    pub fn replace_id_children_with_elements(&mut self, replacement: Vec<Self>, id: usize) -> bool {
         let Some(parent) = &mut self.find_element_by_id_mut(id) else {
             return false;
         };
@@ -1358,10 +1361,25 @@ impl Container {
             parent.children.push(element);
         }
 
-        #[cfg(feature = "calc")]
-        if calc {
-            self.partial_calc(id);
-        }
+        true
+    }
+
+    /// # Panics
+    ///
+    /// * If the `Container` is not properly attached to the tree
+    #[cfg(all(feature = "id", feature = "calc"))]
+    pub fn replace_id_children_with_elements_calc(
+        &mut self,
+        replacement: Vec<Self>,
+        id: usize,
+    ) -> bool {
+        let Some(parent_id) = self.find_element_by_id(id).map(|x| x.id) else {
+            return false;
+        };
+
+        self.replace_id_children_with_elements(replacement, id);
+
+        self.partial_calc(parent_id);
 
         true
     }
@@ -1370,12 +1388,7 @@ impl Container {
     ///
     /// * If the `Container` is not properly attached to the tree
     #[cfg(feature = "id")]
-    pub fn replace_id_with_elements(
-        &mut self,
-        replacement: Vec<Self>,
-        id: usize,
-        #[cfg(feature = "calc")] calc: bool,
-    ) -> bool {
+    pub fn replace_id_with_elements(&mut self, replacement: Vec<Self>, id: usize) -> bool {
         let Some(parent) = self.find_parent_by_id_mut(id) else {
             return false;
         };
@@ -1393,11 +1406,21 @@ impl Container {
             parent.children.insert(index + i, element);
         }
 
-        #[cfg(feature = "calc")]
-        if calc {
-            let id = parent.id;
-            self.partial_calc(id);
-        }
+        true
+    }
+
+    /// # Panics
+    ///
+    /// * If the `Container` is not properly attached to the tree
+    #[cfg(all(feature = "id", feature = "calc"))]
+    pub fn replace_id_with_elements_calc(&mut self, replacement: Vec<Self>, id: usize) -> bool {
+        let Some(parent_id) = self.find_parent_by_id_mut(id).map(|x| x.id) else {
+            return false;
+        };
+
+        self.replace_id_with_elements(replacement, id);
+
+        self.partial_calc(parent_id);
 
         true
     }
@@ -1410,7 +1433,6 @@ impl Container {
         &mut self,
         replacement: Vec<Self>,
         id: &str,
-        #[cfg(feature = "calc")] calc: bool,
     ) -> Option<Self> {
         let parent = self.find_parent_by_str_id_mut(id)?;
 
@@ -1433,13 +1455,25 @@ impl Container {
             parent.children.insert(index + i, element);
         }
 
-        #[cfg(feature = "calc")]
-        if calc {
-            let id = parent.id;
-            self.partial_calc(id);
-        }
-
         Some(element)
+    }
+
+    /// # Panics
+    ///
+    /// * If the `Container` is not properly attached to the tree
+    #[cfg(all(feature = "id", feature = "calc"))]
+    pub fn replace_str_id_with_elements_calc(
+        &mut self,
+        replacement: Vec<Self>,
+        id: &str,
+    ) -> Option<Self> {
+        let parent_id = self.find_parent_by_str_id_mut(id)?.id;
+
+        let element = self.replace_str_id_with_elements(replacement, id);
+
+        self.partial_calc(parent_id);
+
+        element
     }
 
     #[cfg(all(feature = "id", feature = "calc"))]

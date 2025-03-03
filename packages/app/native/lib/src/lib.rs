@@ -85,7 +85,7 @@ impl Default for NativeAppBuilder {
 
 #[derive(Clone)]
 pub enum RendererType {
-    #[cfg(feature = "egui")]
+    #[cfg(all(feature = "egui", any(feature = "retained", feature = "calc")))]
     Egui(hyperchad_renderer_egui::EguiRenderer),
     #[cfg(feature = "fltk")]
     Fltk(hyperchad_renderer_fltk::FltkRenderer),
@@ -219,7 +219,7 @@ pub enum RendererType {
 macro_rules! renderer {
     ($val:expr, $name:ident, $action:expr) => {{
         match $val {
-            #[cfg(feature = "egui")]
+            #[cfg(all(feature = "egui", any(feature = "retained", feature = "calc")))]
             RendererType::Egui($name) => $action,
             #[cfg(feature = "fltk")]
             RendererType::Fltk($name) => $action,
@@ -327,7 +327,7 @@ impl RendererType {
 impl From<RendererType> for Option<Box<dyn hyperchad_renderer::HtmlTagRenderer + Send + Sync>> {
     fn from(value: RendererType) -> Self {
         Some(match value {
-            #[cfg(feature = "egui")]
+            #[cfg(all(feature = "egui", any(feature = "retained", feature = "calc")))]
             RendererType::Egui(..) => return None,
             #[cfg(feature = "fltk")]
             RendererType::Fltk(..) => return None,
@@ -644,7 +644,7 @@ impl NativeAppBuilder {
     pub fn get_renderer(self) -> Result<RendererType, NativeAppError> {
         #[allow(unreachable_code)]
         Ok(if cfg!(feature = "egui") {
-            #[cfg(feature = "egui")]
+            #[cfg(all(feature = "egui", any(feature = "retained", feature = "calc")))]
             {
                 let router = self.router.unwrap();
                 let action_tx = Self::listen_actions(self.action_handlers);
@@ -677,7 +677,7 @@ impl NativeAppBuilder {
                 });
                 RendererType::Egui(renderer)
             }
-            #[cfg(not(feature = "egui"))]
+            #[cfg(not(all(feature = "egui", any(feature = "retained", feature = "calc"))))]
             unreachable!()
         } else if cfg!(feature = "fltk") {
             #[cfg(feature = "fltk")]

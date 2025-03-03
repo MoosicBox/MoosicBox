@@ -27,7 +27,6 @@ hyperchad_renderer = { version = "0.1.0", path = "../", default-features = false
 ] }
 hyperchad_router = { version = "0.1.0", path = "../../router", default-features = false }
 hyperchad_transformer = { version = "0.1.0", path = "../../transformer", default-features = false, features = [
-    "calc",
     "html",
     "id",
     "logic",
@@ -59,7 +58,7 @@ tracy-client = { workspace = true, default-features = false, optional = true, fe
 ] }
 
 [features]
-default = ["debug", "wgpu"]
+default = ["calc", "debug", "retained", "wgpu"]
 
 fail-on-warnings = []
 
@@ -75,3 +74,6 @@ profiling-tracing = ["dep:tracing-subscriber", "profiling"]
 profiling-tracy   = ["dep:tracy-client", "profiling"]
 
 debug = []
+
+calc     = ["hyperchad_transformer/calc"]
+retained = []
