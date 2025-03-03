@@ -1829,28 +1829,30 @@ impl EguiApp {
                 {
                     frame = frame.fill(background.into());
                 }
-                // FIXME
-                // #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                // if container.calculated_border_top_left_radius.is_some()
-                //     || container.calculated_border_top_right_radius.is_some()
-                //     || container.calculated_border_bottom_left_radius.is_some()
-                //     || container.calculated_border_bottom_right_radius.is_some()
-                // {
-                //     frame = frame.corner_radius(egui::CornerRadius {
-                //         nw: container
-                //             .calculated_border_top_left_radius
-                //             .map_or(0, |x| x.round() as u8),
-                //         ne: container
-                //             .calculated_border_top_right_radius
-                //             .map_or(0, |x| x.round() as u8),
-                //         sw: container
-                //             .calculated_border_bottom_left_radius
-                //             .map_or(0, |x| x.round() as u8),
-                //         se: container
-                //             .calculated_border_bottom_right_radius
-                //             .map_or(0, |x| x.round() as u8),
-                //     });
-                // }
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                if container.border_top_left_radius.is_some()
+                    || container.border_top_right_radius.is_some()
+                    || container.border_bottom_left_radius.is_some()
+                    || container.border_bottom_right_radius.is_some()
+                {
+                    frame = frame.corner_radius(egui::CornerRadius {
+                        nw: container.border_top_left_radius.as_ref().map_or(0, |x| {
+                            Self::ui_calc_horizontal(x, ui, view_size).round() as u8
+                        }),
+                        ne: container.border_top_right_radius.as_ref().map_or(0, |x| {
+                            Self::ui_calc_horizontal(x, ui, view_size).round() as u8
+                        }),
+                        sw: container.border_bottom_left_radius.as_ref().map_or(0, |x| {
+                            Self::ui_calc_horizontal(x, ui, view_size).round() as u8
+                        }),
+                        se: container
+                            .border_bottom_right_radius
+                            .as_ref()
+                            .map_or(0, |x| {
+                                Self::ui_calc_horizontal(x, ui, view_size).round() as u8
+                            }),
+                    });
+                }
 
                 frame
                     .show(ui, {
