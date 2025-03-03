@@ -1743,11 +1743,17 @@ impl EguiApp {
     fn ui_set_size(ui: &mut Ui, container: &Container, view_size: (f32, f32)) {
         if let Some(width) = &container.width {
             let width = Self::ui_calc_horizontal(width, ui, view_size);
-            ui.set_width(width);
+
+            if width > 0.0 {
+                ui.set_width(width);
+            }
         }
         if let Some(height) = &container.height {
             let height = Self::ui_calc_vertical(height, ui, view_size);
-            ui.set_height(height);
+
+            if height > 0.0 {
+                ui.set_height(height);
+            }
         }
     }
 
