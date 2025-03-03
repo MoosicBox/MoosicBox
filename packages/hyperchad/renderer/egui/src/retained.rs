@@ -19,7 +19,7 @@ use hyperchad_renderer::viewport::immediate::{Pos, Viewport, ViewportListener};
 pub use hyperchad_renderer::*;
 use hyperchad_router::{ClientInfo, RequestInfo, Router};
 use hyperchad_transformer::{
-    Container, Element, Input, ResponsiveTrigger, TableIter,
+    Container, Element, Input, Number, ResponsiveTrigger, TableIter,
     models::{
         AlignItems, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, Position, Route,
         SwapTarget, Visibility,
@@ -99,9 +99,6 @@ impl RenderRunner for EguiRenderRunner {
         if let (Some(x), Some(y)) = (self.x, self.y) {
             viewport = viewport.with_position((x as f32, y as f32));
         }
-
-        // FIXME
-        // hyperchad_transformer::calc::set_scrollbar_size(0);
 
         #[cfg(feature = "wgpu")]
         let renderer = eframe::Renderer::Wgpu;
@@ -1138,6 +1135,7 @@ impl EguiApp {
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &Container)>,
+        view_size: (f32, f32),
     ) -> Option<Response> {
         if container.debug == Some(true) {
             log::info!("render_container: DEBUG {container}");
@@ -1212,6 +1210,7 @@ impl EguiApp {
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
+                                                            view_size,
                                                             true,
                                                         );
 
@@ -1239,6 +1238,7 @@ impl EguiApp {
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
+                                                            view_size,
                                                             true,
                                                         );
 
@@ -1276,6 +1276,7 @@ impl EguiApp {
                                                                         viewport,
                                                                         Some(rect),
                                                                         relative_container,
+                                                                        view_size,
                                                                         true,
                                                                     );
 
@@ -1317,6 +1318,7 @@ impl EguiApp {
                                                                         viewport,
                                                                         Some(rect),
                                                                         relative_container,
+                                                                        view_size,
                                                                         true,
                                                                     );
 
@@ -1345,6 +1347,7 @@ impl EguiApp {
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
+                                                            view_size,
                                                             false,
                                                         );
 
@@ -1369,6 +1372,7 @@ impl EguiApp {
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
+                                                            view_size,
                                                             false,
                                                         );
 
@@ -1393,6 +1397,7 @@ impl EguiApp {
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
+                                                            view_size,
                                                             true,
                                                         );
 
@@ -1417,6 +1422,7 @@ impl EguiApp {
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
+                                                            view_size,
                                                             true,
                                                         );
 
@@ -1433,6 +1439,7 @@ impl EguiApp {
                                                 viewport,
                                                 rect,
                                                 relative_container,
+                                                view_size,
                                                 false,
                                             );
 
@@ -1607,6 +1614,7 @@ impl EguiApp {
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &'a Container)>,
+        view_size: (f32, f32),
         vscroll: bool,
     ) -> Response {
         for element in container.children.iter().filter(|x| x.is_hidden()) {
@@ -1634,6 +1642,7 @@ impl EguiApp {
                             viewport,
                             rect,
                             relative_container,
+                            view_size,
                             !vscroll && rect.is_some(),
                         );
                     })
@@ -1648,6 +1657,7 @@ impl EguiApp {
                             viewport,
                             rect,
                             relative_container,
+                            view_size,
                             !vscroll && rect.is_some(),
                         );
                     })
@@ -1667,6 +1677,7 @@ impl EguiApp {
                                 viewport,
                                 rect,
                                 relative_container,
+                                view_size,
                                 !vscroll && rect.is_some(),
                             );
                         },
@@ -1682,6 +1693,7 @@ impl EguiApp {
                             viewport,
                             rect,
                             relative_container,
+                            view_size,
                             !vscroll && rect.is_some(),
                         );
                     })
@@ -1696,6 +1708,7 @@ impl EguiApp {
         ui: &mut Ui,
         container: &'a Container,
         relative_container: Option<(egui::Rect, &'a Container)>,
+        _view_size: (f32, f32),
         inner: impl FnOnce(&mut Ui, Option<(egui::Rect, &'a Container)>) -> Response,
     ) -> Response {
         let justify_content = container.justify_content.unwrap_or_default();
@@ -1731,6 +1744,25 @@ impl EguiApp {
         .response
     }
 
+    fn ui_set_size(ui: &mut Ui, container: &Container, view_size: (f32, f32)) {
+        if let Some(width) = &container.width {
+            let width = Self::calc_width(width, ui.available_width(), view_size);
+            ui.set_width(width);
+        }
+        if let Some(height) = &container.height {
+            let height = Self::calc_height(height, ui.available_height(), view_size);
+            ui.set_height(height);
+        }
+    }
+
+    fn calc_width(number: &Number, container_width: f32, view_size: (f32, f32)) -> f32 {
+        number.calc(container_width, view_size.0, view_size.1)
+    }
+
+    fn calc_height(number: &Number, container_height: f32, view_size: (f32, f32)) -> f32 {
+        number.calc(container_height, view_size.0, view_size.1)
+    }
+
     fn get_container_style_override<'a, T>(
         container: &'a Container,
         overrides: &'a HashMap<usize, Vec<StyleOverride<T>>>,
@@ -1755,6 +1787,7 @@ impl EguiApp {
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &'a Container)>,
+        view_size: (f32, f32),
         vscroll: bool,
     ) -> Response {
         Self::render_position(
@@ -1815,6 +1848,8 @@ impl EguiApp {
                 frame
                     .show(ui, {
                         |ui| {
+                            Self::ui_set_size(ui, container, view_size);
+
                             // FIXME
                             // if vscroll {
                             //     if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
@@ -1832,6 +1867,7 @@ impl EguiApp {
                                 ui,
                                 container,
                                 relative_container,
+                                view_size,
                                 move |ui, relative_container| {
                                     self.render_direction(
                                         render_context,
@@ -1841,6 +1877,7 @@ impl EguiApp {
                                         viewport,
                                         rect,
                                         relative_container,
+                                        view_size,
                                         vscroll,
                                     )
                                 },
@@ -1863,6 +1900,7 @@ impl EguiApp {
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &Container)>,
+        view_size: (f32, f32),
         scroll_child: bool,
     ) {
         log::trace!("render_elements: {} elements", elements.len());
@@ -1875,6 +1913,7 @@ impl EguiApp {
                 viewport,
                 rect,
                 relative_container,
+                view_size,
                 scroll_child,
             );
         }
@@ -3006,6 +3045,7 @@ impl EguiApp {
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &Container)>,
+        view_size: (f32, f32),
         scroll_child: bool,
     ) {
         log::trace!("render_element: rect={rect:?}");
@@ -3019,6 +3059,7 @@ impl EguiApp {
                 viewport,
                 rect,
                 relative_container,
+                view_size,
             );
             return;
         }
@@ -3048,7 +3089,7 @@ impl EguiApp {
             Element::Raw { value } => Some(ui.label(value)),
             Element::Image { source, .. } => source
                 .as_ref()
-                .map(|source| Self::render_image(render_context, ui, source, element)),
+                .map(|source| Self::render_image(render_context, ui, source, element, view_size)),
             Element::Canvas => element.str_id.as_ref().map_or_else(
                 || None,
                 |str_id| Self::render_canvas(render_context, ui, str_id, element),
@@ -3078,6 +3119,7 @@ impl EguiApp {
             viewport,
             rect,
             relative_container,
+            view_size,
         );
     }
 
@@ -3158,13 +3200,12 @@ impl EguiApp {
         render_context: &mut RenderContext,
         ui: &mut Ui,
         source: &str,
-        _container: &Container,
+        container: &Container,
+        view_size: (f32, f32),
     ) -> Response {
         egui::Frame::new()
             .show(ui, |ui| {
-                // FIXME
-                // ui.set_width(container.calculated_width.unwrap());
-                // ui.set_height(container.calculated_height.unwrap());
+                Self::ui_set_size(ui, container, view_size);
 
                 let Some(AppImage::Bytes(bytes)) = render_context.images.get(source).cloned()
                 else {
@@ -3350,6 +3391,7 @@ impl EguiApp {
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &Container)>,
+        view_size: (f32, f32),
     ) {
         let TableIter { rows, headings } = element.table_iter();
 
@@ -3408,6 +3450,7 @@ impl EguiApp {
                                 viewport,
                                 rect,
                                 relative_container,
+                                view_size,
                             );
                         });
 
@@ -3468,6 +3511,7 @@ impl EguiApp {
                                 viewport,
                                 rect,
                                 relative_container,
+                                view_size,
                             );
                         });
 
@@ -3548,6 +3592,11 @@ impl EguiApp {
     #[allow(clippy::too_many_lines)]
     fn paint(&self, ctx: &egui::Context) {
         let resized = self.check_frame_resize(ctx);
+
+        let view_size = (
+            self.width.read().unwrap().unwrap(),
+            self.height.read().unwrap().unwrap(),
+        );
 
         self.event_handlers.write().unwrap().clear();
 
@@ -3635,6 +3684,7 @@ impl EguiApp {
                                 None,
                                 None,
                                 None,
+                                view_size,
                             );
                         });
                 });
