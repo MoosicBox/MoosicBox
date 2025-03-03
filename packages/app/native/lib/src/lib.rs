@@ -267,7 +267,7 @@ impl RendererType {
     ///
     /// # Errors
     ///
-    /// Will error if FLTK app fails to start
+    /// Will error if the app fails to start
     #[allow(
         unused_variables,
         clippy::unused_async,
