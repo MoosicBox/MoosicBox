@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["network-programming"]
 description = "MoosicBox tunnel sender package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["api", "tunnel", "websocket"]
 license     = "MPL-2.0"
 name        = "moosicbox_tunnel_sender"

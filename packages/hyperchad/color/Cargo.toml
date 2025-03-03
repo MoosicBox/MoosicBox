@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["gui", "web-programming"]
 description = "HyperChad color package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["color", "gui", "web"]
 license     = "MPL-2.0"
 name        = "hyperchad_color"
@@ -25,12 +25,12 @@ pretty_assertions = { workspace = true }
 test-log          = { workspace = true }
 
 [features]
-default = ["egui", "gen"]
+default = ["egui", "arb"]
 
 fail-on-warnings = []
 
 egui = ["dep:egui"]
 
-gen = ["dep:quickcheck"]
+arb = ["dep:quickcheck"]
 
 serde = ["dep:serde"]

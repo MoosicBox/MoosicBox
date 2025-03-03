@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["database", "development-tools"]
 description = "MoosicBox json utilities package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["database", "json", "tantivy", "util", "utility"]
 license     = "MPL-2.0"
 name        = "moosicbox_json_utils"

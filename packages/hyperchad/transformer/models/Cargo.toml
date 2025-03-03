@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["gui", "web-programming"]
 description = "HyperChad transformer models package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["gui", "models", "web"]
 license     = "MPL-2.0"
 name        = "hyperchad_transformer_models"
@@ -12,7 +12,7 @@ version     = "0.1.0"
 
 [dependencies]
 moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
-moosicbox_gen = { path = "../../../gen", default-features = false, optional = true, features = [
+moosicbox_arb = { path = "../../../arb", default-features = false, optional = true, features = [
     "serde",
     "xml",
 ] }
@@ -22,17 +22,17 @@ quickcheck = { workspace = true, optional = true }
 serde      = { workspace = true, optional = true }
 
 [dev-dependencies]
-moosicbox_gen = { path = "../../../gen", default-features = false, features = [
+moosicbox_arb = { path = "../../../arb", default-features = false, features = [
     "serde",
     "xml",
 ] }
 
 [features]
-default = ["calc", "gen", "serde"]
+default = ["calc", "arb", "serde"]
 
 fail-on-warnings = []
 
 calc = []
-gen  = ["dep:moosicbox_gen", "dep:quickcheck"]
+arb  = ["dep:moosicbox_arb", "dep:quickcheck"]
 
 serde = ["dep:serde"]

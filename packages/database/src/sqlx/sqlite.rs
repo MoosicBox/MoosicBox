@@ -1,25 +1,25 @@
 use std::{
     ops::Deref,
     pin::Pin,
-    sync::{atomic::AtomicU16, Arc, LazyLock},
+    sync::{Arc, LazyLock, atomic::AtomicU16},
 };
 
 use async_trait::async_trait;
 use futures::{Stream, StreamExt};
 use sqlx::{
+    Column, Executor, Row, Sqlite, SqliteConnection, SqlitePool, Statement, TypeInfo, Value,
+    ValueRef,
     pool::PoolConnection,
     query::Query,
     sqlite::{SqliteArguments, SqliteRow, SqliteValueRef},
-    Column, Executor, Row, Sqlite, SqliteConnection, SqlitePool, Statement, TypeInfo, Value,
-    ValueRef,
 };
 use thiserror::Error;
 use tokio::sync::Mutex;
 
 use crate::{
-    query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
     Database, DatabaseError, DatabaseValue, DeleteStatement, InsertStatement, SelectQuery,
     UpdateStatement, UpsertMultiStatement, UpsertStatement,
+    query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
 };
 
 trait ToSql {
@@ -234,7 +234,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::UNumberOpt(None)
                 | DatabaseValue::RealOpt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "strftime('%Y-%m-%dT%H:%M:%f', 'now')".to_string(),
-                DatabaseValue::NowAdd(ref add) => {
+                DatabaseValue::NowAdd(add) => {
                     format!("strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', {add}))")
                 }
                 _ => {

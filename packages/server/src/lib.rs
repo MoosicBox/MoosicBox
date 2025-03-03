@@ -14,9 +14,9 @@ mod tunnel;
 mod ws;
 
 use actix_cors::Cors;
-use actix_web::{http, middleware, App};
-use moosicbox_config::{get_or_init_server_identity, AppType};
-use moosicbox_database::{config::ConfigDatabase, profiles::PROFILES, Database};
+use actix_web::{App, http, middleware};
+use moosicbox_config::{AppType, get_or_init_server_identity};
+use moosicbox_database::{Database, config::ConfigDatabase, profiles::PROFILES};
 use moosicbox_files::files::track_pool::service::Commander as _;
 use std::sync::{Arc, LazyLock};
 use tokio::try_join;
@@ -165,14 +165,14 @@ pub async fn run(
             .expect("Failed to setup tunnel connection");
 
     #[cfg(feature = "tunnel")]
-    if let Some(ref tunnel_handle) = tunnel_handle {
+    if let Some(tunnel_handle) = &tunnel_handle {
         ws_server.add_sender(Box::new(tunnel_handle.clone()));
     }
 
     let ws_server_handle = moosicbox_task::spawn("server: WsServer", ws_server.run());
 
     let (track_pool_handle, track_pool_join_handle) = {
-        use moosicbox_files::files::track_pool::{service::Service, Context, HANDLE};
+        use moosicbox_files::files::track_pool::{Context, HANDLE, service::Service};
 
         let service = Service::new(Context::new());
         let handle = service.handle();
@@ -430,7 +430,7 @@ pub async fn run(
             }
 
             if !cert_path.is_file() || !key_path.is_file() {
-                use rcgen::{generate_simple_self_signed, CertifiedKey};
+                use rcgen::{CertifiedKey, generate_simple_self_signed};
 
                 let subject_alt_names = vec!["localhost".to_string()];
 

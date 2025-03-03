@@ -3,17 +3,17 @@ use std::{ops::Deref, pin::Pin, sync::Arc};
 use async_trait::async_trait;
 use futures::{Stream, StreamExt};
 use sqlx::{
+    Column, Executor, MySql, MySqlPool, Row, Statement, TypeInfo, Value, ValueRef,
     mysql::{MySqlArguments, MySqlRow, MySqlValueRef},
     query::Query,
-    Column, Executor, MySql, MySqlPool, Row, Statement, TypeInfo, Value, ValueRef,
 };
 use thiserror::Error;
 use tokio::sync::Mutex;
 
 use crate::{
-    query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
     Database, DatabaseError, DatabaseValue, DeleteStatement, InsertStatement, SelectQuery,
     UpdateStatement, UpsertMultiStatement, UpsertStatement,
+    query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
 };
 
 trait ToSql {
@@ -183,7 +183,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::UNumberOpt(None)
                 | DatabaseValue::RealOpt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "NOW()".to_string(),
-                DatabaseValue::NowAdd(ref add) => format!("DATE_ADD(NOW(), {add}))"),
+                DatabaseValue::NowAdd(add) => format!("DATE_ADD(NOW(), {add}))"),
                 _ => "?".to_string(),
             },
         }

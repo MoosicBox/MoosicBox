@@ -1,25 +1,25 @@
 use std::{
     ops::Deref,
     pin::Pin,
-    sync::{atomic::AtomicU16, Arc, LazyLock},
+    sync::{Arc, LazyLock, atomic::AtomicU16},
 };
 
 use async_trait::async_trait;
 use futures::{Stream, StreamExt};
 use sqlx::{
+    Column, Executor, PgPool, Postgres, Row, Statement, TypeInfo, Value, ValueRef,
     pool::PoolConnection,
     postgres::{PgArguments, PgRow, PgValueRef},
     query::Query,
-    Column, Executor, PgPool, Postgres, Row, Statement, TypeInfo, Value, ValueRef,
 };
 use sqlx_postgres::PgConnection;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
 use crate::{
-    query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
     Database, DatabaseError, DatabaseValue, DeleteStatement, InsertStatement, SelectQuery,
     UpdateStatement, UpsertMultiStatement, UpsertStatement,
+    query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
 };
 
 trait ToSql {
@@ -234,7 +234,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::UNumberOpt(None)
                 | DatabaseValue::RealOpt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "NOW()".to_string(),
-                DatabaseValue::NowAdd(ref add) => format!("NOW() + {add}"),
+                DatabaseValue::NowAdd(add) => format!("NOW() + {add}"),
                 _ => {
                     let pos = index.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
                     format!("${pos}")

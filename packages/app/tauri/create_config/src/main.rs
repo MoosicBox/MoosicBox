@@ -18,5 +18,5 @@ fn main() {
 
     let args = Args::parse();
 
-    moosicbox_app_create_config::gen(args.bundled, args.output);
+    moosicbox_app_create_config::generate(args.bundled, args.output);
 }

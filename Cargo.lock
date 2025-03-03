@@ -4724,8 +4724,8 @@ version = "0.1.0"
 dependencies = [
  "hyperchad_transformer_models",
  "log",
+ "moosicbox_arb",
  "moosicbox_assert",
- "moosicbox_gen",
  "quickcheck",
  "serde",
  "serde_json",
@@ -4960,8 +4960,8 @@ dependencies = [
  "itertools 0.14.0",
  "log",
  "maud",
+ "moosicbox_arb",
  "moosicbox_assert",
- "moosicbox_gen",
  "moosicbox_logging",
  "pretty_assertions",
  "profiling",
@@ -4982,8 +4982,8 @@ name = "hyperchad_transformer_models"
 version = "0.1.0"
 dependencies = [
  "log",
+ "moosicbox_arb",
  "moosicbox_assert",
- "moosicbox_gen",
  "quickcheck",
  "serde",
 ]
@@ -6260,6 +6260,7 @@ dependencies = [
  "moosicbox_admin_htmx",
  "moosicbox_app_native_lib",
  "moosicbox_app_native_ui",
+ "moosicbox_arb",
  "moosicbox_assert",
  "moosicbox_async_service",
  "moosicbox_audio_decoder",
@@ -6275,7 +6276,6 @@ dependencies = [
  "moosicbox_downloader",
  "moosicbox_env_utils",
  "moosicbox_files",
- "moosicbox_gen",
  "moosicbox_image",
  "moosicbox_json_utils",
  "moosicbox_library",
@@ -6563,6 +6563,16 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "tokio-util",
+]
+
+[[package]]
+name = "moosicbox_arb"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "moosicbox_assert",
+ "quickcheck",
+ "serde_json",
 ]
 
 [[package]]
@@ -6876,16 +6886,6 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "utoipa",
-]
-
-[[package]]
-name = "moosicbox_gen"
-version = "0.1.0"
-dependencies = [
- "log",
- "moosicbox_assert",
- "quickcheck",
- "serde_json",
 ]
 
 [[package]]

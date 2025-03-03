@@ -1,11 +1,11 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["development-tools"]
-description = "MoosicBox arbitrary gen package"
-edition     = "2021"
-keywords    = ["arbitrary", "gen", "testing"]
+description = "MoosicBox arbitrary arb package"
+edition     = "2024"
+keywords    = ["arb", "arbitrary", "testing"]
 license     = "MPL-2.0"
-name        = "moosicbox_gen"
+name        = "moosicbox_arb"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"

@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["development-tools", "gui"]
 description = "MoosicBox native fltk app lib package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["desktop", "gui", "lib", "render", "renderer"]
 license     = "MPL-2.0"
 name        = "moosicbox_app_native_lib"

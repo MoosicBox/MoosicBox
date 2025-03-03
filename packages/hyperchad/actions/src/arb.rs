@@ -1,5 +1,5 @@
 use hyperchad_transformer_models::Visibility;
-use moosicbox_gen::xml::XmlString;
+use moosicbox_arb::xml::XmlString;
 use quickcheck::{Arbitrary, Gen};
 
 use crate::{

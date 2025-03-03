@@ -23,8 +23,8 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 
 use crate::{
+    CACHE_DIR, Scanner,
     output::{ScanOutput, UpdateDatabaseError},
-    Scanner, CACHE_DIR,
 };
 
 #[derive(Debug, Error)]
@@ -150,11 +150,7 @@ fn extract_track_name(track_filestem: &str) -> Option<String> {
         .map(|c| if c == '_' { ' ' } else { c })
         .collect::<String>();
 
-    if name.is_empty() {
-        None
-    } else {
-        Some(name)
-    }
+    if name.is_empty() { None } else { Some(name) }
 }
 
 #[allow(clippy::too_many_lines)]

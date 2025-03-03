@@ -10,18 +10,18 @@ use flume::RecvError;
 use futures::prelude::*;
 use futures_core::Stream;
 use moosicbox_audio_decoder::{
-    decode_file_path_str_async, decode_media_source_async,
-    media_sources::remote_bytestream::RemoteByteStreamMediaSource, DecodeError,
+    DecodeError, decode_file_path_str_async, decode_media_source_async,
+    media_sources::remote_bytestream::RemoteByteStreamMediaSource,
 };
 use moosicbox_audio_output::{AudioOutputError, AudioWrite, Channels, SignalSpec};
 use moosicbox_music_api::{
-    models::{TrackAudioQuality, TrackSource},
     MusicApi, MusicApis, MusicApisError, SourceToMusicApi as _, TrackError, TracksError,
+    models::{TrackAudioQuality, TrackSource},
 };
-use moosicbox_music_models::{id::Id, ApiSource, AudioFormat, PlaybackQuality, Track};
+use moosicbox_music_models::{ApiSource, AudioFormat, PlaybackQuality, Track, id::Id};
 use moosicbox_stream_utils::{
-    new_byte_writer_id, remote_bytestream::RemoteByteStream, stalled_monitor::StalledReadMonitor,
-    ByteWriter,
+    ByteWriter, new_byte_writer_id, remote_bytestream::RemoteByteStream,
+    stalled_monitor::StalledReadMonitor,
 };
 use serde::{Deserialize, Serialize};
 use symphonia::core::{
@@ -233,7 +233,9 @@ pub async fn get_track_bytes(
     start: Option<u64>,
     end: Option<u64>,
 ) -> Result<TrackBytes, GetTrackBytesError> {
-    log::debug!("get_track_bytes: Getting track bytes track_id={track_id} format={format:?} try_to_get_size={try_to_get_size} start={start:?} end={end:?}");
+    log::debug!(
+        "get_track_bytes: Getting track bytes track_id={track_id} format={format:?} try_to_get_size={try_to_get_size} start={start:?} end={end:?}"
+    );
 
     let size = if try_to_get_size {
         match get_or_init_track_size(api, track_id, &source, PlaybackQuality { format }).await {
@@ -451,8 +453,8 @@ pub async fn get_audio_bytes(
                         })
                     };
 
-                    match source {
-                        TrackSource::LocalFilePath { ref path, .. } => {
+                    match &source {
+                        TrackSource::LocalFilePath { path, .. } => {
                             if let Err(err) = decode_file_path_str_async(
                                 path,
                                 get_handler,
@@ -469,7 +471,7 @@ pub async fn get_audio_bytes(
                                 );
                             }
                         }
-                        TrackSource::RemoteUrl { ref url, .. } => {
+                        TrackSource::RemoteUrl { url, .. } => {
                             let source_format = source.format();
                             let source: RemoteByteStreamMediaSource = RemoteByteStream::new(
                                 url.to_string(),
@@ -553,7 +555,9 @@ async fn request_audio_bytes_from_file(
     start: Option<u64>,
     end: Option<u64>,
 ) -> Result<TrackBytes, std::io::Error> {
-    log::debug!("request_audio_bytes_from_file path={path} format={format} size={size:?} start={start:?} end={end:?}");
+    log::debug!(
+        "request_audio_bytes_from_file path={path} format={format} size={size:?} start={start:?} end={end:?}"
+    );
     let mut file = tokio::fs::File::open(&path).await?;
 
     if let Some(start) = start {
@@ -884,7 +888,9 @@ pub async fn get_or_init_track_visualization(
     let dyn_range = max_value - min_value;
     let coefficient = f64::from(u8::MAX) / f64::from(dyn_range);
 
-    log::debug!("dyn_range={dyn_range} coefficient={coefficient} min_value={min_value} max_value={max_value}");
+    log::debug!(
+        "dyn_range={dyn_range} coefficient={coefficient} min_value={min_value} max_value={max_value}"
+    );
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     for x in &mut ret_viz {

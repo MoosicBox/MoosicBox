@@ -10,17 +10,17 @@ use hyperchad_transformer_models::{
     LinkTarget, Position, Route, TextAlign, TextDecorationLine, TextDecorationStyle, Visibility,
 };
 use parse::parse_number;
-use serde::{de::Error, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::Error};
 use serde_json::Value;
 
 pub use hyperchad_actions as actions;
 pub use hyperchad_transformer_models as models;
 use strum::{EnumDiscriminants, EnumIter};
 
+#[cfg(test)]
+pub mod arb;
 #[cfg(feature = "calc")]
 pub mod calc;
-#[cfg(test)]
-pub mod gen;
 #[cfg(any(test, feature = "html"))]
 pub mod html;
 pub mod parse;
@@ -83,20 +83,12 @@ impl Calculation {
             Self::Min(left, right) => {
                 let a = left.calc(container, view_width, view_height);
                 let b = right.calc(container, view_width, view_height);
-                if a > b {
-                    b
-                } else {
-                    a
-                }
+                if a > b { b } else { a }
             }
             Self::Max(left, right) => {
                 let a = left.calc(container, view_width, view_height);
                 let b = right.calc(container, view_width, view_height);
-                if a > b {
-                    a
-                } else {
-                    b
-                }
+                if a > b { a } else { b }
             }
         }
     }

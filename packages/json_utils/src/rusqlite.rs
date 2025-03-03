@@ -4,14 +4,14 @@
     clippy::cast_sign_loss
 )]
 
-use rusqlite::{types::Value, Row};
+use rusqlite::{Row, types::Value};
 
 use crate::{MissingValue, ParseError, ToValueType};
 
 impl<'a> ToValueType<&'a str> for &'a Value {
     fn to_value_type(self) -> Result<&'a str, ParseError> {
-        match self {
-            Value::Text(ref str) => Ok(str),
+        match &self {
+            Value::Text(x) => Ok(x),
             _ => Err(ParseError::ConvertType("&str".into())),
         }
     }
@@ -42,7 +42,7 @@ where
 impl ToValueType<String> for &Value {
     fn to_value_type(self) -> Result<String, ParseError> {
         match self {
-            Value::Text(ref str) => Ok(str.to_string()),
+            Value::Text(x) => Ok(x.to_string()),
             _ => Err(ParseError::ConvertType("String".into())),
         }
     }
@@ -295,8 +295,8 @@ where
 
 impl ToValueType<String> for Value {
     fn to_value_type(self) -> Result<String, ParseError> {
-        match self {
-            Self::Text(ref str) => Ok(str.to_string()),
+        match &self {
+            Self::Text(str) => Ok(str.to_string()),
             _ => Err(ParseError::ConvertType("String".into())),
         }
     }

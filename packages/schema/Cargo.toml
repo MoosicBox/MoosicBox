@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["database"]
 description = "MoosicBox schema package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["database", "schema", "sqlite"]
 license     = "MPL-2.0"
 name        = "moosicbox_schema"

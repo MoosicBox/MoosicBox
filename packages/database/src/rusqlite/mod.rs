@@ -1,14 +1,14 @@
 use std::{ops::Deref, sync::Arc};
 
 use async_trait::async_trait;
-use rusqlite::{types::Value, Connection, Row, Rows, Statement};
+use rusqlite::{Connection, Row, Rows, Statement, types::Value};
 use thiserror::Error;
 use tokio::sync::Mutex;
 
 use crate::{
-    query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
     Database, DatabaseError, DatabaseValue, DeleteStatement, InsertStatement, SelectQuery,
     UpdateStatement, UpsertMultiStatement, UpsertStatement,
+    query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
 };
 
 #[allow(clippy::module_name_repetitions)]
@@ -186,7 +186,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::UNumberOpt(None)
                 | DatabaseValue::RealOpt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "strftime('%Y-%m-%dT%H:%M:%f', 'now')".to_string(),
-                DatabaseValue::NowAdd(ref add) => {
+                DatabaseValue::NowAdd(add) => {
                     format!("strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', {add}))")
                 }
                 _ => "?".to_string(),

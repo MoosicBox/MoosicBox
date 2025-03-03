@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["authentication"]
 description = "MoosicBox authentication package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["authentication", "token"]
 license     = "MPL-2.0"
 name        = "moosicbox_auth"

@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["development-tools"]
 description = "MoosicBox audio zone models package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["audio", "group", "grouping", "models", "playback"]
 license     = "MPL-2.0"
 name        = "moosicbox_audio_zone_models"

@@ -219,21 +219,21 @@ impl DatabaseError {
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn is_connection_error(&self) -> bool {
-        match self {
+        match &self {
             #[cfg(feature = "postgres-sqlx")]
             Self::PostgresSqlx(sqlx::postgres::SqlxDatabaseError::Sqlx(::sqlx::Error::Io(
-                ref _io_err,
+                _io_err,
             ))) => true,
             #[cfg(feature = "mysql-sqlx")]
-            Self::MysqlSqlx(sqlx::mysql::SqlxDatabaseError::Sqlx(::sqlx::Error::Io(
-                ref _io_err,
-            ))) => true,
+            Self::MysqlSqlx(sqlx::mysql::SqlxDatabaseError::Sqlx(::sqlx::Error::Io(_io_err))) => {
+                true
+            }
             #[cfg(feature = "sqlite-sqlx")]
-            Self::SqliteSqlx(sqlx::sqlite::SqlxDatabaseError::Sqlx(::sqlx::Error::Io(
-                ref _io_err,
-            ))) => true,
+            Self::SqliteSqlx(sqlx::sqlite::SqlxDatabaseError::Sqlx(::sqlx::Error::Io(_io_err))) => {
+                true
+            }
             #[cfg(feature = "postgres-raw")]
-            Self::Postgres(postgres::postgres::PostgresDatabaseError::Postgres(ref pg_err)) => {
+            Self::Postgres(postgres::postgres::PostgresDatabaseError::Postgres(pg_err)) => {
                 pg_err.to_string().as_str() == "connection closed"
             }
             #[cfg(feature = "sqlite-rusqlite")]
@@ -292,14 +292,14 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<Row>, DatabaseError>;
     async fn query_first(&self, query: &SelectQuery<'_>) -> Result<Option<Row>, DatabaseError>;
     async fn exec_update(&self, statement: &UpdateStatement<'_>)
-        -> Result<Vec<Row>, DatabaseError>;
+    -> Result<Vec<Row>, DatabaseError>;
     async fn exec_update_first(
         &self,
         statement: &UpdateStatement<'_>,
     ) -> Result<Option<Row>, DatabaseError>;
     async fn exec_insert(&self, statement: &InsertStatement<'_>) -> Result<Row, DatabaseError>;
     async fn exec_upsert(&self, statement: &UpsertStatement<'_>)
-        -> Result<Vec<Row>, DatabaseError>;
+    -> Result<Vec<Row>, DatabaseError>;
     async fn exec_upsert_first(
         &self,
         statement: &UpsertStatement<'_>,
@@ -309,7 +309,7 @@ pub trait Database: Send + Sync + std::fmt::Debug {
         statement: &UpsertMultiStatement<'_>,
     ) -> Result<Vec<Row>, DatabaseError>;
     async fn exec_delete(&self, statement: &DeleteStatement<'_>)
-        -> Result<Vec<Row>, DatabaseError>;
+    -> Result<Vec<Row>, DatabaseError>;
     async fn exec_delete_first(
         &self,
         statement: &DeleteStatement<'_>,

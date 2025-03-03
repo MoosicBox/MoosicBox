@@ -4,9 +4,9 @@
 use std::{path::PathBuf, sync::LazyLock};
 
 use moosicbox_app_native_lib::{
+    NativeApp, NativeAppBuilder, NativeAppError, RendererType,
     renderer::Color,
     router::{RoutePath, Router},
-    NativeApp, NativeAppBuilder, NativeAppError, RendererType,
 };
 use moosicbox_env_utils::option_env_f32;
 use serde_json::json;
@@ -140,7 +140,7 @@ pub async fn start(builder: NativeAppBuilder) -> Result<NativeApp, NativeAppErro
 ///
 /// * If failed to create a tokio runime
 #[allow(clippy::too_many_lines, clippy::future_not_send, clippy::unused_async)]
-pub async fn gen(
+pub async fn generate(
     #[allow(unused_variables)] renderer: RendererType,
     #[allow(unused_variables)] output: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {

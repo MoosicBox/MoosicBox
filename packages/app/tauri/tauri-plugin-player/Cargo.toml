@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["gui"]
 description = "Player plugin"
-edition     = "2021"
+edition     = "2024"
 exclude     = ["/examples", "/node_modules", "/webview-dist", "/webview-src"]
 keywords    = ["app", "desktop", "gui"]
 license     = "MPL-2.0"

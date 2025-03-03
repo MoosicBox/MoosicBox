@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["development-tools"]
 description = "MoosicBox clippier package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["clippier", "util", "utilities", "utils"]
 license     = "MPL-2.0"
 name        = "clippier"

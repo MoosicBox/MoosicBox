@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["development-tools", "network-programming"]
 description = "MoosicBox paging package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["api", "util", "utility"]
 license     = "MPL-2.0"
 name        = "moosicbox_paging"

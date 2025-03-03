@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["web-programming"]
 description = "MoosicBox admin htmx package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["admin", "html", "htmx", "web"]
 license     = "MPL-2.0"
 name        = "moosicbox_admin_htmx"

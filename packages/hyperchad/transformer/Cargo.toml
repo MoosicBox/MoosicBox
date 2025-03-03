@@ -2,8 +2,8 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["development-tools", "gui", "web-programming"]
 description = "HyperChad Transformer package"
-edition     = "2021"
-keywords    = ["dom", "hyperchad", "gui", "transformer", "web"]
+edition     = "2024"
+keywords    = ["dom", "gui", "hyperchad", "transformer", "web"]
 license     = "MPL-2.0"
 name        = "hyperchad_transformer"
 readme      = "README.md"
@@ -39,17 +39,17 @@ xml         = { workspace = true, optional = true }
 
 [dev-dependencies]
 hyperchad_actions = { path = "../actions", default-features = false, features = [
-    "gen",
+    "arb",
     "serde",
 ] }
 hyperchad_color = { path = "../color", default-features = false, features = [
-    "gen",
+    "arb",
 ] }
 hyperchad_transformer_models = { path = "models", default-features = false, features = [
-    "gen",
+    "arb",
 ] }
 maud = { workspace = true }
-moosicbox_gen = { path = "../../gen", default-features = false, features = [
+moosicbox_arb = { path = "../../arb", default-features = false, features = [
     "css",
     "serde",
     "xml",

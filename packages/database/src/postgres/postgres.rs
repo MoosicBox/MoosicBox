@@ -1,6 +1,6 @@
 use std::{
     ops::Deref,
-    sync::{atomic::AtomicU16, LazyLock},
+    sync::{LazyLock, atomic::AtomicU16},
 };
 
 use async_trait::async_trait;
@@ -13,12 +13,12 @@ use tokio::{
     pin,
     task::JoinHandle,
 };
-use tokio_postgres::{types::IsNull, Client, Row, RowStream};
+use tokio_postgres::{Client, Row, RowStream, types::IsNull};
 
 use crate::{
-    query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
     Database, DatabaseError, DatabaseValue, DeleteStatement, InsertStatement, SelectQuery,
     UpdateStatement, UpsertMultiStatement, UpsertStatement,
+    query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
 };
 
 trait ToSql {
@@ -234,7 +234,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::UNumberOpt(None)
                 | DatabaseValue::RealOpt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "NOW()".to_string(),
-                DatabaseValue::NowAdd(ref add) => format!("NOW() + {add}"),
+                DatabaseValue::NowAdd(add) => format!("NOW() + {add}"),
                 _ => {
                     let pos = index.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
                     format!("${pos}")
@@ -1362,7 +1362,7 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
             _ => {
                 return Err(Box::new(PostgresDatabaseError::TypeNotFound {
                     type_name: ty.to_string(),
-                }))
+                }));
             }
         })
     }
@@ -1416,7 +1416,7 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
             _ => {
                 return Err(Box::new(PostgresDatabaseError::TypeNotFound {
                     type_name: ty.to_string(),
-                }))
+                }));
             }
         })
     }

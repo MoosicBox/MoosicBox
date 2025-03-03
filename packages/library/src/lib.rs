@@ -7,7 +7,7 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use db::{get_artist_by_album_id, SetTrackSize};
+use db::{SetTrackSize, get_artist_by_album_id};
 use models::{LibraryAlbum, LibraryArtist, LibraryTrack};
 
 use async_recursion::async_recursion;
@@ -15,25 +15,25 @@ use async_trait::async_trait;
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_files::get_content_length;
 use moosicbox_json_utils::database::DatabaseFetchError;
-use moosicbox_library_models::{track_source_to_u8, LibraryAlbumType};
+use moosicbox_library_models::{LibraryAlbumType, track_source_to_u8};
 use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_api::{
+    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
+    ArtistError, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError, RemoveTrackError,
+    TrackError, TrackOrId, TracksError,
     models::{
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
         ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
         TrackSource,
     },
-    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
-    ArtistError, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError, RemoveTrackError,
-    TrackError, TrackOrId, TracksError,
 };
 use moosicbox_music_models::{
-    id::Id, Album, AlbumSort, AlbumType, ApiSource, Artist, AudioFormat, PlaybackQuality, Track,
+    Album, AlbumSort, AlbumType, ApiSource, Artist, AudioFormat, PlaybackQuality, Track, id::Id,
 };
 use moosicbox_paging::{Page, PagingRequest, PagingResponse, PagingResult};
 use moosicbox_search::{
-    api::models::ApiGlobalSearchResult, data::AsDataValues as _, populate_global_search_index,
-    PopulateIndexError, RecreateIndexError,
+    PopulateIndexError, RecreateIndexError, api::models::ApiGlobalSearchResult,
+    data::AsDataValues as _, populate_global_search_index,
 };
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
@@ -1443,7 +1443,7 @@ impl MusicApi for LibraryMusicApi {
         }
 
         let bytes = match source {
-            TrackSource::LocalFilePath { ref path, .. } => match quality.format {
+            TrackSource::LocalFilePath { path, .. } => match &quality.format {
                 #[cfg(feature = "aac")]
                 AudioFormat::Aac => {
                     let writer = moosicbox_stream_utils::ByteWriter::default();
@@ -1456,7 +1456,7 @@ impl MusicApi for LibraryMusicApi {
                 AudioFormat::Flac => {
                     return Err(TrackError::Other(Box::new(
                         TrackSizeError::UnsupportedFormat(quality.format),
-                    )))
+                    )));
                 }
                 #[cfg(feature = "mp3")]
                 AudioFormat::Mp3 => {

@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["gui"]
 description = "HyperChad htmx renderer package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["gui", "htmx", "render", "renderer", "web"]
 license     = "MPL-2.0"
 name        = "hyperchad_renderer_htmx"

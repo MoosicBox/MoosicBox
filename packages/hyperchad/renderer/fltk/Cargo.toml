@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["gui"]
 description = "HyperChad FLTK renderer package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["desktop", "fltk", "gui", "render", "renderer"]
 license     = "MPL-2.0"
 name        = "hyperchad_renderer_fltk"

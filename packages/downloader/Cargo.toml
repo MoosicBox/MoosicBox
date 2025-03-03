@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["multimedia", "network-programming"]
 description = "MoosicBox downloader package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["audio", "download", "downloader", "multimedia"]
 license     = "MPL-2.0"
 name        = "moosicbox_downloader"

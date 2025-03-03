@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["development-tools::procedural-macro-helpers"]
 description = "MoosicBox env utilities package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["env", "environment", "util", "utilities", "utils"]
 license     = "MPL-2.0"
 name        = "moosicbox_env_utils"

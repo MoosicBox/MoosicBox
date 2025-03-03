@@ -14,8 +14,8 @@ pub use tl::ParseError;
 use tl::{Children, HTMLTag, Node, NodeHandle, Parser, ParserOptions};
 
 use crate::{
-    parse::{parse_number, GetNumberError},
     ConfigOverride, Flex, Number, OverrideItem, TextDecoration,
+    parse::{GetNumberError, parse_number},
 };
 
 #[derive(Debug, Error)]
@@ -674,9 +674,7 @@ fn pmrv_inner<
 }
 
 macro_rules! iter_once {
-    ($val:expr) => {{
-        |x| std::iter::once($val(x))
-    }};
+    ($val:expr) => {{ |x| std::iter::once($val(x)) }};
 }
 
 #[allow(clippy::too_many_lines)]

@@ -5,7 +5,7 @@ use std::{path::PathBuf, pin::Pin, str::FromStr as _, sync::Arc, time::Duration}
 use futures::Future;
 use lazy_static::lazy_static;
 use moosicbox_database::{
-    profiles::LibraryDatabase, query::FilterableQuery, DatabaseError, DatabaseValue, Row,
+    DatabaseError, DatabaseValue, Row, profiles::LibraryDatabase, query::FilterableQuery,
 };
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_scan::local::ScanItem;
@@ -17,8 +17,8 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    db::models::{DownloadItem, DownloadTask, DownloadTaskState},
     DownloadAlbumError, DownloadTrackError, Downloader,
+    db::models::{DownloadItem, DownloadTask, DownloadTaskState},
 };
 
 lazy_static! {
@@ -251,7 +251,7 @@ impl DownloadQueue {
 
             let mut state = self.state.write().await;
 
-            if let Err(ref err) = result {
+            if let Err(err) = &result {
                 log::error!("Encountered error when processing task in DownloadQueue: {err:?}");
                 self.update_task_state(&mut task, DownloadTaskState::Error)
                     .await?;
@@ -541,9 +541,9 @@ impl Drop for DownloadQueue {
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
-    use moosicbox_database::{query::*, Database, Row};
+    use moosicbox_database::{Database, Row, query::*};
     use moosicbox_music_api::models::TrackAudioQuality;
-    use moosicbox_music_models::{id::Id, Album, Artist, Track};
+    use moosicbox_music_models::{Album, Artist, Track, id::Id};
     use pretty_assertions::assert_eq;
 
     use crate::db::models::{DownloadApiSource, DownloadItem, DownloadTaskState};

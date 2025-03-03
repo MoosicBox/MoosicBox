@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["development-tools"]
 description = "MoosicBox Parsing utils package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["parsing"]
 license     = "MPL-2.0"
 name        = "moosicbox_parsing_utils"

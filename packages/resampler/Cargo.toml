@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["development-tools"]
 description = "MoosicBox resampler package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["audio", "pcm", "resample", "resampler", "samples"]
 license     = "MPL-2.0"
 name        = "moosicbox_resampler"

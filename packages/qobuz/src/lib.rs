@@ -11,17 +11,17 @@ pub mod models;
 use itertools::Itertools;
 use models::{QobuzAlbum, QobuzArtist, QobuzRelease, QobuzSearchResults, QobuzTrack};
 #[cfg(feature = "db")]
-use moosicbox_database::profiles::LibraryDatabase;
-#[cfg(feature = "db")]
 use moosicbox_database::DatabaseError;
+#[cfg(feature = "db")]
+use moosicbox_database::profiles::LibraryDatabase;
 #[cfg(feature = "db")]
 use moosicbox_json_utils::database::DatabaseFetchError;
 
 use moosicbox_files::get_content_length;
 use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_models::{
-    id::Id, Album, AlbumType, ApiSource, Artist, AudioFormat, PlaybackQuality, Track,
-    TrackApiSource,
+    Album, AlbumType, ApiSource, Artist, AudioFormat, PlaybackQuality, Track, TrackApiSource,
+    id::Id,
 };
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use reqwest::StatusCode;
@@ -33,20 +33,20 @@ use std::{
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
-use base64::{engine::general_purpose, Engine as _};
+use base64::{Engine as _, engine::general_purpose};
 use moosicbox_json_utils::{
-    serde_json::{ToNestedValue, ToValue},
     MissingValue, ParseError, ToValueType,
+    serde_json::{ToNestedValue, ToValue},
 };
 use moosicbox_music_api::{
+    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
+    ArtistError, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError, RemoveTrackError,
+    TrackError, TrackOrId, TracksError,
     models::{
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
         ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
         TrackSource,
     },
-    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
-    ArtistError, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError, RemoveTrackError,
-    TrackError, TrackOrId, TracksError,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -294,7 +294,7 @@ async fn authenticated_request_inner(
     )
     .await?;
 
-    let Some(ref app_id) = credentials.app_id else {
+    let Some(app_id) = &credentials.app_id else {
         log::debug!("No app_id available");
         return Err(AuthenticatedRequestError::Unauthorized);
     };
@@ -1723,7 +1723,9 @@ pub async fn track_file_url(
         .unwrap()
         .as_secs();
 
-    let request_sig = format!("trackgetFileUrlformat_id{format_id}intent{intent}track_id{track_id}{request_ts}{app_secret}");
+    let request_sig = format!(
+        "trackgetFileUrlformat_id{format_id}intent{intent}track_id{track_id}{request_ts}{app_secret}"
+    );
     let request_sig = format!("{:x}", md5::compute(request_sig));
 
     let url = qobuz_api_endpoint!(

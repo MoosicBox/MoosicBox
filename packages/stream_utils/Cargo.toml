@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["development-tools", "network-programming"]
 description = "MoosicBox stream utils package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["bytes", "stream", "util", "utility"]
 license     = "MPL-2.0"
 name        = "moosicbox_stream_utils"

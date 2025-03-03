@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["development-tools"]
 description = "MoosicBox channel utils package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["async", "channel", "receiver", "sender", "utility"]
 license     = "MPL-2.0"
 name        = "moosicbox_channel_utils"

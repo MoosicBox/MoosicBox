@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["compression", "encoding"]
 description = "Audio converter helper binary"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["audio", "convert", "converter", "encoding"]
 license     = "MPL-2.0"
 name        = "moosicbox_aconverter"

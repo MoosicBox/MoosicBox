@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["development-tools", "multimedia", "network-programming"]
 description = "MoosicBox Library Music API models package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["audio", "library", "models"]
 license     = "MPL-2.0"
 name        = "moosicbox_library_models"

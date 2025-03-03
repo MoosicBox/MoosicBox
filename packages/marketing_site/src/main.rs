@@ -87,7 +87,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if let Commands::Gen { output } = args.cmd {
                 return runtime.block_on(async move {
                     let renderer = moosicbox_marketing_site::start(app).await?.renderer;
-                    moosicbox_marketing_site::gen(renderer, output).await
+                    moosicbox_marketing_site::generate(renderer, output).await
                 });
             }
 

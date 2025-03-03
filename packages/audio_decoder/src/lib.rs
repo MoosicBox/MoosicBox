@@ -7,7 +7,7 @@ use std::fs::File;
 use std::path::Path;
 
 use symphonia::core::audio::{AudioBuffer, SignalSpec};
-use symphonia::core::codecs::{DecoderOptions, FinalizeResult, CODEC_TYPE_NULL};
+use symphonia::core::codecs::{CODEC_TYPE_NULL, DecoderOptions, FinalizeResult};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatOptions, FormatReader, Packet, SeekMode, SeekTo, Track};
 use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
@@ -423,9 +423,9 @@ pub fn decode(
         result
     };
 
-    match result {
+    match &result {
         Ok(code) => {
-            if code == 2 {
+            if *code == 2 {
                 log::debug!("Aborted");
             } else {
                 log::debug!("Attempting to get audio_output to flush");
@@ -435,7 +435,7 @@ pub fn decode(
         Err(DecodeError::AudioDecode(AudioDecodeError::Interrupt)) => {
             log::info!("Audio interrupt detected. Not flushing");
         }
-        Err(ref err) => {
+        Err(err) => {
             log::error!("Encountered error {err:?}");
         }
     };

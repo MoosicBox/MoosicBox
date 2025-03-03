@@ -1,19 +1,19 @@
 use std::str::FromStr as _;
 
 use moosicbox_database::{
-    profiles::LibraryDatabase, query::FilterableQuery as _, AsId, Database, DatabaseValue,
+    AsId, Database, DatabaseValue, profiles::LibraryDatabase, query::FilterableQuery as _,
 };
 use moosicbox_json_utils::{
+    MissingValue, ParseError, ToValueType,
     database::{
         AsModel, AsModelQuery, AsModelResult, AsModelResultMapped, DatabaseFetchError, ToValue as _,
     },
-    MissingValue, ParseError, ToValueType,
 };
 use moosicbox_music_models::{
     AlbumSource, AlbumVersionQuality, ApiSource, ApiSources, AudioFormat, TrackApiSource,
 };
 
-use crate::{sort_album_versions, LibraryAlbum, LibraryAlbumType, LibraryArtist, LibraryTrack};
+use crate::{LibraryAlbum, LibraryAlbumType, LibraryArtist, LibraryTrack, sort_album_versions};
 
 impl AsId for LibraryTrack {
     fn as_id(&self) -> DatabaseValue {
@@ -256,7 +256,7 @@ impl AsModelResultMapped<LibraryAlbum, DatabaseFetchError> for Vec<moosicbox_dat
                 .map_err(|_| DatabaseFetchError::InvalidRequest)?;
 
             if album_id != last_album_id {
-                if let Some(ref mut album) = results.last_mut() {
+                if let Some(album) = results.last_mut() {
                     log::trace!(
                         "Sorting versions for album id={} count={}",
                         album.id,
@@ -356,7 +356,7 @@ impl AsModelResultMapped<LibraryAlbum, DatabaseFetchError> for Vec<moosicbox_dat
             }
         }
 
-        if let Some(ref mut album) = results.last_mut() {
+        if let Some(album) = results.last_mut() {
             log::trace!(
                 "Sorting versions for last album id={} count={}",
                 album.id,

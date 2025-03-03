@@ -16,30 +16,30 @@ use std::{
 use itertools::Itertools as _;
 use models::{TidalAlbum, TidalArtist, TidalSearchResults, TidalTrack};
 #[cfg(feature = "db")]
-use moosicbox_database::profiles::LibraryDatabase;
-#[cfg(feature = "db")]
 use moosicbox_database::DatabaseError;
+#[cfg(feature = "db")]
+use moosicbox_database::profiles::LibraryDatabase;
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use moosicbox_files::get_content_length;
 use moosicbox_json_utils::{
-    database::AsModelResult as _, serde_json::ToValue, MissingValue, ParseError, ToValueType,
+    MissingValue, ParseError, ToValueType, database::AsModelResult as _, serde_json::ToValue,
 };
 use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_api::{
+    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
+    ArtistError, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError, RemoveTrackError,
+    TrackError, TrackOrId, TracksError,
     models::{
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
         ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
         TrackSource,
     },
-    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
-    ArtistError, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError, RemoveTrackError,
-    TrackError, TrackOrId, TracksError,
 };
 use moosicbox_music_models::{
-    id::Id, Album, AlbumSort, AlbumType, ApiSource, Artist, AudioFormat, PlaybackQuality, Track,
-    TrackApiSource,
+    Album, AlbumSort, AlbumType, ApiSource, Artist, AudioFormat, PlaybackQuality, Track,
+    TrackApiSource, id::Id,
 };
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use serde::{Deserialize, Serialize};
@@ -500,8 +500,8 @@ async fn authenticated_request_inner(
     match status {
         401 => {
             log::debug!("Received unauthorized response");
-            if let (Some(ref client_id), Some(ref refresh_token)) =
-                (credentials.client_id, credentials.refresh_token)
+            if let (Some(client_id), Some(refresh_token)) =
+                (&credentials.client_id, &credentials.refresh_token)
             {
                 return authenticated_request_inner(
                     #[cfg(feature = "db")]

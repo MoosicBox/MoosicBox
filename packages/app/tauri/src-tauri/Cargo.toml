@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["gui"]
 description = "MoosicBox"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["app", "desktop", "gui"]
 license     = "MPL-2.0"
 name        = "moosicbox_app"

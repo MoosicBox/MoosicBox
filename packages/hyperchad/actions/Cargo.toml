@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["gui", "web-programming"]
 description = "HyperChad actions package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["actions", "gui", "web"]
 license     = "MPL-2.0"
 name        = "hyperchad_actions"
@@ -12,11 +12,11 @@ version     = "0.1.0"
 
 [dependencies]
 hyperchad_transformer_models = { version = "0.1.0", path = "../transformer/models", default-features = false }
-moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
-moosicbox_gen = { path = "../../gen", default-features = false, optional = true, features = [
+moosicbox_arb = { path = "../../arb", default-features = false, optional = true, features = [
     "serde",
     "xml",
 ] }
+moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
 
 log        = { workspace = true }
 quickcheck = { workspace = true, optional = true }
@@ -26,20 +26,24 @@ serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
 hyperchad_transformer_models = { version = "0.1.0", path = "../transformer/models", default-features = false, features = [
-    "gen",
+    "arb",
 ] }
-moosicbox_gen = { path = "../../gen", default-features = false, features = [
+moosicbox_arb = { path = "../../arb", default-features = false, features = [
     "serde",
     "xml",
 ] }
 
 [features]
-default = ["gen", "id", "logic", "serde"]
+default = ["arb", "id", "logic", "serde"]
 
 fail-on-warnings = []
 
-gen   = ["dep:moosicbox_gen", "dep:quickcheck", "hyperchad_transformer_models/gen"]
-id    = []
+arb = [
+    "dep:moosicbox_arb",
+    "dep:quickcheck",
+    "hyperchad_transformer_models/arb",
+]
+id = []
 logic = []
 
 serde = ["dep:serde", "dep:serde_json", "hyperchad_transformer_models/serde"]

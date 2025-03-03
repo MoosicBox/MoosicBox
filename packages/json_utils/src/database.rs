@@ -19,8 +19,8 @@ pub enum DatabaseFetchError {
 
 impl<'a> ToValueType<&'a str> for &'a DatabaseValue {
     fn to_value_type(self) -> Result<&'a str, ParseError> {
-        match self {
-            DatabaseValue::String(ref str) => Ok(str),
+        match &self {
+            DatabaseValue::String(x) => Ok(x),
             _ => Err(ParseError::ConvertType("&str".into())),
         }
     }
@@ -55,9 +55,9 @@ where
 
 impl ToValueType<String> for &DatabaseValue {
     fn to_value_type(self) -> Result<String, ParseError> {
-        match self {
-            DatabaseValue::String(ref str) => Ok(str.to_string()),
-            DatabaseValue::DateTime(ref datetime) => Ok(datetime.and_utc().to_rfc3339()),
+        match &self {
+            DatabaseValue::String(x) => Ok(x.to_string()),
+            DatabaseValue::DateTime(datetime) => Ok(datetime.and_utc().to_rfc3339()),
             _ => Err(ParseError::ConvertType("String".into())),
         }
     }
@@ -387,9 +387,9 @@ where
 
 impl ToValueType<String> for DatabaseValue {
     fn to_value_type(self) -> Result<String, ParseError> {
-        match self {
-            Self::String(ref str) => Ok(str.to_string()),
-            Self::DateTime(ref datetime) => Ok(datetime.and_utc().to_rfc3339()),
+        match &self {
+            Self::String(x) => Ok(x.to_string()),
+            Self::DateTime(datetime) => Ok(datetime.and_utc().to_rfc3339()),
             _ => Err(ParseError::ConvertType("String".into())),
         }
     }

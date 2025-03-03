@@ -4,8 +4,8 @@
 pub use color_hex::color_from_hex;
 use thiserror::Error;
 
-#[cfg(feature = "gen")]
-pub mod gen;
+#[cfg(feature = "arb")]
+pub mod arb;
 
 #[derive(Debug, Error)]
 pub enum ParseHexError {

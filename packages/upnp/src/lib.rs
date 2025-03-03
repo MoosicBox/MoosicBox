@@ -726,7 +726,7 @@ pub async fn subscribe_events(
 ) -> Result<
     (
         String,
-        impl Stream<Item = Result<HashMap<String, String>, rupnp::Error>>,
+        impl Stream<Item = Result<HashMap<String, String>, rupnp::Error>> + use<>,
     ),
     ScanError,
 > {

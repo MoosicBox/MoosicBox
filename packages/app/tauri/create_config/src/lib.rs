@@ -27,7 +27,7 @@ impl Config {
 /// # Panics
 ///
 /// * If the file fails to open
-pub fn gen<P: AsRef<Path>>(bundled: bool, output: P) {
+pub fn generate<P: AsRef<Path>>(bundled: bool, output: P) {
     let config = Config {
         web: false,
         app: true,

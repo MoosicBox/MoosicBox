@@ -31,7 +31,7 @@ members = [
     "packages/downloader",
     "packages/env_utils",
     "packages/files",
-    "packages/gen",
+    "packages/arb",
     "packages/hyperchad",
     "packages/hyperchad/actions",
     "packages/hyperchad/color",
@@ -126,7 +126,7 @@ inherits  = "dev"
 opt-level = 0
 
 [workspace.package]
-edition = "2021"
+edition = "2024"
 
 [workspace.dependencies]
 actix = "0.13.5"

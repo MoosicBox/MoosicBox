@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["database"]
 description = "MoosicBox profiles package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["database", "profiles"]
 license     = "MPL-2.0"
 name        = "moosicbox_profiles"

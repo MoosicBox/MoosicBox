@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["gui", "web-programming"]
 description = "MoosicBox App Image package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["gui", "image", "web"]
 license     = "MPL-2.0"
 name        = "moosicbox_app_native_image"

@@ -6,8 +6,8 @@ use hyperchad_transformer_models::Visibility;
 #[cfg(feature = "logic")]
 pub mod logic;
 
-#[cfg(feature = "gen")]
-pub mod gen;
+#[cfg(feature = "arb")]
+pub mod arb;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};

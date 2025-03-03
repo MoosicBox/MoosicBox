@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["gui"]
 description = "MoosicBoxApp bundled package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["bundled"]
 license     = "MPL-2.0"
 name        = "moosicbox_app_native_bundled"

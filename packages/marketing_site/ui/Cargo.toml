@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["gui", "web-programming"]
 description = "MoosicBox Marketing Website UI"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["dom", "gui", "transformer", "web"]
 license     = "MPL-2.0"
 name        = "moosicbox_marketing_site_ui"

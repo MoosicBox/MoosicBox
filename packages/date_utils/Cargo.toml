@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["development-tools"]
 description = "MoosicBox date utils package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["date", "time"]
 license     = "MPL-2.0"
 name        = "moosicbox_date_utils"

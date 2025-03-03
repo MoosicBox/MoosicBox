@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["development-tools"]
 description = "MoosicBox assert package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["assert", "false", "true", "util", "utils"]
 license     = "MPL-2.0"
 name        = "moosicbox_assert"

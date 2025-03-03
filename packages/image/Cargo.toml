@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["compression", "development-tools", "multimedia"]
 description = "MoosicBox image package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["compression", "image", "resize"]
 license     = "MPL-2.0"
 name        = "moosicbox_image"

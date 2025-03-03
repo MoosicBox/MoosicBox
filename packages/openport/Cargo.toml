@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["network-programming"]
 description = "Find a free unused port"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["network", "port", "tcp", "udp"]
 license     = "MPL-2.0"
 name        = "openport"

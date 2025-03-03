@@ -6,12 +6,11 @@ use actix_web::error::ErrorInternalServerError;
 use chrono::NaiveDateTime;
 use futures_util::Future;
 use moosicbox_database::{
-    boxed,
-    query::{where_eq, where_gte, FilterableQuery},
-    Database, DatabaseValue, Row,
+    Database, DatabaseValue, Row, boxed,
+    query::{FilterableQuery, where_eq, where_gte},
 };
 use moosicbox_database_connection::InitDbError;
-use moosicbox_json_utils::{database::ToValue, MissingValue, ParseError, ToValueType};
+use moosicbox_json_utils::{MissingValue, ParseError, ToValueType, database::ToValue};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::Mutex;
@@ -165,7 +164,7 @@ where
         match exec().await {
             Ok(value) => return Ok(value),
             Err(err) => {
-                if let DatabaseError::Db(ref db_err) = err {
+                if let DatabaseError::Db(db_err) = &err {
                     if db_err.is_connection_error() {
                         if retries >= MAX_RETRY {
                             return Err(err);

@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["development-tools", "gui", "web-programming"]
 description = "HyperChad Router package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["dom", "hyperchad", "router", "web"]
 license     = "MPL-2.0"
 name        = "hyperchad_router"

@@ -250,7 +250,7 @@ pub async fn get_create_download_tasks_for_tracks(
             } else {
                 match track.track_source {
                     TrackApiSource::Local => {
-                        return Err(GetCreateDownloadTasksError::InvalidSource)
+                        return Err(GetCreateDownloadTasksError::InvalidSource);
                     }
                     #[cfg(feature = "tidal")]
                     TrackApiSource::Tidal => DownloadApiSource::Tidal,
@@ -518,7 +518,9 @@ pub async fn download_track_id(
     speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
 ) -> Result<Track, DownloadTrackError> {
-    log::debug!("Starting download for track_id={track_id} quality={quality:?} source={source:?} path={path}");
+    log::debug!(
+        "Starting download for track_id={track_id} quality={quality:?} source={source:?} path={path}"
+    );
 
     let track = api
         .track(track_id)
@@ -886,7 +888,9 @@ pub async fn download_album_id(
     speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadAlbumError> {
-    log::debug!("Starting download for album_id={album_id} quality={quality:?} source={source:?} path={path}");
+    log::debug!(
+        "Starting download for album_id={album_id} quality={quality:?} source={source:?} path={path}"
+    );
 
     let track_source = source.into();
     let tracks = api

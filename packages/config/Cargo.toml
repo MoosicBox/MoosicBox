@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["config"]
 description = "MoosicBox configuration package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["config", "configuration"]
 license     = "MPL-2.0"
 name        = "moosicbox_config"

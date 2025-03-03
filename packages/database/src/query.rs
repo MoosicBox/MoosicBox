@@ -794,7 +794,7 @@ pub fn select(table_name: &str) -> SelectQuery<'_> {
 
 impl FilterableQuery for SelectQuery<'_> {
     fn filter(mut self, filter: Box<dyn BooleanExpression>) -> Self {
-        if let Some(ref mut filters) = self.filters {
+        if let Some(filters) = &mut self.filters {
             filters.push(filter);
         } else {
             self.filters.replace(vec![filter]);
@@ -819,7 +819,7 @@ impl<'a> SelectQuery<'a> {
     #[must_use]
     pub fn joins(mut self, joins: Vec<Join<'a>>) -> Self {
         for join in joins {
-            if let Some(ref mut joins) = self.joins {
+            if let Some(joins) = &mut self.joins {
                 joins.push(join);
             } else {
                 self.joins.replace(vec![join]);
@@ -830,7 +830,7 @@ impl<'a> SelectQuery<'a> {
 
     #[must_use]
     pub fn join(mut self, table_name: &'a str, on: &'a str) -> Self {
-        if let Some(ref mut joins) = self.joins {
+        if let Some(joins) = &mut self.joins {
             joins.push(join(table_name, on));
         } else {
             self.joins.replace(vec![join(table_name, on)]);
@@ -841,7 +841,7 @@ impl<'a> SelectQuery<'a> {
     #[must_use]
     pub fn left_joins(mut self, left_joins: Vec<Join<'a>>) -> Self {
         for left_join in left_joins {
-            if let Some(ref mut left_joins) = self.joins {
+            if let Some(left_joins) = &mut self.joins {
                 left_joins.push(left_join);
             } else {
                 self.joins.replace(vec![left_join]);
@@ -852,7 +852,7 @@ impl<'a> SelectQuery<'a> {
 
     #[must_use]
     pub fn left_join(mut self, table_name: &'a str, on: &'a str) -> Self {
-        if let Some(ref mut left_joins) = self.joins {
+        if let Some(left_joins) = &mut self.joins {
             left_joins.push(left_join(table_name, on));
         } else {
             self.joins.replace(vec![left_join(table_name, on)]);
@@ -863,7 +863,7 @@ impl<'a> SelectQuery<'a> {
     #[must_use]
     pub fn sorts(mut self, sorts: Vec<Sort>) -> Self {
         for sort in sorts {
-            if let Some(ref mut sorts) = self.sorts {
+            if let Some(sorts) = &mut self.sorts {
                 sorts.push(sort);
             } else {
                 self.sorts.replace(vec![sort]);
@@ -877,7 +877,7 @@ impl<'a> SelectQuery<'a> {
     where
         T: Into<Identifier>,
     {
-        if let Some(ref mut sorts) = self.sorts {
+        if let Some(sorts) = &mut self.sorts {
             sorts.push(sort(expression.into(), direction));
         } else {
             self.sorts.replace(vec![sort(expression.into(), direction)]);
@@ -1023,7 +1023,7 @@ pub fn update(table_name: &str) -> UpdateStatement<'_> {
 
 impl FilterableQuery for UpdateStatement<'_> {
     fn filter(mut self, filter: Box<dyn BooleanExpression>) -> Self {
-        if let Some(ref mut filters) = self.filters {
+        if let Some(filters) = &mut self.filters {
             filters.push(filter);
         } else {
             self.filters.replace(vec![filter]);
@@ -1101,7 +1101,7 @@ pub fn upsert(table_name: &str) -> UpsertStatement<'_> {
 
 impl FilterableQuery for UpsertStatement<'_> {
     fn filter(mut self, filter: Box<dyn BooleanExpression>) -> Self {
-        if let Some(ref mut filters) = self.filters {
+        if let Some(filters) = &mut self.filters {
             filters.push(filter);
         } else {
             self.filters.replace(vec![filter]);
@@ -1211,7 +1211,7 @@ pub fn delete(table_name: &str) -> DeleteStatement<'_> {
 
 impl FilterableQuery for DeleteStatement<'_> {
     fn filter(mut self, filter: Box<dyn BooleanExpression>) -> Self {
-        if let Some(ref mut filters) = self.filters {
+        if let Some(filters) = &mut self.filters {
             filters.push(filter);
         } else {
             self.filters.replace(vec![filter]);

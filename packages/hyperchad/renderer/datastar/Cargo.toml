@@ -2,7 +2,7 @@
 authors     = ["Braden Steffaniak"]
 categories  = ["gui"]
 description = "HyperChad Datastar renderer package"
-edition     = "2021"
+edition     = "2024"
 keywords    = ["datastar", "gui", "render", "renderer", "web"]
 license     = "MPL-2.0"
 name        = "hyperchad_renderer_datastar"

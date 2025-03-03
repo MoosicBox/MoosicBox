@@ -2,14 +2,14 @@ use std::sync::Arc;
 
 use moosicbox_audio_zone::{db::models::AudioZoneModel, models::Player};
 use moosicbox_database::{
+    Database, DatabaseValue,
     config::ConfigDatabase,
     profiles::LibraryDatabase,
-    query::{select, where_in, FilterableQuery as _, SortDirection},
-    Database, DatabaseValue,
+    query::{FilterableQuery as _, SortDirection, select, where_in},
 };
 use moosicbox_json_utils::{
-    database::{DatabaseFetchError, ToValue as _},
     ParseError, ToValueType,
+    database::{DatabaseFetchError, ToValue as _},
 };
 use moosicbox_library::db::get_tracks;
 use moosicbox_music_models::{api::ApiTrack, id::Id};
@@ -43,7 +43,7 @@ pub async fn get_session_playlist(
     db: &LibraryDatabase,
     session_id: u64,
 ) -> Result<Option<SessionPlaylist>, DatabaseFetchError> {
-    if let Some(ref playlist) = db
+    if let Some(playlist) = &db
         .select("session_playlists")
         .where_eq("id", session_id)
         .execute_first(db)
@@ -96,7 +96,7 @@ pub async fn get_session(
     id: u64,
 ) -> Result<Option<Session>, DatabaseFetchError> {
     Ok(
-        if let Some(ref session) = db
+        if let Some(session) = &db
             .select("sessions")
             .where_eq("id", id)
             .execute_first(db)
@@ -112,7 +112,7 @@ pub async fn get_session(
 pub async fn get_sessions(db: &LibraryDatabase) -> Result<Vec<Session>, DatabaseFetchError> {
     let mut sessions = vec![];
 
-    for ref session in db.select("sessions").execute(db).await? {
+    for session in &db.select("sessions").execute(db).await? {
         sessions.push(session_as_model_query(session, db.into()).await?);
     }
 
@@ -348,7 +348,7 @@ pub async fn get_connections(
 ) -> Result<Vec<models::Connection>, DatabaseFetchError> {
     let mut connections = vec![];
 
-    for ref connection in db.select("connections").execute(db).await? {
+    for connection in &db.select("connections").execute(db).await? {
         connections.push(connection_as_model_query(connection, db.into()).await?);
     }
 

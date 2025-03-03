@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use moosicbox_gen::{
+use moosicbox_arb::{
     css::CssIdentifierString,
     serde::{JsonF32, JsonValue},
     xml::{XmlAttrNameString, XmlString},
