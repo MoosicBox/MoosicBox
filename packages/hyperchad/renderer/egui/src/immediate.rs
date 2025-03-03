@@ -1859,18 +1859,18 @@ impl EguiApp {
                         |ui| {
                             Self::ui_set_size(ui, container, view_size);
 
-                            // FIXME
-                            // if vscroll {
-                            //     if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
-                            //         let rect = egui::Rect::from_pos(egui::emath::pos2(0.0, height));
-                            //         ui.scroll_to_rect(rect, Some(egui::Align::TOP));
-                            //     }
-                            //     if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
-                            //         let rect =
-                            //             egui::Rect::from_pos(egui::emath::pos2(0.0, -height));
-                            //         ui.scroll_to_rect(rect, Some(egui::Align::TOP));
-                            //     }
-                            // }
+                            if vscroll {
+                                let height = ui.available_height();
+                                if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
+                                    let rect = egui::Rect::from_pos(egui::emath::pos2(0.0, height));
+                                    ui.scroll_to_rect(rect, Some(egui::Align::TOP));
+                                }
+                                if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
+                                    let rect =
+                                        egui::Rect::from_pos(egui::emath::pos2(0.0, -height));
+                                    ui.scroll_to_rect(rect, Some(egui::Align::TOP));
+                                }
+                            }
 
                             Self::render_layout(
                                 ui,
