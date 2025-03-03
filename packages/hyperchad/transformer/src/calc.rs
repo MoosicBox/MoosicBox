@@ -8,8 +8,8 @@ use itertools::Itertools;
 
 use crate::{
     Container, Element, Number, Position, TableIter, TableIterMut,
-    absolute_positioned_elements_mut, calc_number, fixed_positioned_elements_mut,
-    relative_positioned_elements, relative_positioned_elements_mut,
+    absolute_positioned_elements_mut, fixed_positioned_elements_mut, relative_positioned_elements,
+    relative_positioned_elements_mut,
 };
 
 static SCROLLBAR_SIZE: AtomicU16 = AtomicU16::new(16);
@@ -795,7 +795,7 @@ impl Container {
                         .padding_and_margins(LayoutDirection::Column)
                         .unwrap_or(0.0);
                 let height = self.height.as_ref().map_or(container_height, |x| {
-                    calc_number(x, container_height, root_size.0, root_size.1)
+                    x.calc(container_height, root_size.0, root_size.1)
                 });
                 moosicbox_assert::assert!(height >= 0.0);
                 self.calculated_height.replace(height);
@@ -808,7 +808,7 @@ impl Container {
                         .padding_and_margins(LayoutDirection::Row)
                         .unwrap_or(0.0);
                 let width = self.width.as_ref().map_or(container_width, |x| {
-                    calc_number(x, container_width, root_size.0, root_size.1)
+                    x.calc(container_width, root_size.0, root_size.1)
                 });
                 moosicbox_assert::assert!(width >= 0.0);
                 self.calculated_width.replace(width);
@@ -857,55 +857,39 @@ impl Container {
 
     fn calc_margin(&mut self, container_width: f32, container_height: f32, root_size: (f32, f32)) {
         if let Some(size) = &self.margin_top {
-            self.calculated_margin_top = Some(calc_number(
-                size,
-                container_height,
-                root_size.0,
-                root_size.1,
-            ));
+            self.calculated_margin_top =
+                Some(size.calc(container_height, root_size.0, root_size.1));
         }
         if let Some(size) = &self.margin_bottom {
-            self.calculated_margin_bottom = Some(calc_number(
-                size,
-                container_height,
-                root_size.0,
-                root_size.1,
-            ));
+            self.calculated_margin_bottom =
+                Some(size.calc(container_height, root_size.0, root_size.1));
         }
         if let Some(size) = &self.margin_left {
             self.calculated_margin_left =
-                Some(calc_number(size, container_width, root_size.0, root_size.1));
+                Some(size.calc(container_width, root_size.0, root_size.1));
         }
         if let Some(size) = &self.margin_right {
             self.calculated_margin_right =
-                Some(calc_number(size, container_width, root_size.0, root_size.1));
+                Some(size.calc(container_width, root_size.0, root_size.1));
         }
     }
 
     fn calc_padding(&mut self, container_width: f32, container_height: f32, root_size: (f32, f32)) {
         if let Some(size) = &self.padding_top {
-            self.calculated_padding_top = Some(calc_number(
-                size,
-                container_height,
-                root_size.0,
-                root_size.1,
-            ));
+            self.calculated_padding_top =
+                Some(size.calc(container_height, root_size.0, root_size.1));
         }
         if let Some(size) = &self.padding_bottom {
-            self.calculated_padding_bottom = Some(calc_number(
-                size,
-                container_height,
-                root_size.0,
-                root_size.1,
-            ));
+            self.calculated_padding_bottom =
+                Some(size.calc(container_height, root_size.0, root_size.1));
         }
         if let Some(size) = &self.padding_left {
             self.calculated_padding_left =
-                Some(calc_number(size, container_width, root_size.0, root_size.1));
+                Some(size.calc(container_width, root_size.0, root_size.1));
         }
         if let Some(size) = &self.padding_right {
             self.calculated_padding_right =
-                Some(calc_number(size, container_width, root_size.0, root_size.1));
+                Some(size.calc(container_width, root_size.0, root_size.1));
         }
     }
 
@@ -913,64 +897,44 @@ impl Container {
         if let Some((color, size)) = &self.border_top {
             self.calculated_border_top = Some((
                 *color,
-                calc_number(size, container_height, root_size.0, root_size.1),
+                size.calc(container_height, root_size.0, root_size.1),
             ));
         }
         if let Some((color, size)) = &self.border_bottom {
             self.calculated_border_bottom = Some((
                 *color,
-                calc_number(size, container_height, root_size.0, root_size.1),
+                size.calc(container_height, root_size.0, root_size.1),
             ));
         }
         if let Some((color, size)) = &self.border_left {
-            self.calculated_border_left = Some((
-                *color,
-                calc_number(size, container_width, root_size.0, root_size.1),
-            ));
+            self.calculated_border_left =
+                Some((*color, size.calc(container_width, root_size.0, root_size.1)));
         }
         if let Some((color, size)) = &self.border_right {
-            self.calculated_border_right = Some((
-                *color,
-                calc_number(size, container_width, root_size.0, root_size.1),
-            ));
+            self.calculated_border_right =
+                Some((*color, size.calc(container_width, root_size.0, root_size.1)));
         }
         if let Some(radius) = &self.border_top_left_radius {
-            self.calculated_border_top_left_radius = Some(calc_number(
-                radius,
-                container_width,
-                root_size.0,
-                root_size.1,
-            ));
+            self.calculated_border_top_left_radius =
+                Some(radius.calc(container_width, root_size.0, root_size.1));
         }
         if let Some(radius) = &self.border_top_right_radius {
-            self.calculated_border_top_right_radius = Some(calc_number(
-                radius,
-                container_width,
-                root_size.0,
-                root_size.1,
-            ));
+            self.calculated_border_top_right_radius =
+                Some(radius.calc(container_width, root_size.0, root_size.1));
         }
         if let Some(radius) = &self.border_bottom_left_radius {
-            self.calculated_border_bottom_left_radius = Some(calc_number(
-                radius,
-                container_width,
-                root_size.0,
-                root_size.1,
-            ));
+            self.calculated_border_bottom_left_radius =
+                Some(radius.calc(container_width, root_size.0, root_size.1));
         }
         if let Some(radius) = &self.border_bottom_right_radius {
-            self.calculated_border_bottom_right_radius = Some(calc_number(
-                radius,
-                container_width,
-                root_size.0,
-                root_size.1,
-            ));
+            self.calculated_border_bottom_right_radius =
+                Some(radius.calc(container_width, root_size.0, root_size.1));
         }
     }
 
     fn calc_opacity(&mut self, root_size: (f32, f32)) {
         if let Some(opacity) = &self.opacity {
-            self.calculated_opacity = Some(calc_number(opacity, 1.0, root_size.0, root_size.1));
+            self.calculated_opacity = Some(opacity.calc(1.0, root_size.0, root_size.1));
         }
     }
 
@@ -1040,24 +1004,22 @@ impl Container {
     }
 
     fn calc_sized_element_width(&mut self, container_width: f32, root_size: (f32, f32)) -> f32 {
-        let width = calc_number(
-            self.width.as_ref().unwrap(),
-            container_width,
-            root_size.0,
-            root_size.1,
-        );
+        let width = self
+            .width
+            .as_ref()
+            .unwrap()
+            .calc(container_width, root_size.0, root_size.1);
         moosicbox_assert::assert!(width >= 0.0);
         self.calculated_width.replace(width);
         width
     }
 
     fn calc_sized_element_height(&mut self, container_height: f32, root_size: (f32, f32)) -> f32 {
-        let height = calc_number(
-            self.height.as_ref().unwrap(),
-            container_height,
-            root_size.0,
-            root_size.1,
-        );
+        let height = self
+            .height
+            .as_ref()
+            .unwrap()
+            .calc(container_height, root_size.0, root_size.1);
         self.calculated_height.replace(height);
         height
     }
@@ -1075,14 +1037,13 @@ impl Container {
                     - self
                         .padding_and_margins(LayoutDirection::Column)
                         .unwrap_or(0.0);
-                let width = calc_number(
-                    self.width.as_ref().unwrap(),
-                    container_width,
-                    root_size.0,
-                    root_size.1,
-                );
+                let width =
+                    self.width
+                        .as_ref()
+                        .unwrap()
+                        .calc(container_width, root_size.0, root_size.1);
                 let height = self.height.as_ref().map_or(container_height, |x| {
-                    calc_number(x, container_height, root_size.0, root_size.1)
+                    x.calc(container_height, root_size.0, root_size.1)
                 });
                 moosicbox_assert::assert!(width >= 0.0);
                 self.calculated_width.replace(width);
@@ -1097,10 +1058,10 @@ impl Container {
                         .padding_and_margins(LayoutDirection::Row)
                         .unwrap_or(0.0);
                 let width = self.width.as_ref().map_or(container_width, |x| {
-                    calc_number(x, container_width, root_size.0, root_size.1)
+                    x.calc( container_width, root_size.0, root_size.1)
                 });
-                let height = calc_number(
-                    self.height.as_ref().unwrap(),
+                let height = 
+                    self.height.as_ref().unwrap().calc(
                     container_height,
                     root_size.0,
                     root_size.1,
@@ -1323,7 +1284,7 @@ impl Container {
             match direction {
                 LayoutDirection::Row => {
                     let height = element.height.as_ref().map_or(container_height, |x| {
-                        calc_number(x, container_height, root_size.0, root_size.1)
+                        x.calc( container_height, root_size.0, root_size.1)
                     });
                     moosicbox_assert::assert!(height >= 0.0);
                     element.calculated_height.replace(height);
@@ -1334,7 +1295,7 @@ impl Container {
                 }
                 LayoutDirection::Column => {
                     let width = element.width.as_ref().map_or(container_width, |x| {
-                        calc_number(x, container_width, root_size.0, root_size.1)
+                        x.calc( container_width, root_size.0, root_size.1)
                     });
                     moosicbox_assert::assert!(width >= 0.0);
                     element.calculated_width.replace(width);
@@ -1376,11 +1337,11 @@ impl Container {
         let gap_x = self
             .column_gap
             .as_ref()
-            .map(|x| calc_number(x, container_width, root_size.0, root_size.1));
+            .map(|x| x.calc( container_width, root_size.0, root_size.1));
         let gap_y = self
             .row_gap
             .as_ref()
-            .map(|x| calc_number(x, container_height, root_size.0, root_size.1));
+            .map(|x| x.calc( container_height, root_size.0, root_size.1));
 
         let relative_size = self.get_relative_size().or(relative_size);
 
@@ -1646,7 +1607,7 @@ impl Container {
         let mut first_vertical_margin = vertical_margin;
 
         if let Some(gap) = &self.column_gap {
-            let gap_x = calc_number(gap, container_width, root_size.0, root_size.1);
+            let gap_x = gap.calc(container_width, root_size.0, root_size.1);
 
             if let Some(margin) = horizontal_margin {
                 if gap_x > margin {
@@ -1664,7 +1625,7 @@ impl Container {
         }
 
         if let Some(gap) = &self.row_gap {
-            let gap_y = calc_number(gap, container_height, root_size.0, root_size.1);
+            let gap_y = gap.calc(container_height, root_size.0, root_size.1);
             if let Some(margin) = vertical_margin {
                 if gap_y > margin {
                     vertical_margin.replace(gap_y);
@@ -1790,10 +1751,10 @@ impl Container {
         for element in absolute_positioned_elements_mut(&mut self.children) {
             if let Some((width, height)) = relative_size {
                 if let Some(left) = &element.left {
-                    element.calculated_x = Some(calc_number(left, width, root_size.0, root_size.1));
+                    element.calculated_x = Some(left.calc(width, root_size.0, root_size.1));
                 }
                 if let Some(right) = &element.right {
-                    let offset = calc_number(right, width, root_size.0, root_size.1);
+                    let offset = right.calc(width, root_size.0, root_size.1);
                     let bounding_width = element.bounding_calculated_width().unwrap();
                     element.calculated_x = Some(width - offset - bounding_width);
                     log::trace!(
@@ -1802,10 +1763,10 @@ impl Container {
                     );
                 }
                 if let Some(top) = &element.top {
-                    element.calculated_y = Some(calc_number(top, height, root_size.0, root_size.1));
+                    element.calculated_y = Some(top.calc(height, root_size.0, root_size.1));
                 }
                 if let Some(bottom) = &element.bottom {
-                    let offset = calc_number(bottom, height, root_size.0, root_size.1);
+                    let offset = bottom.calc(height, root_size.0, root_size.1);
                     let bounding_height = element.bounding_calculated_height().unwrap();
                     element.calculated_y = Some(height - offset - bounding_height);
                     log::trace!(
@@ -1830,10 +1791,10 @@ impl Container {
             let (width, height) = root_size;
 
             if let Some(left) = &element.left {
-                element.calculated_x = Some(calc_number(left, width, root_size.0, root_size.1));
+                element.calculated_x = Some(left.calc(width, root_size.0, root_size.1));
             }
             if let Some(right) = &element.right {
-                let offset = calc_number(right, width, root_size.0, root_size.1);
+                let offset = right.calc(width, root_size.0, root_size.1);
                 let bounding_width = element.bounding_calculated_width().unwrap();
                 element.calculated_x = Some(width - offset - bounding_width);
                 log::trace!(
@@ -1842,10 +1803,10 @@ impl Container {
                 );
             }
             if let Some(top) = &element.top {
-                element.calculated_y = Some(calc_number(top, height, root_size.0, root_size.1));
+                element.calculated_y = Some(top.calc(height, root_size.0, root_size.1));
             }
             if let Some(bottom) = &element.bottom {
-                let offset = calc_number(bottom, height, root_size.0, root_size.1);
+                let offset = bottom.calc(height, root_size.0, root_size.1);
                 let bounding_height = element.bounding_calculated_height().unwrap();
                 element.calculated_y = Some(height - offset - bounding_height);
                 log::trace!(
@@ -1885,7 +1846,7 @@ impl Container {
                         .filter_map(|x| {
                             x.width
                                 .as_ref()
-                                .map(|x| calc_number(x, calculated_width, root_size.0, root_size.1))
+                                .map(|x| x.calc(calculated_width, root_size.0, root_size.1))
                                 .or_else(|| {
                                     if recurse {
                                         x.contained_sized_width(root_size, recurse)
@@ -1919,7 +1880,7 @@ impl Container {
                                 x.width
                                     .as_ref()
                                     .map(|x| {
-                                        calc_number(x, calculated_width, root_size.0, root_size.1)
+                                        x.calc( calculated_width, root_size.0, root_size.1)
                                     })
                                     .or_else(|| {
                                         if recurse {
@@ -1966,7 +1927,7 @@ impl Container {
                                 x.height
                                     .as_ref()
                                     .map(|x| {
-                                        calc_number(x, calculated_height, root_size.0, root_size.1)
+                                        x.calc( calculated_height, root_size.0, root_size.1)
                                     })
                                     .or_else(|| {
                                         if recurse {
@@ -2001,7 +1962,7 @@ impl Container {
                             x.height
                                 .as_ref()
                                 .map(|x| {
-                                    calc_number(x, calculated_height, root_size.0, root_size.1)
+                                    x.calc( calculated_height, root_size.0, root_size.1)
                                 })
                                 .or_else(|| {
                                     if recurse {

@@ -25,26 +25,6 @@ pub mod calc;
 pub mod html;
 pub mod parse;
 
-#[allow(clippy::module_name_repetitions)]
-#[must_use]
-pub fn calc_number(number: &Number, container: f32, view_width: f32, view_height: f32) -> f32 {
-    match number {
-        Number::Real(x) => *x,
-        #[allow(clippy::cast_precision_loss)]
-        Number::Integer(x) => *x as f32,
-        Number::RealPercent(x) => container * (*x / 100.0),
-        #[allow(clippy::cast_precision_loss)]
-        Number::IntegerPercent(x) => container * (*x as f32 / 100.0),
-        Number::RealVw(x) | Number::RealDvw(x) => view_width * (*x / 100.0),
-        #[allow(clippy::cast_precision_loss)]
-        Number::IntegerVw(x) | Number::IntegerDvw(x) => view_width * (*x as f32 / 100.0),
-        Number::RealVh(x) | Number::RealDvh(x) => view_height * (*x / 100.0),
-        #[allow(clippy::cast_precision_loss)]
-        Number::IntegerVh(x) | Number::IntegerDvh(x) => view_height * (*x as f32 / 100.0),
-        Number::Calc(x) => x.calc(container, view_width, view_height),
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, EnumDiscriminants, Serialize, Deserialize)]
 #[strum_discriminants(derive(EnumIter))]
 #[strum_discriminants(name(CalculationType))]
@@ -62,7 +42,7 @@ pub enum Calculation {
 impl Calculation {
     fn calc(&self, container: f32, view_width: f32, view_height: f32) -> f32 {
         match self {
-            Self::Number(number) => calc_number(number, container, view_width, view_height),
+            Self::Number(number) => number.calc(container, view_width, view_height),
             Self::Add(left, right) => {
                 left.calc(container, view_width, view_height)
                     + right.calc(container, view_width, view_height)
@@ -214,6 +194,27 @@ impl<'de> Deserialize<'de> for Number {
                 .map_err(D::Error::custom)?
                 .into()
         })
+    }
+}
+
+impl Number {
+    #[must_use]
+    pub fn calc(&self, container: f32, view_width: f32, view_height: f32) -> f32 {
+        match self {
+            Self::Real(x) => *x,
+            #[allow(clippy::cast_precision_loss)]
+            Self::Integer(x) => *x as f32,
+            Self::RealPercent(x) => container * (*x / 100.0),
+            #[allow(clippy::cast_precision_loss)]
+            Self::IntegerPercent(x) => container * (*x as f32 / 100.0),
+            Self::RealVw(x) | Self::RealDvw(x) => view_width * (*x / 100.0),
+            #[allow(clippy::cast_precision_loss)]
+            Self::IntegerVw(x) | Self::IntegerDvw(x) => view_width * (*x as f32 / 100.0),
+            Self::RealVh(x) | Self::RealDvh(x) => view_height * (*x / 100.0),
+            #[allow(clippy::cast_precision_loss)]
+            Self::IntegerVh(x) | Self::IntegerDvh(x) => view_height * (*x as f32 / 100.0),
+            Self::Calc(x) => x.calc(container, view_width, view_height),
+        }
     }
 }
 

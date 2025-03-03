@@ -33,7 +33,6 @@ use hyperchad_renderer::viewport::retained::{
 use hyperchad_transformer::{
     Container, Element, HeaderSize, ResponsiveTrigger,
     calc::Calc as _,
-    calc_number,
     models::{LayoutDirection, LayoutOverflow, LayoutPosition},
 };
 use thiserror::Error;
@@ -955,31 +954,39 @@ impl FltkRenderer {
                                                 clippy::cast_possible_truncation,
                                                 clippy::cast_precision_loss
                                             )]
-                                            let width = calc_number(
-                                                container.width.as_ref().unwrap(),
-                                                context.width,
-                                                self.width.load(std::sync::atomic::Ordering::SeqCst)
-                                                    as f32,
-                                                self.height
-                                                    .load(std::sync::atomic::Ordering::SeqCst)
-                                                    as f32,
-                                            )
-                                            .round()
+                                            let width = container
+                                                .width
+                                                .as_ref()
+                                                .unwrap()
+                                                .calc(
+                                                    context.width,
+                                                    self.width
+                                                        .load(std::sync::atomic::Ordering::SeqCst)
+                                                        as f32,
+                                                    self.height
+                                                        .load(std::sync::atomic::Ordering::SeqCst)
+                                                        as f32,
+                                                )
+                                                .round()
                                                 as i32;
                                             #[allow(
                                                 clippy::cast_possible_truncation,
                                                 clippy::cast_precision_loss
                                             )]
-                                            let height = calc_number(
-                                                container.height.as_ref().unwrap(),
-                                                context.height,
-                                                self.width.load(std::sync::atomic::Ordering::SeqCst)
-                                                    as f32,
-                                                self.height
-                                                    .load(std::sync::atomic::Ordering::SeqCst)
-                                                    as f32,
-                                            )
-                                            .round()
+                                            let height = container
+                                                .height
+                                                .as_ref()
+                                                .unwrap()
+                                                .calc(
+                                                    context.height,
+                                                    self.width
+                                                        .load(std::sync::atomic::Ordering::SeqCst)
+                                                        as f32,
+                                                    self.height
+                                                        .load(std::sync::atomic::Ordering::SeqCst)
+                                                        as f32,
+                                                )
+                                                .round()
                                                 as i32;
 
                                             frame.set_size(width, height);
@@ -1464,7 +1471,7 @@ impl Context {
                 container
                     .width
                     .as_ref()
-                    .map(|x| calc_number(x, self.width, self.root_width, self.root_height))
+                    .map(|x| x.calc(self.width, self.root_width, self.root_height))
             })
             .unwrap_or(self.width);
         self.height = container
@@ -1473,7 +1480,7 @@ impl Context {
                 container
                     .height
                     .as_ref()
-                    .map(|x| calc_number(x, self.height, self.root_width, self.root_height))
+                    .map(|x| x.calc(self.height, self.root_width, self.root_height))
             })
             .unwrap_or(self.height);
         self
