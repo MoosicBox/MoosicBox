@@ -1807,22 +1807,20 @@ impl EguiApp {
             view_size,
             |render_context, ui, relative_container| {
                 #[allow(clippy::cast_possible_truncation)]
-                let mut frame = egui::Frame::new();
-                // FIXME
-                // .inner_margin(egui::Margin {
-                // left: container
-                //     .calculated_padding_left
-                //     .map_or(0, |x| x.round() as i8),
-                // right: container
-                //     .calculated_padding_right
-                //     .map_or(0, |x| x.round() as i8),
-                // top: container
-                //     .calculated_padding_top
-                //     .map_or(0, |x| x.round() as i8),
-                // bottom: container
-                //     .calculated_padding_bottom
-                //     .map_or(0, |x| x.round() as i8),
-                // });
+                let mut frame = egui::Frame::new().inner_margin(egui::Margin {
+                    left: container.padding_left.as_ref().map_or(0, |x| {
+                        Self::ui_calc_horizontal(x, ui, view_size).round() as i8
+                    }),
+                    right: container.padding_right.as_ref().map_or(0, |x| {
+                        Self::ui_calc_horizontal(x, ui, view_size).round() as i8
+                    }),
+                    top: container.padding_top.as_ref().map_or(0, |x| {
+                        Self::ui_calc_vertical(x, ui, view_size).round() as i8
+                    }),
+                    bottom: container.padding_bottom.as_ref().map_or(0, |x| {
+                        Self::ui_calc_vertical(x, ui, view_size).round() as i8
+                    }),
+                });
 
                 if let Some(background) =
                     Self::get_container_style_override(container, render_context.backgrounds)
