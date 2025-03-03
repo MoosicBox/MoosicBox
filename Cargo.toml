@@ -14,6 +14,7 @@ members = [
     "packages/app/tauri/src-tauri",
     "packages/app/tauri/tauri-plugin-player",
     "packages/app/tauri/ws",
+    "packages/arb",
     "packages/assert",
     "packages/async_service",
     "packages/audio_decoder",
@@ -31,7 +32,6 @@ members = [
     "packages/downloader",
     "packages/env_utils",
     "packages/files",
-    "packages/arb",
     "packages/hyperchad",
     "packages/hyperchad/actions",
     "packages/hyperchad/color",
@@ -174,9 +174,9 @@ diesel = { version = "2.2.7", default-features = false }
 diesel_migrations = { version = "2.2.0", default-features = false }
 dotenv = "0.15"
 dyn-clone = "1.0.18"
-eframe = { git = "https://github.com/BSteffaniak/egui", version = "0.31.0", default-features = false }
-egui = { git = "https://github.com/BSteffaniak/egui", version = "0.31.0", default-features = false }
-egui_extras = { git = "https://github.com/BSteffaniak/egui", version = "0.31.0", default-features = false }
+eframe = { version = "0.31.0", default-features = false }
+egui = { version = "0.31.0", default-features = false }
+egui_extras = { version = "0.31.0", default-features = false }
 enum-as-inner = "0.6.1"
 env_logger = "0.11"
 fdk-aac = "0.7.0"
@@ -334,7 +334,10 @@ webp = "0.3.0"
 whoami = "1.5.2"
 xml = "0.8.20"
 
-# [patch.crates-io]
+[patch.crates-io]
+eframe      = { git = "https://github.com/BSteffaniak/egui" }
+egui        = { git = "https://github.com/BSteffaniak/egui" }
+egui_extras = { git = "https://github.com/BSteffaniak/egui" }
 # actix-files            = { path = "../actix-web/actix-files" }
 # actix-http             = { path = "../actix-web/actix-http" }
 # actix-http-test        = { path = "../actix-web/actix-http-test" }
