@@ -1,6 +1,6 @@
 use moosicbox_async_service::Arc;
 use moosicbox_scan::event::{
-    add_progress_listener, ApiProgressEvent, ProgressEvent, ProgressListenerRefFut,
+    ApiProgressEvent, ProgressEvent, ProgressListenerRefFut, add_progress_listener,
 };
 
 use crate::WS_SERVER_HANDLE;

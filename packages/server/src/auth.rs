@@ -1,5 +1,5 @@
 use actix_web::{
-    dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
+    dev::{Service, ServiceRequest, ServiceResponse, Transform, forward_ready},
     error::ErrorUnauthorized,
     http,
 };
@@ -7,7 +7,7 @@ use futures_util::future::LocalBoxFuture;
 use qstring::QString;
 use std::{
     collections::HashMap,
-    future::{ready, Ready},
+    future::{Ready, ready},
 };
 
 #[allow(clippy::module_name_repetitions)]

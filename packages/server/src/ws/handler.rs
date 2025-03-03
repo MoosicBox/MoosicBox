@@ -2,12 +2,12 @@ use std::time::{Duration, Instant};
 
 use actix_ws::Message;
 use futures_util::{
-    future::{select, Either},
     StreamExt as _,
+    future::{Either, select},
 };
 use tokio::{pin, sync::mpsc, time::interval};
 
-use crate::ws::{server::WsServerHandle, ConnId};
+use crate::ws::{ConnId, server::WsServerHandle};
 
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);

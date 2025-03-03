@@ -4,12 +4,12 @@ use moosicbox_async_service::Arc;
 use moosicbox_database::profiles::PROFILES;
 use moosicbox_player::Playback;
 use moosicbox_session::models::UpdateSession;
-use moosicbox_ws::{update_session, WebsocketSender};
+use moosicbox_ws::{WebsocketSender, update_session};
 use service::Commander as _;
 use strum_macros::{AsRefStr, EnumString};
 use tokio::sync::RwLock;
 
-use crate::{ws::server::WsServerHandle, CONFIG_DB};
+use crate::{CONFIG_DB, ws::server::WsServerHandle};
 
 pub static PLAYBACK_EVENT_HANDLE: OnceLock<service::Handle> = OnceLock::new();
 

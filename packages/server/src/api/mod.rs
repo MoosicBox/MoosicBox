@@ -1,13 +1,12 @@
-use crate::{ws::handler, WS_SERVER_HANDLE};
+use crate::{WS_SERVER_HANDLE, ws::handler};
+use actix_web::{HttpResponse, route};
 use actix_web::{
-    get,
+    Result, get,
     web::{self, Json},
-    Result,
 };
-use actix_web::{route, HttpResponse};
 use log::info;
 use moosicbox_database::profiles::api::ProfileName;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 #[cfg(feature = "openapi")]
 pub mod openapi;

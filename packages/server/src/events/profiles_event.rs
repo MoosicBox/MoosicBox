@@ -1,12 +1,12 @@
 use std::{collections::HashMap, sync::Arc};
 
 use moosicbox_config::AppType;
-use moosicbox_database::{config::ConfigDatabase, Database};
+use moosicbox_database::{Database, config::ConfigDatabase};
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_music_api::MusicApi;
 use moosicbox_music_models::ApiSource;
 use moosicbox_profiles::events::{
-    on_profiles_updated_event, trigger_profiles_updated_event, BoxErrorSend,
+    BoxErrorSend, on_profiles_updated_event, trigger_profiles_updated_event,
 };
 
 async fn add_profile(

@@ -2,8 +2,8 @@ use std::{
     collections::{HashMap, HashSet},
     io,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
 };
 
@@ -14,10 +14,10 @@ use moosicbox_ws::{
     PlayerAction, WebsocketContext, WebsocketDisconnectError, WebsocketMessageError,
     WebsocketSendError, WebsocketSender,
 };
-use rand::{rng, Rng as _};
+use rand::{Rng as _, rng};
 use serde_json::Value;
 use strum_macros::AsRefStr;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 use tokio_util::sync::CancellationToken;
 
 use crate::ws::{ConnId, Msg, RoomId};

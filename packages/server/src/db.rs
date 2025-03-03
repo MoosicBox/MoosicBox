@@ -1,4 +1,4 @@
-use moosicbox_config::{get_app_config_dir_path, get_profile_dir_path, AppType};
+use moosicbox_config::{AppType, get_app_config_dir_path, get_profile_dir_path};
 
 #[cfg_attr(feature = "profiling", profiling::function)]
 #[must_use]

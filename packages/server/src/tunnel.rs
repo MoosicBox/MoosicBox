@@ -4,8 +4,8 @@ use moosicbox_auth::get_client_id_and_access_token;
 use moosicbox_database::config::ConfigDatabase;
 use moosicbox_tunnel::TunnelRequest;
 use moosicbox_tunnel_sender::{
-    sender::{TunnelSender, TunnelSenderHandle},
     TunnelMessage,
+    sender::{TunnelSender, TunnelSenderHandle},
 };
 use thiserror::Error;
 use tokio::task::JoinHandle;
@@ -122,10 +122,10 @@ pub async fn setup_tunnel(
                                                 .await
                                             {
                                                 log::error!(
-                                                                "Failed to propagate ws request {} from conn_id {}: {err:?}",
-                                                                request.request_id,
-                                                                request.conn_id
-                                                            );
+                                                    "Failed to propagate ws request {} from conn_id {}: {err:?}",
+                                                    request.request_id,
+                                                    request.conn_id
+                                                );
                                             }
                                         }
                                         TunnelRequest::Abort(request) => {

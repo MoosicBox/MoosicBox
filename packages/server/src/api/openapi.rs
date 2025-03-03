@@ -1,8 +1,8 @@
 use actix_web::{
-    dev::{ServiceFactory, ServiceRequest},
     Scope,
+    dev::{ServiceFactory, ServiceRequest},
 };
-use utoipa::{openapi::OpenApi, OpenApi as _};
+use utoipa::{OpenApi as _, openapi::OpenApi};
 
 #[cfg(feature = "openapi")]
 #[derive(utoipa::OpenApi)]
