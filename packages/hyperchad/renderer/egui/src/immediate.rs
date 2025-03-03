@@ -1746,21 +1746,33 @@ impl EguiApp {
 
     fn ui_set_size(ui: &mut Ui, container: &Container, view_size: (f32, f32)) {
         if let Some(width) = &container.width {
-            let width = Self::calc_width(width, ui.available_width(), view_size);
+            let width = Self::ui_calc_horizontal(width, ui, view_size);
             ui.set_width(width);
         }
         if let Some(height) = &container.height {
-            let height = Self::calc_height(height, ui.available_height(), view_size);
+            let height = Self::ui_calc_vertical(height, ui, view_size);
             ui.set_height(height);
         }
     }
 
-    fn calc_width(number: &Number, container_width: f32, view_size: (f32, f32)) -> f32 {
-        number.calc(container_width, view_size.0, view_size.1)
+    fn ui_calc_horizontal(number: &Number, ui: &Ui, view_size: (f32, f32)) -> f32 {
+        Self::calc_horizontal(number, ui.available_width(), view_size)
     }
 
-    fn calc_height(number: &Number, container_height: f32, view_size: (f32, f32)) -> f32 {
-        number.calc(container_height, view_size.0, view_size.1)
+    fn ui_calc_vertical(number: &Number, ui: &Ui, view_size: (f32, f32)) -> f32 {
+        Self::calc_vertical(number, ui.available_height(), view_size)
+    }
+
+    fn calc_horizontal(number: &Number, container_width: f32, view_size: (f32, f32)) -> f32 {
+        Self::calc_number(number, container_width, view_size)
+    }
+
+    fn calc_vertical(number: &Number, container_height: f32, view_size: (f32, f32)) -> f32 {
+        Self::calc_number(number, container_height, view_size)
+    }
+
+    fn calc_number(number: &Number, container: f32, view_size: (f32, f32)) -> f32 {
+        number.calc(container, view_size.0, view_size.1)
     }
 
     fn get_container_style_override<'a, T>(
