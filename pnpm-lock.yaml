@@ -42,14 +42,14 @@ importers:
         specifier: ^11.1.0
         version: 11.1.0(eslint@8.57.1)
       prettier:
-        specifier: ^3.5.2
-        version: 3.5.2
+        specifier: ^3.5.3
+        version: 3.5.3
       prettier-plugin-astro:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.9.20
-        version: 3.9.20
+        specifier: ^3.9.22
+        version: 3.9.22
       typescript:
         specifier: ^5.8.2
         version: 5.8.2
@@ -1729,8 +1729,8 @@ packages:
     resolution: {integrity: sha512-5HrJNnPmZqTUNoA97zn4gNQv9BgVhv+et03314WpQ9H9N8m2L9OSV798olwmG2YLXPl1iSstlJCR1zB3x5xG4g==}
     engines: {node: ^14.15.0 || >=16.0.0}
 
-  prettier@3.5.2:
-    resolution: {integrity: sha512-lc6npv5PH7hVqozBR7lkBNOGXV9vMwROAPlumdBkX0wTbbzPu/U1hk5yL8p2pt4Xoc+2mkT8t/sow2YrV/M5qg==}
+  prettier@3.5.3:
+    resolution: {integrity: sha512-QQtaxnoDJeAkDvDKWCLiwIXkTgRhwYDEQCghU9Z6q03iyek/rxRh/2lC3HB7P8sWT2xC/y5JDctPLBIGzHKbhw==}
     engines: {node: '>=14'}
     hasBin: true
 
@@ -1970,33 +1970,33 @@ packages:
     resolution: {integrity: sha512-MGrFH9Z4NP9Iyhqn16sDtBpRRNJ0Y2hNa6D65h736fVSaPCHr4DM4sWUNvVaSuC+0OBGhwsrydQwmgfg5LncqQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
-  sst-darwin-arm64@3.9.20:
-    resolution: {integrity: sha512-R4iU3X3YREbwFM7Zuu2t5u4H+oSMqd6KioYzelZ3vxRAhhUvCevbVkZBixnDmxTO9dJSEWruP3ZFqppwCf3DJA==}
+  sst-darwin-arm64@3.9.22:
+    resolution: {integrity: sha512-wSzPvqdBelQndJ/NgQfE/nSfFWMEkN1jxRHM/sLCUV35mqTL5+dNF52T8sMil5M+MxWgu6ZdEMrTw4s1XkM95g==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.9.20:
-    resolution: {integrity: sha512-XU/YMiXx8pJT6m8t4YumGju6JGeA7GvO6tEMCQx5SwHIU6DTO5737+PydOL1scgz+9uL0jiJNzMYvFt7/kb0kw==}
+  sst-darwin-x64@3.9.22:
+    resolution: {integrity: sha512-r1yaY4rKbejZ324hNc3aNQC+FQVrrrQJFk94SFL3gai7osMwnhVlFUsBFBgznLEXqTIPdsq0ypiauRj4loKzbw==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.9.20:
-    resolution: {integrity: sha512-tHsgTJkd1/a0+v3QR63LJQzLs+8MUgBbsD2/6kPbakE9RViWpOe1sTiYa9GfQi3MCkK356Xsagh/czk6pRYr5A==}
+  sst-linux-arm64@3.9.22:
+    resolution: {integrity: sha512-rftae2HNx62oDQWJMtC2wfKvALtldxcRn8waQl2jXmX3iHRkmsRSHUWoknABth8IxNOn2Ye9/hLJD4jt+/0Lxg==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.9.20:
-    resolution: {integrity: sha512-SfO/ZrDJdHsXn0D812+yx0hy90rBqEUR6jeDtNN93GwO5IkXjx7R+Phvi5E953+l+2Vet3cy6SnbZd6eWHcoEQ==}
+  sst-linux-x64@3.9.22:
+    resolution: {integrity: sha512-lG8M4SoRwAAleGhTrLYKnmv+B4YDmFjqsz/xDT6+uUaCHV2U5E5aozcngyRurylP0hRAzvrzyY2FOk+bmjZT3w==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.9.20:
-    resolution: {integrity: sha512-mhxgKz8J6hVk1mJTVsII6dogSxpOgCWu09X+2YtU8cdMVrCEq8AcUv+3QAdjlDAyZSCxlzZUyaVL0RNnapECcw==}
+  sst-linux-x86@3.9.22:
+    resolution: {integrity: sha512-r3gIgpwqEz5vqElEx+IZv1LUUropzz2Rr5ynWIqt/KphwO7vGapL2ufytyNDZLkiWQZ97xRQEHhekF1UJfjjNA==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.9.20:
-    resolution: {integrity: sha512-txmYYBjnPLXZkpw2cs9h4pLqX5V5W+cfE9nU0BVtB7tjHkkCrGIMBY02bIKLv+M2Vk3MOxingtHWimWQ4FgSZQ==}
+  sst@3.9.22:
+    resolution: {integrity: sha512-tNHSVelWgkPNVnq776nGSuxL8JujKURvb5ZeiYR37w8p6FbBZ3i3/HfubOyTDP0BEng2dvdlH/jd3vPYrDLo5g==}
     hasBin: true
 
   string-width@4.2.3:
@@ -4210,10 +4210,10 @@ snapshots:
   prettier-plugin-astro@0.13.0:
     dependencies:
       '@astrojs/compiler': 1.8.2
-      prettier: 3.5.2
+      prettier: 3.5.3
       sass-formatter: 0.7.9
 
-  prettier@3.5.2: {}
+  prettier@3.5.3: {}
 
   proc-log@4.2.0: {}
 
@@ -4476,32 +4476,32 @@ snapshots:
     dependencies:
       minipass: 7.1.2
 
-  sst-darwin-arm64@3.9.20:
+  sst-darwin-arm64@3.9.22:
     optional: true
 
-  sst-darwin-x64@3.9.20:
+  sst-darwin-x64@3.9.22:
     optional: true
 
-  sst-linux-arm64@3.9.20:
+  sst-linux-arm64@3.9.22:
     optional: true
 
-  sst-linux-x64@3.9.20:
+  sst-linux-x64@3.9.22:
     optional: true
 
-  sst-linux-x86@3.9.20:
+  sst-linux-x86@3.9.22:
     optional: true
 
-  sst@3.9.20:
+  sst@3.9.22:
     dependencies:
       aws4fetch: 1.0.20
       jose: 5.2.3
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.9.20
-      sst-darwin-x64: 3.9.20
-      sst-linux-arm64: 3.9.20
-      sst-linux-x64: 3.9.20
-      sst-linux-x86: 3.9.20
+      sst-darwin-arm64: 3.9.22
+      sst-darwin-x64: 3.9.22
+      sst-linux-arm64: 3.9.22
+      sst-linux-x64: 3.9.22
+      sst-linux-x86: 3.9.22
 
   string-width@4.2.3:
     dependencies:

@@ -27,9 +27,9 @@
         "eslint-plugin-import": "^2.31.0",
         "eslint-plugin-jsx-a11y": "^6.10.2",
         "eslint-plugin-node": "^11.1.0",
-        "prettier": "^3.5.2",
+        "prettier": "^3.5.3",
         "prettier-plugin-astro": "^0.13.0",
-        "sst": "^3.9.20",
+        "sst": "^3.9.22",
         "typescript": "^5.8.2",
         "yaml": "^2.7.0"
     }
