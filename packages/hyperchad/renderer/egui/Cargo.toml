@@ -58,7 +58,7 @@ tracy-client = { workspace = true, default-features = false, optional = true, fe
 ] }
 
 [features]
-default = ["calc", "debug", "retained", "wgpu"]
+default = ["debug", "immediate", "retained", "wgpu"]
 
 fail-on-warnings = []
 
@@ -75,5 +75,5 @@ profiling-tracy   = ["dep:tracy-client", "profiling"]
 
 debug = []
 
-calc     = ["hyperchad_transformer/calc"]
-retained = []
+immediate = []
+retained  = ["hyperchad_transformer/calc"]

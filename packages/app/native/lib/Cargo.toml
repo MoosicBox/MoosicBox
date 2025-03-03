@@ -37,13 +37,13 @@ tokio     = { workspace = true, features = ["rt-multi-thread", "sync"] }
 [features]
 default = [
     "actix",
-    "calc",
     "datastar",
     "egui-wgpu",
     "fltk",
     "format",
     "html",
     "htmx",
+    "immediate",
     "json",
     "lambda",
     "logic",
@@ -134,5 +134,5 @@ plugin-nav       = ["hyperchad_renderer_vanilla_js?/plugin-nav"]
 plugin-routing   = ["hyperchad_renderer_vanilla_js?/plugin-routing"]
 plugin-sse       = ["hyperchad_renderer_vanilla_js?/plugin-sse"]
 
-calc     = ["hyperchad_renderer_egui?/calc"]
-retained = ["hyperchad_renderer_egui?/retained"]
+immediate = ["hyperchad_renderer_egui?/immediate"]
+retained  = ["hyperchad_renderer_egui?/retained"]

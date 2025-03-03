@@ -9,7 +9,7 @@ use std::{
 
 use async_trait::async_trait;
 use canvas::CanvasAction;
-use eframe::egui::{self, Color32, CursorIcon, Response, Ui, Widget};
+use eframe::egui::{self, Align, Color32, CursorIcon, Layout, Response, Ui, UiBuilder, Widget};
 use flume::{Receiver, Sender};
 use hyperchad_actions::{
     ActionEffect, ActionTrigger, ActionType, ElementTarget, StyleAction, logic::Value,
@@ -19,14 +19,12 @@ use hyperchad_renderer::viewport::immediate::{Pos, Viewport, ViewportListener};
 pub use hyperchad_renderer::*;
 use hyperchad_router::{ClientInfo, RequestInfo, Router};
 use hyperchad_transformer::{
-    Container, Element, Input, ResponsiveTrigger, TableIter,
-    calc::Calc,
+    Container, Element, Input, Number, ResponsiveTrigger, TableIter,
     models::{
-        AlignItems, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition,
-        Position, Route, SwapTarget, Visibility,
+        AlignItems, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, Position, Route,
+        SwapTarget, Visibility,
     },
 };
-use itertools::Itertools;
 
 #[cfg(feature = "debug")]
 static DEBUG: LazyLock<RwLock<bool>> = LazyLock::new(|| {
@@ -101,8 +99,6 @@ impl RenderRunner for EguiRenderRunner {
         if let (Some(x), Some(y)) = (self.x, self.y) {
             viewport = viewport.with_position((x as f32, y as f32));
         }
-
-        hyperchad_transformer::calc::set_scrollbar_size(0);
 
         #[cfg(feature = "wgpu")]
         let renderer = eframe::Renderer::Wgpu;
@@ -367,19 +363,13 @@ impl Renderer for EguiRenderer {
     /// Will panic if elements `Mutex` is poisoned.
     async fn render(&self, view: View) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         let app = self.app.clone();
-        let width = self.width;
-        let height = self.height;
 
         moosicbox_task::spawn_blocking("egui render", move || {
             moosicbox_logging::debug_or_trace!(
                 ("render: start"),
                 ("render: start {:?}", view.immediate)
             );
-            let mut element = view.immediate;
-
-            element.calculated_width = app.width.read().unwrap().or(width);
-            element.calculated_height = app.height.read().unwrap().or(height);
-            element.calc();
+            let element = view.immediate;
 
             let mut watch_positions = app.watch_positions.write().unwrap();
             watch_positions.clear();
@@ -439,7 +429,7 @@ impl Renderer for EguiRenderer {
                 .collect::<Vec<_>>();
 
             if let Some(removed) =
-                page.replace_str_id_with_elements_calc(view.container.children, &view.target)
+                page.replace_str_id_with_elements(view.container.children, &view.target)
             {
                 let mut watch_positions = app.watch_positions.write().unwrap();
                 watch_positions.clear();
@@ -889,7 +879,7 @@ impl EguiApp {
         let mut page = container.write().unwrap();
         match swap {
             SwapTarget::This => {
-                if page.replace_id_with_elements_calc(result.children, container_id) {
+                if page.replace_id_with_elements(result.children, container_id) {
                     drop(page);
                     ctx.request_repaint();
                 } else {
@@ -897,7 +887,7 @@ impl EguiApp {
                 }
             }
             SwapTarget::Children => {
-                if page.replace_id_children_with_elements_calc(result.children, container_id) {
+                if page.replace_id_children_with_elements(result.children, container_id) {
                     drop(page);
                     ctx.request_repaint();
                 } else {
@@ -916,13 +906,6 @@ impl EguiApp {
             self.width.read().unwrap(),
             self.height.read().unwrap()
         );
-
-        {
-            let mut container = self.container.write().unwrap();
-            container.calculated_width.replace(width);
-            container.calculated_height.replace(height);
-            container.calc();
-        }
 
         self.width.write().unwrap().replace(width);
         self.height.write().unwrap().replace(height);
@@ -956,7 +939,7 @@ impl EguiApp {
         rect: egui::Rect,
         pos_x: f32,
         pos_y: f32,
-        element: &Container,
+        _element: &Container,
         parent: Option<&Viewport>,
     ) -> Viewport {
         let viewport = Viewport {
@@ -964,14 +947,14 @@ impl EguiApp {
             pos: Pos {
                 x: pos_x,
                 y: pos_y,
-                w: element.calculated_width.unwrap(),
-                h: element.calculated_height.unwrap(),
+                w: 0.0, // FIXME
+                h: 0.0, // FIXME
             },
             viewport: Pos {
                 x: rect.min.x,
                 y: rect.min.y,
-                w: element.calculated_width.unwrap(),
-                h: element.calculated_height.unwrap(),
+                w: 0.0, // FIXME
+                h: 0.0, // FIXME
             },
         };
 
@@ -984,86 +967,89 @@ impl EguiApp {
         viewport
     }
 
-    #[cfg_attr(feature = "profiling", profiling::function)]
-    fn render_horizontal_borders(
-        ui: &mut Ui,
-        container: &Container,
-        add_contents: impl FnOnce(&mut Ui) -> Response,
-    ) -> Response {
-        ui.horizontal(|ui| {
-            if let Some((color, size)) = container.calculated_border_left {
-                egui::Frame::new().fill(color.into()).show(ui, |ui| {
-                    ui.set_width(size);
-                    ui.set_height(container.calculated_height.unwrap_or(0.0));
-                });
-            }
+    // FIXME
+    // #[cfg_attr(feature = "profiling", profiling::function)]
+    // fn render_horizontal_borders(
+    //     ui: &mut Ui,
+    //     container: &Container,
+    //     add_contents: impl FnOnce(&mut Ui) -> Response,
+    // ) -> Response {
+    //     ui.horizontal(|ui| {
+    //         if let Some((color, size)) = container.calculated_border_left {
+    //             egui::Frame::new().fill(color.into()).show(ui, |ui| {
+    //                 ui.set_width(size);
+    //                 ui.set_height(container.calculated_height.unwrap_or(0.0));
+    //             });
+    //         }
 
-            let response = add_contents(ui);
+    //         let response = add_contents(ui);
 
-            if let Some((color, size)) = container.calculated_border_right {
-                egui::Frame::new().fill(color.into()).show(ui, |ui| {
-                    ui.set_width(size);
-                    ui.set_height(container.calculated_height.unwrap_or(0.0));
-                });
-            }
+    //         if let Some((color, size)) = container.calculated_border_right {
+    //             egui::Frame::new().fill(color.into()).show(ui, |ui| {
+    //                 ui.set_width(size);
+    //                 ui.set_height(container.calculated_height.unwrap_or(0.0));
+    //             });
+    //         }
 
-            response
-        })
-        .inner
-    }
+    //         response
+    //     })
+    //     .inner
+    // }
 
-    #[cfg_attr(feature = "profiling", profiling::function)]
-    fn render_vertical_borders(
-        ui: &mut Ui,
-        container: &Container,
-        add_contents: impl FnOnce(&mut Ui) -> Response,
-    ) -> Response {
-        ui.vertical(|ui| {
-            if let Some((color, size)) = container.calculated_border_top {
-                egui::Frame::new().fill(color.into()).show(ui, |ui| {
-                    ui.set_width(container.calculated_width.unwrap_or(0.0));
-                    ui.set_height(size);
-                });
-            }
+    // FIXME
+    // #[cfg_attr(feature = "profiling", profiling::function)]
+    // fn render_vertical_borders(
+    //     ui: &mut Ui,
+    //     container: &Container,
+    //     add_contents: impl FnOnce(&mut Ui) -> Response,
+    // ) -> Response {
+    //     ui.vertical(|ui| {
+    //         if let Some((color, size)) = container.calculated_border_top {
+    //             egui::Frame::new().fill(color.into()).show(ui, |ui| {
+    //                 ui.set_width(container.calculated_width.unwrap_or(0.0));
+    //                 ui.set_height(size);
+    //             });
+    //         }
 
-            let response = add_contents(ui);
+    //         let response = add_contents(ui);
 
-            if let Some((color, size)) = container.calculated_border_bottom {
-                egui::Frame::new().fill(color.into()).show(ui, |ui| {
-                    ui.set_width(container.calculated_width.unwrap_or(0.0));
-                    ui.set_height(size);
-                });
-            }
+    //         if let Some((color, size)) = container.calculated_border_bottom {
+    //             egui::Frame::new().fill(color.into()).show(ui, |ui| {
+    //                 ui.set_width(container.calculated_width.unwrap_or(0.0));
+    //                 ui.set_height(size);
+    //             });
+    //         }
 
-            response
-        })
-        .inner
-    }
+    //         response
+    //     })
+    //     .inner
+    // }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_borders(
         ui: &mut Ui,
-        container: &Container,
+        _container: &Container,
         add_contents: impl FnOnce(&mut Ui) -> Response,
     ) -> Response {
-        if container.calculated_border_left.is_some() || container.calculated_border_right.is_some()
-        {
-            Self::render_horizontal_borders(ui, container, |ui| {
-                if container.calculated_border_top.is_some()
-                    || container.calculated_border_bottom.is_some()
-                {
-                    Self::render_vertical_borders(ui, container, add_contents)
-                } else {
-                    add_contents(ui)
-                }
-            })
-        } else if container.calculated_border_top.is_some()
-            || container.calculated_border_bottom.is_some()
-        {
-            Self::render_vertical_borders(ui, container, add_contents)
-        } else {
-            add_contents(ui)
-        }
+        // FIXME
+        // if container.calculated_border_left.is_some() || container.calculated_border_right.is_some()
+        // {
+        //     Self::render_horizontal_borders(ui, container, |ui| {
+        //         if container.calculated_border_top.is_some()
+        //             || container.calculated_border_bottom.is_some()
+        //         {
+        //             Self::render_vertical_borders(ui, container, add_contents)
+        //         } else {
+        //             add_contents(ui)
+        //         }
+        //     })
+        // } else if container.calculated_border_top.is_some()
+        //     || container.calculated_border_bottom.is_some()
+        // {
+        //     Self::render_vertical_borders(ui, container, add_contents)
+        // } else {
+        add_contents(ui)
+        // }
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
@@ -1094,12 +1080,14 @@ impl EguiApp {
         if let Some(rect) = rect {
             let render_rect =
                 Self::get_render_rect(render_context, ui, container, relative_container);
-            let width = render_rect.width()
-                + container.horizontal_padding().unwrap_or(0.0)
-                + container.horizontal_margin().unwrap_or(0.0);
-            let height = render_rect.height()
-                + container.vertical_padding().unwrap_or(0.0)
-                + container.vertical_margin().unwrap_or(0.0);
+            let width = render_rect.width();
+            // FIXME
+            // + container.horizontal_padding().unwrap_or(0.0)
+            // + container.horizontal_margin().unwrap_or(0.0);
+            let height = render_rect.height();
+            // FIXME
+            // + container.vertical_padding().unwrap_or(0.0)
+            // + container.vertical_margin().unwrap_or(0.0);
             let (offset_x, offset_y) =
                 viewport.map_or((0.0, 0.0), |viewport| (viewport.pos.x, viewport.pos.y));
 
@@ -1147,6 +1135,7 @@ impl EguiApp {
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &Container)>,
+        view_size: (f32, f32),
     ) -> Option<Response> {
         if container.debug == Some(true) {
             log::info!("render_container: DEBUG {container}");
@@ -1167,9 +1156,10 @@ impl EguiApp {
             return None;
         }
 
-        if let Some(opacity) = container.calculated_opacity {
-            ui.set_opacity(opacity);
-        }
+        // FIXME
+        // if let Some(opacity) = container.calculated_opacity {
+        //     ui.set_opacity(opacity);
+        // }
 
         Some(Self::render_borders(ui, container, |ui| {
             #[allow(clippy::cast_possible_truncation)]
@@ -1177,20 +1167,21 @@ impl EguiApp {
                 render_context,
                 response,
             ) = egui::Frame::new()
-                .inner_margin(egui::Margin {
-                    left:
-                        container.internal_margin_left.map_or(0,|x| x.round() as i8)
-                        + container.calculated_margin_left.map_or(0,|x| x.round() as i8),
-                    right:
-                        container.internal_margin_right.map_or(0,|x| x.round() as i8)
-                        + container.calculated_margin_right.map_or(0,|x| x.round() as i8),
-                    top:
-                        container.internal_margin_top.map_or(0,|x| x.round() as i8)
-                        + container.calculated_margin_top.map_or(0,|x| x.round() as i8),
-                    bottom:
-                        container.internal_margin_bottom.map_or(0,|x| x.round() as i8)
-                        + container.calculated_margin_bottom.map_or(0,|x| x.round() as i8),
-                })
+                // FIXME
+                // .inner_margin(egui::Margin {
+                //     left:
+                //         container.internal_margin_left.map_or(0,|x| x.round() as i8)
+                //         + container.calculated_margin_left.map_or(0,|x| x.round() as i8),
+                //     right:
+                //         container.internal_margin_right.map_or(0,|x| x.round() as i8)
+                //         + container.calculated_margin_right.map_or(0,|x| x.round() as i8),
+                //     top:
+                //         container.internal_margin_top.map_or(0,|x| x.round() as i8)
+                //         + container.calculated_margin_top.map_or(0,|x| x.round() as i8),
+                //     bottom:
+                //         container.internal_margin_bottom.map_or(0,|x| x.round() as i8)
+                //         + container.calculated_margin_bottom.map_or(0,|x| x.round() as i8),
+                // })
                 .show(ui, {
                     move |ui| {
                         ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
@@ -1219,6 +1210,7 @@ impl EguiApp {
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
+                                                            view_size,
                                                             true,
                                                         );
 
@@ -1246,6 +1238,7 @@ impl EguiApp {
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
+                                                            view_size,
                                                             true,
                                                         );
 
@@ -1283,6 +1276,7 @@ impl EguiApp {
                                                                         viewport,
                                                                         Some(rect),
                                                                         relative_container,
+                                                                        view_size,
                                                                         true,
                                                                     );
 
@@ -1324,6 +1318,7 @@ impl EguiApp {
                                                                         viewport,
                                                                         Some(rect),
                                                                         relative_container,
+                                                                        view_size,
                                                                         true,
                                                                     );
 
@@ -1352,6 +1347,7 @@ impl EguiApp {
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
+                                                            view_size,
                                                             false,
                                                         );
 
@@ -1376,6 +1372,7 @@ impl EguiApp {
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
+                                                            view_size,
                                                             false,
                                                         );
 
@@ -1400,6 +1397,7 @@ impl EguiApp {
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
+                                                            view_size,
                                                             true,
                                                         );
 
@@ -1424,6 +1422,7 @@ impl EguiApp {
                                                             viewport,
                                                             Some(rect),
                                                             relative_container,
+                                                            view_size,
                                                             true,
                                                         );
 
@@ -1440,6 +1439,7 @@ impl EguiApp {
                                                 viewport,
                                                 rect,
                                                 relative_container,
+                                                view_size,
                                                 false,
                                             );
 
@@ -1476,16 +1476,18 @@ impl EguiApp {
         ui: &Ui,
         container: &Container,
     ) -> egui::Rect {
-        moosicbox_assert::assert_or_panic!(
-            container.calculated_width.is_some() && container.calculated_height.is_some(),
-            "Container size not properly calculated: {container}"
-        );
+        // FIXME
+        // moosicbox_assert::assert_or_panic!(
+        //     container.calculated_width.is_some() && container.calculated_height.is_some(),
+        //     "Container size not properly calculated: {container}"
+        // );
 
         let rect = egui::Rect::from_min_size(
             ui.cursor().left_top(),
             egui::vec2(
-                container.calculated_width.unwrap(),
-                container.calculated_height.unwrap(),
+                // FIXME
+                0.0, // container.calculated_width.unwrap(),
+                0.0, // container.calculated_height.unwrap(),
             ),
         );
 
@@ -1501,58 +1503,59 @@ impl EguiApp {
         render_context: &mut RenderContext,
         ui: &Ui,
         container: &Container,
-        relative_container: Option<(egui::Rect, &Container)>,
+        _relative_container: Option<(egui::Rect, &Container)>,
     ) -> egui::Rect {
-        match container.position {
-            Some(Position::Absolute) => {
-                if let Some((relative_rect, ..)) = relative_container {
-                    let rect = relative_rect
-                        .with_min_x(relative_rect.min.x + container.calculated_x.unwrap())
-                        .with_min_y(relative_rect.min.y + container.calculated_y.unwrap())
-                        .with_max_x(
-                            relative_rect.min.x
-                                + container.calculated_x.unwrap()
-                                + container.bounding_calculated_width().unwrap(),
-                        )
-                        .with_max_y(
-                            relative_rect.min.y
-                                + container.calculated_y.unwrap()
-                                + container.bounding_calculated_height().unwrap(),
-                        );
+        // FIXME
+        // match container.position {
+        //     Some(Position::Absolute) => {
+        //         if let Some((relative_rect, ..)) = relative_container {
+        //             let rect = relative_rect
+        //                 .with_min_x(relative_rect.min.x + container.calculated_x.unwrap())
+        //                 .with_min_y(relative_rect.min.y + container.calculated_y.unwrap())
+        //                 .with_max_x(
+        //                     relative_rect.min.x
+        //                         + container.calculated_x.unwrap()
+        //                         + container.bounding_calculated_width().unwrap(),
+        //                 )
+        //                 .with_max_y(
+        //                     relative_rect.min.y
+        //                         + container.calculated_y.unwrap()
+        //                         + container.bounding_calculated_height().unwrap(),
+        //                 );
 
-                    if render_context.watch_positions.contains(&container.id) {
-                        render_context.positions.insert(container.id, rect);
-                    }
+        //             if render_context.watch_positions.contains(&container.id) {
+        //                 render_context.positions.insert(container.id, rect);
+        //             }
 
-                    rect
-                } else {
-                    Self::get_relative_render_rect(render_context, ui, container)
-                }
-            }
-            Some(Position::Fixed | Position::Sticky) => {
-                let rect = egui::Rect::from_min_size(
-                    egui::pos2(
-                        container.calculated_x.unwrap(),
-                        container.calculated_y.unwrap(),
-                    ),
-                    egui::vec2(
-                        container.calculated_x.unwrap()
-                            + container.bounding_calculated_width().unwrap(),
-                        container.calculated_y.unwrap()
-                            + container.bounding_calculated_height().unwrap(),
-                    ),
-                );
+        //             rect
+        //         } else {
+        //             Self::get_relative_render_rect(render_context, ui, container)
+        //         }
+        //     }
+        //     Some(Position::Fixed | Position::Sticky) => {
+        //         let rect = egui::Rect::from_min_size(
+        //             egui::pos2(
+        //                 container.calculated_x.unwrap(),
+        //                 container.calculated_y.unwrap(),
+        //             ),
+        //             egui::vec2(
+        //                 container.calculated_x.unwrap()
+        //                     + container.bounding_calculated_width().unwrap(),
+        //                 container.calculated_y.unwrap()
+        //                     + container.bounding_calculated_height().unwrap(),
+        //             ),
+        //         );
 
-                if render_context.watch_positions.contains(&container.id) {
-                    render_context.positions.insert(container.id, rect);
-                }
+        //         if render_context.watch_positions.contains(&container.id) {
+        //             render_context.positions.insert(container.id, rect);
+        //         }
 
-                rect
-            }
-            Some(Position::Static | Position::Relative) | None => {
-                Self::get_relative_render_rect(render_context, ui, container)
-            }
-        }
+        //         rect
+        //     }
+        //     Some(Position::Static | Position::Relative) | None => {
+        Self::get_relative_render_rect(render_context, ui, container)
+        // }
+        // }
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
@@ -1568,8 +1571,9 @@ impl EguiApp {
             Some(Position::Relative) => {
                 let pos = ui.cursor().left_top();
                 let size = egui::vec2(
-                    container.calculated_width.unwrap(),
-                    container.calculated_height.unwrap(),
+                    // FIXME
+                    0.0, // container.calculated_width.unwrap(),
+                    0.0, // container.calculated_height.unwrap(),
                 );
                 relative_container = Some((egui::Rect::from_min_size(pos, size), container));
             }
@@ -1585,9 +1589,10 @@ impl EguiApp {
                     .interactable(false)
                     .fixed_pos(abs_rect.min)
                     .show(ctx, |ui| {
-                        if let Some(opacity) = container.calculated_opacity {
-                            ui.set_opacity(opacity);
-                        }
+                        // FIXME
+                        // if let Some(opacity) = container.calculated_opacity {
+                        //     ui.set_opacity(opacity);
+                        // }
                         inner(render_context, ui, relative_container)
                     })
                     .inner;
@@ -1609,6 +1614,7 @@ impl EguiApp {
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &'a Container)>,
+        view_size: (f32, f32),
         vscroll: bool,
     ) -> Response {
         for element in container.children.iter().filter(|x| x.is_hidden()) {
@@ -1626,40 +1632,19 @@ impl EguiApp {
 
         match container.direction {
             LayoutDirection::Row => {
-                let rows = container
-                    .children
-                    .iter()
-                    .filter_map(|x| x.calculated_position.as_ref().map(|y| (x, y)))
-                    .filter_map({
-                        |(x, y)| match y {
-                            LayoutPosition::Wrap { row, .. } => Some((*row, x)),
-                            LayoutPosition::Default => None,
-                        }
-                    })
-                    .chunk_by(|(row, _element)| *row);
-
-                let mut rows = rows
-                    .into_iter()
-                    .map(|(_row, y)| y.into_iter().map(|(_, element)| element).collect_vec())
-                    .peekable();
-
-                if rows.peek().is_some() {
-                    ui.vertical(move |ui| {
-                        for row in rows {
-                            let render_context = &mut *render_context;
-                            ui.horizontal(move |ui| {
-                                self.render_elements_ref(
-                                    render_context,
-                                    ctx,
-                                    ui,
-                                    &row,
-                                    viewport,
-                                    rect,
-                                    relative_container,
-                                    !vscroll && rect.is_some(),
-                                );
-                            });
-                        }
+                if container.overflow_x == LayoutOverflow::Wrap {
+                    ui.horizontal_wrapped(move |ui| {
+                        self.render_elements(
+                            render_context,
+                            ctx,
+                            ui,
+                            &container.children,
+                            viewport,
+                            rect,
+                            relative_container,
+                            view_size,
+                            !vscroll && rect.is_some(),
+                        );
                     })
                     .response
                 } else {
@@ -1672,6 +1657,7 @@ impl EguiApp {
                             viewport,
                             rect,
                             relative_container,
+                            view_size,
                             !vscroll && rect.is_some(),
                         );
                     })
@@ -1679,39 +1665,23 @@ impl EguiApp {
                 }
             }
             LayoutDirection::Column => {
-                let cols = container
-                    .children
-                    .iter()
-                    .filter_map(|x| x.calculated_position.as_ref().map(|y| (x, y)))
-                    .filter_map(|(x, y)| match y {
-                        LayoutPosition::Wrap { col, .. } => Some((*col, x)),
-                        LayoutPosition::Default => None,
-                    })
-                    .chunk_by(|(col, _element)| *col);
-
-                let mut cols = cols
-                    .into_iter()
-                    .map(|(_row, y)| y.into_iter().map(|(_, element)| element).collect_vec())
-                    .peekable();
-
-                if cols.peek().is_some() {
-                    ui.horizontal(move |ui| {
-                        for col in cols {
-                            let render_context = &mut *render_context;
-                            ui.vertical(move |ui| {
-                                self.render_elements_ref(
-                                    render_context,
-                                    ctx,
-                                    ui,
-                                    &col,
-                                    viewport,
-                                    rect,
-                                    relative_container,
-                                    !vscroll && rect.is_some(),
-                                );
-                            });
-                        }
-                    })
+                if container.overflow_y == LayoutOverflow::Wrap {
+                    ui.allocate_new_ui(
+                        UiBuilder::new().layout(Layout::top_down(Align::Min).with_main_wrap(true)),
+                        move |ui| {
+                            self.render_elements(
+                                render_context,
+                                ctx,
+                                ui,
+                                &container.children,
+                                viewport,
+                                rect,
+                                relative_container,
+                                view_size,
+                                !vscroll && rect.is_some(),
+                            );
+                        },
+                    )
                     .response
                 } else {
                     ui.vertical(move |ui| {
@@ -1723,6 +1693,7 @@ impl EguiApp {
                             viewport,
                             rect,
                             relative_container,
+                            view_size,
                             !vscroll && rect.is_some(),
                         );
                     })
@@ -1737,6 +1708,7 @@ impl EguiApp {
         ui: &mut Ui,
         container: &'a Container,
         relative_container: Option<(egui::Rect, &'a Container)>,
+        _view_size: (f32, f32),
         inner: impl FnOnce(&mut Ui, Option<(egui::Rect, &'a Container)>) -> Response,
     ) -> Response {
         let justify_content = container.justify_content.unwrap_or_default();
@@ -1748,11 +1720,6 @@ impl EguiApp {
             return inner(ui, relative_container);
         }
 
-        let contained_calculated_width = container.contained_calculated_width();
-        let contained_calculated_height = container.contained_calculated_height();
-        if justify_content == JustifyContent::End {
-            ui.add_space(container.calculated_width.unwrap() - contained_calculated_width);
-        }
         ui.allocate_new_ui(
             egui::UiBuilder::new().layout(match align_items {
                 AlignItems::Center => {
@@ -1766,17 +1733,8 @@ impl EguiApp {
             }),
             |ui| {
                 egui::Frame::new().show(ui, |ui| {
-                    ui.set_width(contained_calculated_width);
-                    ui.set_height(contained_calculated_height);
                     if align_items == AlignItems::End {
-                        let rect = egui::Rect::from_min_size(
-                            ui.cursor().left_top(),
-                            egui::vec2(
-                                0.0,
-                                container.calculated_height.unwrap() - contained_calculated_height,
-                            ),
-                        );
-                        ui.advance_cursor_after_rect(rect);
+                        // FIXME
                     }
 
                     inner(ui, relative_container)
@@ -1784,6 +1742,25 @@ impl EguiApp {
             },
         )
         .response
+    }
+
+    fn ui_set_size(ui: &mut Ui, container: &Container, view_size: (f32, f32)) {
+        if let Some(width) = &container.width {
+            let width = Self::calc_width(width, ui.available_width(), view_size);
+            ui.set_width(width);
+        }
+        if let Some(height) = &container.height {
+            let height = Self::calc_height(height, ui.available_height(), view_size);
+            ui.set_height(height);
+        }
+    }
+
+    fn calc_width(number: &Number, container_width: f32, view_size: (f32, f32)) -> f32 {
+        number.calc(container_width, view_size.0, view_size.1)
+    }
+
+    fn calc_height(number: &Number, container_height: f32, view_size: (f32, f32)) -> f32 {
+        number.calc(container_height, view_size.0, view_size.1)
     }
 
     fn get_container_style_override<'a, T>(
@@ -1810,6 +1787,7 @@ impl EguiApp {
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &'a Container)>,
+        view_size: (f32, f32),
         vscroll: bool,
     ) -> Response {
         Self::render_position(
@@ -1820,20 +1798,22 @@ impl EguiApp {
             relative_container,
             |render_context, ui, relative_container| {
                 #[allow(clippy::cast_possible_truncation)]
-                let mut frame = egui::Frame::new().inner_margin(egui::Margin {
-                    left: container
-                        .calculated_padding_left
-                        .map_or(0, |x| x.round() as i8),
-                    right: container
-                        .calculated_padding_right
-                        .map_or(0, |x| x.round() as i8),
-                    top: container
-                        .calculated_padding_top
-                        .map_or(0, |x| x.round() as i8),
-                    bottom: container
-                        .calculated_padding_bottom
-                        .map_or(0, |x| x.round() as i8),
-                });
+                let mut frame = egui::Frame::new();
+                // FIXME
+                // .inner_margin(egui::Margin {
+                // left: container
+                //     .calculated_padding_left
+                //     .map_or(0, |x| x.round() as i8),
+                // right: container
+                //     .calculated_padding_right
+                //     .map_or(0, |x| x.round() as i8),
+                // top: container
+                //     .calculated_padding_top
+                //     .map_or(0, |x| x.round() as i8),
+                // bottom: container
+                //     .calculated_padding_bottom
+                //     .map_or(0, |x| x.round() as i8),
+                // });
 
                 if let Some(background) =
                     Self::get_container_style_override(container, render_context.backgrounds)
@@ -1842,63 +1822,52 @@ impl EguiApp {
                 {
                     frame = frame.fill(background.into());
                 }
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                if container.calculated_border_top_left_radius.is_some()
-                    || container.calculated_border_top_right_radius.is_some()
-                    || container.calculated_border_bottom_left_radius.is_some()
-                    || container.calculated_border_bottom_right_radius.is_some()
-                {
-                    frame = frame.corner_radius(egui::CornerRadius {
-                        nw: container
-                            .calculated_border_top_left_radius
-                            .map_or(0, |x| x.round() as u8),
-                        ne: container
-                            .calculated_border_top_right_radius
-                            .map_or(0, |x| x.round() as u8),
-                        sw: container
-                            .calculated_border_bottom_left_radius
-                            .map_or(0, |x| x.round() as u8),
-                        se: container
-                            .calculated_border_bottom_right_radius
-                            .map_or(0, |x| x.round() as u8),
-                    });
-                }
+                // FIXME
+                // #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                // if container.calculated_border_top_left_radius.is_some()
+                //     || container.calculated_border_top_right_radius.is_some()
+                //     || container.calculated_border_bottom_left_radius.is_some()
+                //     || container.calculated_border_bottom_right_radius.is_some()
+                // {
+                //     frame = frame.corner_radius(egui::CornerRadius {
+                //         nw: container
+                //             .calculated_border_top_left_radius
+                //             .map_or(0, |x| x.round() as u8),
+                //         ne: container
+                //             .calculated_border_top_right_radius
+                //             .map_or(0, |x| x.round() as u8),
+                //         sw: container
+                //             .calculated_border_bottom_left_radius
+                //             .map_or(0, |x| x.round() as u8),
+                //         se: container
+                //             .calculated_border_bottom_right_radius
+                //             .map_or(0, |x| x.round() as u8),
+                //     });
+                // }
 
                 frame
                     .show(ui, {
                         |ui| {
-                            let width = container.calculated_width.unwrap();
-                            let height = container.calculated_height.unwrap();
+                            Self::ui_set_size(ui, container, view_size);
 
-                            ui.set_width(width);
-                            ui.set_height(height);
+                            // FIXME
+                            // if vscroll {
+                            //     if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
+                            //         let rect = egui::Rect::from_pos(egui::emath::pos2(0.0, height));
+                            //         ui.scroll_to_rect(rect, Some(egui::Align::TOP));
+                            //     }
+                            //     if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
+                            //         let rect =
+                            //             egui::Rect::from_pos(egui::emath::pos2(0.0, -height));
+                            //         ui.scroll_to_rect(rect, Some(egui::Align::TOP));
+                            //     }
+                            // }
 
-                            #[cfg(feature = "debug")]
-                            let debug = *DEBUG.read().unwrap();
-
-                            #[cfg(feature = "debug")]
-                            let pos = if debug {
-                                Some(ui.cursor().left_top())
-                            } else {
-                                None
-                            };
-
-                            if vscroll {
-                                if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
-                                    let rect = egui::Rect::from_pos(egui::emath::pos2(0.0, height));
-                                    ui.scroll_to_rect(rect, Some(egui::Align::TOP));
-                                }
-                                if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
-                                    let rect =
-                                        egui::Rect::from_pos(egui::emath::pos2(0.0, -height));
-                                    ui.scroll_to_rect(rect, Some(egui::Align::TOP));
-                                }
-                            }
-
-                            let response = Self::render_layout(
+                            Self::render_layout(
                                 ui,
                                 container,
                                 relative_container,
+                                view_size,
                                 move |ui, relative_container| {
                                     self.render_direction(
                                         render_context,
@@ -1908,174 +1877,11 @@ impl EguiApp {
                                         viewport,
                                         rect,
                                         relative_container,
+                                        view_size,
                                         vscroll,
                                     )
                                 },
-                            );
-
-                            #[cfg(feature = "debug")]
-                            if let Some(mut pos) = pos {
-                                let painter = ui.painter();
-                                let text = format!("({}, {}, {width}, {height})", pos.x, pos.y);
-                                let galley = painter.layout_no_wrap(
-                                    text.clone(),
-                                    egui::FontId::default(),
-                                    Color32::WHITE,
-                                );
-                                let rect = egui::Align2::LEFT_TOP.anchor_size(pos, galley.size());
-                                painter.add(egui::Shape::rect_filled(rect, 0.0, Color32::WHITE));
-                                ui.painter().text(
-                                    pos,
-                                    egui::Align2::LEFT_TOP,
-                                    text,
-                                    egui::FontId::default(),
-                                    Color32::RED,
-                                );
-
-                                pos.y += rect.height();
-
-                                if container.calculated_padding_left.is_some()
-                                    || container.calculated_padding_right.is_some()
-                                    || container.calculated_padding_top.is_some()
-                                    || container.calculated_padding_bottom.is_some()
-                                {
-                                    let text = format!(
-                                        "p({}, {}, {}, {})",
-                                        container.calculated_padding_left.unwrap_or(0.0),
-                                        container.calculated_padding_right.unwrap_or(0.0),
-                                        container.calculated_padding_top.unwrap_or(0.0),
-                                        container.calculated_padding_bottom.unwrap_or(0.0),
-                                    );
-                                    let galley = painter.layout_no_wrap(
-                                        text.clone(),
-                                        egui::FontId::default(),
-                                        Color32::WHITE,
-                                    );
-                                    let rect =
-                                        egui::Align2::LEFT_TOP.anchor_size(pos, galley.size());
-                                    painter.add(egui::Shape::rect_filled(
-                                        rect,
-                                        0.0,
-                                        Color32::WHITE,
-                                    ));
-                                    ui.painter().text(
-                                        pos,
-                                        egui::Align2::LEFT_TOP,
-                                        text,
-                                        egui::FontId::default(),
-                                        Color32::RED,
-                                    );
-
-                                    pos.y += rect.height();
-                                }
-
-                                if container.calculated_margin_left.is_some()
-                                    || container.calculated_margin_right.is_some()
-                                    || container.calculated_margin_top.is_some()
-                                    || container.calculated_margin_bottom.is_some()
-                                {
-                                    let text = format!(
-                                        "m({}, {}, {}, {})",
-                                        container.calculated_margin_left.unwrap_or(0.0),
-                                        container.calculated_margin_right.unwrap_or(0.0),
-                                        container.calculated_margin_top.unwrap_or(0.0),
-                                        container.calculated_margin_bottom.unwrap_or(0.0),
-                                    );
-                                    let galley = painter.layout_no_wrap(
-                                        text.clone(),
-                                        egui::FontId::default(),
-                                        Color32::WHITE,
-                                    );
-                                    let rect =
-                                        egui::Align2::LEFT_TOP.anchor_size(pos, galley.size());
-                                    painter.add(egui::Shape::rect_filled(
-                                        rect,
-                                        0.0,
-                                        Color32::WHITE,
-                                    ));
-                                    ui.painter().text(
-                                        pos,
-                                        egui::Align2::LEFT_TOP,
-                                        text,
-                                        egui::FontId::default(),
-                                        Color32::RED,
-                                    );
-
-                                    pos.y += rect.height();
-                                }
-
-                                if container.internal_padding_top.is_some()
-                                    || container.internal_padding_right.is_some()
-                                    || container.internal_padding_top.is_some()
-                                    || container.internal_padding_bottom.is_some()
-                                {
-                                    let text = format!(
-                                        "ip({}, {}, {}, {})",
-                                        container.internal_padding_left.unwrap_or(0.0),
-                                        container.internal_padding_right.unwrap_or(0.0),
-                                        container.internal_padding_top.unwrap_or(0.0),
-                                        container.internal_padding_bottom.unwrap_or(0.0),
-                                    );
-                                    let galley = painter.layout_no_wrap(
-                                        text.clone(),
-                                        egui::FontId::default(),
-                                        Color32::WHITE,
-                                    );
-                                    let rect =
-                                        egui::Align2::LEFT_TOP.anchor_size(pos, galley.size());
-                                    painter.add(egui::Shape::rect_filled(
-                                        rect,
-                                        0.0,
-                                        Color32::WHITE,
-                                    ));
-                                    ui.painter().text(
-                                        pos,
-                                        egui::Align2::LEFT_TOP,
-                                        text,
-                                        egui::FontId::default(),
-                                        Color32::RED,
-                                    );
-
-                                    pos.y += rect.height();
-                                }
-
-                                if container.internal_margin_top.is_some()
-                                    || container.internal_margin_right.is_some()
-                                    || container.internal_margin_top.is_some()
-                                    || container.internal_margin_bottom.is_some()
-                                {
-                                    let text = format!(
-                                        "im({}, {}, {}, {})",
-                                        container.internal_margin_left.unwrap_or(0.0),
-                                        container.internal_margin_right.unwrap_or(0.0),
-                                        container.internal_margin_top.unwrap_or(0.0),
-                                        container.internal_margin_bottom.unwrap_or(0.0),
-                                    );
-                                    let galley = painter.layout_no_wrap(
-                                        text.clone(),
-                                        egui::FontId::default(),
-                                        Color32::WHITE,
-                                    );
-                                    let rect =
-                                        egui::Align2::LEFT_TOP.anchor_size(pos, galley.size());
-                                    painter.add(egui::Shape::rect_filled(
-                                        rect,
-                                        0.0,
-                                        Color32::WHITE,
-                                    ));
-                                    ui.painter().text(
-                                        pos,
-                                        egui::Align2::LEFT_TOP,
-                                        text,
-                                        egui::FontId::default(),
-                                        Color32::RED,
-                                    );
-
-                                    pos.y += rect.height();
-                                }
-                            }
-
-                            response
+                            )
                         }
                     })
                     .response
@@ -2094,6 +1900,7 @@ impl EguiApp {
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &Container)>,
+        view_size: (f32, f32),
         scroll_child: bool,
     ) {
         log::trace!("render_elements: {} elements", elements.len());
@@ -2106,34 +1913,7 @@ impl EguiApp {
                 viewport,
                 rect,
                 relative_container,
-                scroll_child,
-            );
-        }
-    }
-
-    #[cfg_attr(feature = "profiling", profiling::function)]
-    #[allow(clippy::too_many_arguments)]
-    fn render_elements_ref(
-        &self,
-        render_context: &mut RenderContext,
-        ctx: &egui::Context,
-        ui: &mut Ui,
-        elements: &[&Container],
-        viewport: Option<&Viewport>,
-        rect: Option<egui::Rect>,
-        relative_container: Option<(egui::Rect, &Container)>,
-        scroll_child: bool,
-    ) {
-        log::trace!("render_elements_ref: {} elements", elements.len());
-        for element in elements {
-            self.render_element(
-                render_context,
-                ctx,
-                ui,
-                element,
-                viewport,
-                rect,
-                relative_container,
+                view_size,
                 scroll_child,
             );
         }
@@ -2226,8 +2006,11 @@ impl EguiApp {
                             viewport.cloned(),
                             0.0,
                             0.0,
-                            container.calculated_width.unwrap(),
-                            container.calculated_height.unwrap(),
+                            0.0,
+                            0.0,
+                            // FIXME
+                            // container.calculated_width.unwrap(),
+                            // container.calculated_height.unwrap(),
                         )
                     });
                 listener.viewport = viewport.cloned();
@@ -2684,19 +2467,21 @@ impl EguiApp {
                 .map(Value::String)
             }
             CalcValue::EventValue => event_value.map(ToString::to_string).map(Value::String),
-            CalcValue::WidthPx { target } => {
-                let width =
-                    Self::map_element_target(target, id, render_context.container, |element| {
-                        Value::Real(element.calculated_width.unwrap())
-                    });
+            CalcValue::WidthPx { target: _target } => {
+                let width = None;
+                // FIXME
+                // Self::map_element_target(target, id, render_context.container, |element| {
+                //     Value::Real(element.calculated_width.unwrap())
+                // });
                 log::debug!("calc_value: getting width px for element id={id} width={width:?}");
                 width
             }
-            CalcValue::HeightPx { target } => {
-                let height =
-                    Self::map_element_target(target, id, render_context.container, |element| {
-                        Value::Real(element.calculated_height.unwrap())
-                    });
+            CalcValue::HeightPx { target: _target } => {
+                let height = None;
+                // FIXME
+                // Self::map_element_target(target, id, render_context.container, |element| {
+                //     Value::Real(element.calculated_height.unwrap())
+                // });
                 log::debug!("calc_value: getting height px for element id={id} height={height:?}");
                 height
             }
@@ -3260,6 +3045,7 @@ impl EguiApp {
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &Container)>,
+        view_size: (f32, f32),
         scroll_child: bool,
     ) {
         log::trace!("render_element: rect={rect:?}");
@@ -3273,6 +3059,7 @@ impl EguiApp {
                 viewport,
                 rect,
                 relative_container,
+                view_size,
             );
             return;
         }
@@ -3302,7 +3089,7 @@ impl EguiApp {
             Element::Raw { value } => Some(ui.label(value)),
             Element::Image { source, .. } => source
                 .as_ref()
-                .map(|source| Self::render_image(render_context, ui, source, element)),
+                .map(|source| Self::render_image(render_context, ui, source, element, view_size)),
             Element::Canvas => element.str_id.as_ref().map_or_else(
                 || None,
                 |str_id| Self::render_canvas(render_context, ui, str_id, element),
@@ -3332,6 +3119,7 @@ impl EguiApp {
             viewport,
             rect,
             relative_container,
+            view_size,
         );
     }
 
@@ -3413,11 +3201,11 @@ impl EguiApp {
         ui: &mut Ui,
         source: &str,
         container: &Container,
+        view_size: (f32, f32),
     ) -> Response {
         egui::Frame::new()
             .show(ui, |ui| {
-                ui.set_width(container.calculated_width.unwrap());
-                ui.set_height(container.calculated_height.unwrap());
+                Self::ui_set_size(ui, container, view_size);
 
                 let Some(AppImage::Bytes(bytes)) = render_context.images.get(source).cloned()
                 else {
@@ -3426,16 +3214,17 @@ impl EguiApp {
 
                 log::trace!(
                     "render_image: showing image for source={source} ({}, {})",
-                    container.calculated_width.unwrap(),
-                    container.calculated_height.unwrap(),
+                    // FIXME
+                    0.0, // container.calculated_width.unwrap(),
+                    0.0, // container.calculated_height.unwrap(),
                 );
 
                 egui::Image::from_bytes(
                     format!("bytes://{source}"),
                     egui::load::Bytes::Shared(bytes),
                 )
-                .max_width(container.calculated_width.unwrap())
-                .max_height(container.calculated_height.unwrap())
+                // .max_width(container.calculated_width.unwrap())
+                // .max_height(container.calculated_height.unwrap())
                 .ui(ui);
             })
             .response
@@ -3446,15 +3235,16 @@ impl EguiApp {
         render_context: &mut RenderContext,
         ui: &mut Ui,
         str_id: &str,
-        container: &Container,
+        _container: &Container,
     ) -> Option<Response> {
         render_context.canvas_actions.get(str_id).map_or_else(
             || None,
             |actions| {
                 let (response, painter) = ui.allocate_painter(
                     egui::Vec2::new(
-                        container.calculated_width.unwrap(),
-                        container.calculated_height.unwrap(),
+                        // FIXME
+                        0.0, // container.calculated_width.unwrap(),
+                        0.0, // container.calculated_height.unwrap(),
                     ),
                     egui::Sense::hover(),
                 );
@@ -3516,8 +3306,8 @@ impl EguiApp {
     fn apply_container_styles(
         container: &Container,
         mut frame: egui::Frame,
-        start: bool,
-        end: bool,
+        _start: bool,
+        _end: bool,
         backgrounds: &HashMap<usize, Vec<StyleOverride<Option<Color>>>>,
     ) -> egui::Frame {
         if let Some(background) = Self::get_container_style_override(container, backgrounds)
@@ -3527,64 +3317,65 @@ impl EguiApp {
             frame = frame.fill(background.into());
         }
 
-        if start && end {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            if container.calculated_border_top_left_radius.is_some()
-                || container.calculated_border_top_right_radius.is_some()
-                || container.calculated_border_bottom_left_radius.is_some()
-                || container.calculated_border_bottom_right_radius.is_some()
-            {
-                frame = frame.corner_radius(egui::CornerRadius {
-                    nw: container
-                        .calculated_border_top_left_radius
-                        .map_or(0, |x| x.round() as u8),
-                    ne: container
-                        .calculated_border_top_right_radius
-                        .map_or(0, |x| x.round() as u8),
-                    sw: container
-                        .calculated_border_bottom_left_radius
-                        .map_or(0, |x| x.round() as u8),
-                    se: container
-                        .calculated_border_bottom_right_radius
-                        .map_or(0, |x| x.round() as u8),
-                });
-            }
-        } else if start {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            if container.calculated_border_top_left_radius.is_some()
-                || container.calculated_border_bottom_left_radius.is_some()
-            {
-                frame = frame.corner_radius(egui::CornerRadius {
-                    nw: container
-                        .calculated_border_top_left_radius
-                        .map_or(0, |x| x.round() as u8),
-                    ne: 0,
-                    sw: container
-                        .calculated_border_bottom_left_radius
-                        .map_or(0, |x| x.round() as u8),
-                    se: 0,
-                });
-            }
-        } else if end
-            && (container.calculated_border_top_right_radius.is_some()
-                || container.calculated_border_bottom_right_radius.is_some())
-        {
-            frame = frame.corner_radius(
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                {
-                    egui::CornerRadius {
-                        nw: 0,
-                        ne: container
-                            .calculated_border_top_right_radius
-                            .map_or(0, |x| x.round() as u8),
-                        sw: 0,
-                        se: container
-                            .calculated_border_bottom_right_radius
-                            .map_or(0, |x| x.round() as u8),
-                    }
-                },
-            );
-        }
+        // FIXME
+        // if start && end {
+        //     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        //     if container.calculated_border_top_left_radius.is_some()
+        //         || container.calculated_border_top_right_radius.is_some()
+        //         || container.calculated_border_bottom_left_radius.is_some()
+        //         || container.calculated_border_bottom_right_radius.is_some()
+        //     {
+        //         frame = frame.corner_radius(egui::CornerRadius {
+        //             nw: container
+        //                 .calculated_border_top_left_radius
+        //                 .map_or(0, |x| x.round() as u8),
+        //             ne: container
+        //                 .calculated_border_top_right_radius
+        //                 .map_or(0, |x| x.round() as u8),
+        //             sw: container
+        //                 .calculated_border_bottom_left_radius
+        //                 .map_or(0, |x| x.round() as u8),
+        //             se: container
+        //                 .calculated_border_bottom_right_radius
+        //                 .map_or(0, |x| x.round() as u8),
+        //         });
+        //     }
+        // } else if start {
+        //     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        //     if container.calculated_border_top_left_radius.is_some()
+        //         || container.calculated_border_bottom_left_radius.is_some()
+        //     {
+        //         frame = frame.corner_radius(egui::CornerRadius {
+        //             nw: container
+        //                 .calculated_border_top_left_radius
+        //                 .map_or(0, |x| x.round() as u8),
+        //             ne: 0,
+        //             sw: container
+        //                 .calculated_border_bottom_left_radius
+        //                 .map_or(0, |x| x.round() as u8),
+        //             se: 0,
+        //         });
+        //     }
+        // } else if end
+        //     && (container.calculated_border_top_right_radius.is_some()
+        //         || container.calculated_border_bottom_right_radius.is_some())
+        // {
+        //     frame = frame.corner_radius(
+        //         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        //         {
+        //             egui::CornerRadius {
+        //                 nw: 0,
+        //                 ne: container
+        //                     .calculated_border_top_right_radius
+        //                     .map_or(0, |x| x.round() as u8),
+        //                 sw: 0,
+        //                 se: container
+        //                     .calculated_border_bottom_right_radius
+        //                     .map_or(0, |x| x.round() as u8),
+        //             }
+        //         },
+        //     );
+        // }
 
         frame
     }
@@ -3600,6 +3391,7 @@ impl EguiApp {
         viewport: Option<&Viewport>,
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &Container)>,
+        view_size: (f32, f32),
     ) {
         let TableIter { rows, headings } = element.table_iter();
 
@@ -3658,6 +3450,7 @@ impl EguiApp {
                                 viewport,
                                 rect,
                                 relative_container,
+                                view_size,
                             );
                         });
 
@@ -3718,6 +3511,7 @@ impl EguiApp {
                                 viewport,
                                 rect,
                                 relative_container,
+                                view_size,
                             );
                         });
 
@@ -3798,6 +3592,11 @@ impl EguiApp {
     #[allow(clippy::too_many_lines)]
     fn paint(&self, ctx: &egui::Context) {
         let resized = self.check_frame_resize(ctx);
+
+        let view_size = (
+            self.width.read().unwrap().unwrap(),
+            self.height.read().unwrap().unwrap(),
+        );
 
         self.event_handlers.write().unwrap().clear();
 
@@ -3885,6 +3684,7 @@ impl EguiApp {
                                 None,
                                 None,
                                 None,
+                                view_size,
                             );
                         });
                 });
