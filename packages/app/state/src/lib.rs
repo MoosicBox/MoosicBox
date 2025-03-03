@@ -113,6 +113,10 @@ pub enum RegisterPlayersError {
 pub enum AppStateError {
     #[error("Unknown({0})")]
     Unknown(String),
+    #[error("Action missing param")]
+    ActionMissingParam,
+    #[error("Action invalid param")]
+    ActionInvalidParam,
     #[error(transparent)]
     Player(#[from] PlayerError),
     #[cfg(feature = "upnp")]

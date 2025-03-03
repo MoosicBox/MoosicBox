@@ -738,11 +738,11 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
                 log::debug!("handle_action: RefreshVisualization: {value:?}");
 
                 let width = value
-                    .expect("Missing width value")
+                    .ok_or(AppStateError::ActionMissingParam)?
                     .as_f32(
                         None::<&Box<dyn Fn(&hyperchad_actions::logic::CalcValue) -> Option<Value>>>,
                     )
-                    .expect("Invalid width value");
+                    .ok_or(AppStateError::ActionInvalidParam)?;
 
                 let height = moosicbox_app_native_ui::VIZ_HEIGHT;
                 let height = f32::from(height);
@@ -883,13 +883,13 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
                 Action::SetVolume => {
                     log::debug!("handle_action: SetVolume: {value:?}");
                     let volume = value
-                        .expect("Missing volume value")
+                        .ok_or(AppStateError::ActionMissingParam)?
                         .as_f32(
                             None::<
                                 &Box<dyn Fn(&hyperchad_actions::logic::CalcValue) -> Option<Value>>,
                             >,
                         )
-                        .expect("Invalid volume value");
+                        .ok_or(AppStateError::ActionInvalidParam)?;
                     if STATE.get_current_session().await.is_some_and(|x| {
                         x.volume
                             .is_some_and(|x| (x - f64::from(volume)).abs() < 0.01)
@@ -924,13 +924,13 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
                 Action::SeekCurrentTrackPercent => {
                     log::debug!("handle_action: SeekCurrentTrackPercent: {value:?}");
                     let seek = value
-                        .expect("Missing seek value")
+                        .ok_or(AppStateError::ActionMissingParam)?
                         .as_f32(
                             None::<
                                 &Box<dyn Fn(&hyperchad_actions::logic::CalcValue) -> Option<Value>>,
                             >,
                         )
-                        .expect("Invalid seek value");
+                        .ok_or(AppStateError::ActionInvalidParam)?;
                     let session = STATE.get_current_session_ref().await;
                     if let Some(session) = session {
                         if let Some(position) = session.position {
@@ -1136,8 +1136,8 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
             filtered_sources,
             sort,
         } => {
-            let value = value.expect("Missing filter value");
-            let filter = value.as_str().expect("Invalid filter value");
+            let value = value.ok_or(AppStateError::ActionMissingParam)?;
+            let filter = value.as_str().ok_or(AppStateError::ActionInvalidParam)?;
             log::debug!("handle_action: FilterAlbums filter={filter}");
 
             let size: u16 = 200;
