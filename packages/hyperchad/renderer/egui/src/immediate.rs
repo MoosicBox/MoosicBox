@@ -1156,10 +1156,10 @@ impl EguiApp {
             return None;
         }
 
-        // FIXME
-        // if let Some(opacity) = container.calculated_opacity {
-        //     ui.set_opacity(opacity);
-        // }
+        if let Some(opacity) = &container.opacity {
+            let opacity = Self::calc_number(opacity, 1.0, view_size);
+            ui.set_opacity(opacity);
+        }
 
         Some(Self::render_borders(ui, container, |ui| {
             #[allow(clippy::cast_possible_truncation)]
@@ -1565,6 +1565,7 @@ impl EguiApp {
         ctx: &egui::Context,
         container: &'a Container,
         mut relative_container: Option<(egui::Rect, &'a Container)>,
+        view_size: (f32, f32),
         inner: impl FnOnce(&mut RenderContext, &mut Ui, Option<(egui::Rect, &'a Container)>) -> Response,
     ) -> Response {
         match container.position {
@@ -1589,10 +1590,10 @@ impl EguiApp {
                     .interactable(false)
                     .fixed_pos(abs_rect.min)
                     .show(ctx, |ui| {
-                        // FIXME
-                        // if let Some(opacity) = container.calculated_opacity {
-                        //     ui.set_opacity(opacity);
-                        // }
+                        if let Some(opacity) = &container.opacity {
+                            let opacity = Self::calc_number(opacity, 1.0, view_size);
+                            ui.set_opacity(opacity);
+                        }
                         inner(render_context, ui, relative_container)
                     })
                     .inner;
@@ -1808,6 +1809,7 @@ impl EguiApp {
             ctx,
             container,
             relative_container,
+            view_size,
             |render_context, ui, relative_container| {
                 #[allow(clippy::cast_possible_truncation)]
                 let mut frame = egui::Frame::new();
