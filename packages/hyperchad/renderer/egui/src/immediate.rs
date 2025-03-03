@@ -1167,21 +1167,16 @@ impl EguiApp {
                 render_context,
                 response,
             ) = egui::Frame::new()
-                // FIXME
-                // .inner_margin(egui::Margin {
-                //     left:
-                //         container.internal_margin_left.map_or(0,|x| x.round() as i8)
-                //         + container.calculated_margin_left.map_or(0,|x| x.round() as i8),
-                //     right:
-                //         container.internal_margin_right.map_or(0,|x| x.round() as i8)
-                //         + container.calculated_margin_right.map_or(0,|x| x.round() as i8),
-                //     top:
-                //         container.internal_margin_top.map_or(0,|x| x.round() as i8)
-                //         + container.calculated_margin_top.map_or(0,|x| x.round() as i8),
-                //     bottom:
-                //         container.internal_margin_bottom.map_or(0,|x| x.round() as i8)
-                //         + container.calculated_margin_bottom.map_or(0,|x| x.round() as i8),
-                // })
+                .inner_margin(egui::Margin {
+                    left:
+                        container.margin_left.as_ref().map_or(0,|x| Self::ui_calc_horizontal(x, ui, view_size).round() as i8),
+                    right:
+                        container.margin_right.as_ref().map_or(0,|x| Self::ui_calc_horizontal(x, ui, view_size).round() as i8),
+                    top:
+                        container.margin_top.as_ref().map_or(0,|x| Self::ui_calc_vertical(x, ui, view_size).round() as i8),
+                    bottom:
+                        container.margin_bottom.as_ref().map_or(0,|x| Self::ui_calc_vertical(x, ui, view_size).round() as i8),
+                })
                 .show(ui, {
                     move |ui| {
                         ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
