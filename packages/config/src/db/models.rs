@@ -1,4 +1,4 @@
-use moosicbox_json_utils::{database::ToValue, ParseError, ToValueType};
+use moosicbox_json_utils::{ParseError, ToValueType, database::ToValue};
 
 pub struct Profile {
     pub id: u64,

@@ -4,7 +4,7 @@
 pub use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 
 pub use async_trait::async_trait;
-pub use flume::{unbounded, Receiver, RecvError, SendError, Sender};
+pub use flume::{Receiver, RecvError, SendError, Sender, unbounded};
 pub use futures::Future;
 pub use log;
 pub use moosicbox_task;

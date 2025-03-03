@@ -1,7 +1,7 @@
 use std::sync::LazyLock;
 
 use bytes::Bytes;
-use libvips::{ops, VipsApp, VipsImage};
+use libvips::{VipsApp, VipsImage, ops};
 use log::debug;
 
 static VIPS: LazyLock<VipsApp> = LazyLock::new(|| {

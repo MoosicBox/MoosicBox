@@ -1,6 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use std::sync::{atomic::AtomicBool, Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock, atomic::AtomicBool};
 
 use async_trait::async_trait;
 use flume::Receiver;
@@ -8,14 +8,14 @@ use moosicbox_audio_decoder::{AudioDecodeError, AudioDecodeHandler};
 use moosicbox_audio_output::{AudioOutput, AudioOutputFactory};
 use moosicbox_music_models::TrackApiSource;
 use moosicbox_session::models::UpdateSession;
-use rand::{rng, Rng as _};
+use rand::{Rng as _, rng};
 use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
+    ApiPlaybackStatus, Playback, PlaybackHandler, PlaybackType, Player, PlayerError, PlayerSource,
     send_playback_event, symphonia::play_media_source_async, track_or_id_to_playable,
-    trigger_playback_event, volume_mixer::mix_volume, ApiPlaybackStatus, Playback, PlaybackHandler,
-    PlaybackType, Player, PlayerError, PlayerSource,
+    trigger_playback_event, volume_mixer::mix_volume,
 };
 
 #[derive(Clone)]

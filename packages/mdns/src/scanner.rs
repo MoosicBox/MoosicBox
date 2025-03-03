@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use mdns_sd::{ServiceDaemon, ServiceEvent};
-use moosicbox_async_service::{tokio::sync::RwLock, Arc, CancellationToken, JoinError, JoinHandle};
+use moosicbox_async_service::{Arc, CancellationToken, JoinError, JoinHandle, tokio::sync::RwLock};
 use strum_macros::AsRefStr;
 use thiserror::Error;
 

@@ -7,9 +7,9 @@ use hyperchad_transformer_models::{
 use itertools::Itertools;
 
 use crate::{
+    Container, Element, Number, Position, TableIter, TableIterMut,
     absolute_positioned_elements_mut, calc_number, fixed_positioned_elements_mut,
-    relative_positioned_elements, relative_positioned_elements_mut, Container, Element, Number,
-    Position, TableIter, TableIterMut,
+    relative_positioned_elements, relative_positioned_elements_mut,
 };
 
 static SCROLLBAR_SIZE: AtomicU16 = AtomicU16::new(16);
@@ -335,7 +335,9 @@ impl Container {
                 0.0
             };
 
-            log::debug!("calc_table: col_sizes={col_sizes:?} evenly_split_remaining_size={evenly_split_remaining_size} evenly_split_increase_size={evenly_split_increase_size}");
+            log::debug!(
+                "calc_table: col_sizes={col_sizes:?} evenly_split_remaining_size={evenly_split_remaining_size} evenly_split_increase_size={evenly_split_increase_size}"
+            );
 
             if let Some(headings) = headings {
                 for heading in headings {
@@ -753,7 +755,11 @@ impl Container {
 
             log::trace!(
                 "size_elements: setting {} to evenly_split_remaining_size={evenly_split_remaining_size} unsized_elements_count={unsized_elements_count}",
-                if direction == LayoutDirection::Row { "width"} else { "height" },
+                if direction == LayoutDirection::Row {
+                    "width"
+                } else {
+                    "height"
+                },
             );
 
             for container in unsized_elements.map(|x| &mut **x) {
@@ -1151,7 +1157,9 @@ impl Container {
                 })
                 .unwrap_or(rowcol_index);
 
-            log::trace!("calc_element_sizes_by_rowcol: current_rowcol_index={current_rowcol_index} rowcol_index={rowcol_index}");
+            log::trace!(
+                "calc_element_sizes_by_rowcol: current_rowcol_index={current_rowcol_index} rowcol_index={rowcol_index}"
+            );
             if current_rowcol_index == rowcol_index {
                 if let Some(fluff) = element.padding_and_margins(LayoutDirection::Row) {
                     if direction == LayoutDirection::Row {
@@ -1159,7 +1167,9 @@ impl Container {
                     } else if fluff > padding_and_margins_x {
                         padding_and_margins_x = fluff;
                     }
-                    log::trace!("calc_element_sizes_by_rowcol: increased padding_and_margins_x={padding_and_margins_x}");
+                    log::trace!(
+                        "calc_element_sizes_by_rowcol: increased padding_and_margins_x={padding_and_margins_x}"
+                    );
                 }
                 if let Some(fluff) = element.padding_and_margins(LayoutDirection::Column) {
                     if direction == LayoutDirection::Column {
@@ -1167,7 +1177,9 @@ impl Container {
                     } else if fluff > padding_and_margins_y {
                         padding_and_margins_y = fluff;
                     }
-                    log::trace!("calc_element_sizes_by_rowcol: increased padding_and_margins_y={padding_and_margins_y}");
+                    log::trace!(
+                        "calc_element_sizes_by_rowcol: increased padding_and_margins_y={padding_and_margins_y}"
+                    );
                 }
                 buf.push(element);
                 continue;
@@ -1185,14 +1197,20 @@ impl Container {
 
             if let Some(fluff) = element.padding_and_margins(LayoutDirection::Row) {
                 padding_and_margins_x += fluff;
-                log::trace!("calc_element_sizes_by_rowcol: increased padding_and_margins_x={padding_and_margins_x}");
+                log::trace!(
+                    "calc_element_sizes_by_rowcol: increased padding_and_margins_x={padding_and_margins_x}"
+                );
             }
             if let Some(fluff) = element.padding_and_margins(LayoutDirection::Column) {
                 padding_and_margins_y += fluff;
-                log::trace!("calc_element_sizes_by_rowcol: increased padding_and_margins_y={padding_and_margins_y}");
+                log::trace!(
+                    "calc_element_sizes_by_rowcol: increased padding_and_margins_y={padding_and_margins_y}"
+                );
             }
 
-            log::trace!("calc_element_sizes_by_rowcol: next rowcol_index={rowcol_index} padding_and_margins_x={padding_and_margins_x} padding_and_margins_y={padding_and_margins_y}");
+            log::trace!(
+                "calc_element_sizes_by_rowcol: next rowcol_index={rowcol_index} padding_and_margins_x={padding_and_margins_x} padding_and_margins_y={padding_and_margins_y}"
+            );
 
             buf.push(element);
         }
@@ -1273,15 +1291,30 @@ impl Container {
         moosicbox_logging::debug_or_trace!(
             (
                 "calc_unsized_element_sizes: setting {} to evenly_split_remaining_size={evenly_split_remaining_size}",
-                if direction == LayoutDirection::Row { "width"}  else { "height" },
+                if direction == LayoutDirection::Row {
+                    "width"
+                } else {
+                    "height"
+                },
             ),
             (
                 "calc_unsized_element_sizes: setting {} to evenly_split_remaining_size={evenly_split_remaining_size}{}",
-                if direction == LayoutDirection::Row { "width"}  else { "height" },
-                if elements.is_empty(){
+                if direction == LayoutDirection::Row {
+                    "width"
+                } else {
+                    "height"
+                },
+                if elements.is_empty() {
                     String::new()
                 } else {
-                    format!("\n{}", elements.iter().map(|x| format!("{x}")).collect_vec().join("\n"))
+                    format!(
+                        "\n{}",
+                        elements
+                            .iter()
+                            .map(|x| format!("{x}"))
+                            .collect_vec()
+                            .join("\n")
+                    )
                 }
             )
         );
@@ -1433,7 +1466,9 @@ impl Container {
                     }) = container.calculated_position
                     {
                         if current_row != old_row || current_col != old_col {
-                            log::trace!("handle_overflow: layout_shifted because current_row != old_row || current_col != old_col ({current_row} != {old_row} || {current_col} != {old_col})");
+                            log::trace!(
+                                "handle_overflow: layout_shifted because current_row != old_row || current_col != old_col ({current_row} != {old_row} || {current_col} != {old_col})"
+                            );
                             layout_shifted = true;
                             true
                         } else {
@@ -1444,7 +1479,9 @@ impl Container {
                     };
 
                     if updated {
-                        log::trace!("handle_overflow: setting element row/col ({current_row}, {current_col})");
+                        log::trace!(
+                            "handle_overflow: setting element row/col ({current_row}, {current_col})"
+                        );
                         container.calculated_position.replace(LayoutPosition::Wrap {
                             row: current_row,
                             col: current_col,
@@ -1659,7 +1696,9 @@ impl Container {
                 element.bounding_calculated_height(),
                 element.calculated_position.as_ref(),
             ) else {
-                moosicbox_assert::die_or_warn!("position_children: missing width, height, and/or position. continuing on to next element");
+                moosicbox_assert::die_or_warn!(
+                    "position_children: missing width, height, and/or position. continuing on to next element"
+                );
                 continue;
             };
 
@@ -1757,7 +1796,10 @@ impl Container {
                     let offset = calc_number(right, width, root_size.0, root_size.1);
                     let bounding_width = element.bounding_calculated_width().unwrap();
                     element.calculated_x = Some(width - offset - bounding_width);
-                    log::trace!("position_children: absolute position right={right} calculated_x={} width={width} offset={offset} bounding_width={bounding_width}", element.calculated_x.unwrap());
+                    log::trace!(
+                        "position_children: absolute position right={right} calculated_x={} width={width} offset={offset} bounding_width={bounding_width}",
+                        element.calculated_x.unwrap()
+                    );
                 }
                 if let Some(top) = &element.top {
                     element.calculated_y = Some(calc_number(top, height, root_size.0, root_size.1));
@@ -1766,7 +1808,10 @@ impl Container {
                     let offset = calc_number(bottom, height, root_size.0, root_size.1);
                     let bounding_height = element.bounding_calculated_height().unwrap();
                     element.calculated_y = Some(height - offset - bounding_height);
-                    log::trace!("position_children: absolute position bottom={bottom} calculated_y={} height={height} offset={offset} bounding_height={bounding_height}", element.calculated_y.unwrap());
+                    log::trace!(
+                        "position_children: absolute position bottom={bottom} calculated_y={} height={height} offset={offset} bounding_height={bounding_height}",
+                        element.calculated_y.unwrap()
+                    );
                 }
 
                 if element.calculated_x.is_none() {
@@ -1791,7 +1836,10 @@ impl Container {
                 let offset = calc_number(right, width, root_size.0, root_size.1);
                 let bounding_width = element.bounding_calculated_width().unwrap();
                 element.calculated_x = Some(width - offset - bounding_width);
-                log::trace!("position_children: fixed position right={right} calculated_x={} width={width} offset={offset} bounding_width={bounding_width}", element.calculated_x.unwrap());
+                log::trace!(
+                    "position_children: fixed position right={right} calculated_x={} width={width} offset={offset} bounding_width={bounding_width}",
+                    element.calculated_x.unwrap()
+                );
             }
             if let Some(top) = &element.top {
                 element.calculated_y = Some(calc_number(top, height, root_size.0, root_size.1));
@@ -1800,7 +1848,10 @@ impl Container {
                 let offset = calc_number(bottom, height, root_size.0, root_size.1);
                 let bounding_height = element.bounding_calculated_height().unwrap();
                 element.calculated_y = Some(height - offset - bounding_height);
-                log::trace!("position_children: fixed position bottom={bottom} calculated_y={} height={height} offset={offset} bounding_height={bounding_height}", element.calculated_y.unwrap());
+                log::trace!(
+                    "position_children: fixed position bottom={bottom} calculated_y={} height={height} offset={offset} bounding_height={bounding_height}",
+                    element.calculated_y.unwrap()
+                );
             }
 
             if element.calculated_x.is_none() {
@@ -2297,11 +2348,7 @@ impl Container {
         self.calculated_width.map(|x| {
             self.horizontal_borders().map_or(x, |borders| {
                 let x = x - borders;
-                if x < 0.0 {
-                    0.0
-                } else {
-                    x
-                }
+                if x < 0.0 { 0.0 } else { x }
             })
         })
     }
@@ -2311,11 +2358,7 @@ impl Container {
         self.calculated_height.map(|x| {
             self.vertical_borders().map_or(x, |borders| {
                 let x = x - borders;
-                if x < 0.0 {
-                    0.0
-                } else {
-                    x
-                }
+                if x < 0.0 { 0.0 } else { x }
             })
         })
     }
@@ -2325,11 +2368,7 @@ impl Container {
         self.calculated_width.map(|x| {
             self.internal_horizontal_margin().map_or(x, |margin| {
                 let x = x + margin;
-                if x < 0.0 {
-                    0.0
-                } else {
-                    x
-                }
+                if x < 0.0 { 0.0 } else { x }
             })
         })
     }
@@ -2339,11 +2378,7 @@ impl Container {
         self.calculated_height.map(|x| {
             self.internal_vertical_margin().map_or(x, |margin| {
                 let x = x + margin;
-                if x < 0.0 {
-                    0.0
-                } else {
-                    x
-                }
+                if x < 0.0 { 0.0 } else { x }
             })
         })
     }
@@ -2435,7 +2470,9 @@ impl Container {
         let mut resized = false;
 
         if width < contained_calculated_width - EPSILON {
-            log::trace!("resize_children: width < contained_calculated_width (width={width} contained_calculated_width={contained_calculated_width})");
+            log::trace!(
+                "resize_children: width < contained_calculated_width (width={width} contained_calculated_width={contained_calculated_width})"
+            );
             match self.overflow_x {
                 LayoutOverflow::Auto | LayoutOverflow::Scroll | LayoutOverflow::Hidden => {}
                 LayoutOverflow::Expand => {
@@ -2443,7 +2480,10 @@ impl Container {
                         && (self.calculated_width.unwrap() - contained_calculated_width).abs()
                             > EPSILON
                     {
-                        log::trace!("resize_children: resized because contained_calculated_width changed from {} to {contained_calculated_width}", self.calculated_width.unwrap());
+                        log::trace!(
+                            "resize_children: resized because contained_calculated_width changed from {} to {contained_calculated_width}",
+                            self.calculated_width.unwrap()
+                        );
                         moosicbox_assert::assert!(contained_calculated_width >= 0.0);
                         self.calculated_width.replace(contained_calculated_width);
                         resized = true;
@@ -2455,11 +2495,15 @@ impl Container {
                 }
             }
         } else {
-            log::trace!("resize_children: width={width} currently contains all of the contained_calculated_width={contained_calculated_width}");
+            log::trace!(
+                "resize_children: width={width} currently contains all of the contained_calculated_width={contained_calculated_width}"
+            );
         }
 
         if height < contained_calculated_height - EPSILON {
-            log::trace!("resize_children: height < contained_calculated_height (height={height} contained_calculated_height={contained_calculated_height})");
+            log::trace!(
+                "resize_children: height < contained_calculated_height (height={height} contained_calculated_height={contained_calculated_height})"
+            );
             match self.overflow_y {
                 LayoutOverflow::Auto | LayoutOverflow::Scroll | LayoutOverflow::Hidden => {}
                 LayoutOverflow::Expand => {
@@ -2467,7 +2511,10 @@ impl Container {
                         && (self.calculated_height.unwrap() - contained_calculated_height).abs()
                             > EPSILON
                     {
-                        log::trace!("resize_children: resized because contained_calculated_height changed from {} to {contained_calculated_height}", self.calculated_height.unwrap());
+                        log::trace!(
+                            "resize_children: resized because contained_calculated_height changed from {} to {contained_calculated_height}",
+                            self.calculated_height.unwrap()
+                        );
                         moosicbox_assert::assert!(contained_calculated_height >= 0.0);
                         self.calculated_height.replace(contained_calculated_height);
                         resized = true;
@@ -2479,7 +2526,9 @@ impl Container {
                 }
             }
         } else {
-            log::trace!("resize_children: height={height} currently contains all of the contained_calculated_height={contained_calculated_height}");
+            log::trace!(
+                "resize_children: height={height} currently contains all of the contained_calculated_height={contained_calculated_height}"
+            );
         }
 
         if resized {
@@ -2492,7 +2541,9 @@ impl Container {
                 );
             };
 
-            log::trace!("resize_children: original_height={height} -> new_height={new_height} original_width={width} -> new_width={new_width}");
+            log::trace!(
+                "resize_children: original_height={height} -> new_height={new_height} original_width={width} -> new_width={new_width}"
+            );
         }
 
         resized
@@ -2515,7 +2566,9 @@ impl Container {
                 moosicbox_assert::assert!(new_width >= 0.0);
                 self.calculated_width = Some(new_width);
                 *container_width = self.calculated_width_minus_borders().unwrap();
-                log::trace!("resize_children: resized because vertical scrollbar is now visible and affected children elements, setting scrollbar_right to {scrollbar_size} new_width={new_width}");
+                log::trace!(
+                    "resize_children: resized because vertical scrollbar is now visible and affected children elements, setting scrollbar_right to {scrollbar_size} new_width={new_width}"
+                );
                 return true;
             }
         } else if let Some(scrollbar_size) = self.scrollbar_right {
@@ -2550,7 +2603,9 @@ impl Container {
                 moosicbox_assert::assert!(new_height >= 0.0);
                 self.calculated_height = Some(new_height);
                 *container_height = self.calculated_height_minus_borders().unwrap();
-                log::trace!("resize_children: resized because horizontal scrollbar is now visible and affected children elements, setting scrollbar_bottom to {scrollbar_size} new_height={new_height}");
+                log::trace!(
+                    "resize_children: resized because horizontal scrollbar is now visible and affected children elements, setting scrollbar_bottom to {scrollbar_size} new_height={new_height}"
+                );
                 return true;
             }
         } else if let Some(scrollbar_size) = self.scrollbar_bottom {
@@ -2582,7 +2637,9 @@ impl Container {
         } else {
             0.0
         };
-        log::trace!("evenly_distribute_children_width: width={width} contained_sized_width={contained_sized_width} evenly_split_remaining_size={evenly_split_remaining_size}");
+        log::trace!(
+            "evenly_distribute_children_width: width={width} contained_sized_width={contained_sized_width} evenly_split_remaining_size={evenly_split_remaining_size}"
+        );
 
         for element in self
             .relative_positioned_elements_mut()
@@ -2596,13 +2653,17 @@ impl Container {
                     moosicbox_assert::assert!(element_width >= 0.0);
                     element.calculated_width.replace(element_width);
                     resized = true;
-                    log::trace!("evenly_distribute_children_width: resized because child calculated_width was different ({existing} != {element_width})");
+                    log::trace!(
+                        "evenly_distribute_children_width: resized because child calculated_width was different ({existing} != {element_width})"
+                    );
                 }
             } else {
                 moosicbox_assert::assert!(element_width >= 0.0);
                 element.calculated_width.replace(element_width);
                 resized = true;
-                log::trace!("evenly_distribute_children_width: resized because child calculated_width was None");
+                log::trace!(
+                    "evenly_distribute_children_width: resized because child calculated_width was None"
+                );
             }
 
             if element.resize_children(arena, root_size) {
@@ -2657,7 +2718,9 @@ impl Container {
                 .filter_map(|(_, x)| x.contained_sized_height(root_size, true))
                 .max_by(order_float)
             {
-                log::trace!("evenly_distribute_children_height: row={row:?} contained_sized_height={height}");
+                log::trace!(
+                    "evenly_distribute_children_height: row={row:?} contained_sized_height={height}"
+                );
                 rows.push(Some(height));
                 contained_sized_height += height;
             } else {
@@ -2678,7 +2741,9 @@ impl Container {
         let overflow_y = self.overflow_y;
         let direction = self.direction;
 
-        log::trace!("evenly_distribute_children_height: height={height} contained_sized_height={contained_sized_height} evenly_split_remaining_size={evenly_split_remaining_size}");
+        log::trace!(
+            "evenly_distribute_children_height: height={height} contained_sized_height={contained_sized_height} evenly_split_remaining_size={evenly_split_remaining_size}"
+        );
 
         let mut contained_sized_height = 0.0;
         let mut unsized_row_count = 0;
@@ -2721,7 +2786,9 @@ impl Container {
             } else {
                 0.0
             };
-        log::trace!("evenly_distribute_children_height: height={height} contained_sized_height={contained_sized_height} evenly_split_remaining_size={evenly_split_remaining_size}");
+        log::trace!(
+            "evenly_distribute_children_height: height={height} contained_sized_height={contained_sized_height} evenly_split_remaining_size={evenly_split_remaining_size}"
+        );
 
         for (row, elements) in &self
             .relative_positioned_elements_mut()
@@ -2745,14 +2812,19 @@ impl Container {
                     let height = height.unwrap_or(evenly_split_remaining_size);
                     let element_height = height - element.vertical_padding().unwrap_or(0.0);
 
-                    log::trace!("evenly_distribute_children_height: i={i} updating element height from={:?} element_height={element_height}", element.calculated_height);
+                    log::trace!(
+                        "evenly_distribute_children_height: i={i} updating element height from={:?} element_height={element_height}",
+                        element.calculated_height
+                    );
 
                     if let Some(existing) = element.calculated_height {
                         if (existing - element_height).abs() > 0.01 {
                             moosicbox_assert::assert!(element_height >= 0.0);
                             element.calculated_height.replace(element_height);
                             resized = true;
-                            log::trace!("evenly_distribute_children_height: resized because child calculated_height was different ({existing} != {element_height})");
+                            log::trace!(
+                                "evenly_distribute_children_height: resized because child calculated_height was different ({existing} != {element_height})"
+                            );
                             element.evenly_distribute_children_height(arena, height, root_size);
                         } else {
                             log::trace!(
@@ -2817,9 +2889,9 @@ mod test {
     use pretty_assertions::{assert_eq, assert_ne};
 
     use crate::{
-        calc::{get_scrollbar_size, Calc as _, EPSILON},
-        models::{JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition},
         Calculation, Container, Element, HeaderSize, Number, Position,
+        calc::{Calc as _, EPSILON, get_scrollbar_size},
+        models::{JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition},
     };
 
     fn compare_containers(a: &Container, b: &Container) {
@@ -3419,8 +3491,8 @@ mod test {
     }
 
     #[test_log::test]
-    fn contained_calculated_width_auto_y_takes_into_account_scrollbar_size_when_there_is_scroll_overflow(
-    ) {
+    fn contained_calculated_width_auto_y_takes_into_account_scrollbar_size_when_there_is_scroll_overflow()
+     {
         let mut container = Container {
             children: vec![
                 Container {
@@ -3528,8 +3600,8 @@ mod test {
     }
 
     #[test_log::test]
-    fn contained_calculated_width_auto_y_takes_into_account_scrollbar_size_when_there_is_scroll_overflow_and_hardsized_elements(
-    ) {
+    fn contained_calculated_width_auto_y_takes_into_account_scrollbar_size_when_there_is_scroll_overflow_and_hardsized_elements()
+     {
         let mut container = Container {
             children: vec![
                 Container {
@@ -3573,8 +3645,8 @@ mod test {
     }
 
     #[test_log::test]
-    fn handle_overflow_auto_y_takes_into_account_scrollbar_size_when_there_is_scroll_overflow_and_hardsized_elements(
-    ) {
+    fn handle_overflow_auto_y_takes_into_account_scrollbar_size_when_there_is_scroll_overflow_and_hardsized_elements()
+     {
         let mut container = Container {
             children: vec![
                 Container {
@@ -3941,8 +4013,8 @@ mod test {
     }
 
     #[test_log::test]
-    fn handle_overflow_y_squash_handles_justify_content_space_between_and_wraps_elements_properly_and_can_recalc_with_new_rows(
-    ) {
+    fn handle_overflow_y_squash_handles_justify_content_space_between_and_wraps_elements_properly_and_can_recalc_with_new_rows()
+     {
         const ROW_HEIGHT: f32 = 40.0 / 4.0;
 
         let div = Container {
@@ -4076,8 +4148,8 @@ mod test {
     }
 
     #[test_log::test]
-    fn handle_overflow_y_expand_handles_justify_content_space_between_and_wraps_elements_properly_and_can_recalc_with_new_rows(
-    ) {
+    fn handle_overflow_y_expand_handles_justify_content_space_between_and_wraps_elements_properly_and_can_recalc_with_new_rows()
+     {
         const ROW_HEIGHT: f32 = 20.0;
 
         let div = Container {
@@ -4509,8 +4581,8 @@ mod test {
     }
 
     #[test_log::test]
-    fn handle_overflow_y_squash_handles_justify_content_space_evenly_with_padding_and_wraps_elements_properly(
-    ) {
+    fn handle_overflow_y_squash_handles_justify_content_space_evenly_with_padding_and_wraps_elements_properly()
+     {
         let mut container = Container {
             children: vec![
                 Container {
@@ -4608,8 +4680,8 @@ mod test {
     }
 
     #[test_log::test]
-    fn handle_overflow_y_expand_handles_justify_content_space_evenly_with_padding_and_wraps_elements_properly(
-    ) {
+    fn handle_overflow_y_expand_handles_justify_content_space_evenly_with_padding_and_wraps_elements_properly()
+     {
         let mut container = Container {
             children: vec![
                 Container {
@@ -4811,8 +4883,8 @@ mod test {
     }
 
     #[test_log::test]
-    fn handle_overflow_y_squash_handles_justify_content_space_evenly_and_wraps_elements_properly_and_can_recalc_with_new_rows(
-    ) {
+    fn handle_overflow_y_squash_handles_justify_content_space_evenly_and_wraps_elements_properly_and_can_recalc_with_new_rows()
+     {
         const ROW_HEIGHT: f32 = 40.0 / 4.0;
 
         let div = Container {
@@ -4946,8 +5018,8 @@ mod test {
     }
 
     #[test_log::test]
-    fn handle_overflow_y_expand_handles_justify_content_space_evenly_and_wraps_elements_properly_and_can_recalc_with_new_rows(
-    ) {
+    fn handle_overflow_y_expand_handles_justify_content_space_evenly_and_wraps_elements_properly_and_can_recalc_with_new_rows()
+     {
         const ROW_HEIGHT: f32 = 20.0;
 
         let div = Container {
@@ -6515,8 +6587,8 @@ mod test {
     }
 
     #[test_log::test]
-    fn calc_can_calc_horizontal_split_with_row_content_in_right_pane_above_a_vertial_split_with_a_specified_height(
-    ) {
+    fn calc_can_calc_horizontal_split_with_row_content_in_right_pane_above_a_vertial_split_with_a_specified_height()
+     {
         let mut container = Container {
             children: vec![
                 Container {
@@ -7407,8 +7479,8 @@ mod test {
     }
 
     #[test_log::test]
-    fn calc_can_calc_absolute_positioned_element_nested_on_top_of_a_relative_element_with_left_offset(
-    ) {
+    fn calc_can_calc_absolute_positioned_element_nested_on_top_of_a_relative_element_with_left_offset()
+     {
         let mut container = Container {
             children: vec![Container {
                 children: vec![
@@ -7551,8 +7623,8 @@ mod test {
     }
 
     #[test_log::test]
-    fn calc_can_calc_fixed_positioned_element_on_top_of_a_relative_element_and_have_it_not_inherit_position_or_size(
-    ) {
+    fn calc_can_calc_fixed_positioned_element_on_top_of_a_relative_element_and_have_it_not_inherit_position_or_size()
+     {
         let mut container = Container {
             children: vec![
                 Container::default(),
@@ -7741,8 +7813,8 @@ mod test {
     }
 
     #[test_log::test]
-    fn calc_can_calc_fixed_positioned_element_on_top_of_a_relative_element_doesnt_affect_fixed_position_element_location(
-    ) {
+    fn calc_can_calc_fixed_positioned_element_on_top_of_a_relative_element_doesnt_affect_fixed_position_element_location()
+     {
         let mut container = Container {
             children: vec![
                 Container::default(),
@@ -8623,8 +8695,8 @@ mod test {
     }
 
     #[test_log::test]
-    fn calc_calculates_width_minus_the_horizontal_padding_for_nested_children_with_calc_parent_sizes(
-    ) {
+    fn calc_calculates_width_minus_the_horizontal_padding_for_nested_children_with_calc_parent_sizes()
+     {
         let mut container: Container = html! {
             div sx-width="100%" sx-height="100%" sx-position="relative" {
                 section sx-dir="row" sx-height=("calc(100% - 140px)") {
@@ -8773,8 +8845,8 @@ mod test {
     }
 
     #[test_log::test]
-    fn calc_calculates_horizontal_and_vertical_position_from_right_for_absolute_position_with_padding(
-    ) {
+    fn calc_calculates_horizontal_and_vertical_position_from_right_for_absolute_position_with_padding()
+     {
         let mut container: Container = html! {
             div
                 sx-width="calc(min(500, 30%))"
@@ -8815,8 +8887,8 @@ mod test {
     }
 
     #[test_log::test]
-    fn calc_calculates_horizontal_and_vertical_position_from_right_for_nested_absolute_position_with_padding(
-    ) {
+    fn calc_calculates_horizontal_and_vertical_position_from_right_for_nested_absolute_position_with_padding()
+     {
         let mut container: Container = html! {
             div sx-width="100%" sx-height="100%" sx-position="relative" {
                 section sx-dir="row" sx-height=("calc(100% - 140px)") {
@@ -9451,8 +9523,8 @@ mod test {
     }
 
     #[test_log::test]
-    fn calc_overflow_y_expand_expands_height_when_contained_height_is_greater_than_single_unsized_div(
-    ) {
+    fn calc_overflow_y_expand_expands_height_when_contained_height_is_greater_than_single_unsized_div()
+     {
         let mut container: Container = html! {
             div {
                 div {
@@ -9487,8 +9559,8 @@ mod test {
     }
 
     #[test_log::test]
-    fn calc_overflow_y_expand_expands_height_when_contained_height_is_greater_than_two_unsized_divs(
-    ) {
+    fn calc_overflow_y_expand_expands_height_when_contained_height_is_greater_than_two_unsized_divs()
+     {
         let mut container: Container = html! {
             div {
                 div {

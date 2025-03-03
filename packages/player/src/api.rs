@@ -1,23 +1,23 @@
 #![allow(clippy::future_not_send)]
 
 use actix_web::{
+    Result, Scope,
     dev::{ServiceFactory, ServiceRequest},
     error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     get, post,
     web::{self, Json},
-    Result, Scope,
 };
 use moosicbox_database::profiles::api::ProfileName;
 use moosicbox_music_api::{MusicApi, MusicApis, SourceToMusicApi as _};
 use moosicbox_music_models::{
-    id::{parse_integer_ranges_to_ids, Id, IdType, ParseIntegersError},
     ApiSource, AudioFormat, PlaybackQuality, Track,
+    id::{Id, IdType, ParseIntegersError, parse_integer_ranges_to_ids},
 };
 use moosicbox_session::models::PlaybackTarget;
 use serde::Deserialize;
 
 use crate::{
-    ApiPlaybackStatus, PlaybackHandler, PlaybackStatus, PlayerError, DEFAULT_PLAYBACK_RETRY_OPTIONS,
+    ApiPlaybackStatus, DEFAULT_PLAYBACK_RETRY_OPTIONS, PlaybackHandler, PlaybackStatus, PlayerError,
 };
 
 pub fn bind_services<
@@ -135,7 +135,7 @@ async fn get_player(
     }
     #[cfg(feature = "local")]
     {
-        use crate::{local::LocalPlayer, PlayerSource};
+        use crate::{PlayerSource, local::LocalPlayer};
         use moosicbox_audio_output::default_output_factory;
 
         Ok(PLAYER_CACHE

@@ -1,8 +1,8 @@
 use moosicbox_database::{
     profiles::LibraryDatabase,
-    query::{where_eq, FilterableQuery},
+    query::{FilterableQuery, where_eq},
 };
-use moosicbox_json_utils::{database::DatabaseFetchError, ToValueType};
+use moosicbox_json_utils::{ToValueType, database::DatabaseFetchError};
 
 pub mod models;
 

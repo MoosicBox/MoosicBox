@@ -1,4 +1,4 @@
-use moosicbox_music_models::{api::ApiAlbumVersionQuality, id::Id, AudioFormat, TrackApiSource};
+use moosicbox_music_models::{AudioFormat, TrackApiSource, api::ApiAlbumVersionQuality, id::Id};
 use serde::Serialize;
 use tantivy::schema::NamedFieldDocument;
 

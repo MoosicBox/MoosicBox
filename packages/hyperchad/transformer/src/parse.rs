@@ -360,8 +360,8 @@ mod test {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        parse::{parse_calculation, split_on_char, split_on_char_trimmed},
         Calculation, Number,
+        parse::{parse_calculation, split_on_char, split_on_char_trimmed},
     };
 
     #[test_log::test]

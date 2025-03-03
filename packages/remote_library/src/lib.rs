@@ -4,21 +4,21 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use moosicbox_menu_models::{api::ApiAlbumVersion, AlbumVersion};
+use moosicbox_menu_models::{AlbumVersion, api::ApiAlbumVersion};
 use moosicbox_music_api::{
+    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
+    ArtistError, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError, RemoveTrackError,
+    TrackError, TrackOrId, TracksError,
     models::{
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
         ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
         TrackSource,
     },
-    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
-    ArtistError, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError, RemoveTrackError,
-    TrackError, TrackOrId, TracksError,
 };
 use moosicbox_music_models::{
+    Album, AlbumType, ApiSource, Artist, PlaybackQuality, Track,
     api::{ApiAlbum, ApiTrack},
     id::Id,
-    Album, AlbumType, ApiSource, Artist, PlaybackQuality, Track,
 };
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use reqwest::Client;

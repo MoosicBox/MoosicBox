@@ -1,10 +1,10 @@
 #![allow(clippy::module_name_repetitions)]
 
-use maud::{html, Markup};
+use maud::{Markup, html};
 use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
 use moosicbox_session_models::ApiConnection;
 
-use crate::{public_img, AUDIO_ZONES_CONTENT_ID};
+use crate::{AUDIO_ZONES_CONTENT_ID, public_img};
 
 #[must_use]
 pub fn audio_zones(zones: &[ApiAudioZoneWithSession], connections: &[ApiConnection]) -> Markup {

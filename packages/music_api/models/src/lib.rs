@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use moosicbox_music_models::{
-    id::Id, AlbumSort, AlbumSource, AlbumType, AudioFormat, TrackApiSource,
+    AlbumSort, AlbumSource, AlbumType, AudioFormat, TrackApiSource, id::Id,
 };
 use std::str::FromStr as _;
 

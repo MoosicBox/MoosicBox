@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use crate::{
-    node::{run_command, run_npm_command},
     MANIFEST_DIR,
+    node::{run_command, run_npm_command},
 };
 
 pub fn bundle(target: &Path, out: &Path) {

@@ -8,7 +8,7 @@ use hyperchad_actions::logic::if_responsive;
 use hyperchad_transformer_models::{
     AlignItems, JustifyContent, LayoutDirection, LayoutOverflow, Position, TextAlign,
 };
-use maud::{html, Markup};
+use maud::{Markup, html};
 
 #[macro_export]
 macro_rules! public_img {

@@ -1,20 +1,20 @@
 use std::collections::HashMap;
 
 use actix_web::{
+    Result, Scope,
     dev::{ServiceFactory, ServiceRequest},
     error::{ErrorBadRequest, ErrorFailedDependency, ErrorInternalServerError},
     route,
     web::{self, Json},
-    Result, Scope,
 };
 use futures::TryStreamExt;
 use serde::Deserialize;
 
 use crate::{
+    ActionError, MediaInfo, PositionInfo, ScanError, TransportInfo, UpnpDeviceScannerError,
     cache::get_device_and_service_from_url, devices, get_device_and_service, get_media_info,
     get_position_info, get_transport_info, get_volume, models::UpnpDevice, pause, play,
-    scan_devices, seek, set_volume, subscribe_events, ActionError, MediaInfo, PositionInfo,
-    ScanError, TransportInfo, UpnpDeviceScannerError,
+    scan_devices, seek, set_volume, subscribe_events,
 };
 
 pub fn bind_services<

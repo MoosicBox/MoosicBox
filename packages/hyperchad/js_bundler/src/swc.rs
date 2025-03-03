@@ -2,23 +2,23 @@ use std::{collections::HashMap, fs::create_dir_all, path::Path};
 
 use anyhow::Error;
 use swc_bundler::{Bundle, Bundler, Load, ModuleData, ModuleRecord, ModuleType};
-use swc_common::{sync::Lrc, FileName, FilePathMapping, Mark, SourceMap, Span, GLOBALS};
+use swc_common::{FileName, FilePathMapping, GLOBALS, Mark, SourceMap, Span, sync::Lrc};
 use swc_ecma_ast::{
     Bool, EsVersion, Expr, IdentName, KeyValueProp, Lit, MemberExpr, MemberProp, MetaPropExpr,
     MetaPropKind, PropName, Str,
 };
 use swc_ecma_codegen::{
-    text_writer::{omit_trailing_semi, JsWriter, WriteJs},
     Emitter,
+    text_writer::{JsWriter, WriteJs, omit_trailing_semi},
 };
 use swc_ecma_loader::{
-    resolvers::{lru::CachingResolver, node::NodeModulesResolver},
     TargetEnv,
+    resolvers::{lru::CachingResolver, node::NodeModulesResolver},
 };
 use swc_ecma_minifier::option::{
     CompressOptions, ExtraOptions, MangleOptions, MinifyOptions, TopLevelOptions,
 };
-use swc_ecma_parser::{parse_file_as_module, parse_file_as_program, EsSyntax, Syntax, TsSyntax};
+use swc_ecma_parser::{EsSyntax, Syntax, TsSyntax, parse_file_as_module, parse_file_as_program};
 use swc_ecma_transforms_base::{fixer::fixer, helpers::Helpers};
 use swc_ecma_transforms_typescript::strip;
 use swc_ecma_visit::VisitMutWith as _;

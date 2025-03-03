@@ -1,17 +1,17 @@
 #![allow(clippy::module_name_repetitions, clippy::future_not_send)]
 
 use actix_web::{
+    HttpRequest, Result, Scope,
     dev::{ServiceFactory, ServiceRequest},
     error::{ErrorInternalServerError, ErrorNotFound, ErrorUnauthorized},
     route,
     web::{self, Json},
-    HttpRequest, Result, Scope,
 };
 #[cfg(feature = "db")]
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_music_models::{
-    api::{ApiAlbum, ApiArtist},
     ApiSource, ApiSources, TrackApiSource,
+    api::{ApiAlbum, ApiArtist},
 };
 use moosicbox_paging::Page;
 use moosicbox_search::api::models::ApiSearchResultsResponse;
@@ -20,10 +20,6 @@ use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 
 use crate::{
-    add_favorite_album, add_favorite_artist, add_favorite_track, album, album_tracks, artist,
-    artist_albums, device_authorization, device_authorization_token, favorite_albums,
-    favorite_artists, favorite_tracks, remove_favorite_album, remove_favorite_artist,
-    remove_favorite_track, search, track, track_file_url, track_playback_info,
     AuthenticatedRequestError, YtAddFavoriteAlbumError, YtAddFavoriteArtistError,
     YtAddFavoriteTrackError, YtAlbumError, YtAlbumOrder, YtAlbumOrderDirection, YtAlbumTracksError,
     YtAlbumType, YtArtistAlbumsError, YtArtistError, YtArtistOrder, YtArtistOrderDirection,
@@ -31,7 +27,11 @@ use crate::{
     YtFavoriteAlbumsError, YtFavoriteArtistsError, YtFavoriteTracksError,
     YtRemoveFavoriteAlbumError, YtRemoveFavoriteArtistError, YtRemoveFavoriteTrackError,
     YtSearchError, YtTrack, YtTrackError, YtTrackFileUrlError, YtTrackOrder, YtTrackOrderDirection,
-    YtTrackPlaybackInfo, YtTrackPlaybackInfoError,
+    YtTrackPlaybackInfo, YtTrackPlaybackInfoError, add_favorite_album, add_favorite_artist,
+    add_favorite_track, album, album_tracks, artist, artist_albums, device_authorization,
+    device_authorization_token, favorite_albums, favorite_artists, favorite_tracks,
+    remove_favorite_album, remove_favorite_artist, remove_favorite_track, search, track,
+    track_file_url, track_playback_info,
 };
 
 pub fn bind_services<

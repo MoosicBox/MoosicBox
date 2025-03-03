@@ -4,8 +4,8 @@ use std::{
 };
 
 use async_trait::async_trait;
-use pingora_core::{upstreams::peer::HttpPeer, Result};
-use pingora_load_balancing::{selection::RoundRobin, LoadBalancer};
+use pingora_core::{Result, upstreams::peer::HttpPeer};
+use pingora_load_balancing::{LoadBalancer, selection::RoundRobin};
 use pingora_proxy::{ProxyHttp, Session};
 
 pub static PORT: LazyLock<u16> = LazyLock::new(|| {

@@ -10,34 +10,35 @@ use std::{
 
 use async_trait::async_trait;
 #[cfg(feature = "base64")]
-use base64::{engine::general_purpose, Engine as _};
+use base64::{Engine as _, engine::general_purpose};
 use bytes::Bytes;
 use futures_util::{
+    Future, Stream, StreamExt,
     future::{self, ready},
-    pin_mut, Future, Stream, StreamExt,
+    pin_mut,
 };
 use moosicbox_audio_decoder::{
-    media_sources::remote_bytestream::RemoteByteStreamMediaSource, AudioDecodeHandler,
+    AudioDecodeHandler, media_sources::remote_bytestream::RemoteByteStreamMediaSource,
 };
 use moosicbox_auth::AuthError;
-use moosicbox_channel_utils::{futures_channel::PrioritizedSender, MoosicBoxSender as _};
+use moosicbox_channel_utils::{MoosicBoxSender as _, futures_channel::PrioritizedSender};
 use moosicbox_database::{config::ConfigDatabase, profiles::PROFILES};
 use moosicbox_env_utils::default_env_usize;
 use moosicbox_files::{
     api::AlbumCoverQuery,
     files::{
-        album::{get_album_cover, AlbumCoverError},
+        album::{AlbumCoverError, get_album_cover},
         track::{audio_format_to_content_type, get_track_id_source, get_track_info},
     },
-    range::{parse_ranges, Range},
+    range::{Range, parse_ranges},
 };
-use moosicbox_music_api::{models::TrackSource, SourceToMusicApi as _};
-use moosicbox_music_models::{id::Id, ApiSource, AudioFormat};
+use moosicbox_music_api::{SourceToMusicApi as _, models::TrackSource};
+use moosicbox_music_models::{ApiSource, AudioFormat, id::Id};
 use moosicbox_player::symphonia::play_media_source_async;
-use moosicbox_stream_utils::{remote_bytestream::RemoteByteStream, ByteWriter};
+use moosicbox_stream_utils::{ByteWriter, remote_bytestream::RemoteByteStream};
 use moosicbox_tunnel::{Method, TunnelEncoding, TunnelWsResponse};
 use moosicbox_ws::{PlayerAction, WebsocketContext, WebsocketSendError, WebsocketSender};
-use rand::{rng, Rng as _};
+use rand::{Rng as _, rng};
 use regex::Regex;
 use serde_json::Value;
 use symphonia::core::{
@@ -47,7 +48,7 @@ use symphonia::core::{
 use thiserror::Error;
 use tokio::{
     select,
-    sync::mpsc::{channel, error::SendError, Receiver, Sender},
+    sync::mpsc::{Receiver, Sender, channel, error::SendError},
     time::sleep,
 };
 use tokio_tungstenite::{
@@ -1576,7 +1577,7 @@ impl TunnelSender {
                             let mut headers = HashMap::new();
                             let resized = {
                                 use moosicbox_image::{
-                                    image::try_resize_local_file_async, Encoding,
+                                    Encoding, image::try_resize_local_file_async,
                                 };
                                 if let Some(resized) = try_resize_local_file_async(
                                     width,
@@ -1676,7 +1677,9 @@ impl TunnelSender {
             player_actions: self.player_actions.read().unwrap().clone(),
         };
         let packet_id = 1_u32;
-        log::debug!("Processing tunnel ws request request_id={request_id} packet_id={packet_id} conn_id={conn_id}");
+        log::debug!(
+            "Processing tunnel ws request request_id={request_id} packet_id={packet_id} conn_id={conn_id}"
+        );
         let sender = TunnelWebsocketSender {
             id: self.id,
             propagate_id: conn_id,

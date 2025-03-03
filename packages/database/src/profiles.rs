@@ -46,13 +46,11 @@ impl DatabaseProfiles {
     /// Will panic if `RwLock` is poisoned
     #[must_use]
     pub fn get(&self, profile: &str) -> Option<LibraryDatabase> {
-        self.profiles.read().unwrap().iter().find_map(|(p, db)| {
-            if p == profile {
-                Some(db.clone())
-            } else {
-                None
-            }
-        })
+        self.profiles
+            .read()
+            .unwrap()
+            .iter()
+            .find_map(|(p, db)| if p == profile { Some(db.clone()) } else { None })
     }
 
     /// # Panics
@@ -108,8 +106,8 @@ impl Deref for LibraryDatabase {
 
 #[cfg(feature = "api")]
 pub mod api {
-    use actix_web::{dev::Payload, error::ErrorBadRequest, FromRequest, HttpRequest};
-    use futures::future::{err, ok, Ready};
+    use actix_web::{FromRequest, HttpRequest, dev::Payload, error::ErrorBadRequest};
+    use futures::future::{Ready, err, ok};
     use qstring::QString;
 
     use super::{LibraryDatabase, PROFILES};

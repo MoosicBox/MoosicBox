@@ -2,7 +2,7 @@ use std::cmp::min;
 use std::io::{Read, Seek};
 
 use bytes::Bytes;
-use flume::{bounded, unbounded, Receiver, Sender};
+use flume::{Receiver, Sender, bounded, unbounded};
 use futures::StreamExt;
 use reqwest::Client;
 use tokio::task::JoinHandle;

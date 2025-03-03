@@ -5,6 +5,8 @@ use std::{
 };
 
 use crate::{
+    CreateDownloadTasksError, DownloadApiSource, GetCreateDownloadTasksError, GetDownloadPathError,
+    MoosicboxDownloader,
     api::models::{ApiDownloadLocation, ApiDownloadTask, ApiDownloadTaskState},
     create_download_tasks,
     db::{
@@ -13,18 +15,16 @@ use crate::{
     },
     get_create_download_tasks, get_download_path,
     queue::{DownloadQueue, ProcessDownloadQueueError, ProgressListenerRef},
-    CreateDownloadTasksError, DownloadApiSource, GetCreateDownloadTasksError, GetDownloadPathError,
-    MoosicboxDownloader,
 };
 use actix_web::{
+    Result, Scope,
     dev::{ServiceFactory, ServiceRequest},
     error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     route,
     web::{self, Json},
-    Result, Scope,
 };
 use moosicbox_database::profiles::LibraryDatabase;
-use moosicbox_music_api::{models::TrackAudioQuality, MusicApis, SourceToMusicApi as _};
+use moosicbox_music_api::{MusicApis, SourceToMusicApi as _, models::TrackAudioQuality};
 use moosicbox_paging::Page;
 use regex::{Captures, Regex};
 use serde::Deserialize;

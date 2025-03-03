@@ -7,8 +7,8 @@ use std::{
     ops::Deref,
     str::FromStr as _,
     sync::{
-        atomic::{AtomicBool, AtomicI32},
         Arc, LazyLock, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
+        atomic::{AtomicBool, AtomicI32},
     },
 };
 
@@ -31,10 +31,10 @@ use hyperchad_renderer::viewport::retained::{
     Viewport, ViewportListener, ViewportPosition, WidgetPosition,
 };
 use hyperchad_transformer::{
+    Container, Element, HeaderSize, ResponsiveTrigger,
     calc::Calc as _,
     calc_number,
     models::{LayoutDirection, LayoutOverflow, LayoutPosition},
-    Container, Element, HeaderSize, ResponsiveTrigger,
 };
 use thiserror::Error;
 use tokio::task::JoinHandle;
@@ -352,7 +352,9 @@ impl FltkRenderer {
                 log::debug!("perform_render: Container had same size, not recalculating");
             }
 
-            log::trace!("perform_render: initialized Container for rendering {container:?} window_width={window_width} window_height={window_height}");
+            log::trace!(
+                "perform_render: initialized Container for rendering {container:?} window_width={window_width} window_height={window_height}"
+            );
 
             {
                 log::debug!("perform_render: aborting any existing viewport_listener_join_handle");
@@ -412,14 +414,14 @@ impl FltkRenderer {
         };
 
         moosicbox_assert::assert!(
-        calculated_width > 0.0 && calculated_height > 0.0
-            || calculated_width <= 0.0 && calculated_height <= 0.0,
-        "Invalid calculated_width/calculated_height: calculated_width={calculated_width} calculated_height={calculated_height}"
-    );
+            calculated_width > 0.0 && calculated_height > 0.0
+                || calculated_width <= 0.0 && calculated_height <= 0.0,
+            "Invalid calculated_width/calculated_height: calculated_width={calculated_width} calculated_height={calculated_height}"
+        );
 
         log::debug!(
-        "draw_elements: calculated_width={calculated_width} calculated_height={calculated_height}"
-    );
+            "draw_elements: calculated_width={calculated_width} calculated_height={calculated_height}"
+        );
         let direction = context.direction;
 
         #[allow(clippy::cast_possible_truncation)]
@@ -618,7 +620,11 @@ impl FltkRenderer {
             if context.direction == LayoutDirection::Row && row != current_row
                 || context.direction == LayoutDirection::Column && col != current_col
             {
-                log::debug!("draw_elements: finished row/col current_row={current_row} current_col={current_col} flex_width={} flex_height={}", flex.w(), flex.h());
+                log::debug!(
+                    "draw_elements: finished row/col current_row={current_row} current_col={current_col} flex_width={} flex_height={}",
+                    flex.w(),
+                    flex.h()
+                );
                 flex.end();
 
                 #[allow(clippy::cast_possible_truncation)]
@@ -684,10 +690,18 @@ impl FltkRenderer {
 
         log::debug!(
             "draw_elements: finished draw: container_wrap_x={:?} container_wrap_y={:?} container_scroll_x={:?} container_scroll_y={:?} container={}",
-            container_wrap_x.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
-            container_wrap_y.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
-            container_scroll_x.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
-            container_scroll_y.as_ref().map(|x| format!("({}, {})", x.wid(), x.hei())),
+            container_wrap_x
+                .as_ref()
+                .map(|x| format!("({}, {})", x.wid(), x.hei())),
+            container_wrap_y
+                .as_ref()
+                .map(|x| format!("({}, {})", x.wid(), x.hei())),
+            container_scroll_x
+                .as_ref()
+                .map(|x| format!("({}, {})", x.wid(), x.hei())),
+            container_scroll_y
+                .as_ref()
+                .map(|x| format!("({}, {})", x.wid(), x.hei())),
             format!("({}, {})", container.w(), container.h()),
         );
         flex.end();

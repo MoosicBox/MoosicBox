@@ -4,11 +4,12 @@
 use std::{io::Write, marker::PhantomData};
 
 use async_trait::async_trait;
-use flate2::{write::GzEncoder, Compression};
+use flate2::{Compression, write::GzEncoder};
 use hyperchad_renderer::{RenderRunner, ToRenderRunner};
 use lambda_http::{
+    Request, Response,
     http::header::{CONTENT_ENCODING, CONTENT_TYPE},
-    service_fn, Request, Response,
+    service_fn,
 };
 use tokio::runtime::Handle;
 
@@ -57,9 +58,9 @@ impl<T: Send + Sync + Clone, R: LambdaResponseProcessor<T> + Send + Sync + Clone
 }
 
 impl<
-        T: Send + Sync + Clone + 'static,
-        R: LambdaResponseProcessor<T> + Send + Sync + Clone + 'static,
-    > ToRenderRunner for LambdaApp<T, R>
+    T: Send + Sync + Clone + 'static,
+    R: LambdaResponseProcessor<T> + Send + Sync + Clone + 'static,
+> ToRenderRunner for LambdaApp<T, R>
 {
     fn to_runner(
         self,
@@ -78,9 +79,9 @@ pub struct LambdaAppRunner<
 }
 
 impl<
-        T: Send + Sync + Clone + 'static,
-        R: LambdaResponseProcessor<T> + Send + Sync + Clone + 'static,
-    > RenderRunner for LambdaAppRunner<T, R>
+    T: Send + Sync + Clone + 'static,
+    R: LambdaResponseProcessor<T> + Send + Sync + Clone + 'static,
+> RenderRunner for LambdaAppRunner<T, R>
 {
     /// # Errors
     ///

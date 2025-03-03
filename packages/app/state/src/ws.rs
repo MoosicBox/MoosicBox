@@ -4,7 +4,7 @@ use moosicbox_app_ws::{
     CloseError, WebsocketSendError, WebsocketSender as _, WsClient, WsHandle, WsMessage,
 };
 use moosicbox_audio_output::AudioOutputScannerError;
-use moosicbox_player::{PlayerError, DEFAULT_PLAYBACK_RETRY_OPTIONS};
+use moosicbox_player::{DEFAULT_PLAYBACK_RETRY_OPTIONS, PlayerError};
 use moosicbox_session::models::{ApiSession, ApiUpdateSession};
 use moosicbox_ws::models::{EmptyPayload, InboundPayload, OutboundPayload};
 use serde::Serialize;

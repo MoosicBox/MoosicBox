@@ -6,7 +6,7 @@ use std::sync::{Arc, LazyLock};
 use std::{path::PathBuf, sync::atomic::AtomicUsize};
 
 use db::get_enabled_scan_origins;
-use event::{ProgressEvent, ScanTask, PROGRESS_LISTENERS};
+use event::{PROGRESS_LISTENERS, ProgressEvent, ScanTask};
 use moosicbox_config::get_cache_dir_path;
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_json_utils::database::DatabaseFetchError;

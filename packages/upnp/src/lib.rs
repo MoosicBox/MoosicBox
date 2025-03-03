@@ -14,7 +14,7 @@ use async_recursion::async_recursion;
 use futures::prelude::*;
 use itertools::Itertools;
 use models::{UpnpDevice, UpnpService};
-pub use rupnp::{http::Uri, ssdp::SearchTarget, Device, DeviceSpec, Service};
+pub use rupnp::{Device, DeviceSpec, Service, http::Uri, ssdp::SearchTarget};
 use serde::Serialize;
 use std::{
     collections::HashMap,

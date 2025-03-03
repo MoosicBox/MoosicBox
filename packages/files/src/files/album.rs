@@ -4,19 +4,19 @@ use std::path::{Path, PathBuf};
 
 use bytes::BytesMut;
 use futures::{StreamExt, TryStreamExt};
-use moosicbox_database::{profiles::LibraryDatabase, query::FilterableQuery, DatabaseError};
+use moosicbox_database::{DatabaseError, profiles::LibraryDatabase, query::FilterableQuery};
 use moosicbox_music_api::{
-    models::{ImageCoverSize, ImageCoverSource},
     AlbumError, MusicApi,
+    models::{ImageCoverSize, ImageCoverSource},
 };
-use moosicbox_music_models::{id::Id, Album};
+use moosicbox_music_models::{Album, id::Id};
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
 use thiserror::Error;
 use tokio_util::codec::{BytesCodec, FramedRead};
 
 use crate::{
-    get_or_fetch_cover_bytes_from_remote_url, get_or_fetch_cover_from_remote_url,
-    sanitize_filename, search_for_cover, CoverBytes, FetchCoverError,
+    CoverBytes, FetchCoverError, get_or_fetch_cover_bytes_from_remote_url,
+    get_or_fetch_cover_from_remote_url, sanitize_filename, search_for_cover,
 };
 
 fn get_album_cover_path(

@@ -1,6 +1,6 @@
 use std::{fs::File, path::Path};
 
-use moosicbox_audio_decoder::{decode, AudioDecodeHandler, DecodeError};
+use moosicbox_audio_decoder::{AudioDecodeHandler, DecodeError, decode};
 use symphonia::core::{
     codecs::DecoderOptions,
     formats::FormatOptions,

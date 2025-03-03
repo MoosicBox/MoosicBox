@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use flume::{Receiver, Sender};
 use hyperchad_renderer::{
-    canvas::{self},
     PartialView, RendererEvent, View,
+    canvas::{self},
 };
 use thiserror::Error;
 

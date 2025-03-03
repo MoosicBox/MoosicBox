@@ -1,7 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use moosicbox_async_service::{tokio::sync::RwLock, Arc, JoinHandle};
+use moosicbox_async_service::{Arc, JoinHandle, tokio::sync::RwLock};
 use moosicbox_config::AppType;
 use strum_macros::AsRefStr;
 use tauri::RunEvent;

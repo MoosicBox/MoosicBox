@@ -1,9 +1,9 @@
 use actix_web::{
+    Result, Scope,
     dev::{ServiceFactory, ServiceRequest},
     error::{ErrorInternalServerError, ErrorNotFound},
     route,
     web::{self, Json},
-    Result, Scope,
 };
 use moosicbox_database::{config::ConfigDatabase, profiles::LibraryDatabase};
 use moosicbox_paging::Page;

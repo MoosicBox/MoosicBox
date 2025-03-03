@@ -9,11 +9,11 @@ use std::{
 };
 
 use moosicbox_app_state::{
-    ws::WsConnectMessage, AppStateError, UpdateAppState, UPNP_LISTENER_HANDLE,
+    AppStateError, UPNP_LISTENER_HANDLE, UpdateAppState, ws::WsConnectMessage,
 };
 use moosicbox_logging::free_log_client::DynLayer;
 use moosicbox_mdns::scanner::service::Commander;
-use moosicbox_music_models::{api::ApiTrack, id::Id, ApiSource, PlaybackQuality};
+use moosicbox_music_models::{ApiSource, PlaybackQuality, api::ApiTrack, id::Id};
 use moosicbox_player::{Playback, PlayerError};
 use moosicbox_session::models::{ApiSession, ApiUpdateSession, UpdateSession};
 use moosicbox_ws::models::{

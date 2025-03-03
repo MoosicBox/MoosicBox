@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use hyperchad_renderer::{transformer::ResponsiveTrigger, Color, Handle, RenderRunner, Renderer};
+use hyperchad_renderer::{Color, Handle, RenderRunner, Renderer, transformer::ResponsiveTrigger};
 use hyperchad_router::Router;
 use moosicbox_env_utils::default_env_usize;
 use thiserror::Error;
@@ -475,9 +475,9 @@ impl NativeAppBuilder {
     pub fn with_action_handler<E: std::error::Error + 'static>(
         mut self,
         func: impl Fn(&str, Option<&hyperchad_actions::logic::Value>) -> Result<bool, E>
-            + Send
-            + Sync
-            + 'static,
+        + Send
+        + Sync
+        + 'static,
     ) -> Self {
         self.action_handlers.push(Arc::new(Box::new(move |(a, b)| {
             func(a, b).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)

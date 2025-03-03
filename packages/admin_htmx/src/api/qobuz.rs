@@ -1,10 +1,11 @@
 use actix_htmx::{Htmx, TriggerType};
 use actix_web::{
+    Scope,
     dev::{ServiceFactory, ServiceRequest},
     error::ErrorInternalServerError,
-    route, web, Scope,
+    route, web,
 };
-use maud::{html, Markup};
+use maud::{Markup, html};
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_json_utils::database::DatabaseFetchError;
 #[cfg(feature = "scan")]

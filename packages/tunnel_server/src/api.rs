@@ -3,10 +3,10 @@
 use actix_web::error::{
     ErrorBadRequest, ErrorFailedDependency, ErrorInternalServerError, ErrorUnauthorized,
 };
-use actix_web::http::{header, StatusCode};
+use actix_web::http::{StatusCode, header};
 use actix_web::web::{self, Json};
-use actix_web::{route, HttpResponse};
 use actix_web::{HttpRequest, Result};
+use actix_web::{HttpResponse, route};
 use bytes::Bytes;
 use futures_util::StreamExt;
 use log::{debug, info};
@@ -15,26 +15,26 @@ use moosicbox_tunnel::{
     Method, TunnelEncoding, TunnelHttpRequest, TunnelRequest, TunnelResponse, TunnelStream,
 };
 use qstring::QString;
-use rand::{rng, Rng as _};
+use rand::{Rng as _, rng};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::str::FromStr;
 use thiserror::Error;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
+use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+use crate::WS_SERVER_HANDLE;
 use crate::auth::{
-    hash_token, ClientHeaderAuthorized, GeneralHeaderAuthorized, SignatureAuthorized,
+    ClientHeaderAuthorized, GeneralHeaderAuthorized, SignatureAuthorized, hash_token,
 };
 use crate::db::{
     insert_client_access_token, insert_magic_token, insert_signature_token, select_magic_token,
 };
 use crate::ws::server::service::{Commander, CommanderError};
-use crate::ws::server::{get_connection_id, ConnectionIdError, RequestHeaders};
-use crate::WS_SERVER_HANDLE;
+use crate::ws::server::{ConnectionIdError, RequestHeaders, get_connection_id};
 
 #[route("/health", method = "GET")]
 pub async fn health_endpoint() -> Result<Json<Value>> {
@@ -257,7 +257,9 @@ async fn handle_request(
     let request_id = rng().random::<u64>();
     let abort_token = CancellationToken::new();
 
-    debug!("Starting ws request for {request_id} method={method} path={path} query={query:?} headers={headers:?} profile={profile:?} (id {request_id})");
+    debug!(
+        "Starting ws request for {request_id} method={method} path={path} query={query:?} headers={headers:?} profile={profile:?} (id {request_id})"
+    );
 
     let (headers_rx, rx) = request(
         client_id,
@@ -371,7 +373,9 @@ fn request(
         let conn_id = match get_connection_id(&client_id).await {
             Ok(conn_id) => conn_id,
             Err(err) => {
-                log::error!("Failed to get connection id for request_id={request_id} client_id={client_id}: {err:?}");
+                log::error!(
+                    "Failed to get connection id for request_id={request_id} client_id={client_id}: {err:?}"
+                );
                 ws_server
                     .send_command_async(crate::ws::server::Command::RequestEnd { request_id })
                     .await?;

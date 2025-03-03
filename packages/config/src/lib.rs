@@ -101,10 +101,10 @@ pub use db_impl::*;
 
 #[cfg(feature = "db")]
 mod db_impl {
-    use moosicbox_database::{config::ConfigDatabase, DatabaseError};
+    use moosicbox_database::{DatabaseError, config::ConfigDatabase};
     use moosicbox_json_utils::database::DatabaseFetchError;
 
-    use crate::db::{models, GetOrInitServerIdentityError};
+    use crate::db::{GetOrInitServerIdentityError, models};
 
     /// # Errors
     ///

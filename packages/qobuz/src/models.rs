@@ -3,15 +3,15 @@ use std::{fmt::Display, str::FromStr as _};
 use chrono::{DateTime, Utc};
 use moosicbox_date_utils::chrono::parse_date_time;
 use moosicbox_json_utils::{
+    ParseError, ToValueType,
     database::AsModelResult,
     serde_json::{ToNestedValue, ToValue},
-    ParseError, ToValueType,
 };
 use moosicbox_music_api::models::ImageCoverSize;
 use moosicbox_music_models::{
+    Album, AlbumSource, ApiSource, ApiSources, Artist, Track, TrackApiSource,
     api::{ApiAlbum, ApiArtist},
     id::TryFromIdError,
-    Album, AlbumSource, ApiSource, ApiSources, Artist, Track, TrackApiSource,
 };
 use moosicbox_search::api::models::{
     ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
@@ -20,7 +20,7 @@ use moosicbox_search::api::models::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{format_title, QobuzAlbumReleaseType};
+use crate::{QobuzAlbumReleaseType, format_title};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]

@@ -1,17 +1,17 @@
 #![allow(clippy::module_name_repetitions)]
 
 use actix_web::{
+    HttpRequest, Result, Scope,
     dev::{ServiceFactory, ServiceRequest},
     error::{ErrorInternalServerError, ErrorNotFound, ErrorUnauthorized},
     route,
     web::{self, Json},
-    HttpRequest, Result, Scope,
 };
 #[cfg(feature = "db")]
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_music_models::{
-    api::{ApiAlbum, ApiArtist},
     ApiSource, ApiSources, TrackApiSource,
+    api::{ApiAlbum, ApiArtist},
 };
 use moosicbox_paging::Page;
 use moosicbox_search::api::models::ApiSearchResultsResponse;
@@ -20,19 +20,19 @@ use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 
 use crate::{
-    add_favorite_album, add_favorite_artist, add_favorite_track, album, album_tracks, artist,
-    artist_albums, device_authorization, device_authorization_token, favorite_albums,
-    favorite_artists, favorite_tracks, models::TidalAlbum, remove_favorite_album,
-    remove_favorite_artist, remove_favorite_track, search, track, track_file_url,
-    track_playback_info, AuthenticatedRequestError, SearchType, TidalAddFavoriteAlbumError,
-    TidalAddFavoriteArtistError, TidalAddFavoriteTrackError, TidalAlbumError, TidalAlbumOrder,
-    TidalAlbumOrderDirection, TidalAlbumTracksError, TidalAlbumType, TidalArtistAlbumsError,
-    TidalArtistError, TidalArtistOrder, TidalArtistOrderDirection, TidalAudioQuality,
-    TidalDeviceAuthorizationError, TidalDeviceAuthorizationTokenError, TidalDeviceType,
-    TidalFavoriteAlbumsError, TidalFavoriteArtistsError, TidalFavoriteTracksError,
-    TidalRemoveFavoriteAlbumError, TidalRemoveFavoriteArtistError, TidalRemoveFavoriteTrackError,
-    TidalSearchError, TidalTrack, TidalTrackError, TidalTrackFileUrlError, TidalTrackOrder,
-    TidalTrackOrderDirection, TidalTrackPlaybackInfo, TidalTrackPlaybackInfoError,
+    AuthenticatedRequestError, SearchType, TidalAddFavoriteAlbumError, TidalAddFavoriteArtistError,
+    TidalAddFavoriteTrackError, TidalAlbumError, TidalAlbumOrder, TidalAlbumOrderDirection,
+    TidalAlbumTracksError, TidalAlbumType, TidalArtistAlbumsError, TidalArtistError,
+    TidalArtistOrder, TidalArtistOrderDirection, TidalAudioQuality, TidalDeviceAuthorizationError,
+    TidalDeviceAuthorizationTokenError, TidalDeviceType, TidalFavoriteAlbumsError,
+    TidalFavoriteArtistsError, TidalFavoriteTracksError, TidalRemoveFavoriteAlbumError,
+    TidalRemoveFavoriteArtistError, TidalRemoveFavoriteTrackError, TidalSearchError, TidalTrack,
+    TidalTrackError, TidalTrackFileUrlError, TidalTrackOrder, TidalTrackOrderDirection,
+    TidalTrackPlaybackInfo, TidalTrackPlaybackInfoError, add_favorite_album, add_favorite_artist,
+    add_favorite_track, album, album_tracks, artist, artist_albums, device_authorization,
+    device_authorization_token, favorite_albums, favorite_artists, favorite_tracks,
+    models::TidalAlbum, remove_favorite_album, remove_favorite_artist, remove_favorite_track,
+    search, track, track_file_url, track_playback_info,
 };
 
 pub fn bind_services<

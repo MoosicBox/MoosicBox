@@ -20,17 +20,17 @@ use moosicbox_app_native_lib::{
     router::{Container, RouteRequest, Router},
 };
 use moosicbox_app_native_ui::{
+    AUDIO_ZONES_CONTENT_ID, Action, PLAYBACK_SESSIONS_CONTENT_ID,
     albums::load_albums,
     state::{self, State},
-    Action, AUDIO_ZONES_CONTENT_ID, PLAYBACK_SESSIONS_CONTENT_ID,
 };
 use moosicbox_app_state::AppStateError;
 use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
 use moosicbox_env_utils::{default_env_usize, option_env_f32, option_env_i32};
-use moosicbox_music_api::{profiles::PROFILES, MusicApi, SourceToMusicApi};
+use moosicbox_music_api::{MusicApi, SourceToMusicApi, profiles::PROFILES};
 use moosicbox_music_models::{
-    api::{ApiAlbum, ApiArtist, ApiTrack},
     AlbumSort, AlbumType, ApiSource, TrackApiSource,
+    api::{ApiAlbum, ApiArtist, ApiTrack},
 };
 use moosicbox_paging::Page;
 use moosicbox_player::Playback;
@@ -943,10 +943,14 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
                                 let seek = duration * f64::from(seek);
 
                                 if seek < 0.0 || seek > duration {
-                                    log::debug!("handle_action: SeekCurrentTrackPercent: target seek is out of track duration bounds");
+                                    log::debug!(
+                                        "handle_action: SeekCurrentTrackPercent: target seek is out of track duration bounds"
+                                    );
                                     Ok(())
                                 } else if session.seek.is_some_and(|x| (x - seek).abs() < 0.1) {
-                                    log::debug!("handle_action: SeekCurrentTrackPercent: already at desired position");
+                                    log::debug!(
+                                        "handle_action: SeekCurrentTrackPercent: already at desired position"
+                                    );
                                     Ok(())
                                 } else {
                                     STATE

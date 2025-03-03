@@ -1,9 +1,9 @@
 use actix_web::{
+    Result, Scope,
     dev::{ServiceFactory, ServiceRequest},
     error::ErrorInternalServerError,
     route,
     web::{self, Json},
-    Result, Scope,
 };
 use moosicbox_database::config::ConfigDatabase;
 use serde::Deserialize;

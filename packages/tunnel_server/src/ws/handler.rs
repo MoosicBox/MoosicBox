@@ -4,8 +4,8 @@ use std::time::{Duration, Instant};
 
 use actix_ws::Message;
 use futures_util::{
-    future::{select, Either},
     StreamExt as _,
+    future::{Either, select},
 };
 use moosicbox_tunnel::TunnelWsResponse;
 use tokio::{pin, sync::mpsc, time::interval};
@@ -140,7 +140,9 @@ pub async fn handle_ws(
             // ws messages received from other room participants
             Either::Left((Either::Right((Some(ws_msg), _)), _)) => {
                 if let Err(err) = session.text(ws_msg).await {
-                    log::error!("Failed to send text message to conn_id='{conn_id}' client_id='{client_id}': {err:?}");
+                    log::error!(
+                        "Failed to send text message to conn_id='{conn_id}' client_id='{client_id}': {err:?}"
+                    );
                 }
             }
 

@@ -1,12 +1,11 @@
 use std::str::FromStr;
 
 use actix_web::{
-    delete,
+    Result, Scope, delete,
     dev::{ServiceFactory, ServiceRequest},
     error::{ErrorBadRequest, ErrorInternalServerError},
     post,
     web::{self, Json},
-    Result, Scope,
 };
 use moosicbox_auth::NonTunnelRequestAuthorized;
 use moosicbox_database::profiles::LibraryDatabase;
@@ -14,7 +13,7 @@ use moosicbox_music_api::MusicApis;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::{disable_scan_origin, enable_scan_origin, run_scan, ScanError, ScanOrigin};
+use crate::{ScanError, ScanOrigin, disable_scan_origin, enable_scan_origin, run_scan};
 
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,

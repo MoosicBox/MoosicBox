@@ -1,9 +1,9 @@
 use actix_web::{
+    Result, Scope,
     dev::{ServiceFactory, ServiceRequest},
     error::{ErrorInternalServerError, ErrorNotFound},
     route,
     web::{self, Json},
-    Result, Scope,
 };
 use moosicbox_audio_zone::models::{ApiAudioZone, ApiPlayer};
 use moosicbox_database::{config::ConfigDatabase, profiles::LibraryDatabase};
@@ -13,8 +13,8 @@ use moosicbox_session_models::{ApiConnection, RegisterConnection};
 use serde::Deserialize;
 
 use crate::{
-    models::{ApiSession, ApiSessionPlaylist, RegisterPlayer},
     CreatePlayersError,
+    models::{ApiSession, ApiSessionPlaylist, RegisterPlayer},
 };
 
 pub mod models;

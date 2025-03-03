@@ -1,34 +1,34 @@
 use std::sync::{Arc, PoisonError};
 
 use moosicbox_database::{
-    profiles::LibraryDatabase, query::FilterableQuery, DatabaseError, DatabaseValue,
+    DatabaseError, DatabaseValue, profiles::LibraryDatabase, query::FilterableQuery,
 };
 use moosicbox_date_utils::chrono;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_library::{
+    LibraryAlbumTracksError, LibraryMusicApi,
     db::{delete_track_sizes_by_track_id, delete_tracks},
     models::LibraryAlbum,
-    LibraryAlbumTracksError, LibraryMusicApi,
 };
 use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_api::{
-    models::AlbumsRequest, AlbumsError, ArtistAlbumsError, LibraryAlbumError, MusicApi, TracksError,
+    AlbumsError, ArtistAlbumsError, LibraryAlbumError, MusicApi, TracksError, models::AlbumsRequest,
 };
 use moosicbox_music_models::{
-    id::{Id, TryFromIdError},
     Album, ApiSource, Artist, Track, TrackApiSource,
+    id::{Id, TryFromIdError},
 };
 use moosicbox_paging::Page;
 use moosicbox_scan::{music_api::ScanError, output::ScanOutput};
 use moosicbox_search::{
-    data::{AsDataValues, AsDeleteTerm},
     DeleteFromIndexError, PopulateIndexError,
+    data::{AsDataValues, AsDeleteTerm},
 };
 use moosicbox_session::delete_session_playlist_tracks_by_track_id;
 use thiserror::Error;
 use tokio::sync::RwLock;
 
-use super::{get_albums, GetAlbumError};
+use super::{GetAlbumError, get_albums};
 
 #[derive(Debug, Error)]
 pub enum GetAlbumTracksError {

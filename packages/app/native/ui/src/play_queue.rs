@@ -1,8 +1,8 @@
 #![allow(clippy::module_name_repetitions)]
 
-use hyperchad_actions::{logic::get_visibility_self, ActionType};
+use hyperchad_actions::{ActionType, logic::get_visibility_self};
 use hyperchad_transformer_models::Visibility;
-use maud::{html, Markup};
+use maud::{Markup, html};
 use moosicbox_music_models::api::ApiTrack;
 
 use crate::{public_img, state::State};

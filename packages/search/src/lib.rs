@@ -10,11 +10,11 @@ use tantivy::directory::MmapDirectory;
 use tantivy::query::{BooleanQuery, BoostQuery, DisjunctionMaxQuery, QueryParser, TermQuery};
 use tantivy::query_grammar::Occur;
 use tantivy::{
-    schema::{
-        Document, Field, IndexRecordOption, NamedFieldDocument, Schema, TantivyDocument, Term,
-        STORED, STRING, TEXT,
-    },
     Directory, IndexWriter,
+    schema::{
+        Document, Field, IndexRecordOption, NamedFieldDocument, STORED, STRING, Schema, TEXT,
+        TantivyDocument, Term,
+    },
 };
 use tantivy::{Index, IndexReader, ReloadPolicy};
 use thiserror::Error;
@@ -82,12 +82,12 @@ static GLOBAL_SEARCH_READER: LazyLock<RwLock<Result<IndexReader, GetGlobalSearch
             Ok(index) => index,
             Err(err) => match err {
                 GetGlobalSearchIndexError::Tantivy(err) => {
-                    return RwLock::new(Err(GetGlobalSearchReaderError::Tantivy(err.clone())))
+                    return RwLock::new(Err(GetGlobalSearchReaderError::Tantivy(err.clone())));
                 }
                 GetGlobalSearchIndexError::FailedToGetIndex(_) => {
                     return RwLock::new(Err(GetGlobalSearchReaderError::FailedToGetReader(
                         err.to_string(),
-                    )))
+                    )));
                 }
             },
         };

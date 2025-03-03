@@ -2,7 +2,7 @@ use std::cmp::min;
 use std::io::{Read, Seek};
 
 use bytes::Bytes;
-use flume::{bounded, Receiver, Sender};
+use flume::{Receiver, Sender, bounded};
 use futures::{Stream, StreamExt};
 use symphonia::core::io::MediaSource;
 use tokio::task::JoinHandle;

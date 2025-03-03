@@ -1,39 +1,39 @@
 use std::str::FromStr;
 
 use actix_web::{
-    delete,
+    Result, Scope, delete,
     dev::{ServiceFactory, ServiceRequest},
     error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     get, post,
     web::{self, Json},
-    Result, Scope,
 };
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_library::{
-    db::{get_album_tracks, get_tracks},
     LibraryMusicApi,
+    db::{get_album_tracks, get_tracks},
 };
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_music_api::{
-    models::{AlbumFilters, AlbumsRequest},
     MusicApis, SourceToMusicApi as _,
+    models::{AlbumFilters, AlbumsRequest},
 };
 use moosicbox_music_models::{
-    api::{ApiAlbum, ApiArtist, ApiTrack},
-    id::{parse_integer_ranges_to_ids, Id, IdType, ParseIntegersError},
     AlbumSort, AlbumSource, AlbumType, ApiSource, ArtistSort,
+    api::{ApiAlbum, ApiArtist, ApiTrack},
+    id::{Id, IdType, ParseIntegersError, parse_integer_ranges_to_ids},
 };
 use moosicbox_paging::{Page, PagingRequest};
 use serde::Deserialize;
 use thiserror::Error;
 
 use crate::library::{
+    GetArtistError,
     albums::{
         add_album, get_album_versions_from_source, get_albums_from_source, refavorite_album,
         remove_album,
     },
-    artists::{get_all_artists, ArtistFilters, ArtistsRequest},
-    get_album_from_source, get_artist, get_artist_albums, get_library_album, GetArtistError,
+    artists::{ArtistFilters, ArtistsRequest, get_all_artists},
+    get_album_from_source, get_artist, get_artist_albums, get_library_album,
 };
 
 pub fn bind_services<

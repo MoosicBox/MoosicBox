@@ -4,9 +4,9 @@
 use std::{collections::HashMap, io::Write};
 
 use hyperchad_renderer::{Color, HtmlTagRenderer};
-use hyperchad_renderer_html::{html::write_attr, DefaultHtmlTagRenderer};
-use hyperchad_transformer::{models::Route, Container, ResponsiveTrigger};
-use maud::{html, PreEscaped, DOCTYPE};
+use hyperchad_renderer_html::{DefaultHtmlTagRenderer, html::write_attr};
+use hyperchad_transformer::{Container, ResponsiveTrigger, models::Route};
+use maud::{DOCTYPE, PreEscaped, html};
 
 #[derive(Default, Clone)]
 pub struct HtmxTagRenderer {

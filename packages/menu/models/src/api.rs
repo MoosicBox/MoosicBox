@@ -1,6 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use moosicbox_music_models::{api::ApiTrack, AlbumVersionQuality, AudioFormat, TrackApiSource};
+use moosicbox_music_models::{AlbumVersionQuality, AudioFormat, TrackApiSource, api::ApiTrack};
 use serde::{Deserialize, Serialize};
 
 use crate::AlbumVersion;

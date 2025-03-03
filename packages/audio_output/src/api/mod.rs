@@ -1,8 +1,8 @@
 use actix_web::{
+    Result, Scope,
     dev::{ServiceFactory, ServiceRequest},
     route,
     web::{self, Json},
-    Result, Scope,
 };
 use moosicbox_paging::Page;
 use serde::Deserialize;

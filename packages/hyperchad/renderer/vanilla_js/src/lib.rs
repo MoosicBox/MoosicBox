@@ -5,21 +5,21 @@ use std::{collections::HashMap, io::Write};
 
 use async_trait::async_trait;
 use const_format::concatcp;
-use hyperchad_renderer::{canvas, Color, HtmlTagRenderer, PartialView, RendererEvent, View};
+use hyperchad_renderer::{Color, HtmlTagRenderer, PartialView, RendererEvent, View, canvas};
 use hyperchad_renderer_html::{
+    DefaultHtmlTagRenderer,
     extend::{ExtendHtmlRenderer, HtmlRendererEventPub},
     html::write_attr,
-    DefaultHtmlTagRenderer,
 };
 use hyperchad_transformer::{
+    Container, ResponsiveTrigger,
     actions::{
-        logic::{Arithmetic, CalcValue, Condition, Value},
         ActionEffect, ActionTrigger, ActionType, ElementTarget, LogLevel, StyleAction,
+        logic::{Arithmetic, CalcValue, Condition, Value},
     },
     models::{LayoutDirection, Route, Visibility},
-    Container, ResponsiveTrigger,
 };
-use maud::{html, PreEscaped, DOCTYPE};
+use maud::{DOCTYPE, PreEscaped, html};
 
 #[derive(Default, Clone)]
 pub struct VanillaJsTagRenderer {

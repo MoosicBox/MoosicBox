@@ -3,7 +3,7 @@ use std::sync::LazyLock;
 use chrono::NaiveDateTime;
 use hyperchad_actions::logic::if_responsive;
 use hyperchad_transformer_models::{AlignItems, LayoutDirection};
-use maud::{html, Markup};
+use maud::{Markup, html};
 use regex::Regex;
 
 use crate::page;

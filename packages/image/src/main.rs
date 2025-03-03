@@ -128,7 +128,9 @@ async fn try_resize_local_file(
             })
     });
 
-    log::debug!("Resizing local image file path={path} width={width} height={height} encoding={encoding} quality={quality}");
+    log::debug!(
+        "Resizing local image file path={path} width={width} height={height} encoding={encoding} quality={quality}"
+    );
 
     let bytes = image::try_resize_local_file_async(width, height, path, encoding, quality)
         .await?

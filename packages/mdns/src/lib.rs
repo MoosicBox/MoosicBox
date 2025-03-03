@@ -33,13 +33,17 @@ pub fn register_service(
             .unwrap_or_else(|_| "unknown".to_string())
     );
 
-    log::debug!("register_service: Registering mdns service service_type={service_type} instance_name={instance_name} host_name={host_name} ip={ip} port={port}");
+    log::debug!(
+        "register_service: Registering mdns service service_type={service_type} instance_name={instance_name} host_name={host_name} ip={ip} port={port}"
+    );
 
     let service_info = ServiceInfo::new(service_type, instance_name, &host_name, ip, port, None)?;
 
     mdns.register(service_info)?;
 
-    log::debug!("register_service: Registered mdns service service_type={service_type} instance_name={instance_name} host_name={host_name} ip={ip} port={port}");
+    log::debug!(
+        "register_service: Registered mdns service service_type={service_type} instance_name={instance_name} host_name={host_name} ip={ip} port={port}"
+    );
 
     Ok(())
 }

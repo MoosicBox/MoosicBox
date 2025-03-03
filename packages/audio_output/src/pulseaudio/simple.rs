@@ -7,8 +7,8 @@ use symphonia::core::audio::{AudioBuffer, Layout, RawSampleBuffer, Signal, Signa
 use symphonia::core::units::Duration;
 
 use crate::{
-    pulseaudio::common::map_channels_to_pa_channelmap, AudioOutputError, AudioOutputFactory,
-    AudioWrite,
+    AudioOutputError, AudioOutputFactory, AudioWrite,
+    pulseaudio::common::map_channels_to_pa_channelmap,
 };
 
 static SAMPLE_RATE: Option<u32> = option_env_u32!("PULSEAUDIO_RESAMPLE_RATE");

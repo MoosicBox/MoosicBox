@@ -4,11 +4,7 @@ pub mod immediate;
 pub mod retained;
 
 fn max_f32(a: f32, b: f32) -> f32 {
-    if a > b {
-        a
-    } else {
-        b
-    }
+    if a > b { a } else { b }
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -30,8 +30,8 @@ impl From<::opus::Error> for EncoderError {
 /// * If the encoder fails to encode the samples
 pub fn encode_audiopus(samples: &[f32]) -> Result<(u32, Vec<u8>), EncoderError> {
     use audiopus::{
-        coder::Encoder, Application, Bitrate, Channels, Error as OpusError,
-        ErrorCode as OpusErrorCode, SampleRate,
+        Application, Bitrate, Channels, Error as OpusError, ErrorCode as OpusErrorCode, SampleRate,
+        coder::Encoder,
     };
     let sample_rate = SampleRate::Hz48000;
     let mut encoder = Encoder::new(sample_rate, Channels::Stereo, Application::Audio)?;

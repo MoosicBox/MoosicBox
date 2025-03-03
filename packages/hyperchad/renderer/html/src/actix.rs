@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use actix_web::{http::header::ContentType, HttpResponse};
+use actix_web::{HttpResponse, http::header::ContentType};
 use async_trait::async_trait;
 use flume::Receiver;
 use hyperchad_renderer::{Color, Content, HtmlTagRenderer, PartialView, RendererEvent, View};
@@ -14,7 +14,7 @@ use hyperchad_router::{ClientInfo, ClientOs, RequestInfo, Router};
 use hyperchad_transformer::ResponsiveTrigger;
 use uaparser::{Parser as _, UserAgentParser};
 
-use crate::{html::container_element_to_html, HtmlApp, HtmlRenderer};
+use crate::{HtmlApp, HtmlRenderer, html::container_element_to_html};
 
 pub use hyperchad_renderer_html_actix::*;
 

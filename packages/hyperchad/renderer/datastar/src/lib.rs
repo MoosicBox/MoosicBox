@@ -7,7 +7,7 @@ use hyperchad_renderer::{Color, HtmlTagRenderer};
 use hyperchad_renderer_html::DefaultHtmlTagRenderer;
 use hyperchad_router::Container;
 use hyperchad_transformer::ResponsiveTrigger;
-use maud::{html, PreEscaped, DOCTYPE};
+use maud::{DOCTYPE, PreEscaped, html};
 
 #[derive(Default, Clone)]
 pub struct DatastarTagRenderer {

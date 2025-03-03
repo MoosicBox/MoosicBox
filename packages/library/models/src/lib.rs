@@ -12,8 +12,8 @@ use std::{path::PathBuf, str::FromStr as _};
 use moosicbox_date_utils::chrono::{self, parse_date_time};
 use moosicbox_json_utils::{ParseError, ToValueType};
 use moosicbox_music_models::{
-    id::TryFromIdError, Album, AlbumSource, AlbumType, AlbumVersionQuality, ApiSource, ApiSources,
-    Artist, AudioFormat, Track, TrackApiSource,
+    Album, AlbumSource, AlbumType, AlbumVersionQuality, ApiSource, ApiSources, Artist, AudioFormat,
+    Track, TrackApiSource, id::TryFromIdError,
 };
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, EnumString};

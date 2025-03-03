@@ -1,11 +1,10 @@
+use crate::WS_SERVER_HANDLE;
 use crate::auth::SignatureAuthorized;
 use crate::ws::handler;
-use crate::WS_SERVER_HANDLE;
 use actix_web::HttpResponse;
 use actix_web::{
-    get,
+    Result, get,
     web::{self},
-    Result,
 };
 use moosicbox_database::profiles::api::ProfileNameUnverified;
 use serde::Deserialize;

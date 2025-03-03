@@ -1,7 +1,7 @@
 use std::{
     ops::Deref,
-    pin::{pin, Pin},
-    sync::{atomic::AtomicBool, Arc, RwLock},
+    pin::{Pin, pin},
+    sync::{Arc, RwLock, atomic::AtomicBool},
     task::{Context, Poll},
 };
 
@@ -62,11 +62,10 @@ impl<T: Send> MoosicBoxSender<T, TrySendError<T>> for PrioritizedSender<T> {
 
                 let mut buffer = self.buffer.write().unwrap();
 
-                let index =
-                    buffer
-                        .iter()
-                        .enumerate()
-                        .find_map(|(i, (p, _item))| if priority > *p { Some(i) } else { None });
+                let index = buffer
+                    .iter()
+                    .enumerate()
+                    .find_map(|(i, (p, _item))| if priority > *p { Some(i) } else { None });
 
                 if let Some(index) = index {
                     buffer.insert(index, (priority, msg));

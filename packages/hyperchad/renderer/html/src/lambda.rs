@@ -7,10 +7,10 @@ use async_trait::async_trait;
 use hyperchad_renderer::{Color, HtmlTagRenderer, PartialView, View};
 use hyperchad_router::{ClientInfo, ClientOs, RequestInfo, Router};
 use hyperchad_transformer::ResponsiveTrigger;
-use lambda_http::{http::header::USER_AGENT, Request, RequestExt as _};
+use lambda_http::{Request, RequestExt as _, http::header::USER_AGENT};
 use uaparser::{Parser as _, UserAgentParser};
 
-use crate::{html::container_element_to_html, HtmlApp, HtmlRenderer};
+use crate::{HtmlApp, HtmlRenderer, html::container_element_to_html};
 
 pub use hyperchad_renderer_html_lambda::*;
 

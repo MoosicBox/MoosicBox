@@ -1,4 +1,4 @@
-use moosicbox_json_utils::{database::ToValue as _, ParseError, ToValueType};
+use moosicbox_json_utils::{ParseError, ToValueType, database::ToValue as _};
 
 #[derive(Debug, Clone)]
 pub struct AudioZoneModel {

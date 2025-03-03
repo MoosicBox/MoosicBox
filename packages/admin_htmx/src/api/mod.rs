@@ -2,14 +2,15 @@
 
 use actix_htmx::Htmx;
 use actix_web::{
+    Scope,
     dev::{ServiceFactory, ServiceRequest},
     error::ErrorInternalServerError,
-    route, web, Scope,
+    route, web,
 };
-use maud::{html, Markup, PreEscaped, DOCTYPE};
+use maud::{DOCTYPE, Markup, PreEscaped, html};
 use moosicbox_database::{
     config::ConfigDatabase,
-    profiles::{api::ProfileName, LibraryDatabase, PROFILES},
+    profiles::{LibraryDatabase, PROFILES, api::ProfileName},
 };
 use serde::Deserialize;
 

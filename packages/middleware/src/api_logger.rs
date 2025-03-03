@@ -1,9 +1,9 @@
 use actix_web::{
-    dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
+    dev::{Service, ServiceRequest, ServiceResponse, Transform, forward_ready},
     http::header,
 };
-use futures_util::{future::LocalBoxFuture, FutureExt};
-use std::future::{ready, Ready};
+use futures_util::{FutureExt, future::LocalBoxFuture};
+use std::future::{Ready, ready};
 
 #[allow(clippy::module_name_repetitions)]
 pub struct ApiLogger {}

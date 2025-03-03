@@ -5,13 +5,13 @@ use std::sync::{LazyLock, Mutex};
 use actix_web::dev::Payload;
 use actix_web::error::ErrorUnauthorized;
 use actix_web::http::header::HeaderValue;
-use actix_web::{http, FromRequest, HttpRequest};
-use futures_util::future::{err, ok, Ready};
+use actix_web::{FromRequest, HttpRequest, http};
 use futures_util::Future;
+use futures_util::future::{Ready, err, ok};
 use qstring::QString;
 use sha2::{Digest, Sha256};
 
-use crate::db::{valid_client_access_token, valid_signature_token, DatabaseError};
+use crate::db::{DatabaseError, valid_client_access_token, valid_signature_token};
 
 static TUNNEL_ACCESS_TOKEN: &str = std::env!("TUNNEL_ACCESS_TOKEN");
 

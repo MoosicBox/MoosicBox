@@ -6,7 +6,7 @@ use thiserror::Error;
 use tokio::task::JoinError;
 
 use crate::{
-    DataValue, PopulateIndexError, RecreateIndexError, GLOBAL_SEARCH_INDEX_PATH, SEMAPHORE,
+    DataValue, GLOBAL_SEARCH_INDEX_PATH, PopulateIndexError, RecreateIndexError, SEMAPHORE,
 };
 
 pub trait AsDataValues {

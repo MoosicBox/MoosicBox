@@ -1,14 +1,14 @@
 use std::str::FromStr;
 
 use actix_web::{
+    Result, Scope,
     dev::{ServiceFactory, ServiceRequest},
     error::ErrorInternalServerError,
     get,
     web::{self, Json},
-    Result, Scope,
 };
-use moosicbox_json_utils::{tantivy::ToValue, ParseError, ToValueType};
-use moosicbox_music_models::{api::ApiAlbumVersionQuality, AudioFormat, TrackApiSource};
+use moosicbox_json_utils::{ParseError, ToValueType, tantivy::ToValue};
+use moosicbox_music_models::{AudioFormat, TrackApiSource, api::ApiAlbumVersionQuality};
 use serde::Deserialize;
 use tantivy::schema::NamedFieldDocument;
 

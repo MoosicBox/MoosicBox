@@ -1,22 +1,22 @@
 use std::str::FromStr;
 
 use actix_web::{
+    HttpRequest, HttpResponse, Result, Scope,
     dev::{ServiceFactory, ServiceRequest},
     error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     route,
     web::{self, Json},
-    HttpRequest, HttpResponse, Result, Scope,
 };
 use bytes::{Bytes, BytesMut};
 use futures::{StreamExt, TryStreamExt as _};
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_music_api::{
-    models::{ImageCoverSize, TrackAudioQuality, TrackSource},
     MusicApis, SourceToMusicApi as _,
+    models::{ImageCoverSize, TrackAudioQuality, TrackSource},
 };
 use moosicbox_music_models::{
-    id::{parse_id_ranges, parse_integer_ranges_to_ids, Id, IdType, ParseIdsError},
     ApiSource, AudioFormat,
+    id::{Id, IdType, ParseIdsError, parse_id_ranges, parse_integer_ranges_to_ids},
 };
 use moosicbox_parsing_utils::integer_range::ParseIntegersError;
 use serde::Deserialize;
@@ -25,13 +25,13 @@ use tokio::io::AsyncWriteExt;
 use tokio_util::codec::{BytesCodec, FramedRead};
 
 use crate::files::{
-    album::{get_album_cover, AlbumCoverError},
-    artist::{get_artist_cover, ArtistCoverError},
+    album::{AlbumCoverError, get_album_cover},
+    artist::{ArtistCoverError, get_artist_cover},
     track::{
+        GetSilenceBytesError, GetTrackBytesError, TrackInfo, TrackInfoError, TrackSourceError,
         audio_format_to_content_type, get_or_init_track_visualization, get_silence_bytes,
         get_track_bytes, get_track_id_source, get_track_info, get_tracks_info,
-        track_source_to_content_type, GetSilenceBytesError, GetTrackBytesError, TrackInfo,
-        TrackInfoError, TrackSourceError,
+        track_source_to_content_type,
     },
 };
 
@@ -1049,7 +1049,7 @@ pub(crate) async fn resize_image_path(
     } else if cfg!(feature = "image") {
         #[cfg(feature = "image")]
         {
-            use moosicbox_image::{image::try_resize_local_file_async, Encoding};
+            use moosicbox_image::{Encoding, image::try_resize_local_file_async};
 
             if let Ok(Some(resized)) =
                 try_resize_local_file_async(width, height, path, Encoding::Webp, 80)

@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use bytes::Bytes;
-use moosicbox_music_api::{models::TrackAudioQuality, MusicApisError};
+use moosicbox_music_api::{MusicApisError, models::TrackAudioQuality};
 use moosicbox_music_models::{ApiSource, AudioFormat};
 use moosicbox_ws::WebsocketMessageError;
 use serde::Deserialize;

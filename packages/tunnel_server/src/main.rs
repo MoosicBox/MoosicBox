@@ -7,7 +7,7 @@ mod db;
 mod ws;
 
 use actix_cors::Cors;
-use actix_web::{http, middleware, App};
+use actix_web::{App, http, middleware};
 use api::health_endpoint;
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
 use moosicbox_logging::free_log_client::DynLayer;

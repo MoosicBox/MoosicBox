@@ -3,7 +3,7 @@ use std::sync::Arc;
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
 use moosicbox_json_utils::database::DatabaseFetchError;
-use moosicbox_music_api::{models::AlbumsRequest, AlbumsError, MusicApi};
+use moosicbox_music_api::{AlbumsError, MusicApi, models::AlbumsRequest};
 use moosicbox_music_models::{Album, ApiSource, AudioFormat, Track};
 use moosicbox_paging::PagingRequest;
 use thiserror::Error;
@@ -11,8 +11,8 @@ use tokio::{select, sync::RwLock};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    output::{ScanAlbum, ScanOutput, UpdateDatabaseError},
     Scanner,
+    output::{ScanAlbum, ScanOutput, UpdateDatabaseError},
 };
 
 #[derive(Debug, Error)]

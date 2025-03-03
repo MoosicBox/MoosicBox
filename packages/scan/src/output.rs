@@ -3,28 +3,28 @@
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
-    sync::{atomic::AtomicU32, Arc, LazyLock},
+    sync::{Arc, LazyLock, atomic::AtomicU32},
 };
 
 use futures::future::join_all;
-use moosicbox_database::{profiles::LibraryDatabase, DatabaseError, DatabaseValue, TryFromError};
+use moosicbox_database::{DatabaseError, DatabaseValue, TryFromError, profiles::LibraryDatabase};
 use moosicbox_date_utils::chrono;
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_library::{
     db::{
-        self, add_album_maps_and_get_albums, add_artist_maps_and_get_artists, add_tracks,
-        set_track_sizes, InsertTrack, SetTrackSize,
+        self, InsertTrack, SetTrackSize, add_album_maps_and_get_albums,
+        add_artist_maps_and_get_artists, add_tracks, set_track_sizes,
     },
     models::{LibraryAlbum, LibraryArtist, LibraryTrack},
 };
 use moosicbox_music_api::models::ImageCoverSize;
 use moosicbox_music_models::{
-    id::{Id, TryFromIdError},
     Album, ApiSource, Artist, AudioFormat, PlaybackQuality, Track, TrackApiSource,
+    id::{Id, TryFromIdError},
 };
 use moosicbox_search::{
-    data::AsDataValues as _, populate_global_search_index, PopulateIndexError, RecreateIndexError,
+    PopulateIndexError, RecreateIndexError, data::AsDataValues as _, populate_global_search_index,
 };
 use thiserror::Error;
 use tokio::{sync::RwLock, task::JoinError};

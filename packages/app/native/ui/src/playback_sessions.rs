@@ -1,7 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad_transformer_models::AlignItems;
-use maud::{html, Markup};
+use maud::{Markup, html};
 use moosicbox_session_models::ApiSession;
 
 use crate::PLAYBACK_SESSIONS_CONTENT_ID;

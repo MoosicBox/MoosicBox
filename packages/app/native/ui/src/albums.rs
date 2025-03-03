@@ -1,27 +1,27 @@
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad_actions::{
+    ActionType,
     logic::{
         get_data_attr_value_self, get_event_value, get_visibility_self, get_visibility_str_id,
     },
-    ActionType,
 };
 use hyperchad_transformer_models::{ImageLoading, Visibility};
-use maud::{html, Markup, PreEscaped};
+use maud::{Markup, PreEscaped, html};
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_music_models::{
+    AlbumSort, AlbumVersionQuality, ApiSource, TrackApiSource,
     api::{ApiAlbum, ApiTrack},
     id::Id,
-    AlbumSort, AlbumVersionQuality, ApiSource, TrackApiSource,
 };
 use moosicbox_paging::Page;
 
 use crate::{
+    Action,
     artists::artist_page_url,
-    formatting::{format_date_string, TimeFormat as _},
+    formatting::{TimeFormat as _, format_date_string},
     page, pre_escaped, public_img,
     state::State,
-    Action,
 };
 
 #[must_use]

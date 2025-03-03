@@ -3,11 +3,11 @@
 
 use std::{collections::HashMap, path::Path};
 
-use moosicbox_load_balancer::{Router, PORT, SSL_CRT_PATH, SSL_KEY_PATH, SSL_PORT};
+use moosicbox_load_balancer::{PORT, Router, SSL_CRT_PATH, SSL_KEY_PATH, SSL_PORT};
 use pingora::{listeners::tls::TlsSettings, prelude::*};
 use pingora_core::services::{background::GenBackgroundService, listening::Service};
-use pingora_load_balancing::{health_check::TcpHealthCheck, selection::RoundRobin, LoadBalancer};
-use pingora_proxy::{http_proxy_service, HttpProxy};
+use pingora_load_balancing::{LoadBalancer, health_check::TcpHealthCheck, selection::RoundRobin};
+use pingora_proxy::{HttpProxy, http_proxy_service};
 
 pub fn serve() {
     moosicbox_logging::init(Some("moosicbox_lb.log"), None).expect("Failed to initialize FreeLog");

@@ -161,7 +161,7 @@ impl TryFrom<&str> for TunnelResponse {
     type Error = Base64DecodeError;
 
     fn try_from(base64: &str) -> Result<Self, Self::Error> {
-        use base64::{engine::general_purpose, Engine};
+        use base64::{Engine, engine::general_purpose};
 
         let base64 = base64
             .strip_prefix(BASE64_TUNNEL_RESPONSE_PREFIX)
@@ -364,16 +364,16 @@ impl<F: Future<Output = Result<(), Box<dyn std::error::Error>>>> Stream for Tunn
                 let end = SystemTime::now();
 
                 log::debug!(
-                "poll_next: Byte count: {} for request_id={request_id} (received {} packet{}, took {}ms total, {}ms to first byte)",
-                stream.byte_count,
-                stream.packet_count,
-                if stream.packet_count == 1 { "" } else { "s" },
-                end.duration_since(stream.start).unwrap().as_millis(),
-                stream
-                    .time_to_first_byte
-                    .map(|t| t.duration_since(stream.start).unwrap().as_millis())
-                    .map_or_else(|| "N/A".into(), |t| t.to_string())
-            );
+                    "poll_next: Byte count: {} for request_id={request_id} (received {} packet{}, took {}ms total, {}ms to first byte)",
+                    stream.byte_count,
+                    stream.packet_count,
+                    if stream.packet_count == 1 { "" } else { "s" },
+                    end.duration_since(stream.start).unwrap().as_millis(),
+                    stream
+                        .time_to_first_byte
+                        .map(|t| t.duration_since(stream.start).unwrap().as_millis())
+                        .map_or_else(|| "N/A".into(), |t| t.to_string())
+                );
 
                 (stream.on_end)(stream.request_id);
 
@@ -401,12 +401,12 @@ impl<F: Future<Output = Result<(), Box<dyn std::error::Error>>>> Stream for Tunn
                 }
             };
             log::debug!(
-            "poll_next: Received next packet for request_id={request_id} packet_count={}: packet_id={} status={:?} last={}",
-            stream.packet_count,
-            response.packet_id,
-            response.status,
-            response.last,
-        );
+                "poll_next: Received next packet for request_id={request_id} packet_count={}: packet_id={} status={:?} last={}",
+                stream.packet_count,
+                response.packet_id,
+                response.status,
+                response.last,
+            );
 
             if response.packet_id == 1 && response.last {
                 log::debug!(

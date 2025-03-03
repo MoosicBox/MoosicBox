@@ -6,10 +6,10 @@ use std::marker::PhantomData;
 use actix_cors::Cors;
 pub use actix_web::http::header::HeaderMap;
 use actix_web::{
+    App, HttpRequest, HttpResponse,
     http::{self},
     middleware,
     web::{self, Data},
-    App, HttpRequest, HttpResponse,
 };
 use async_trait::async_trait;
 use flume::Receiver;
@@ -91,10 +91,8 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
     }
 }
 
-impl<
-        T: Send + Sync + Clone + 'static,
-        R: ActixResponseProcessor<T> + Send + Sync + Clone + 'static,
-    > ToRenderRunner for ActixApp<T, R>
+impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Sync + Clone + 'static>
+    ToRenderRunner for ActixApp<T, R>
 {
     fn to_runner(
         self,
@@ -113,10 +111,8 @@ pub struct ActixAppRunner<
     pub handle: Handle,
 }
 
-impl<
-        T: Send + Sync + Clone + 'static,
-        R: ActixResponseProcessor<T> + Send + Sync + Clone + 'static,
-    > RenderRunner for ActixAppRunner<T, R>
+impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Sync + Clone + 'static>
+    RenderRunner for ActixAppRunner<T, R>
 {
     /// # Errors
     ///

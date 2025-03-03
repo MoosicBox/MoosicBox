@@ -2,7 +2,7 @@
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Host, SampleFormat, SizedSample, StreamConfig};
-use rb::{RbConsumer, RbProducer, SpscRb, RB};
+use rb::{RB, RbConsumer, RbProducer, SpscRb};
 use symphonia::core::audio::{
     AudioBuffer, Channels, Layout, RawSample, SampleBuffer, Signal as _, SignalSpec,
 };

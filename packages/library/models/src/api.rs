@@ -1,7 +1,7 @@
 use moosicbox_date_utils::chrono::{self, parse_date_time};
 use moosicbox_music_models::{
-    api::{ApiAlbum, ApiAlbumVersionQuality, ApiArtist, ApiTrack},
     Album, AlbumSource, ApiSource, ApiSources, Artist, AudioFormat, Track, TrackApiSource,
+    api::{ApiAlbum, ApiAlbumVersionQuality, ApiArtist, ApiTrack},
 };
 use serde::{Deserialize, Serialize};
 

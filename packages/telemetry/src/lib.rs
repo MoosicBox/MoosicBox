@@ -2,23 +2,23 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 #[cfg(feature = "actix")]
-use actix_web::{get, web, Handler as _, HttpRequest, Responder};
+use actix_web::{Handler as _, HttpRequest, Responder, get, web};
 #[cfg(feature = "actix")]
 pub use actix_web_opentelemetry::RequestTracing;
 #[cfg(feature = "actix")]
 use actix_web_opentelemetry::{PrometheusMetricsHandler, RequestMetrics, RequestMetricsBuilder};
 use moosicbox_logging::free_log_client::DynLayer;
 use opentelemetry::{
+    InstrumentationScope, KeyValue,
     global::{self},
     trace::{TraceError, TracerProvider as _},
-    InstrumentationScope, KeyValue,
 };
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{
+    Resource,
     metrics::{MeterProviderBuilder, MetricError, SdkMeterProvider},
     propagation::TraceContextPropagator,
     trace::SdkTracerProvider,
-    Resource,
 };
 
 /// # Errors

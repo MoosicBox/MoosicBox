@@ -11,7 +11,7 @@ use symphonia::core::{
 };
 use thiserror::Error;
 
-use super::symphonia_unsync::{play_media_source, PlaybackError};
+use super::symphonia_unsync::{PlaybackError, play_media_source};
 
 #[derive(Debug, Error)]
 pub enum SignalChainError {

@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use moosicbox_database::{AsId, DatabaseValue};
-use moosicbox_json_utils::{database::ToValue as _, MissingValue, ParseError, ToValueType};
+use moosicbox_json_utils::{MissingValue, ParseError, ToValueType, database::ToValue as _};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

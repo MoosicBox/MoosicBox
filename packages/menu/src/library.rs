@@ -6,12 +6,12 @@ use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_date_utils::chrono;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_library::{
-    cache::{get_or_set_to_cache, CacheItemType, CacheRequest},
+    cache::{CacheItemType, CacheRequest, get_or_set_to_cache},
     db,
     models::LibraryAlbum,
 };
 use moosicbox_music_api::{ArtistError, MusicApi};
-use moosicbox_music_models::{id::Id, Album, ApiSource, Artist};
+use moosicbox_music_models::{Album, ApiSource, Artist, id::Id};
 use std::{
     sync::{Arc, PoisonError},
     time::{Duration, SystemTime},

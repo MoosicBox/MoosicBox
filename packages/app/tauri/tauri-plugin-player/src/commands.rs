@@ -1,8 +1,8 @@
-use tauri::{command, AppHandle, Runtime};
+use tauri::{AppHandle, Runtime, command};
 
-use crate::models::{StateResponse, UpdateState};
 use crate::PlayerExt;
 use crate::Result;
+use crate::models::{StateResponse, UpdateState};
 
 #[command]
 pub async fn update_state<R: Runtime>(

@@ -2,18 +2,19 @@ use std::sync::LazyLock;
 
 use actix_htmx::{Htmx, TriggerType};
 use actix_web::{
+    Scope,
     dev::{ServiceFactory, ServiceRequest},
     error::ErrorInternalServerError,
-    route, web, Scope,
+    route, web,
 };
-use base64::{engine::general_purpose, Engine as _};
-use maud::{html, Markup};
+use base64::{Engine as _, engine::general_purpose};
+use maud::{Markup, html};
 use moosicbox_database::profiles::LibraryDatabase;
 #[cfg(feature = "scan")]
 use moosicbox_music_api::MusicApis;
 #[cfg(feature = "scan")]
 use moosicbox_scan::ScanOrigin;
-use moosicbox_tidal::{db::TidalConfigError, TidalDeviceAuthorizationTokenError};
+use moosicbox_tidal::{TidalDeviceAuthorizationTokenError, db::TidalConfigError};
 use serde::Deserialize;
 use urlencoding::encode;
 

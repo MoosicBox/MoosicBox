@@ -1,15 +1,15 @@
 #![allow(clippy::module_name_repetitions)]
 
 use actix_web::{
+    Result, Scope,
     dev::{ServiceFactory, ServiceRequest},
     error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     route,
     web::{self, Json},
-    Result, Scope,
 };
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_music_api::models::AlbumsRequest;
-use moosicbox_music_models::{api::ApiAlbum, id::parse_integer_ranges_to_ids, AlbumSort};
+use moosicbox_music_models::{AlbumSort, api::ApiAlbum, id::parse_integer_ranges_to_ids};
 use moosicbox_paging::{Page, PagingRequest};
 use moosicbox_search::api::models::ApiSearchResultsResponse;
 use serde::{Deserialize, Serialize};
@@ -17,18 +17,18 @@ use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 
 use crate::{
-    add_favorite_album, add_favorite_artist, add_favorite_track, album, album_tracks, artist,
-    artist_albums, favorite_albums, favorite_artists, favorite_tracks, reindex_global_search_index,
-    remove_favorite_album, remove_favorite_artist, remove_favorite_track, search, track,
-    track_file_url, LibraryAddFavoriteAlbumError, LibraryAddFavoriteArtistError,
-    LibraryAddFavoriteTrackError, LibraryAlbumError, LibraryAlbumOrder, LibraryAlbumOrderDirection,
-    LibraryAlbumTracksError, LibraryAlbumType, LibraryArtist, LibraryArtistAlbumsError,
-    LibraryArtistError, LibraryArtistOrder, LibraryArtistOrderDirection, LibraryAudioQuality,
+    LibraryAddFavoriteAlbumError, LibraryAddFavoriteArtistError, LibraryAddFavoriteTrackError,
+    LibraryAlbumError, LibraryAlbumOrder, LibraryAlbumOrderDirection, LibraryAlbumTracksError,
+    LibraryAlbumType, LibraryArtist, LibraryArtistAlbumsError, LibraryArtistError,
+    LibraryArtistOrder, LibraryArtistOrderDirection, LibraryAudioQuality,
     LibraryFavoriteAlbumsError, LibraryFavoriteArtistsError, LibraryFavoriteTracksError,
     LibraryRemoveFavoriteAlbumError, LibraryRemoveFavoriteArtistError,
     LibraryRemoveFavoriteTrackError, LibrarySearchError, LibraryTrack, LibraryTrackError,
     LibraryTrackFileUrlError, LibraryTrackOrder, LibraryTrackOrderDirection, ReindexError,
-    SearchType,
+    SearchType, add_favorite_album, add_favorite_artist, add_favorite_track, album, album_tracks,
+    artist, artist_albums, favorite_albums, favorite_artists, favorite_tracks,
+    reindex_global_search_index, remove_favorite_album, remove_favorite_artist,
+    remove_favorite_track, search, track, track_file_url,
 };
 
 pub fn bind_services<

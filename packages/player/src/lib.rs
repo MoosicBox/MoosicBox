@@ -11,7 +11,7 @@ use std::{
 use ::symphonia::core::{io::MediaSource, probe::Hint};
 use async_trait::async_trait;
 use atomic_float::AtomicF64;
-use flume::{bounded, Receiver, SendError};
+use flume::{Receiver, SendError, bounded};
 use futures::{Future, StreamExt as _, TryStreamExt as _};
 use local_ip_address::local_ip;
 use moosicbox_audio_decoder::media_sources::{
@@ -19,9 +19,9 @@ use moosicbox_audio_decoder::media_sources::{
 };
 use moosicbox_audio_output::AudioOutputFactory;
 use moosicbox_database::profiles::LibraryDatabase;
-use moosicbox_json_utils::{database::DatabaseFetchError, ParseError};
+use moosicbox_json_utils::{ParseError, database::DatabaseFetchError};
 use moosicbox_music_api::MusicApi;
-use moosicbox_music_models::{id::Id, ApiSource, AudioFormat, PlaybackQuality, Track};
+use moosicbox_music_models::{ApiSource, AudioFormat, PlaybackQuality, Track, id::Id};
 use moosicbox_session::{
     get_session_playlist,
     models::{ApiSession, PlaybackTarget, Session, UpdateSession, UpdateSessionPlaylist},
@@ -29,7 +29,7 @@ use moosicbox_session::{
 use moosicbox_stream_utils::{
     remote_bytestream::RemoteByteStream, stalled_monitor::StalledReadMonitor,
 };
-use rand::{rng, Rng as _};
+use rand::{Rng as _, rng};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -1574,7 +1574,9 @@ async fn track_or_id_to_playable(
     player_source: &PlayerSource,
     abort: CancellationToken,
 ) -> Result<PlayableTrack, PlayerError> {
-    log::trace!("track_or_id_to_playable playback_type={playback_type:?} track={track:?} quality={quality:?}");
+    log::trace!(
+        "track_or_id_to_playable playback_type={playback_type:?} track={track:?} quality={quality:?}"
+    );
     Ok(match (playback_type, track.api_source) {
         (PlaybackType::File | PlaybackType::Default, ApiSource::Library) => {
             track_to_playable_file(track, quality).await?

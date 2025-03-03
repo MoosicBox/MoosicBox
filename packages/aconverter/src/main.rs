@@ -11,7 +11,7 @@ use futures::StreamExt as _;
 use moosicbox_audiotags::Tag;
 use moosicbox_files::{files::track::get_audio_bytes, save_bytes_stream_to_file};
 use moosicbox_music_api::models::TrackSource;
-use moosicbox_music_models::{from_extension_to_audio_format, AudioFormat, TrackApiSource};
+use moosicbox_music_models::{AudioFormat, TrackApiSource, from_extension_to_audio_format};
 use thiserror::Error;
 
 #[derive(Parser, Debug)]

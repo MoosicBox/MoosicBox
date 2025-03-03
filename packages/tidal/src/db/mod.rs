@@ -1,4 +1,4 @@
-use moosicbox_database::{profiles::LibraryDatabase, query::FilterableQuery, DatabaseError};
+use moosicbox_database::{DatabaseError, profiles::LibraryDatabase, query::FilterableQuery};
 use moosicbox_json_utils::ToValueType;
 use thiserror::Error;
 

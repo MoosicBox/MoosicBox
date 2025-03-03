@@ -4,8 +4,8 @@ use std::{
     collections::HashMap,
     fmt,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc, LazyLock,
+        atomic::{AtomicUsize, Ordering},
     },
 };
 
@@ -13,18 +13,19 @@ use moosicbox_tunnel::{
     TunnelAbortRequest, TunnelRequest, TunnelResponse, TunnelWsRequest, TunnelWsResponse,
 };
 use moosicbox_tunnel_server::CANCELLATION_TOKEN;
-use rand::{rng, Rng as _};
+use rand::{Rng as _, rng};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 use thiserror::Error;
 use tokio::sync::{
-    mpsc::{self, error::SendError, UnboundedSender},
-    oneshot, RwLock,
+    RwLock,
+    mpsc::{self, UnboundedSender, error::SendError},
+    oneshot,
 };
 use tokio_util::sync::CancellationToken;
 
-use crate::db::{delete_connection, select_connection, upsert_connection, DatabaseError};
+use crate::db::{DatabaseError, delete_connection, select_connection, upsert_connection};
 use crate::ws::{ConnId, Msg};
 
 use self::service::{Commander, CommanderError};
@@ -163,7 +164,9 @@ impl service::Processor for service::Service {
                 log::debug!("process_command: Handling response for request_id={request_id}");
 
                 if let (Some(status), Some(headers)) = (response.status, &response.headers) {
-                    log::debug!("process_command: Response request_id={request_id} status={status} headers={headers:?}");
+                    log::debug!(
+                        "process_command: Response request_id={request_id} status={status} headers={headers:?}"
+                    );
                     let headers_senders = {
                         let mut ctx = ctx.write().await;
                         let headers_senders = ctx.headers_senders.remove(&request_id);
@@ -188,7 +191,9 @@ impl service::Processor for service::Service {
                             }
                             let response = ctx.read().await.abort_request(conn_id, request_id);
                             if let Err(err) = response {
-                                log::error!("process_command: Failed to abort request_id={request_id}: {err:?}");
+                                log::error!(
+                                    "process_command: Failed to abort request_id={request_id}: {err:?}"
+                                );
                             }
                         }
                     } else {
@@ -205,7 +210,9 @@ impl service::Processor for service::Service {
                     let packet_id = response.packet_id;
                     let last = response.last;
                     let status = response.status;
-                    log::trace!("process_command: Sending response for request_id={request_id} packet_id={packet_id} last={last} status={status:?}");
+                    log::trace!(
+                        "process_command: Sending response for request_id={request_id} packet_id={packet_id} last={last} status={status:?}"
+                    );
                     if sender.send(response).is_err() {
                         log::debug!("process_command: Sender dropped for request_id={request_id}");
                         let mut binding = ctx.write().await;
@@ -218,7 +225,9 @@ impl service::Processor for service::Service {
                             );
                         }
                     } else {
-                        log::trace!("process_command: Sent response for request_id={request_id} packet_id={packet_id} last={last} status={status:?}");
+                        log::trace!(
+                            "process_command: Sent response for request_id={request_id} packet_id={packet_id} last={last} status={status:?}"
+                        );
                     }
                 } else {
                     log::error!(

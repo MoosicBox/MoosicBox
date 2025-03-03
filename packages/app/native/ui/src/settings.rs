@@ -1,6 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use maud::{html, Markup};
+use maud::{Markup, html};
 
 use crate::{page, state::State};
 

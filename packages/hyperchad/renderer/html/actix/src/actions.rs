@@ -1,4 +1,4 @@
-use actix_web::{error::ErrorInternalServerError, web, HttpRequest, HttpResponse, Responder};
+use actix_web::{HttpRequest, HttpResponse, Responder, error::ErrorInternalServerError, web};
 use hyperchad_renderer::transformer::actions::logic::Value;
 use serde::{Deserialize, Serialize};
 

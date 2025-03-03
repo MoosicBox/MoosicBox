@@ -6,10 +6,10 @@ use std::{
 };
 
 use moosicbox_app_native_lib::renderer::{
-    canvas::{self, CanvasAction, Pos},
     Color,
+    canvas::{self, CanvasAction, Pos},
 };
-use moosicbox_music_models::{id::Id, ApiSource};
+use moosicbox_music_models::{ApiSource, id::Id};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -233,7 +233,9 @@ async fn update_visualization(
     #[allow(clippy::cast_possible_truncation)]
     let duration = duration as f32;
 
-    log::trace!("update_visualization: track_id={track_id} api_source={api_source} seek={seek} visualization_width={visualization_width} visualization_height={visualization_height}");
+    log::trace!(
+        "update_visualization: track_id={track_id} api_source={api_source} seek={seek} visualization_width={visualization_width} visualization_height={visualization_height}"
+    );
 
     let key = format!("{api_source}|{track_id}|{visualization_width}|{visualization_height}");
 

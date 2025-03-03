@@ -2,26 +2,26 @@
 
 use std::{
     sync::{
-        atomic::{AtomicBool, AtomicUsize},
         Arc, RwLock,
+        atomic::{AtomicBool, AtomicUsize},
     },
     time::Duration,
 };
 
 use async_trait::async_trait;
-use flume::{unbounded, Receiver, Sender};
+use flume::{Receiver, Sender, unbounded};
 use moosicbox_async_service::CancellationToken;
 use moosicbox_audio_output::{
     AudioOutputError, AudioOutputFactory, AudioWrite, Channels, SignalSpec,
 };
 use moosicbox_music_api::SourceToMusicApi;
 use moosicbox_session::models::UpdateSession;
-use rand::{rng, Rng as _};
+use rand::{Rng as _, rng};
 use rupnp::{Device, Service};
 
 use moosicbox_player::{
-    get_track_url, send_playback_event, trigger_playback_event, ApiPlaybackStatus, Playback,
-    PlaybackHandler, PlaybackRetryOptions, Player, PlayerError, PlayerSource,
+    ApiPlaybackStatus, Playback, PlaybackHandler, PlaybackRetryOptions, Player, PlayerError,
+    PlayerSource, get_track_url, send_playback_event, trigger_playback_event,
 };
 use symphonia::core::audio::AudioBuffer;
 

@@ -395,8 +395,8 @@ impl std::fmt::Display for Id {
 mod db {
     use moosicbox_database::{AsId, DatabaseValue};
     use moosicbox_json_utils::{
-        database::{AsModel, AsModelResult, ToValue as _},
         ParseError, ToValueType,
+        database::{AsModel, AsModelResult, ToValue as _},
     };
     use serde::{Deserialize, Serialize};
 
@@ -589,8 +589,8 @@ mod test {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        id::{parse_id_ranges, Id, IdType},
         ApiSource,
+        id::{Id, IdType, parse_id_ranges},
     };
 
     #[test_log::test]

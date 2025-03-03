@@ -31,8 +31,8 @@ pub async fn on_audio_zones_updated_event<
 /// # Errors
 ///
 /// * If any of the event handlers fail with an error
-pub async fn trigger_audio_zones_updated_event(
-) -> Result<(), Vec<Box<dyn std::error::Error + Send>>> {
+pub async fn trigger_audio_zones_updated_event()
+-> Result<(), Vec<Box<dyn std::error::Error + Send>>> {
     send_audio_zones_updated_event().await
 }
 

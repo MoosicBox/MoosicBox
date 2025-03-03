@@ -2,12 +2,12 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use std::{
-    sync::{atomic::AtomicUsize, Arc, RwLock},
+    sync::{Arc, RwLock, atomic::AtomicUsize},
     task::Poll,
 };
 
 use bytes::Bytes;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 #[cfg(feature = "remote-bytestream")]
 pub mod remote_bytestream;

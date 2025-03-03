@@ -1,9 +1,9 @@
 use actix_web::{
-    dev::{ServiceFactory, ServiceRequest},
     Scope,
+    dev::{ServiceFactory, ServiceRequest},
 };
-use maud::{html, Markup};
-use moosicbox_database::{config::ConfigDatabase, DatabaseError};
+use maud::{Markup, html};
+use moosicbox_database::{DatabaseError, config::ConfigDatabase};
 
 pub const fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,

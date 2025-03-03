@@ -1,7 +1,7 @@
 use std::sync::{Arc, OnceLock};
 
-use actix_web::{dev::Payload, error::ErrorInternalServerError, FromRequest, HttpRequest};
-use futures::future::{err, ok, Ready};
+use actix_web::{FromRequest, HttpRequest, dev::Payload, error::ErrorInternalServerError};
+use futures::future::{Ready, err, ok};
 
 static TUNNEL_INFO: OnceLock<TunnelInfo> = OnceLock::new();
 

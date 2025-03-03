@@ -1,6 +1,6 @@
 use flume::Receiver;
 use symphonia::core::audio::AudioBuffer;
-use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
+use symphonia::core::codecs::{CODEC_TYPE_NULL, DecoderOptions};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatReader, SeekMode, SeekTo, Track};
 use symphonia::core::units::Time;

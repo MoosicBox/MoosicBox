@@ -5,8 +5,8 @@ use std::sync::LazyLock;
 
 use moosicbox_audio_zone_models::{ApiPlayer, Player};
 use moosicbox_database::{AsId, DatabaseValue};
-use moosicbox_json_utils::{database::ToValue as _, ParseError, ToValueType};
-use moosicbox_music_models::{api::ApiTrack, PlaybackQuality};
+use moosicbox_json_utils::{ParseError, ToValueType, database::ToValue as _};
+use moosicbox_music_models::{PlaybackQuality, api::ApiTrack};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 

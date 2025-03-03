@@ -1,14 +1,15 @@
 use std::io::Write as _;
 
 use actix_web::{
+    HttpRequest, HttpResponse, Responder,
     error::ErrorInternalServerError,
     http::header::{CacheControl, CacheDirective, ContentEncoding},
-    web, HttpRequest, HttpResponse, Responder,
+    web,
 };
 use bytes::{BufMut as _, Bytes, BytesMut};
 use flate2::{
-    write::{DeflateEncoder, GzEncoder, ZlibEncoder},
     Compression,
+    write::{DeflateEncoder, GzEncoder, ZlibEncoder},
 };
 use futures_util::StreamExt as _;
 use hyperchad_renderer::{Content, RendererEvent};

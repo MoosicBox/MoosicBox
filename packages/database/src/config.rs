@@ -54,8 +54,8 @@ impl Deref for ConfigDatabase {
 
 #[cfg(feature = "api")]
 mod api {
-    use actix_web::{dev::Payload, error::ErrorInternalServerError, FromRequest, HttpRequest};
-    use futures::future::{err, ok, Ready};
+    use actix_web::{FromRequest, HttpRequest, dev::Payload, error::ErrorInternalServerError};
+    use futures::future::{Ready, err, ok};
 
     use super::DATABASE;
 

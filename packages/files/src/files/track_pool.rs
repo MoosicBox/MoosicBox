@@ -5,25 +5,25 @@ use std::{
     fmt::Display,
     io::Write,
     pin::Pin,
-    sync::{atomic::AtomicBool, Arc, OnceLock},
+    sync::{Arc, OnceLock, atomic::AtomicBool},
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use flume::{bounded, SendError, Sender};
+use flume::{SendError, Sender, bounded};
 use futures::StreamExt;
 use futures_core::Future;
 use lazy_static::lazy_static;
 use moosicbox_music_api::models::TrackSource;
 use moosicbox_music_models::AudioFormat;
-use moosicbox_stream_utils::{stalled_monitor::StalledReadMonitor, ByteWriter};
+use moosicbox_stream_utils::{ByteWriter, stalled_monitor::StalledReadMonitor};
 use strum_macros::AsRefStr;
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock, Semaphore};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    files::{filename_from_path_str, track_pool::service::Commander},
     BytesStream,
+    files::{filename_from_path_str, track_pool::service::Commander},
 };
 
 use super::track::{BytesStreamItem, GetTrackBytesError, TrackBytes};
@@ -455,12 +455,12 @@ pub async fn get_or_fetch_track(
     start: Option<u64>,
     end: Option<u64>,
     fetch: impl Fn(
-            Option<u64>,
-            Option<u64>,
-            Option<u64>,
-        ) -> Pin<Box<dyn Future<Output = Result<TrackBytes, GetTrackBytesError>> + Send>>
-        + Send
-        + 'static,
+        Option<u64>,
+        Option<u64>,
+        Option<u64>,
+    ) -> Pin<Box<dyn Future<Output = Result<TrackBytes, GetTrackBytesError>> + Send>>
+    + Send
+    + 'static,
 ) -> Result<TrackBytes, GetTrackBytesError> {
     log::debug!("get_or_fetch_track: start={start:?} end={end:?} size={size:?}");
     if start.is_some_and(|x| x != 0) || end.is_some_and(|x| size.is_none_or(|s| s != x)) {

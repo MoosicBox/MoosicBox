@@ -8,11 +8,11 @@ use std::time::Duration;
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures_channel::mpsc::UnboundedSender;
-use futures_util::{future, pin_mut, StreamExt as _};
+use futures_util::{StreamExt as _, future, pin_mut};
 use thiserror::Error;
 use tokio::select;
-use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::error::SendError;
 use tokio::time::sleep;
 use tokio_tungstenite::tungstenite::http::StatusCode;
 use tokio_tungstenite::{

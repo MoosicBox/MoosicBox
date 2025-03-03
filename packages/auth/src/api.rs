@@ -1,17 +1,17 @@
 use actix_web::{
+    Result, Scope,
     dev::{ServiceFactory, ServiceRequest},
     error::{ErrorInternalServerError, ErrorUnauthorized},
     route,
     web::{self, Json},
-    Result, Scope,
 };
 use moosicbox_database::config::ConfigDatabase;
 use moosicbox_middleware::tunnel_info::TunnelInfo;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use url::form_urlencoded;
 
-use crate::{create_magic_token, get_credentials_from_magic_token, NonTunnelRequestAuthorized};
+use crate::{NonTunnelRequestAuthorized, create_magic_token, get_credentials_from_magic_token};
 
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,

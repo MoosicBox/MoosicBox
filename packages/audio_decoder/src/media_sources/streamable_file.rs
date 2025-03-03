@@ -2,7 +2,7 @@ use std::io::{Read, Seek};
 use std::sync::atomic::AtomicBool;
 use std::thread;
 
-use flume::{bounded, Receiver, Sender};
+use flume::{Receiver, Sender, bounded};
 use log::debug;
 use rangemap::RangeSet;
 use reqwest::blocking::Client;
@@ -148,7 +148,11 @@ impl Read for StreamableFile {
         // to the last downloaded chunk, then fetch more.
         let (should_get_chunk, chunk_write_pos) = self.should_get_chunk(buf.len());
 
-        debug!("Read: read_pos[{}] read_max[{read_max}] buf[{}] write_pos[{chunk_write_pos}] download[{should_get_chunk}]", self.read_position, buf.len());
+        debug!(
+            "Read: read_pos[{}] read_max[{read_max}] buf[{}] write_pos[{chunk_write_pos}] download[{should_get_chunk}]",
+            self.read_position,
+            buf.len()
+        );
         if should_get_chunk {
             #[allow(clippy::range_plus_one)]
             self.requested

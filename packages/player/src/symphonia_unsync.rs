@@ -1,5 +1,5 @@
 use flume::Receiver;
-use moosicbox_audio_decoder::{unsync::decode, DecodeError};
+use moosicbox_audio_decoder::{DecodeError, unsync::decode};
 use symphonia::core::{
     audio::AudioBuffer, codecs::DecoderOptions, formats::FormatOptions, io::MediaSourceStream,
     meta::MetadataOptions, probe::Hint,

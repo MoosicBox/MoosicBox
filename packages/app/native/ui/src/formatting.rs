@@ -1,4 +1,4 @@
-use moosicbox_date_utils::chrono::{parse_date_time, NaiveDateTime};
+use moosicbox_date_utils::chrono::{NaiveDateTime, parse_date_time};
 use moosicbox_music_models::{AlbumType, ApiSource};
 
 pub trait TimeFormat {

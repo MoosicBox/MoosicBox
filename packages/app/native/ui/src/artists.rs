@@ -1,11 +1,11 @@
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad_transformer_models::ImageLoading;
-use maud::{html, Markup, PreEscaped};
+use maud::{Markup, PreEscaped, html};
 use moosicbox_music_models::{
+    AlbumType, ApiSource,
     api::{ApiAlbum, ApiArtist},
     id::Id,
-    AlbumType, ApiSource,
 };
 
 use crate::{

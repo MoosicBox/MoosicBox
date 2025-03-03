@@ -1,17 +1,17 @@
 #![allow(clippy::future_not_send, clippy::module_name_repetitions)]
 
 use actix_web::{
+    HttpRequest, Result, Scope,
     dev::{ServiceFactory, ServiceRequest},
     error::{ErrorInternalServerError, ErrorUnauthorized},
     route,
     web::{self, Json},
-    HttpRequest, Result, Scope,
 };
 #[cfg(feature = "db")]
 use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_music_models::{
-    api::{ApiAlbum, ApiArtist},
     ApiSource, ApiSources, TrackApiSource,
+    api::{ApiAlbum, ApiArtist},
 };
 use moosicbox_paging::Page;
 use moosicbox_search::api::models::ApiSearchResultsResponse;
@@ -20,12 +20,12 @@ use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 
 use crate::{
-    album, album_tracks, artist, artist_albums, favorite_albums, favorite_artists, favorite_tracks,
-    format_title, models::QobuzAlbum, search, track, track_file_url, user_login, QobuzAlbumError,
-    QobuzAlbumOrder, QobuzAlbumReleaseType, QobuzAlbumSort, QobuzAlbumTracksError,
+    QobuzAlbumError, QobuzAlbumOrder, QobuzAlbumReleaseType, QobuzAlbumSort, QobuzAlbumTracksError,
     QobuzArtistAlbumsError, QobuzArtistError, QobuzAudioQuality, QobuzFavoriteAlbumsError,
     QobuzFavoriteArtistsError, QobuzFavoriteTracksError, QobuzRelease, QobuzSearchError,
-    QobuzTrack, QobuzTrackError, QobuzTrackFileUrlError, QobuzUserLoginError,
+    QobuzTrack, QobuzTrackError, QobuzTrackFileUrlError, QobuzUserLoginError, album, album_tracks,
+    artist, artist_albums, favorite_albums, favorite_artists, favorite_tracks, format_title,
+    models::QobuzAlbum, search, track, track_file_url, user_login,
 };
 
 pub fn bind_services<

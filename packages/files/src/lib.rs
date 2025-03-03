@@ -5,7 +5,7 @@ use std::{
     io::{Seek, Write},
     path::{Path, PathBuf},
     pin::Pin,
-    sync::{atomic::AtomicUsize, Arc, LazyLock},
+    sync::{Arc, LazyLock, atomic::AtomicUsize},
     time::Instant,
 };
 

@@ -4,9 +4,9 @@ use std::sync::RwLock;
 
 use bytes::Bytes;
 use moosicbox_audio_decoder::{
-    decode_file_path_str, AudioDecode, AudioDecodeError, AudioDecodeHandler,
+    AudioDecode, AudioDecodeError, AudioDecodeHandler, decode_file_path_str,
 };
-use moosicbox_audio_encoder::flac::{encoder_flac, Encoder};
+use moosicbox_audio_encoder::flac::{Encoder, encoder_flac};
 use moosicbox_stream_utils::{ByteStream, ByteWriter};
 use symphonia::core::{
     audio::{AudioBuffer, Channels, Signal, SignalSpec},
@@ -14,7 +14,7 @@ use symphonia::core::{
     units::Duration,
 };
 
-use crate::{to_samples, AudioOutputError, AudioWrite};
+use crate::{AudioOutputError, AudioWrite, to_samples};
 use moosicbox_resampler::Resampler;
 
 use super::AudioEncoder;
