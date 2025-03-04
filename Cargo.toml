@@ -170,10 +170,10 @@ convert_case = "0.8.0"
 cpal = "0.15.3"
 debounce = "0.2.2"
 derive_more = "2.0.1"
-diesel = { version = "2.2.7", default-features = false }
+diesel = { version = "2.2.8", default-features = false }
 diesel_migrations = { version = "2.2.0", default-features = false }
 dotenv = "0.15"
-dyn-clone = "1.0.18"
+dyn-clone = "1.0.19"
 eframe = { version = "0.31.0", default-features = false }
 egui = { version = "0.31.0", default-features = false }
 egui_extras = { version = "0.31.0", default-features = false }
@@ -235,7 +235,7 @@ opentelemetry-prometheus = { version = "0.28.0" }
 opentelemetry_sdk = { version = "0.28.0", features = ["rt-tokio"] }
 opus = "0.3.0"
 os_info = { version = "3.10.0", default-features = false }
-pin-project = "1.1.9"
+pin-project = "1.1.10"
 pin-utils = "0.1.0"
 pingora = "0.4.0"
 pingora-core = "0.4.0"
@@ -271,7 +271,7 @@ rusqlite = { version = "=0.32.1", features = ["bundled"] }
 rustls = "0.23"
 serde = { version = "1", features = ["derive"] }
 serde-aux = "4.6.0"
-serde_json = "1.0.139"
+serde_json = "1.0.140"
 serial_test = "3.2.0"
 sha2 = "0.10.8"
 sqlx = { version = "0.8.3", default-features = false, features = [
@@ -292,10 +292,10 @@ swc_common = { version = "8.0.0", features = ["tty-emitter"] }
 swc_ecma_ast = "8.0.0"
 swc_ecma_codegen = "8.0.2"
 swc_ecma_loader = { version = "8.0.0", features = ["cache", "node"] }
-swc_ecma_minifier = "12.0.2"
+swc_ecma_minifier = "12.0.3"
 swc_ecma_parser = "10.0.0"
 swc_ecma_transforms_base = "11.2.0"
-swc_ecma_transforms_typescript = "12.0.0"
+swc_ecma_transforms_typescript = "12.0.1"
 swc_ecma_visit = "8.0.0"
 symphonia = { version = "0.5.4", features = ["all"] }
 syntect = "5.2.0"
