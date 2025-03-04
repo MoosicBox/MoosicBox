@@ -40,6 +40,8 @@ use tokio::task::JoinHandle;
 
 pub use hyperchad_renderer::*;
 
+mod font_metrics;
+
 #[cfg(feature = "debug")]
 static DEBUG: LazyLock<RwLock<bool>> = LazyLock::new(|| {
     RwLock::new(
@@ -47,6 +49,8 @@ static DEBUG: LazyLock<RwLock<bool>> = LazyLock::new(|| {
             .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str())),
     )
 });
+
+static FLTK_MEASURE_TEXT: font_metrics::FltkFontMetrics = font_metrics::FltkFontMetrics;
 
 #[derive(Debug, Error)]
 pub enum LoadImageError {
@@ -346,7 +350,7 @@ impl FltkRenderer {
                 container.calculated_width.replace(window_width);
                 container.calculated_height.replace(window_height);
 
-                container.calc();
+                container.calc(&FLTK_MEASURE_TEXT);
             } else {
                 log::debug!("perform_render: Container had same size, not recalculating");
             }

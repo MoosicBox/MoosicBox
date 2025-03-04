@@ -28,6 +28,8 @@ use hyperchad_transformer::{
 };
 use itertools::Itertools;
 
+use crate::font_metrics::EguiFontMetrics;
+
 #[cfg(feature = "debug")]
 static DEBUG: LazyLock<RwLock<bool>> = LazyLock::new(|| {
     RwLock::new(
@@ -379,7 +381,7 @@ impl Renderer for EguiRenderer {
 
             element.calculated_width = app.width.read().unwrap().or(width);
             element.calculated_height = app.height.read().unwrap().or(height);
-            element.calc();
+            element.calc(app.measure_text.read().unwrap().as_ref().unwrap());
 
             let mut watch_positions = app.watch_positions.write().unwrap();
             watch_positions.clear();
@@ -438,9 +440,13 @@ impl Renderer for EguiRenderer {
                 .map(|x| x.id)
                 .collect::<Vec<_>>();
 
-            if let Some(removed) =
-                page.replace_str_id_with_elements_calc(view.container.children, &view.target)
-            {
+            let font_metrics = app.font_metrics.read().unwrap().clone().unwrap();
+
+            if let Some(removed) = page.replace_str_id_with_elements_calc(
+                view.container.children,
+                &view.target,
+                &font_metrics,
+            ) {
                 let mut watch_positions = app.watch_positions.write().unwrap();
                 watch_positions.clear();
                 add_watch_pos(&page, &page, &mut watch_positions);
@@ -610,6 +616,7 @@ struct RenderContext<'a> {
 #[derive(Clone)]
 struct EguiApp {
     ctx: Arc<RwLock<Option<egui::Context>>>,
+    measure_text: Arc<RwLock<Option<EguiFontMetrics>>>,
     width: Arc<RwLock<Option<f32>>>,
     height: Arc<RwLock<Option<f32>>>,
     container: Arc<RwLock<Container>>,
@@ -657,6 +664,7 @@ impl EguiApp {
     ) -> Self {
         Self {
             ctx: Arc::new(RwLock::new(None)),
+            measure_text: Arc::new(RwLock::new(None)),
             width: Arc::new(RwLock::new(None)),
             height: Arc::new(RwLock::new(None)),
             container: Arc::new(RwLock::new(Container::default())),
@@ -812,6 +820,7 @@ impl EguiApp {
                 } => {
                     let router = self.router.clone();
                     let container = self.container.clone();
+                    let measure_text = self.measure_text.clone();
                     let ctx = self.ctx.clone();
                     let client = self.client_info.clone();
                     moosicbox_task::spawn("renderer: ProcessRoute", async move {
@@ -842,6 +851,7 @@ impl EguiApp {
                                                         &swap,
                                                         &ctx,
                                                         &container,
+                                                        &measure_text,
                                                         container_id,
                                                         view.immediate,
                                                     );
@@ -851,6 +861,7 @@ impl EguiApp {
                                                             &swap,
                                                             &ctx,
                                                             &container,
+                                                            &measure_text,
                                                             container_id,
                                                             view,
                                                         );
@@ -879,6 +890,7 @@ impl EguiApp {
         swap: &SwapTarget,
         ctx: &egui::Context,
         container: &RwLock<Container>,
+        measure_text: &RwLock<Option<EguiFontMetrics>>,
         container_id: usize,
         result: Container,
     ) {
@@ -889,7 +901,11 @@ impl EguiApp {
         let mut page = container.write().unwrap();
         match swap {
             SwapTarget::This => {
-                if page.replace_id_with_elements_calc(result.children, container_id) {
+                if page.replace_id_with_elements_calc(
+                    result.children,
+                    container_id,
+                    measure_text.read().unwrap().as_ref().unwrap(),
+                ) {
                     drop(page);
                     ctx.request_repaint();
                 } else {
@@ -897,7 +913,11 @@ impl EguiApp {
                 }
             }
             SwapTarget::Children => {
-                if page.replace_id_children_with_elements_calc(result.children, container_id) {
+                if page.replace_id_children_with_elements_calc(
+                    result.children,
+                    container_id,
+                    measure_text.read().unwrap().as_ref().unwrap(),
+                ) {
                     drop(page);
                     ctx.request_repaint();
                 } else {
@@ -921,7 +941,7 @@ impl EguiApp {
             let mut container = self.container.write().unwrap();
             container.calculated_width.replace(width);
             container.calculated_height.replace(height);
-            container.calc();
+            container.calc(self.measure_text.read().unwrap().as_ref().unwrap());
         }
 
         self.width.write().unwrap().replace(width);

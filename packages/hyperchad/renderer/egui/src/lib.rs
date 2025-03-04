@@ -12,3 +12,6 @@ pub mod immediate;
 
 #[cfg(all(not(feature = "retained"), feature = "immediate"))]
 pub use immediate::*;
+
+#[cfg(feature = "retained")]
+mod font_metrics;

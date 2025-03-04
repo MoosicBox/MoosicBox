@@ -1365,6 +1365,7 @@ impl Container {
         &mut self,
         replacement: Vec<Self>,
         id: usize,
+        measure_text: &dyn calc::FontMetrics,
     ) -> bool {
         let Some(parent_id) = self.find_element_by_id(id).map(|x| x.id) else {
             return false;
@@ -1372,7 +1373,7 @@ impl Container {
 
         self.replace_id_children_with_elements(replacement, id);
 
-        self.partial_calc(parent_id);
+        self.partial_calc(parent_id, measure_text);
 
         true
     }
@@ -1406,14 +1407,19 @@ impl Container {
     ///
     /// * If the `Container` is not properly attached to the tree
     #[cfg(all(feature = "id", feature = "calc"))]
-    pub fn replace_id_with_elements_calc(&mut self, replacement: Vec<Self>, id: usize) -> bool {
+    pub fn replace_id_with_elements_calc(
+        &mut self,
+        replacement: Vec<Self>,
+        id: usize,
+        measure_text: &dyn calc::FontMetrics,
+    ) -> bool {
         let Some(parent_id) = self.find_parent_by_id_mut(id).map(|x| x.id) else {
             return false;
         };
 
         self.replace_id_with_elements(replacement, id);
 
-        self.partial_calc(parent_id);
+        self.partial_calc(parent_id, measure_text);
 
         true
     }
@@ -1459,26 +1465,27 @@ impl Container {
         &mut self,
         replacement: Vec<Self>,
         id: &str,
+        measure_text: &dyn calc::FontMetrics,
     ) -> Option<Self> {
         let parent_id = self.find_parent_by_str_id_mut(id)?.id;
 
         let element = self.replace_str_id_with_elements(replacement, id);
 
-        self.partial_calc(parent_id);
+        self.partial_calc(parent_id, measure_text);
 
         element
     }
 
     #[cfg(all(feature = "id", feature = "calc"))]
-    pub fn partial_calc(&mut self, id: usize) {
+    pub fn partial_calc(&mut self, id: usize, measure_text: &dyn calc::FontMetrics) {
         use calc::Calc as _;
 
         let Some(parent) = self.find_parent_by_id_mut(id) else {
             return;
         };
 
-        if parent.calc() {
-            self.calc();
+        if parent.calc(measure_text) {
+            self.calc(measure_text);
         }
     }
 

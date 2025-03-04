@@ -24,8 +24,12 @@ pub fn set_scrollbar_size(size: u16) {
     SCROLLBAR_SIZE.store(size, std::sync::atomic::Ordering::SeqCst);
 }
 
+pub trait FontMetrics {
+    fn measure_text(&self, text: &str, wrap_width: f32) -> bool;
+}
+
 pub trait Calc {
-    fn calc(&mut self) -> bool;
+    fn calc(&mut self, font_metrics: &dyn FontMetrics) -> bool;
 }
 
 impl Container {
@@ -470,7 +474,7 @@ impl Container {
 }
 
 impl Calc for Container {
-    fn calc(&mut self) -> bool {
+    fn calc(&mut self, _font_metrics: &dyn FontMetrics) -> bool {
         log::trace!("calc");
 
         let (Some(root_width), Some(root_height)) = (self.calculated_width, self.calculated_height)
@@ -1058,14 +1062,13 @@ impl Container {
                         .padding_and_margins(LayoutDirection::Row)
                         .unwrap_or(0.0);
                 let width = self.width.as_ref().map_or(container_width, |x| {
-                    x.calc( container_width, root_size.0, root_size.1)
+                    x.calc(container_width, root_size.0, root_size.1)
                 });
-                let height = 
-                    self.height.as_ref().unwrap().calc(
-                    container_height,
-                    root_size.0,
-                    root_size.1,
-                );
+                let height =
+                    self.height
+                        .as_ref()
+                        .unwrap()
+                        .calc(container_height, root_size.0, root_size.1);
                 moosicbox_assert::assert!(width >= 0.0);
                 self.calculated_width.replace(width);
                 moosicbox_assert::assert!(height >= 0.0);
@@ -1284,7 +1287,7 @@ impl Container {
             match direction {
                 LayoutDirection::Row => {
                     let height = element.height.as_ref().map_or(container_height, |x| {
-                        x.calc( container_height, root_size.0, root_size.1)
+                        x.calc(container_height, root_size.0, root_size.1)
                     });
                     moosicbox_assert::assert!(height >= 0.0);
                     element.calculated_height.replace(height);
@@ -1295,7 +1298,7 @@ impl Container {
                 }
                 LayoutDirection::Column => {
                     let width = element.width.as_ref().map_or(container_width, |x| {
-                        x.calc( container_width, root_size.0, root_size.1)
+                        x.calc(container_width, root_size.0, root_size.1)
                     });
                     moosicbox_assert::assert!(width >= 0.0);
                     element.calculated_width.replace(width);
@@ -1337,11 +1340,11 @@ impl Container {
         let gap_x = self
             .column_gap
             .as_ref()
-            .map(|x| x.calc( container_width, root_size.0, root_size.1));
+            .map(|x| x.calc(container_width, root_size.0, root_size.1));
         let gap_y = self
             .row_gap
             .as_ref()
-            .map(|x| x.calc( container_height, root_size.0, root_size.1));
+            .map(|x| x.calc(container_height, root_size.0, root_size.1));
 
         let relative_size = self.get_relative_size().or(relative_size);
 
@@ -1879,9 +1882,7 @@ impl Container {
                             .filter_map(|x| {
                                 x.width
                                     .as_ref()
-                                    .map(|x| {
-                                        x.calc( calculated_width, root_size.0, root_size.1)
-                                    })
+                                    .map(|x| x.calc(calculated_width, root_size.0, root_size.1))
                                     .or_else(|| {
                                         if recurse {
                                             x.contained_sized_width(root_size, recurse)
@@ -1926,9 +1927,7 @@ impl Container {
                             .filter_map(|x| {
                                 x.height
                                     .as_ref()
-                                    .map(|x| {
-                                        x.calc( calculated_height, root_size.0, root_size.1)
-                                    })
+                                    .map(|x| x.calc(calculated_height, root_size.0, root_size.1))
                                     .or_else(|| {
                                         if recurse {
                                             x.contained_sized_height(root_size, recurse)
@@ -1961,9 +1960,7 @@ impl Container {
                         .filter_map(|x| {
                             x.height
                                 .as_ref()
-                                .map(|x| {
-                                    x.calc( calculated_height, root_size.0, root_size.1)
-                                })
+                                .map(|x| x.calc(calculated_height, root_size.0, root_size.1))
                                 .or_else(|| {
                                     if recurse {
                                         x.contained_sized_height(root_size, recurse)
@@ -2855,6 +2852,8 @@ mod test {
         models::{JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition},
     };
 
+    use super::FontMetrics;
+
     fn compare_containers(a: &Container, b: &Container) {
         assert_eq!(
             a.display_to_string(
@@ -2876,6 +2875,16 @@ mod test {
         );
     }
 
+    struct DefaultFontMetrics;
+
+    impl FontMetrics for DefaultFontMetrics {
+        fn measure_text(&self, _text: &str, _wrap_width: f32) -> bool {
+            false
+        }
+    }
+
+    static DEFAULT_FONT_METRICS: DefaultFontMetrics = DefaultFontMetrics;
+
     #[macro_export]
     macro_rules! pre_escaped {
         ($($message:tt)+) => {
@@ -2891,7 +2900,7 @@ mod test {
             calculated_height: Some(50.0),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -2922,7 +2931,7 @@ mod test {
             calculated_height: Some(40.0),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -2975,7 +2984,7 @@ mod test {
             calculated_height: Some(40.0),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -3041,7 +3050,7 @@ mod test {
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -4587,7 +4596,7 @@ mod test {
             justify_content: Some(JustifyContent::SpaceEvenly),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -4686,7 +4695,7 @@ mod test {
             justify_content: Some(JustifyContent::SpaceEvenly),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -5354,7 +5363,7 @@ mod test {
             overflow_y: LayoutOverflow::Auto,
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -5986,7 +5995,7 @@ mod test {
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -6065,7 +6074,7 @@ mod test {
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         let remainder = 50.0f32 / 3_f32; // 16.66666
@@ -6171,7 +6180,7 @@ mod test {
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         let remainder = 50.0f32 / 3_f32; // 16.66666
@@ -6280,7 +6289,7 @@ mod test {
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -6391,7 +6400,7 @@ mod test {
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -6480,7 +6489,7 @@ mod test {
             calculated_height: Some(40.0),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -6573,7 +6582,7 @@ mod test {
             calculated_height: Some(80.0),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -6708,7 +6717,7 @@ mod test {
             calculated_height: Some(80.0),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -6847,7 +6856,7 @@ mod test {
             calculated_height: Some(80.0),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -6978,7 +6987,7 @@ mod test {
             calculated_height: Some(80.0),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -7089,7 +7098,7 @@ mod test {
             calculated_height: Some(80.0),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -7185,7 +7194,7 @@ mod test {
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(80.0);
 
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -7320,7 +7329,7 @@ mod test {
             calculated_height: Some(80.0),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -7410,7 +7419,7 @@ mod test {
             position: Some(Position::Relative),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -7459,7 +7468,7 @@ mod test {
             position: Some(Position::Relative),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -7507,7 +7516,7 @@ mod test {
             position: Some(Position::Relative),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -7554,7 +7563,7 @@ mod test {
             position: Some(Position::Relative),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -7599,7 +7608,7 @@ mod test {
             position: Some(Position::Relative),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -7648,7 +7657,7 @@ mod test {
             position: Some(Position::Relative),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -7696,7 +7705,7 @@ mod test {
             position: Some(Position::Relative),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -7744,7 +7753,7 @@ mod test {
             position: Some(Position::Relative),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -7794,7 +7803,7 @@ mod test {
             position: Some(Position::Relative),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -7845,7 +7854,7 @@ mod test {
             justify_content: Some(JustifyContent::Center),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -7876,7 +7885,7 @@ mod test {
             justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -7920,7 +7929,7 @@ mod test {
             direction: LayoutDirection::Row,
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -7963,7 +7972,7 @@ mod test {
             direction: LayoutDirection::Row,
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -8003,7 +8012,7 @@ mod test {
             overflow_x: LayoutOverflow::Wrap,
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -8043,7 +8052,7 @@ mod test {
             overflow_x: LayoutOverflow::Wrap,
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -8087,7 +8096,7 @@ mod test {
             overflow_x: LayoutOverflow::Wrap,
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -8129,7 +8138,7 @@ mod test {
             overflow_x: LayoutOverflow::Wrap,
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -8172,7 +8181,7 @@ mod test {
             overflow_x: LayoutOverflow::Wrap,
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -8210,7 +8219,7 @@ mod test {
             calculated_height: Some(50.0),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -8251,7 +8260,7 @@ mod test {
             overflow_x: LayoutOverflow::Wrap,
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -8299,7 +8308,7 @@ mod test {
             direction: LayoutDirection::Row,
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -8351,7 +8360,7 @@ mod test {
             direction: LayoutDirection::Row,
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -8383,7 +8392,7 @@ mod test {
             calculated_height: Some(50.0),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -8412,7 +8421,7 @@ mod test {
             calculated_height: Some(50.0),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -8444,7 +8453,7 @@ mod test {
             height: Some(Number::Integer(50)),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -8486,7 +8495,7 @@ mod test {
             height: Some(Number::Integer(50)),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -8544,7 +8553,7 @@ mod test {
             height: Some(Number::Integer(50)),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -8595,7 +8604,7 @@ mod test {
             position: Some(Position::Relative),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -8635,7 +8644,7 @@ mod test {
             position: Some(Position::Relative),
             ..Default::default()
         };
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -8684,7 +8693,7 @@ mod test {
         container.calculated_width = Some(1600.0);
         container.calculated_height = Some(1000.0);
 
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         let container = container.children[0].children[0].children[1].clone();
@@ -8746,7 +8755,7 @@ mod test {
         container.calculated_height = Some(1000.0);
         container.position = Some(Position::Relative);
 
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -8785,7 +8794,7 @@ mod test {
         container.calculated_height = Some(1000.0);
         container.position = Some(Position::Relative);
 
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -8825,7 +8834,7 @@ mod test {
         container.calculated_height = Some(1000.0);
         container.position = Some(Position::Relative);
 
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -8872,7 +8881,7 @@ mod test {
         container.calculated_width = Some(1600.0);
         container.calculated_height = Some(1000.0);
 
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         let container = container.children[0].children[1].clone();
@@ -8932,7 +8941,7 @@ mod test {
         container.calculated_width = Some(1600.0);
         container.calculated_height = Some(1000.0);
 
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         let container = container.children[0].children[0].children[1].children[0].clone();
@@ -8969,7 +8978,7 @@ mod test {
         container.calculated_width = Some(1600.0);
         container.calculated_height = Some(1000.0);
 
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         let main = container.children[0].children[0].children[1].clone();
@@ -9022,7 +9031,7 @@ mod test {
         container.calculated_width = Some(1600.0);
         container.calculated_height = Some(1000.0);
 
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         let main = container.children[0].children[0].children[1].clone();
@@ -9095,7 +9104,7 @@ mod test {
         container.calculated_width = Some(50.0);
         container.calculated_height = Some(100.0);
 
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         let td = container.children[0].children[0].children[0].clone();
@@ -9124,7 +9133,7 @@ mod test {
         container.calculated_width = Some(50.0);
         container.calculated_height = Some(100.0);
 
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         let tr = container.children[0].children[0].clone();
@@ -9165,7 +9174,7 @@ mod test {
         container.calculated_width = Some(50.0);
         container.calculated_height = Some(100.0);
 
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -9210,7 +9219,7 @@ mod test {
         container.calculated_width = Some(50.0);
         container.calculated_height = Some(100.0);
 
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -9261,7 +9270,7 @@ mod test {
         container.calculated_width = Some(50.0);
         container.calculated_height = Some(100.0);
 
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -9314,7 +9323,7 @@ mod test {
         container.calculated_width = Some(1232.0);
         container.calculated_height = Some(500.0);
 
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -9383,7 +9392,7 @@ mod test {
         container.calculated_width = Some(1232.0);
         container.calculated_height = Some(500.0);
 
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -9423,7 +9432,7 @@ mod test {
         container.calculated_width = Some(1232.0);
         container.calculated_height = Some(500.0);
 
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -9461,7 +9470,7 @@ mod test {
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(500.0);
 
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -9499,7 +9508,7 @@ mod test {
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(500.0);
 
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -9538,7 +9547,7 @@ mod test {
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(500.0);
 
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
@@ -9583,7 +9592,7 @@ mod test {
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(500.0);
 
-        container.calc();
+        container.calc(&DEFAULT_FONT_METRICS);
         log::trace!("container:\n{}", container);
 
         compare_containers(
