@@ -24,8 +24,35 @@ pub fn set_scrollbar_size(size: u16) {
     SCROLLBAR_SIZE.store(size, std::sync::atomic::Ordering::SeqCst);
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct FontMetricsRow {
+    pub width: f32,
+    pub height: f32,
+}
+
+#[derive(Debug, Clone)]
+pub struct FontMetricsValue {
+    pub rows: Vec<FontMetricsRow>,
+}
+
+impl FontMetricsValue {
+    #[must_use]
+    pub fn width(&self) -> f32 {
+        self.rows
+            .iter()
+            .map(|x| x.width)
+            .max_by(order_float)
+            .unwrap_or_default()
+    }
+
+    #[must_use]
+    pub fn height(&self) -> f32 {
+        self.rows.iter().map(|x| x.height).sum()
+    }
+}
+
 pub trait FontMetrics {
-    fn measure_text(&self, text: &str, wrap_width: f32) -> bool;
+    fn measure_text(&self, text: &str, size: f32, wrap_width: f32) -> FontMetricsValue;
 }
 
 pub trait Calc {
@@ -36,6 +63,7 @@ impl Container {
     fn calc_inner(
         &mut self,
         arena: &Bump,
+        font_metrics: &dyn FontMetrics,
         relative_size: Option<(f32, f32)>,
         root_size: (f32, f32),
     ) -> bool {
@@ -77,9 +105,9 @@ impl Container {
         }
 
         if self.element == Element::Table {
-            self.calc_table(arena, relative_size, root_size)
+            self.calc_table(arena, font_metrics, relative_size, root_size)
         } else {
-            self.calc_inner_container(arena, relative_size, root_size)
+            self.calc_inner_container(arena, font_metrics, relative_size, root_size)
         }
     }
 
@@ -95,6 +123,7 @@ impl Container {
     fn calc_table(
         &mut self,
         arena: &Bump,
+        font_metrics: &dyn FontMetrics,
         relative_size: Option<(f32, f32)>,
         root_size: (f32, f32),
     ) -> bool {
@@ -238,6 +267,7 @@ impl Container {
                                 x.calculated_width = Some(evenly_split_size);
                                 x.calc_unsized_element_size(
                                     arena,
+                                    font_metrics,
                                     relative_size,
                                     root_size,
                                     evenly_split_size,
@@ -265,6 +295,7 @@ impl Container {
                             x.calculated_width = Some(evenly_split_size);
                             x.calc_unsized_element_size(
                                 arena,
+                                font_metrics,
                                 relative_size,
                                 root_size,
                                 evenly_split_size,
@@ -458,14 +489,14 @@ impl Container {
         if let Some(headings) = headings {
             for heading in headings {
                 for th in heading {
-                    th.calc_inner(arena, relative_size, root_size);
+                    th.calc_inner(arena, font_metrics, relative_size, root_size);
                 }
             }
         }
 
         for row in rows {
             for td in row {
-                td.calc_inner(arena, relative_size, root_size);
+                td.calc_inner(arena, font_metrics, relative_size, root_size);
             }
         }
 
@@ -474,7 +505,7 @@ impl Container {
 }
 
 impl Calc for Container {
-    fn calc(&mut self, _font_metrics: &dyn FontMetrics) -> bool {
+    fn calc(&mut self, font_metrics: &dyn FontMetrics) -> bool {
         log::trace!("calc");
 
         let (Some(root_width), Some(root_height)) = (self.calculated_width, self.calculated_height)
@@ -486,7 +517,7 @@ impl Calc for Container {
 
         let arena = Bump::new();
 
-        self.calc_inner(&arena, None, (root_width, root_height))
+        self.calc_inner(&arena, font_metrics, None, (root_width, root_height))
     }
 }
 
@@ -496,6 +527,7 @@ impl Container {
     fn calc_inner_container(
         &mut self,
         arena: &Bump,
+        font_metrics: &dyn FontMetrics,
         relative_size: Option<(f32, f32)>,
         root_size: (f32, f32),
     ) -> bool {
@@ -524,6 +556,7 @@ impl Container {
 
         Self::calc_element_sizes(
             arena,
+            font_metrics,
             self.relative_positioned_elements_mut(),
             direction,
             overflow_x,
@@ -536,7 +569,7 @@ impl Container {
         let relative_size = self.get_relative_size().or(relative_size);
 
         for element in self.relative_positioned_elements_mut() {
-            element.calc_inner(arena, relative_size, root_size);
+            element.calc_inner(arena, font_metrics, relative_size, root_size);
         }
 
         if let Some((width, height)) = relative_size {
@@ -549,6 +582,7 @@ impl Container {
 
             Self::calc_element_sizes(
                 arena,
+                font_metrics,
                 self.absolute_positioned_elements_mut(),
                 direction,
                 overflow_x,
@@ -559,7 +593,7 @@ impl Container {
             );
 
             for container in self.absolute_positioned_elements_mut() {
-                container.calc_inner(arena, relative_size, root_size);
+                container.calc_inner(arena, font_metrics, relative_size, root_size);
             }
         }
 
@@ -574,6 +608,7 @@ impl Container {
 
             Self::calc_element_sizes(
                 arena,
+                font_metrics,
                 self.fixed_positioned_elements_mut(),
                 direction,
                 overflow_x,
@@ -584,12 +619,12 @@ impl Container {
             );
 
             for container in self.fixed_positioned_elements_mut() {
-                container.calc_inner(arena, relative_size, root_size);
+                container.calc_inner(arena, font_metrics, relative_size, root_size);
             }
         }
 
         let mut attempt = 0;
-        while self.handle_overflow(arena, relative_size, root_size) {
+        while self.handle_overflow(arena, font_metrics, relative_size, root_size) {
             attempt += 1;
 
             {
@@ -617,6 +652,7 @@ impl Container {
     #[allow(clippy::too_many_arguments)]
     fn calc_element_sizes<'a>(
         arena: &Bump,
+        font_metrics: &dyn FontMetrics,
         elements: impl Iterator<Item = &'a mut Self>,
         direction: LayoutDirection,
         overflow_x: LayoutOverflow,
@@ -647,6 +683,7 @@ impl Container {
                 container_height,
                 |elements, container_width, container_height| {
                     Self::size_elements(
+                        font_metrics,
                         elements,
                         direction,
                         container_width,
@@ -685,6 +722,7 @@ impl Container {
                 }
 
                 Self::size_elements(
+                    font_metrics,
                     &mut elements,
                     direction,
                     container_width - padding_x,
@@ -697,6 +735,7 @@ impl Container {
 
     #[allow(clippy::too_many_lines)]
     fn size_elements(
+        font_metrics: &dyn FontMetrics,
         elements: &mut [&mut Self],
         direction: LayoutDirection,
         container_width: f32,
@@ -768,6 +807,7 @@ impl Container {
 
             for container in unsized_elements.map(|x| &mut **x) {
                 container.size_unsized_element(
+                    font_metrics,
                     container_width,
                     container_height,
                     root_size,
@@ -780,6 +820,7 @@ impl Container {
 
     fn size_unsized_element(
         &mut self,
+        font_metrics: &dyn FontMetrics,
         container_width: f32,
         container_height: f32,
         root_size: (f32, f32),
@@ -789,6 +830,14 @@ impl Container {
         if self.is_fixed() {
             self.calculated_width.replace(0.0);
             self.calculated_height.replace(0.0);
+            return;
+        }
+
+        if let Element::Raw { value } = &self.element {
+            let metrics = font_metrics.measure_text(value, 14.0, container_width);
+            self.calculated_width.replace(metrics.width());
+            self.calculated_height.replace(metrics.height());
+            log::warn!("Calculated text: {value}, {metrics:?}");
             return;
         }
 
@@ -1197,6 +1246,7 @@ impl Container {
     fn calc_unsized_element_size(
         &mut self,
         arena: &Bump,
+        font_metrics: &dyn FontMetrics,
         relative_size: Option<(f32, f32)>,
         root_size: (f32, f32),
         remainder: f32,
@@ -1211,6 +1261,7 @@ impl Container {
         };
         Self::calc_unsized_element_sizes(
             arena,
+            font_metrics,
             relative_size,
             root_size,
             relative_positioned_elements_mut(&mut self.children),
@@ -1224,6 +1275,7 @@ impl Container {
     #[allow(clippy::cognitive_complexity, clippy::too_many_arguments)]
     fn calc_unsized_element_sizes<'a>(
         arena: &Bump,
+        font_metrics: &dyn FontMetrics,
         relative_size: Option<(f32, f32)>,
         root_size: (f32, f32),
         elements: impl Iterator<Item = &'a mut Self>,
@@ -1311,7 +1363,7 @@ impl Container {
         }
 
         for element in elements {
-            element.calc_inner(arena, relative_size, root_size);
+            element.calc_inner(arena, font_metrics, relative_size, root_size);
         }
     }
 
@@ -1319,6 +1371,7 @@ impl Container {
     pub fn handle_overflow(
         &mut self,
         arena: &Bump,
+        font_metrics: &dyn FontMetrics,
         relative_size: Option<(f32, f32)>,
         root_size: (f32, f32),
     ) -> bool {
@@ -1354,7 +1407,7 @@ impl Container {
             // TODO:
             // need to handle non container elements that have a width/height that is the split
             // remainder of the container width/height
-            container.handle_overflow(arena, relative_size, root_size);
+            container.handle_overflow(arena, font_metrics, relative_size, root_size);
             let width = container.calculated_width_minus_borders().unwrap_or(0.0);
             let height = container.calculated_height_minus_borders().unwrap_or(0.0);
 
@@ -1462,7 +1515,7 @@ impl Container {
             max_width = if max_width > width { max_width } else { width };
         }
 
-        if self.resize_children(arena, root_size) {
+        if self.resize_children(arena, font_metrics, root_size) {
             log::trace!("handle_overflow: layout_shifted because children were resized");
             layout_shifted = true;
         }
@@ -2366,7 +2419,12 @@ impl Container {
         clippy::cognitive_complexity,
         clippy::similar_names
     )]
-    fn resize_children(&mut self, arena: &Bump, root_size: (f32, f32)) -> bool {
+    fn resize_children(
+        &mut self,
+        arena: &Bump,
+        font_metrics: &dyn FontMetrics,
+        root_size: (f32, f32),
+    ) -> bool {
         if matches!(
             self.element,
             Element::Table
@@ -2414,13 +2472,13 @@ impl Container {
         // TODO: Might not need to return out of these, might be able to just update the
         // contained_calculated_width and/or contained_calculated_height properties
         if self.check_scrollbar_x_changed(&mut width, height, contained_calculated_height) {
-            self.evenly_distribute_children_width(arena, width, root_size);
+            self.evenly_distribute_children_width(arena, font_metrics, width, root_size);
 
             return true;
         }
 
         if self.check_scrollbar_y_changed(width, &mut height, contained_calculated_width) {
-            self.evenly_distribute_children_height(arena, height, root_size);
+            self.evenly_distribute_children_height(arena, font_metrics, height, root_size);
 
             return true;
         }
@@ -2448,8 +2506,12 @@ impl Container {
                     }
                 }
                 LayoutOverflow::Wrap | LayoutOverflow::Squash => {
-                    resized =
-                        self.evenly_distribute_children_width(arena, width, root_size) || resized;
+                    resized = self.evenly_distribute_children_width(
+                        arena,
+                        font_metrics,
+                        width,
+                        root_size,
+                    ) || resized;
                 }
             }
         } else {
@@ -2479,8 +2541,12 @@ impl Container {
                     }
                 }
                 LayoutOverflow::Wrap | LayoutOverflow::Squash => {
-                    resized =
-                        self.evenly_distribute_children_height(arena, height, root_size) || resized;
+                    resized = self.evenly_distribute_children_height(
+                        arena,
+                        font_metrics,
+                        height,
+                        root_size,
+                    ) || resized;
                 }
             }
         } else {
@@ -2584,6 +2650,7 @@ impl Container {
     fn evenly_distribute_children_width(
         &mut self,
         arena: &Bump,
+        font_metrics: &dyn FontMetrics,
         width: f32,
         root_size: (f32, f32),
     ) -> bool {
@@ -2624,7 +2691,7 @@ impl Container {
                 );
             }
 
-            if element.resize_children(arena, root_size) {
+            if element.resize_children(arena, font_metrics, root_size) {
                 resized = true;
                 log::trace!("evenly_distribute_children_width: resized because child was resized");
             }
@@ -2642,6 +2709,7 @@ impl Container {
     fn evenly_distribute_children_height(
         &mut self,
         arena: &Bump,
+        font_metrics: &dyn FontMetrics,
         height: f32,
         root_size: (f32, f32),
     ) -> bool {
@@ -2783,7 +2851,12 @@ impl Container {
                             log::trace!(
                                 "evenly_distribute_children_height: resized because child calculated_height was different ({existing} != {element_height})"
                             );
-                            element.evenly_distribute_children_height(arena, height, root_size);
+                            element.evenly_distribute_children_height(
+                                arena,
+                                font_metrics,
+                                height,
+                                root_size,
+                            );
                         } else {
                             log::trace!(
                                 "evenly_distribute_children_height: existing height already set to {element_height}"
@@ -2796,10 +2869,15 @@ impl Container {
                         log::trace!(
                             "evenly_distribute_children_height: resized because child calculated_height was None"
                         );
-                        element.evenly_distribute_children_height(arena, height, root_size);
+                        element.evenly_distribute_children_height(
+                            arena,
+                            font_metrics,
+                            height,
+                            root_size,
+                        );
                     }
 
-                    if element.resize_children(arena, root_size) {
+                    if element.resize_children(arena, font_metrics, root_size) {
                         resized = true;
                         log::trace!(
                             "evenly_distribute_children_height: resized because child was resized"
@@ -2820,6 +2898,7 @@ impl Container {
 
 #[allow(clippy::trivially_copy_pass_by_ref)]
 #[inline]
+#[must_use]
 fn order_float(a: &f32, b: &f32) -> std::cmp::Ordering {
     if a > b {
         std::cmp::Ordering::Greater
@@ -2852,7 +2931,7 @@ mod test {
         models::{JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition},
     };
 
-    use super::FontMetrics;
+    use super::{FontMetrics, FontMetricsRow, FontMetricsValue};
 
     fn compare_containers(a: &Container, b: &Container) {
         assert_eq!(
@@ -2878,8 +2957,28 @@ mod test {
     struct DefaultFontMetrics;
 
     impl FontMetrics for DefaultFontMetrics {
-        fn measure_text(&self, _text: &str, _wrap_width: f32) -> bool {
-            false
+        fn measure_text(&self, text: &str, size: f32, wrap_width: f32) -> FontMetricsValue {
+            let mut rows = vec![];
+            #[allow(clippy::cast_precision_loss)]
+            let mut width = text.len() as f32 * size;
+
+            #[allow(clippy::while_float)]
+            while width > wrap_width {
+                rows.push(FontMetricsRow {
+                    width: wrap_width,
+                    height: size,
+                });
+                width -= wrap_width;
+            }
+
+            if width > 0.0 {
+                rows.push(FontMetricsRow {
+                    width,
+                    height: size,
+                });
+            }
+
+            FontMetricsValue { rows }
         }
     }
 
@@ -3491,7 +3590,7 @@ mod test {
             overflow_y: LayoutOverflow::Auto,
             ..Default::default()
         };
-        while container.handle_overflow(&Bump::new(), None, (50.0, 40.0)) {}
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (50.0, 40.0)) {}
         let width = container.contained_calculated_width();
         let expected = 50.0 - f32::from(get_scrollbar_size());
 
@@ -3532,7 +3631,7 @@ mod test {
             overflow_y: LayoutOverflow::Auto,
             ..Default::default()
         };
-        while container.handle_overflow(&Bump::new(), None, (50.0, 40.0)) {}
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (50.0, 40.0)) {}
         let width = 50.0 - f32::from(get_scrollbar_size());
 
         compare_containers(
@@ -3603,7 +3702,7 @@ mod test {
             overflow_y: LayoutOverflow::Auto,
             ..Default::default()
         };
-        while container.handle_overflow(&Bump::new(), None, (50.0, 40.0)) {}
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (50.0, 40.0)) {}
         let width = container.contained_calculated_width();
         let expected = 25.0;
 
@@ -3648,7 +3747,7 @@ mod test {
             overflow_y: LayoutOverflow::Auto,
             ..Default::default()
         };
-        while container.handle_overflow(&Bump::new(), None, (50.0, 40.0)) {}
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (50.0, 40.0)) {}
 
         compare_containers(
             &container.clone(),
@@ -3728,7 +3827,7 @@ mod test {
             overflow_y: LayoutOverflow::Auto,
             ..Default::default()
         };
-        while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (75.0, 40.0)) {}
 
         compare_containers(
             &container.clone(),
@@ -3824,7 +3923,7 @@ mod test {
             justify_content: Some(JustifyContent::SpaceBetween),
             ..Default::default()
         };
-        while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (75.0, 40.0)) {}
 
         compare_containers(
             &container.clone(),
@@ -3929,7 +4028,7 @@ mod test {
             justify_content: Some(JustifyContent::SpaceBetween),
             ..Default::default()
         };
-        while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (75.0, 40.0)) {}
 
         compare_containers(
             &container.clone(),
@@ -4012,7 +4111,7 @@ mod test {
         };
 
         log::debug!("First handle_overflow");
-        while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (75.0, 40.0)) {}
 
         container.children.extend(vec![
             div.clone(),
@@ -4023,7 +4122,7 @@ mod test {
         ]);
 
         log::debug!("Second handle_overflow");
-        while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (75.0, 40.0)) {}
 
         compare_containers(
             &container.clone(),
@@ -4147,7 +4246,7 @@ mod test {
         };
 
         log::debug!("First handle_overflow");
-        while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (75.0, 40.0)) {}
 
         container.children.extend(vec![
             div.clone(),
@@ -4158,7 +4257,7 @@ mod test {
         ]);
 
         log::debug!("Second handle_overflow");
-        while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (75.0, 40.0)) {}
 
         compare_containers(
             &container.clone(),
@@ -4297,7 +4396,7 @@ mod test {
             row_gap: Some(Number::Integer(10)),
             ..Default::default()
         };
-        while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (75.0, 40.0)) {}
 
         compare_containers(
             &container.clone(),
@@ -4396,7 +4495,7 @@ mod test {
             row_gap: Some(Number::Integer(10)),
             ..Default::default()
         };
-        while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (75.0, 40.0)) {}
 
         let mut actual = container.clone();
         let expected = Container {
@@ -4449,7 +4548,7 @@ mod test {
 
         compare_containers(&actual, &expected);
 
-        while actual.handle_overflow(&Bump::new(), None, (75.0, 60.0)) {}
+        while actual.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (75.0, 60.0)) {}
 
         compare_containers(&actual, &expected);
     }
@@ -4496,7 +4595,7 @@ mod test {
             justify_content: Some(JustifyContent::SpaceEvenly),
             ..Default::default()
         };
-        while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (75.0, 40.0)) {}
 
         compare_containers(
             &container.clone(),
@@ -4799,7 +4898,7 @@ mod test {
             justify_content: Some(JustifyContent::SpaceEvenly),
             ..Default::default()
         };
-        while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (75.0, 40.0)) {}
 
         compare_containers(
             &container.clone(),
@@ -4882,7 +4981,7 @@ mod test {
         };
 
         log::debug!("First handle_overflow");
-        while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (75.0, 40.0)) {}
 
         container.children.extend(vec![
             div.clone(),
@@ -4893,7 +4992,7 @@ mod test {
         ]);
 
         log::debug!("Second handle_overflow");
-        while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (75.0, 40.0)) {}
 
         compare_containers(
             &container.clone(),
@@ -5017,7 +5116,7 @@ mod test {
         };
 
         log::debug!("First handle_overflow");
-        while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (75.0, 40.0)) {}
 
         container.children.extend(vec![
             div.clone(),
@@ -5028,7 +5127,7 @@ mod test {
         ]);
 
         log::debug!("Second handle_overflow");
-        while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (75.0, 40.0)) {}
 
         compare_containers(
             &container.clone(),
@@ -5167,7 +5266,7 @@ mod test {
             row_gap: Some(Number::Integer(10)),
             ..Default::default()
         };
-        while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (75.0, 40.0)) {}
 
         compare_containers(
             &container.clone(),
@@ -5266,7 +5365,7 @@ mod test {
             row_gap: Some(Number::Integer(10)),
             ..Default::default()
         };
-        while container.handle_overflow(&Bump::new(), None, (75.0, 40.0)) {}
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (75.0, 40.0)) {}
 
         let mut actual = container.clone();
         let expected = Container {
@@ -5319,7 +5418,7 @@ mod test {
 
         compare_containers(&actual, &expected);
 
-        while actual.handle_overflow(&Bump::new(), None, (75.0, 60.0)) {}
+        while actual.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (75.0, 60.0)) {}
 
         compare_containers(&actual, &expected);
     }
@@ -5555,6 +5654,7 @@ mod test {
         };
         let resized = container.resize_children(
             &Bump::new(),
+            &DEFAULT_FONT_METRICS,
             (
                 container.calculated_width.unwrap(),
                 container.calculated_height.unwrap(),
@@ -5628,6 +5728,7 @@ mod test {
         };
         let resized = container.resize_children(
             &Bump::new(),
+            &DEFAULT_FONT_METRICS,
             (
                 container.calculated_width.unwrap(),
                 container.calculated_height.unwrap(),
@@ -5692,6 +5793,7 @@ mod test {
         };
         let resized = container.resize_children(
             &Bump::new(),
+            &DEFAULT_FONT_METRICS,
             (
                 container.calculated_width.unwrap(),
                 container.calculated_height.unwrap(),
@@ -5752,7 +5854,7 @@ mod test {
             ..Default::default()
         };
         let mut shifted = false;
-        while container.handle_overflow(&Bump::new(), None, (50.0, 40.0)) {
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (50.0, 40.0)) {
             shifted = true;
         }
 
@@ -5837,7 +5939,7 @@ mod test {
             ..Default::default()
         };
         let mut shifted = false;
-        while container.handle_overflow(&Bump::new(), None, (50.0, 40.0)) {
+        while container.handle_overflow(&Bump::new(), &DEFAULT_FONT_METRICS, None, (50.0, 40.0)) {
             shifted = true;
         }
 
@@ -5927,6 +6029,7 @@ mod test {
         let mut shifted = false;
         while container.handle_overflow(
             &Bump::new(),
+            &DEFAULT_FONT_METRICS,
             None,
             (50.0 + f32::from(get_scrollbar_size()), 80.0),
         ) {
@@ -8370,10 +8473,11 @@ mod test {
                     container.children[0].clone(),
                     Container {
                         calculated_width: Some(50.0),
-                        calculated_x: Some(50.0),
+                        calculated_x: Some(56.0),
                         ..container.children[1].clone()
                     },
                 ],
+                calculated_width: Some(106.0),
                 ..container
             },
         );
