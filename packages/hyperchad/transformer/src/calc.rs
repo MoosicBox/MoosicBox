@@ -589,7 +589,7 @@ impl Container {
         }
 
         let mut attempt = 0;
-        while self.handle_overflow(&Bump::new(), relative_size, root_size) {
+        while self.handle_overflow(arena, relative_size, root_size) {
             attempt += 1;
 
             {
