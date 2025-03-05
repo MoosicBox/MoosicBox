@@ -117,7 +117,7 @@ impl std::fmt::Display for TextAlign {
     }
 }
 
-#[cfg(feature = "calc")]
+#[cfg(feature = "layout")]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
@@ -130,7 +130,7 @@ pub enum LayoutPosition {
     Default,
 }
 
-#[cfg(feature = "calc")]
+#[cfg(feature = "layout")]
 impl LayoutPosition {
     #[must_use]
     pub const fn row(&self) -> Option<u32> {

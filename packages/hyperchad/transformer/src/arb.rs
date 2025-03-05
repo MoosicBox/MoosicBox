@@ -771,69 +771,69 @@ impl Arbitrary for Container {
             route: Option::arbitrary(g),
             actions: Vec::arbitrary(smaller_g),
             overrides,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             internal_margin_left: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             internal_margin_right: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             internal_margin_top: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             internal_margin_bottom: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             internal_padding_left: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             internal_padding_right: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             internal_padding_top: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             internal_padding_bottom: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_margin_left: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_margin_right: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_margin_top: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_margin_bottom: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_padding_left: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_padding_right: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_padding_top: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_padding_bottom: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_width: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_height: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_x: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_y: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_position: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_border_top: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_border_right: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_border_bottom: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_border_left: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_border_top_left_radius: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_border_top_right_radius: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_border_bottom_left_radius: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_border_bottom_right_radius: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             calculated_opacity: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             scrollbar_right: None,
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             scrollbar_bottom: None,
         }
     }

@@ -20,7 +20,7 @@ pub use hyperchad_renderer::*;
 use hyperchad_router::{ClientInfo, RequestInfo, Router};
 use hyperchad_transformer::{
     Container, Element, Input, ResponsiveTrigger, TableIter,
-    calc::Calc,
+    layout::Calc,
     models::{
         AlignItems, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition,
         Position, Route, SwapTarget, Visibility,
@@ -104,7 +104,7 @@ impl RenderRunner for EguiRenderRunner {
             viewport = viewport.with_position((x as f32, y as f32));
         }
 
-        hyperchad_transformer::calc::set_scrollbar_size(0);
+        hyperchad_transformer::layout::set_scrollbar_size(0);
 
         #[cfg(feature = "wgpu")]
         let renderer = eframe::Renderer::Wgpu;

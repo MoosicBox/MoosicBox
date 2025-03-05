@@ -19,10 +19,10 @@ use strum::{EnumDiscriminants, EnumIter};
 
 #[cfg(test)]
 pub mod arb;
-#[cfg(feature = "calc")]
-pub mod calc;
 #[cfg(any(test, feature = "html"))]
 pub mod html;
+#[cfg(feature = "layout")]
+pub mod layout;
 pub mod parse;
 
 #[derive(Clone, Debug, PartialEq, EnumDiscriminants, Serialize, Deserialize)]
@@ -981,69 +981,69 @@ pub struct Container {
     pub route: Option<Route>,
     pub actions: Vec<Action>,
     pub overrides: Vec<ConfigOverride>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub internal_margin_left: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub internal_margin_right: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub internal_margin_top: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub internal_margin_bottom: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub internal_padding_left: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub internal_padding_right: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub internal_padding_top: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub internal_padding_bottom: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_margin_left: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_margin_right: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_margin_top: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_margin_bottom: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_padding_left: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_padding_right: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_padding_top: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_padding_bottom: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_width: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_height: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_x: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_y: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_position: Option<hyperchad_transformer_models::LayoutPosition>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_border_top: Option<(Color, f32)>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_border_right: Option<(Color, f32)>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_border_bottom: Option<(Color, f32)>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_border_left: Option<(Color, f32)>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_border_top_left_radius: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_border_top_right_radius: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_border_bottom_left_radius: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_border_bottom_right_radius: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub calculated_opacity: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub scrollbar_right: Option<f32>,
-    #[cfg(feature = "calc")]
+    #[cfg(feature = "layout")]
     pub scrollbar_bottom: Option<f32>,
 }
 
@@ -1248,7 +1248,7 @@ impl Container {
         }
     }
 
-    #[cfg(all(feature = "id", feature = "calc"))]
+    #[cfg(all(feature = "id", feature = "layout"))]
     #[must_use]
     pub fn find_relative_size_by_id(&self, id: usize) -> Option<(f32, f32)> {
         fn recurse(
@@ -1269,7 +1269,7 @@ impl Container {
         recurse(self, id, self.get_relative_size())
     }
 
-    #[cfg(all(feature = "id", feature = "calc"))]
+    #[cfg(all(feature = "id", feature = "layout"))]
     #[must_use]
     pub fn find_relative_size_by_str_id(&self, id: &str) -> Option<(f32, f32)> {
         fn recurse(
@@ -1360,12 +1360,12 @@ impl Container {
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
-    #[cfg(all(feature = "id", feature = "calc"))]
+    #[cfg(all(feature = "id", feature = "layout"))]
     pub fn replace_id_children_with_elements_calc(
         &mut self,
         replacement: Vec<Self>,
         id: usize,
-        measure_text: &dyn calc::FontMetrics,
+        measure_text: &dyn layout::font::FontMetrics,
     ) -> bool {
         let Some(parent_id) = self.find_element_by_id(id).map(|x| x.id) else {
             return false;
@@ -1406,12 +1406,12 @@ impl Container {
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
-    #[cfg(all(feature = "id", feature = "calc"))]
+    #[cfg(all(feature = "id", feature = "layout"))]
     pub fn replace_id_with_elements_calc(
         &mut self,
         replacement: Vec<Self>,
         id: usize,
-        measure_text: &dyn calc::FontMetrics,
+        measure_text: &dyn layout::font::FontMetrics,
     ) -> bool {
         let Some(parent_id) = self.find_parent_by_id_mut(id).map(|x| x.id) else {
             return false;
@@ -1460,12 +1460,12 @@ impl Container {
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
-    #[cfg(all(feature = "id", feature = "calc"))]
+    #[cfg(all(feature = "id", feature = "layout"))]
     pub fn replace_str_id_with_elements_calc(
         &mut self,
         replacement: Vec<Self>,
         id: &str,
-        measure_text: &dyn calc::FontMetrics,
+        measure_text: &dyn layout::font::FontMetrics,
     ) -> Option<Self> {
         let parent_id = self.find_parent_by_str_id_mut(id)?.id;
 
@@ -1476,9 +1476,9 @@ impl Container {
         element
     }
 
-    #[cfg(all(feature = "id", feature = "calc"))]
-    pub fn partial_calc(&mut self, id: usize, measure_text: &dyn calc::FontMetrics) {
-        use calc::Calc as _;
+    #[cfg(all(feature = "id", feature = "layout"))]
+    pub fn partial_calc(&mut self, id: usize, measure_text: &dyn layout::font::FontMetrics) {
+        use layout::Calc as _;
 
         let Some(parent) = self.find_parent_by_id_mut(id) else {
             return;
@@ -1954,7 +1954,7 @@ impl Container {
         }
 
         if with_debug_attrs {
-            #[cfg(feature = "calc")]
+            #[cfg(feature = "layout")]
             {
                 attrs.add_opt("calc-x", self.calculated_x);
                 attrs.add_opt("calc-y", self.calculated_y);

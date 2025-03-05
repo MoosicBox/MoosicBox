@@ -122,7 +122,7 @@ impl Arbitrary for Route {
     }
 }
 
-#[cfg(feature = "calc")]
+#[cfg(feature = "layout")]
 impl Arbitrary for crate::LayoutPosition {
     fn arbitrary(g: &mut Gen) -> Self {
         match *g.choose(&(0..=1).collect::<Vec<_>>()).unwrap() {

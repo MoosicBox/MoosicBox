@@ -1,4 +1,4 @@
-use hyperchad_transformer::calc::{FontMetrics, FontMetricsBounds};
+use hyperchad_transformer::layout::font::{FontMetrics, FontMetricsBounds};
 
 pub struct FltkFontMetrics;
 
