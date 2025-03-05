@@ -31,11 +31,11 @@ pub struct FontMetricsRow {
 }
 
 #[derive(Debug, Clone)]
-pub struct FontMetricsValue {
+pub struct FontMetricsBounds {
     pub rows: Vec<FontMetricsRow>,
 }
 
-impl FontMetricsValue {
+impl FontMetricsBounds {
     #[must_use]
     pub fn width(&self) -> f32 {
         self.rows
@@ -52,7 +52,7 @@ impl FontMetricsValue {
 }
 
 pub trait FontMetrics {
-    fn measure_text(&self, text: &str, size: f32, wrap_width: f32) -> FontMetricsValue;
+    fn measure_text(&self, text: &str, size: f32, wrap_width: f32) -> FontMetricsBounds;
 }
 
 pub trait Calc {
@@ -2931,7 +2931,7 @@ mod test {
         models::{JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition},
     };
 
-    use super::{FontMetrics, FontMetricsRow, FontMetricsValue};
+    use super::{FontMetrics, FontMetricsRow, FontMetricsBounds};
 
     fn compare_containers(a: &Container, b: &Container) {
         assert_eq!(
@@ -2957,7 +2957,7 @@ mod test {
     struct DefaultFontMetrics;
 
     impl FontMetrics for DefaultFontMetrics {
-        fn measure_text(&self, text: &str, size: f32, wrap_width: f32) -> FontMetricsValue {
+        fn measure_text(&self, text: &str, size: f32, wrap_width: f32) -> FontMetricsBounds {
             let mut rows = vec![];
             #[allow(clippy::cast_precision_loss)]
             let mut width = text.len() as f32 * size;
@@ -2978,7 +2978,7 @@ mod test {
                 });
             }
 
-            FontMetricsValue { rows }
+            FontMetricsBounds { rows }
         }
     }
 

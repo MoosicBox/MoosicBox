@@ -1,5 +1,5 @@
 use eframe::egui::{self};
-use hyperchad_transformer::calc::{FontMetrics, FontMetricsRow, FontMetricsValue};
+use hyperchad_transformer::calc::{FontMetrics, FontMetricsRow, FontMetricsBounds};
 
 #[derive(Clone)]
 pub struct EguiFontMetrics {
@@ -14,7 +14,7 @@ impl EguiFontMetrics {
 }
 
 impl FontMetrics for EguiFontMetrics {
-    fn measure_text(&self, text: &str, size: f32, wrap_width: f32) -> FontMetricsValue {
+    fn measure_text(&self, text: &str, size: f32, wrap_width: f32) -> FontMetricsBounds {
         from_galley(&self.ctx.fonts(|x| {
             let font_id = egui::FontId {
                 size,
@@ -33,8 +33,8 @@ fn from_row(value: &egui::epaint::text::Row) -> FontMetricsRow {
     }
 }
 
-fn from_galley(value: &egui::Galley) -> FontMetricsValue {
-    FontMetricsValue {
+fn from_galley(value: &egui::Galley) -> FontMetricsBounds {
+    FontMetricsBounds {
         rows: value.rows.iter().map(from_row).collect(),
     }
 }
