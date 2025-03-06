@@ -1,5 +1,5 @@
 use eframe::egui::{self};
-use hyperchad_transformer::layout::font::{FontMetrics, FontMetricsRow, FontMetricsBounds};
+use hyperchad_transformer::layout::font::{FontMetrics, FontMetricsBounds, FontMetricsRow};
 
 #[derive(Clone)]
 pub struct EguiFontMetrics {

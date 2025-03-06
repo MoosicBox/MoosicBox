@@ -27,7 +27,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut runner = RUNTIME.block_on(async move {
         let builder = moosicbox_marketing_site::init().with_runtime_arc(RUNTIME.clone());
-        moosicbox_marketing_site::start(builder).await?.into_runner()
+        moosicbox_marketing_site::start(builder)
+            .await?
+            .into_runner()
     })?;
 
     runner.run().unwrap();
