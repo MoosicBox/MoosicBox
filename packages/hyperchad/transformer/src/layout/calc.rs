@@ -5,7 +5,10 @@ use hyperchad_transformer_models::{
 use itertools::Itertools;
 
 use crate::{
-    absolute_positioned_elements_mut, fixed_positioned_elements_mut, layout::{get_scrollbar_size, order_float, EPSILON}, relative_positioned_elements, relative_positioned_elements_mut, Container, Element, Number, Position, TableIter, TableIterMut
+    Container, Element, Number, Position, TableIter, TableIterMut,
+    absolute_positioned_elements_mut, fixed_positioned_elements_mut,
+    layout::{EPSILON, get_scrollbar_size, order_float},
+    relative_positioned_elements, relative_positioned_elements_mut,
 };
 
 use super::{Calc, font::FontMetrics, increase_opt};
@@ -455,20 +458,33 @@ impl Container {
     }
 }
 
-impl Calc for Container {
-    fn calc(&mut self, font_metrics: &dyn FontMetrics) -> bool {
-        log::trace!("calc");
+pub struct CalcCalculator<F: FontMetrics> {
+    font_metrics: F,
+}
 
-        let (Some(root_width), Some(root_height)) = (self.calculated_width, self.calculated_height)
+impl<F: FontMetrics> CalcCalculator<F> {
+    pub const fn new(font_metrics: F) -> Self {
+        Self { font_metrics }
+    }
+}
+
+impl<F: FontMetrics> Calc for CalcCalculator<F> {
+    fn calc(&self, container: &mut Container) -> bool {
+        log::trace!("calc: container={container}");
+
+        let (Some(root_width), Some(root_height)) =
+            (container.calculated_width, container.calculated_height)
         else {
             moosicbox_assert::die_or_panic!(
                 "calc requires calculated_width and calculated_height to be set"
             );
         };
 
+        log::debug!("calc: root_width={root_width} root_height={root_height}");
+
         let arena = Bump::new();
 
-        self.calc_inner(&arena, font_metrics, None, (root_width, root_height))
+        container.calc_inner(&arena, &self.font_metrics, None, (root_width, root_height))
     }
 }
 
@@ -771,7 +787,7 @@ impl Container {
 
     fn size_unsized_element(
         &mut self,
-        font_metrics: &dyn FontMetrics,
+        _font_metrics: &dyn FontMetrics,
         container_width: f32,
         container_height: f32,
         root_size: (f32, f32),
@@ -784,13 +800,13 @@ impl Container {
             return;
         }
 
-        if let Element::Raw { value } = &self.element {
-            let metrics = font_metrics.measure_text(value, 14.0, container_width);
-            self.calculated_width.replace(metrics.width());
-            self.calculated_height.replace(metrics.height());
-            log::warn!("Calculated text: {value}, {metrics:?}");
-            return;
-        }
+        // if let Element::Raw { value } = &self.element {
+        //     let metrics = font_metrics.measure_text(value, 14.0, container_width);
+        //     self.calculated_width.replace(metrics.width());
+        //     self.calculated_height.replace(metrics.height());
+        //     log::warn!("Calculated text: {value}, {metrics:?}");
+        //     return;
+        // }
 
         match direction {
             LayoutDirection::Row => {

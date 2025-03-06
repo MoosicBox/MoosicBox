@@ -39,6 +39,34 @@ pub static CLIENT_INFO: std::sync::LazyLock<Arc<hyperchad_router::ClientInfo>> =
         })
     });
 
+#[cfg(feature = "egui")]
+mod egui {
+    use std::sync::Arc;
+
+    use hyperchad_renderer::transformer::layout::calc::CalcCalculator;
+    use hyperchad_renderer_egui::eframe::egui::{self};
+    use hyperchad_renderer_egui::font_metrics::EguiFontMetrics;
+
+    #[derive(Clone)]
+    pub struct EguiCalculator(pub Option<Arc<CalcCalculator<EguiFontMetrics>>>);
+
+    impl hyperchad_renderer::transformer::layout::Calc for EguiCalculator {
+        fn calc(&self, container: &mut hyperchad_router::Container) -> bool {
+            self.0.as_ref().unwrap().calc(container)
+        }
+    }
+
+    impl hyperchad_renderer_egui::layout::EguiCalc for EguiCalculator {
+        fn with_context(mut self, context: egui::Context) -> Self {
+            self.0 = Some(Arc::new(CalcCalculator::new(EguiFontMetrics::new(context))));
+            self
+        }
+    }
+}
+
+#[cfg(feature = "egui")]
+pub use egui::*;
+
 #[derive(Debug, Error)]
 pub enum NativeAppError {
     #[error("Runtime required")]
@@ -85,8 +113,8 @@ impl Default for NativeAppBuilder {
 
 #[derive(Clone)]
 pub enum RendererType {
-    #[cfg(all(feature = "egui", any(feature = "retained", feature = "immediate")))]
-    Egui(hyperchad_renderer_egui::EguiRenderer),
+    #[cfg(feature = "egui")]
+    Egui(hyperchad_renderer_egui::EguiRenderer<EguiCalculator>),
     #[cfg(feature = "fltk")]
     Fltk(hyperchad_renderer_fltk::FltkRenderer),
     #[cfg(feature = "html")]
@@ -219,7 +247,7 @@ pub enum RendererType {
 macro_rules! renderer {
     ($val:expr, $name:ident, $action:expr) => {{
         match $val {
-            #[cfg(all(feature = "egui", any(feature = "retained", feature = "immediate")))]
+            #[cfg(feature = "egui")]
             RendererType::Egui($name) => $action,
             #[cfg(feature = "fltk")]
             RendererType::Fltk($name) => $action,
@@ -327,7 +355,7 @@ impl RendererType {
 impl From<RendererType> for Option<Box<dyn hyperchad_renderer::HtmlTagRenderer + Send + Sync>> {
     fn from(value: RendererType) -> Self {
         Some(match value {
-            #[cfg(all(feature = "egui", any(feature = "retained", feature = "immediate")))]
+            #[cfg(feature = "egui")]
             RendererType::Egui(..) => return None,
             #[cfg(feature = "fltk")]
             RendererType::Fltk(..) => return None,
@@ -644,17 +672,19 @@ impl NativeAppBuilder {
     pub fn get_renderer(self) -> Result<RendererType, NativeAppError> {
         #[allow(unreachable_code)]
         Ok(if cfg!(feature = "egui") {
-            #[cfg(all(feature = "egui", any(feature = "retained", feature = "immediate")))]
+            #[cfg(feature = "egui")]
             {
                 let router = self.router.unwrap();
                 let action_tx = Self::listen_actions(self.action_handlers);
                 let resize_tx = Self::listen_resize(self.resize_listeners);
+                let calculator = EguiCalculator(None);
                 let renderer = hyperchad_renderer_egui::EguiRenderer::new(
                     router.clone(),
                     #[cfg(feature = "logic")]
                     action_tx,
                     resize_tx,
                     CLIENT_INFO.clone(),
+                    calculator,
                 );
 
                 moosicbox_task::spawn("egui navigation listener", {
@@ -677,7 +707,7 @@ impl NativeAppBuilder {
                 });
                 RendererType::Egui(renderer)
             }
-            #[cfg(not(all(feature = "egui", any(feature = "retained", feature = "immediate"))))]
+            #[cfg(not(feature = "egui"))]
             unreachable!()
         } else if cfg!(feature = "fltk") {
             #[cfg(feature = "fltk")]

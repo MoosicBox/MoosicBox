@@ -32,7 +32,7 @@ use hyperchad_renderer::viewport::retained::{
 };
 use hyperchad_transformer::{
     Container, Element, HeaderSize, ResponsiveTrigger,
-    layout::Calc as _,
+    layout::{Calc as _, calc::CalcCalculator},
     models::{LayoutDirection, LayoutOverflow, LayoutPosition},
 };
 use thiserror::Error;
@@ -50,7 +50,8 @@ static DEBUG: LazyLock<RwLock<bool>> = LazyLock::new(|| {
     )
 });
 
-static FLTK_MEASURE_TEXT: font_metrics::FltkFontMetrics = font_metrics::FltkFontMetrics;
+static FLTK_CALCULATOR: CalcCalculator<font_metrics::FltkFontMetrics> =
+    CalcCalculator::new(font_metrics::FltkFontMetrics);
 
 #[derive(Debug, Error)]
 pub enum LoadImageError {
@@ -350,7 +351,7 @@ impl FltkRenderer {
                 container.calculated_width.replace(window_width);
                 container.calculated_height.replace(window_height);
 
-                container.calc(&FLTK_MEASURE_TEXT);
+                FLTK_CALCULATOR.calc(container);
             } else {
                 log::debug!("perform_render: Container had same size, not recalculating");
             }

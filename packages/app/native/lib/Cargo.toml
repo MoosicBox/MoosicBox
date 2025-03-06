@@ -43,12 +43,10 @@ default = [
     "format",
     "html",
     "htmx",
-    "immediate",
     "json",
     "lambda",
     "logic",
     "maud",
-    "retained",
     "static-routes",
     "vanilla-js",
 ]
@@ -133,6 +131,3 @@ plugin-idiomorph = ["hyperchad_renderer_vanilla_js?/plugin-idiomorph"]
 plugin-nav       = ["hyperchad_renderer_vanilla_js?/plugin-nav"]
 plugin-routing   = ["hyperchad_renderer_vanilla_js?/plugin-routing"]
 plugin-sse       = ["hyperchad_renderer_vanilla_js?/plugin-sse"]
-
-immediate = ["hyperchad_renderer_egui?/immediate"]
-retained  = ["hyperchad_renderer_egui?/retained"]

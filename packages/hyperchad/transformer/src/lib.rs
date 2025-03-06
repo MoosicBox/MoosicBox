@@ -1363,9 +1363,9 @@ impl Container {
     #[cfg(all(feature = "id", feature = "layout"))]
     pub fn replace_id_children_with_elements_calc(
         &mut self,
+        calculator: &impl layout::Calc,
         replacement: Vec<Self>,
         id: usize,
-        measure_text: &dyn layout::font::FontMetrics,
     ) -> bool {
         let Some(parent_id) = self.find_element_by_id(id).map(|x| x.id) else {
             return false;
@@ -1373,7 +1373,7 @@ impl Container {
 
         self.replace_id_children_with_elements(replacement, id);
 
-        self.partial_calc(parent_id, measure_text);
+        self.partial_calc(calculator, parent_id);
 
         true
     }
@@ -1409,9 +1409,9 @@ impl Container {
     #[cfg(all(feature = "id", feature = "layout"))]
     pub fn replace_id_with_elements_calc(
         &mut self,
+        calculator: &impl layout::Calc,
         replacement: Vec<Self>,
         id: usize,
-        measure_text: &dyn layout::font::FontMetrics,
     ) -> bool {
         let Some(parent_id) = self.find_parent_by_id_mut(id).map(|x| x.id) else {
             return false;
@@ -1419,7 +1419,7 @@ impl Container {
 
         self.replace_id_with_elements(replacement, id);
 
-        self.partial_calc(parent_id, measure_text);
+        self.partial_calc(calculator, parent_id);
 
         true
     }
@@ -1463,29 +1463,27 @@ impl Container {
     #[cfg(all(feature = "id", feature = "layout"))]
     pub fn replace_str_id_with_elements_calc(
         &mut self,
+        calculator: &impl layout::Calc,
         replacement: Vec<Self>,
         id: &str,
-        measure_text: &dyn layout::font::FontMetrics,
     ) -> Option<Self> {
         let parent_id = self.find_parent_by_str_id_mut(id)?.id;
 
         let element = self.replace_str_id_with_elements(replacement, id);
 
-        self.partial_calc(parent_id, measure_text);
+        self.partial_calc(calculator, parent_id);
 
         element
     }
 
     #[cfg(all(feature = "id", feature = "layout"))]
-    pub fn partial_calc(&mut self, id: usize, measure_text: &dyn layout::font::FontMetrics) {
-        use layout::Calc as _;
-
+    pub fn partial_calc(&mut self, calculator: &impl layout::Calc, id: usize) {
         let Some(parent) = self.find_parent_by_id_mut(id) else {
             return;
         };
 
-        if parent.calc(measure_text) {
-            self.calc(measure_text);
+        if calculator.calc(parent) {
+            calculator.calc(self);
         }
     }
 
