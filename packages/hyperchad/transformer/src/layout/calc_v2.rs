@@ -43,8 +43,7 @@ impl<F: FontMetrics> Calc for CalcV2Calculator<F> {
 /// and calculates the widths required for each of the `Container`s.
 mod pass_widths {
     use crate::{
-        Container,
-        layout::{EPSILON, font::FontMetrics},
+        layout::{font::FontMetrics, EPSILON}, Container, Element
     };
 
     use super::CalcV2Calculator;
@@ -68,6 +67,18 @@ mod pass_widths {
 
                     if let Some(width) = &child.width {
                         let new_width = width.calc(0.0, view_width, view_height);
+
+                        if child
+                            .calculated_width
+                            .is_none_or(|x| (x - new_width).abs() >= EPSILON)
+                        {
+                            child.calculated_width = Some(new_width);
+                            changed = true;
+                        }
+                    } else if let Element::Raw { value } = &child.element {
+                        let bounds = self.font_metrics.measure_text(value, 14.0, f32::INFINITY);
+                        let new_width = bounds.width();
+
                         if child
                             .calculated_width
                             .is_none_or(|x| (x - new_width).abs() >= EPSILON)
@@ -113,6 +124,7 @@ mod pass_heights {
 
                     if let Some(height) = &child.height {
                         let new_height = height.calc(0.0, view_width, view_height);
+
                         if child
                             .calculated_height
                             .is_none_or(|x| (x - new_height).abs() >= EPSILON)
