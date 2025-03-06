@@ -379,9 +379,48 @@ mod pass_positioning {
                 let mut x = 0.0;
                 let mut y = 0.0;
 
+                let container_width = parent.calculated_width.unwrap();
+
                 if parent.overflow_x == LayoutOverflow::Wrap {
                     let mut last_row = 0;
+                    let mut col_count = 0;
+                    let mut row_width = 0.0;
+                    let mut gaps = vec![];
+
+                    for child in &mut parent.children {
+                        let Some(LayoutPosition::Wrap { row, col }) = child.calculated_position
+                        else {
+                            continue;
+                        };
+                        log::trace!("position_elements: wrap calculating gaps ({row}, {col})");
+
+                        if row != last_row {
+                            moosicbox_assert::assert!(row > last_row);
+
+                            let remainder = container_width - row_width;
+                            #[allow(clippy::cast_precision_loss)]
+                            let gap = remainder / ((col_count + 1) as f32);
+                            gaps.push(gap);
+                            row_width = 0.0;
+                            col_count = 0;
+                            last_row = row;
+                        }
+
+                        row_width += child.calculated_width.unwrap();
+                        col_count += 1;
+                    }
+
+                    {
+                        let remainder = container_width - row_width;
+                        #[allow(clippy::cast_precision_loss)]
+                        let gap = remainder / ((col_count + 1) as f32);
+                        gaps.push(gap);
+                    }
+
+                    let mut gap = gaps.first().copied().unwrap_or_default();
                     let mut max_height = 0.0;
+                    last_row = 0;
+                    x = gap;
 
                     for child in &mut parent.children {
                         let Some(LayoutPosition::Wrap { row, .. }) = child.calculated_position
@@ -392,10 +431,15 @@ mod pass_positioning {
                         let child_width = child.calculated_width.unwrap();
                         let child_height = child.calculated_height.unwrap();
 
-                        if row > last_row {
-                            x = 0.0;
+                        if row != last_row {
+                            moosicbox_assert::assert!(row > last_row);
+
+                            // FIXME: This could break if we allow jumping rows (e.g. from row 2 to 4)
+                            gap = gaps.get(row as usize).copied().unwrap_or_default();
+                            x = gap;
                             y += max_height;
                             max_height = 0.0;
+                            last_row = row;
                         }
 
                         if child_height > max_height {
@@ -412,9 +456,7 @@ mod pass_positioning {
                             changed = true;
                         }
 
-                        x += child_width;
-
-                        last_row = row;
+                        x += child_width + gap;
                     }
                 } else {
                     for child in &mut parent.children {
