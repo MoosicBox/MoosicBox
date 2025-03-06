@@ -15,27 +15,119 @@ impl<F: FontMetrics> CalcV2Calculator<F> {
 
 impl<F: FontMetrics> Calc for CalcV2Calculator<F> {
     fn calc(&self, container: &mut Container) -> bool {
+        use pass_1::Pass as _;
+        use pass_2::Pass as _;
+        use pass_3::Pass as _;
+        use pass_4::Pass as _;
+        use pass_5::Pass as _;
+
         log::trace!("calc: container={container}");
 
-        fit_width();
-        fit_heights();
-        grow_shrink_sizing();
-        wrap_text();
-        position_elements();
+        self.fit_widths(container);
+        self.fit_heights(container);
+        self.grow_shrink_sizing(container);
+        self.wrap_text(container);
+        self.position_elements(container);
 
         false
     }
 }
 
-const fn fit_width() {}
+mod pass_1 {
+    use crate::{Container, layout::font::FontMetrics};
 
-const fn fit_heights() {}
+    use super::CalcV2Calculator;
 
-const fn grow_shrink_sizing() {}
+    pub trait Pass {
+        fn fit_widths(&self, container: &mut Container);
+    }
 
-const fn wrap_text() {}
+    impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
+        fn fit_widths(&self, container: &mut Container) {
+            moosicbox_logging::debug_or_trace!(("fit_width"), ("fit_width: {container}"));
+        }
+    }
 
-const fn position_elements() {}
+    impl<F: FontMetrics> CalcV2Calculator<F> {}
+}
+
+mod pass_2 {
+    use crate::{Container, layout::font::FontMetrics};
+
+    use super::CalcV2Calculator;
+
+    pub trait Pass {
+        fn fit_heights(&self, container: &mut Container);
+    }
+
+    impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
+        fn fit_heights(&self, container: &mut Container) {
+            moosicbox_logging::debug_or_trace!(("fit_heights"), ("fit_heights: {container}"));
+        }
+    }
+
+    impl<F: FontMetrics> CalcV2Calculator<F> {}
+}
+
+mod pass_3 {
+    use crate::{Container, layout::font::FontMetrics};
+
+    use super::CalcV2Calculator;
+
+    pub trait Pass {
+        fn grow_shrink_sizing(&self, container: &mut Container);
+    }
+
+    impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
+        fn grow_shrink_sizing(&self, container: &mut Container) {
+            moosicbox_logging::debug_or_trace!(
+                ("grow_shrink_sizing"),
+                ("grow_shrink_sizing: {container}")
+            );
+        }
+    }
+
+    impl<F: FontMetrics> CalcV2Calculator<F> {}
+}
+
+mod pass_4 {
+    use crate::{Container, layout::font::FontMetrics};
+
+    use super::CalcV2Calculator;
+
+    pub trait Pass {
+        fn wrap_text(&self, container: &mut Container);
+    }
+
+    impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
+        fn wrap_text(&self, container: &mut Container) {
+            moosicbox_logging::debug_or_trace!(("wrap_text"), ("wrap_text: {container}"));
+        }
+    }
+
+    impl<F: FontMetrics> CalcV2Calculator<F> {}
+}
+
+mod pass_5 {
+    use crate::{Container, layout::font::FontMetrics};
+
+    use super::CalcV2Calculator;
+
+    pub trait Pass {
+        fn position_elements(&self, container: &mut Container);
+    }
+
+    impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
+        fn position_elements(&self, container: &mut Container) {
+            moosicbox_logging::debug_or_trace!(
+                ("position_elements"),
+                ("position_elements: {container}")
+            );
+        }
+    }
+
+    impl<F: FontMetrics> CalcV2Calculator<F> {}
+}
 
 #[cfg(test)]
 mod test {
