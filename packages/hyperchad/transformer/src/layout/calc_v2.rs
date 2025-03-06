@@ -15,7 +15,8 @@ impl<F: FontMetrics> CalcV2Calculator<F> {
 
 impl<F: FontMetrics> Calc for CalcV2Calculator<F> {
     fn calc(&self, container: &mut Container) -> bool {
-        use pass_flex::Pass as _;
+        use pass_flex_height::Pass as _;
+        use pass_flex_width::Pass as _;
         use pass_heights::Pass as _;
         use pass_positioning::Pass as _;
         use pass_widths::Pass as _;
@@ -24,9 +25,12 @@ impl<F: FontMetrics> Calc for CalcV2Calculator<F> {
         log::trace!("calc: container={container}");
 
         self.calc_widths(container);
+        self.grow_shrink_width(container);
+        if self.wrap(container) {
+            self.grow_shrink_width(container);
+        }
         self.calc_heights(container);
-        self.grow_shrink_sizing(container);
-        self.wrap(container);
+        self.grow_shrink_height(container);
         self.position_elements(container);
 
         false
@@ -127,7 +131,7 @@ mod pass_heights {
     impl<F: FontMetrics> CalcV2Calculator<F> {}
 }
 
-mod pass_flex {
+mod pass_flex_width {
     use hyperchad_transformer_models::LayoutDirection;
 
     use crate::{
@@ -138,45 +142,33 @@ mod pass_flex {
     use super::CalcV2Calculator;
 
     pub trait Pass {
-        fn grow_shrink_sizing(&self, container: &mut Container) -> bool;
+        fn grow_shrink_width(&self, container: &mut Container) -> bool;
     }
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
-        fn grow_shrink_sizing(&self, container: &mut Container) -> bool {
+        fn grow_shrink_width(&self, container: &mut Container) -> bool {
             moosicbox_logging::debug_or_trace!(
-                ("grow_shrink_sizing"),
-                ("grow_shrink_sizing: {container}")
+                ("grow_shrink_width"),
+                ("grow_shrink_width: {container}")
             );
 
             let mut changed = false;
 
             container.bfs_mut(|parent| {
                 let container_width = parent.calculated_width.unwrap();
-                let container_height = parent.calculated_height.unwrap();
 
                 let mut remaining_width = container_width;
-                let mut remaining_height = container_height;
                 let mut unsized_count = 0;
 
                 for child in &mut parent.children {
-                    log::trace!("grow_shrink_sizing: calculating remaining size:\n{child}");
+                    log::trace!("grow_shrink_width: calculating remaining size:\n{child}");
 
-                    match parent.direction {
-                        LayoutDirection::Row => {
-                            if let Some(width) = child.calculated_width {
-                                log::trace!("grow_shrink_sizing: removing width={width} from remaining_width={remaining_width} ({})", remaining_width - width);
-                                remaining_width -= width;
-                            } else {
-                                unsized_count += 1;
-                            }
-                        }
-                        LayoutDirection::Column => {
-                            if let Some(height) = child.calculated_height {
-                                log::trace!("grow_shrink_sizing: removing height={height} from remaining_height={remaining_height} ({})", remaining_height - height);
-                                remaining_height -= height;
-                            } else {
-                                unsized_count += 1;
-                            }
+                    if parent.direction == LayoutDirection::Row  {
+                        if let Some(width) = child.calculated_width {
+                            log::trace!("grow_shrink_width: removing width={width} from remaining_width={remaining_width} ({})", remaining_width - width);
+                            remaining_width -= width;
+                        } else {
+                            unsized_count += 1;
                         }
                     }
                 }
@@ -187,6 +179,78 @@ mod pass_flex {
                         LayoutDirection::Row => {
                             remaining_width / unsized_count as f32
                         }
+                        LayoutDirection::Column => {
+                            remaining_width
+                        }
+                    };
+
+                for child in &mut parent.children {
+                    log::trace!("grow_shrink_width: distributing evenly split remaining size:\n{child}");
+
+                    if child.width.is_none() && child
+                        .calculated_width
+                        .is_none_or(|x| (x - evenly_split_remaining_size).abs() >= EPSILON)
+                    {
+                        child.calculated_width = Some(evenly_split_remaining_size);
+                        changed = true;
+                    }
+                }
+            });
+
+            changed
+        }
+    }
+
+    impl<F: FontMetrics> CalcV2Calculator<F> {}
+}
+
+mod pass_flex_height {
+    use hyperchad_transformer_models::LayoutDirection;
+
+    use crate::{
+        Container,
+        layout::{EPSILON, font::FontMetrics},
+    };
+
+    use super::CalcV2Calculator;
+
+    pub trait Pass {
+        fn grow_shrink_height(&self, container: &mut Container) -> bool;
+    }
+
+    impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
+        fn grow_shrink_height(&self, container: &mut Container) -> bool {
+            moosicbox_logging::debug_or_trace!(
+                ("grow_shrink_height"),
+                ("grow_shrink_height: {container}")
+            );
+
+            let mut changed = false;
+
+            container.bfs_mut(|parent| {
+                let container_height = parent.calculated_height.unwrap();
+
+                let mut remaining_height = container_height;
+                let mut unsized_count = 0;
+
+                for child in &mut parent.children {
+                    log::trace!("grow_shrink_height: calculating remaining size:\n{child}");
+
+                    if parent.direction == LayoutDirection::Column  {
+                        if let Some(height) = child.calculated_height {
+                            log::trace!("grow_shrink_height: removing height={height} from remaining_height={remaining_height} ({})", remaining_height - height);
+                            remaining_height -= height;
+                        } else {
+                            unsized_count += 1;
+                        }
+                    }
+                }
+
+                let evenly_split_remaining_size =
+                    match parent.direction {
+                        LayoutDirection::Row => {
+                            remaining_height
+                        }
                         #[allow(clippy::cast_precision_loss)]
                         LayoutDirection::Column => {
                             remaining_height / unsized_count as f32
@@ -194,41 +258,14 @@ mod pass_flex {
                     };
 
                 for child in &mut parent.children {
-                    log::trace!("grow_shrink_sizing: distributing evenly split remaining size:\n{child}");
+                    log::trace!("grow_shrink_height: distributing evenly split remaining size:\n{child}");
 
-                    match parent.direction {
-                        LayoutDirection::Row => {
-                            if child.width.is_none() && child
-                                .calculated_width
-                                .is_none_or(|x| (x - evenly_split_remaining_size).abs() >= EPSILON)
-                            {
-                                child.calculated_width = Some(evenly_split_remaining_size);
-                                changed = true;
-                            }
-                            if child.height.is_none() && child
-                                .calculated_height
-                                .is_none_or(|x| (x - container_height).abs() >= EPSILON)
-                            {
-                                child.calculated_height = Some(container_height);
-                                changed = true;
-                            }
-                        }
-                        LayoutDirection::Column => {
-                            if child.width.is_none() && child
-                                .calculated_width
-                                .is_none_or(|x| (x - container_width).abs() >= EPSILON)
-                            {
-                                child.calculated_width = Some(container_width);
-                                changed = true;
-                            }
-                            if child.height.is_none() && child
-                                .calculated_height
-                                .is_none_or(|x| (x - evenly_split_remaining_size).abs() >= EPSILON)
-                            {
-                                child.calculated_height = Some(evenly_split_remaining_size);
-                                changed = true;
-                            }
-                        }
+                    if child.height.is_none() && child
+                        .calculated_height
+                        .is_none_or(|x| (x - evenly_split_remaining_size).abs() >= EPSILON)
+                    {
+                        child.calculated_height = Some(evenly_split_remaining_size);
+                        changed = true;
                     }
                 }
             });
