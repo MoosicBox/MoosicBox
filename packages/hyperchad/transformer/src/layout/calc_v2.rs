@@ -43,7 +43,8 @@ impl<F: FontMetrics> Calc for CalcV2Calculator<F> {
 /// and calculates the widths required for each of the `Container`s.
 mod pass_widths {
     use crate::{
-        layout::{font::FontMetrics, EPSILON}, Container, Element
+        Container, Element,
+        layout::{font::FontMetrics, set_float},
     };
 
     use super::CalcV2Calculator;
@@ -68,22 +69,14 @@ mod pass_widths {
                     if let Some(width) = &child.width {
                         let new_width = width.calc(0.0, view_width, view_height);
 
-                        if child
-                            .calculated_width
-                            .is_none_or(|x| (x - new_width).abs() >= EPSILON)
-                        {
-                            child.calculated_width = Some(new_width);
+                        if set_float(&mut child.calculated_width, new_width).is_some() {
                             changed = true;
                         }
                     } else if let Element::Raw { value } = &child.element {
                         let bounds = self.font_metrics.measure_text(value, 14.0, f32::INFINITY);
                         let new_width = bounds.width();
 
-                        if child
-                            .calculated_width
-                            .is_none_or(|x| (x - new_width).abs() >= EPSILON)
-                        {
-                            child.calculated_width = Some(new_width);
+                        if set_float(&mut child.calculated_width, new_width).is_some() {
                             changed = true;
                         }
                     }
@@ -100,7 +93,7 @@ mod pass_widths {
 mod pass_heights {
     use crate::{
         Container,
-        layout::{EPSILON, font::FontMetrics},
+        layout::{font::FontMetrics, set_float},
     };
 
     use super::CalcV2Calculator;
@@ -125,11 +118,7 @@ mod pass_heights {
                     if let Some(height) = &child.height {
                         let new_height = height.calc(0.0, view_width, view_height);
 
-                        if child
-                            .calculated_height
-                            .is_none_or(|x| (x - new_height).abs() >= EPSILON)
-                        {
-                            child.calculated_height = Some(new_height);
+                        if set_float(&mut child.calculated_height, new_height).is_some() {
                             changed = true;
                         }
                     }
@@ -148,7 +137,7 @@ mod pass_flex_width {
 
     use crate::{
         Container,
-        layout::{EPSILON, font::FontMetrics},
+        layout::{font::FontMetrics, set_float},
     };
 
     use super::CalcV2Calculator;
@@ -172,9 +161,12 @@ mod pass_flex_width {
                 for child in &mut parent.children {
                     log::trace!("flex_width: calculating remaining size:\n{child}");
 
-                    if parent.direction == LayoutDirection::Row  {
+                    if parent.direction == LayoutDirection::Row {
                         if let Some(width) = child.calculated_width {
-                            log::trace!("flex_width: removing width={width} from remaining_width={remaining_width} ({})", remaining_width - width);
+                            log::trace!(
+                                "flex_width: removing width={width} from remaining_width={remaining_width} ({})",
+                                remaining_width - width
+                            );
                             remaining_width -= width;
                         } else {
                             unsized_count += 1;
@@ -182,25 +174,18 @@ mod pass_flex_width {
                     }
                 }
 
-                let evenly_split_remaining_size =
-                    match parent.direction {
-                        #[allow(clippy::cast_precision_loss)]
-                        LayoutDirection::Row => {
-                            remaining_width / unsized_count as f32
-                        }
-                        LayoutDirection::Column => {
-                            remaining_width
-                        }
-                    };
+                let evenly_split_remaining_size = match parent.direction {
+                    #[allow(clippy::cast_precision_loss)]
+                    LayoutDirection::Row => remaining_width / unsized_count as f32,
+                    LayoutDirection::Column => remaining_width,
+                };
 
                 for child in &mut parent.children {
                     log::trace!("flex_width: distributing evenly split remaining size:\n{child}");
 
-                    if child.width.is_none() && child
-                        .calculated_width
-                        .is_none_or(|x| (x - evenly_split_remaining_size).abs() >= EPSILON)
+                    if child.width.is_none()
+                        && set_float(&mut child.calculated_width, evenly_split_remaining_size).is_some()
                     {
-                        child.calculated_width = Some(evenly_split_remaining_size);
                         changed = true;
                     }
                 }
@@ -214,11 +199,11 @@ mod pass_flex_width {
 }
 
 mod pass_flex_height {
-    use hyperchad_transformer_models::LayoutDirection;
+    use hyperchad_transformer_models::{LayoutDirection, LayoutPosition};
 
     use crate::{
         Container,
-        layout::{EPSILON, font::FontMetrics},
+        layout::{font::FontMetrics, set_float},
     };
 
     use super::CalcV2Calculator;
@@ -239,23 +224,43 @@ mod pass_flex_height {
                 let mut remaining_height = container_height;
                 let mut unsized_count = 0;
 
+                let mut last_row = 0;
+                let mut max_row_height = 0.0;
+
                 for child in &mut parent.children {
                     log::trace!("flex_height: calculating remaining size:\n{child}");
 
-                    if parent.direction == LayoutDirection::Column  {
-                        if let Some(height) = child.calculated_height {
-                            log::trace!("flex_height: removing height={height} from remaining_height={remaining_height} ({})", remaining_height - height);
-                            remaining_height -= height;
-                        } else {
-                            unsized_count += 1;
+                    match parent.direction  {
+                        LayoutDirection::Row => {
+                            if let Some(LayoutPosition::Wrap { row, .. }) = child.calculated_position {
+                                if row != last_row {
+                                    moosicbox_assert::assert!(row > last_row);
+                                    remaining_height -= max_row_height;
+                                    max_row_height = child.calculated_height.unwrap_or_default();
+                                }
+
+                                last_row = row;
+                            }
+                        }
+                        LayoutDirection::Column => {
+                            if let Some(height) = child.calculated_height {
+                                log::trace!("flex_height: removing height={height} from remaining_height={remaining_height} ({})", remaining_height - height);
+                                remaining_height -= height;
+                            } else {
+                                unsized_count += 1;
+                            }
                         }
                     }
                 }
 
+                let row_count = last_row + 1;
+                remaining_height -= max_row_height;
+
                 let evenly_split_remaining_size =
                     match parent.direction {
+                        #[allow(clippy::cast_precision_loss)]
                         LayoutDirection::Row => {
-                            remaining_height
+                            remaining_height / row_count as f32
                         }
                         #[allow(clippy::cast_precision_loss)]
                         LayoutDirection::Column => {
@@ -266,11 +271,9 @@ mod pass_flex_height {
                 for child in &mut parent.children {
                     log::trace!("flex_height: distributing evenly split remaining size:\n{child}");
 
-                    if child.height.is_none() && child
-                        .calculated_height
-                        .is_none_or(|x| (x - evenly_split_remaining_size).abs() >= EPSILON)
+                    if child.height.is_none()
+                        && set_float(&mut child.calculated_height, evenly_split_remaining_size).is_some()
                     {
-                        child.calculated_height = Some(evenly_split_remaining_size);
                         changed = true;
                     }
                 }
@@ -284,7 +287,12 @@ mod pass_flex_height {
 }
 
 mod pass_wrap {
-    use crate::{Container, layout::font::FontMetrics};
+    use hyperchad_transformer_models::{LayoutDirection, LayoutOverflow, LayoutPosition};
+
+    use crate::{
+        Container,
+        layout::{font::FontMetrics, set_value},
+    };
 
     use super::CalcV2Calculator;
 
@@ -296,7 +304,46 @@ mod pass_wrap {
         fn wrap(&self, container: &mut Container) -> bool {
             moosicbox_logging::debug_or_trace!(("wrap"), ("wrap: {container}"));
 
-            false
+            let mut changed = true;
+
+            container.bfs_mut(|parent| {
+                if parent.overflow_x != LayoutOverflow::Wrap {
+                    return;
+                }
+
+                let container_width = parent.calculated_width.unwrap();
+
+                let mut x = 0.0;
+                let mut row = 0;
+                let mut col = 0;
+
+                for child in &mut parent.children {
+                    log::trace!("wrap: positioning child ({row}, {col}):\n{child}");
+
+                    let child_width = child.calculated_width.unwrap();
+                    let mut position = LayoutPosition::Wrap { row, col };
+
+                    if parent.direction == LayoutDirection::Row {
+                        x += child_width;
+
+                        if x > container_width {
+                            log::trace!("wrap: wrapping to next row");
+                            x = 0.0;
+                            col = 0;
+                            row += 1;
+                            position = LayoutPosition::Wrap { row, col };
+                        }
+
+                        col += 1;
+                    }
+
+                    if set_value(&mut child.calculated_position, position).is_some() {
+                        changed = true;
+                    }
+                }
+            });
+
+            changed
         }
     }
 
@@ -304,11 +351,11 @@ mod pass_wrap {
 }
 
 mod pass_positioning {
-    use hyperchad_transformer_models::LayoutDirection;
+    use hyperchad_transformer_models::{LayoutDirection, LayoutOverflow, LayoutPosition};
 
     use crate::{
         Container,
-        layout::{EPSILON, font::FontMetrics},
+        layout::{font::FontMetrics, set_float},
     };
 
     use super::CalcV2Calculator;
@@ -330,29 +377,60 @@ mod pass_positioning {
                 let mut x = 0.0;
                 let mut y = 0.0;
 
-                for child in &mut parent.children {
-                    log::trace!("position_elements: setting position ({x}, {y}):\n{child}");
-                    if child
-                        .calculated_x
-                        .is_none_or(|other| (other - x).abs() >= EPSILON)
-                    {
-                        child.calculated_x = Some(x);
-                        changed = true;
-                    }
-                    if child
-                        .calculated_y
-                        .is_none_or(|other| (other - y).abs() >= EPSILON)
-                    {
-                        child.calculated_y = Some(y);
-                        changed = true;
-                    }
+                if parent.overflow_x == LayoutOverflow::Wrap {
+                    let mut last_row = 0;
+                    let mut max_height = 0.0;
 
-                    match parent.direction {
-                        LayoutDirection::Row => {
-                            x += child.calculated_width.unwrap();
+                    for child in &mut parent.children {
+                        let Some(LayoutPosition::Wrap { row, .. }) = child.calculated_position
+                        else {
+                            continue;
+                        };
+
+                        let child_width = child.calculated_width.unwrap();
+                        let child_height = child.calculated_height.unwrap();
+
+                        if row > last_row {
+                            x = 0.0;
+                            y += max_height;
+                            max_height = 0.0;
                         }
-                        LayoutDirection::Column => {
-                            y += child.calculated_height.unwrap();
+
+                        if child_height > max_height {
+                            max_height = child_height;
+                        }
+
+                        log::trace!(
+                            "position_elements: setting wrapped position ({x}, {y}):\n{child}"
+                        );
+                        if set_float(&mut child.calculated_x, x).is_some() {
+                            changed = true;
+                        }
+                        if set_float(&mut child.calculated_y, y).is_some() {
+                            changed = true;
+                        }
+
+                        x += child_width;
+
+                        last_row = row;
+                    }
+                } else {
+                    for child in &mut parent.children {
+                        log::trace!("position_elements: setting position ({x}, {y}):\n{child}");
+                        if set_float(&mut child.calculated_x, x).is_some() {
+                            changed = true;
+                        }
+                        if set_float(&mut child.calculated_y, y).is_some() {
+                            changed = true;
+                        }
+
+                        match parent.direction {
+                            LayoutDirection::Row => {
+                                x += child.calculated_width.unwrap();
+                            }
+                            LayoutDirection::Column => {
+                                y += child.calculated_height.unwrap();
+                            }
                         }
                     }
                 }
@@ -2121,32 +2199,27 @@ mod test {
             children: vec![
                 Container {
                     width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
+                    height: Some(Number::Integer(20)),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
+                    height: Some(Number::Integer(20)),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
+                    height: Some(Number::Integer(20)),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
+                    height: Some(Number::Integer(20)),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
+                    height: Some(Number::Integer(20)),
                     ..Default::default()
                 },
             ],
@@ -3555,7 +3628,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_inner_wraps_row_content_correctly() {
         let mut container = Container {
             children: vec![
