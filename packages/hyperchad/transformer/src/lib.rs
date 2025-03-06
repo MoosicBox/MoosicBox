@@ -1064,6 +1064,152 @@ impl Container {
 
         iter
     }
+
+    fn impl_bfs_mut<F>(&mut self, reverse: bool, mut visitor: F)
+    where
+        F: FnMut(&mut Self),
+    {
+        // Collect nodes in pre-order, recording their path
+        fn collect_paths(
+            node: &Container,
+            path: &[usize],
+            paths: &mut Vec<Vec<usize>>,
+            levels: &mut Vec<Vec<usize>>,
+        ) {
+            if !node.children.is_empty() {
+                // Store the path to this node
+                paths.push(path.to_owned());
+
+                // Add this node's index to the appropriate level
+                let level = path.len(); // Path length = level + 1 (root is at index 0)
+                if levels.len() <= level {
+                    levels.resize(level + 1, Vec::new());
+                }
+                levels[level].push(paths.len() - 1);
+                // Process children
+                for (i, _) in node.children.iter().enumerate() {
+                    let mut child_path = path.to_owned();
+                    child_path.push(i);
+                    collect_paths(&node.children[i], &child_path, paths, levels);
+                }
+            }
+        }
+
+        // Collect nodes by level
+        let mut levels: Vec<Vec<usize>> = Vec::new();
+
+        // Start by collecting all paths to nodes
+        let mut paths: Vec<Vec<usize>> = Vec::new();
+        collect_paths(self, &[], &mut paths, &mut levels);
+
+        if reverse {
+            // Apply visitor in reverse level order
+            levels.reverse();
+        }
+
+        // Follow paths to apply visitor to each node
+        for level_nodes in levels {
+            for node_idx in level_nodes {
+                let path = &paths[node_idx];
+
+                // Follow the path to find the node
+                let mut current = &mut *self;
+
+                for &child_idx in path {
+                    current = &mut current.children[child_idx];
+                }
+
+                visitor(current);
+            }
+        }
+    }
+
+    pub fn impl_bfs<F>(&self, reverse: bool, mut visitor: F)
+    where
+        F: FnMut(&Self),
+    {
+        // Collect nodes in pre-order, recording their path
+        fn collect_paths(
+            node: &Container,
+            path: &[usize],
+            paths: &mut Vec<Vec<usize>>,
+            levels: &mut Vec<Vec<usize>>,
+        ) {
+            if !node.children.is_empty() {
+                // Store the path to this node
+                paths.push(path.to_owned());
+
+                // Add this node's index to the appropriate level
+                let level = path.len(); // Path length = level + 1 (root is at index 0)
+                if levels.len() <= level {
+                    levels.resize(level + 1, Vec::new());
+                }
+                levels[level].push(paths.len() - 1);
+                // Process children
+                for (i, _) in node.children.iter().enumerate() {
+                    let mut child_path = path.to_owned();
+                    child_path.push(i);
+                    collect_paths(&node.children[i], &child_path, paths, levels);
+                }
+            }
+        }
+
+        // Collect nodes by level
+        let mut levels: Vec<Vec<usize>> = Vec::new();
+
+        // Start by collecting all paths to nodes
+        let mut paths: Vec<Vec<usize>> = Vec::new();
+        collect_paths(self, &[], &mut paths, &mut levels);
+
+        if reverse {
+            // Apply visitor in reverse level order
+            levels.reverse();
+        }
+
+        // Follow paths to apply visitor to each node
+        for level_nodes in levels {
+            for node_idx in level_nodes {
+                let path = &paths[node_idx];
+
+                // Follow the path to find the node
+                let mut current = self;
+
+                for &child_idx in path {
+                    current = &current.children[child_idx];
+                }
+
+                visitor(current);
+            }
+        }
+    }
+
+    pub fn bfs_mut<F>(&mut self, visitor: F)
+    where
+        F: FnMut(&mut Self),
+    {
+        self.impl_bfs_mut(false, visitor);
+    }
+
+    pub fn bfs<F>(&self, visitor: F)
+    where
+        F: FnMut(&Self),
+    {
+        self.impl_bfs(false, visitor);
+    }
+
+    pub fn reverse_bfs_mut<F>(&mut self, visitor: F)
+    where
+        F: FnMut(&mut Self),
+    {
+        self.impl_bfs_mut(true, visitor);
+    }
+
+    pub fn reverse_bfs<F>(&self, visitor: F)
+    where
+        F: FnMut(&Self),
+    {
+        self.impl_bfs(true, visitor);
+    }
 }
 
 #[cfg(any(test, feature = "maud"))]
