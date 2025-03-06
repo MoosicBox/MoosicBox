@@ -43,12 +43,16 @@ pub static CLIENT_INFO: std::sync::LazyLock<Arc<hyperchad_router::ClientInfo>> =
 mod egui {
     use std::sync::Arc;
 
-    use hyperchad_renderer::transformer::layout::calc::CalcCalculator;
+    #[cfg(not(feature = "calc-v2"))]
+    use hyperchad_renderer::transformer::layout::calc::CalcCalculator as Calculator;
+    #[cfg(feature = "calc-v2")]
+    use hyperchad_renderer::transformer::layout::calc_v2::CalcV2Calculator as Calculator;
+
     use hyperchad_renderer_egui::eframe::egui::{self};
     use hyperchad_renderer_egui::font_metrics::EguiFontMetrics;
 
     #[derive(Clone)]
-    pub struct EguiCalculator(pub Option<Arc<CalcCalculator<EguiFontMetrics>>>);
+    pub struct EguiCalculator(pub Option<Arc<Calculator<EguiFontMetrics>>>);
 
     impl hyperchad_renderer::transformer::layout::Calc for EguiCalculator {
         fn calc(&self, container: &mut hyperchad_router::Container) -> bool {
@@ -58,7 +62,7 @@ mod egui {
 
     impl hyperchad_renderer_egui::layout::EguiCalc for EguiCalculator {
         fn with_context(mut self, context: egui::Context) -> Self {
-            self.0 = Some(Arc::new(CalcCalculator::new(EguiFontMetrics::new(context))));
+            self.0 = Some(Arc::new(Calculator::new(EguiFontMetrics::new(context))));
             self
         }
     }
