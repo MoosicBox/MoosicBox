@@ -43,3 +43,31 @@ pub(crate) fn increase_opt(opt: &mut Option<f32>, value: f32) -> f32 {
         value
     }
 }
+
+pub(crate) fn set_value<T: PartialEq + Copy>(opt: &mut Option<T>, value: T) -> Option<T> {
+    if let Some(existing) = *opt {
+        if existing != value {
+            *opt = Some(value);
+            return *opt;
+        }
+    } else {
+        *opt = Some(value);
+        return *opt;
+    }
+
+    None
+}
+
+pub(crate) fn set_float(opt: &mut Option<f32>, value: f32) -> Option<f32> {
+    if let Some(existing) = *opt {
+        if (existing - value).abs() >= EPSILON {
+            *opt = Some(value);
+            return *opt;
+        }
+    } else {
+        *opt = Some(value);
+        return *opt;
+    }
+
+    None
+}
