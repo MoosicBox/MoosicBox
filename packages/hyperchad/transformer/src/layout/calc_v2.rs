@@ -1,4 +1,4 @@
-use crate::Container;
+use crate::{BfsPaths, Container};
 
 use super::{Calc, font::FontMetrics};
 
@@ -24,14 +24,16 @@ impl<F: FontMetrics> Calc for CalcV2Calculator<F> {
 
         log::trace!("calc: container={container}");
 
-        self.calc_widths(container);
-        self.flex_width(container);
-        if self.wrap(container) {
-            self.flex_width(container);
+        let bfs: BfsPaths = (&*container).into();
+
+        self.calc_widths(&bfs, container);
+        self.flex_width(&bfs, container);
+        if self.wrap(&bfs, container) {
+            self.flex_width(&bfs, container);
         }
-        self.calc_heights(container);
-        self.flex_height(container);
-        self.position_elements(container);
+        self.calc_heights(&bfs, container);
+        self.flex_height(&bfs, container);
+        self.position_elements(&bfs, container);
 
         false
     }
@@ -43,18 +45,18 @@ impl<F: FontMetrics> Calc for CalcV2Calculator<F> {
 /// and calculates the widths required for each of the `Container`s.
 mod pass_widths {
     use crate::{
-        Container, Element,
+        BfsPaths, Container, Element,
         layout::{font::FontMetrics, set_float},
     };
 
     use super::CalcV2Calculator;
 
     pub trait Pass {
-        fn calc_widths(&self, container: &mut Container) -> bool;
+        fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
     }
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
-        fn calc_widths(&self, container: &mut Container) -> bool {
+        fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
             moosicbox_logging::debug_or_trace!(("calc_width"), ("calc_width: {container}"));
 
             let view_width = container.calculated_width.unwrap();
@@ -62,7 +64,7 @@ mod pass_widths {
 
             let mut changed = false;
 
-            container.reverse_bfs_mut(|parent| {
+            bfs.traverse_rev_mut(container, |parent| {
                 for child in &mut parent.children {
                     log::trace!("calc_widths: container:\n{child}");
 
@@ -92,18 +94,18 @@ mod pass_widths {
 
 mod pass_heights {
     use crate::{
-        Container,
+        BfsPaths, Container,
         layout::{font::FontMetrics, set_float},
     };
 
     use super::CalcV2Calculator;
 
     pub trait Pass {
-        fn calc_heights(&self, container: &mut Container) -> bool;
+        fn calc_heights(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
     }
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
-        fn calc_heights(&self, container: &mut Container) -> bool {
+        fn calc_heights(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
             moosicbox_logging::debug_or_trace!(("calc_heights"), ("calc_heights: {container}"));
 
             let view_width = container.calculated_width.unwrap();
@@ -111,7 +113,7 @@ mod pass_heights {
 
             let mut changed = false;
 
-            container.reverse_bfs_mut(|parent| {
+            bfs.traverse_rev_mut(container, |parent| {
                 for child in &mut parent.children {
                     log::trace!("calc_heights: container:\n{child}");
 
@@ -136,23 +138,23 @@ mod pass_flex_width {
     use hyperchad_transformer_models::LayoutDirection;
 
     use crate::{
-        Container,
+        BfsPaths, Container,
         layout::{font::FontMetrics, set_float},
     };
 
     use super::CalcV2Calculator;
 
     pub trait Pass {
-        fn flex_width(&self, container: &mut Container) -> bool;
+        fn flex_width(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
     }
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
-        fn flex_width(&self, container: &mut Container) -> bool {
+        fn flex_width(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
             moosicbox_logging::debug_or_trace!(("flex_width"), ("flex_width: {container}"));
 
             let mut changed = false;
 
-            container.bfs_mut(|parent| {
+            bfs.traverse_mut(container, |parent| {
                 let container_width = parent.calculated_width.unwrap();
 
                 let mut remaining_width = container_width;
@@ -202,23 +204,23 @@ mod pass_flex_height {
     use hyperchad_transformer_models::{LayoutDirection, LayoutPosition};
 
     use crate::{
-        Container,
+        BfsPaths, Container,
         layout::{font::FontMetrics, set_float},
     };
 
     use super::CalcV2Calculator;
 
     pub trait Pass {
-        fn flex_height(&self, container: &mut Container) -> bool;
+        fn flex_height(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
     }
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
-        fn flex_height(&self, container: &mut Container) -> bool {
+        fn flex_height(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
             moosicbox_logging::debug_or_trace!(("flex_height"), ("flex_height: {container}"));
 
             let mut changed = false;
 
-            container.bfs_mut(|parent| {
+            bfs.traverse_mut(container, |parent| {
                 let container_height = parent.calculated_height.unwrap();
 
                 let mut remaining_height = container_height;
@@ -290,23 +292,23 @@ mod pass_wrap {
     use hyperchad_transformer_models::{LayoutDirection, LayoutOverflow, LayoutPosition};
 
     use crate::{
-        Container,
+        BfsPaths, Container,
         layout::{font::FontMetrics, set_value},
     };
 
     use super::CalcV2Calculator;
 
     pub trait Pass {
-        fn wrap(&self, container: &mut Container) -> bool;
+        fn wrap(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
     }
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
-        fn wrap(&self, container: &mut Container) -> bool {
+        fn wrap(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
             moosicbox_logging::debug_or_trace!(("wrap"), ("wrap: {container}"));
 
             let mut changed = true;
 
-            container.bfs_mut(|parent| {
+            bfs.traverse_mut(container, |parent| {
                 if parent.overflow_x != LayoutOverflow::Wrap {
                     return;
                 }
@@ -354,18 +356,18 @@ mod pass_positioning {
     use hyperchad_transformer_models::{LayoutDirection, LayoutOverflow, LayoutPosition};
 
     use crate::{
-        Container,
+        BfsPaths, Container,
         layout::{font::FontMetrics, set_float},
     };
 
     use super::CalcV2Calculator;
 
     pub trait Pass {
-        fn position_elements(&self, container: &mut Container) -> bool;
+        fn position_elements(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
     }
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
-        fn position_elements(&self, container: &mut Container) -> bool {
+        fn position_elements(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
             moosicbox_logging::debug_or_trace!(
                 ("position_elements"),
                 ("position_elements: {container}")
@@ -373,7 +375,7 @@ mod pass_positioning {
 
             let mut changed = false;
 
-            container.bfs_mut(|parent| {
+            bfs.traverse_mut(container, |parent| {
                 let mut x = 0.0;
                 let mut y = 0.0;
 
