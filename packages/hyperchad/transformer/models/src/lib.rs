@@ -118,7 +118,7 @@ impl std::fmt::Display for TextAlign {
 }
 
 #[cfg(feature = "layout")]
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub enum LayoutPosition {
