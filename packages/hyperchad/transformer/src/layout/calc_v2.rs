@@ -25,12 +25,12 @@ impl<F: FontMetrics> Calc for CalcV2Calculator<F> {
         log::trace!("calc: container={container}");
 
         self.calc_widths(container);
-        self.grow_shrink_width(container);
+        self.flex_width(container);
         if self.wrap(container) {
-            self.grow_shrink_width(container);
+            self.flex_width(container);
         }
         self.calc_heights(container);
-        self.grow_shrink_height(container);
+        self.flex_height(container);
         self.position_elements(container);
 
         false
@@ -142,15 +142,12 @@ mod pass_flex_width {
     use super::CalcV2Calculator;
 
     pub trait Pass {
-        fn grow_shrink_width(&self, container: &mut Container) -> bool;
+        fn flex_width(&self, container: &mut Container) -> bool;
     }
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
-        fn grow_shrink_width(&self, container: &mut Container) -> bool {
-            moosicbox_logging::debug_or_trace!(
-                ("grow_shrink_width"),
-                ("grow_shrink_width: {container}")
-            );
+        fn flex_width(&self, container: &mut Container) -> bool {
+            moosicbox_logging::debug_or_trace!(("flex_width"), ("flex_width: {container}"));
 
             let mut changed = false;
 
@@ -161,11 +158,11 @@ mod pass_flex_width {
                 let mut unsized_count = 0;
 
                 for child in &mut parent.children {
-                    log::trace!("grow_shrink_width: calculating remaining size:\n{child}");
+                    log::trace!("flex_width: calculating remaining size:\n{child}");
 
                     if parent.direction == LayoutDirection::Row  {
                         if let Some(width) = child.calculated_width {
-                            log::trace!("grow_shrink_width: removing width={width} from remaining_width={remaining_width} ({})", remaining_width - width);
+                            log::trace!("flex_width: removing width={width} from remaining_width={remaining_width} ({})", remaining_width - width);
                             remaining_width -= width;
                         } else {
                             unsized_count += 1;
@@ -185,7 +182,7 @@ mod pass_flex_width {
                     };
 
                 for child in &mut parent.children {
-                    log::trace!("grow_shrink_width: distributing evenly split remaining size:\n{child}");
+                    log::trace!("flex_width: distributing evenly split remaining size:\n{child}");
 
                     if child.width.is_none() && child
                         .calculated_width
@@ -215,15 +212,12 @@ mod pass_flex_height {
     use super::CalcV2Calculator;
 
     pub trait Pass {
-        fn grow_shrink_height(&self, container: &mut Container) -> bool;
+        fn flex_height(&self, container: &mut Container) -> bool;
     }
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
-        fn grow_shrink_height(&self, container: &mut Container) -> bool {
-            moosicbox_logging::debug_or_trace!(
-                ("grow_shrink_height"),
-                ("grow_shrink_height: {container}")
-            );
+        fn flex_height(&self, container: &mut Container) -> bool {
+            moosicbox_logging::debug_or_trace!(("flex_height"), ("flex_height: {container}"));
 
             let mut changed = false;
 
@@ -234,11 +228,11 @@ mod pass_flex_height {
                 let mut unsized_count = 0;
 
                 for child in &mut parent.children {
-                    log::trace!("grow_shrink_height: calculating remaining size:\n{child}");
+                    log::trace!("flex_height: calculating remaining size:\n{child}");
 
                     if parent.direction == LayoutDirection::Column  {
                         if let Some(height) = child.calculated_height {
-                            log::trace!("grow_shrink_height: removing height={height} from remaining_height={remaining_height} ({})", remaining_height - height);
+                            log::trace!("flex_height: removing height={height} from remaining_height={remaining_height} ({})", remaining_height - height);
                             remaining_height -= height;
                         } else {
                             unsized_count += 1;
@@ -258,7 +252,7 @@ mod pass_flex_height {
                     };
 
                 for child in &mut parent.children {
-                    log::trace!("grow_shrink_height: distributing evenly split remaining size:\n{child}");
+                    log::trace!("flex_height: distributing evenly split remaining size:\n{child}");
 
                     if child.height.is_none() && child
                         .calculated_height
