@@ -716,7 +716,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        app.to_runner()
+        app.into_runner()
     })?;
 
     log::debug!("app_native: running");

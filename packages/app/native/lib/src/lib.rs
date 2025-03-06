@@ -982,7 +982,7 @@ impl NativeApp {
     /// # Panics
     ///
     /// * If the runtime handle doesn't exist
-    pub fn to_runner(self) -> Result<Box<dyn RenderRunner>, NativeAppError> {
+    pub fn into_runner(self) -> Result<Box<dyn RenderRunner>, NativeAppError> {
         log::debug!("run: getting runner");
         self.renderer
             .into_runner(self.runtime_handle.unwrap())
