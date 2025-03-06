@@ -15,114 +15,307 @@ impl<F: FontMetrics> CalcV2Calculator<F> {
 
 impl<F: FontMetrics> Calc for CalcV2Calculator<F> {
     fn calc(&self, container: &mut Container) -> bool {
-        use pass_1::Pass as _;
-        use pass_2::Pass as _;
-        use pass_3::Pass as _;
-        use pass_4::Pass as _;
-        use pass_5::Pass as _;
+        use pass_flex::Pass as _;
+        use pass_heights::Pass as _;
+        use pass_positioning::Pass as _;
+        use pass_widths::Pass as _;
+        use pass_wrap::Pass as _;
 
         log::trace!("calc: container={container}");
 
-        self.fit_widths(container);
-        self.fit_heights(container);
+        self.calc_widths(container);
+        self.calc_heights(container);
         self.grow_shrink_sizing(container);
-        self.wrap_text(container);
+        self.wrap(container);
         self.position_elements(container);
 
         false
     }
 }
 
-mod pass_1 {
-    use crate::{Container, layout::font::FontMetrics};
+/// # Pass 1: Widths
+///
+/// This pass traverses the `Container` children in reverse BFS (Breadth-First Search)
+/// and calculates the widths required for each of the `Container`s.
+mod pass_widths {
+    use crate::{
+        Container,
+        layout::{EPSILON, font::FontMetrics},
+    };
 
     use super::CalcV2Calculator;
 
     pub trait Pass {
-        fn fit_widths(&self, container: &mut Container);
+        fn calc_widths(&self, container: &mut Container) -> bool;
     }
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
-        fn fit_widths(&self, container: &mut Container) {
-            moosicbox_logging::debug_or_trace!(("fit_width"), ("fit_width: {container}"));
+        fn calc_widths(&self, container: &mut Container) -> bool {
+            moosicbox_logging::debug_or_trace!(("calc_width"), ("calc_width: {container}"));
+
+            let view_width = container.calculated_width.unwrap();
+            let view_height = container.calculated_height.unwrap();
+
+            let mut changed = false;
+
+            container.reverse_bfs_mut(|parent| {
+                for child in &mut parent.children {
+                    log::trace!("calc_widths: container:\n{child}");
+
+                    if let Some(width) = &child.width {
+                        let new_width = width.calc(0.0, view_width, view_height);
+                        if child
+                            .calculated_width
+                            .is_none_or(|x| (x - new_width).abs() >= EPSILON)
+                        {
+                            child.calculated_width = Some(new_width);
+                            changed = true;
+                        }
+                    }
+                }
+            });
+
+            changed
         }
     }
 
     impl<F: FontMetrics> CalcV2Calculator<F> {}
 }
 
-mod pass_2 {
-    use crate::{Container, layout::font::FontMetrics};
+mod pass_heights {
+    use crate::{
+        Container,
+        layout::{EPSILON, font::FontMetrics},
+    };
 
     use super::CalcV2Calculator;
 
     pub trait Pass {
-        fn fit_heights(&self, container: &mut Container);
+        fn calc_heights(&self, container: &mut Container) -> bool;
     }
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
-        fn fit_heights(&self, container: &mut Container) {
-            moosicbox_logging::debug_or_trace!(("fit_heights"), ("fit_heights: {container}"));
+        fn calc_heights(&self, container: &mut Container) -> bool {
+            moosicbox_logging::debug_or_trace!(("calc_heights"), ("calc_heights: {container}"));
+
+            let view_width = container.calculated_width.unwrap();
+            let view_height = container.calculated_height.unwrap();
+
+            let mut changed = false;
+
+            container.reverse_bfs_mut(|parent| {
+                for child in &mut parent.children {
+                    log::trace!("calc_heights: container:\n{child}");
+
+                    if let Some(height) = &child.height {
+                        let new_height = height.calc(0.0, view_width, view_height);
+                        if child
+                            .calculated_height
+                            .is_none_or(|x| (x - new_height).abs() >= EPSILON)
+                        {
+                            child.calculated_height = Some(new_height);
+                            changed = true;
+                        }
+                    }
+                }
+            });
+
+            changed
         }
     }
 
     impl<F: FontMetrics> CalcV2Calculator<F> {}
 }
 
-mod pass_3 {
-    use crate::{Container, layout::font::FontMetrics};
+mod pass_flex {
+    use hyperchad_transformer_models::LayoutDirection;
+
+    use crate::{
+        Container,
+        layout::{EPSILON, font::FontMetrics},
+    };
 
     use super::CalcV2Calculator;
 
     pub trait Pass {
-        fn grow_shrink_sizing(&self, container: &mut Container);
+        fn grow_shrink_sizing(&self, container: &mut Container) -> bool;
     }
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
-        fn grow_shrink_sizing(&self, container: &mut Container) {
+        fn grow_shrink_sizing(&self, container: &mut Container) -> bool {
             moosicbox_logging::debug_or_trace!(
                 ("grow_shrink_sizing"),
                 ("grow_shrink_sizing: {container}")
             );
+
+            let mut changed = false;
+
+            container.bfs_mut(|parent| {
+                let container_width = parent.calculated_width.unwrap();
+                let container_height = parent.calculated_height.unwrap();
+
+                let mut remaining_width = container_width;
+                let mut remaining_height = container_height;
+                let mut unsized_count = 0;
+
+                for child in &mut parent.children {
+                    log::trace!("grow_shrink_sizing: calculating remaining size:\n{child}");
+
+                    match parent.direction {
+                        LayoutDirection::Row => {
+                            if let Some(width) = child.calculated_width {
+                                log::trace!("grow_shrink_sizing: removing width={width} from remaining_width={remaining_width} ({})", remaining_width - width);
+                                remaining_width -= width;
+                            } else {
+                                unsized_count += 1;
+                            }
+                        }
+                        LayoutDirection::Column => {
+                            if let Some(height) = child.calculated_height {
+                                log::trace!("grow_shrink_sizing: removing height={height} from remaining_height={remaining_height} ({})", remaining_height - height);
+                                remaining_height -= height;
+                            } else {
+                                unsized_count += 1;
+                            }
+                        }
+                    }
+                }
+
+                let evenly_split_remaining_size =
+                    match parent.direction {
+                        #[allow(clippy::cast_precision_loss)]
+                        LayoutDirection::Row => {
+                            remaining_width / unsized_count as f32
+                        }
+                        #[allow(clippy::cast_precision_loss)]
+                        LayoutDirection::Column => {
+                            remaining_height / unsized_count as f32
+                        }
+                    };
+
+                for child in &mut parent.children {
+                    log::trace!("grow_shrink_sizing: distributing evenly split remaining size:\n{child}");
+
+                    match parent.direction {
+                        LayoutDirection::Row => {
+                            if child.width.is_none() && child
+                                .calculated_width
+                                .is_none_or(|x| (x - evenly_split_remaining_size).abs() >= EPSILON)
+                            {
+                                child.calculated_width = Some(evenly_split_remaining_size);
+                                changed = true;
+                            }
+                            if child.height.is_none() && child
+                                .calculated_height
+                                .is_none_or(|x| (x - container_height).abs() >= EPSILON)
+                            {
+                                child.calculated_height = Some(container_height);
+                                changed = true;
+                            }
+                        }
+                        LayoutDirection::Column => {
+                            if child.width.is_none() && child
+                                .calculated_width
+                                .is_none_or(|x| (x - container_width).abs() >= EPSILON)
+                            {
+                                child.calculated_width = Some(container_width);
+                                changed = true;
+                            }
+                            if child.height.is_none() && child
+                                .calculated_height
+                                .is_none_or(|x| (x - evenly_split_remaining_size).abs() >= EPSILON)
+                            {
+                                child.calculated_height = Some(evenly_split_remaining_size);
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+            });
+
+            changed
         }
     }
 
     impl<F: FontMetrics> CalcV2Calculator<F> {}
 }
 
-mod pass_4 {
+mod pass_wrap {
     use crate::{Container, layout::font::FontMetrics};
 
     use super::CalcV2Calculator;
 
     pub trait Pass {
-        fn wrap_text(&self, container: &mut Container);
+        fn wrap(&self, container: &mut Container) -> bool;
     }
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
-        fn wrap_text(&self, container: &mut Container) {
-            moosicbox_logging::debug_or_trace!(("wrap_text"), ("wrap_text: {container}"));
+        fn wrap(&self, container: &mut Container) -> bool {
+            moosicbox_logging::debug_or_trace!(("wrap"), ("wrap: {container}"));
+
+            false
         }
     }
 
     impl<F: FontMetrics> CalcV2Calculator<F> {}
 }
 
-mod pass_5 {
-    use crate::{Container, layout::font::FontMetrics};
+mod pass_positioning {
+    use hyperchad_transformer_models::LayoutDirection;
+
+    use crate::{
+        Container,
+        layout::{EPSILON, font::FontMetrics},
+    };
 
     use super::CalcV2Calculator;
 
     pub trait Pass {
-        fn position_elements(&self, container: &mut Container);
+        fn position_elements(&self, container: &mut Container) -> bool;
     }
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
-        fn position_elements(&self, container: &mut Container) {
+        fn position_elements(&self, container: &mut Container) -> bool {
             moosicbox_logging::debug_or_trace!(
                 ("position_elements"),
                 ("position_elements: {container}")
             );
+
+            let mut changed = false;
+
+            container.bfs_mut(|parent| {
+                let mut x = 0.0;
+                let mut y = 0.0;
+
+                for child in &mut parent.children {
+                    log::trace!("position_elements: setting position ({x}, {y}):\n{child}");
+                    if child
+                        .calculated_x
+                        .is_none_or(|other| (other - x).abs() >= EPSILON)
+                    {
+                        child.calculated_x = Some(x);
+                        changed = true;
+                    }
+                    if child
+                        .calculated_y
+                        .is_none_or(|other| (other - y).abs() >= EPSILON)
+                    {
+                        child.calculated_y = Some(y);
+                        changed = true;
+                    }
+
+                    match parent.direction {
+                        LayoutDirection::Row => {
+                            x += child.calculated_width.unwrap();
+                        }
+                        LayoutDirection::Column => {
+                            y += child.calculated_height.unwrap();
+                        }
+                    }
+                }
+            });
+
+            changed
         }
     }
 
@@ -200,7 +393,6 @@ mod test {
         CalcV2Calculator::new(DefaultFontMetrics);
 
     #[test_log::test]
-    #[ignore]
     fn calc_can_calc_single_element_size() {
         let mut container = Container {
             children: vec![Container::default()],
@@ -212,7 +404,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         compare_containers(
-            &container.clone(),
+            &container,
             &Container {
                 children: vec![Container {
                     calculated_width: Some(100.0),
@@ -220,15 +412,14 @@ mod test {
                     calculated_x: Some(0.0),
                     calculated_y: Some(0.0),
                     calculated_position: Some(LayoutPosition::Default),
-                    ..Default::default()
+                    ..container.children[0].clone()
                 }],
-                ..container
+                ..container.clone()
             },
         );
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_can_calc_two_elements_with_size_split_evenly_row() {
         let mut container = Container {
             children: vec![Container {
@@ -279,7 +470,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_can_calc_horizontal_split_above_a_vertial_split() {
         let mut container = Container {
             children: vec![
@@ -343,7 +533,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_calcs_contained_height_correctly() {
         let mut container = Container {
             children: vec![
