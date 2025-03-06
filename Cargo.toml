@@ -335,9 +335,9 @@ whoami = "1.5.2"
 xml = "0.8.20"
 
 [patch.crates-io]
-eframe      = { git = "https://github.com/BSteffaniak/egui" }
-egui        = { git = "https://github.com/BSteffaniak/egui" }
-egui_extras = { git = "https://github.com/BSteffaniak/egui" }
+# eframe      = { git = "https://github.com/BSteffaniak/egui" }
+# egui        = { git = "https://github.com/BSteffaniak/egui" }
+# egui_extras = { git = "https://github.com/BSteffaniak/egui" }
 # actix-files            = { path = "../actix-web/actix-files" }
 # actix-http             = { path = "../actix-web/actix-http" }
 # actix-http-test        = { path = "../actix-web/actix-http-test" }

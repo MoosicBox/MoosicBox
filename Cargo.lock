@@ -16254,18 +16254,3 @@ dependencies = [
  "syn 2.0.99",
  "winnow 0.7.3",
 ]
-
-[[patch.unused]]
-name = "eframe"
-version = "0.31.0"
-source = "git+https://github.com/BSteffaniak/egui#652d75d4acde1922735fdbc64cf3680879672a0a"
-
-[[patch.unused]]
-name = "egui"
-version = "0.31.0"
-source = "git+https://github.com/BSteffaniak/egui#652d75d4acde1922735fdbc64cf3680879672a0a"
-
-[[patch.unused]]
-name = "egui_extras"
-version = "0.31.0"
-source = "git+https://github.com/BSteffaniak/egui#652d75d4acde1922735fdbc64cf3680879672a0a"
