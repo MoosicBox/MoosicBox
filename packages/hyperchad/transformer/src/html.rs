@@ -1124,6 +1124,13 @@ fn parse_element(
             iter_once!(OverrideItem::OverflowY),
         )?
         .unwrap_or_default(),
+        grid_cell_size: pmrv(
+            tag,
+            once("sx-grid-cell-size"),
+            &mut overrides,
+            parse_number,
+            iter_once!(OverrideItem::GridCellSize),
+        )?,
         justify_content: pmrv(
             tag,
             once("sx-justify-content"),

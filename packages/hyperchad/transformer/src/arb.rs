@@ -232,6 +232,7 @@ fn override_item_of_type(g: &mut Gen, value: OverrideItemType) -> OverrideItem {
         OverrideItemType::Direction => OverrideItem::Direction(Arbitrary::arbitrary(g)),
         OverrideItemType::OverflowX => OverrideItem::OverflowX(Arbitrary::arbitrary(g)),
         OverrideItemType::OverflowY => OverrideItem::OverflowY(Arbitrary::arbitrary(g)),
+        OverrideItemType::GridCellSize => OverrideItem::GridCellSize(Arbitrary::arbitrary(g)),
         OverrideItemType::JustifyContent => OverrideItem::JustifyContent(Arbitrary::arbitrary(g)),
         OverrideItemType::AlignItems => OverrideItem::AlignItems(Arbitrary::arbitrary(g)),
         OverrideItemType::TextAlign => OverrideItem::TextAlign(Arbitrary::arbitrary(g)),
@@ -453,6 +454,13 @@ impl Arbitrary for Container {
             }),
             overflow_x: default_value_or_arbitrary(g, &overrides, |x| {
                 if let OverrideItem::OverflowX(x) = x {
+                    Some(x)
+                } else {
+                    None
+                }
+            }),
+            grid_cell_size: opt_default_value_or_arbitrary(g, &overrides, |x| {
+                if let OverrideItem::GridCellSize(x) = x {
                     Some(x)
                 } else {
                     None

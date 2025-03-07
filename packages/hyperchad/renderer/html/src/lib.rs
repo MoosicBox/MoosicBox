@@ -213,7 +213,8 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                     | OverrideItem::Opacity(x)
                     | OverrideItem::TranslateX(x)
                     | OverrideItem::TranslateY(x)
-                    | OverrideItem::FontSize(x) => {
+                    | OverrideItem::FontSize(x)
+                    | OverrideItem::GridCellSize(x) => {
                         write_css_attr_important(
                             f,
                             override_item_to_css_name(o),
@@ -323,6 +324,7 @@ const fn override_item_to_css_name(item: &OverrideItem) -> &'static [u8] {
         OverrideItem::Direction(..) => b"flex-direction",
         OverrideItem::OverflowX(..) => b"overflow-x",
         OverrideItem::OverflowY(..) => b"overflow-y",
+        OverrideItem::GridCellSize(..) => b"grid-template-columns",
         OverrideItem::JustifyContent(..) => b"justify-content",
         OverrideItem::AlignItems(..) => b"align-items",
         OverrideItem::TextAlign(..) => b"text-align",

@@ -430,6 +430,7 @@ pub enum OverrideItem {
     Direction(LayoutDirection),
     OverflowX(LayoutOverflow),
     OverflowY(LayoutOverflow),
+    GridCellSize(Number),
     JustifyContent(JustifyContent),
     AlignItems(AlignItems),
     TextAlign(TextAlign),
@@ -518,7 +519,8 @@ impl OverrideItem {
             | Self::PaddingRight(x)
             | Self::PaddingTop(x)
             | Self::PaddingBottom(x)
-            | Self::FontSize(x) => serde_json::to_string(x),
+            | Self::FontSize(x)
+            | Self::GridCellSize(x) => serde_json::to_string(x),
             Self::Cursor(x) => serde_json::to_string(x),
             Self::Position(x) => serde_json::to_string(x),
             Self::BorderTop(x)
@@ -572,7 +574,8 @@ impl OverrideItem {
             | Self::PaddingRight(x)
             | Self::PaddingTop(x)
             | Self::PaddingBottom(x)
-            | Self::FontSize(x) => serde_json::to_value(x),
+            | Self::FontSize(x)
+            | Self::GridCellSize(x) => serde_json::to_value(x),
             Self::Cursor(x) => serde_json::to_value(x),
             Self::Position(x) => serde_json::to_value(x),
             Self::BorderTop(x)
@@ -627,7 +630,8 @@ impl OverrideItem {
             | Self::PaddingRight(x)
             | Self::PaddingTop(x)
             | Self::PaddingBottom(x)
-            | Self::FontSize(x) => Box::new(x),
+            | Self::FontSize(x)
+            | Self::GridCellSize(x) => Box::new(x),
             Self::Cursor(x) => Box::new(x),
             Self::Position(x) => Box::new(x),
             Self::BorderTop(x)
@@ -759,7 +763,8 @@ impl OverrideItem {
             | Self::PaddingRight(x)
             | Self::PaddingTop(x)
             | Self::PaddingBottom(x)
-            | Self::FontSize(x) => {
+            | Self::FontSize(x)
+            | Self::GridCellSize(x) => {
                 let mut expr = responsive.then::<&Number>(x);
 
                 if let Some(
@@ -790,7 +795,8 @@ impl OverrideItem {
                     | Self::PaddingRight(default)
                     | Self::PaddingTop(default)
                     | Self::PaddingBottom(default)
-                    | Self::FontSize(default),
+                    | Self::FontSize(default)
+                    | Self::GridCellSize(default),
                 ) = default
                 {
                     expr = expr.or_else(default);
@@ -906,7 +912,8 @@ macro_rules! override_item {
             | OverrideItem::PaddingRight($name)
             | OverrideItem::PaddingTop($name)
             | OverrideItem::PaddingBottom($name)
-            | OverrideItem::FontSize($name) => $action,
+            | OverrideItem::FontSize($name)
+            | OverrideItem::GridCellSize($name) => $action,
             OverrideItem::Cursor($name) => $action,
             OverrideItem::Position($name) => $action,
             OverrideItem::BorderTop($name)
@@ -932,6 +939,7 @@ pub struct Container {
     pub direction: LayoutDirection,
     pub overflow_x: LayoutOverflow,
     pub overflow_y: LayoutOverflow,
+    pub grid_cell_size: Option<Number>,
     pub justify_content: Option<JustifyContent>,
     pub align_items: Option<AlignItems>,
     pub text_align: Option<TextAlign>,
@@ -1929,6 +1937,7 @@ impl Container {
 
         attrs.add_opt("sx-col-gap", self.column_gap.as_ref());
         attrs.add_opt("sx-row-gap", self.row_gap.as_ref());
+        attrs.add_opt("sx-grid-cell-size", self.grid_cell_size.as_ref());
 
         attrs.add_opt("sx-opacity", self.opacity.as_ref());
 
@@ -2481,6 +2490,7 @@ const fn override_item_to_attr_name(item: &OverrideItem) -> &'static str {
         OverrideItem::Direction(..) => "sx-dir",
         OverrideItem::OverflowX(..) => "sx-overflow-x",
         OverrideItem::OverflowY(..) => "sx-overflow-y",
+        OverrideItem::GridCellSize(..) => "sx-grid-cell-size",
         OverrideItem::JustifyContent(..) => "sx-justify-content",
         OverrideItem::AlignItems(..) => "sx-align-items",
         OverrideItem::TextAlign(..) => "sx-text-align",

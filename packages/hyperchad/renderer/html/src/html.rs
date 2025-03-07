@@ -151,8 +151,8 @@ fn is_flex_container(container: &Container) -> bool {
         || container.align_items.is_some()
 }
 
-const fn is_grid_container(_container: &Container) -> bool {
-    false
+const fn is_grid_container(container: &Container) -> bool {
+    matches!(container.overflow_x, LayoutOverflow::Wrap { grid: true })
 }
 
 /// # Errors
@@ -216,8 +216,8 @@ pub fn element_style_to_html(
         | Element::Canvas => {}
     }
 
-    let is_flex = is_flex_container(container);
-    let is_grid = !is_flex && is_grid_container(container);
+    let is_grid = is_grid_container(container);
+    let is_flex = !is_grid && is_flex_container(container);
 
     if is_flex {
         write_css_attr!(b"display", b"flex");
@@ -225,6 +225,8 @@ pub fn element_style_to_html(
         if container.direction == LayoutDirection::Column {
             write_css_attr!(b"flex-direction", b"column");
         }
+    } else if is_grid {
+        write_css_attr!(b"display", b"grid");
     }
 
     match container.overflow_x {
@@ -234,13 +236,23 @@ pub fn element_style_to_html(
         LayoutOverflow::Scroll => {
             write_css_attr!(b"overflow-x", b"scroll");
         }
-        LayoutOverflow::Expand | LayoutOverflow::Squash => {}
-        LayoutOverflow::Wrap { .. } => {
-            write_css_attr!(b"flex-wrap", b"wrap");
+        LayoutOverflow::Wrap { grid } => {
+            if grid {
+                if let Some(size) = &container.grid_cell_size {
+                    write_css_attr!(
+                        b"grid-template-columns",
+                        format!("repeat(auto-fill, {})", number_to_html_string(size, true))
+                            .as_bytes()
+                    );
+                }
+            } else {
+                write_css_attr!(b"flex-wrap", b"wrap");
+            }
         }
         LayoutOverflow::Hidden => {
             write_css_attr!(b"overflow-x", b"hidden");
         }
+        LayoutOverflow::Expand | LayoutOverflow::Squash => {}
     }
     match container.overflow_y {
         LayoutOverflow::Auto => {
@@ -249,13 +261,23 @@ pub fn element_style_to_html(
         LayoutOverflow::Scroll => {
             write_css_attr!(b"overflow-y", b"scroll");
         }
-        LayoutOverflow::Expand | LayoutOverflow::Squash => {}
-        LayoutOverflow::Wrap { .. } => {
-            write_css_attr!(b"flex-wrap", b"wrap");
+        LayoutOverflow::Wrap { grid } => {
+            if grid {
+                if let Some(size) = &container.grid_cell_size {
+                    write_css_attr!(
+                        b"grid-template-columns",
+                        format!("repeat(auto-fill, {})", number_to_html_string(size, true))
+                            .as_bytes()
+                    );
+                }
+            } else {
+                write_css_attr!(b"flex-wrap", b"wrap");
+            }
         }
         LayoutOverflow::Hidden => {
             write_css_attr!(b"overflow-y", b"hidden");
         }
+        LayoutOverflow::Expand | LayoutOverflow::Squash => {}
     }
 
     if let Some(position) = container.position {
