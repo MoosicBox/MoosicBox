@@ -34,7 +34,7 @@ moosicbox_arb = { path = "../../arb", default-features = false, features = [
 ] }
 
 [features]
-default = ["arb", "id", "logic", "serde"]
+default = ["arb", "logic", "serde"]
 
 fail-on-warnings = []
 
@@ -43,7 +43,6 @@ arb = [
     "dep:quickcheck",
     "hyperchad_transformer_models/arb",
 ]
-id = []
 logic = []
 
 serde = ["dep:serde", "dep:serde_json", "hyperchad_transformer_models/serde"]

@@ -398,7 +398,6 @@ impl Arbitrary for Container {
         overrides.sort_by(|a, b| format!("{:?}", a.condition).cmp(&format!("{:?}", b.condition)));
 
         Self {
-            #[cfg(feature = "id")]
             id: usize::arbitrary(g),
             str_id: default_value(&overrides, |x| {
                 if let OverrideItem::StrId(x) = x {

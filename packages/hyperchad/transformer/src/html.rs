@@ -684,7 +684,6 @@ fn parse_element(
     node: &Node<'_>,
     parser: &Parser<'_>,
 ) -> Result<crate::Container, ParseAttrWrapperError> {
-    #[cfg(feature = "id")]
     static CURRENT_ID: std::sync::LazyLock<std::sync::Arc<std::sync::atomic::AtomicUsize>> =
         std::sync::LazyLock::new(|| std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(1)));
 
@@ -999,7 +998,6 @@ fn parse_element(
 
     #[allow(clippy::needless_update)]
     Ok(crate::Container {
-        #[cfg(feature = "id")]
         id: CURRENT_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
         str_id: pmrv(
             tag,
@@ -1457,10 +1455,7 @@ mod test {
     use crate::Container;
 
     fn clean_up_container(container: &mut Container) {
-        #[cfg(feature = "id")]
-        {
-            container.id = 0;
-        }
+        container.id = 0;
 
         let mut i = 0;
         let actions = container.actions.clone();

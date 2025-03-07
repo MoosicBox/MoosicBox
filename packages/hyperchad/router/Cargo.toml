@@ -26,7 +26,7 @@ thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["rt-multi-thread", "sync"] }
 
 [features]
-default = ["format", "id", "json", "static-routes"]
+default = ["format", "json", "static-routes"]
 
 fail-on-warnings = []
 
@@ -37,5 +37,3 @@ format = ["hyperchad_transformer/format"]
 json = ["hyperchad_renderer/json"]
 
 static-routes = []
-
-id = []

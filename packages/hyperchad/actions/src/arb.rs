@@ -28,15 +28,11 @@ impl Arbitrary for ActionTrigger {
 
 impl Arbitrary for ElementTarget {
     fn arbitrary(g: &mut Gen) -> Self {
-        #[cfg(feature = "id")]
         let max = 3;
-        #[cfg(not(feature = "id"))]
-        let max = 2;
         match *g.choose(&(0..=max).collect::<Vec<_>>()).unwrap() {
             0 => Self::StrId(XmlString::arbitrary(g).0),
             1 => Self::SelfTarget,
             2 => Self::LastChild,
-            #[cfg(feature = "id")]
             3 => Self::Id(usize::arbitrary(g)),
             _ => unreachable!(),
         }

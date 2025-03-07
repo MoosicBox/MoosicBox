@@ -15,7 +15,6 @@ ignored = ["hyperchad_color", "image", "tracy-client"]
 
 [dependencies]
 hyperchad_actions = { version = "0.1.0", path = "../../actions", default-features = false, features = [
-    "id",
     "logic",
 ] }
 hyperchad_color = { version = "0.1.0", path = "../../color", default-features = false, features = [
@@ -28,7 +27,6 @@ hyperchad_renderer = { version = "0.1.0", path = "../", default-features = false
 hyperchad_router = { version = "0.1.0", path = "../../router", default-features = false }
 hyperchad_transformer = { version = "0.1.0", path = "../../transformer", default-features = false, features = [
     "html",
-    "id",
     "layout",
     "logic",
 ] }

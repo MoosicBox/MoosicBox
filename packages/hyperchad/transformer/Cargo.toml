@@ -65,7 +65,6 @@ default = [
     "canvas",
     "format",
     "html",
-    "id",
     "layout",
     "logic",
     "maud",
@@ -98,5 +97,3 @@ simd = ["tl?/simd"]
 
 format              = ["dep:xml"]
 syntax-highlighting = ["dep:syntect"]
-
-id = []

@@ -17,7 +17,6 @@ use serde::{Deserialize, Serialize};
 pub enum ElementTarget {
     StrId(String),
     ChildClass(String),
-    #[cfg(feature = "id")]
     Id(usize),
     SelfTarget,
     LastChild,
@@ -202,7 +201,6 @@ impl ActionType {
         Self::set_visibility_str_id(Visibility::Visible, target)
     }
 
-    #[cfg(feature = "id")]
     #[must_use]
     pub const fn set_visibility_id(visibility: Visibility, target: usize) -> Self {
         Self::Style {
@@ -211,13 +209,11 @@ impl ActionType {
         }
     }
 
-    #[cfg(feature = "id")]
     #[must_use]
     pub const fn hide_id(target: usize) -> Self {
         Self::set_visibility_id(Visibility::Hidden, target)
     }
 
-    #[cfg(feature = "id")]
     #[must_use]
     pub const fn show_id(target: usize) -> Self {
         Self::set_visibility_id(Visibility::Visible, target)
@@ -277,7 +273,6 @@ impl ActionType {
         Self::set_display_str_id(true, target)
     }
 
-    #[cfg(feature = "id")]
     #[must_use]
     pub const fn set_display_id(display: bool, target: usize) -> Self {
         Self::Style {
@@ -286,13 +281,11 @@ impl ActionType {
         }
     }
 
-    #[cfg(feature = "id")]
     #[must_use]
     pub const fn no_display_id(target: usize) -> Self {
         Self::set_display_id(false, target)
     }
 
-    #[cfg(feature = "id")]
     #[must_use]
     pub const fn display_id(target: usize) -> Self {
         Self::set_display_id(true, target)
@@ -342,7 +335,6 @@ impl ActionType {
         }
     }
 
-    #[cfg(feature = "id")]
     #[must_use]
     pub fn set_background_id(background: impl Into<String>, target: usize) -> Self {
         Self::Style {

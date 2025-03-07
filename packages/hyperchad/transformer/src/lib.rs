@@ -929,7 +929,6 @@ macro_rules! override_item {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Container {
-    #[cfg(feature = "id")]
     pub id: usize,
     pub str_id: Option<String>,
     pub classes: Vec<String>,
@@ -1294,7 +1293,6 @@ impl Container {
         fixed_positioned_elements_mut(&mut self.children)
     }
 
-    #[cfg(feature = "id")]
     #[must_use]
     pub fn find_element_by_id(&self, id: usize) -> Option<&Self> {
         if self.id == id {
@@ -1303,7 +1301,6 @@ impl Container {
         self.children.iter().find_map(|x| x.find_element_by_id(id))
     }
 
-    #[cfg(feature = "id")]
     #[must_use]
     pub fn find_element_by_id_mut(&mut self, id: usize) -> Option<&mut Self> {
         if self.id == id {
@@ -1344,7 +1341,6 @@ impl Container {
             .find_map(|x| x.find_element_by_str_id_mut(str_id))
     }
 
-    #[cfg(feature = "id")]
     #[must_use]
     pub fn find_parent<'a>(&self, root: &'a mut Self) -> Option<&'a Self> {
         if root.children.iter().any(|x| x.id == self.id) {
@@ -1356,7 +1352,6 @@ impl Container {
         }
     }
 
-    #[cfg(feature = "id")]
     #[must_use]
     pub fn find_parent_by_id(&self, id: usize) -> Option<&Self> {
         if self.children.iter().any(|x| x.id == id) {
@@ -1366,7 +1361,6 @@ impl Container {
         }
     }
 
-    #[cfg(feature = "id")]
     #[must_use]
     pub fn find_parent_by_id_mut(&mut self, id: usize) -> Option<&mut Self> {
         if self.children.iter().any(|x| x.id == id) {
@@ -1378,7 +1372,7 @@ impl Container {
         }
     }
 
-    #[cfg(all(feature = "id", feature = "layout"))]
+    #[cfg(feature = "layout")]
     #[must_use]
     pub fn find_relative_size_by_id(&self, id: usize) -> Option<(f32, f32)> {
         fn recurse(
@@ -1399,7 +1393,7 @@ impl Container {
         recurse(self, id, self.get_relative_size())
     }
 
-    #[cfg(all(feature = "id", feature = "layout"))]
+    #[cfg(feature = "layout")]
     #[must_use]
     pub fn find_relative_size_by_str_id(&self, id: &str) -> Option<(f32, f32)> {
         fn recurse(
@@ -1449,7 +1443,6 @@ impl Container {
     ///
     /// * If the `Container` is the root node
     /// * If the `Container` is not properly attached to the tree
-    #[cfg(feature = "id")]
     pub fn replace_with_elements(&mut self, replacement: Vec<Self>, root: &mut Self) {
         let Some(parent) = &mut root.find_parent_by_id_mut(self.id) else {
             panic!("Cannot replace the root node with multiple elements");
@@ -1472,7 +1465,6 @@ impl Container {
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
-    #[cfg(feature = "id")]
     pub fn replace_id_children_with_elements(&mut self, replacement: Vec<Self>, id: usize) -> bool {
         let Some(parent) = &mut self.find_element_by_id_mut(id) else {
             return false;
@@ -1490,7 +1482,7 @@ impl Container {
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
-    #[cfg(all(feature = "id", feature = "layout"))]
+    #[cfg(feature = "layout")]
     pub fn replace_id_children_with_elements_calc(
         &mut self,
         calculator: &impl layout::Calc,
@@ -1511,7 +1503,6 @@ impl Container {
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
-    #[cfg(feature = "id")]
     pub fn replace_id_with_elements(&mut self, replacement: Vec<Self>, id: usize) -> bool {
         let Some(parent) = self.find_parent_by_id_mut(id) else {
             return false;
@@ -1536,7 +1527,7 @@ impl Container {
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
-    #[cfg(all(feature = "id", feature = "layout"))]
+    #[cfg(feature = "layout")]
     pub fn replace_id_with_elements_calc(
         &mut self,
         calculator: &impl layout::Calc,
@@ -1557,7 +1548,6 @@ impl Container {
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
-    #[cfg(feature = "id")]
     pub fn replace_str_id_with_elements(
         &mut self,
         replacement: Vec<Self>,
@@ -1590,7 +1580,7 @@ impl Container {
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
-    #[cfg(all(feature = "id", feature = "layout"))]
+    #[cfg(feature = "layout")]
     pub fn replace_str_id_with_elements_calc(
         &mut self,
         calculator: &impl layout::Calc,
@@ -1606,7 +1596,7 @@ impl Container {
         element
     }
 
-    #[cfg(all(feature = "id", feature = "layout"))]
+    #[cfg(feature = "layout")]
     pub fn partial_calc(&mut self, calculator: &impl layout::Calc, id: usize) {
         let Some(parent) = self.find_parent_by_id_mut(id) else {
             return;
@@ -1620,7 +1610,6 @@ impl Container {
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
-    #[cfg(feature = "id")]
     pub fn replace_ids_with_elements(&mut self, replacement: Vec<Self>, ids: &[usize]) -> bool {
         let Some(parent) = self.find_parent_by_id_mut(ids[0]) else {
             return false;
@@ -1800,7 +1789,6 @@ impl Container {
     fn attrs(&self, with_debug_attrs: bool) -> Attrs {
         let mut attrs = Attrs { values: vec![] };
 
-        #[cfg(feature = "id")]
         attrs.add("dbg-id", self.id);
 
         attrs.add_opt("id", self.str_id.as_ref());

@@ -457,7 +457,6 @@ pub fn get_visibility_str_id(str_id: impl Into<String>) -> CalcValue {
     }
 }
 
-#[cfg(feature = "id")]
 #[must_use]
 pub const fn get_visibility_id(id: usize) -> CalcValue {
     CalcValue::Visibility {
@@ -499,7 +498,6 @@ pub fn get_width_px_str_id(str_id: impl Into<String>) -> CalcValue {
     }
 }
 
-#[cfg(feature = "id")]
 #[must_use]
 pub const fn get_width_px_id(id: usize) -> CalcValue {
     CalcValue::WidthPx {
@@ -521,7 +519,6 @@ pub fn get_height_px_str_id(str_id: impl Into<String>) -> CalcValue {
     }
 }
 
-#[cfg(feature = "id")]
 #[must_use]
 pub const fn get_height_px_id(id: usize) -> CalcValue {
     CalcValue::HeightPx {
@@ -543,7 +540,6 @@ pub fn get_position_x_str_id(str_id: impl Into<String>) -> CalcValue {
     }
 }
 
-#[cfg(feature = "id")]
 #[must_use]
 pub const fn get_position_x_id(id: usize) -> CalcValue {
     CalcValue::PositionX {
@@ -565,7 +561,6 @@ pub fn get_position_y_str_id(str_id: impl Into<String>) -> CalcValue {
     }
 }
 
-#[cfg(feature = "id")]
 #[must_use]
 pub const fn get_position_y_id(id: usize) -> CalcValue {
     CalcValue::PositionY {
@@ -592,7 +587,6 @@ pub fn get_mouse_x_str_id(str_id: impl Into<String>) -> CalcValue {
     }
 }
 
-#[cfg(feature = "id")]
 #[must_use]
 pub const fn get_mouse_x_id(id: usize) -> CalcValue {
     CalcValue::MouseX {
@@ -619,7 +613,6 @@ pub fn get_mouse_y_str_id(str_id: impl Into<String>) -> CalcValue {
     }
 }
 
-#[cfg(feature = "id")]
 #[must_use]
 pub const fn get_mouse_y_id(id: usize) -> CalcValue {
     CalcValue::MouseY {
