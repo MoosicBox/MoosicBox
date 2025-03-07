@@ -48,8 +48,8 @@ importers:
         specifier: ^3.5.3
         version: 3.5.3
       sst:
-        specifier: ^3.9.27
-        version: 3.9.27
+        specifier: ^3.9.28
+        version: 3.9.28
       typescript:
         specifier: ^5.8.2
         version: 5.8.2
@@ -1813,33 +1813,33 @@ packages:
     resolution: {integrity: sha512-MGrFH9Z4NP9Iyhqn16sDtBpRRNJ0Y2hNa6D65h736fVSaPCHr4DM4sWUNvVaSuC+0OBGhwsrydQwmgfg5LncqQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
-  sst-darwin-arm64@3.9.27:
-    resolution: {integrity: sha512-eDmSOFoW2EXzM8+CfqW0n+0bb5gFCSNkAS/wcwMT3iyAPPJANtWXAyFYUsXbLgXjIpg6uofMTbEGb4T3gEmpJg==}
+  sst-darwin-arm64@3.9.28:
+    resolution: {integrity: sha512-t68ssWbty3qNflJSWaJUM/4ue70QWLEjNJWzdv1IAZASC/2qmt6KLLQDX8+UEACovv7/mNHZd/pFDArKhgENqw==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.9.27:
-    resolution: {integrity: sha512-qRfXwBtCZfI1lHSlvPdt9wex3uTRCTE2e4tCQ749mtY3s0mdSYQ4ikdD1/7uxpjVxTwve705jfQBNpa4Pn6DIg==}
+  sst-darwin-x64@3.9.28:
+    resolution: {integrity: sha512-o2uqIY0WWR93wUQtGseLirX2llir/hkvihTvj/tqgUW6s9IzeczFBVTLVrUl08Na9e+SAMhq1mx3BvG7MJk+ew==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.9.27:
-    resolution: {integrity: sha512-BbGM59rYcBdwHLUsp3++VkbtZABxon4eYmgrc7v8iP3CrpbeoWn1VCP1MnFoXdXvx9n6Nbmui3oATQUVeWgBFg==}
+  sst-linux-arm64@3.9.28:
+    resolution: {integrity: sha512-+72GenIBkfLrZDoBrIpfC/ty1lkSyMjRdsmMscCZoKrvCPyHJFHZLJ8J4z5+6wvTRhoXsgPABsyU0ldzVSfuWw==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.9.27:
-    resolution: {integrity: sha512-ZSBmYryaXkQVgVfbPx/ZlPqZXQTX2aGnbCAQ91vkKnhDx7kaF84zAx7bIvk9Jk/1ZbPg5HTvoKm0CWFgJjKKxg==}
+  sst-linux-x64@3.9.28:
+    resolution: {integrity: sha512-SPTmxK0+b+oilF2dfNEBFRwXTf7PMMkjc0dgh5X4OStuZHJEF4CeHM6hF4djXMPrgKL81IGlC2iDz+ykZhLSAA==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.9.27:
-    resolution: {integrity: sha512-aMw7b+SJjPrlSqasJjkIIf6Saz3HVFugo1XDoCW8rNIgwfzVX7/gT2ds87KefpCOYdMARICcKuCycQq1nT+4jg==}
+  sst-linux-x86@3.9.28:
+    resolution: {integrity: sha512-fjZ6DS/hN/13SXPo+ZaSpYcCLLZEUKh+x6p434Ci1BDkG4t9gcRd5FzPLzwAgqgYmehmtYybBegvqxPjy5Q6+A==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.9.27:
-    resolution: {integrity: sha512-kt9Lw65MhqSwIJBywBalhZrj3FFLnKHn9KcVI4FuoLXpek+0tvQKW2mnwxsO9pqF96a8sYtlNRki6F1neb9qgg==}
+  sst@3.9.28:
+    resolution: {integrity: sha512-j5pOI4VlOkYz3SEwxrDn8PDrgBGADs2MELCbnDogSTN7LgDPLlbTROeqgiohr5qbIytHIrvUS8o2Oe1I9hobHg==}
     hasBin: true
 
   string-width@4.2.3:
@@ -2043,8 +2043,8 @@ packages:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
 
-  yocto-queue@1.1.1:
-    resolution: {integrity: sha512-b4JR1PFR10y1mKjhHY9LaGo6tmrgjit7hxVIeAmyMw3jegXR4dhYqLaQF5zMXZxY7tLpMyJeLjr1C4rLmkVe8g==}
+  yocto-queue@1.2.0:
+    resolution: {integrity: sha512-KHBC7z61OJeaMGnF3wqNZj+GGNXOyypZviiKpQeiHirG5Ib1ImwcLBH70rbMSkKfSmUNBsdf2PwaEJtKvgmkNw==}
     engines: {node: '>=12.20'}
 
 snapshots:
@@ -3790,7 +3790,7 @@ snapshots:
 
   p-limit@4.0.0:
     dependencies:
-      yocto-queue: 1.1.1
+      yocto-queue: 1.2.0
 
   p-locate@5.0.0:
     dependencies:
@@ -4118,32 +4118,32 @@ snapshots:
     dependencies:
       minipass: 7.1.2
 
-  sst-darwin-arm64@3.9.27:
+  sst-darwin-arm64@3.9.28:
     optional: true
 
-  sst-darwin-x64@3.9.27:
+  sst-darwin-x64@3.9.28:
     optional: true
 
-  sst-linux-arm64@3.9.27:
+  sst-linux-arm64@3.9.28:
     optional: true
 
-  sst-linux-x64@3.9.27:
+  sst-linux-x64@3.9.28:
     optional: true
 
-  sst-linux-x86@3.9.27:
+  sst-linux-x86@3.9.28:
     optional: true
 
-  sst@3.9.27:
+  sst@3.9.28:
     dependencies:
       aws4fetch: 1.0.20
       jose: 5.2.3
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.9.27
-      sst-darwin-x64: 3.9.27
-      sst-linux-arm64: 3.9.27
-      sst-linux-x64: 3.9.27
-      sst-linux-x86: 3.9.27
+      sst-darwin-arm64: 3.9.28
+      sst-darwin-x64: 3.9.28
+      sst-linux-arm64: 3.9.28
+      sst-linux-x64: 3.9.28
+      sst-linux-x86: 3.9.28
 
   string-width@4.2.3:
     dependencies:
@@ -4396,4 +4396,4 @@ snapshots:
 
   yocto-queue@0.1.0: {}
 
-  yocto-queue@1.1.1: {}
+  yocto-queue@1.2.0: {}
