@@ -34,7 +34,9 @@ pub enum LayoutOverflow {
     #[default]
     Expand,
     Squash,
-    Wrap,
+    Wrap {
+        grid: bool,
+    },
     Hidden,
 }
 
@@ -45,7 +47,7 @@ impl std::fmt::Display for LayoutOverflow {
             Self::Scroll => f.write_str("scroll"),
             Self::Expand => f.write_str("expand"),
             Self::Squash => f.write_str("squash"),
-            Self::Wrap => f.write_str("wrap"),
+            Self::Wrap { .. } => f.write_str("wrap"),
             Self::Hidden => f.write_str("hidden"),
         }
     }

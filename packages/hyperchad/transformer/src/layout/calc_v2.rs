@@ -309,7 +309,7 @@ mod pass_wrap {
             let mut changed = true;
 
             bfs.traverse_mut(container, |parent| {
-                if parent.overflow_x != LayoutOverflow::Wrap {
+                if !matches!(parent.overflow_x, LayoutOverflow::Wrap { .. }) {
                     return;
                 }
 
@@ -367,6 +367,7 @@ mod pass_positioning {
     }
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
+        #[allow(clippy::too_many_lines)]
         fn position_elements(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
             moosicbox_logging::debug_or_trace!(
                 ("position_elements"),
@@ -381,9 +382,10 @@ mod pass_positioning {
 
                 let container_width = parent.calculated_width.unwrap();
 
-                if parent.overflow_x == LayoutOverflow::Wrap {
+                if let LayoutOverflow::Wrap { grid } = parent.overflow_x {
                     let mut last_row = 0;
                     let mut col_count = 0;
+                    let mut max_col_count = 0;
                     let mut row_width = 0.0;
                     let mut gaps = vec![];
 
@@ -401,6 +403,11 @@ mod pass_positioning {
                             #[allow(clippy::cast_precision_loss)]
                             let gap = remainder / ((col_count + 1) as f32);
                             gaps.push(gap);
+
+                            if grid && col_count > max_col_count {
+                                max_col_count = col_count;
+                            }
+
                             row_width = 0.0;
                             col_count = 0;
                             last_row = row;
@@ -410,11 +417,14 @@ mod pass_positioning {
                         col_count += 1;
                     }
 
-                    {
-                        let remainder = container_width - row_width;
-                        #[allow(clippy::cast_precision_loss)]
-                        let gap = remainder / ((col_count + 1) as f32);
-                        gaps.push(gap);
+                    let remainder = container_width - row_width;
+                    #[allow(clippy::cast_precision_loss)]
+                    let gap = remainder / ((col_count + 1) as f32);
+                    gaps.push(gap);
+
+                    #[allow(unused_assignments)]
+                    if col_count > max_col_count {
+                        max_col_count = col_count;
                     }
 
                     let mut gap = gaps.first().copied().unwrap_or_default();
@@ -434,8 +444,11 @@ mod pass_positioning {
                         if row != last_row {
                             moosicbox_assert::assert!(row > last_row);
 
-                            // FIXME: This could break if we allow jumping rows (e.g. from row 2 to 4)
-                            gap = gaps.get(row as usize).copied().unwrap_or_default();
+                            if !grid {
+                                // FIXME: This could break if we allow jumping rows (e.g. from row 2 to 4)
+                                gap = gaps.get(row as usize).copied().unwrap_or_default();
+                            }
+
                             x = gap;
                             y += max_height;
                             max_height = 0.0;
@@ -793,7 +806,7 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
@@ -845,7 +858,7 @@ mod test {
             calculated_width: Some(40.0),
             calculated_height: Some(50.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
@@ -890,7 +903,7 @@ mod test {
             calculated_width: Some(40.0),
             calculated_height: Some(50.0),
             direction: LayoutDirection::Column,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
@@ -942,7 +955,7 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
@@ -987,7 +1000,7 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
@@ -1031,7 +1044,7 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
@@ -1075,7 +1088,7 @@ mod test {
             calculated_width: Some(20.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Scroll,
             ..Default::default()
         };
@@ -1119,7 +1132,7 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Scroll,
             ..Default::default()
         };
@@ -1161,7 +1174,7 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Auto,
             ..Default::default()
         };
@@ -1203,7 +1216,7 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Auto,
             ..Default::default()
         };
@@ -1275,7 +1288,7 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Auto,
             ..Default::default()
         };
@@ -1321,7 +1334,7 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Auto,
             ..Default::default()
         };
@@ -1402,7 +1415,7 @@ mod test {
             calculated_width: Some(75.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Auto,
             ..Default::default()
         };
@@ -1499,7 +1512,7 @@ mod test {
             calculated_width: Some(75.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             justify_content: Some(JustifyContent::SpaceBetween),
             ..Default::default()
         };
@@ -1605,7 +1618,7 @@ mod test {
             calculated_width: Some(75.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             justify_content: Some(JustifyContent::SpaceBetween),
             ..Default::default()
         };
@@ -1686,7 +1699,7 @@ mod test {
             calculated_width: Some(75.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Squash,
             justify_content: Some(JustifyContent::SpaceBetween),
             ..Default::default()
@@ -1822,7 +1835,7 @@ mod test {
             calculated_width: Some(75.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Expand,
             justify_content: Some(JustifyContent::SpaceBetween),
             ..Default::default()
@@ -1973,7 +1986,7 @@ mod test {
             calculated_width: Some(75.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Expand,
             justify_content: Some(JustifyContent::SpaceBetween),
             column_gap: Some(Number::Integer(10)),
@@ -2073,7 +2086,7 @@ mod test {
             calculated_width: Some(75.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Expand,
             justify_content: Some(JustifyContent::SpaceBetween),
             column_gap: Some(Number::Integer(10)),
@@ -2177,7 +2190,7 @@ mod test {
             calculated_width: Some(75.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             justify_content: Some(JustifyContent::SpaceEvenly),
             ..Default::default()
         };
@@ -2236,7 +2249,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn handle_overflow_y_squash_handles_justify_content_space_evenly_with_padding_and_wraps_elements_properly()
      {
         let mut container = Container {
@@ -2272,7 +2284,7 @@ mod test {
             calculated_padding_left: Some(20.0),
             calculated_padding_right: Some(20.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Squash,
             justify_content: Some(JustifyContent::SpaceEvenly),
             ..Default::default()
@@ -2372,7 +2384,7 @@ mod test {
             calculated_padding_left: Some(20.0),
             calculated_padding_right: Some(20.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Expand,
             justify_content: Some(JustifyContent::SpaceEvenly),
             ..Default::default()
@@ -2478,7 +2490,7 @@ mod test {
             calculated_width: Some(75.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             justify_content: Some(JustifyContent::SpaceEvenly),
             ..Default::default()
         };
@@ -2559,7 +2571,7 @@ mod test {
             calculated_width: Some(75.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Squash,
             justify_content: Some(JustifyContent::SpaceEvenly),
             ..Default::default()
@@ -2695,7 +2707,7 @@ mod test {
             calculated_width: Some(75.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Expand,
             justify_content: Some(JustifyContent::SpaceEvenly),
             ..Default::default()
@@ -2846,7 +2858,7 @@ mod test {
             calculated_width: Some(75.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Expand,
             justify_content: Some(JustifyContent::SpaceEvenly),
             column_gap: Some(Number::Integer(10)),
@@ -2946,7 +2958,7 @@ mod test {
             calculated_width: Some(75.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Expand,
             justify_content: Some(JustifyContent::SpaceEvenly),
             column_gap: Some(Number::Integer(10)),
@@ -3041,7 +3053,7 @@ mod test {
                 calculated_width: Some(75.0),
                 calculated_height: Some(40.0),
                 direction: LayoutDirection::Row,
-                overflow_x: LayoutOverflow::Wrap,
+                overflow_x: LayoutOverflow::Wrap { grid: true },
                 overflow_y: LayoutOverflow::Expand,
                 ..Default::default()
             }],
@@ -3140,7 +3152,7 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Expand,
             ..Default::default()
         };
@@ -3190,7 +3202,7 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Expand,
             ..Default::default()
         };
@@ -3240,7 +3252,7 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Expand,
             ..Default::default()
         };
@@ -3315,7 +3327,7 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
@@ -3381,7 +3393,7 @@ mod test {
             calculated_width: Some(50.0 + f32::from(get_scrollbar_size())),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Scroll,
             ..Default::default()
         };
@@ -3444,7 +3456,7 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
@@ -3530,7 +3542,7 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
@@ -3619,7 +3631,7 @@ mod test {
             calculated_width: Some(50.0 + f32::from(get_scrollbar_size())),
             calculated_height: Some(80.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Scroll,
             ..Default::default()
         };
@@ -3691,7 +3703,7 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
@@ -3771,7 +3783,7 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
@@ -3877,7 +3889,7 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
@@ -3987,7 +3999,7 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
@@ -4098,7 +4110,7 @@ mod test {
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
@@ -5733,7 +5745,7 @@ mod test {
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -5774,7 +5786,7 @@ mod test {
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -5819,7 +5831,7 @@ mod test {
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -5862,7 +5874,7 @@ mod test {
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -5906,7 +5918,7 @@ mod test {
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -5987,7 +5999,7 @@ mod test {
             calculated_width: Some(110.0),
             calculated_height: Some(50.0),
             direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);

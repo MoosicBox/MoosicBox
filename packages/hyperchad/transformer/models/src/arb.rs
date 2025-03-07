@@ -15,11 +15,12 @@ impl Arbitrary for LayoutDirection {
 
 impl Arbitrary for LayoutOverflow {
     fn arbitrary(g: &mut Gen) -> Self {
+        let grid = *g.choose(&[true, false]).unwrap();
         *g.choose(&[
             Self::Auto,
             Self::Scroll,
             Self::Expand,
-            Self::Wrap,
+            Self::Wrap { grid },
             Self::Squash,
         ])
         .unwrap()

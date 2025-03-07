@@ -235,7 +235,7 @@ pub fn element_style_to_html(
             write_css_attr!(b"overflow-x", b"scroll");
         }
         LayoutOverflow::Expand | LayoutOverflow::Squash => {}
-        LayoutOverflow::Wrap => {
+        LayoutOverflow::Wrap { .. } => {
             write_css_attr!(b"flex-wrap", b"wrap");
         }
         LayoutOverflow::Hidden => {
@@ -250,7 +250,7 @@ pub fn element_style_to_html(
             write_css_attr!(b"overflow-y", b"scroll");
         }
         LayoutOverflow::Expand | LayoutOverflow::Squash => {}
-        LayoutOverflow::Wrap => {
+        LayoutOverflow::Wrap { .. } => {
             write_css_attr!(b"flex-wrap", b"wrap");
         }
         LayoutOverflow::Hidden => {

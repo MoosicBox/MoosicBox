@@ -470,7 +470,7 @@ impl FltkRenderer {
             }),
             LayoutOverflow::Squash
             | LayoutOverflow::Expand
-            | LayoutOverflow::Wrap
+            | LayoutOverflow::Wrap { .. }
             | LayoutOverflow::Hidden => None,
         };
         #[allow(clippy::cast_possible_truncation)]
@@ -507,48 +507,48 @@ impl FltkRenderer {
             }),
             LayoutOverflow::Squash
             | LayoutOverflow::Expand
-            | LayoutOverflow::Wrap
+            | LayoutOverflow::Wrap { .. }
             | LayoutOverflow::Hidden => None,
         };
 
         #[allow(clippy::cast_possible_truncation)]
-        let container_wrap_y: Option<Box<dyn Group>> = if context.overflow_y == LayoutOverflow::Wrap
-        {
-            Some({
-                let mut flex = match context.direction {
-                    LayoutDirection::Row => group::Flex::default_fill().column(),
-                    LayoutDirection::Column => group::Flex::default_fill().row(),
-                }
-                .with_size(
-                    calculated_width.round() as i32,
-                    calculated_height.round() as i32,
-                );
-                flex.set_pad(0);
-                flex.set_clip_children(false);
-                flex.into()
-            })
-        } else {
-            None
-        };
+        let container_wrap_y: Option<Box<dyn Group>> =
+            if matches!(context.overflow_y, LayoutOverflow::Wrap { .. }) {
+                Some({
+                    let mut flex = match context.direction {
+                        LayoutDirection::Row => group::Flex::default_fill().column(),
+                        LayoutDirection::Column => group::Flex::default_fill().row(),
+                    }
+                    .with_size(
+                        calculated_width.round() as i32,
+                        calculated_height.round() as i32,
+                    );
+                    flex.set_pad(0);
+                    flex.set_clip_children(false);
+                    flex.into()
+                })
+            } else {
+                None
+            };
         #[allow(clippy::cast_possible_truncation)]
-        let container_wrap_x: Option<Box<dyn Group>> = if context.overflow_x == LayoutOverflow::Wrap
-        {
-            Some({
-                let mut flex = match context.direction {
-                    LayoutDirection::Row => group::Flex::default_fill().column(),
-                    LayoutDirection::Column => group::Flex::default_fill().row(),
-                }
-                .with_size(
-                    calculated_width.round() as i32,
-                    calculated_height.round() as i32,
-                );
-                flex.set_pad(0);
-                flex.set_clip_children(false);
-                flex.into()
-            })
-        } else {
-            None
-        };
+        let container_wrap_x: Option<Box<dyn Group>> =
+            if matches!(context.overflow_x, LayoutOverflow::Wrap { .. }) {
+                Some({
+                    let mut flex = match context.direction {
+                        LayoutDirection::Row => group::Flex::default_fill().column(),
+                        LayoutDirection::Column => group::Flex::default_fill().row(),
+                    }
+                    .with_size(
+                        calculated_width.round() as i32,
+                        calculated_height.round() as i32,
+                    );
+                    flex.set_pad(0);
+                    flex.set_clip_children(false);
+                    flex.into()
+                })
+            } else {
+                None
+            };
 
         let contained_width = element.contained_calculated_width();
         let contained_height = element.contained_calculated_height();

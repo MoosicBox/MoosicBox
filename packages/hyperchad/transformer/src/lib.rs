@@ -2043,8 +2043,8 @@ impl Container {
             LayoutOverflow::Squash => {
                 attrs.add("sx-overflow-x", "squash");
             }
-            LayoutOverflow::Wrap => {
-                attrs.add("sx-overflow-x", "wrap");
+            LayoutOverflow::Wrap { grid } => {
+                attrs.add("sx-overflow-x", if grid { "wrap-grid" } else { "wrap" });
             }
             LayoutOverflow::Hidden => {
                 attrs.add("sx-overflow-x", "hidden");
@@ -2061,8 +2061,8 @@ impl Container {
             LayoutOverflow::Squash => {
                 attrs.add("sx-overflow-y", "squash");
             }
-            LayoutOverflow::Wrap => {
-                attrs.add("sx-overflow-y", "wrap");
+            LayoutOverflow::Wrap { grid } => {
+                attrs.add("sx-overflow-y", if grid { "wrap-grid" } else { "wrap" });
             }
             LayoutOverflow::Hidden => {
                 attrs.add("sx-overflow-y", "hidden");

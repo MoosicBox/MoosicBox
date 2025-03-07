@@ -229,7 +229,8 @@ fn parse_post_route(value: &str, tag: &HTMLTag) -> Result<Route, ParseAttrError>
 
 fn parse_overflow(value: &str) -> Result<LayoutOverflow, ParseAttrError> {
     Ok(match value {
-        "wrap" => LayoutOverflow::Wrap,
+        "wrap" => LayoutOverflow::Wrap { grid: false },
+        "wrap-grid" => LayoutOverflow::Wrap { grid: true },
         "scroll" => LayoutOverflow::Scroll,
         "expand" => LayoutOverflow::Expand,
         "squash" => LayoutOverflow::Squash,
