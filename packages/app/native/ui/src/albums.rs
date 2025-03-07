@@ -850,7 +850,8 @@ pub fn load_albums(
             hx-trigger="load"
             hx-swap="children"
             sx-dir="row"
-            sx-overflow-x="wrap"
+            sx-overflow-x="wrap-grid"
+            sx-grid-cell-size=(size)
             sx-justify-content="space-evenly"
             sx-gap=(15)
             sx-padding-x=(30)
