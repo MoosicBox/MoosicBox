@@ -117,7 +117,8 @@ pub struct Rect {
 
 macro_rules! flex_on_axis {
     (
-        $parent_ident:ident,
+        $bfs_ident:ident,
+        $container_ident:ident,
         $changed_ident:ident,
         $fixed_ident:ident,
         $calculated_ident:ident,
@@ -125,114 +126,156 @@ macro_rules! flex_on_axis {
         $cross_axis_ident:ident,
         $cell_ident:ident
     ) => {
-        if $parent_ident.relative_positioned_elements().all(|x| x.$fixed_ident.is_some()) {
-            return;
-        }
+        let root_id = $container_ident.id;
+        let view_width = $container_ident.calculated_width.unwrap();
+        let view_height = $container_ident.calculated_height.unwrap();
+        let relative_container = std::sync::Arc::new(std::sync::RwLock::new(super::Rect::default()));
 
-        let container_size = $parent_ident.$calculated_ident.unwrap();
-
-        let mut remaining_size = container_size;
-        let mut last_cell = 0;
-        let mut max_cell_size = 0.0;
-
-        for child in &mut $parent_ident.relative_positioned_elements() {
-            log::trace!("flex: calculating remaining size:\n{child}");
-
-            match $parent_ident.direction  {
-                LayoutDirection::$axis_ident => {
-                    if let Some(size) = child.$calculated_ident {
-                        log::trace!(
-                            "flex: removing size={size} from remaining_size={remaining_size} ({})",
-                            remaining_size - size
-                        );
-                        remaining_size -= size;
-                    }
+        #[allow(clippy::cognitive_complexity)]
+        $bfs_ident.traverse_with_parents_mut(
+            true,
+            $container_ident,
+            |parent| {
+                if parent.id == root_id {
+                    *relative_container.write().unwrap() = super::Rect {
+                        x: 0.0,
+                        y: 0.0,
+                        width: view_width,
+                        height: view_height,
+                    };
+                } else if parent.position == Some(Position::Relative) {
+                    *relative_container.write().unwrap() = super::Rect {
+                        x: parent.calculated_x.unwrap(),
+                        y: parent.calculated_y.unwrap(),
+                        width: parent.calculated_width.unwrap(),
+                        height: parent.calculated_height.unwrap(),
+                    };
                 }
-                LayoutDirection::$cross_axis_ident => {
-                    if let Some(LayoutPosition::Wrap { $cell_ident: cell, .. }) = child.calculated_position {
-                        if cell != last_cell {
-                            moosicbox_assert::assert!(cell > last_cell);
-                            remaining_size -= max_cell_size;
-                            max_cell_size = child.$calculated_ident.unwrap_or_default();
+            },
+            |parent| {
+                if parent.relative_positioned_elements().all(|x| x.$fixed_ident.is_some()) {
+                    return;
+                }
+
+                let container_size = parent.$calculated_ident.unwrap();
+
+                let mut remaining_size = container_size;
+                let mut last_cell = 0;
+                let mut max_cell_size = 0.0;
+
+                for child in &mut parent.relative_positioned_elements() {
+                    log::trace!("flex: calculating remaining size:\n{child}");
+
+                    match parent.direction  {
+                        LayoutDirection::$axis_ident => {
+                            if let Some(size) = child.$calculated_ident {
+                                log::trace!(
+                                    "flex: removing size={size} from remaining_size={remaining_size} ({})",
+                                    remaining_size - size
+                                );
+                                remaining_size -= size;
+                            }
                         }
+                        LayoutDirection::$cross_axis_ident => {
+                            if let Some(LayoutPosition::Wrap { $cell_ident: cell, .. }) = child.calculated_position {
+                                if cell != last_cell {
+                                    moosicbox_assert::assert!(cell > last_cell);
+                                    remaining_size -= max_cell_size;
+                                    max_cell_size = child.$calculated_ident.unwrap_or_default();
+                                }
 
-                        last_cell = cell;
-                    }
-                }
-            }
-        }
-
-        let cell_count = last_cell + 1;
-        remaining_size -= max_cell_size;
-
-        log::trace!("flex: remaining_size={remaining_size}");
-
-        match $parent_ident.direction {
-            LayoutDirection::$axis_ident => {
-                #[allow(clippy::while_float)]
-                while remaining_size >= EPSILON {
-                    let mut smallest= f32::INFINITY;
-                    let mut target= f32::INFINITY;
-                    let mut smallest_count= 0;
-
-                    for size in $parent_ident
-                        .relative_positioned_elements()
-                        .filter(|x| x.$fixed_ident.is_none())
-                        .filter_map(|x| x.$calculated_ident)
-                    {
-                        if smallest > size {
-                            target = smallest;
-                            smallest = size;
-                            smallest_count = 1;
-                        } else if (smallest - size).abs() < EPSILON {
-                            smallest_count += 1;
+                                last_cell = cell;
+                            }
                         }
                     }
+                }
 
-                    moosicbox_assert::assert!(smallest_count > 0);
-                    moosicbox_assert::assert!(smallest.is_finite());
+                let cell_count = last_cell + 1;
+                remaining_size -= max_cell_size;
 
-                    if target.is_infinite() {
-                        target = remaining_size;
+                log::trace!("flex: remaining_size={remaining_size}");
+
+                match parent.direction {
+                    LayoutDirection::$axis_ident => {
+                        #[allow(clippy::while_float)]
+                        while remaining_size >= EPSILON {
+                            let mut smallest= f32::INFINITY;
+                            let mut target= f32::INFINITY;
+                            let mut smallest_count= 0;
+
+                            for size in parent
+                                .relative_positioned_elements()
+                                .filter(|x| x.$fixed_ident.is_none())
+                                .filter_map(|x| x.$calculated_ident)
+                            {
+                                if smallest > size {
+                                    target = smallest;
+                                    smallest = size;
+                                    smallest_count = 1;
+                                } else if (smallest - size).abs() < EPSILON {
+                                    smallest_count += 1;
+                                }
+                            }
+
+                            moosicbox_assert::assert!(smallest_count > 0);
+                            moosicbox_assert::assert!(smallest.is_finite());
+
+                            if target.is_infinite() {
+                                target = remaining_size;
+                            }
+
+                            let target_delta = target - smallest;
+                            remaining_size -= target_delta;
+
+                            #[allow(clippy::cast_precision_loss)]
+                            let delta = target_delta / (smallest_count as f32);
+
+                            log::trace!("flex: target={target} target_delta={target_delta} smallest={smallest} smallest_count={smallest_count} delta={delta} remaining_size={remaining_size}");
+
+                            for child in parent
+                                .relative_positioned_elements_mut()
+                                .filter(|x| x.$fixed_ident.is_none())
+                                .filter(|x| x.$calculated_ident.is_some_and(|x| (x - smallest).abs() < EPSILON))
+                            {
+                                let size = child.$calculated_ident.unwrap();
+                                log::trace!("flex: distributing evenly split remaining_size={remaining_size} delta={delta}:\n{child}");
+                                set_float(&mut child.$calculated_ident, size + delta);
+                            }
+                        }
                     }
+                    LayoutDirection::$cross_axis_ident => {
+                        for child in parent.relative_positioned_elements_mut() {
+                            log::trace!("flex: setting size to remaining_size={remaining_size}:\n{child}");
 
-                    let target_delta = target - smallest;
-                    remaining_size -= target_delta;
-
-                    #[allow(clippy::cast_precision_loss)]
-                    let delta = target_delta / (smallest_count as f32);
-
-                    log::trace!("flex: target={target} target_delta={target_delta} smallest={smallest} smallest_count={smallest_count} delta={delta} remaining_size={remaining_size}");
-
-                    for child in $parent_ident
-                        .relative_positioned_elements_mut()
-                        .filter(|x| x.$fixed_ident.is_none())
-                        .filter(|x| x.$calculated_ident.is_some_and(|x| (x - smallest).abs() < EPSILON))
-                    {
-                        let size = child.$calculated_ident.unwrap();
-                        log::trace!("flex: distributing evenly split remaining_size={remaining_size} delta={delta}:\n{child}");
-                        set_float(&mut child.$calculated_ident, size + delta);
+                            #[allow(clippy::cast_precision_loss)]
+                            if child.$fixed_ident.is_none()
+                                && set_float(&mut child.$calculated_ident, remaining_size / (cell_count as f32)).is_some()
+                            {
+                                $changed_ident = true;
+                            }
+                        }
                     }
                 }
-            }
-            LayoutDirection::$cross_axis_ident => {
-                for child in $parent_ident.relative_positioned_elements_mut() {
-                    log::trace!("flex: setting size to remaining_size={remaining_size}:\n{child}");
 
-                    #[allow(clippy::cast_precision_loss)]
-                    if child.$fixed_ident.is_none()
-                        && set_float(&mut child.$calculated_ident, remaining_size / (cell_count as f32)).is_some()
-                    {
+                // absolute positioned
+
+                let super::Rect { $fixed_ident: size, .. } = *relative_container.read().unwrap();
+
+                for child in parent.absolute_positioned_elements_mut() {
+                    if child.$fixed_ident.is_some() {
+                        continue;
+                    }
+
+                    if set_float(&mut child.$calculated_ident, size).is_some() {
                         $changed_ident = true;
                     }
                 }
-            }
-        }
+            });
     };
 }
 
 mod pass_flex_width {
-    use hyperchad_transformer_models::{LayoutDirection, LayoutPosition};
+    use hyperchad_transformer_models::{LayoutDirection, LayoutPosition, Position};
 
     use crate::{
         BfsPaths, Container,
@@ -251,10 +294,16 @@ mod pass_flex_width {
 
             let mut changed = false;
 
-            #[allow(clippy::cognitive_complexity)]
-            bfs.traverse_mut(container, |parent| {
-                flex_on_axis!(parent, changed, width, calculated_width, Row, Column, col);
-            });
+            flex_on_axis!(
+                bfs,
+                container,
+                changed,
+                width,
+                calculated_width,
+                Row,
+                Column,
+                col
+            );
 
             changed
         }
@@ -318,7 +367,7 @@ mod pass_heights {
 }
 
 mod pass_flex_height {
-    use hyperchad_transformer_models::{LayoutDirection, LayoutPosition};
+    use hyperchad_transformer_models::{LayoutDirection, LayoutPosition, Position};
 
     use crate::{
         BfsPaths, Container,
@@ -337,10 +386,16 @@ mod pass_flex_height {
 
             let mut changed = false;
 
-            #[allow(clippy::cognitive_complexity)]
-            bfs.traverse_mut(container, |parent| {
-                flex_on_axis!(parent, changed, height, calculated_height, Column, Row, row);
-            });
+            flex_on_axis!(
+                bfs,
+                container,
+                changed,
+                height,
+                calculated_height,
+                Column,
+                Row,
+                row
+            );
 
             changed
         }
@@ -415,8 +470,10 @@ mod pass_wrap {
 }
 
 mod pass_positioning {
+    use std::sync::{Arc, RwLock};
+
     use bumpalo::Bump;
-    use hyperchad_transformer_models::{LayoutDirection, LayoutOverflow, LayoutPosition};
+    use hyperchad_transformer_models::{LayoutDirection, LayoutOverflow, LayoutPosition, Position};
 
     use crate::{
         BfsPaths, Container,
@@ -447,141 +504,203 @@ mod pass_positioning {
                 ("position_elements:\n{container}")
             );
 
+            let root_id = container.id;
             let view_width = container.calculated_width.unwrap();
             let view_height = container.calculated_height.unwrap();
 
             let mut changed = false;
 
-            bfs.traverse_mut(container, |parent| {
-                let mut x = 0.0;
-                let mut y = 0.0;
+            let relative_container = Arc::new(RwLock::new((0.0, 0.0, 0.0, 0.0)));
 
-                let direction = parent.direction;
-                let container_width = parent.calculated_width.unwrap();
-
-                if let LayoutOverflow::Wrap { grid } = parent.overflow_x {
-                    let mut last_row = 0;
-                    let mut col_count = 0;
-                    let mut max_col_count = 0;
-                    let mut row_width = 0.0;
-                    let gaps = &mut bumpalo::collections::Vec::new_in(arena);
-                    let grid_cell_size = parent
-                        .grid_cell_size
-                        .as_ref()
-                        .map(|x| x.calc(container_width, view_width, view_height));
-
-                    for child in parent.relative_positioned_elements_mut() {
-                        let Some(LayoutPosition::Wrap { row, col }) = child.calculated_position
-                        else {
-                            continue;
-                        };
-                        log::trace!("position_elements: wrap calculating gaps ({row}, {col})");
-
-                        if row != last_row {
-                            moosicbox_assert::assert!(row > last_row);
-
-                            let remainder = container_width - row_width;
-                            #[allow(clippy::cast_precision_loss)]
-                            let gap = remainder / ((col_count + 1) as f32);
-                            gaps.push(gap);
-
-                            if grid && col_count > max_col_count {
-                                max_col_count = col_count;
-                            }
-
-                            row_width = 0.0;
-                            col_count = 0;
-                            last_row = row;
-                        }
-
-                        row_width +=
-                            grid_cell_size.unwrap_or_else(|| child.calculated_width.unwrap());
-                        col_count += 1;
-                    }
-
-                    let remainder = container_width - row_width;
-                    #[allow(clippy::cast_precision_loss)]
-                    let gap = remainder / ((col_count + 1) as f32);
-                    gaps.push(gap);
-
-                    #[allow(unused_assignments)]
-                    if col_count > max_col_count {
-                        max_col_count = col_count;
-                    }
-
-                    let mut gap = match parent.justify_content.unwrap_or_default() {
-                        hyperchad_transformer_models::JustifyContent::Start => 0.0,
-                        hyperchad_transformer_models::JustifyContent::Center => todo!(),
-                        hyperchad_transformer_models::JustifyContent::End => todo!(),
-                        hyperchad_transformer_models::JustifyContent::SpaceBetween => todo!(),
-                        hyperchad_transformer_models::JustifyContent::SpaceEvenly => {
-                            gaps.first().copied().unwrap_or_default()
-                        }
-                    };
-                    let mut max_height = 0.0;
-                    last_row = 0;
-                    x = gap;
-
-                    for child in parent.relative_positioned_elements_mut() {
-                        let Some(LayoutPosition::Wrap { row, .. }) = child.calculated_position
-                        else {
-                            continue;
-                        };
-
-                        let child_width = child.calculated_width.unwrap();
-                        let child_height = child.calculated_height.unwrap();
-
-                        if row != last_row {
-                            moosicbox_assert::assert!(row > last_row);
-
-                            if !grid {
-                                // FIXME: This could break if we allow jumping rows (e.g. from row 2 to 4)
-                                gap = gaps.get(row as usize).copied().unwrap_or_default();
-                            }
-
-                            x = gap;
-                            y += max_height;
-                            max_height = 0.0;
-                            last_row = row;
-                        }
-
-                        if child_height > max_height {
-                            max_height = child_height;
-                        }
-
-                        log::trace!(
-                            "position_elements: setting wrapped position ({x}, {y}):\n{child}"
+            #[allow(clippy::cognitive_complexity)]
+            bfs.traverse_with_parents_mut(
+                true,
+                container,
+                |parent| {
+                    if parent.id == root_id {
+                        *relative_container.write().unwrap() = (0.0, 0.0, view_width, view_height);
+                    } else if parent.position == Some(Position::Relative) {
+                        *relative_container.write().unwrap() = (
+                            parent.calculated_x.unwrap(),
+                            parent.calculated_y.unwrap(),
+                            parent.calculated_width.unwrap(),
+                            parent.calculated_height.unwrap(),
                         );
-                        if set_float(&mut child.calculated_x, x).is_some() {
-                            changed = true;
-                        }
-                        if set_float(&mut child.calculated_y, y).is_some() {
-                            changed = true;
+                    }
+                },
+                |parent| {
+                    let mut x = 0.0;
+                    let mut y = 0.0;
+
+                    let direction = parent.direction;
+                    let container_width = parent.calculated_width.unwrap();
+
+                    if let LayoutOverflow::Wrap { grid } = parent.overflow_x {
+                        let mut last_row = 0;
+                        let mut col_count = 0;
+                        let mut max_col_count = 0;
+                        let mut row_width = 0.0;
+                        let gaps = &mut bumpalo::collections::Vec::new_in(arena);
+                        let grid_cell_size = parent
+                            .grid_cell_size
+                            .as_ref()
+                            .map(|x| x.calc(container_width, view_width, view_height));
+
+                        for child in parent.relative_positioned_elements_mut() {
+                            let Some(LayoutPosition::Wrap { row, col }) = child.calculated_position
+                            else {
+                                continue;
+                            };
+                            log::trace!("position_elements: wrap calculating gaps ({row}, {col})");
+
+                            if row != last_row {
+                                moosicbox_assert::assert!(row > last_row);
+
+                                let remainder = container_width - row_width;
+                                #[allow(clippy::cast_precision_loss)]
+                                let gap = remainder / ((col_count + 1) as f32);
+                                gaps.push(gap);
+
+                                if grid && col_count > max_col_count {
+                                    max_col_count = col_count;
+                                }
+
+                                row_width = 0.0;
+                                col_count = 0;
+                                last_row = row;
+                            }
+
+                            row_width +=
+                                grid_cell_size.unwrap_or_else(|| child.calculated_width.unwrap());
+                            col_count += 1;
                         }
 
-                        x += child_width + gap;
-                    }
-                } else {
-                    for child in parent.relative_positioned_elements_mut() {
-                        log::trace!("position_elements: setting position ({x}, {y}):\n{child}");
-                        if set_float(&mut child.calculated_x, x).is_some() {
-                            changed = true;
-                        }
-                        if set_float(&mut child.calculated_y, y).is_some() {
-                            changed = true;
+                        let remainder = container_width - row_width;
+                        #[allow(clippy::cast_precision_loss)]
+                        let gap = remainder / ((col_count + 1) as f32);
+                        gaps.push(gap);
+
+                        #[allow(unused_assignments)]
+                        if col_count > max_col_count {
+                            max_col_count = col_count;
                         }
 
-                        match direction {
-                            LayoutDirection::Row => {
-                                x += child.calculated_width.unwrap();
+                        let mut gap = match parent.justify_content.unwrap_or_default() {
+                            hyperchad_transformer_models::JustifyContent::Start => 0.0,
+                            hyperchad_transformer_models::JustifyContent::Center => todo!(),
+                            hyperchad_transformer_models::JustifyContent::End => todo!(),
+                            hyperchad_transformer_models::JustifyContent::SpaceBetween => todo!(),
+                            hyperchad_transformer_models::JustifyContent::SpaceEvenly => {
+                                gaps.first().copied().unwrap_or_default()
                             }
-                            LayoutDirection::Column => {
-                                y += child.calculated_height.unwrap();
+                        };
+                        let mut max_height = 0.0;
+                        last_row = 0;
+                        x = gap;
+
+                        for child in parent.relative_positioned_elements_mut() {
+                            let Some(LayoutPosition::Wrap { row, .. }) = child.calculated_position
+                            else {
+                                continue;
+                            };
+
+                            let child_width = child.calculated_width.unwrap();
+                            let child_height = child.calculated_height.unwrap();
+
+                            if row != last_row {
+                                moosicbox_assert::assert!(row > last_row);
+
+                                if !grid {
+                                    // FIXME: This could break if we allow jumping rows (e.g. from row 2 to 4)
+                                    gap = gaps.get(row as usize).copied().unwrap_or_default();
+                                }
+
+                                x = gap;
+                                y += max_height;
+                                max_height = 0.0;
+                                last_row = row;
+                            }
+
+                            if child_height > max_height {
+                                max_height = child_height;
+                            }
+
+                            log::trace!(
+                                "position_elements: setting wrapped position ({x}, {y}):\n{child}"
+                            );
+                            if set_float(&mut child.calculated_x, x).is_some() {
+                                changed = true;
+                            }
+                            if set_float(&mut child.calculated_y, y).is_some() {
+                                changed = true;
+                            }
+
+                            x += child_width + gap;
+                        }
+                    } else {
+                        for child in parent.relative_positioned_elements_mut() {
+                            log::trace!("position_elements: setting position ({x}, {y}):\n{child}");
+                            if set_float(&mut child.calculated_x, x).is_some() {
+                                changed = true;
+                            }
+                            if set_float(&mut child.calculated_y, y).is_some() {
+                                changed = true;
+                            }
+
+                            match direction {
+                                LayoutDirection::Row => {
+                                    x += child.calculated_width.unwrap();
+                                }
+                                LayoutDirection::Column => {
+                                    y += child.calculated_height.unwrap();
+                                }
                             }
                         }
                     }
-                }
-            });
+
+                    // absolute positioned
+
+                    let (_x, _y, width, height) = *relative_container.read().unwrap();
+
+                    for child in parent.absolute_positioned_elements_mut() {
+                        if let Some(left) = &child.left {
+                            let left = left.calc(width, view_width, view_height);
+                            if set_float(&mut child.calculated_x, left).is_some() {
+                                changed = true;
+                            }
+                        }
+                        if let Some(right) = &child.right {
+                            let right = right.calc(width, view_width, view_height);
+                            let bounding_width = child.bounding_calculated_width().unwrap();
+                            let right = width - right - bounding_width;
+                            if set_float(&mut child.calculated_x, right).is_some() {
+                                changed = true;
+                            }
+                        }
+                        if let Some(top) = &child.top {
+                            let top = top.calc(height, view_width, view_height);
+                            if set_float(&mut child.calculated_y, top).is_some() {
+                                changed = true;
+                            }
+                        }
+                        if let Some(bottom) = &child.bottom {
+                            let bottom = bottom.calc(height, view_width, view_height);
+                            let bounding_height = child.bounding_calculated_height().unwrap();
+                            let bottom = height - bottom - bounding_height;
+                            if set_float(&mut child.calculated_y, bottom).is_some() {
+                                changed = true;
+                            }
+                        }
+
+                        if child.calculated_x.is_none() {
+                            child.calculated_x = Some(0.0);
+                        }
+                        if child.calculated_y.is_none() {
+                            child.calculated_y = Some(0.0);
+                        }
+                    }
+                },
+            );
 
             changed
         }
@@ -5148,7 +5267,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_can_calc_absolute_positioned_element_on_top_of_a_relative_element() {
         let mut container = Container {
             children: vec![
@@ -5167,7 +5285,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         compare_containers(
-            &container.clone(),
+            &container,
             &Container {
                 children: vec![
                     Container {
@@ -5176,7 +5294,7 @@ mod test {
                         calculated_x: Some(0.0),
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Default),
-                        ..Default::default()
+                        ..container.children[0].clone()
                     },
                     Container {
                         calculated_width: Some(100.0),
@@ -5184,10 +5302,10 @@ mod test {
                         calculated_x: Some(0.0),
                         calculated_y: Some(0.0),
                         position: Some(Position::Absolute),
-                        ..Default::default()
+                        ..container.children[1].clone()
                     },
                 ],
-                ..container
+                ..container.clone()
             },
         );
     }
