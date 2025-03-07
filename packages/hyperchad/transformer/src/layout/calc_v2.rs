@@ -109,30 +109,30 @@ mod pass_widths {
 
 macro_rules! flex_on_axis {
     (
-        $parent:ident,
-        $changed:ident,
+        $parent_ident:ident,
+        $changed_ident:ident,
         $fixed_ident:ident,
-        $calculated:ident,
-        $axis:ident,
-        $cross_axis:ident,
+        $calculated_ident:ident,
+        $axis_ident:ident,
+        $cross_axis_ident:ident,
         $cell_ident:ident
     ) => {
-        if $parent.relative_positioned_elements().all(|x| x.$fixed_ident.is_some()) {
+        if $parent_ident.relative_positioned_elements().all(|x| x.$fixed_ident.is_some()) {
             return;
         }
 
-        let container_size = $parent.$calculated.unwrap();
+        let container_size = $parent_ident.$calculated_ident.unwrap();
 
         let mut remaining_size = container_size;
         let mut last_cell = 0;
         let mut max_cell_size = 0.0;
 
-        for child in &mut $parent.relative_positioned_elements() {
+        for child in &mut $parent_ident.relative_positioned_elements() {
             log::trace!("flex: calculating remaining size:\n{child}");
 
-            match $parent.direction  {
-                LayoutDirection::$axis => {
-                    if let Some(size) = child.$calculated {
+            match $parent_ident.direction  {
+                LayoutDirection::$axis_ident => {
+                    if let Some(size) = child.$calculated_ident {
                         log::trace!(
                             "flex: removing size={size} from remaining_size={remaining_size} ({})",
                             remaining_size - size
@@ -140,12 +140,12 @@ macro_rules! flex_on_axis {
                         remaining_size -= size;
                     }
                 }
-                LayoutDirection::$cross_axis => {
+                LayoutDirection::$cross_axis_ident => {
                     if let Some(LayoutPosition::Wrap { $cell_ident: cell, .. }) = child.calculated_position {
                         if cell != last_cell {
                             moosicbox_assert::assert!(cell > last_cell);
                             remaining_size -= max_cell_size;
-                            max_cell_size = child.$calculated.unwrap_or_default();
+                            max_cell_size = child.$calculated_ident.unwrap_or_default();
                         }
 
                         last_cell = cell;
@@ -159,18 +159,18 @@ macro_rules! flex_on_axis {
 
         log::trace!("flex: remaining_size={remaining_size}");
 
-        match $parent.direction {
-            LayoutDirection::$axis => {
+        match $parent_ident.direction {
+            LayoutDirection::$axis_ident => {
                 #[allow(clippy::while_float)]
                 while remaining_size >= EPSILON {
                     let mut smallest= f32::INFINITY;
                     let mut target= f32::INFINITY;
                     let mut smallest_count= 0;
 
-                    for size in $parent
+                    for size in $parent_ident
                         .relative_positioned_elements()
                         .filter(|x| x.$fixed_ident.is_none())
-                        .filter_map(|x| x.$calculated)
+                        .filter_map(|x| x.$calculated_ident)
                     {
                         if smallest > size {
                             target = smallest;
@@ -196,26 +196,26 @@ macro_rules! flex_on_axis {
 
                     log::trace!("flex: target={target} target_delta={target_delta} smallest={smallest} smallest_count={smallest_count} delta={delta} remaining_size={remaining_size}");
 
-                    for child in $parent
+                    for child in $parent_ident
                         .relative_positioned_elements_mut()
                         .filter(|x| x.$fixed_ident.is_none())
-                        .filter(|x| x.$calculated.is_some_and(|x| (x - smallest).abs() < EPSILON))
+                        .filter(|x| x.$calculated_ident.is_some_and(|x| (x - smallest).abs() < EPSILON))
                     {
-                        let size = child.$calculated.unwrap();
-                        log::trace!("flex: distributing evenly split remaining size delta={delta} remaining_size={remaining_size}:\n{child}");
-                        set_float(&mut child.$calculated, size + delta);
+                        let size = child.$calculated_ident.unwrap();
+                        log::trace!("flex: distributing evenly split remaining_size={remaining_size} delta={delta}:\n{child}");
+                        set_float(&mut child.$calculated_ident, size + delta);
                     }
                 }
             }
-            LayoutDirection::$cross_axis => {
-                for child in $parent.relative_positioned_elements_mut() {
+            LayoutDirection::$cross_axis_ident => {
+                for child in $parent_ident.relative_positioned_elements_mut() {
                     log::trace!("flex: setting size to remaining_size={remaining_size}:\n{child}");
 
                     #[allow(clippy::cast_precision_loss)]
                     if child.$fixed_ident.is_none()
-                        && set_float(&mut child.$calculated, remaining_size / (cell_count as f32)).is_some()
+                        && set_float(&mut child.$calculated_ident, remaining_size / (cell_count as f32)).is_some()
                     {
-                        $changed = true;
+                        $changed_ident = true;
                     }
                 }
             }
