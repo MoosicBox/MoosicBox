@@ -1022,7 +1022,11 @@ pub struct Container {
     #[cfg(feature = "layout")]
     pub calculated_padding_bottom: Option<f32>,
     #[cfg(feature = "layout")]
+    pub calculated_min_width: Option<f32>,
+    #[cfg(feature = "layout")]
     pub calculated_width: Option<f32>,
+    #[cfg(feature = "layout")]
+    pub calculated_min_height: Option<f32>,
     #[cfg(feature = "layout")]
     pub calculated_height: Option<f32>,
     #[cfg(feature = "layout")]
@@ -2083,7 +2087,9 @@ impl Container {
             {
                 attrs.add_opt("calc-x", self.calculated_x);
                 attrs.add_opt("calc-y", self.calculated_y);
+                attrs.add_opt("calc-min-width", self.calculated_min_width);
                 attrs.add_opt("calc-width", self.calculated_width);
+                attrs.add_opt("calc-min-height", self.calculated_min_height);
                 attrs.add_opt("calc-height", self.calculated_height);
                 attrs.add_opt("calc-margin-left", self.calculated_margin_left);
                 attrs.add_opt("calc-margin-right", self.calculated_margin_right);

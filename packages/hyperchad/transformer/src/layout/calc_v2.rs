@@ -60,7 +60,7 @@ mod pass_widths {
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
         fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-            moosicbox_logging::debug_or_trace!(("calc_width"), ("calc_width: {container}"));
+            moosicbox_logging::debug_or_trace!(("calc_width"), ("calc_width:\n{container}"));
 
             let view_width = container.calculated_width.unwrap();
             let view_height = container.calculated_height.unwrap();
@@ -68,11 +68,15 @@ mod pass_widths {
             let mut changed = false;
 
             bfs.traverse_rev_mut(container, |parent| {
+                let mut min_width = 0.0;
+
                 for child in &mut parent.children {
                     log::trace!("calc_widths: container:\n{child}");
 
                     if let Some(width) = &child.width {
                         let new_width = width.calc(0.0, view_width, view_height);
+
+                        min_width += new_width;
 
                         if set_float(&mut child.calculated_width, new_width).is_some() {
                             changed = true;
@@ -84,8 +88,133 @@ mod pass_widths {
                         if set_float(&mut child.calculated_width, new_width).is_some() {
                             changed = true;
                         }
+                    } else if let Some(width) = child.calculated_min_width {
+                        if set_float(&mut child.calculated_width, width).is_some() {
+                            changed = true;
+                        }
+                    } else {
+                        set_float(&mut child.calculated_width, 0.0);
                     }
                 }
+
+                set_float(&mut parent.calculated_min_width, min_width);
+            });
+
+            changed
+        }
+    }
+
+    impl<F: FontMetrics> CalcV2Calculator<F> {}
+}
+
+mod pass_flex_width {
+    use hyperchad_transformer_models::LayoutDirection;
+
+    use crate::{
+        BfsPaths, Container,
+        layout::{EPSILON, font::FontMetrics, set_float},
+    };
+
+    use super::CalcV2Calculator;
+
+    pub trait Pass {
+        fn flex_width(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
+    }
+
+    impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
+        fn flex_width(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
+            moosicbox_logging::debug_or_trace!(("flex_width"), ("flex_width:\n{container}"));
+
+            let mut changed = false;
+
+            bfs.traverse_mut(container, |parent| {
+                if parent.children.iter().all(|x| x.width.is_some()) {
+                    return;
+                }
+
+                let container_width = parent.calculated_width.unwrap();
+
+                let mut remaining_width = container_width;
+
+                for child in &mut parent.children {
+                    log::trace!("flex_width: calculating remaining size:\n{child}");
+
+                    if parent.direction == LayoutDirection::Row {
+                        if let Some(width) = child.calculated_width {
+                            log::trace!(
+                                "flex_width: removing width={width} from remaining_width={remaining_width} ({})",
+                                remaining_width - width
+                            );
+                            remaining_width -= width;
+                        }
+                    }
+                }
+
+                log::trace!("flex_width: remaining_width={remaining_width}");
+
+                match parent.direction {
+                    LayoutDirection::Row => {
+                        #[allow(clippy::while_float)]
+                        while remaining_width >= EPSILON {
+                            let mut smallest= f32::INFINITY;
+                            let mut target= f32::INFINITY;
+                            let mut smallest_count= 0;
+
+                            for width in parent
+                                .children
+                                .iter()
+                                .filter(|x| x.width.is_none())
+                                .filter_map(|x| x.calculated_width)
+                            {
+                                if smallest > width {
+                                    target = smallest;
+                                    smallest = width;
+                                    smallest_count = 1;
+                                } else if (smallest - width).abs() < EPSILON {
+                                    smallest_count += 1;
+                                }
+                            }
+
+                            moosicbox_assert::assert!(smallest_count > 0);
+                            moosicbox_assert::assert!(smallest.is_finite());
+
+                            if target.is_infinite() {
+                                target = remaining_width;
+                            }
+
+                            let target_delta = target - smallest;
+                            remaining_width -= target_delta;
+
+                            #[allow(clippy::cast_precision_loss)]
+                            let delta = target_delta / (smallest_count as f32);
+
+                            log::trace!("flex_width: target={target} target_delta={target_delta} smallest={smallest} smallest_count={smallest_count} delta={delta} remaining_width={remaining_width}");
+
+                            for child in parent
+                                .children
+                                .iter_mut()
+                                .filter(|x| x.width.is_none())
+                                .filter(|x| x.calculated_width.is_some_and(|x| (x - smallest).abs() < EPSILON))
+                            {
+                                let width = child.calculated_width.unwrap();
+                                log::trace!("flex_width: distributing evenly split remaining size delta={delta} remaining_width={remaining_width}:\n{child}");
+                                set_float(&mut child.calculated_width, width + delta);
+                            }
+                        }
+                    }
+                    LayoutDirection::Column => {
+                        for child in &mut parent.children {
+                            log::trace!("flex_width: setting width to remaining_width={remaining_width}:\n{child}");
+
+                            if child.width.is_none()
+                                && set_float(&mut child.calculated_width, remaining_width).is_some()
+                            {
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+
             });
 
             changed
@@ -109,7 +238,7 @@ mod pass_heights {
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
         fn calc_heights(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-            moosicbox_logging::debug_or_trace!(("calc_heights"), ("calc_heights: {container}"));
+            moosicbox_logging::debug_or_trace!(("calc_heights"), ("calc_heights:\n{container}"));
 
             let view_width = container.calculated_width.unwrap();
             let view_height = container.calculated_height.unwrap();
@@ -117,83 +246,29 @@ mod pass_heights {
             let mut changed = false;
 
             bfs.traverse_rev_mut(container, |parent| {
+                let mut min_height = 0.0;
+
                 for child in &mut parent.children {
                     log::trace!("calc_heights: container:\n{child}");
 
                     if let Some(height) = &child.height {
                         let new_height = height.calc(0.0, view_width, view_height);
 
+                        min_height += new_height;
+
                         if set_float(&mut child.calculated_height, new_height).is_some() {
                             changed = true;
                         }
-                    }
-                }
-            });
-
-            changed
-        }
-    }
-
-    impl<F: FontMetrics> CalcV2Calculator<F> {}
-}
-
-mod pass_flex_width {
-    use hyperchad_transformer_models::LayoutDirection;
-
-    use crate::{
-        BfsPaths, Container,
-        layout::{font::FontMetrics, set_float},
-    };
-
-    use super::CalcV2Calculator;
-
-    pub trait Pass {
-        fn flex_width(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
-    }
-
-    impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
-        fn flex_width(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-            moosicbox_logging::debug_or_trace!(("flex_width"), ("flex_width: {container}"));
-
-            let mut changed = false;
-
-            bfs.traverse_mut(container, |parent| {
-                let container_width = parent.calculated_width.unwrap();
-
-                let mut remaining_width = container_width;
-                let mut unsized_count = 0;
-
-                for child in &mut parent.children {
-                    log::trace!("flex_width: calculating remaining size:\n{child}");
-
-                    if parent.direction == LayoutDirection::Row {
-                        if let Some(width) = child.calculated_width {
-                            log::trace!(
-                                "flex_width: removing width={width} from remaining_width={remaining_width} ({})",
-                                remaining_width - width
-                            );
-                            remaining_width -= width;
-                        } else {
-                            unsized_count += 1;
+                    } else if let Some(height) = child.calculated_min_height {
+                        if set_float(&mut child.calculated_height, height).is_some() {
+                            changed = true;
                         }
+                    } else {
+                        set_float(&mut child.calculated_height, 0.0);
                     }
                 }
 
-                let evenly_split_remaining_size = match parent.direction {
-                    #[allow(clippy::cast_precision_loss)]
-                    LayoutDirection::Row => remaining_width / unsized_count as f32,
-                    LayoutDirection::Column => remaining_width,
-                };
-
-                for child in &mut parent.children {
-                    log::trace!("flex_width: distributing evenly split remaining size:\n{child}");
-
-                    if child.width.is_none()
-                        && set_float(&mut child.calculated_width, evenly_split_remaining_size).is_some()
-                    {
-                        changed = true;
-                    }
-                }
+                set_float(&mut parent.calculated_min_height, min_height);
             });
 
             changed
@@ -219,7 +294,7 @@ mod pass_flex_height {
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
         fn flex_height(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-            moosicbox_logging::debug_or_trace!(("flex_height"), ("flex_height: {container}"));
+            moosicbox_logging::debug_or_trace!(("flex_height"), ("flex_height:\n{container}"));
 
             let mut changed = false;
 
@@ -248,11 +323,12 @@ mod pass_flex_height {
                             }
                         }
                         LayoutDirection::Column => {
+                            if child.height.is_none() {
+                                unsized_count += 1;
+                            }
                             if let Some(height) = child.calculated_height {
                                 log::trace!("flex_height: removing height={height} from remaining_height={remaining_height} ({})", remaining_height - height);
                                 remaining_height -= height;
-                            } else {
-                                unsized_count += 1;
                             }
                         }
                     }
@@ -265,11 +341,19 @@ mod pass_flex_height {
                     match parent.direction {
                         #[allow(clippy::cast_precision_loss)]
                         LayoutDirection::Row => {
-                            remaining_height / row_count as f32
+                            if row_count == 0 {
+                                0.0
+                            } else {
+                                remaining_height / row_count as f32
+                            }
                         }
                         #[allow(clippy::cast_precision_loss)]
                         LayoutDirection::Column => {
-                            remaining_height / unsized_count as f32
+                            if unsized_count == 0 {
+                                0.0
+                            } else {
+                                remaining_height / unsized_count as f32
+                            }
                         }
                     };
 
@@ -307,7 +391,7 @@ mod pass_wrap {
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
         fn wrap(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-            moosicbox_logging::debug_or_trace!(("wrap"), ("wrap: {container}"));
+            moosicbox_logging::debug_or_trace!(("wrap"), ("wrap:\n{container}"));
 
             let mut changed = true;
 
@@ -385,7 +469,7 @@ mod pass_positioning {
         ) -> bool {
             moosicbox_logging::debug_or_trace!(
                 ("position_elements"),
-                ("position_elements: {container}")
+                ("position_elements:\n{container}")
             );
 
             let view_width = container.calculated_width.unwrap();
@@ -449,7 +533,15 @@ mod pass_positioning {
                         max_col_count = col_count;
                     }
 
-                    let mut gap = gaps.first().copied().unwrap_or_default();
+                    let mut gap = match parent.justify_content.unwrap_or_default() {
+                        hyperchad_transformer_models::JustifyContent::Start => 0.0,
+                        hyperchad_transformer_models::JustifyContent::Center => todo!(),
+                        hyperchad_transformer_models::JustifyContent::End => todo!(),
+                        hyperchad_transformer_models::JustifyContent::SpaceBetween => todo!(),
+                        hyperchad_transformer_models::JustifyContent::SpaceEvenly => {
+                            gaps.first().copied().unwrap_or_default()
+                        }
+                    };
                     let mut max_height = 0.0;
                     last_row = 0;
                     x = gap;
@@ -621,21 +713,22 @@ mod test {
 
     #[test_log::test]
     fn calc_can_calc_two_elements_with_size_split_evenly_row() {
-        let mut container = Container {
-            children: vec![Container {
-                children: vec![Container::default(), Container::default()],
-                direction: LayoutDirection::Row,
-                ..Default::default()
-            }],
-            calculated_width: Some(100.0),
-            calculated_height: Some(40.0),
-            ..Default::default()
-        };
+        let mut container: Container = html! {
+            div sx-dir=(LayoutDirection::Row) {
+                div {} div {}
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(100.0);
+        container.calculated_height = Some(40.0);
+
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
 
         compare_containers(
-            &container.clone(),
+            &container,
             &Container {
                 children: vec![Container {
                     children: vec![
@@ -645,7 +738,7 @@ mod test {
                             calculated_x: Some(0.0),
                             calculated_y: Some(0.0),
                             calculated_position: Some(LayoutPosition::Default),
-                            ..Default::default()
+                            ..container.children[0].children[0].clone()
                         },
                         Container {
                             calculated_width: Some(50.0),
@@ -653,7 +746,7 @@ mod test {
                             calculated_x: Some(50.0),
                             calculated_y: Some(0.0),
                             calculated_position: Some(LayoutPosition::Default),
-                            ..Default::default()
+                            ..container.children[0].children[1].clone()
                         },
                     ],
                     calculated_width: Some(100.0),
@@ -662,33 +755,32 @@ mod test {
                     calculated_y: Some(0.0),
                     calculated_position: Some(LayoutPosition::Default),
                     direction: LayoutDirection::Row,
-                    ..Default::default()
+                    ..container.children[0].clone()
                 }],
-                ..container
+                ..container.clone()
             },
         );
     }
 
     #[test_log::test]
     fn calc_can_calc_horizontal_split_above_a_vertial_split() {
-        let mut container = Container {
-            children: vec![
-                Container {
-                    children: vec![Container::default(), Container::default()],
-                    direction: LayoutDirection::Row,
-                    ..Default::default()
-                },
-                Container::default(),
-            ],
-            calculated_width: Some(100.0),
-            calculated_height: Some(40.0),
-            ..Default::default()
-        };
+        let mut container: Container = html! {
+            div sx-dir=(LayoutDirection::Row) {
+                div {} div {}
+            }
+            div {}
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(100.0);
+        container.calculated_height = Some(40.0);
+
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
 
         compare_containers(
-            &container.clone(),
+            &container,
             &Container {
                 children: vec![
                     Container {
@@ -699,7 +791,7 @@ mod test {
                                 calculated_x: Some(0.0),
                                 calculated_y: Some(0.0),
                                 calculated_position: Some(LayoutPosition::Default),
-                                ..Default::default()
+                                ..container.children[0].children[0].clone()
                             },
                             Container {
                                 calculated_width: Some(50.0),
@@ -707,7 +799,7 @@ mod test {
                                 calculated_x: Some(50.0),
                                 calculated_y: Some(0.0),
                                 calculated_position: Some(LayoutPosition::Default),
-                                ..Default::default()
+                                ..container.children[0].children[1].clone()
                             },
                         ],
                         calculated_width: Some(100.0),
@@ -716,7 +808,7 @@ mod test {
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Default),
                         direction: LayoutDirection::Row,
-                        ..Default::default()
+                        ..container.children[0].clone()
                     },
                     Container {
                         calculated_width: Some(100.0),
@@ -724,37 +816,37 @@ mod test {
                         calculated_x: Some(0.0),
                         calculated_y: Some(20.0),
                         calculated_position: Some(LayoutPosition::Default),
-                        ..Default::default()
+                        ..container.children[1].clone()
                     },
                 ],
-                ..container
+                ..container.clone()
             },
         );
     }
 
     #[test_log::test]
     fn calc_calcs_contained_height_correctly() {
-        let mut container = Container {
-            children: vec![
-                Container::default(),
-                Container {
-                    children: vec![Container::default(), Container::default()],
-                    direction: LayoutDirection::Row,
-                    ..Default::default()
-                },
-            ],
-            calculated_width: Some(100.0),
-            calculated_height: Some(40.0),
-            direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Squash,
-            overflow_y: LayoutOverflow::Squash,
-            ..Default::default()
-        };
+        let mut container: Container = html! {
+            div {}
+            div sx-dir=(LayoutDirection::Row) {
+                div {}
+                div {}
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(100.0);
+        container.calculated_height = Some(40.0);
+        container.direction = LayoutDirection::Row;
+        container.overflow_x = LayoutOverflow::Squash;
+        container.overflow_y = LayoutOverflow::Squash;
+
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
 
         compare_containers(
-            &container.clone(),
+            &container,
             &Container {
                 children: vec![
                     Container {
@@ -762,8 +854,7 @@ mod test {
                         calculated_height: Some(40.0),
                         calculated_x: Some(0.0),
                         calculated_y: Some(0.0),
-                        calculated_position: Some(LayoutPosition::Default),
-                        ..Default::default()
+                        ..container.children[0].clone()
                     },
                     Container {
                         children: vec![
@@ -772,28 +863,24 @@ mod test {
                                 calculated_height: Some(40.0),
                                 calculated_x: Some(0.0),
                                 calculated_y: Some(0.0),
-                                calculated_position: Some(LayoutPosition::Default),
-                                ..Default::default()
+                                ..container.children[1].children[0].clone()
                             },
                             Container {
                                 calculated_width: Some(25.0),
                                 calculated_height: Some(40.0),
                                 calculated_x: Some(25.0),
                                 calculated_y: Some(0.0),
-                                calculated_position: Some(LayoutPosition::Default),
-                                ..Default::default()
+                                ..container.children[1].children[1].clone()
                             },
                         ],
                         calculated_width: Some(50.0),
                         calculated_height: Some(40.0),
                         calculated_x: Some(50.0),
                         calculated_y: Some(0.0),
-                        calculated_position: Some(LayoutPosition::Default),
-                        direction: LayoutDirection::Row,
-                        ..Default::default()
+                        ..container.children[1].clone()
                     },
                 ],
-                ..container
+                ..container.clone()
             },
         );
     }
@@ -2365,52 +2452,27 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn handle_overflow_y_expand_handles_justify_content_space_evenly_with_padding_and_wraps_elements_properly()
      {
-        let mut container = Container {
-            children: vec![
-                Container {
-                    width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
-                    ..Default::default()
-                },
-            ],
-            calculated_width: Some(75.0),
-            calculated_height: Some(40.0),
-            calculated_padding_left: Some(20.0),
-            calculated_padding_right: Some(20.0),
-            direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap { grid: true },
-            overflow_y: LayoutOverflow::Expand,
-            justify_content: Some(JustifyContent::SpaceEvenly),
-            ..Default::default()
-        };
+        let mut container: Container = html! {
+            div sx-width=(20) {}
+            div sx-width=(20) {}
+            div sx-width=(20) {}
+            div sx-width=(20) {}
+            div sx-width=(20) {}
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(75.0);
+        container.calculated_height = Some(40.0);
+        container.calculated_padding_left = Some(20.0);
+        container.calculated_padding_right = Some(20.0);
+        container.direction = LayoutDirection::Row;
+        container.overflow_x = LayoutOverflow::Wrap { grid: true };
+        container.overflow_y = LayoutOverflow::Expand;
+        container.justify_content = Some(JustifyContent::SpaceEvenly);
+
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
 
@@ -2420,7 +2482,7 @@ mod test {
                 children: vec![
                     Container {
                         calculated_width: Some(20.0),
-                        calculated_height: Some(40.0),
+                        calculated_height: Some(20.0),
                         calculated_x: Some(3.75),
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
@@ -2428,7 +2490,7 @@ mod test {
                     },
                     Container {
                         calculated_width: Some(20.0),
-                        calculated_height: Some(40.0),
+                        calculated_height: Some(20.0),
                         calculated_x: Some(20.0 + 3.75 + 3.75),
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
@@ -2436,7 +2498,7 @@ mod test {
                     },
                     Container {
                         calculated_width: Some(20.0),
-                        calculated_height: Some(40.0),
+                        calculated_height: Some(20.0),
                         calculated_x: Some(40.0 + 3.75 + 3.75 + 3.75),
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 2 }),
@@ -2444,17 +2506,17 @@ mod test {
                     },
                     Container {
                         calculated_width: Some(20.0),
-                        calculated_height: Some(40.0),
+                        calculated_height: Some(20.0),
                         calculated_x: Some(3.75),
-                        calculated_y: Some(40.0),
+                        calculated_y: Some(20.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
                         ..container.children[3].clone()
                     },
                     Container {
                         calculated_width: Some(20.0),
-                        calculated_height: Some(40.0),
+                        calculated_height: Some(20.0),
                         calculated_x: Some(20.0 + 3.75 + 3.75),
-                        calculated_y: Some(40.0),
+                        calculated_y: Some(20.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
                         ..container.children[4].clone()
                     },
@@ -3770,7 +3832,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_inner_children_overflow_squash_wraps_row_content_with_nested_width_correctly() {
         let mut container = Container {
             children: vec![
@@ -3812,24 +3873,21 @@ mod test {
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
 
-        let remainder = 50.0f32 / 3_f32; // 16.66666
-
         compare_containers(
             &container.clone(),
             &Container {
                 children: vec![
                     Container {
                         children: vec![Container {
-                            width: Some(Number::Integer(25)),
                             calculated_width: Some(25.0),
-                            calculated_height: Some(40.0),
+                            calculated_height: Some(20.0),
                             calculated_x: Some(0.0),
                             calculated_y: Some(0.0),
                             calculated_position: Some(LayoutPosition::default()),
                             ..container.children[0].children[0].clone()
                         }],
-                        calculated_width: Some(remainder),
-                        calculated_height: Some(40.0),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(20.0),
                         calculated_x: Some(0.0),
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
@@ -3839,15 +3897,15 @@ mod test {
                         children: vec![Container {
                             width: Some(Number::Integer(25)),
                             calculated_width: Some(25.0),
-                            calculated_height: Some(40.0),
+                            calculated_height: Some(20.0),
                             calculated_x: Some(0.0),
                             calculated_y: Some(0.0),
                             calculated_position: Some(LayoutPosition::default()),
                             ..container.children[1].children[0].clone()
                         }],
-                        calculated_width: Some(remainder),
-                        calculated_height: Some(40.0),
-                        calculated_x: Some(remainder),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(20.0),
+                        calculated_x: Some(25.0),
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
                         ..container.children[1].clone()
@@ -3856,17 +3914,17 @@ mod test {
                         children: vec![Container {
                             width: Some(Number::Integer(25)),
                             calculated_width: Some(25.0),
-                            calculated_height: Some(40.0),
+                            calculated_height: Some(20.0),
                             calculated_x: Some(0.0),
                             calculated_y: Some(0.0),
                             calculated_position: Some(LayoutPosition::default()),
                             ..container.children[2].children[0].clone()
                         }],
-                        calculated_width: Some(remainder),
-                        calculated_height: Some(40.0),
-                        calculated_x: Some(remainder * 2.0),
-                        calculated_y: Some(0.0),
-                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 2 }),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(20.0),
+                        calculated_x: Some(0.0),
+                        calculated_y: Some(20.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
                         ..container.children[2].clone()
                     },
                 ],
