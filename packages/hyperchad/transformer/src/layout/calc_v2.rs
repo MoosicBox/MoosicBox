@@ -127,7 +127,7 @@ macro_rules! flex_on_axis {
         let mut last_cell = 0;
         let mut max_cell_size = 0.0;
 
-        for child in &mut $parent.children {
+        for child in &mut $parent.relative_positioned_elements() {
             log::trace!("flex: calculating remaining size:\n{child}");
 
             match $parent.direction  {
@@ -168,8 +168,7 @@ macro_rules! flex_on_axis {
                     let mut smallest_count= 0;
 
                     for size in $parent
-                        .children
-                        .iter()
+                        .relative_positioned_elements()
                         .filter(|x| x.$fixed_ident.is_none())
                         .filter_map(|x| x.$calculated)
                     {
@@ -198,8 +197,7 @@ macro_rules! flex_on_axis {
                     log::trace!("flex: target={target} target_delta={target_delta} smallest={smallest} smallest_count={smallest_count} delta={delta} remaining_size={remaining_size}");
 
                     for child in $parent
-                        .children
-                        .iter_mut()
+                        .relative_positioned_elements_mut()
                         .filter(|x| x.$fixed_ident.is_none())
                         .filter(|x| x.$calculated.is_some_and(|x| (x - smallest).abs() < EPSILON))
                     {
@@ -210,7 +208,7 @@ macro_rules! flex_on_axis {
                 }
             }
             LayoutDirection::$cross_axis => {
-                for child in &mut $parent.children {
+                for child in $parent.relative_positioned_elements_mut() {
                     log::trace!("flex: setting size to remaining_size={remaining_size}:\n{child}");
 
                     #[allow(clippy::cast_precision_loss)]
@@ -370,17 +368,18 @@ mod pass_wrap {
 
                 let container_width = parent.calculated_width.unwrap();
 
+                let direction = parent.direction;
                 let mut x = 0.0;
                 let mut row = 0;
                 let mut col = 0;
 
-                for child in &mut parent.children {
+                for child in parent.relative_positioned_elements_mut() {
                     log::trace!("wrap: positioning child ({row}, {col}):\n{child}");
 
                     let child_width = child.calculated_width.unwrap();
                     let mut position = LayoutPosition::Wrap { row, col };
 
-                    if parent.direction == LayoutDirection::Row {
+                    if direction == LayoutDirection::Row {
                         x += child_width;
 
                         if x > container_width {
@@ -449,6 +448,7 @@ mod pass_positioning {
                 let mut x = 0.0;
                 let mut y = 0.0;
 
+                let direction = parent.direction;
                 let container_width = parent.calculated_width.unwrap();
 
                 if let LayoutOverflow::Wrap { grid } = parent.overflow_x {
@@ -462,7 +462,7 @@ mod pass_positioning {
                         .as_ref()
                         .map(|x| x.calc(container_width, view_width, view_height));
 
-                    for child in &mut parent.children {
+                    for child in parent.relative_positioned_elements_mut() {
                         let Some(LayoutPosition::Wrap { row, col }) = child.calculated_position
                         else {
                             continue;
@@ -514,7 +514,7 @@ mod pass_positioning {
                     last_row = 0;
                     x = gap;
 
-                    for child in &mut parent.children {
+                    for child in parent.relative_positioned_elements_mut() {
                         let Some(LayoutPosition::Wrap { row, .. }) = child.calculated_position
                         else {
                             continue;
@@ -554,7 +554,7 @@ mod pass_positioning {
                         x += child_width + gap;
                     }
                 } else {
-                    for child in &mut parent.children {
+                    for child in parent.relative_positioned_elements_mut() {
                         log::trace!("position_elements: setting position ({x}, {y}):\n{child}");
                         if set_float(&mut child.calculated_x, x).is_some() {
                             changed = true;
@@ -563,7 +563,7 @@ mod pass_positioning {
                             changed = true;
                         }
 
-                        match parent.direction {
+                        match direction {
                             LayoutDirection::Row => {
                                 x += child.calculated_width.unwrap();
                             }
