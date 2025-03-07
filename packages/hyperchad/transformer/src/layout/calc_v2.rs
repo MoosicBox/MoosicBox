@@ -374,6 +374,9 @@ mod pass_positioning {
                 ("position_elements: {container}")
             );
 
+            let view_width = container.calculated_width.unwrap();
+            let view_height = container.calculated_height.unwrap();
+
             let mut changed = false;
 
             bfs.traverse_mut(container, |parent| {
@@ -388,6 +391,10 @@ mod pass_positioning {
                     let mut max_col_count = 0;
                     let mut row_width = 0.0;
                     let mut gaps = vec![];
+                    let grid_cell_size = parent
+                        .grid_cell_size
+                        .as_ref()
+                        .map(|x| x.calc(container_width, view_width, view_height));
 
                     for child in &mut parent.children {
                         let Some(LayoutPosition::Wrap { row, col }) = child.calculated_position
@@ -413,7 +420,8 @@ mod pass_positioning {
                             last_row = row;
                         }
 
-                        row_width += child.calculated_width.unwrap();
+                        row_width +=
+                            grid_cell_size.unwrap_or_else(|| child.calculated_width.unwrap());
                         col_count += 1;
                     }
 
