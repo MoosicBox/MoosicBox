@@ -107,6 +107,14 @@ mod pass_widths {
     impl<F: FontMetrics> CalcV2Calculator<F> {}
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct Rect {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
 macro_rules! flex_on_axis {
     (
         $parent_ident:ident,
