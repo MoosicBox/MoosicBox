@@ -699,6 +699,46 @@ mod pass_positioning {
                             child.calculated_y = Some(0.0);
                         }
                     }
+
+                    // fixed positioned
+
+                    for child in parent.fixed_positioned_elements_mut() {
+                        if let Some(left) = &child.left {
+                            let left = left.calc(view_width, view_width, view_height);
+                            if set_float(&mut child.calculated_x, left).is_some() {
+                                changed = true;
+                            }
+                        }
+                        if let Some(right) = &child.right {
+                            let right = right.calc(view_width, view_width, view_height);
+                            let bounding_width = child.bounding_calculated_width().unwrap();
+                            let right = width - right - bounding_width;
+                            if set_float(&mut child.calculated_x, right).is_some() {
+                                changed = true;
+                            }
+                        }
+                        if let Some(top) = &child.top {
+                            let top = top.calc(view_height, view_width, view_height);
+                            if set_float(&mut child.calculated_y, top).is_some() {
+                                changed = true;
+                            }
+                        }
+                        if let Some(bottom) = &child.bottom {
+                            let bottom = bottom.calc(view_height, view_width, view_height);
+                            let bounding_height = child.bounding_calculated_height().unwrap();
+                            let bottom = height - bottom - bounding_height;
+                            if set_float(&mut child.calculated_y, bottom).is_some() {
+                                changed = true;
+                            }
+                        }
+
+                        if child.calculated_x.is_none() {
+                            child.calculated_x = Some(0.0);
+                        }
+                        if child.calculated_y.is_none() {
+                            child.calculated_y = Some(0.0);
+                        }
+                    }
                 },
             );
 
@@ -5311,7 +5351,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_can_calc_absolute_positioned_element_nested_on_top_of_a_relative_element_with_left_offset()
      {
         let mut container = Container {
@@ -5364,7 +5403,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_can_calc_absolute_positioned_element_on_top_of_a_relative_element_with_left_offset() {
         let mut container = Container {
             children: vec![
@@ -5410,7 +5448,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_can_calc_absolute_positioned_element_with_explicit_sizes() {
         let mut container = Container {
             children: vec![
@@ -5458,7 +5495,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_can_calc_fixed_positioned_element_on_top_of_a_relative_element_and_have_it_not_inherit_position_or_size()
      {
         let mut container = Container {
@@ -5504,7 +5540,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_can_calc_fixed_positioned_element_nested_on_top_of_a_relative_element_with_left_offset()
     {
         let mut container = Container {
@@ -5557,7 +5592,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_can_calc_fixed_positioned_element_on_top_of_a_relative_element_with_left_offset() {
         let mut container = Container {
             children: vec![
@@ -5604,7 +5638,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_can_calc_fixed_positioned_element_with_explicit_sizes() {
         let mut container = Container {
             children: vec![
@@ -5652,7 +5685,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_can_calc_fixed_positioned_element_on_top_of_a_relative_element_doesnt_affect_fixed_position_element_location()
      {
         let mut container = Container {
