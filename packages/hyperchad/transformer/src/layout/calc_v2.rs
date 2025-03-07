@@ -1,3 +1,5 @@
+use bumpalo::Bump;
+
 use crate::{BfsPaths, Container};
 
 use super::{Calc, font::FontMetrics};
@@ -25,6 +27,7 @@ impl<F: FontMetrics> Calc for CalcV2Calculator<F> {
         log::trace!("calc: container={container}");
 
         let bfs: BfsPaths = (&*container).into();
+        let arena = Bump::new();
 
         self.calc_widths(&bfs, container);
         self.flex_width(&bfs, container);
@@ -33,7 +36,7 @@ impl<F: FontMetrics> Calc for CalcV2Calculator<F> {
         }
         self.calc_heights(&bfs, container);
         self.flex_height(&bfs, container);
-        self.position_elements(&bfs, container);
+        self.position_elements(&arena, &bfs, container);
 
         false
     }
@@ -353,6 +356,7 @@ mod pass_wrap {
 }
 
 mod pass_positioning {
+    use bumpalo::Bump;
     use hyperchad_transformer_models::{LayoutDirection, LayoutOverflow, LayoutPosition};
 
     use crate::{
@@ -363,12 +367,22 @@ mod pass_positioning {
     use super::CalcV2Calculator;
 
     pub trait Pass {
-        fn position_elements(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
+        fn position_elements(
+            &self,
+            arena: &Bump,
+            bfs: &BfsPaths,
+            container: &mut Container,
+        ) -> bool;
     }
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
         #[allow(clippy::too_many_lines)]
-        fn position_elements(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
+        fn position_elements(
+            &self,
+            arena: &Bump,
+            bfs: &BfsPaths,
+            container: &mut Container,
+        ) -> bool {
             moosicbox_logging::debug_or_trace!(
                 ("position_elements"),
                 ("position_elements: {container}")
@@ -390,7 +404,7 @@ mod pass_positioning {
                     let mut col_count = 0;
                     let mut max_col_count = 0;
                     let mut row_width = 0.0;
-                    let mut gaps = vec![];
+                    let gaps = &mut bumpalo::collections::Vec::new_in(arena);
                     let grid_cell_size = parent
                         .grid_cell_size
                         .as_ref()
