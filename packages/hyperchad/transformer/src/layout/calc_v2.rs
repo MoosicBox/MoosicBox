@@ -107,8 +107,126 @@ mod pass_widths {
     impl<F: FontMetrics> CalcV2Calculator<F> {}
 }
 
+macro_rules! flex_on_axis {
+    (
+        $parent:ident,
+        $changed:ident,
+        $fixed_ident:ident,
+        $calculated:ident,
+        $axis:ident,
+        $cross_axis:ident,
+        $cell_ident:ident
+    ) => {
+        if $parent.relative_positioned_elements().all(|x| x.$fixed_ident.is_some()) {
+            return;
+        }
+
+        let container_size = $parent.$calculated.unwrap();
+
+        let mut remaining_size = container_size;
+        let mut last_cell = 0;
+        let mut max_cell_size = 0.0;
+
+        for child in &mut $parent.children {
+            log::trace!("flex: calculating remaining size:\n{child}");
+
+            match $parent.direction  {
+                LayoutDirection::$axis => {
+                    if let Some(size) = child.$calculated {
+                        log::trace!(
+                            "flex: removing size={size} from remaining_size={remaining_size} ({})",
+                            remaining_size - size
+                        );
+                        remaining_size -= size;
+                    }
+                }
+                LayoutDirection::$cross_axis => {
+                    if let Some(LayoutPosition::Wrap { $cell_ident: cell, .. }) = child.calculated_position {
+                        if cell != last_cell {
+                            moosicbox_assert::assert!(cell > last_cell);
+                            remaining_size -= max_cell_size;
+                            max_cell_size = child.$calculated.unwrap_or_default();
+                        }
+
+                        last_cell = cell;
+                    }
+                }
+            }
+        }
+
+        let cell_count = last_cell + 1;
+        remaining_size -= max_cell_size;
+
+        log::trace!("flex: remaining_size={remaining_size}");
+
+        match $parent.direction {
+            LayoutDirection::$axis => {
+                #[allow(clippy::while_float)]
+                while remaining_size >= EPSILON {
+                    let mut smallest= f32::INFINITY;
+                    let mut target= f32::INFINITY;
+                    let mut smallest_count= 0;
+
+                    for size in $parent
+                        .children
+                        .iter()
+                        .filter(|x| x.$fixed_ident.is_none())
+                        .filter_map(|x| x.$calculated)
+                    {
+                        if smallest > size {
+                            target = smallest;
+                            smallest = size;
+                            smallest_count = 1;
+                        } else if (smallest - size).abs() < EPSILON {
+                            smallest_count += 1;
+                        }
+                    }
+
+                    moosicbox_assert::assert!(smallest_count > 0);
+                    moosicbox_assert::assert!(smallest.is_finite());
+
+                    if target.is_infinite() {
+                        target = remaining_size;
+                    }
+
+                    let target_delta = target - smallest;
+                    remaining_size -= target_delta;
+
+                    #[allow(clippy::cast_precision_loss)]
+                    let delta = target_delta / (smallest_count as f32);
+
+                    log::trace!("flex: target={target} target_delta={target_delta} smallest={smallest} smallest_count={smallest_count} delta={delta} remaining_size={remaining_size}");
+
+                    for child in $parent
+                        .children
+                        .iter_mut()
+                        .filter(|x| x.$fixed_ident.is_none())
+                        .filter(|x| x.$calculated.is_some_and(|x| (x - smallest).abs() < EPSILON))
+                    {
+                        let size = child.$calculated.unwrap();
+                        log::trace!("flex: distributing evenly split remaining size delta={delta} remaining_size={remaining_size}:\n{child}");
+                        set_float(&mut child.$calculated, size + delta);
+                    }
+                }
+            }
+            LayoutDirection::$cross_axis => {
+                for child in &mut $parent.children {
+                    log::trace!("flex: setting size to remaining_size={remaining_size}:\n{child}");
+
+                    #[allow(clippy::cast_precision_loss)]
+                    if child.$fixed_ident.is_none()
+                        && set_float(&mut child.$calculated, remaining_size / (cell_count as f32)).is_some()
+                    {
+                        $changed = true;
+                    }
+                }
+            }
+        }
+    };
+}
+
 mod pass_flex_width {
-    use hyperchad_transformer_models::LayoutDirection;
+    use hyperchad_transformer_models::{LayoutDirection, LayoutPosition};
 
     use crate::{
         BfsPaths, Container,
@@ -127,94 +245,9 @@ mod pass_flex_width {
 
             let mut changed = false;
 
+            #[allow(clippy::cognitive_complexity)]
             bfs.traverse_mut(container, |parent| {
-                if parent.children.iter().all(|x| x.width.is_some()) {
-                    return;
-                }
-
-                let container_width = parent.calculated_width.unwrap();
-
-                let mut remaining_width = container_width;
-
-                for child in &mut parent.children {
-                    log::trace!("flex_width: calculating remaining size:\n{child}");
-
-                    if parent.direction == LayoutDirection::Row {
-                        if let Some(width) = child.calculated_width {
-                            log::trace!(
-                                "flex_width: removing width={width} from remaining_width={remaining_width} ({})",
-                                remaining_width - width
-                            );
-                            remaining_width -= width;
-                        }
-                    }
-                }
-
-                log::trace!("flex_width: remaining_width={remaining_width}");
-
-                match parent.direction {
-                    LayoutDirection::Row => {
-                        #[allow(clippy::while_float)]
-                        while remaining_width >= EPSILON {
-                            let mut smallest= f32::INFINITY;
-                            let mut target= f32::INFINITY;
-                            let mut smallest_count= 0;
-
-                            for width in parent
-                                .children
-                                .iter()
-                                .filter(|x| x.width.is_none())
-                                .filter_map(|x| x.calculated_width)
-                            {
-                                if smallest > width {
-                                    target = smallest;
-                                    smallest = width;
-                                    smallest_count = 1;
-                                } else if (smallest - width).abs() < EPSILON {
-                                    smallest_count += 1;
-                                }
-                            }
-
-                            moosicbox_assert::assert!(smallest_count > 0);
-                            moosicbox_assert::assert!(smallest.is_finite());
-
-                            if target.is_infinite() {
-                                target = remaining_width;
-                            }
-
-                            let target_delta = target - smallest;
-                            remaining_width -= target_delta;
-
-                            #[allow(clippy::cast_precision_loss)]
-                            let delta = target_delta / (smallest_count as f32);
-
-                            log::trace!("flex_width: target={target} target_delta={target_delta} smallest={smallest} smallest_count={smallest_count} delta={delta} remaining_width={remaining_width}");
-
-                            for child in parent
-                                .children
-                                .iter_mut()
-                                .filter(|x| x.width.is_none())
-                                .filter(|x| x.calculated_width.is_some_and(|x| (x - smallest).abs() < EPSILON))
-                            {
-                                let width = child.calculated_width.unwrap();
-                                log::trace!("flex_width: distributing evenly split remaining size delta={delta} remaining_width={remaining_width}:\n{child}");
-                                set_float(&mut child.calculated_width, width + delta);
-                            }
-                        }
-                    }
-                    LayoutDirection::Column => {
-                        for child in &mut parent.children {
-                            log::trace!("flex_width: setting width to remaining_width={remaining_width}:\n{child}");
-
-                            if child.width.is_none()
-                                && set_float(&mut child.calculated_width, remaining_width).is_some()
-                            {
-                                changed = true;
-                            }
-                        }
-                    }
-                }
-
+                flex_on_axis!(parent, changed, width, calculated_width, Row, Column, col);
             });
 
             changed
@@ -283,7 +316,7 @@ mod pass_flex_height {
 
     use crate::{
         BfsPaths, Container,
-        layout::{font::FontMetrics, set_float},
+        layout::{EPSILON, font::FontMetrics, set_float},
     };
 
     use super::CalcV2Calculator;
@@ -298,74 +331,9 @@ mod pass_flex_height {
 
             let mut changed = false;
 
+            #[allow(clippy::cognitive_complexity)]
             bfs.traverse_mut(container, |parent| {
-                let container_height = parent.calculated_height.unwrap();
-
-                let mut remaining_height = container_height;
-                let mut unsized_count = 0;
-
-                let mut last_row = 0;
-                let mut max_row_height = 0.0;
-
-                for child in &mut parent.children {
-                    log::trace!("flex_height: calculating remaining size:\n{child}");
-
-                    match parent.direction  {
-                        LayoutDirection::Row => {
-                            if let Some(LayoutPosition::Wrap { row, .. }) = child.calculated_position {
-                                if row != last_row {
-                                    moosicbox_assert::assert!(row > last_row);
-                                    remaining_height -= max_row_height;
-                                    max_row_height = child.calculated_height.unwrap_or_default();
-                                }
-
-                                last_row = row;
-                            }
-                        }
-                        LayoutDirection::Column => {
-                            if child.height.is_none() {
-                                unsized_count += 1;
-                            }
-                            if let Some(height) = child.calculated_height {
-                                log::trace!("flex_height: removing height={height} from remaining_height={remaining_height} ({})", remaining_height - height);
-                                remaining_height -= height;
-                            }
-                        }
-                    }
-                }
-
-                let row_count = last_row + 1;
-                remaining_height -= max_row_height;
-
-                let evenly_split_remaining_size =
-                    match parent.direction {
-                        #[allow(clippy::cast_precision_loss)]
-                        LayoutDirection::Row => {
-                            if row_count == 0 {
-                                0.0
-                            } else {
-                                remaining_height / row_count as f32
-                            }
-                        }
-                        #[allow(clippy::cast_precision_loss)]
-                        LayoutDirection::Column => {
-                            if unsized_count == 0 {
-                                0.0
-                            } else {
-                                remaining_height / unsized_count as f32
-                            }
-                        }
-                    };
-
-                for child in &mut parent.children {
-                    log::trace!("flex_height: distributing evenly split remaining size:\n{child}");
-
-                    if child.height.is_none()
-                        && set_float(&mut child.calculated_height, evenly_split_remaining_size).is_some()
-                    {
-                        changed = true;
-                    }
-                }
+                flex_on_axis!(parent, changed, height, calculated_height, Column, Row, row);
             });
 
             changed
