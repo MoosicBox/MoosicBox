@@ -362,10 +362,26 @@ macro_rules! flex_on_axis {
                     LayoutDirection::$cross_axis => {
                         for child in parent.relative_positioned_elements_mut() {
                             log::trace!("flex: setting size to remaining_size={remaining_size}:\n{child}");
+                            let mut remaining_container_size = remaining_size;
+
+                            if let Some(size) = child.$margin_axis() {
+                                log::trace!(
+                                    "flex: removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
+                                    remaining_container_size - size
+                                );
+                                remaining_container_size -= size;
+                            }
+                            if let Some(size) = child.$padding_axis() {
+                                log::trace!(
+                                    "flex: removing padding size={size} from remaining_container_size={remaining_container_size} ({})",
+                                    remaining_container_size - size
+                                );
+                                remaining_container_size -= size;
+                            }
 
                             #[allow(clippy::cast_precision_loss)]
                             if child.$fixed.is_none()
-                                && set_float(&mut child.$calculated, remaining_size / (cell_count as f32)).is_some()
+                                && set_float(&mut child.$calculated, remaining_container_size / (cell_count as f32)).is_some()
                             {
                                 $changed = true;
                             }
@@ -6377,7 +6393,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_horizontal_padding_on_vertical_sibling_doesnt_affect_size_of_other_sibling() {
         let mut container = Container {
             children: vec![
@@ -6416,7 +6431,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_child_padding_does_not_add_to_parent_container() {
         let mut container = Container {
             children: vec![
