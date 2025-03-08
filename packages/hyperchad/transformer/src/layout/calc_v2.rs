@@ -98,6 +98,45 @@ mod pass_widths {
                     } else {
                         set_float(&mut child.calculated_width, 0.0);
                     }
+
+                    if let Some(margin) =
+                        child.margin_left.as_ref().and_then(crate::Number::as_fixed)
+                    {
+                        let size = margin.calc(0.0, view_width, view_height);
+                        if set_float(&mut child.calculated_margin_left, size).is_some() {
+                            changed = true;
+                        }
+                    }
+                    if let Some(margin) = child
+                        .margin_right
+                        .as_ref()
+                        .and_then(crate::Number::as_fixed)
+                    {
+                        let size = margin.calc(0.0, view_width, view_height);
+                        if set_float(&mut child.calculated_margin_right, size).is_some() {
+                            changed = true;
+                        }
+                    }
+                    if let Some(padding) = child
+                        .padding_left
+                        .as_ref()
+                        .and_then(crate::Number::as_fixed)
+                    {
+                        let size = padding.calc(0.0, view_width, view_height);
+                        if set_float(&mut child.calculated_padding_left, size).is_some() {
+                            changed = true;
+                        }
+                    }
+                    if let Some(padding) = child
+                        .padding_right
+                        .as_ref()
+                        .and_then(crate::Number::as_fixed)
+                    {
+                        let size = padding.calc(0.0, view_width, view_height);
+                        if set_float(&mut child.calculated_padding_right, size).is_some() {
+                            changed = true;
+                        }
+                    }
                 }
 
                 set_float(&mut parent.calculated_min_width, min_width);
@@ -127,7 +166,15 @@ macro_rules! flex_on_axis {
         $calculated_ident:ident,
         $axis_ident:ident,
         $cross_axis_ident:ident,
-        $cell_ident:ident
+        $cell_ident:ident,
+        $margin_x_ident:ident,
+        $margin_y_ident:ident,
+        $calculated_margin_x_ident:ident,
+        $calculated_margin_y_ident:ident,
+        $padding_x_ident:ident,
+        $padding_y_ident:ident,
+        $calculated_padding_x_ident:ident,
+        $calculated_padding_y_ident:ident,
     ) => {
         let root_id = $container_ident.id;
         let view_width = $container_ident.calculated_width.expect("Missing view_width");
@@ -164,6 +211,31 @@ macro_rules! flex_on_axis {
                     if let Some(size) = child.$fixed_ident.as_ref().and_then(crate::Number::as_dynamic) {
                         let size = size.calc(container_size, view_width, view_height);
                         if set_float(&mut child.$calculated_ident, size).is_some() {
+                            $changed_ident = true;
+                        }
+                    }
+
+                    if let Some(margin) = child.$margin_x_ident.as_ref().and_then(crate::Number::as_dynamic) {
+                        let size = margin.calc(container_size, view_width, view_height);
+                        if set_float(&mut child.$calculated_margin_x_ident, size).is_some() {
+                            $changed_ident = true;
+                        }
+                    }
+                    if let Some(margin) = child.$margin_y_ident.as_ref().and_then(crate::Number::as_dynamic) {
+                        let size = margin.calc(container_size, view_width, view_height);
+                        if set_float(&mut child.$calculated_margin_y_ident, size).is_some() {
+                            $changed_ident = true;
+                        }
+                    }
+                    if let Some(padding) = child.$padding_x_ident.as_ref().and_then(crate::Number::as_dynamic) {
+                        let size = padding.calc(container_size, view_width, view_height);
+                        if set_float(&mut child.$calculated_padding_x_ident, size).is_some() {
+                            $changed_ident = true;
+                        }
+                    }
+                    if let Some(padding) = child.$padding_y_ident.as_ref().and_then(crate::Number::as_dynamic) {
+                        let size = padding.calc(container_size, view_width, view_height);
+                        if set_float(&mut child.$calculated_padding_y_ident, size).is_some() {
                             $changed_ident = true;
                         }
                     }
@@ -314,7 +386,15 @@ mod pass_flex_width {
                 calculated_width,
                 Row,
                 Column,
-                col
+                col,
+                margin_left,
+                margin_right,
+                calculated_margin_left,
+                calculated_margin_right,
+                padding_left,
+                padding_right,
+                calculated_padding_left,
+                calculated_padding_right,
             );
 
             changed
@@ -366,6 +446,43 @@ mod pass_heights {
                     } else {
                         set_float(&mut child.calculated_height, 0.0);
                     }
+
+                    if let Some(margin) =
+                        child.margin_top.as_ref().and_then(crate::Number::as_fixed)
+                    {
+                        let size = margin.calc(0.0, view_width, view_height);
+                        if set_float(&mut child.calculated_margin_top, size).is_some() {
+                            changed = true;
+                        }
+                    }
+                    if let Some(margin) = child
+                        .margin_bottom
+                        .as_ref()
+                        .and_then(crate::Number::as_fixed)
+                    {
+                        let size = margin.calc(0.0, view_width, view_height);
+                        if set_float(&mut child.calculated_margin_bottom, size).is_some() {
+                            changed = true;
+                        }
+                    }
+                    if let Some(padding) =
+                        child.padding_top.as_ref().and_then(crate::Number::as_fixed)
+                    {
+                        let size = padding.calc(0.0, view_width, view_height);
+                        if set_float(&mut child.calculated_padding_top, size).is_some() {
+                            changed = true;
+                        }
+                    }
+                    if let Some(padding) = child
+                        .padding_bottom
+                        .as_ref()
+                        .and_then(crate::Number::as_fixed)
+                    {
+                        let size = padding.calc(0.0, view_width, view_height);
+                        if set_float(&mut child.calculated_padding_bottom, size).is_some() {
+                            changed = true;
+                        }
+                    }
                 }
 
                 set_float(&mut parent.calculated_min_height, min_height);
@@ -406,7 +523,15 @@ mod pass_flex_height {
                 calculated_height,
                 Column,
                 Row,
-                row
+                row,
+                margin_top,
+                margin_bottom,
+                calculated_margin_top,
+                calculated_margin_bottom,
+                padding_top,
+                padding_bottom,
+                calculated_padding_top,
+                calculated_padding_bottom,
             );
 
             changed
@@ -744,10 +869,16 @@ mod pass_positioning {
 
                             match direction {
                                 LayoutDirection::Row => {
-                                    x += child.calculated_width.unwrap() + gap;
+                                    x += child.calculated_width.unwrap()
+                                        + child.horizontal_margin().unwrap_or_default()
+                                        + child.horizontal_padding().unwrap_or_default()
+                                        + gap;
                                 }
                                 LayoutDirection::Column => {
-                                    y += child.calculated_height.unwrap() + gap;
+                                    y += child.calculated_height.unwrap()
+                                        + child.vertical_margin().unwrap_or_default()
+                                        + child.vertical_padding().unwrap_or_default()
+                                        + gap;
                                 }
                             }
                         }
@@ -5911,7 +6042,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_includes_horizontal_margins_in_content_width() {
         let mut container = Container {
             children: vec![
@@ -5955,7 +6085,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_includes_horizontal_padding_in_content_width() {
         let mut container = Container {
             children: vec![
