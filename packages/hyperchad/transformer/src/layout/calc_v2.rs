@@ -82,8 +82,11 @@ mod pass_widths {
                             changed = true;
                         }
                     } else if let Element::Raw { value } = &child.element {
+                        log::trace!("calc_widths: measuring text={value}");
                         let bounds = self.font_metrics.measure_text(value, 14.0, f32::INFINITY);
+                        log::trace!("calc_widths: measured bounds={bounds:?}");
                         let new_width = bounds.width();
+                        log::trace!("calc_widths: measured width={new_width}");
 
                         if set_float(&mut child.calculated_width, new_width).is_some() {
                             changed = true;

@@ -144,6 +144,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> RenderRunner for EguiRenderRun
                 *self.app.ctx.write().unwrap() = Some(cc.egui_ctx.clone());
                 let mut calculator = self.app.calculator.write().unwrap();
                 *calculator = calculator.clone().with_context(cc.egui_ctx.clone());
+                log::debug!("run: set calculator context");
                 drop(calculator);
 
                 Ok(Box::new(self.app.clone()))

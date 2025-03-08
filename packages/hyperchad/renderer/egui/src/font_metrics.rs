@@ -15,7 +15,9 @@ impl EguiFontMetrics {
 
 impl FontMetrics for EguiFontMetrics {
     fn measure_text(&self, text: &str, size: f32, wrap_width: f32) -> FontMetricsBounds {
+        log::trace!("measure_text: measuring text={text} size={size} wrap_width={wrap_width}");
         from_galley(&self.ctx.fonts(|x| {
+            log::trace!("measure_text: got fonts");
             let font_id = egui::FontId {
                 size,
                 ..Default::default()
@@ -34,6 +36,7 @@ fn from_row(value: &egui::epaint::text::Row) -> FontMetricsRow {
 }
 
 fn from_galley(value: &egui::Galley) -> FontMetricsBounds {
+    log::trace!("from_galley");
     FontMetricsBounds {
         rows: value.rows.iter().map(from_row).collect(),
     }
