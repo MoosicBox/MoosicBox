@@ -242,7 +242,9 @@ macro_rules! flex_on_axis {
                             #[allow(clippy::cast_precision_loss)]
                             let delta = target_delta / (smallest_count as f32);
 
-                            log::trace!("flex: target={target} target_delta={target_delta} smallest={smallest} smallest_count={smallest_count} delta={delta} remaining_size={remaining_size}");
+                            log::trace!("flex: target={target} target_delta={target_delta} smallest={smallest} smallest_count={smallest_count} delta={delta} remaining_size={remaining_size} container_size={container_size}");
+
+                            moosicbox_assert::assert!(delta > EPSILON);
 
                             for child in parent
                                 .relative_positioned_elements_mut()
