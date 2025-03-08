@@ -207,6 +207,7 @@ macro_rules! flex_on_axis {
                     return;
                 }
 
+                let direction = parent.direction;
                 let container_size = parent.$calculated.expect("Missing container size");
 
                 for child in &mut parent.relative_positioned_elements_mut() {
@@ -239,7 +240,7 @@ macro_rules! flex_on_axis {
                 let mut remaining_container_size = container_size;
 
                 for child in &mut parent.relative_positioned_elements() {
-                    match parent.direction  {
+                    match direction {
                         LayoutDirection::$axis => {
                             if let Some(size) = child.$margin_axis() {
                                 log::trace!(
@@ -265,6 +266,14 @@ macro_rules! flex_on_axis {
 
                 for child in &mut parent.relative_positioned_elements_mut() {
                     if let Some(size) = child.$fixed.as_ref().and_then(crate::Number::as_dynamic) {
+                        let container_size = match direction {
+                            LayoutDirection::$axis => container_size,
+                            LayoutDirection::$cross_axis => {
+                                container_size
+                                    - child.$margin_axis().unwrap_or_default()
+                                    - child.$padding_axis().unwrap_or_default()
+                            }
+                        };
                         log::trace!("flex: calculating dynamic size={size:?}");
                         let size = size.calc(container_size, view_width, view_height);
                         log::trace!("flex: calculated dynamic size={size}");
@@ -281,7 +290,7 @@ macro_rules! flex_on_axis {
                 for child in &mut parent.relative_positioned_elements() {
                     log::trace!("flex: calculating remaining size:\n{child}");
 
-                    match parent.direction  {
+                    match direction  {
                         LayoutDirection::$axis => {
                             if let Some(size) = child.$calculated {
                                 log::trace!(
@@ -309,7 +318,7 @@ macro_rules! flex_on_axis {
 
                 log::trace!("flex: remaining_size={remaining_size}");
 
-                match parent.direction {
+                match direction {
                     LayoutDirection::$axis => {
                         #[allow(clippy::while_float)]
                         while remaining_size >= EPSILON {
@@ -339,6 +348,11 @@ macro_rules! flex_on_axis {
                             }
 
                             let target_delta = target - smallest;
+                            let target_delta = if remaining_size < target_delta {
+                                remaining_size
+                            } else {
+                                target_delta
+                            };
                             remaining_size -= target_delta;
 
                             #[allow(clippy::cast_precision_loss)]
@@ -6477,7 +6491,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_nested_child_padding_does_not_offset_unsized_container_siblings() {
         let mut container = Container {
             children: vec![
@@ -6532,8 +6545,10 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_horizontal_sibling_left_raw_still_divides_the_unsized_width() {
+        let metrics = DefaultFontMetrics;
+        let text_width = metrics.measure_text("test", 14.0, f32::INFINITY).width();
+
         let mut container = Container {
             children: vec![
                 Container {
@@ -6553,24 +6568,23 @@ mod test {
         log::trace!("container:\n{}", container);
 
         compare_containers(
-            &container.clone(),
+            &container,
             &Container {
                 children: vec![
                     container.children[0].clone(),
                     Container {
-                        calculated_width: Some(50.0),
-                        calculated_x: Some(50.0),
+                        calculated_width: Some(100.0 - text_width),
+                        calculated_x: Some(text_width),
                         ..container.children[1].clone()
                     },
                 ],
                 calculated_width: Some(100.0),
-                ..container
+                ..container.clone()
             },
         );
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_calculates_width_minus_the_horizontal_padding() {
         let mut container = Container {
             children: vec![Container {
@@ -6578,7 +6592,6 @@ mod test {
                 padding_right: Some(Number::Integer(20)),
                 ..Default::default()
             }],
-
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             ..Default::default()
@@ -6600,7 +6613,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_calculates_height_minus_the_vertical_padding() {
         let mut container = Container {
             children: vec![Container {
@@ -6608,7 +6620,6 @@ mod test {
                 padding_bottom: Some(Number::Integer(20)),
                 ..Default::default()
             }],
-
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             ..Default::default()
@@ -6630,7 +6641,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_calculates_width_minus_the_horizontal_padding_with_percentage_width() {
         let mut container = Container {
             children: vec![Container {
@@ -6640,7 +6650,6 @@ mod test {
                 padding_top: Some(Number::Integer(15)),
                 ..Default::default()
             }],
-
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             height: Some(Number::Integer(50)),
@@ -6665,7 +6674,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_calculates_width_minus_the_horizontal_padding_with_percentage_width_nested() {
         let mut container = Container {
             children: vec![Container {
@@ -6676,7 +6684,6 @@ mod test {
                     padding_top: Some(Number::Integer(1)),
                     ..Default::default()
                 }],
-
                 width: Some(Number::IntegerPercent(100)),
                 padding_left: Some(Number::Integer(10)),
                 padding_right: Some(Number::Integer(20)),
@@ -6706,7 +6713,6 @@ mod test {
                         calculated_padding_top: Some(1.0),
                         ..container.children[0].children[0].clone()
                     }],
-
                     calculated_width: Some(70.0),
                     calculated_height: Some(35.0),
                     calculated_x: Some(0.0),
@@ -6722,7 +6728,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_calculates_width_minus_the_horizontal_padding_with_calc_width_nested() {
         let mut container = Container {
             children: vec![Container {
@@ -6733,7 +6738,6 @@ mod test {
                     padding_top: Some(Number::Integer(1)),
                     ..Default::default()
                 }],
-
                 width: Some(Number::Calc(Calculation::Number(Box::new(
                     Number::IntegerPercent(100),
                 )))),
@@ -6765,7 +6769,6 @@ mod test {
                         calculated_padding_top: Some(1.0),
                         ..container.children[0].children[0].clone()
                     }],
-
                     calculated_width: Some(70.0),
                     calculated_height: Some(35.0),
                     calculated_x: Some(0.0),
@@ -6794,7 +6797,6 @@ mod test {
                 position: Some(Position::Absolute),
                 ..Default::default()
             }],
-
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             position: Some(Position::Relative),
@@ -6912,7 +6914,6 @@ mod test {
                             }],
                             ..container.children[0].children[0].children[0].clone()
                         }],
-
                         calculated_width: Some(1300.0),
                         calculated_height: Some(61.0),
                         calculated_padding_left: Some(30.0),
@@ -6922,7 +6923,6 @@ mod test {
                         calculated_y: Some(0.0),
                         ..container.children[0].children[0].clone()
                     }],
-
                     calculated_width: Some(1360.0),
                     calculated_height: Some(76.0),
                     calculated_x: Some(0.0),
