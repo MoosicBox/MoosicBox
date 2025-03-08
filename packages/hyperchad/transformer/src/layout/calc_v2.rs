@@ -48,7 +48,7 @@ impl<F: FontMetrics> Calc for CalcV2Calculator<F> {
 /// and calculates the widths required for each of the `Container`s.
 mod pass_widths {
     use crate::{
-        BfsPaths, Container, Element,
+        BfsPaths, Container, Element, Number,
         layout::{font::FontMetrics, set_float},
     };
 
@@ -73,7 +73,7 @@ mod pass_widths {
                 for child in &mut parent.children {
                     log::trace!("calc_widths: container:\n{child}");
 
-                    if let Some(width) = &child.width {
+                    if let Some(width) = child.width.as_ref().and_then(Number::as_fixed) {
                         let new_width = width.calc(0.0, view_width, view_height);
 
                         min_width += new_width;
@@ -161,6 +161,15 @@ macro_rules! flex_on_axis {
                 }
 
                 let container_size = parent.$calculated_ident.expect("Missing container size");
+
+                for child in &mut parent.relative_positioned_elements_mut() {
+                    if let Some(size) = child.$fixed_ident.as_ref().and_then(crate::Number::as_dynamic) {
+                        let size = size.calc(container_size, view_width, view_height);
+                        if set_float(&mut child.$calculated_ident, size).is_some() {
+                            $changed_ident = true;
+                        }
+                    }
+                }
 
                 let mut remaining_size = container_size;
                 let mut last_cell = 0;
@@ -317,7 +326,7 @@ mod pass_flex_width {
 
 mod pass_heights {
     use crate::{
-        BfsPaths, Container,
+        BfsPaths, Container, Number,
         layout::{font::FontMetrics, set_float},
     };
 
@@ -342,7 +351,7 @@ mod pass_heights {
                 for child in &mut parent.children {
                     log::trace!("calc_heights: container:\n{child}");
 
-                    if let Some(height) = &child.height {
+                    if let Some(height) = child.height.as_ref().and_then(Number::as_fixed) {
                         let new_height = height.calc(0.0, view_width, view_height);
 
                         min_height += new_height;
