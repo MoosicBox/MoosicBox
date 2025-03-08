@@ -199,9 +199,9 @@ macro_rules! flex_on_axis {
                     LayoutDirection::$axis_ident => {
                         #[allow(clippy::while_float)]
                         while remaining_size >= EPSILON {
-                            let mut smallest= f32::INFINITY;
-                            let mut target= f32::INFINITY;
-                            let mut smallest_count= 0;
+                            let mut smallest = f32::INFINITY;
+                            let mut target = f32::INFINITY;
+                            let mut smallest_count = 0;
 
                             for size in parent
                                 .relative_positioned_elements()
@@ -510,7 +510,7 @@ mod pass_positioning {
 
             let mut changed = false;
 
-            let relative_container = Arc::new(RwLock::new((0.0, 0.0, 0.0, 0.0)));
+            let relative_container = Arc::new(RwLock::new(super::Rect::default()));
 
             #[allow(clippy::cognitive_complexity)]
             bfs.traverse_with_parents_mut(
@@ -518,14 +518,19 @@ mod pass_positioning {
                 container,
                 |parent| {
                     if parent.id == root_id {
-                        *relative_container.write().unwrap() = (0.0, 0.0, view_width, view_height);
+                        *relative_container.write().unwrap() = super::Rect {
+                            x: 0.0,
+                            y: 0.0,
+                            width: view_width,
+                            height: view_height,
+                        };
                     } else if parent.position == Some(Position::Relative) {
-                        *relative_container.write().unwrap() = (
-                            parent.calculated_x.unwrap(),
-                            parent.calculated_y.unwrap(),
-                            parent.calculated_width.unwrap(),
-                            parent.calculated_height.unwrap(),
-                        );
+                        *relative_container.write().unwrap() = super::Rect {
+                            x: parent.calculated_x.unwrap(),
+                            y: parent.calculated_y.unwrap(),
+                            width: parent.calculated_width.unwrap(),
+                            height: parent.calculated_height.unwrap(),
+                        };
                     }
                 },
                 |parent| {
@@ -660,7 +665,7 @@ mod pass_positioning {
 
                     // absolute positioned
 
-                    let (_x, _y, width, height) = *relative_container.read().unwrap();
+                    let super::Rect { width, height, .. } = *relative_container.read().unwrap();
 
                     for child in parent.absolute_positioned_elements_mut() {
                         if let Some(left) = &child.left {
@@ -5743,7 +5748,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_can_calc_justify_content_center_horizontally() {
         let mut container = Container {
             children: vec![Container {
@@ -5761,10 +5765,13 @@ mod test {
         log::trace!("container:\n{}", container);
 
         compare_containers(
-            &container.clone(),
+            &container,
             &Container {
-                internal_padding_left: Some((100.0 - 30.0) / 2.0),
-                ..container
+                children: vec![Container {
+                    calculated_x: Some((100.0 - 30.0) / 2.0),
+                    ..container.children[0].clone()
+                }],
+                ..container.clone()
             },
         );
     }
