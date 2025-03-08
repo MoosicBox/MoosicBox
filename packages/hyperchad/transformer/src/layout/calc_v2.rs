@@ -159,32 +159,34 @@ pub struct Rect {
 
 macro_rules! flex_on_axis {
     (
-        $bfs_ident:ident,
-        $container_ident:ident,
-        $changed_ident:ident,
-        $fixed_ident:ident,
-        $calculated_ident:ident,
-        $axis_ident:ident,
-        $cross_axis_ident:ident,
-        $cell_ident:ident,
-        $margin_x_ident:ident,
-        $margin_y_ident:ident,
-        $calculated_margin_x_ident:ident,
-        $calculated_margin_y_ident:ident,
-        $padding_x_ident:ident,
-        $padding_y_ident:ident,
-        $calculated_padding_x_ident:ident,
-        $calculated_padding_y_ident:ident,
+        $bfs:ident,
+        $container:ident,
+        $changed:ident,
+        $fixed:ident,
+        $calculated:ident,
+        $axis:ident,
+        $cross_axis:ident,
+        $cell:ident,
+        $margin_x:ident,
+        $margin_y:ident,
+        $calculated_margin_x:ident,
+        $calculated_margin_y:ident,
+        $margin_axis:ident,
+        $padding_x:ident,
+        $padding_y:ident,
+        $calculated_padding_x:ident,
+        $calculated_padding_y:ident,
+        $padding_axis:ident,
     ) => {
-        let root_id = $container_ident.id;
-        let view_width = $container_ident.calculated_width.expect("Missing view_width");
-        let view_height = $container_ident.calculated_height.expect("Missing view_height");
+        let root_id = $container.id;
+        let view_width = $container.calculated_width.expect("Missing view_width");
+        let view_height = $container.calculated_height.expect("Missing view_height");
         let relative_container = std::sync::Arc::new(std::sync::RwLock::new(super::Rect::default()));
 
         #[allow(clippy::cognitive_complexity)]
-        $bfs_ident.traverse_with_parents_mut(
+        $bfs.traverse_with_parents_mut(
             true,
-            $container_ident,
+            $container,
             |parent| {
                 if parent.id == root_id {
                     *relative_container.write().expect("Missing relative_container") = super::Rect {
@@ -195,48 +197,48 @@ macro_rules! flex_on_axis {
                     };
                 } else if parent.position == Some(Position::Relative) {
                     *relative_container.write().expect("Missing relative_container") = super::Rect {
-                        $fixed_ident: parent.$calculated_ident.expect("Missing parent calculated size"),
+                        $fixed: parent.$calculated.expect("Missing parent calculated size"),
                         ..Default::default()
                     };
                 }
             },
             |parent| {
-                if parent.relative_positioned_elements().all(|x| x.$fixed_ident.is_some()) {
+                if parent.relative_positioned_elements().all(|x| x.$fixed.is_some()) {
                     return;
                 }
 
-                let container_size = parent.$calculated_ident.expect("Missing container size");
+                let container_size = parent.$calculated.expect("Missing container size");
 
                 for child in &mut parent.relative_positioned_elements_mut() {
-                    if let Some(size) = child.$fixed_ident.as_ref().and_then(crate::Number::as_dynamic) {
+                    if let Some(size) = child.$fixed.as_ref().and_then(crate::Number::as_dynamic) {
                         let size = size.calc(container_size, view_width, view_height);
-                        if set_float(&mut child.$calculated_ident, size).is_some() {
-                            $changed_ident = true;
+                        if set_float(&mut child.$calculated, size).is_some() {
+                            $changed = true;
                         }
                     }
 
-                    if let Some(margin) = child.$margin_x_ident.as_ref().and_then(crate::Number::as_dynamic) {
+                    if let Some(margin) = child.$margin_x.as_ref().and_then(crate::Number::as_dynamic) {
                         let size = margin.calc(container_size, view_width, view_height);
-                        if set_float(&mut child.$calculated_margin_x_ident, size).is_some() {
-                            $changed_ident = true;
+                        if set_float(&mut child.$calculated_margin_x, size).is_some() {
+                            $changed = true;
                         }
                     }
-                    if let Some(margin) = child.$margin_y_ident.as_ref().and_then(crate::Number::as_dynamic) {
+                    if let Some(margin) = child.$margin_y.as_ref().and_then(crate::Number::as_dynamic) {
                         let size = margin.calc(container_size, view_width, view_height);
-                        if set_float(&mut child.$calculated_margin_y_ident, size).is_some() {
-                            $changed_ident = true;
+                        if set_float(&mut child.$calculated_margin_y, size).is_some() {
+                            $changed = true;
                         }
                     }
-                    if let Some(padding) = child.$padding_x_ident.as_ref().and_then(crate::Number::as_dynamic) {
+                    if let Some(padding) = child.$padding_x.as_ref().and_then(crate::Number::as_dynamic) {
                         let size = padding.calc(container_size, view_width, view_height);
-                        if set_float(&mut child.$calculated_padding_x_ident, size).is_some() {
-                            $changed_ident = true;
+                        if set_float(&mut child.$calculated_padding_x, size).is_some() {
+                            $changed = true;
                         }
                     }
-                    if let Some(padding) = child.$padding_y_ident.as_ref().and_then(crate::Number::as_dynamic) {
+                    if let Some(padding) = child.$padding_y.as_ref().and_then(crate::Number::as_dynamic) {
                         let size = padding.calc(container_size, view_width, view_height);
-                        if set_float(&mut child.$calculated_padding_y_ident, size).is_some() {
-                            $changed_ident = true;
+                        if set_float(&mut child.$calculated_padding_y, size).is_some() {
+                            $changed = true;
                         }
                     }
                 }
@@ -249,23 +251,36 @@ macro_rules! flex_on_axis {
                     log::trace!("flex: calculating remaining size:\n{child}");
 
                     match parent.direction  {
-                        LayoutDirection::$axis_ident => {
-                            if let Some(size) = child.$calculated_ident {
+                        LayoutDirection::$axis => {
+                            if let Some(size) = child.$calculated {
                                 log::trace!(
                                     "flex: removing size={size} from remaining_size={remaining_size} ({})",
                                     remaining_size - size
                                 );
                                 remaining_size -= size;
                             }
+                            if let Some(size) = child.$margin_axis() {
+                                log::trace!(
+                                    "flex: removing margin size={size} from remaining_size={remaining_size} ({})",
+                                    remaining_size - size
+                                );
+                                remaining_size -= size;
+                            }
+                            if let Some(size) = child.$padding_axis() {
+                                log::trace!(
+                                    "flex: removing padding size={size} from remaining_size={remaining_size} ({})",
+                                    remaining_size - size
+                                );
+                                remaining_size -= size;
+                            }
                         }
-                        LayoutDirection::$cross_axis_ident => {
-                            if let Some(LayoutPosition::Wrap { $cell_ident: cell, .. }) = child.calculated_position {
+                        LayoutDirection::$cross_axis => {
+                            if let Some(LayoutPosition::Wrap { $cell: cell, .. }) = child.calculated_position {
                                 if cell != last_cell {
                                     moosicbox_assert::assert!(cell > last_cell);
                                     remaining_size -= max_cell_size;
-                                    max_cell_size = child.$calculated_ident.unwrap_or_default();
+                                    max_cell_size = child.$calculated.unwrap_or_default();
                                 }
-
                                 last_cell = cell;
                             }
                         }
@@ -278,7 +293,7 @@ macro_rules! flex_on_axis {
                 log::trace!("flex: remaining_size={remaining_size}");
 
                 match parent.direction {
-                    LayoutDirection::$axis_ident => {
+                    LayoutDirection::$axis => {
                         #[allow(clippy::while_float)]
                         while remaining_size >= EPSILON {
                             let mut smallest = f32::INFINITY;
@@ -287,8 +302,8 @@ macro_rules! flex_on_axis {
 
                             for size in parent
                                 .relative_positioned_elements()
-                                .filter(|x| x.$fixed_ident.is_none())
-                                .filter_map(|x| x.$calculated_ident)
+                                .filter(|x| x.$fixed.is_none())
+                                .filter_map(|x| x.$calculated)
                             {
                                 if smallest > size {
                                     target = smallest;
@@ -318,24 +333,24 @@ macro_rules! flex_on_axis {
 
                             for child in parent
                                 .relative_positioned_elements_mut()
-                                .filter(|x| x.$fixed_ident.is_none())
-                                .filter(|x| x.$calculated_ident.is_some_and(|x| (x - smallest).abs() < EPSILON))
+                                .filter(|x| x.$fixed.is_none())
+                                .filter(|x| x.$calculated.is_some_and(|x| (x - smallest).abs() < EPSILON))
                             {
-                                let size = child.$calculated_ident.expect("Missing child calculated size");
+                                let size = child.$calculated.expect("Missing child calculated size");
                                 log::trace!("flex: distributing evenly split remaining_size={remaining_size} delta={delta}:\n{child}");
-                                set_float(&mut child.$calculated_ident, size + delta);
+                                set_float(&mut child.$calculated, size + delta);
                             }
                         }
                     }
-                    LayoutDirection::$cross_axis_ident => {
+                    LayoutDirection::$cross_axis => {
                         for child in parent.relative_positioned_elements_mut() {
                             log::trace!("flex: setting size to remaining_size={remaining_size}:\n{child}");
 
                             #[allow(clippy::cast_precision_loss)]
-                            if child.$fixed_ident.is_none()
-                                && set_float(&mut child.$calculated_ident, remaining_size / (cell_count as f32)).is_some()
+                            if child.$fixed.is_none()
+                                && set_float(&mut child.$calculated, remaining_size / (cell_count as f32)).is_some()
                             {
-                                $changed_ident = true;
+                                $changed = true;
                             }
                         }
                     }
@@ -343,15 +358,15 @@ macro_rules! flex_on_axis {
 
                 // absolute positioned
 
-                let super::Rect { $fixed_ident: size, .. } = *relative_container.read().expect("Missing relative_container");
+                let super::Rect { $fixed: size, .. } = *relative_container.read().expect("Missing relative_container");
 
                 for child in parent.absolute_positioned_elements_mut() {
-                    if child.$fixed_ident.is_some() {
+                    if child.$fixed.is_some() {
                         continue;
                     }
 
-                    if set_float(&mut child.$calculated_ident, size).is_some() {
-                        $changed_ident = true;
+                    if set_float(&mut child.$calculated, size).is_some() {
+                        $changed = true;
                     }
                 }
             });
@@ -391,10 +406,12 @@ mod pass_flex_width {
                 margin_right,
                 calculated_margin_left,
                 calculated_margin_right,
+                horizontal_margin,
                 padding_left,
                 padding_right,
                 calculated_padding_left,
                 calculated_padding_right,
+                horizontal_padding,
             );
 
             changed
@@ -528,10 +545,12 @@ mod pass_flex_height {
                 margin_bottom,
                 calculated_margin_top,
                 calculated_margin_bottom,
+                vertical_margin,
                 padding_top,
                 padding_bottom,
                 calculated_padding_top,
                 calculated_padding_bottom,
+                vertical_padding,
             );
 
             changed
@@ -6128,7 +6147,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_includes_horizontal_padding_in_auto_calculated_content_width() {
         let mut container = Container {
             children: vec![
@@ -6169,7 +6187,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_includes_horizontal_margin_in_auto_calculated_content_width() {
         let mut container = Container {
             children: vec![
