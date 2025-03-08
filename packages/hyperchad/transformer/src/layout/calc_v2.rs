@@ -147,11 +147,9 @@ macro_rules! flex_on_axis {
                         height: view_height,
                     };
                 } else if parent.position == Some(Position::Relative) {
-                    *relative_container.write().unwrap() = super::Rect {
-                        x: parent.calculated_x.unwrap(),
-                        y: parent.calculated_y.unwrap(),
-                        width: parent.calculated_width.unwrap(),
-                        height: parent.calculated_height.unwrap(),
+                    *relative_container.write().expect("Missing relative_container") = super::Rect {
+                        $fixed_ident: parent.$calculated_ident.expect("Missing parent calculated size"),
+                        ..Default::default()
                     };
                 }
             },
