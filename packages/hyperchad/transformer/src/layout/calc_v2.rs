@@ -130,8 +130,8 @@ macro_rules! flex_on_axis {
         $cell_ident:ident
     ) => {
         let root_id = $container_ident.id;
-        let view_width = $container_ident.calculated_width.unwrap();
-        let view_height = $container_ident.calculated_height.unwrap();
+        let view_width = $container_ident.calculated_width.expect("Missing view_width");
+        let view_height = $container_ident.calculated_height.expect("Missing view_height");
         let relative_container = std::sync::Arc::new(std::sync::RwLock::new(super::Rect::default()));
 
         #[allow(clippy::cognitive_complexity)]
@@ -140,7 +140,7 @@ macro_rules! flex_on_axis {
             $container_ident,
             |parent| {
                 if parent.id == root_id {
-                    *relative_container.write().unwrap() = super::Rect {
+                    *relative_container.write().expect("Missing relative_container") = super::Rect {
                         x: 0.0,
                         y: 0.0,
                         width: view_width,
@@ -160,7 +160,7 @@ macro_rules! flex_on_axis {
                     return;
                 }
 
-                let container_size = parent.$calculated_ident.unwrap();
+                let container_size = parent.$calculated_ident.expect("Missing container size");
 
                 let mut remaining_size = container_size;
                 let mut last_cell = 0;
@@ -240,7 +240,7 @@ macro_rules! flex_on_axis {
                                 .filter(|x| x.$fixed_ident.is_none())
                                 .filter(|x| x.$calculated_ident.is_some_and(|x| (x - smallest).abs() < EPSILON))
                             {
-                                let size = child.$calculated_ident.unwrap();
+                                let size = child.$calculated_ident.expect("Missing child calculated size");
                                 log::trace!("flex: distributing evenly split remaining_size={remaining_size} delta={delta}:\n{child}");
                                 set_float(&mut child.$calculated_ident, size + delta);
                             }
@@ -262,7 +262,7 @@ macro_rules! flex_on_axis {
 
                 // absolute positioned
 
-                let super::Rect { $fixed_ident: size, .. } = *relative_container.read().unwrap();
+                let super::Rect { $fixed_ident: size, .. } = *relative_container.read().expect("Missing relative_container");
 
                 for child in parent.absolute_positioned_elements_mut() {
                     if child.$fixed_ident.is_some() {
