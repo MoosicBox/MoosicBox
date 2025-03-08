@@ -72,6 +72,80 @@ impl Calculation {
             }
         }
     }
+
+    #[must_use]
+    pub fn as_dynamic(&self) -> Option<&Self> {
+        match self {
+            Self::Number(x) => {
+                if x.is_dynamic() {
+                    Some(self)
+                } else {
+                    None
+                }
+            }
+            Self::Add(a, b)
+            | Self::Subtract(a, b)
+            | Self::Multiply(a, b)
+            | Self::Divide(a, b)
+            | Self::Min(a, b)
+            | Self::Max(a, b) => {
+                if a.is_dynamic() || b.is_dynamic() {
+                    Some(self)
+                } else {
+                    None
+                }
+            }
+            Self::Grouping(x) => {
+                if x.is_dynamic() {
+                    Some(self)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn is_dynamic(&self) -> bool {
+        self.as_dynamic().is_some()
+    }
+
+    #[must_use]
+    pub fn as_fixed(&self) -> Option<&Self> {
+        match self {
+            Self::Number(x) => {
+                if x.is_fixed() {
+                    Some(self)
+                } else {
+                    None
+                }
+            }
+            Self::Add(a, b)
+            | Self::Subtract(a, b)
+            | Self::Multiply(a, b)
+            | Self::Divide(a, b)
+            | Self::Min(a, b)
+            | Self::Max(a, b) => {
+                if a.is_fixed() && b.is_fixed() {
+                    Some(self)
+                } else {
+                    None
+                }
+            }
+            Self::Grouping(x) => {
+                if x.is_fixed() {
+                    Some(self)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn is_fixed(&self) -> bool {
+        self.as_fixed().is_some()
+    }
 }
 
 impl std::fmt::Display for Calculation {
@@ -215,6 +289,64 @@ impl Number {
             Self::IntegerVh(x) | Self::IntegerDvh(x) => view_height * (*x as f32 / 100.0),
             Self::Calc(x) => x.calc(container, view_width, view_height),
         }
+    }
+
+    #[must_use]
+    pub fn as_dynamic(&self) -> Option<&Self> {
+        match self {
+            Self::RealPercent(_) | Self::IntegerPercent(_) => Some(self),
+            Self::Real(_)
+            | Self::Integer(_)
+            | Self::RealDvw(_)
+            | Self::IntegerDvw(_)
+            | Self::RealDvh(_)
+            | Self::IntegerDvh(_)
+            | Self::RealVw(_)
+            | Self::IntegerVw(_)
+            | Self::RealVh(_)
+            | Self::IntegerVh(_) => None,
+            Self::Calc(x) => {
+                if x.is_dynamic() {
+                    Some(self)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn is_dynamic(&self) -> bool {
+        self.as_dynamic().is_some()
+    }
+
+    #[must_use]
+    pub fn as_fixed(&self) -> Option<&Self> {
+        match self {
+            Self::RealPercent(_) | Self::IntegerPercent(_) => None,
+            Self::Real(_)
+            | Self::Integer(_)
+            | Self::RealDvw(_)
+            | Self::IntegerDvw(_)
+            | Self::RealDvh(_)
+            | Self::IntegerDvh(_)
+            | Self::RealVw(_)
+            | Self::IntegerVw(_)
+            | Self::RealVh(_)
+            | Self::IntegerVh(_) => Some(self),
+            Self::Calc(x) => {
+                if x.is_fixed() {
+                    Some(self)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn is_fixed(&self) -> bool {
+        self.as_fixed().is_some()
     }
 }
 
