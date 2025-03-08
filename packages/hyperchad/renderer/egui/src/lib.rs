@@ -1080,25 +1080,23 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
     #[cfg_attr(feature = "profiling", profiling::function)]
     fn check_frame_resize(&self, ctx: &egui::Context) -> bool {
-        ctx.input(move |i| {
-            let width = i.screen_rect.width();
-            let height = i.screen_rect.height();
-            let current_width = *self.width.read().unwrap();
-            let current_height = *self.height.read().unwrap();
-            if current_width.is_none_or(|x| (x - width).abs() >= 0.01)
-                || current_height.is_none_or(|x| (x - height).abs() >= 0.01)
-            {
-                self.update_frame_size(width, height);
-                if let Err(e) = self.on_resize.send((width, height)) {
-                    moosicbox_assert::die_or_error!(
-                        "Failed to send on_resize message: {width}, {height}: {e:?}"
-                    );
-                }
-                true
-            } else {
-                false
+        let (width, height) = ctx.input(move |i| (i.screen_rect.width(), i.screen_rect.height()));
+
+        let current_width = *self.width.read().unwrap();
+        let current_height = *self.height.read().unwrap();
+        if current_width.is_none_or(|x| (x - width).abs() >= 0.01)
+            || current_height.is_none_or(|x| (x - height).abs() >= 0.01)
+        {
+            self.update_frame_size(width, height);
+            if let Err(e) = self.on_resize.send((width, height)) {
+                moosicbox_assert::die_or_error!(
+                    "Failed to send on_resize message: {width}, {height}: {e:?}"
+                );
             }
-        })
+            true
+        } else {
+            false
+        }
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
