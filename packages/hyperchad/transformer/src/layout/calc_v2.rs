@@ -538,7 +538,9 @@ mod pass_positioning {
                     let mut y = 0.0;
 
                     let direction = parent.direction;
+                    let justify_content = parent.justify_content.unwrap_or_default();
                     let container_width = parent.calculated_width.unwrap();
+                    let container_height = parent.calculated_height.unwrap();
 
                     if let LayoutOverflow::Wrap { grid } = parent.overflow_x {
                         let mut last_row = 0;
@@ -590,7 +592,7 @@ mod pass_positioning {
                             max_col_count = col_count;
                         }
 
-                        let mut gap = match parent.justify_content.unwrap_or_default() {
+                        let mut gap = match justify_content {
                             hyperchad_transformer_models::JustifyContent::Start => 0.0,
                             hyperchad_transformer_models::JustifyContent::Center => todo!(),
                             hyperchad_transformer_models::JustifyContent::End => todo!(),
@@ -643,6 +645,82 @@ mod pass_positioning {
                             x += child_width + gap;
                         }
                     } else {
+                        let mut gap = 0.0;
+
+                        match justify_content {
+                            hyperchad_transformer_models::JustifyContent::Start => {}
+                            hyperchad_transformer_models::JustifyContent::Center => {
+                                let size: f32 = parent
+                                    .relative_positioned_elements()
+                                    .filter_map(|x| match direction {
+                                        LayoutDirection::Row => x.calculated_width,
+                                        LayoutDirection::Column => x.calculated_height,
+                                    })
+                                    .sum();
+
+                                match direction {
+                                    LayoutDirection::Row => x += (container_width - size) / 2.0,
+                                    LayoutDirection::Column => y += (container_height - size) / 2.0,
+                                }
+                            }
+                            hyperchad_transformer_models::JustifyContent::End => {
+                                let size: f32 = parent
+                                    .relative_positioned_elements()
+                                    .filter_map(|x| match direction {
+                                        LayoutDirection::Row => x.calculated_width,
+                                        LayoutDirection::Column => x.calculated_height,
+                                    })
+                                    .sum();
+
+                                match direction {
+                                    LayoutDirection::Row => x += container_width - size,
+                                    LayoutDirection::Column => y += container_height - size,
+                                }
+                            }
+                            hyperchad_transformer_models::JustifyContent::SpaceBetween => {
+                                let count = parent.relative_positioned_elements().count();
+                                let size: f32 = parent
+                                    .relative_positioned_elements()
+                                    .filter_map(|x| match direction {
+                                        LayoutDirection::Row => x.calculated_width,
+                                        LayoutDirection::Column => x.calculated_height,
+                                    })
+                                    .sum();
+
+                                #[allow(clippy::cast_precision_loss)]
+                                match direction {
+                                    LayoutDirection::Row => {
+                                        gap = (container_width - size) / ((count - 1) as f32);
+                                    }
+                                    LayoutDirection::Column => {
+                                        gap = (container_height - size) / ((count - 1) as f32);
+                                    }
+                                }
+                            }
+                            hyperchad_transformer_models::JustifyContent::SpaceEvenly => {
+                                let count = parent.relative_positioned_elements().count();
+                                let size: f32 = parent
+                                    .relative_positioned_elements()
+                                    .filter_map(|x| match direction {
+                                        LayoutDirection::Row => x.calculated_width,
+                                        LayoutDirection::Column => x.calculated_height,
+                                    })
+                                    .sum();
+
+                                #[allow(clippy::cast_precision_loss)]
+                                match direction {
+                                    LayoutDirection::Row => {
+                                        gap = (container_width - size) / ((count + 1) as f32);
+                                    }
+                                    LayoutDirection::Column => {
+                                        gap = (container_height - size) / ((count + 1) as f32);
+                                    }
+                                }
+
+                                x += gap;
+                            }
+                        };
+
                         for child in parent.relative_positioned_elements_mut() {
                             log::trace!("position_elements: setting position ({x}, {y}):\n{child}");
                             if set_float(&mut child.calculated_x, x).is_some() {
@@ -654,10 +732,10 @@ mod pass_positioning {
 
                             match direction {
                                 LayoutDirection::Row => {
-                                    x += child.calculated_width.unwrap();
+                                    x += child.calculated_width.unwrap() + gap;
                                 }
                                 LayoutDirection::Column => {
-                                    y += child.calculated_height.unwrap();
+                                    y += child.calculated_height.unwrap() + gap;
                                 }
                             }
                         }
@@ -5777,7 +5855,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_can_calc_justify_content_start() {
         let mut container = Container {
             children: vec![
