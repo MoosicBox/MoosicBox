@@ -203,20 +203,13 @@ macro_rules! flex_on_axis {
                 }
             },
             |parent| {
-                if parent.relative_positioned_elements().all(|x| x.$fixed.is_some()) {
+                if parent.relative_positioned_elements().all(|x| x.$fixed.as_ref().is_some_and(crate::Number::is_fixed)) {
                     return;
                 }
 
                 let container_size = parent.$calculated.expect("Missing container size");
 
                 for child in &mut parent.relative_positioned_elements_mut() {
-                    if let Some(size) = child.$fixed.as_ref().and_then(crate::Number::as_dynamic) {
-                        let size = size.calc(container_size, view_width, view_height);
-                        if set_float(&mut child.$calculated, size).is_some() {
-                            $changed = true;
-                        }
-                    }
-
                     if let Some(margin) = child.$margin_x.as_ref().and_then(crate::Number::as_dynamic) {
                         let size = margin.calc(container_size, view_width, view_height);
                         if set_float(&mut child.$calculated_margin_x, size).is_some() {
@@ -243,6 +236,44 @@ macro_rules! flex_on_axis {
                     }
                 }
 
+                let mut remaining_container_size = container_size;
+
+                for child in &mut parent.relative_positioned_elements() {
+                    match parent.direction  {
+                        LayoutDirection::$axis => {
+                            if let Some(size) = child.$margin_axis() {
+                                log::trace!(
+                                    "flex: removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
+                                    remaining_container_size - size
+                                );
+                                remaining_container_size -= size;
+                            }
+                            if let Some(size) = child.$padding_axis() {
+                                log::trace!(
+                                    "flex: removing padding size={size} from remaining_container_size={remaining_container_size} ({})",
+                                    remaining_container_size - size
+                                );
+                                remaining_container_size -= size;
+                            }
+                        }
+                        LayoutDirection::$cross_axis => {}
+                    }
+                }
+
+                log::trace!("flex: container_size={container_size} remaining_container_size={remaining_container_size}");
+                let container_size = remaining_container_size;
+
+                for child in &mut parent.relative_positioned_elements_mut() {
+                    if let Some(size) = child.$fixed.as_ref().and_then(crate::Number::as_dynamic) {
+                        log::trace!("flex: calculating dynamic size={size:?}");
+                        let size = size.calc(container_size, view_width, view_height);
+                        log::trace!("flex: calculated dynamic size={size}");
+                        if set_float(&mut child.$calculated, size).is_some() {
+                            $changed = true;
+                        }
+                    }
+                }
+
                 let mut remaining_size = container_size;
                 let mut last_cell = 0;
                 let mut max_cell_size = 0.0;
@@ -255,20 +286,6 @@ macro_rules! flex_on_axis {
                             if let Some(size) = child.$calculated {
                                 log::trace!(
                                     "flex: removing size={size} from remaining_size={remaining_size} ({})",
-                                    remaining_size - size
-                                );
-                                remaining_size -= size;
-                            }
-                            if let Some(size) = child.$margin_axis() {
-                                log::trace!(
-                                    "flex: removing margin size={size} from remaining_size={remaining_size} ({})",
-                                    remaining_size - size
-                                );
-                                remaining_size -= size;
-                            }
-                            if let Some(size) = child.$padding_axis() {
-                                log::trace!(
-                                    "flex: removing padding size={size} from remaining_size={remaining_size} ({})",
                                     remaining_size - size
                                 );
                                 remaining_size -= size;
@@ -361,7 +378,7 @@ macro_rules! flex_on_axis {
                 let super::Rect { $fixed: size, .. } = *relative_container.read().expect("Missing relative_container");
 
                 for child in parent.absolute_positioned_elements_mut() {
-                    if child.$fixed.is_some() {
+                    if child.$fixed.as_ref().is_some_and(crate::Number::is_fixed) {
                         continue;
                     }
 
@@ -767,8 +784,12 @@ mod pass_positioning {
                                 continue;
                             };
 
-                            let child_width = child.calculated_width.unwrap();
-                            let child_height = child.calculated_height.unwrap();
+                            let child_width = child.calculated_width.unwrap()
+                                + child.horizontal_margin().unwrap_or_default()
+                                + child.horizontal_padding().unwrap_or_default();
+                            let child_height = child.calculated_height.unwrap()
+                                + child.vertical_margin().unwrap_or_default()
+                                + child.vertical_padding().unwrap_or_default();
 
                             if row != last_row {
                                 moosicbox_assert::assert!(row > last_row);
@@ -6227,7 +6248,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_calculates_sized_widths_based_on_the_container_width_minus_all_its_childrens_padding() {
         let mut container = Container {
             children: vec![
@@ -6272,7 +6292,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_calculates_unsized_widths_based_on_the_container_width_minus_all_its_childrens_padding()
     {
         let mut container = Container {
@@ -6315,7 +6334,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_calculates_unsized_widths_based_on_the_container_width_minus_second_childs_padding() {
         let mut container = Container {
             children: vec![
