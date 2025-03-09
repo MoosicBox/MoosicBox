@@ -1233,7 +1233,7 @@ mod pass_positioning {
 mod test {
     use bumpalo::Bump;
     use maud::html;
-    use pretty_assertions::{assert_eq, assert_ne};
+    use pretty_assertions::assert_eq;
 
     use crate::{
         Calculation, Container, Element, HeaderSize, Number, Position,
@@ -1302,6 +1302,166 @@ mod test {
     mod scrollbar {
         use super::*;
         use pretty_assertions::assert_eq;
+
+        #[test_log::test]
+        #[ignore]
+        fn calc_calculates_resized_wrapped_content_with_scrollbar_and_padding_correctly() {
+            let mut container: Container = html! {
+                div sx-width="100%" sx-height="100%" sx-position="relative" {
+                    section sx-dir="row" sx-height=("calc(100% - 140px)") {
+                        aside sx-width="calc(max(240, min(280, 15%)))" {}
+                        main sx-overflow-y="auto" {
+                            div
+                                sx-dir="row"
+                                sx-overflow-x="wrap"
+                                sx-justify-content="space-evenly"
+                                sx-gap=(15)
+                                sx-padding-left=(30)
+                                sx-padding-right=(30)
+                                sx-padding-top=(15)
+                                sx-padding-bottom=(15)
+                            {
+                                @for _ in 0..19 {
+                                    div sx-width=(200) sx-height=(200 + 30) {}
+                                }
+                            }
+                        }
+                    }
+                    div
+                        sx-width="calc(min(500, 30%))"
+                        sx-height="calc(100% - 200)"
+                        sx-padding=(20)
+                        sx-position="absolute"
+                        sx-bottom=(170)
+                        sx-right=(0)
+                    {}
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(1600.0);
+            container.calculated_height = Some(1000.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            let container = container.children[0].children[0].children[1].children[0].clone();
+
+            compare_containers(
+                &container.clone(),
+                &Container {
+                    calculated_width: Some(1360.0 - 30.0 - 30.0 - f32::from(get_scrollbar_size())),
+                    calculated_height: Some(920.0),
+                    calculated_x: Some(0.0),
+                    calculated_y: Some(0.0),
+                    calculated_padding_left: Some(30.0),
+                    calculated_padding_right: Some(30.0),
+                    calculated_padding_top: Some(15.0),
+                    calculated_padding_bottom: Some(15.0),
+                    ..container
+                },
+            );
+        }
+
+        #[test_log::test]
+        #[ignore]
+        fn calc_auto_y_wraps_nested_elements_properly_by_taking_into_account_scrollbar_size() {
+            let mut container = Container {
+                children: vec![Container {
+                    children: vec![
+                        Container {
+                            width: Some(Number::Integer(25)),
+                            ..Default::default()
+                        },
+                        Container {
+                            width: Some(Number::Integer(25)),
+                            ..Default::default()
+                        },
+                        Container {
+                            width: Some(Number::Integer(25)),
+                            ..Default::default()
+                        },
+                        Container {
+                            width: Some(Number::Integer(25)),
+                            ..Default::default()
+                        },
+                        Container {
+                            width: Some(Number::Integer(25)),
+                            ..Default::default()
+                        },
+                    ],
+                    calculated_width: Some(75.0),
+                    calculated_height: Some(40.0),
+                    direction: LayoutDirection::Row,
+                    overflow_x: LayoutOverflow::Wrap { grid: true },
+                    overflow_y: LayoutOverflow::Expand,
+                    ..Default::default()
+                }],
+
+                calculated_width: Some(75.0),
+                calculated_height: Some(40.0),
+                overflow_y: LayoutOverflow::Auto,
+                ..Default::default()
+            };
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container.clone(),
+                &Container {
+                    children: vec![Container {
+                        children: vec![
+                            Container {
+                                calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                                calculated_width: Some(25.0),
+                                calculated_height: Some(40.0),
+                                calculated_x: Some(0.0),
+                                calculated_y: Some(0.0),
+                                ..container.children[0].children[0].clone()
+                            },
+                            Container {
+                                calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                                calculated_width: Some(25.0),
+                                calculated_height: Some(40.0),
+                                calculated_x: Some(25.0),
+                                calculated_y: Some(0.0),
+                                ..container.children[0].children[1].clone()
+                            },
+                            Container {
+                                calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                                calculated_width: Some(25.0),
+                                calculated_height: Some(40.0),
+                                calculated_x: Some(0.0),
+                                calculated_y: Some(40.0),
+                                ..container.children[0].children[2].clone()
+                            },
+                            Container {
+                                calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
+                                calculated_width: Some(25.0),
+                                calculated_height: Some(40.0),
+                                calculated_x: Some(25.0),
+                                calculated_y: Some(40.0),
+                                ..container.children[0].children[3].clone()
+                            },
+                            Container {
+                                calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
+                                calculated_width: Some(25.0),
+                                calculated_height: Some(40.0),
+                                calculated_x: Some(0.0),
+                                calculated_y: Some(80.0),
+                                ..container.children[0].children[4].clone()
+                            },
+                        ],
+                        ..container.children[0].clone()
+                    }],
+
+                    calculated_width: Some(75.0 - f32::from(get_scrollbar_size())),
+                    calculated_height: Some(40.0),
+                    ..container
+                },
+            );
+        }
 
         #[test_log::test]
         #[ignore]
@@ -2886,487 +3046,6 @@ mod test {
 
     #[test_log::test]
     #[ignore]
-    fn contained_sized_width_calculates_wrapped_width_correctly() {
-        let container = Container {
-            children: vec![
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                    ..Default::default()
-                },
-            ],
-            calculated_width: Some(50.0),
-            calculated_height: Some(40.0),
-            direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap { grid: true },
-            overflow_y: LayoutOverflow::Squash,
-            ..Default::default()
-        };
-        let width = container.contained_sized_width(
-            (
-                container.calculated_width.unwrap(),
-                container.calculated_height.unwrap(),
-            ),
-            true,
-        );
-        let expected = 50.0;
-
-        assert_ne!(width, None);
-        let width = width.unwrap();
-        assert_eq!(
-            (width - expected).abs() < EPSILON,
-            true,
-            "width expected to be {expected} (actual={width})"
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn contained_sized_width_calculates_wrapped_empty_width_correctly() {
-        let container = Container {
-            children: vec![
-                Container {
-                    height: Some(Number::Integer(25)),
-                    calculated_width: Some(40.0),
-                    calculated_height: Some(25.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                    ..Default::default()
-                },
-                Container {
-                    height: Some(Number::Integer(25)),
-                    calculated_width: Some(40.0),
-                    calculated_height: Some(25.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
-                    ..Default::default()
-                },
-                Container {
-                    height: Some(Number::Integer(25)),
-                    calculated_width: Some(40.0),
-                    calculated_height: Some(25.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                    ..Default::default()
-                },
-            ],
-            calculated_width: Some(40.0),
-            calculated_height: Some(50.0),
-            direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap { grid: true },
-            overflow_y: LayoutOverflow::Squash,
-            ..Default::default()
-        };
-        let width = container.contained_sized_width(
-            (
-                container.calculated_width.unwrap(),
-                container.calculated_height.unwrap(),
-            ),
-            true,
-        );
-
-        assert_eq!(width, None);
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn contained_sized_height_calculates_wrapped_height_correctly() {
-        let container = Container {
-            children: vec![
-                Container {
-                    height: Some(Number::Integer(25)),
-                    calculated_width: Some(40.0),
-                    calculated_height: Some(25.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                    ..Default::default()
-                },
-                Container {
-                    height: Some(Number::Integer(25)),
-                    calculated_width: Some(40.0),
-                    calculated_height: Some(25.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                    ..Default::default()
-                },
-                Container {
-                    height: Some(Number::Integer(25)),
-                    calculated_width: Some(40.0),
-                    calculated_height: Some(25.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
-                    ..Default::default()
-                },
-            ],
-            calculated_width: Some(40.0),
-            calculated_height: Some(50.0),
-            direction: LayoutDirection::Column,
-            overflow_x: LayoutOverflow::Wrap { grid: true },
-            overflow_y: LayoutOverflow::Squash,
-            ..Default::default()
-        };
-        let height = container.contained_sized_height(
-            (
-                container.calculated_width.unwrap(),
-                container.calculated_height.unwrap(),
-            ),
-            true,
-        );
-        let expected = 50.0;
-
-        assert_ne!(height, None);
-        let height = height.unwrap();
-        assert_eq!(
-            (height - expected).abs() < EPSILON,
-            true,
-            "height expected to be {expected} (actual={height})"
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn contained_sized_height_calculates_empty_height_correctly() {
-        let container = Container {
-            children: vec![
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                    ..Default::default()
-                },
-            ],
-            calculated_width: Some(50.0),
-            calculated_height: Some(40.0),
-            direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap { grid: true },
-            overflow_y: LayoutOverflow::Squash,
-            ..Default::default()
-        };
-        let height = container.contained_sized_height(
-            (
-                container.calculated_width.unwrap(),
-                container.calculated_height.unwrap(),
-            ),
-            true,
-        );
-
-        assert_eq!(height, None);
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn contained_calculated_width_calculates_wrapped_width_correctly() {
-        let container = Container {
-            children: vec![
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                    ..Default::default()
-                },
-            ],
-            calculated_width: Some(50.0),
-            calculated_height: Some(40.0),
-            direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap { grid: true },
-            overflow_y: LayoutOverflow::Squash,
-            ..Default::default()
-        };
-        let width = container.contained_calculated_width();
-        let expected = 50.0;
-
-        assert_eq!(
-            (width - expected).abs() < EPSILON,
-            true,
-            "width expected to be {expected} (actual={width})"
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn contained_calculated_height_calculates_wrapped_height_correctly() {
-        let container = Container {
-            children: vec![
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                    ..Default::default()
-                },
-            ],
-            calculated_width: Some(50.0),
-            calculated_height: Some(40.0),
-            direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap { grid: true },
-            overflow_y: LayoutOverflow::Squash,
-            ..Default::default()
-        };
-        let height = container.contained_calculated_height();
-        let expected = 80.0;
-
-        assert_eq!(
-            (height - expected).abs() < EPSILON,
-            true,
-            "height expected to be {expected} (actual={height})"
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn contained_calculated_scroll_y_width_calculates_wrapped_height_correctly() {
-        let container = Container {
-            children: vec![
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                    ..Default::default()
-                },
-            ],
-            calculated_width: Some(20.0),
-            calculated_height: Some(40.0),
-            direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap { grid: true },
-            overflow_y: LayoutOverflow::Scroll,
-            ..Default::default()
-        };
-        let width = container.contained_calculated_width();
-        let expected = 50.0;
-
-        assert_eq!(
-            (width - expected).abs() < EPSILON,
-            true,
-            "width expected to be {expected} (actual={width})"
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn contained_calculated_scroll_y_calculates_height_correctly() {
-        let container = Container {
-            children: vec![
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                    ..Default::default()
-                },
-            ],
-            calculated_width: Some(50.0),
-            calculated_height: Some(40.0),
-            direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap { grid: true },
-            overflow_y: LayoutOverflow::Scroll,
-            ..Default::default()
-        };
-        let height = container.contained_calculated_height();
-        let expected = 80.0;
-
-        assert_eq!(
-            (height - expected).abs() < EPSILON,
-            true,
-            "height expected to be {expected} (actual={height})"
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn contained_calculated_width_auto_y_takes_into_account_scrollbar_size_when_there_is_scroll_overflow()
-     {
-        let mut container = Container {
-            children: vec![
-                Container {
-                    calculated_width: Some(50.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                    ..Default::default()
-                },
-                Container {
-                    calculated_width: Some(50.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
-                    ..Default::default()
-                },
-                Container {
-                    calculated_width: Some(50.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                    ..Default::default()
-                },
-            ],
-            calculated_width: Some(50.0),
-            calculated_height: Some(40.0),
-            direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap { grid: true },
-            overflow_y: LayoutOverflow::Auto,
-            ..Default::default()
-        };
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (50.0, 40.0)) {}
-        let width = container.contained_calculated_width();
-        let expected = 50.0 - f32::from(get_scrollbar_size());
-
-        assert_eq!(
-            (width - expected).abs() < EPSILON,
-            true,
-            "width expected to be {expected} (actual={width})"
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn handle_overflow_auto_y_takes_into_account_scrollbar_size_when_there_is_scroll_overflow() {
-        let mut container = Container {
-            children: vec![
-                Container {
-                    calculated_width: Some(50.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                    ..Default::default()
-                },
-                Container {
-                    calculated_width: Some(50.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
-                    ..Default::default()
-                },
-                Container {
-                    calculated_width: Some(50.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                    ..Default::default()
-                },
-            ],
-            calculated_width: Some(50.0),
-            calculated_height: Some(40.0),
-            direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap { grid: true },
-            overflow_y: LayoutOverflow::Auto,
-            ..Default::default()
-        };
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (50.0, 40.0)) {}
-        let width = 50.0 - f32::from(get_scrollbar_size());
-
-        compare_containers(
-            &container.clone(),
-            &Container {
-                children: vec![
-                    Container {
-                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                        calculated_width: Some(width),
-                        calculated_height: Some(40.0),
-                        calculated_x: Some(0.0),
-                        calculated_y: Some(0.0),
-                        ..container.children[0].clone()
-                    },
-                    Container {
-                        calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                        calculated_width: Some(width),
-                        calculated_height: Some(40.0),
-                        calculated_x: Some(0.0),
-                        calculated_y: Some(40.0),
-                        ..container.children[1].clone()
-                    },
-                    Container {
-                        calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
-                        calculated_width: Some(width),
-                        calculated_height: Some(40.0),
-                        calculated_x: Some(0.0),
-                        calculated_y: Some(80.0),
-                        ..container.children[2].clone()
-                    },
-                ],
-                ..container
-            },
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
     fn handles_justify_content_space_between_and_wraps_elements_properly() {
         let mut container = Container {
             children: vec![
@@ -4859,199 +4538,6 @@ mod test {
         while actual.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (75.0, 60.0)) {}
 
         compare_containers(&actual, &expected);
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn calc_auto_y_wraps_nested_elements_properly_by_taking_into_account_scrollbar_size() {
-        let mut container = Container {
-            children: vec![Container {
-                children: vec![
-                    Container {
-                        width: Some(Number::Integer(25)),
-                        ..Default::default()
-                    },
-                    Container {
-                        width: Some(Number::Integer(25)),
-                        ..Default::default()
-                    },
-                    Container {
-                        width: Some(Number::Integer(25)),
-                        ..Default::default()
-                    },
-                    Container {
-                        width: Some(Number::Integer(25)),
-                        ..Default::default()
-                    },
-                    Container {
-                        width: Some(Number::Integer(25)),
-                        ..Default::default()
-                    },
-                ],
-                calculated_width: Some(75.0),
-                calculated_height: Some(40.0),
-                direction: LayoutDirection::Row,
-                overflow_x: LayoutOverflow::Wrap { grid: true },
-                overflow_y: LayoutOverflow::Expand,
-                ..Default::default()
-            }],
-
-            calculated_width: Some(75.0),
-            calculated_height: Some(40.0),
-            overflow_y: LayoutOverflow::Auto,
-            ..Default::default()
-        };
-        CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
-
-        compare_containers(
-            &container.clone(),
-            &Container {
-                children: vec![Container {
-                    children: vec![
-                        Container {
-                            calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                            calculated_width: Some(25.0),
-                            calculated_height: Some(40.0),
-                            calculated_x: Some(0.0),
-                            calculated_y: Some(0.0),
-                            ..container.children[0].children[0].clone()
-                        },
-                        Container {
-                            calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
-                            calculated_width: Some(25.0),
-                            calculated_height: Some(40.0),
-                            calculated_x: Some(25.0),
-                            calculated_y: Some(0.0),
-                            ..container.children[0].children[1].clone()
-                        },
-                        Container {
-                            calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                            calculated_width: Some(25.0),
-                            calculated_height: Some(40.0),
-                            calculated_x: Some(0.0),
-                            calculated_y: Some(40.0),
-                            ..container.children[0].children[2].clone()
-                        },
-                        Container {
-                            calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
-                            calculated_width: Some(25.0),
-                            calculated_height: Some(40.0),
-                            calculated_x: Some(25.0),
-                            calculated_y: Some(40.0),
-                            ..container.children[0].children[3].clone()
-                        },
-                        Container {
-                            calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
-                            calculated_width: Some(25.0),
-                            calculated_height: Some(40.0),
-                            calculated_x: Some(0.0),
-                            calculated_y: Some(80.0),
-                            ..container.children[0].children[4].clone()
-                        },
-                    ],
-                    ..container.children[0].clone()
-                }],
-
-                calculated_width: Some(75.0 - f32::from(get_scrollbar_size())),
-                calculated_height: Some(40.0),
-                ..container
-            },
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn contained_calculated_expand_y_calculates_height_correctly() {
-        let container = Container {
-            children: vec![
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                    ..Default::default()
-                },
-            ],
-            calculated_width: Some(50.0),
-            calculated_height: Some(40.0),
-            direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap { grid: true },
-            overflow_y: LayoutOverflow::Expand,
-            ..Default::default()
-        };
-        let height = container.contained_calculated_height();
-        let expected = 80.0;
-
-        assert_eq!(
-            (height - expected).abs() < EPSILON,
-            true,
-            "height expected to be {expected} (actual={height})"
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn contained_calculated_expand_y_nested_calculates_height_correctly() {
-        let container = Container {
-            children: vec![Container {
-                children: vec![
-                    Container {
-                        width: Some(Number::Integer(25)),
-                        calculated_width: Some(25.0),
-                        calculated_height: Some(40.0),
-                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                        ..Default::default()
-                    },
-                    Container {
-                        width: Some(Number::Integer(25)),
-                        calculated_width: Some(25.0),
-                        calculated_height: Some(40.0),
-                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
-                        ..Default::default()
-                    },
-                    Container {
-                        width: Some(Number::Integer(25)),
-                        calculated_width: Some(25.0),
-                        calculated_height: Some(40.0),
-                        calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                        ..Default::default()
-                    },
-                ],
-                calculated_width: Some(50.0),
-                calculated_height: Some(80.0),
-                ..Default::default()
-            }],
-
-            calculated_width: Some(50.0),
-            calculated_height: Some(40.0),
-            direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap { grid: true },
-            overflow_y: LayoutOverflow::Expand,
-            ..Default::default()
-        };
-        let height = container.contained_calculated_height();
-        let expected = 80.0;
-
-        assert_eq!(
-            (height - expected).abs() < EPSILON,
-            true,
-            "height expected to be {expected} (actual={height})"
-        );
     }
 
     #[test_log::test]
@@ -7771,67 +7257,6 @@ mod test {
                 calculated_padding_right: Some(20.0),
                 calculated_padding_top: Some(20.0),
                 calculated_padding_bottom: Some(20.0),
-                ..container
-            },
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn calc_calculates_resized_wrapped_content_with_scrollbar_and_padding_correctly() {
-        let mut container: Container = html! {
-            div sx-width="100%" sx-height="100%" sx-position="relative" {
-                section sx-dir="row" sx-height=("calc(100% - 140px)") {
-                    aside sx-width="calc(max(240, min(280, 15%)))" {}
-                    main sx-overflow-y="auto" {
-                        div
-                            sx-dir="row"
-                            sx-overflow-x="wrap"
-                            sx-justify-content="space-evenly"
-                            sx-gap=(15)
-                            sx-padding-left=(30)
-                            sx-padding-right=(30)
-                            sx-padding-top=(15)
-                            sx-padding-bottom=(15)
-                        {
-                            @for _ in 0..19 {
-                                div sx-width=(200) sx-height=(200 + 30) {}
-                            }
-                        }
-                    }
-                }
-                div
-                    sx-width="calc(min(500, 30%))"
-                    sx-height="calc(100% - 200)"
-                    sx-padding=(20)
-                    sx-position="absolute"
-                    sx-bottom=(170)
-                    sx-right=(0)
-                {}
-            }
-        }
-        .try_into()
-        .unwrap();
-
-        container.calculated_width = Some(1600.0);
-        container.calculated_height = Some(1000.0);
-
-        CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
-
-        let container = container.children[0].children[0].children[1].children[0].clone();
-
-        compare_containers(
-            &container.clone(),
-            &Container {
-                calculated_width: Some(1360.0 - 30.0 - 30.0 - f32::from(get_scrollbar_size())),
-                calculated_height: Some(920.0),
-                calculated_x: Some(0.0),
-                calculated_y: Some(0.0),
-                calculated_padding_left: Some(30.0),
-                calculated_padding_right: Some(30.0),
-                calculated_padding_top: Some(15.0),
-                calculated_padding_bottom: Some(15.0),
                 ..container
             },
         );
