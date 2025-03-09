@@ -58,7 +58,9 @@ macro_rules! calc_size_on_axis {
         $calculated_padding_x:ident,
         $calculated_padding_y:ident,
     ) => {{
-        moosicbox_logging::debug_or_trace!(($label), ("{}:\n{}", $label, $container));
+        const LABEL: &str = $label;
+
+        moosicbox_logging::debug_or_trace!(("{LABEL}"), ("{LABEL}:\n{}", $container));
 
         let view_width = $container.calculated_width.unwrap();
         let view_height = $container.calculated_height.unwrap();
@@ -69,7 +71,7 @@ macro_rules! calc_size_on_axis {
             let mut min_size = 0.0;
 
             for child in &mut parent.children {
-                log::trace!("{}: container:\n{child}", $label);
+                log::trace!("{LABEL}: container:\n{child}");
 
                 if let Some(size) = child.$fixed.as_ref().and_then(Number::as_fixed) {
                     let new_size = size.calc(0.0, view_width, view_height);
@@ -80,11 +82,11 @@ macro_rules! calc_size_on_axis {
                         changed = true;
                     }
                 } else if let crate::Element::Raw { value } = &child.element {
-                    log::trace!("{}: measuring text={value}", $label);
+                    log::trace!("{LABEL}: measuring text={value}");
                     let bounds = $self.font_metrics.measure_text(value, 14.0, f32::INFINITY);
-                    log::trace!("{}: measured bounds={bounds:?}", $label);
+                    log::trace!("{LABEL}: measured bounds={bounds:?}");
                     let new_size = bounds.$fixed();
-                    log::trace!("{}: measured size={new_size}", $label);
+                    log::trace!("{LABEL}: measured size={new_size}");
 
                     if set_float(&mut child.$calculated, new_size).is_some() {
                         changed = true;
@@ -159,7 +161,9 @@ macro_rules! flex_on_axis {
         $calculated_padding_y:ident,
         $padding_axis:ident,
     ) => {{
-        moosicbox_logging::debug_or_trace!(($label), ("{}:\n{}", $label, $container));
+        const LABEL: &str = $label;
+
+        moosicbox_logging::debug_or_trace!(("{LABEL}"), ("{LABEL}:\n{}", $container));
 
         let mut changed = false;
 
@@ -228,16 +232,14 @@ macro_rules! flex_on_axis {
                             LayoutDirection::$axis => {
                                 if let Some(size) = child.$margin_axis() {
                                     log::trace!(
-                                        "{}: removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
-                                        $label,
+                                        "{LABEL}: removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
                                         remaining_container_size - size
                                     );
                                     remaining_container_size -= size;
                                 }
                                 if let Some(size) = child.$padding_axis() {
                                     log::trace!(
-                                        "{}: removing padding size={size} from remaining_container_size={remaining_container_size} ({})",
-                                        $label,
+                                        "{LABEL}: removing padding size={size} from remaining_container_size={remaining_container_size} ({})",
                                         remaining_container_size - size
                                     );
                                     remaining_container_size -= size;
@@ -247,7 +249,7 @@ macro_rules! flex_on_axis {
                         }
                     }
 
-                    log::trace!("{}: container_size={container_size} remaining_container_size={remaining_container_size}", $label);
+                    log::trace!("{LABEL}: container_size={container_size} remaining_container_size={remaining_container_size}");
                     let container_size = remaining_container_size;
 
                     for child in &mut parent.relative_positioned_elements_mut() {
@@ -260,9 +262,9 @@ macro_rules! flex_on_axis {
                                         - child.$padding_axis().unwrap_or_default()
                                 }
                             };
-                            log::trace!("{}: calculating dynamic size={size:?}", $label);
+                            log::trace!("{LABEL}: calculating dynamic size={size:?}");
                             let size = size.calc(container_size, view_width, view_height);
-                            log::trace!("{}: calculated dynamic size={size}", $label);
+                            log::trace!("{LABEL}: calculated dynamic size={size}");
                             if set_float(&mut child.$calculated, size).is_some() {
                                 changed = true;
                             }
@@ -275,14 +277,13 @@ macro_rules! flex_on_axis {
                         let mut max_cell_size = 0.0;
 
                         for child in &mut parent.relative_positioned_elements() {
-                            log::trace!("{}: calculating remaining size:\n{child}", $label);
+                            log::trace!("{LABEL}: calculating remaining size:\n{child}");
 
                             match direction {
                                 LayoutDirection::$axis => {
                                     if let Some(size) = child.$calculated {
                                         log::trace!(
-                                            "{}: removing size={size} from remaining_size={remaining_size} ({})",
-                                            $label,
+                                            "{LABEL}: removing size={size} from remaining_size={remaining_size} ({})",
                                             remaining_size - size
                                         );
                                         remaining_size -= size;
@@ -304,7 +305,7 @@ macro_rules! flex_on_axis {
                         let cell_count = last_cell + 1;
                         remaining_size -= max_cell_size;
 
-                        log::trace!("{}: remaining_size={remaining_size}\n{parent}", $label);
+                        log::trace!("{LABEL}: remaining_size={remaining_size}\n{parent}");
 
                         match direction {
                             LayoutDirection::$axis => {
@@ -346,7 +347,7 @@ macro_rules! flex_on_axis {
                                     #[allow(clippy::cast_precision_loss)]
                                     let delta = target_delta / (smallest_count as f32);
 
-                                    log::trace!("{}: target={target} target_delta={target_delta} smallest={smallest} smallest_count={smallest_count} delta={delta} remaining_size={remaining_size} container_size={container_size}", $label);
+                                    log::trace!("{LABEL}: target={target} target_delta={target_delta} smallest={smallest} smallest_count={smallest_count} delta={delta} remaining_size={remaining_size} container_size={container_size}");
 
                                     moosicbox_assert::assert!(delta > EPSILON, "expected target to be positive");
 
@@ -356,7 +357,7 @@ macro_rules! flex_on_axis {
                                         .filter(|x| x.$calculated.is_some_and(|x| (x - smallest).abs() < EPSILON))
                                     {
                                         let size = child.$calculated.expect("Missing child calculated size");
-                                        log::trace!("{}: distributing evenly split remaining_size={remaining_size} delta={delta}:\n{child}", $label);
+                                        log::trace!("{LABEL}: distributing evenly split remaining_size={remaining_size} delta={delta}:\n{child}");
                                         set_float(&mut child.$calculated, size + delta);
                                     }
 
@@ -365,21 +366,19 @@ macro_rules! flex_on_axis {
                             }
                             LayoutDirection::$cross_axis => {
                                 for child in parent.relative_positioned_elements_mut() {
-                                    log::trace!("{}: setting size to remaining_size={remaining_size}:\n{child}", $label);
+                                    log::trace!("{LABEL}: setting size to remaining_size={remaining_size}:\n{child}");
                                     let mut remaining_container_size = remaining_size;
 
                                     if let Some(size) = child.$margin_axis() {
                                         log::trace!(
-                                            "{}: removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
-                                            $label,
+                                            "{LABEL}: removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
                                             remaining_container_size - size
                                         );
                                         remaining_container_size -= size;
                                     }
                                     if let Some(size) = child.$padding_axis() {
                                         log::trace!(
-                                            "{}: removing padding size={size} from remaining_container_size={remaining_container_size} ({})",
-                                            $label,
+                                            "{LABEL}: removing padding size={size} from remaining_container_size={remaining_container_size} ({})",
                                             remaining_container_size - size
                                         );
                                         remaining_container_size -= size;
