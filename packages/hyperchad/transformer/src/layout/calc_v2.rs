@@ -3169,7 +3169,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn handles_justify_content_space_between_and_wraps_elements_properly_with_hidden_div() {
         let mut container = Container {
             children: vec![
@@ -3220,7 +3219,9 @@ mod test {
             justify_content: Some(JustifyContent::SpaceBetween),
             ..Default::default()
         };
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (75.0, 40.0)) {}
+
+        CALCULATOR.calc(&mut container);
+        log::trace!("container:\n{}", container);
 
         compare_containers(
             &container.clone(),
@@ -3263,7 +3264,6 @@ mod test {
                     },
                     Container {
                         hidden: Some(true),
-                        ..Default::default()
                         ..container.children[5].clone()
                     },
                 ],
