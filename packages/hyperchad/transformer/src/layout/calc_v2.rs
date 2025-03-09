@@ -564,8 +564,6 @@ macro_rules! wrap_on_axis {
             let mut col = 0;
 
             for child in parent.relative_positioned_elements_mut() {
-                log::trace!("{LABEL}: positioning child ({row}, {col}):\n{child}");
-
                 let child_size = child.$calculated.unwrap();
                 let mut position = LayoutPosition::Wrap { row, col };
 
@@ -574,13 +572,17 @@ macro_rules! wrap_on_axis {
 
                     if pos > container_size {
                         log::trace!("{LABEL}: wrapping to next row");
-                        pos = 0.0;
+                        pos = child_size;
                         col = 0;
                         row += 1;
                         position = LayoutPosition::Wrap { row, col };
                     }
 
                     col += 1;
+                }
+
+                if let LayoutPosition::Wrap { row, col } = position {
+                    log::trace!("{LABEL}: positioning child ({row}, {col}) pos={pos} container_size={container_size}:\n{child}");
                 }
 
                 if set_value(&mut child.calculated_position, position).is_some() {
@@ -3262,6 +3264,7 @@ mod test {
                     Container {
                         hidden: Some(true),
                         ..Default::default()
+                        ..container.children[5].clone()
                     },
                 ],
                 calculated_width: Some(75.0),
@@ -3272,7 +3275,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn handle_overflow_y_squash_handles_justify_content_space_between_and_wraps_elements_properly_and_can_recalc_with_new_rows()
      {
         const ROW_HEIGHT: f32 = 40.0 / 4.0;
@@ -3301,8 +3303,9 @@ mod test {
             ..Default::default()
         };
 
-        log::debug!("First handle_overflow");
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (75.0, 40.0)) {}
+        log::debug!("First calc");
+        CALCULATOR.calc(&mut container);
+        log::trace!("first container:\n{}", container);
 
         container.children.extend(vec![
             div.clone(),
@@ -3312,8 +3315,9 @@ mod test {
             div,
         ]);
 
-        log::debug!("Second handle_overflow");
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (75.0, 40.0)) {}
+        log::debug!("Second calc");
+        CALCULATOR.calc(&mut container);
+        log::trace!("second container:\n{}", container);
 
         compare_containers(
             &container.clone(),
