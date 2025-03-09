@@ -141,7 +141,6 @@ macro_rules! flex_on_axis {
     (
         $bfs:ident,
         $container:ident,
-        $changed:ident,
         $fixed:ident,
         $calculated:ident,
         $axis:ident,
@@ -157,7 +156,11 @@ macro_rules! flex_on_axis {
         $calculated_padding_x:ident,
         $calculated_padding_y:ident,
         $padding_axis:ident,
-    ) => {
+    ) => {{
+        moosicbox_logging::debug_or_trace!(("flex"), ("flex:\n{}", $container));
+
+        let mut changed = false;
+
         let root_id = $container.id;
         let view_width = $container.calculated_width.expect("Missing view_width");
         let view_height = $container.calculated_height.expect("Missing view_height");
@@ -193,25 +196,25 @@ macro_rules! flex_on_axis {
                         if let Some(margin) = child.$margin_x.as_ref().and_then(crate::Number::as_dynamic) {
                             let size = margin.calc(container_size, view_width, view_height);
                             if set_float(&mut child.$calculated_margin_x, size).is_some() {
-                                $changed = true;
+                                changed = true;
                             }
                         }
                         if let Some(margin) = child.$margin_y.as_ref().and_then(crate::Number::as_dynamic) {
                             let size = margin.calc(container_size, view_width, view_height);
                             if set_float(&mut child.$calculated_margin_y, size).is_some() {
-                                $changed = true;
+                                changed = true;
                             }
                         }
                         if let Some(padding) = child.$padding_x.as_ref().and_then(crate::Number::as_dynamic) {
                             let size = padding.calc(container_size, view_width, view_height);
                             if set_float(&mut child.$calculated_padding_x, size).is_some() {
-                                $changed = true;
+                                changed = true;
                             }
                         }
                         if let Some(padding) = child.$padding_y.as_ref().and_then(crate::Number::as_dynamic) {
                             let size = padding.calc(container_size, view_width, view_height);
                             if set_float(&mut child.$calculated_padding_y, size).is_some() {
-                                $changed = true;
+                                changed = true;
                             }
                         }
                     }
@@ -257,7 +260,7 @@ macro_rules! flex_on_axis {
                             let size = size.calc(container_size, view_width, view_height);
                             log::trace!("flex: calculated dynamic size={size}");
                             if set_float(&mut child.$calculated, size).is_some() {
-                                $changed = true;
+                                changed = true;
                             }
                         }
                     }
@@ -379,7 +382,7 @@ macro_rules! flex_on_axis {
                                     if child.$fixed.is_none()
                                         && set_float(&mut child.$calculated, remaining_container_size / (cell_count as f32)).is_some()
                                     {
-                                        $changed = true;
+                                        changed = true;
                                     }
                                 }
                             }
@@ -414,14 +417,16 @@ macro_rules! flex_on_axis {
                         let size = size.calc(remaining_container_size, view_width, view_height);
                         log::trace!("flex: calculated absolute child size={size}");
                         if set_float(&mut child.$calculated, size).is_some() {
-                            $changed = true;
+                            changed = true;
                         }
                     } else if set_float(&mut child.$calculated, remaining_container_size).is_some() {
-                        $changed = true;
+                        changed = true;
                     }
                 }
             });
-    };
+
+        changed
+    }};
 }
 
 /// # Pass 1: Widths
@@ -480,14 +485,9 @@ mod pass_flex_width {
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
         fn flex_width(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-            moosicbox_logging::debug_or_trace!(("flex_width"), ("flex_width:\n{container}"));
-
-            let mut changed = false;
-
             flex_on_axis!(
                 bfs,
                 container,
-                changed,
                 width,
                 calculated_width,
                 Row,
@@ -503,9 +503,7 @@ mod pass_flex_width {
                 calculated_padding_left,
                 calculated_padding_right,
                 horizontal_padding,
-            );
-
-            changed
+            )
         }
     }
 
@@ -629,14 +627,9 @@ mod pass_flex_height {
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
         fn flex_height(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-            moosicbox_logging::debug_or_trace!(("flex_height"), ("flex_height:\n{container}"));
-
-            let mut changed = false;
-
             flex_on_axis!(
                 bfs,
                 container,
-                changed,
                 height,
                 calculated_height,
                 Column,
@@ -652,9 +645,7 @@ mod pass_flex_height {
                 calculated_padding_top,
                 calculated_padding_bottom,
                 vertical_padding,
-            );
-
-            changed
+            )
         }
     }
 
