@@ -4741,29 +4741,22 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_allows_expanding_height_for_overflow_y_scroll() {
         let mut container = Container {
             children: vec![
                 Container {
                     width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                    height: Some(Number::Integer(40)),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                    height: Some(Number::Integer(40)),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                    height: Some(Number::Integer(40)),
                     ..Default::default()
                 },
             ],
@@ -4774,18 +4767,12 @@ mod test {
             overflow_y: LayoutOverflow::Scroll,
             ..Default::default()
         };
-        let resized = container.resize_children(
-            &Bump::new(),
-            &DefaultFontMetrics,
-            (
-                container.calculated_width.unwrap(),
-                container.calculated_height.unwrap(),
-            ),
-        );
 
-        assert_eq!(resized, true);
+        CALCULATOR.calc(&mut container);
+        log::trace!("container:\n{}", container);
+
         compare_containers(
-            &container.clone(),
+            &container,
             &Container {
                 children: vec![
                     Container {
@@ -4801,32 +4788,28 @@ mod test {
                         ..container.children[2].clone()
                     },
                 ],
-                ..container
+                ..container.clone()
             },
         );
     }
 
     #[test_log::test]
-    #[ignore]
     fn handle_overflow_wraps_single_row_overflow_content_correctly() {
         let mut container = Container {
             children: vec![
                 Container {
                     width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
+                    height: Some(Number::Integer(40)),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
+                    height: Some(Number::Integer(40)),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
+                    height: Some(Number::Integer(40)),
                     ..Default::default()
                 },
             ],
@@ -4837,107 +4820,17 @@ mod test {
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
-        let mut shifted = false;
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (50.0, 40.0)) {
-            shifted = true;
-        }
 
-        assert_eq!(shifted, true);
+        CALCULATOR.calc(&mut container);
+        log::trace!("container:\n{}", container);
+
         compare_containers(
-            &container.clone(),
-            &Container {
-                children: vec![
-                    Container {
-                        width: Some(Number::Integer(25)),
-                        calculated_width: Some(25.0),
-                        calculated_height: Some(20.0),
-                        calculated_x: Some(0.0),
-                        calculated_y: Some(0.0),
-                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                        ..Default::default()
-                    },
-                    Container {
-                        width: Some(Number::Integer(25)),
-                        calculated_width: Some(25.0),
-                        calculated_height: Some(20.0),
-                        calculated_x: Some(25.0),
-                        calculated_y: Some(0.0),
-                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
-                        ..Default::default()
-                    },
-                    Container {
-                        width: Some(Number::Integer(25)),
-                        calculated_width: Some(25.0),
-                        calculated_height: Some(20.0),
-                        calculated_x: Some(0.0),
-                        calculated_y: Some(20.0),
-                        calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                        ..Default::default()
-                    },
-                ],
-                ..container
-            },
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn handle_overflow_wraps_multi_row_overflow_content_correctly() {
-        let mut container = Container {
-            children: vec![
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    ..Default::default()
-                },
-            ],
-            calculated_width: Some(50.0),
-            calculated_height: Some(40.0),
-            direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap { grid: true },
-            overflow_y: LayoutOverflow::Squash,
-            ..Default::default()
-        };
-        let mut shifted = false;
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (50.0, 40.0)) {
-            shifted = true;
-        }
-
-        let row_height = 40.0 / 3.0;
-
-        assert_eq!(shifted, true);
-        compare_containers(
-            &container.clone(),
+            &container,
             &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(25.0),
-                        calculated_height: Some(row_height),
+                        calculated_height: Some(40.0),
                         calculated_x: Some(0.0),
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
@@ -4945,7 +4838,7 @@ mod test {
                     },
                     Container {
                         calculated_width: Some(25.0),
-                        calculated_height: Some(row_height),
+                        calculated_height: Some(40.0),
                         calculated_x: Some(25.0),
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
@@ -4953,55 +4846,128 @@ mod test {
                     },
                     Container {
                         calculated_width: Some(25.0),
-                        calculated_height: Some(row_height),
+                        calculated_height: Some(40.0),
                         calculated_x: Some(0.0),
-                        calculated_y: Some(row_height),
+                        calculated_y: Some(40.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
                         ..container.children[2].clone()
                     },
-                    Container {
-                        calculated_width: Some(25.0),
-                        calculated_height: Some(row_height),
-                        calculated_x: Some(25.0),
-                        calculated_y: Some(row_height),
-                        calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
-                        ..container.children[3].clone()
-                    },
-                    Container {
-                        calculated_width: Some(25.0),
-                        calculated_height: Some(row_height),
-                        calculated_x: Some(0.0),
-                        calculated_y: Some(row_height * 2.0),
-                        calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
-                        ..container.children[4].clone()
-                    },
                 ],
-                ..container
+                ..container.clone()
             },
         );
     }
 
     #[test_log::test]
-    #[ignore]
+    fn handle_overflow_wraps_multi_row_overflow_content_correctly() {
+        const ROW_HEIGHT: f32 = 40.0;
+
+        let mut container = Container {
+            children: vec![
+                Container {
+                    width: Some(Number::Integer(25)),
+                    height: Some(Number::Integer(40)),
+                    ..Default::default()
+                },
+                Container {
+                    width: Some(Number::Integer(25)),
+                    height: Some(Number::Integer(40)),
+                    ..Default::default()
+                },
+                Container {
+                    width: Some(Number::Integer(25)),
+                    height: Some(Number::Integer(40)),
+                    ..Default::default()
+                },
+                Container {
+                    width: Some(Number::Integer(25)),
+                    height: Some(Number::Integer(40)),
+                    ..Default::default()
+                },
+                Container {
+                    width: Some(Number::Integer(25)),
+                    height: Some(Number::Integer(40)),
+                    ..Default::default()
+                },
+            ],
+            calculated_width: Some(50.0),
+            calculated_height: Some(40.0),
+            direction: LayoutDirection::Row,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
+            overflow_y: LayoutOverflow::Squash,
+            ..Default::default()
+        };
+
+        CALCULATOR.calc(&mut container);
+        log::trace!("container:\n{}", container);
+
+        compare_containers(
+            &container,
+            &Container {
+                children: vec![
+                    Container {
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(ROW_HEIGHT),
+                        calculated_x: Some(0.0),
+                        calculated_y: Some(0.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                        ..container.children[0].clone()
+                    },
+                    Container {
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(ROW_HEIGHT),
+                        calculated_x: Some(25.0),
+                        calculated_y: Some(0.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                        ..container.children[1].clone()
+                    },
+                    Container {
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(ROW_HEIGHT),
+                        calculated_x: Some(0.0),
+                        calculated_y: Some(ROW_HEIGHT),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                        ..container.children[2].clone()
+                    },
+                    Container {
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(ROW_HEIGHT),
+                        calculated_x: Some(25.0),
+                        calculated_y: Some(ROW_HEIGHT),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
+                        ..container.children[3].clone()
+                    },
+                    Container {
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(ROW_HEIGHT),
+                        calculated_x: Some(0.0),
+                        calculated_y: Some(ROW_HEIGHT * 2.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
+                        ..container.children[4].clone()
+                    },
+                ],
+                ..container.clone()
+            },
+        );
+    }
+
+    #[test_log::test]
     fn handle_overflow_wraps_row_content_correctly_in_overflow_y_scroll() {
         let mut container = Container {
             children: vec![
                 Container {
                     width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
+                    height: Some(Number::Integer(40)),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
+                    height: Some(Number::Integer(40)),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
+                    height: Some(Number::Integer(40)),
                     ..Default::default()
                 },
             ],
@@ -5012,47 +4978,37 @@ mod test {
             overflow_y: LayoutOverflow::Scroll,
             ..Default::default()
         };
-        let mut shifted = false;
-        while container.handle_overflow(
-            &Bump::new(),
-            &DefaultFontMetrics,
-            None,
-            (50.0 + f32::from(get_scrollbar_size()), 80.0),
-        ) {
-            shifted = true;
-        }
 
-        assert_eq!(shifted, true);
+        CALCULATOR.calc(&mut container);
+        log::trace!("container:\n{}", container);
+
         compare_containers(
             &container.clone(),
             &Container {
                 children: vec![
                     Container {
-                        width: Some(Number::Integer(25)),
                         calculated_width: Some(25.0),
                         calculated_height: Some(40.0),
                         calculated_x: Some(0.0),
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                        ..Default::default()
+                        ..container.children[0].clone()
                     },
                     Container {
-                        width: Some(Number::Integer(25)),
                         calculated_width: Some(25.0),
                         calculated_height: Some(40.0),
                         calculated_x: Some(25.0),
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
-                        ..Default::default()
+                        ..container.children[1].clone()
                     },
                     Container {
-                        width: Some(Number::Integer(25)),
                         calculated_width: Some(25.0),
                         calculated_height: Some(40.0),
                         calculated_x: Some(0.0),
                         calculated_y: Some(40.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                        ..Default::default()
+                        ..container.children[2].clone()
                     },
                 ],
                 ..container
