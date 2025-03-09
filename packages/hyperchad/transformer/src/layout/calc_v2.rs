@@ -609,6 +609,9 @@ mod pass_widths {
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
         fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
             let each_child = |container: &mut Container, view_width, view_height| {
+                if let Some(opacity) = &container.opacity {
+                    container.calculated_opacity = Some(opacity.calc(1.0, view_width, view_height));
+                }
                 if let Some(radius) = &container
                     .border_top_left_radius
                     .as_ref()
@@ -8295,6 +8298,58 @@ mod test {
             &Container {
                 children: vec![Container {
                     calculated_border_bottom_right_radius: Some(100.0),
+                    ..container.children[0].clone()
+                }],
+                ..container.clone()
+            },
+        );
+    }
+
+    #[test_log::test]
+    fn calc_does_calculate_fixed_opacity() {
+        let mut container: Container = html! {
+            div sx-opacity=(0.5) {}
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(100.0);
+        container.calculated_height = Some(500.0);
+
+        CALCULATOR.calc(&mut container);
+        log::trace!("container:\n{}", container);
+
+        compare_containers(
+            &container,
+            &Container {
+                children: vec![Container {
+                    calculated_opacity: Some(0.5),
+                    ..container.children[0].clone()
+                }],
+                ..container.clone()
+            },
+        );
+    }
+
+    #[test_log::test]
+    fn calc_does_calculate_percentage_opacity() {
+        let mut container: Container = html! {
+            div sx-opacity="100%" {}
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(100.0);
+        container.calculated_height = Some(500.0);
+
+        CALCULATOR.calc(&mut container);
+        log::trace!("container:\n{}", container);
+
+        compare_containers(
+            &container,
+            &Container {
+                children: vec![Container {
+                    calculated_opacity: Some(1.0),
                     ..container.children[0].clone()
                 }],
                 ..container.clone()
