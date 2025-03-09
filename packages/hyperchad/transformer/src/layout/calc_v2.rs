@@ -66,9 +66,12 @@ macro_rules! calc_size_on_axis {
         $calculated_border_y:ident,
         $gap:ident,
         $calculated_gap:ident,
+        $overflow:ident,
         $each_child:expr
         $(,)?
     ) => {{
+        use crate::LayoutOverflow;
+
         const LABEL: &str = $label;
 
         moosicbox_logging::debug_or_trace!(("{LABEL}"), ("{LABEL}:\n{}", $container));
@@ -87,13 +90,28 @@ macro_rules! calc_size_on_axis {
                 parent.$calculated_gap = Some(gap);
             }
 
+            let overflow = parent.$overflow;
+
             for child in &mut parent.children {
                 log::trace!("{LABEL}: container:\n{child}");
 
                 if let Some(size) = child.$fixed.as_ref().and_then(Number::as_fixed) {
                     let new_size = size.calc(0.0, view_width, view_height);
 
-                    min_size += new_size;
+                    match overflow {
+                        LayoutOverflow::Auto
+                        | LayoutOverflow::Scroll
+                        | LayoutOverflow::Expand
+                        | LayoutOverflow::Squash => {
+                            min_size += new_size;
+                        }
+                        LayoutOverflow::Wrap { .. } => {
+                            if new_size > min_size {
+                                min_size = new_size;
+                            }
+                        }
+                        LayoutOverflow::Hidden => {}
+                    }
 
                     if set_float(&mut child.$calculated, new_size).is_some() {
                         changed = true;
@@ -205,6 +223,7 @@ macro_rules! flex_on_axis {
         $container:ident,
         $fixed:ident,
         $calculated:ident,
+        $calculated_min:ident,
         $axis:ident,
         $cross_axis:ident,
         $cell:ident,
@@ -420,6 +439,14 @@ macro_rules! flex_on_axis {
                         let cell_count = last_cell + 1;
                         remaining_size -= max_cell_size;
 
+                        if let Some(min) = parent.$calculated_min {
+                            if remaining_size < min {
+                                remaining_size = min;
+                            }
+                        } else if remaining_size < 0.0 {
+                            remaining_size = 0.0;
+                        }
+
                         log::trace!("{LABEL}: remaining_size={remaining_size}\n{parent}");
 
                         match direction {
@@ -500,9 +527,17 @@ macro_rules! flex_on_axis {
                                     }
 
                                     #[allow(clippy::cast_precision_loss)]
-                                    if child.$fixed.is_none()
-                                        && set_float(&mut child.$calculated, remaining_container_size / (cell_count as f32)).is_some()
-                                    {
+                                    let mut new_size = remaining_container_size / (cell_count as f32);
+
+                                    if let Some(min) = child.$calculated_min {
+                                        if new_size < min {
+                                            new_size = min;
+                                        }
+                                    } else if new_size < 0.0 {
+                                        new_size = 0.0;
+                                    }
+
+                                    if child.$fixed.is_none() && set_float(&mut child.$calculated, new_size).is_some() {
                                         changed = true;
                                     }
                                 }
@@ -698,6 +733,7 @@ mod pass_widths {
                 calculated_border_right,
                 column_gap,
                 calculated_column_gap,
+                overflow_x,
                 each_child,
             )
         }
@@ -762,6 +798,7 @@ mod pass_flex_width {
                 container,
                 width,
                 calculated_width,
+                calculated_min_width,
                 Row,
                 Column,
                 col,
@@ -854,6 +891,7 @@ mod pass_heights {
                 calculated_border_bottom,
                 row_gap,
                 calculated_row_gap,
+                overflow_y,
                 |_, _, _| {},
             )
         }
@@ -882,6 +920,7 @@ mod pass_flex_height {
                 container,
                 height,
                 calculated_height,
+                calculated_min_height,
                 Column,
                 Row,
                 row,
@@ -4599,8 +4638,7 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
-    fn resize_children_expand_y_nested_expands_parent_height_correctly() {
+    fn calc_child_minimum_height_is_propagated_upward() {
         let mut container = Container {
             children: vec![Container {
                 children: vec![
@@ -4637,12 +4675,12 @@ mod test {
             &container,
             &Container {
                 children: vec![Container {
-                    calculated_width: Some(50.0),
-                    calculated_height: Some(80.0),
+                    calculated_width: Some(75.0),
+                    calculated_height: Some(120.0),
                     ..container.children[0].clone()
                 }],
                 calculated_width: Some(50.0),
-                calculated_height: Some(80.0),
+                calculated_height: Some(40.0),
                 direction: LayoutDirection::Row,
                 ..container.clone()
             },
@@ -4650,29 +4688,22 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
-    fn resize_children_resizes_when_a_new_row_was_shifted_into_view() {
+    fn calc_resizes_when_a_new_row_was_shifted_into_view() {
         let mut container = Container {
             children: vec![
                 Container {
                     width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                    height: Some(Number::Integer(40)),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                    height: Some(Number::Integer(40)),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                    height: Some(Number::Integer(40)),
                     ..Default::default()
                 },
             ],
@@ -4683,41 +4714,35 @@ mod test {
             overflow_y: LayoutOverflow::Squash,
             ..Default::default()
         };
-        let resized = container.resize_children(
-            &Bump::new(),
-            &DefaultFontMetrics,
-            (
-                container.calculated_width.unwrap(),
-                container.calculated_height.unwrap(),
-            ),
-        );
 
-        assert_eq!(resized, true);
+        CALCULATOR.calc(&mut container);
+        log::trace!("container:\n{}", container);
+
         compare_containers(
-            &container.clone(),
+            &container,
             &Container {
                 children: vec![
                     Container {
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(40.0),
                         ..container.children[0].clone()
                     },
                     Container {
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(40.0),
                         ..container.children[1].clone()
                     },
                     Container {
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(40.0),
                         ..container.children[2].clone()
                     },
                 ],
-                ..container
+                ..container.clone()
             },
         );
     }
 
     #[test_log::test]
     #[ignore]
-    fn resize_children_allows_expanding_height_for_overflow_y_scroll() {
+    fn calc_allows_expanding_height_for_overflow_y_scroll() {
         let mut container = Container {
             children: vec![
                 Container {
