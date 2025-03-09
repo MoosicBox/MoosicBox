@@ -1299,6 +1299,1390 @@ mod test {
     static CALCULATOR: CalcV2Calculator<DefaultFontMetrics> =
         CalcV2Calculator::new(DefaultFontMetrics);
 
+    mod scrollbar {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test_log::test]
+        #[ignore]
+        fn contained_calculated_width_auto_y_takes_into_account_scrollbar_size_when_there_is_scroll_overflow_and_hardsized_elements()
+         {
+            let mut container = Container {
+                children: vec![
+                    Container {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                        ..Default::default()
+                    },
+                    Container {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                        ..Default::default()
+                    },
+                    Container {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                        ..Default::default()
+                    },
+                ],
+                calculated_width: Some(50.0),
+                calculated_height: Some(40.0),
+                direction: LayoutDirection::Row,
+                overflow_x: LayoutOverflow::Wrap { grid: true },
+                overflow_y: LayoutOverflow::Auto,
+                ..Default::default()
+            };
+            while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (50.0, 40.0)) {
+            }
+            let width = container.contained_calculated_width();
+            let expected = 25.0;
+
+            assert_eq!(
+                (width - expected).abs() < EPSILON,
+                true,
+                "width expected to be {expected} (actual={width})"
+            );
+        }
+
+        #[test_log::test]
+        #[ignore]
+        fn handle_overflow_auto_y_takes_into_account_scrollbar_size_when_there_is_scroll_overflow_and_hardsized_elements()
+         {
+            let mut container = Container {
+                children: vec![
+                    Container {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                        ..Default::default()
+                    },
+                    Container {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                        ..Default::default()
+                    },
+                    Container {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                        ..Default::default()
+                    },
+                ],
+                calculated_width: Some(50.0),
+                calculated_height: Some(40.0),
+                direction: LayoutDirection::Row,
+                overflow_x: LayoutOverflow::Wrap { grid: true },
+                overflow_y: LayoutOverflow::Auto,
+                ..Default::default()
+            };
+            while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (50.0, 40.0)) {
+            }
+
+            compare_containers(
+                &container.clone(),
+                &Container {
+                    children: vec![
+                        Container {
+                            calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                            calculated_width: Some(25.0),
+                            calculated_height: Some(40.0),
+                            calculated_x: Some(0.0),
+                            calculated_y: Some(0.0),
+                            ..container.children[0].clone()
+                        },
+                        Container {
+                            calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                            calculated_width: Some(25.0),
+                            calculated_height: Some(40.0),
+                            calculated_x: Some(0.0),
+                            calculated_y: Some(40.0),
+                            ..container.children[1].clone()
+                        },
+                        Container {
+                            calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
+                            calculated_width: Some(25.0),
+                            calculated_height: Some(40.0),
+                            calculated_x: Some(0.0),
+                            calculated_y: Some(80.0),
+                            ..container.children[2].clone()
+                        },
+                    ],
+                    calculated_width: Some(50.0 - f32::from(get_scrollbar_size())),
+                    calculated_height: Some(40.0),
+                    ..container
+                },
+            );
+        }
+
+        #[test_log::test]
+        #[ignore]
+        fn handle_overflow_auto_y_wraps_elements_properly_by_taking_into_account_scrollbar_size() {
+            let mut container = Container {
+                children: vec![
+                    Container {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        ..Default::default()
+                    },
+                    Container {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        ..Default::default()
+                    },
+                    Container {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        ..Default::default()
+                    },
+                    Container {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        ..Default::default()
+                    },
+                    Container {
+                        width: Some(Number::Integer(25)),
+                        calculated_width: Some(25.0),
+                        calculated_height: Some(40.0),
+                        ..Default::default()
+                    },
+                ],
+                calculated_width: Some(75.0),
+                calculated_height: Some(40.0),
+                direction: LayoutDirection::Row,
+                overflow_x: LayoutOverflow::Wrap { grid: true },
+                overflow_y: LayoutOverflow::Auto,
+                ..Default::default()
+            };
+            while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (75.0, 40.0)) {
+            }
+
+            compare_containers(
+                &container.clone(),
+                &Container {
+                    children: vec![
+                        Container {
+                            calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                            calculated_width: Some(25.0),
+                            calculated_height: Some(40.0),
+                            calculated_x: Some(0.0),
+                            calculated_y: Some(0.0),
+                            ..container.children[0].clone()
+                        },
+                        Container {
+                            calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                            calculated_width: Some(25.0),
+                            calculated_height: Some(40.0),
+                            calculated_x: Some(25.0),
+                            calculated_y: Some(0.0),
+                            ..container.children[1].clone()
+                        },
+                        Container {
+                            calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                            calculated_width: Some(25.0),
+                            calculated_height: Some(40.0),
+                            calculated_x: Some(0.0),
+                            calculated_y: Some(40.0),
+                            ..container.children[2].clone()
+                        },
+                        Container {
+                            calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
+                            calculated_width: Some(25.0),
+                            calculated_height: Some(40.0),
+                            calculated_x: Some(25.0),
+                            calculated_y: Some(40.0),
+                            ..container.children[3].clone()
+                        },
+                        Container {
+                            calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
+                            calculated_width: Some(25.0),
+                            calculated_height: Some(40.0),
+                            calculated_x: Some(0.0),
+                            calculated_y: Some(80.0),
+                            ..container.children[4].clone()
+                        },
+                    ],
+                    calculated_width: Some(75.0 - f32::from(get_scrollbar_size())),
+                    calculated_height: Some(40.0),
+                    ..container
+                },
+            );
+        }
+    }
+
+    mod table {
+        use super::*;
+
+        #[test_log::test]
+        #[ignore]
+        fn calc_can_calc_table_column_and_row_sizes() {
+            let mut container = Container {
+                children: vec![Container {
+                    element: Element::Table,
+                    children: vec![
+                        Container {
+                            element: Element::TR,
+                            direction: LayoutDirection::Row,
+                            children: vec![
+                                Container {
+                                    element: Element::TD,
+                                    children: vec![Container {
+                                        element: Element::Div,
+                                        width: Some(Number::Integer(40)),
+                                        height: Some(Number::Integer(10)),
+                                        ..Default::default()
+                                    }],
+                                    ..Container::default()
+                                },
+                                Container {
+                                    element: Element::TD,
+                                    children: vec![Container {
+                                        element: Element::Div,
+                                        width: Some(Number::Integer(30)),
+                                        height: Some(Number::Integer(20)),
+                                        ..Default::default()
+                                    }],
+                                    ..Container::default()
+                                },
+                            ],
+                            ..Default::default()
+                        },
+                        Container {
+                            element: Element::TR,
+                            direction: LayoutDirection::Row,
+                            children: vec![
+                                Container {
+                                    element: Element::TD,
+                                    children: vec![Container {
+                                        element: Element::Div,
+                                        width: Some(Number::Integer(10)),
+                                        height: Some(Number::Integer(40)),
+                                        ..Default::default()
+                                    }],
+                                    ..Container::default()
+                                },
+                                Container {
+                                    element: Element::TD,
+                                    children: vec![Container {
+                                        element: Element::Div,
+                                        width: Some(Number::Integer(20)),
+                                        height: Some(Number::Integer(30)),
+                                        ..Default::default()
+                                    }],
+                                    ..Container::default()
+                                },
+                            ],
+                            ..Default::default()
+                        },
+                    ],
+                    ..Default::default()
+                }],
+                calculated_width: Some(70.0),
+                calculated_height: Some(80.0),
+                ..Default::default()
+            };
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container.clone(),
+                &Container {
+                    children: vec![Container {
+                        children: vec![
+                            Container {
+                                children: vec![
+                                    Container {
+                                        children: vec![Container {
+                                            calculated_width: Some(40.0),
+                                            calculated_height: Some(10.0),
+                                            ..container.children[0].children[0].children[0].children
+                                                [0]
+                                            .clone()
+                                        }],
+                                        calculated_width: Some(40.0),
+                                        calculated_height: Some(20.0),
+                                        ..container.children[0].children[0].children[0].clone()
+                                    },
+                                    Container {
+                                        children: vec![Container {
+                                            calculated_width: Some(30.0),
+                                            calculated_height: Some(20.0),
+                                            ..container.children[0].children[0].children[1].children
+                                                [0]
+                                            .clone()
+                                        }],
+                                        calculated_width: Some(30.0),
+                                        calculated_height: Some(20.0),
+                                        ..container.children[0].children[0].children[1].clone()
+                                    },
+                                ],
+                                calculated_width: Some(70.0),
+                                calculated_height: Some(20.0),
+                                ..container.children[0].children[0].clone()
+                            },
+                            Container {
+                                children: vec![
+                                    Container {
+                                        children: vec![Container {
+                                            calculated_width: Some(10.0),
+                                            calculated_height: Some(40.0),
+                                            ..container.children[0].children[1].children[0].children
+                                                [0]
+                                            .clone()
+                                        }],
+                                        calculated_width: Some(40.0),
+                                        calculated_height: Some(40.0),
+                                        ..container.children[0].children[1].children[0].clone()
+                                    },
+                                    Container {
+                                        children: vec![Container {
+                                            calculated_width: Some(20.0),
+                                            calculated_height: Some(30.0),
+                                            ..container.children[0].children[1].children[1].children
+                                                [0]
+                                            .clone()
+                                        }],
+                                        calculated_width: Some(30.0),
+                                        calculated_height: Some(40.0),
+                                        ..container.children[0].children[1].children[1].clone()
+                                    },
+                                ],
+                                calculated_width: Some(70.0),
+                                calculated_height: Some(40.0),
+                                ..container.children[0].children[1].clone()
+                            },
+                        ],
+                        calculated_width: Some(70.0),
+                        calculated_height: Some(20.0 + 40.0),
+                        ..container.children[0].clone()
+                    }],
+                    ..container
+                },
+            );
+        }
+
+        #[test_log::test]
+        #[ignore]
+        fn calc_can_calc_table_column_and_row_sizes_and_expand_to_fill_width() {
+            let mut container = Container {
+                children: vec![Container {
+                    element: Element::Table,
+                    children: vec![
+                        Container {
+                            element: Element::TR,
+                            direction: LayoutDirection::Row,
+                            children: vec![
+                                Container {
+                                    element: Element::TD,
+                                    children: vec![Container {
+                                        width: Some(Number::Integer(40)),
+                                        height: Some(Number::Integer(10)),
+                                        ..Default::default()
+                                    }],
+                                    ..Container::default()
+                                },
+                                Container {
+                                    element: Element::TD,
+                                    children: vec![Container {
+                                        width: Some(Number::Integer(30)),
+                                        height: Some(Number::Integer(20)),
+                                        ..Default::default()
+                                    }],
+                                    ..Container::default()
+                                },
+                            ],
+                            ..Default::default()
+                        },
+                        Container {
+                            element: Element::TR,
+                            direction: LayoutDirection::Row,
+                            children: vec![
+                                Container {
+                                    element: Element::TD,
+                                    children: vec![Container {
+                                        width: Some(Number::Integer(10)),
+                                        height: Some(Number::Integer(40)),
+                                        ..Default::default()
+                                    }],
+                                    ..Container::default()
+                                },
+                                Container {
+                                    element: Element::TD,
+                                    children: vec![Container {
+                                        width: Some(Number::Integer(20)),
+                                        height: Some(Number::Integer(30)),
+                                        ..Default::default()
+                                    }],
+                                    ..Container::default()
+                                },
+                            ],
+                            ..Default::default()
+                        },
+                    ],
+                    ..Default::default()
+                }],
+                calculated_width: Some(100.0),
+                calculated_height: Some(80.0),
+                ..Default::default()
+            };
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container.clone(),
+                &Container {
+                    children: vec![Container {
+                        children: vec![
+                            Container {
+                                children: vec![
+                                    Container {
+                                        children: vec![Container {
+                                            calculated_width: Some(40.0),
+                                            calculated_height: Some(10.0),
+                                            ..container.children[0].children[0].children[0].children
+                                                [0]
+                                            .clone()
+                                        }],
+                                        calculated_width: Some(50.0),
+                                        calculated_height: Some(20.0),
+                                        ..container.children[0].children[0].children[0].clone()
+                                    },
+                                    Container {
+                                        children: vec![Container {
+                                            calculated_width: Some(30.0),
+                                            calculated_height: Some(20.0),
+                                            ..container.children[0].children[0].children[1].children
+                                                [0]
+                                            .clone()
+                                        }],
+                                        calculated_width: Some(50.0),
+                                        calculated_height: Some(20.0),
+                                        ..container.children[0].children[0].children[1].clone()
+                                    },
+                                ],
+                                calculated_width: Some(100.0),
+                                calculated_height: Some(20.0),
+                                ..container.children[0].children[0].clone()
+                            },
+                            Container {
+                                children: vec![
+                                    Container {
+                                        children: vec![Container {
+                                            calculated_width: Some(10.0),
+                                            calculated_height: Some(40.0),
+                                            ..container.children[0].children[1].children[0].children
+                                                [0]
+                                            .clone()
+                                        }],
+                                        calculated_width: Some(50.0),
+                                        calculated_height: Some(40.0),
+                                        ..container.children[0].children[1].children[0].clone()
+                                    },
+                                    Container {
+                                        children: vec![Container {
+                                            calculated_width: Some(20.0),
+                                            calculated_height: Some(30.0),
+                                            ..container.children[0].children[1].children[1].children
+                                                [0]
+                                            .clone()
+                                        }],
+                                        calculated_width: Some(50.0),
+                                        calculated_height: Some(40.0),
+                                        ..container.children[0].children[1].children[1].clone()
+                                    },
+                                ],
+                                calculated_width: Some(100.0),
+                                calculated_height: Some(40.0),
+                                ..container.children[0].children[1].clone()
+                            },
+                        ],
+                        calculated_width: Some(100.0),
+                        calculated_height: Some(20.0 + 40.0),
+                        ..container.children[0].clone()
+                    }],
+                    ..container
+                },
+            );
+        }
+
+        #[test_log::test]
+        #[ignore]
+        fn calc_can_calc_table_column_and_row_sizes_and_auto_size_unsized_cells() {
+            let mut container = Container {
+                children: vec![Container {
+                    element: Element::Table,
+                    children: vec![
+                        Container {
+                            element: Element::TR,
+                            direction: LayoutDirection::Row,
+                            children: vec![
+                                Container {
+                                    element: Element::TD,
+                                    children: vec![Container {
+                                        width: Some(Number::Integer(40)),
+                                        height: Some(Number::Integer(10)),
+                                        ..Default::default()
+                                    }],
+                                    ..Container::default()
+                                },
+                                Container {
+                                    element: Element::TD,
+                                    children: vec![Container::default()],
+                                    ..Container::default()
+                                },
+                            ],
+                            ..Default::default()
+                        },
+                        Container {
+                            element: Element::TR,
+                            direction: LayoutDirection::Row,
+                            children: vec![
+                                Container {
+                                    element: Element::TD,
+                                    children: vec![Container::default()],
+                                    ..Container::default()
+                                },
+                                Container {
+                                    element: Element::TD,
+                                    children: vec![Container {
+                                        width: Some(Number::Integer(20)),
+                                        height: Some(Number::Integer(30)),
+                                        ..Default::default()
+                                    }],
+                                    ..Container::default()
+                                },
+                            ],
+                            ..Default::default()
+                        },
+                    ],
+                    ..Default::default()
+                }],
+                calculated_width: Some(100.0),
+                calculated_height: Some(80.0),
+                ..Default::default()
+            };
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container.clone(),
+                &Container {
+                    children: vec![Container {
+                        children: vec![
+                            Container {
+                                children: vec![
+                                    Container {
+                                        children: vec![Container {
+                                            calculated_width: Some(40.0),
+                                            calculated_height: Some(10.0),
+                                            ..container.children[0].children[0].children[0].children
+                                                [0]
+                                            .clone()
+                                        }],
+                                        calculated_width: Some(50.0),
+                                        calculated_height: Some(10.0),
+                                        ..container.children[0].children[0].children[0].clone()
+                                    },
+                                    Container {
+                                        calculated_width: Some(50.0),
+                                        calculated_height: Some(10.0),
+                                        ..container.children[0].children[0].children[1].clone()
+                                    },
+                                ],
+                                calculated_width: Some(100.0),
+                                calculated_height: Some(10.0),
+                                ..container.children[0].children[0].clone()
+                            },
+                            Container {
+                                children: vec![
+                                    Container {
+                                        calculated_width: Some(50.0),
+                                        calculated_height: Some(30.0),
+                                        ..container.children[0].children[1].children[0].clone()
+                                    },
+                                    Container {
+                                        children: vec![Container {
+                                            calculated_width: Some(20.0),
+                                            calculated_height: Some(30.0),
+                                            ..container.children[0].children[1].children[1].children
+                                                [0]
+                                            .clone()
+                                        }],
+                                        calculated_width: Some(50.0),
+                                        calculated_height: Some(30.0),
+                                        ..container.children[0].children[1].children[1].clone()
+                                    },
+                                ],
+                                calculated_width: Some(100.0),
+                                calculated_height: Some(30.0),
+                                ..container.children[0].children[1].clone()
+                            },
+                        ],
+                        calculated_width: Some(100.0),
+                        calculated_height: Some(10.0 + 30.0),
+                        ..container.children[0].clone()
+                    }],
+                    ..container
+                },
+            );
+        }
+
+        #[test_log::test]
+        #[ignore]
+        fn calc_can_calc_table_column_and_row_sizes_and_auto_size_unsized_cells_when_all_are_unsized()
+         {
+            let mut container = Container {
+                children: vec![Container {
+                    element: Element::Table,
+                    children: vec![
+                        Container {
+                            element: Element::TR,
+                            direction: LayoutDirection::Row,
+                            children: vec![
+                                Container {
+                                    element: Element::TD,
+                                    children: vec![Container::default()],
+                                    ..Container::default()
+                                },
+                                Container {
+                                    element: Element::TD,
+                                    children: vec![Container::default()],
+                                    ..Container::default()
+                                },
+                            ],
+                            ..Default::default()
+                        },
+                        Container {
+                            element: Element::TR,
+                            direction: LayoutDirection::Row,
+                            children: vec![
+                                Container {
+                                    element: Element::TD,
+                                    children: vec![Container::default()],
+                                    ..Container::default()
+                                },
+                                Container {
+                                    element: Element::TD,
+                                    children: vec![Container::default()],
+                                    ..Container::default()
+                                },
+                            ],
+                            ..Default::default()
+                        },
+                    ],
+                    ..Default::default()
+                }],
+                calculated_width: Some(100.0),
+                calculated_height: Some(80.0),
+                ..Default::default()
+            };
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container.clone(),
+                &Container {
+                    children: vec![Container {
+                        children: vec![
+                            Container {
+                                children: vec![
+                                    Container {
+                                        children: vec![Container {
+                                            calculated_width: Some(50.0),
+                                            calculated_height: Some(25.0),
+                                            ..container.children[0].children[0].children[0].children
+                                                [0]
+                                            .clone()
+                                        }],
+                                        calculated_width: Some(50.0),
+                                        calculated_height: Some(25.0),
+                                        ..container.children[0].children[0].children[0].clone()
+                                    },
+                                    Container {
+                                        children: vec![Container {
+                                            calculated_width: Some(50.0),
+                                            calculated_height: Some(25.0),
+                                            ..container.children[0].children[0].children[1].children
+                                                [0]
+                                            .clone()
+                                        }],
+                                        calculated_width: Some(50.0),
+                                        calculated_height: Some(25.0),
+                                        ..container.children[0].children[0].children[1].clone()
+                                    },
+                                ],
+                                calculated_width: Some(100.0),
+                                calculated_height: Some(25.0),
+                                ..container.children[0].children[0].clone()
+                            },
+                            Container {
+                                children: vec![
+                                    Container {
+                                        children: vec![Container {
+                                            calculated_width: Some(50.0),
+                                            calculated_height: Some(25.0),
+                                            ..container.children[0].children[1].children[0].children
+                                                [0]
+                                            .clone()
+                                        }],
+                                        calculated_width: Some(50.0),
+                                        calculated_height: Some(25.0),
+                                        ..container.children[0].children[1].children[0].clone()
+                                    },
+                                    Container {
+                                        children: vec![Container {
+                                            calculated_width: Some(50.0),
+                                            calculated_height: Some(25.0),
+                                            ..container.children[0].children[1].children[1].children
+                                                [0]
+                                            .clone()
+                                        }],
+                                        calculated_width: Some(50.0),
+                                        calculated_height: Some(25.0),
+                                        ..container.children[0].children[1].children[1].clone()
+                                    },
+                                ],
+                                calculated_width: Some(100.0),
+                                calculated_height: Some(25.0),
+                                ..container.children[0].children[1].clone()
+                            },
+                        ],
+                        calculated_width: Some(100.0),
+                        calculated_height: Some(25.0 + 25.0),
+                        ..container.children[0].clone()
+                    }],
+                    ..container
+                },
+            );
+        }
+
+        #[test_log::test]
+        #[ignore]
+        fn calc_can_calc_table_column_and_row_sizes_and_auto_size_raw_data() {
+            let mut container: Container = html! {
+                table {
+                    tr {
+                        td { "test" }
+                        td { "test" }
+                    }
+                    tr {
+                        td { "test" }
+                        td { "test" }
+                    }
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(100.0);
+            container.calculated_height = Some(80.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container.clone(),
+                &Container {
+                    children: vec![Container {
+                        children: vec![
+                            Container {
+                                children: vec![
+                                    Container {
+                                        children: container.children[0].children[0].children[0]
+                                            .children
+                                            .clone(),
+                                        calculated_width: Some(50.0),
+                                        calculated_height: Some(25.0),
+                                        ..container.children[0].children[0].children[0].clone()
+                                    },
+                                    Container {
+                                        children: container.children[0].children[0].children[1]
+                                            .children
+                                            .clone(),
+                                        calculated_width: Some(50.0),
+                                        calculated_height: Some(25.0),
+                                        ..container.children[0].children[0].children[1].clone()
+                                    },
+                                ],
+                                calculated_width: Some(100.0),
+                                calculated_height: Some(25.0),
+                                ..container.children[0].children[0].clone()
+                            },
+                            Container {
+                                children: vec![
+                                    Container {
+                                        children: container.children[0].children[1].children[0]
+                                            .children
+                                            .clone(),
+                                        calculated_width: Some(50.0),
+                                        calculated_height: Some(25.0),
+                                        ..container.children[0].children[1].children[0].clone()
+                                    },
+                                    Container {
+                                        children: container.children[0].children[1].children[1]
+                                            .children
+                                            .clone(),
+                                        calculated_width: Some(50.0),
+                                        calculated_height: Some(25.0),
+                                        ..container.children[0].children[1].children[1].clone()
+                                    },
+                                ],
+                                calculated_width: Some(100.0),
+                                calculated_height: Some(25.0),
+                                ..container.children[0].children[1].clone()
+                            },
+                        ],
+                        calculated_width: Some(100.0),
+                        calculated_height: Some(25.0 + 25.0),
+                        ..container.children[0].clone()
+                    }],
+                    ..container
+                },
+            );
+        }
+
+        #[test_log::test]
+        #[ignore]
+        fn calc_can_calc_table_column_and_row_sizes_with_tbody() {
+            let mut container = Container {
+                children: vec![Container {
+                    element: Element::Table,
+                    children: vec![Container {
+                        element: Element::TBody,
+                        children: vec![
+                            Container {
+                                element: Element::TR,
+                                direction: LayoutDirection::Row,
+                                children: vec![
+                                    Container {
+                                        element: Element::TD,
+                                        children: vec![Container {
+                                            element: Element::Raw {
+                                                value: "test".to_string(),
+                                            },
+                                            ..Container::default()
+                                        }],
+                                        ..Container::default()
+                                    },
+                                    Container {
+                                        element: Element::TD,
+                                        children: vec![Container {
+                                            element: Element::Raw {
+                                                value: "test".to_string(),
+                                            },
+                                            ..Container::default()
+                                        }],
+                                        ..Container::default()
+                                    },
+                                ],
+                                ..Default::default()
+                            },
+                            Container {
+                                element: Element::TR,
+                                direction: LayoutDirection::Row,
+                                children: vec![
+                                    Container {
+                                        element: Element::TD,
+                                        children: vec![Container {
+                                            element: Element::Raw {
+                                                value: "test".to_string(),
+                                            },
+                                            ..Container::default()
+                                        }],
+                                        ..Container::default()
+                                    },
+                                    Container {
+                                        element: Element::TD,
+                                        children: vec![Container {
+                                            element: Element::Raw {
+                                                value: "test".to_string(),
+                                            },
+                                            ..Container::default()
+                                        }],
+                                        ..Container::default()
+                                    },
+                                ],
+                                ..Default::default()
+                            },
+                        ],
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                }],
+                calculated_width: Some(100.0),
+                calculated_height: Some(80.0),
+                ..Default::default()
+            };
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container.clone(),
+                &Container {
+                    children: vec![Container {
+                        children: vec![Container {
+                            children: vec![
+                                Container {
+                                    children: vec![
+                                        Container {
+                                            children: container.children[0].children[0].children[0]
+                                                .children[0]
+                                                .children
+                                                .clone(),
+                                            calculated_width: Some(50.0),
+                                            calculated_height: Some(25.0),
+                                            ..container.children[0].children[0].children[0].children
+                                                [0]
+                                            .clone()
+                                        },
+                                        Container {
+                                            children: container.children[0].children[0].children[0]
+                                                .children[1]
+                                                .children
+                                                .clone(),
+                                            calculated_width: Some(50.0),
+                                            calculated_height: Some(25.0),
+                                            ..container.children[0].children[0].children[0].children
+                                                [1]
+                                            .clone()
+                                        },
+                                    ],
+                                    calculated_width: Some(100.0),
+                                    calculated_height: Some(25.0),
+                                    ..container.children[0].children[0].children[0].clone()
+                                },
+                                Container {
+                                    children: vec![
+                                        Container {
+                                            children: container.children[0].children[0].children[1]
+                                                .children[0]
+                                                .children
+                                                .clone(),
+                                            calculated_width: Some(50.0),
+                                            calculated_height: Some(25.0),
+                                            ..container.children[0].children[0].children[1].children
+                                                [0]
+                                            .clone()
+                                        },
+                                        Container {
+                                            children: container.children[0].children[0].children[1]
+                                                .children[1]
+                                                .children
+                                                .clone(),
+                                            calculated_width: Some(50.0),
+                                            calculated_height: Some(25.0),
+                                            ..container.children[0].children[0].children[1].children
+                                                [1]
+                                            .clone()
+                                        },
+                                    ],
+                                    calculated_width: Some(100.0),
+                                    calculated_height: Some(25.0),
+                                    ..container.children[0].children[0].children[1].clone()
+                                },
+                            ],
+                            calculated_width: Some(100.0),
+                            calculated_height: Some(25.0 + 25.0),
+                            ..container.children[0].children[0].clone()
+                        }],
+                        ..container.children[0].clone()
+                    }],
+                    ..container
+                },
+            );
+        }
+
+        #[test_log::test]
+        #[ignore]
+        fn calc_calculates_table_td_height_correctly() {
+            let mut container: Container = html! {
+                table {
+                    tr {
+                        td sx-height=(30) {}
+                    }
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(50.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            let td = container.children[0].children[0].children[0].clone();
+
+            compare_containers(
+                &td.clone(),
+                &Container {
+                    calculated_height: Some(30.0),
+                    ..td
+                },
+            );
+        }
+
+        #[test_log::test]
+        #[ignore]
+        fn calc_calculates_table_tr_height_correctly() {
+            let mut container: Container = html! {
+                table {
+                    tr {
+                        td sx-height=(30) {}
+                    }
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(50.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            let tr = container.children[0].children[0].clone();
+
+            compare_containers(
+                &tr.clone(),
+                &Container {
+                    calculated_height: Some(30.0),
+                    ..tr
+                },
+            );
+        }
+
+        #[test_log::test]
+        #[ignore]
+        fn calc_calculates_table_height_correctly() {
+            let mut container: Container = html! {
+                table {
+                    tr sx-height=(30) {
+                        td sx-height=(30) {}
+                        td sx-height=(30) {}
+                        td sx-height=(30) {}
+                    }
+                    tr sx-height=(30) {
+                        td sx-height=(30) {}
+                        td sx-height=(30) {}
+                        td sx-height=(30) {}
+                    }
+                    tr sx-height=(30) {
+                        td sx-height=(30) {}
+                        td sx-height=(30) {}
+                        td sx-height=(30) {}
+                    }
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(50.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        calculated_height: Some(90.0),
+                        ..container.children[0].clone()
+                    }],
+                    calculated_height: Some(100.0),
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        #[ignore]
+        fn calc_overflow_y_squash_calculates_table_sibling_element_height_correctly() {
+            let mut container: Container = html! {
+                div {}
+                table {
+                    tr sx-height=(30) {
+                        td sx-height=(30) {}
+                        td sx-height=(30) {}
+                        td sx-height=(30) {}
+                    }
+                    tr sx-height=(30) {
+                        td sx-height=(30) {}
+                        td sx-height=(30) {}
+                        td sx-height=(30) {}
+                    }
+                    tr sx-height=(30) {
+                        td sx-height=(30) {}
+                        td sx-height=(30) {}
+                        td sx-height=(30) {}
+                    }
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.overflow_y = LayoutOverflow::Squash;
+            container.calculated_width = Some(50.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![
+                        Container {
+                            calculated_height: Some(10.0),
+                            ..container.children[0].clone()
+                        },
+                        Container {
+                            calculated_height: Some(90.0),
+                            ..container.children[1].clone()
+                        },
+                    ],
+                    calculated_height: Some(100.0),
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        #[ignore]
+        fn calc_overflow_y_expand_calculates_table_sibling_element_height_correctly() {
+            let mut container: Container = html! {
+                div {}
+                table {
+                    tr sx-height=(30) {
+                        td sx-height=(30) {}
+                        td sx-height=(30) {}
+                        td sx-height=(30) {}
+                    }
+                    tr sx-height=(30) {
+                        td sx-height=(30) {}
+                        td sx-height=(30) {}
+                        td sx-height=(30) {}
+                    }
+                    tr sx-height=(30) {
+                        td sx-height=(30) {}
+                        td sx-height=(30) {}
+                        td sx-height=(30) {}
+                    }
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(50.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![
+                        Container {
+                            calculated_height: Some(10.0),
+                            ..container.children[0].clone()
+                        },
+                        Container {
+                            calculated_height: Some(90.0),
+                            ..container.children[1].clone()
+                        },
+                    ],
+                    calculated_height: Some(100.0),
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        #[ignore]
+        fn calc_calculates_table_column_widths_the_same_across_headers_and_body() {
+            let mut container: Container = html! {
+                table {
+                    thead {
+                      tr {
+                        th { "#" }
+                        th { "Time" }
+                      }
+                    }
+                    tbody id="album-page-tracks" {
+                        tr sx-border-radius=(5) {
+                            td sx-padding-x=(10) sx-padding-y=(15) {
+                                span class="track-number" { "1" }
+                                button class="play-button" sx-visibility="hidden" {
+                                    img sx-width=(12) sx-height=(12);
+                                }
+                            }
+                            td sx-padding-x=(10) sx-padding-y=(15) {
+                                "Even Still I Want To"
+                            }
+                        }
+                    }
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(1232.0);
+            container.calculated_height = Some(500.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container.clone(),
+                &Container {
+                    children: vec![Container {
+                        children: vec![
+                            Container {
+                                children: vec![Container {
+                                    children: vec![
+                                        Container {
+                                            calculated_width: Some(616.0),
+                                            ..container.children[0].children[0].children[0].children
+                                                [0]
+                                            .clone()
+                                        },
+                                        Container {
+                                            calculated_width: Some(616.0),
+                                            ..container.children[0].children[0].children[0].children
+                                                [1]
+                                            .clone()
+                                        },
+                                    ],
+                                    ..container.children[0].children[0].children[0].clone()
+                                }],
+                                ..container.children[0].children[0].clone()
+                            },
+                            Container {
+                                children: vec![Container {
+                                    children: vec![
+                                        Container {
+                                            calculated_width: Some(596.0),
+                                            ..container.children[0].children[1].children[0].children
+                                                [0]
+                                            .clone()
+                                        },
+                                        Container {
+                                            calculated_width: Some(596.0),
+                                            ..container.children[0].children[1].children[0].children
+                                                [1]
+                                            .clone()
+                                        },
+                                    ],
+                                    ..container.children[0].children[1].children[0].clone()
+                                }],
+                                ..container.children[0].children[1].clone()
+                            },
+                        ],
+                        ..container.children[0].clone()
+                    }],
+                    ..container
+                },
+            );
+        }
+
+        #[test_log::test]
+        #[ignore]
+        fn calc_calculates_table_th_sizes_with_padding_taken_into_account() {
+            let mut container: Container = html! {
+                table {
+                    thead {
+                        tr {
+                            th sx-padding-x=(10) sx-padding-y=(15) {}
+                        }
+                    }
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(1232.0);
+            container.calculated_height = Some(500.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        children: vec![Container {
+                            children: vec![Container {
+                                children: vec![Container {
+                                    calculated_width: Some(1212.0),
+                                    calculated_height: Some(25.0),
+                                    ..container.children[0].children[0].children[0].children[0]
+                                        .clone()
+                                }],
+                                ..container.children[0].children[0].children[0].clone()
+                            }],
+                            ..container.children[0].children[0].clone()
+                        }],
+                        ..container.children[0].clone()
+                    }],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        #[ignore]
+        fn calc_calculates_table_td_sizes_with_padding_taken_into_account() {
+            let mut container: Container = html! {
+                table {
+                    tr {
+                        td sx-padding-x=(10) sx-padding-y=(15) {}
+                    }
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(1232.0);
+            container.calculated_height = Some(500.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        children: vec![Container {
+                            children: vec![Container {
+                                calculated_width: Some(1212.0),
+                                calculated_height: Some(25.0),
+                                ..container.children[0].children[0].children[0].clone()
+                            }],
+                            ..container.children[0].children[0].clone()
+                        }],
+                        ..container.children[0].clone()
+                    }],
+                    ..container.clone()
+                },
+            );
+        }
+    }
+
     #[test_log::test]
     fn calc_can_calc_single_element_size() {
         let mut container = Container {
@@ -1976,222 +3360,6 @@ mod test {
                         ..container.children[2].clone()
                     },
                 ],
-                ..container
-            },
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn contained_calculated_width_auto_y_takes_into_account_scrollbar_size_when_there_is_scroll_overflow_and_hardsized_elements()
-     {
-        let mut container = Container {
-            children: vec![
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                    ..Default::default()
-                },
-            ],
-            calculated_width: Some(50.0),
-            calculated_height: Some(40.0),
-            direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap { grid: true },
-            overflow_y: LayoutOverflow::Auto,
-            ..Default::default()
-        };
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (50.0, 40.0)) {}
-        let width = container.contained_calculated_width();
-        let expected = 25.0;
-
-        assert_eq!(
-            (width - expected).abs() < EPSILON,
-            true,
-            "width expected to be {expected} (actual={width})"
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn handle_overflow_auto_y_takes_into_account_scrollbar_size_when_there_is_scroll_overflow_and_hardsized_elements()
-     {
-        let mut container = Container {
-            children: vec![
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                    ..Default::default()
-                },
-            ],
-            calculated_width: Some(50.0),
-            calculated_height: Some(40.0),
-            direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap { grid: true },
-            overflow_y: LayoutOverflow::Auto,
-            ..Default::default()
-        };
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (50.0, 40.0)) {}
-
-        compare_containers(
-            &container.clone(),
-            &Container {
-                children: vec![
-                    Container {
-                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                        calculated_width: Some(25.0),
-                        calculated_height: Some(40.0),
-                        calculated_x: Some(0.0),
-                        calculated_y: Some(0.0),
-                        ..container.children[0].clone()
-                    },
-                    Container {
-                        calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                        calculated_width: Some(25.0),
-                        calculated_height: Some(40.0),
-                        calculated_x: Some(0.0),
-                        calculated_y: Some(40.0),
-                        ..container.children[1].clone()
-                    },
-                    Container {
-                        calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
-                        calculated_width: Some(25.0),
-                        calculated_height: Some(40.0),
-                        calculated_x: Some(0.0),
-                        calculated_y: Some(80.0),
-                        ..container.children[2].clone()
-                    },
-                ],
-                calculated_width: Some(50.0 - f32::from(get_scrollbar_size())),
-                calculated_height: Some(40.0),
-                ..container
-            },
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn handle_overflow_auto_y_wraps_elements_properly_by_taking_into_account_scrollbar_size() {
-        let mut container = Container {
-            children: vec![
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    ..Default::default()
-                },
-                Container {
-                    width: Some(Number::Integer(25)),
-                    calculated_width: Some(25.0),
-                    calculated_height: Some(40.0),
-                    ..Default::default()
-                },
-            ],
-            calculated_width: Some(75.0),
-            calculated_height: Some(40.0),
-            direction: LayoutDirection::Row,
-            overflow_x: LayoutOverflow::Wrap { grid: true },
-            overflow_y: LayoutOverflow::Auto,
-            ..Default::default()
-        };
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (75.0, 40.0)) {}
-
-        compare_containers(
-            &container.clone(),
-            &Container {
-                children: vec![
-                    Container {
-                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                        calculated_width: Some(25.0),
-                        calculated_height: Some(40.0),
-                        calculated_x: Some(0.0),
-                        calculated_y: Some(0.0),
-                        ..container.children[0].clone()
-                    },
-                    Container {
-                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
-                        calculated_width: Some(25.0),
-                        calculated_height: Some(40.0),
-                        calculated_x: Some(25.0),
-                        calculated_y: Some(0.0),
-                        ..container.children[1].clone()
-                    },
-                    Container {
-                        calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                        calculated_width: Some(25.0),
-                        calculated_height: Some(40.0),
-                        calculated_x: Some(0.0),
-                        calculated_y: Some(40.0),
-                        ..container.children[2].clone()
-                    },
-                    Container {
-                        calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
-                        calculated_width: Some(25.0),
-                        calculated_height: Some(40.0),
-                        calculated_x: Some(25.0),
-                        calculated_y: Some(40.0),
-                        ..container.children[3].clone()
-                    },
-                    Container {
-                        calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
-                        calculated_width: Some(25.0),
-                        calculated_height: Some(40.0),
-                        calculated_x: Some(0.0),
-                        calculated_y: Some(80.0),
-                        ..container.children[4].clone()
-                    },
-                ],
-                calculated_width: Some(75.0 - f32::from(get_scrollbar_size())),
-                calculated_height: Some(40.0),
                 ..container
             },
         );
@@ -5027,766 +6195,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
-    fn calc_can_calc_table_column_and_row_sizes() {
-        let mut container = Container {
-            children: vec![Container {
-                element: Element::Table,
-                children: vec![
-                    Container {
-                        element: Element::TR,
-                        direction: LayoutDirection::Row,
-                        children: vec![
-                            Container {
-                                element: Element::TD,
-                                children: vec![Container {
-                                    element: Element::Div,
-                                    width: Some(Number::Integer(40)),
-                                    height: Some(Number::Integer(10)),
-                                    ..Default::default()
-                                }],
-                                ..Container::default()
-                            },
-                            Container {
-                                element: Element::TD,
-                                children: vec![Container {
-                                    element: Element::Div,
-                                    width: Some(Number::Integer(30)),
-                                    height: Some(Number::Integer(20)),
-                                    ..Default::default()
-                                }],
-                                ..Container::default()
-                            },
-                        ],
-                        ..Default::default()
-                    },
-                    Container {
-                        element: Element::TR,
-                        direction: LayoutDirection::Row,
-                        children: vec![
-                            Container {
-                                element: Element::TD,
-                                children: vec![Container {
-                                    element: Element::Div,
-                                    width: Some(Number::Integer(10)),
-                                    height: Some(Number::Integer(40)),
-                                    ..Default::default()
-                                }],
-                                ..Container::default()
-                            },
-                            Container {
-                                element: Element::TD,
-                                children: vec![Container {
-                                    element: Element::Div,
-                                    width: Some(Number::Integer(20)),
-                                    height: Some(Number::Integer(30)),
-                                    ..Default::default()
-                                }],
-                                ..Container::default()
-                            },
-                        ],
-                        ..Default::default()
-                    },
-                ],
-                ..Default::default()
-            }],
-            calculated_width: Some(70.0),
-            calculated_height: Some(80.0),
-            ..Default::default()
-        };
-        CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
-
-        compare_containers(
-            &container.clone(),
-            &Container {
-                children: vec![Container {
-                    children: vec![
-                        Container {
-                            children: vec![
-                                Container {
-                                    children: vec![Container {
-                                        calculated_width: Some(40.0),
-                                        calculated_height: Some(10.0),
-                                        ..container.children[0].children[0].children[0].children[0]
-                                            .clone()
-                                    }],
-                                    calculated_width: Some(40.0),
-                                    calculated_height: Some(20.0),
-                                    ..container.children[0].children[0].children[0].clone()
-                                },
-                                Container {
-                                    children: vec![Container {
-                                        calculated_width: Some(30.0),
-                                        calculated_height: Some(20.0),
-                                        ..container.children[0].children[0].children[1].children[0]
-                                            .clone()
-                                    }],
-                                    calculated_width: Some(30.0),
-                                    calculated_height: Some(20.0),
-                                    ..container.children[0].children[0].children[1].clone()
-                                },
-                            ],
-                            calculated_width: Some(70.0),
-                            calculated_height: Some(20.0),
-                            ..container.children[0].children[0].clone()
-                        },
-                        Container {
-                            children: vec![
-                                Container {
-                                    children: vec![Container {
-                                        calculated_width: Some(10.0),
-                                        calculated_height: Some(40.0),
-                                        ..container.children[0].children[1].children[0].children[0]
-                                            .clone()
-                                    }],
-                                    calculated_width: Some(40.0),
-                                    calculated_height: Some(40.0),
-                                    ..container.children[0].children[1].children[0].clone()
-                                },
-                                Container {
-                                    children: vec![Container {
-                                        calculated_width: Some(20.0),
-                                        calculated_height: Some(30.0),
-                                        ..container.children[0].children[1].children[1].children[0]
-                                            .clone()
-                                    }],
-                                    calculated_width: Some(30.0),
-                                    calculated_height: Some(40.0),
-                                    ..container.children[0].children[1].children[1].clone()
-                                },
-                            ],
-                            calculated_width: Some(70.0),
-                            calculated_height: Some(40.0),
-                            ..container.children[0].children[1].clone()
-                        },
-                    ],
-                    calculated_width: Some(70.0),
-                    calculated_height: Some(20.0 + 40.0),
-                    ..container.children[0].clone()
-                }],
-                ..container
-            },
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn calc_can_calc_table_column_and_row_sizes_and_expand_to_fill_width() {
-        let mut container = Container {
-            children: vec![Container {
-                element: Element::Table,
-                children: vec![
-                    Container {
-                        element: Element::TR,
-                        direction: LayoutDirection::Row,
-                        children: vec![
-                            Container {
-                                element: Element::TD,
-                                children: vec![Container {
-                                    width: Some(Number::Integer(40)),
-                                    height: Some(Number::Integer(10)),
-                                    ..Default::default()
-                                }],
-                                ..Container::default()
-                            },
-                            Container {
-                                element: Element::TD,
-                                children: vec![Container {
-                                    width: Some(Number::Integer(30)),
-                                    height: Some(Number::Integer(20)),
-                                    ..Default::default()
-                                }],
-                                ..Container::default()
-                            },
-                        ],
-                        ..Default::default()
-                    },
-                    Container {
-                        element: Element::TR,
-                        direction: LayoutDirection::Row,
-                        children: vec![
-                            Container {
-                                element: Element::TD,
-                                children: vec![Container {
-                                    width: Some(Number::Integer(10)),
-                                    height: Some(Number::Integer(40)),
-                                    ..Default::default()
-                                }],
-                                ..Container::default()
-                            },
-                            Container {
-                                element: Element::TD,
-                                children: vec![Container {
-                                    width: Some(Number::Integer(20)),
-                                    height: Some(Number::Integer(30)),
-                                    ..Default::default()
-                                }],
-                                ..Container::default()
-                            },
-                        ],
-                        ..Default::default()
-                    },
-                ],
-                ..Default::default()
-            }],
-            calculated_width: Some(100.0),
-            calculated_height: Some(80.0),
-            ..Default::default()
-        };
-        CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
-
-        compare_containers(
-            &container.clone(),
-            &Container {
-                children: vec![Container {
-                    children: vec![
-                        Container {
-                            children: vec![
-                                Container {
-                                    children: vec![Container {
-                                        calculated_width: Some(40.0),
-                                        calculated_height: Some(10.0),
-                                        ..container.children[0].children[0].children[0].children[0]
-                                            .clone()
-                                    }],
-                                    calculated_width: Some(50.0),
-                                    calculated_height: Some(20.0),
-                                    ..container.children[0].children[0].children[0].clone()
-                                },
-                                Container {
-                                    children: vec![Container {
-                                        calculated_width: Some(30.0),
-                                        calculated_height: Some(20.0),
-                                        ..container.children[0].children[0].children[1].children[0]
-                                            .clone()
-                                    }],
-                                    calculated_width: Some(50.0),
-                                    calculated_height: Some(20.0),
-                                    ..container.children[0].children[0].children[1].clone()
-                                },
-                            ],
-                            calculated_width: Some(100.0),
-                            calculated_height: Some(20.0),
-                            ..container.children[0].children[0].clone()
-                        },
-                        Container {
-                            children: vec![
-                                Container {
-                                    children: vec![Container {
-                                        calculated_width: Some(10.0),
-                                        calculated_height: Some(40.0),
-                                        ..container.children[0].children[1].children[0].children[0]
-                                            .clone()
-                                    }],
-                                    calculated_width: Some(50.0),
-                                    calculated_height: Some(40.0),
-                                    ..container.children[0].children[1].children[0].clone()
-                                },
-                                Container {
-                                    children: vec![Container {
-                                        calculated_width: Some(20.0),
-                                        calculated_height: Some(30.0),
-                                        ..container.children[0].children[1].children[1].children[0]
-                                            .clone()
-                                    }],
-                                    calculated_width: Some(50.0),
-                                    calculated_height: Some(40.0),
-                                    ..container.children[0].children[1].children[1].clone()
-                                },
-                            ],
-                            calculated_width: Some(100.0),
-                            calculated_height: Some(40.0),
-                            ..container.children[0].children[1].clone()
-                        },
-                    ],
-                    calculated_width: Some(100.0),
-                    calculated_height: Some(20.0 + 40.0),
-                    ..container.children[0].clone()
-                }],
-                ..container
-            },
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn calc_can_calc_table_column_and_row_sizes_and_auto_size_unsized_cells() {
-        let mut container = Container {
-            children: vec![Container {
-                element: Element::Table,
-                children: vec![
-                    Container {
-                        element: Element::TR,
-                        direction: LayoutDirection::Row,
-                        children: vec![
-                            Container {
-                                element: Element::TD,
-                                children: vec![Container {
-                                    width: Some(Number::Integer(40)),
-                                    height: Some(Number::Integer(10)),
-                                    ..Default::default()
-                                }],
-                                ..Container::default()
-                            },
-                            Container {
-                                element: Element::TD,
-                                children: vec![Container::default()],
-                                ..Container::default()
-                            },
-                        ],
-                        ..Default::default()
-                    },
-                    Container {
-                        element: Element::TR,
-                        direction: LayoutDirection::Row,
-                        children: vec![
-                            Container {
-                                element: Element::TD,
-                                children: vec![Container::default()],
-                                ..Container::default()
-                            },
-                            Container {
-                                element: Element::TD,
-                                children: vec![Container {
-                                    width: Some(Number::Integer(20)),
-                                    height: Some(Number::Integer(30)),
-                                    ..Default::default()
-                                }],
-                                ..Container::default()
-                            },
-                        ],
-                        ..Default::default()
-                    },
-                ],
-                ..Default::default()
-            }],
-            calculated_width: Some(100.0),
-            calculated_height: Some(80.0),
-            ..Default::default()
-        };
-        CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
-
-        compare_containers(
-            &container.clone(),
-            &Container {
-                children: vec![Container {
-                    children: vec![
-                        Container {
-                            children: vec![
-                                Container {
-                                    children: vec![Container {
-                                        calculated_width: Some(40.0),
-                                        calculated_height: Some(10.0),
-                                        ..container.children[0].children[0].children[0].children[0]
-                                            .clone()
-                                    }],
-                                    calculated_width: Some(50.0),
-                                    calculated_height: Some(10.0),
-                                    ..container.children[0].children[0].children[0].clone()
-                                },
-                                Container {
-                                    calculated_width: Some(50.0),
-                                    calculated_height: Some(10.0),
-                                    ..container.children[0].children[0].children[1].clone()
-                                },
-                            ],
-                            calculated_width: Some(100.0),
-                            calculated_height: Some(10.0),
-                            ..container.children[0].children[0].clone()
-                        },
-                        Container {
-                            children: vec![
-                                Container {
-                                    calculated_width: Some(50.0),
-                                    calculated_height: Some(30.0),
-                                    ..container.children[0].children[1].children[0].clone()
-                                },
-                                Container {
-                                    children: vec![Container {
-                                        calculated_width: Some(20.0),
-                                        calculated_height: Some(30.0),
-                                        ..container.children[0].children[1].children[1].children[0]
-                                            .clone()
-                                    }],
-                                    calculated_width: Some(50.0),
-                                    calculated_height: Some(30.0),
-                                    ..container.children[0].children[1].children[1].clone()
-                                },
-                            ],
-                            calculated_width: Some(100.0),
-                            calculated_height: Some(30.0),
-                            ..container.children[0].children[1].clone()
-                        },
-                    ],
-                    calculated_width: Some(100.0),
-                    calculated_height: Some(10.0 + 30.0),
-                    ..container.children[0].clone()
-                }],
-                ..container
-            },
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn calc_can_calc_table_column_and_row_sizes_and_auto_size_unsized_cells_when_all_are_unsized() {
-        let mut container = Container {
-            children: vec![Container {
-                element: Element::Table,
-                children: vec![
-                    Container {
-                        element: Element::TR,
-                        direction: LayoutDirection::Row,
-                        children: vec![
-                            Container {
-                                element: Element::TD,
-                                children: vec![Container::default()],
-                                ..Container::default()
-                            },
-                            Container {
-                                element: Element::TD,
-                                children: vec![Container::default()],
-                                ..Container::default()
-                            },
-                        ],
-                        ..Default::default()
-                    },
-                    Container {
-                        element: Element::TR,
-                        direction: LayoutDirection::Row,
-                        children: vec![
-                            Container {
-                                element: Element::TD,
-                                children: vec![Container::default()],
-                                ..Container::default()
-                            },
-                            Container {
-                                element: Element::TD,
-                                children: vec![Container::default()],
-                                ..Container::default()
-                            },
-                        ],
-                        ..Default::default()
-                    },
-                ],
-                ..Default::default()
-            }],
-            calculated_width: Some(100.0),
-            calculated_height: Some(80.0),
-            ..Default::default()
-        };
-        CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
-
-        compare_containers(
-            &container.clone(),
-            &Container {
-                children: vec![Container {
-                    children: vec![
-                        Container {
-                            children: vec![
-                                Container {
-                                    children: vec![Container {
-                                        calculated_width: Some(50.0),
-                                        calculated_height: Some(25.0),
-                                        ..container.children[0].children[0].children[0].children[0]
-                                            .clone()
-                                    }],
-                                    calculated_width: Some(50.0),
-                                    calculated_height: Some(25.0),
-                                    ..container.children[0].children[0].children[0].clone()
-                                },
-                                Container {
-                                    children: vec![Container {
-                                        calculated_width: Some(50.0),
-                                        calculated_height: Some(25.0),
-                                        ..container.children[0].children[0].children[1].children[0]
-                                            .clone()
-                                    }],
-                                    calculated_width: Some(50.0),
-                                    calculated_height: Some(25.0),
-                                    ..container.children[0].children[0].children[1].clone()
-                                },
-                            ],
-                            calculated_width: Some(100.0),
-                            calculated_height: Some(25.0),
-                            ..container.children[0].children[0].clone()
-                        },
-                        Container {
-                            children: vec![
-                                Container {
-                                    children: vec![Container {
-                                        calculated_width: Some(50.0),
-                                        calculated_height: Some(25.0),
-                                        ..container.children[0].children[1].children[0].children[0]
-                                            .clone()
-                                    }],
-                                    calculated_width: Some(50.0),
-                                    calculated_height: Some(25.0),
-                                    ..container.children[0].children[1].children[0].clone()
-                                },
-                                Container {
-                                    children: vec![Container {
-                                        calculated_width: Some(50.0),
-                                        calculated_height: Some(25.0),
-                                        ..container.children[0].children[1].children[1].children[0]
-                                            .clone()
-                                    }],
-                                    calculated_width: Some(50.0),
-                                    calculated_height: Some(25.0),
-                                    ..container.children[0].children[1].children[1].clone()
-                                },
-                            ],
-                            calculated_width: Some(100.0),
-                            calculated_height: Some(25.0),
-                            ..container.children[0].children[1].clone()
-                        },
-                    ],
-                    calculated_width: Some(100.0),
-                    calculated_height: Some(25.0 + 25.0),
-                    ..container.children[0].clone()
-                }],
-                ..container
-            },
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn calc_can_calc_table_column_and_row_sizes_and_auto_size_raw_data() {
-        let mut container: Container = html! {
-            table {
-                tr {
-                    td { "test" }
-                    td { "test" }
-                }
-                tr {
-                    td { "test" }
-                    td { "test" }
-                }
-            }
-        }
-        .try_into()
-        .unwrap();
-
-        container.calculated_width = Some(100.0);
-        container.calculated_height = Some(80.0);
-
-        CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
-
-        compare_containers(
-            &container.clone(),
-            &Container {
-                children: vec![Container {
-                    children: vec![
-                        Container {
-                            children: vec![
-                                Container {
-                                    children: container.children[0].children[0].children[0]
-                                        .children
-                                        .clone(),
-                                    calculated_width: Some(50.0),
-                                    calculated_height: Some(25.0),
-                                    ..container.children[0].children[0].children[0].clone()
-                                },
-                                Container {
-                                    children: container.children[0].children[0].children[1]
-                                        .children
-                                        .clone(),
-                                    calculated_width: Some(50.0),
-                                    calculated_height: Some(25.0),
-                                    ..container.children[0].children[0].children[1].clone()
-                                },
-                            ],
-                            calculated_width: Some(100.0),
-                            calculated_height: Some(25.0),
-                            ..container.children[0].children[0].clone()
-                        },
-                        Container {
-                            children: vec![
-                                Container {
-                                    children: container.children[0].children[1].children[0]
-                                        .children
-                                        .clone(),
-                                    calculated_width: Some(50.0),
-                                    calculated_height: Some(25.0),
-                                    ..container.children[0].children[1].children[0].clone()
-                                },
-                                Container {
-                                    children: container.children[0].children[1].children[1]
-                                        .children
-                                        .clone(),
-                                    calculated_width: Some(50.0),
-                                    calculated_height: Some(25.0),
-                                    ..container.children[0].children[1].children[1].clone()
-                                },
-                            ],
-                            calculated_width: Some(100.0),
-                            calculated_height: Some(25.0),
-                            ..container.children[0].children[1].clone()
-                        },
-                    ],
-                    calculated_width: Some(100.0),
-                    calculated_height: Some(25.0 + 25.0),
-                    ..container.children[0].clone()
-                }],
-                ..container
-            },
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn calc_can_calc_table_column_and_row_sizes_with_tbody() {
-        let mut container = Container {
-            children: vec![Container {
-                element: Element::Table,
-                children: vec![Container {
-                    element: Element::TBody,
-                    children: vec![
-                        Container {
-                            element: Element::TR,
-                            direction: LayoutDirection::Row,
-                            children: vec![
-                                Container {
-                                    element: Element::TD,
-                                    children: vec![Container {
-                                        element: Element::Raw {
-                                            value: "test".to_string(),
-                                        },
-                                        ..Container::default()
-                                    }],
-                                    ..Container::default()
-                                },
-                                Container {
-                                    element: Element::TD,
-                                    children: vec![Container {
-                                        element: Element::Raw {
-                                            value: "test".to_string(),
-                                        },
-                                        ..Container::default()
-                                    }],
-                                    ..Container::default()
-                                },
-                            ],
-                            ..Default::default()
-                        },
-                        Container {
-                            element: Element::TR,
-                            direction: LayoutDirection::Row,
-                            children: vec![
-                                Container {
-                                    element: Element::TD,
-                                    children: vec![Container {
-                                        element: Element::Raw {
-                                            value: "test".to_string(),
-                                        },
-                                        ..Container::default()
-                                    }],
-                                    ..Container::default()
-                                },
-                                Container {
-                                    element: Element::TD,
-                                    children: vec![Container {
-                                        element: Element::Raw {
-                                            value: "test".to_string(),
-                                        },
-                                        ..Container::default()
-                                    }],
-                                    ..Container::default()
-                                },
-                            ],
-                            ..Default::default()
-                        },
-                    ],
-                    ..Default::default()
-                }],
-                ..Default::default()
-            }],
-            calculated_width: Some(100.0),
-            calculated_height: Some(80.0),
-            ..Default::default()
-        };
-        CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
-
-        compare_containers(
-            &container.clone(),
-            &Container {
-                children: vec![Container {
-                    children: vec![Container {
-                        children: vec![
-                            Container {
-                                children: vec![
-                                    Container {
-                                        children: container.children[0].children[0].children[0]
-                                            .children[0]
-                                            .children
-                                            .clone(),
-                                        calculated_width: Some(50.0),
-                                        calculated_height: Some(25.0),
-                                        ..container.children[0].children[0].children[0].children[0]
-                                            .clone()
-                                    },
-                                    Container {
-                                        children: container.children[0].children[0].children[0]
-                                            .children[1]
-                                            .children
-                                            .clone(),
-                                        calculated_width: Some(50.0),
-                                        calculated_height: Some(25.0),
-                                        ..container.children[0].children[0].children[0].children[1]
-                                            .clone()
-                                    },
-                                ],
-                                calculated_width: Some(100.0),
-                                calculated_height: Some(25.0),
-                                ..container.children[0].children[0].children[0].clone()
-                            },
-                            Container {
-                                children: vec![
-                                    Container {
-                                        children: container.children[0].children[0].children[1]
-                                            .children[0]
-                                            .children
-                                            .clone(),
-                                        calculated_width: Some(50.0),
-                                        calculated_height: Some(25.0),
-                                        ..container.children[0].children[0].children[1].children[0]
-                                            .clone()
-                                    },
-                                    Container {
-                                        children: container.children[0].children[0].children[1]
-                                            .children[1]
-                                            .children
-                                            .clone(),
-                                        calculated_width: Some(50.0),
-                                        calculated_height: Some(25.0),
-                                        ..container.children[0].children[0].children[1].children[1]
-                                            .clone()
-                                    },
-                                ],
-                                calculated_width: Some(100.0),
-                                calculated_height: Some(25.0),
-                                ..container.children[0].children[0].children[1].clone()
-                            },
-                        ],
-                        calculated_width: Some(100.0),
-                        calculated_height: Some(25.0 + 25.0),
-                        ..container.children[0].children[0].clone()
-                    }],
-                    ..container.children[0].clone()
-                }],
-                ..container
-            },
-        );
-    }
-
-    #[test_log::test]
     fn calc_can_calc_absolute_positioned_element_on_top_of_a_relative_element() {
         let mut container = Container {
             children: vec![
@@ -7552,378 +7960,6 @@ mod test {
                 calculated_padding_top: Some(20.0),
                 calculated_padding_bottom: Some(20.0),
                 ..aside
-            },
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn calc_calculates_table_td_height_correctly() {
-        let mut container: Container = html! {
-            table {
-                tr {
-                    td sx-height=(30) {}
-                }
-            }
-        }
-        .try_into()
-        .unwrap();
-
-        container.calculated_width = Some(50.0);
-        container.calculated_height = Some(100.0);
-
-        CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
-
-        let td = container.children[0].children[0].children[0].clone();
-
-        compare_containers(
-            &td.clone(),
-            &Container {
-                calculated_height: Some(30.0),
-                ..td
-            },
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn calc_calculates_table_tr_height_correctly() {
-        let mut container: Container = html! {
-            table {
-                tr {
-                    td sx-height=(30) {}
-                }
-            }
-        }
-        .try_into()
-        .unwrap();
-
-        container.calculated_width = Some(50.0);
-        container.calculated_height = Some(100.0);
-
-        CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
-
-        let tr = container.children[0].children[0].clone();
-
-        compare_containers(
-            &tr.clone(),
-            &Container {
-                calculated_height: Some(30.0),
-                ..tr
-            },
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn calc_calculates_table_height_correctly() {
-        let mut container: Container = html! {
-            table {
-                tr sx-height=(30) {
-                    td sx-height=(30) {}
-                    td sx-height=(30) {}
-                    td sx-height=(30) {}
-                }
-                tr sx-height=(30) {
-                    td sx-height=(30) {}
-                    td sx-height=(30) {}
-                    td sx-height=(30) {}
-                }
-                tr sx-height=(30) {
-                    td sx-height=(30) {}
-                    td sx-height=(30) {}
-                    td sx-height=(30) {}
-                }
-            }
-        }
-        .try_into()
-        .unwrap();
-
-        container.calculated_width = Some(50.0);
-        container.calculated_height = Some(100.0);
-
-        CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
-
-        compare_containers(
-            &container,
-            &Container {
-                children: vec![Container {
-                    calculated_height: Some(90.0),
-                    ..container.children[0].clone()
-                }],
-                calculated_height: Some(100.0),
-                ..container.clone()
-            },
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn calc_overflow_y_squash_calculates_table_sibling_element_height_correctly() {
-        let mut container: Container = html! {
-            div {}
-            table {
-                tr sx-height=(30) {
-                    td sx-height=(30) {}
-                    td sx-height=(30) {}
-                    td sx-height=(30) {}
-                }
-                tr sx-height=(30) {
-                    td sx-height=(30) {}
-                    td sx-height=(30) {}
-                    td sx-height=(30) {}
-                }
-                tr sx-height=(30) {
-                    td sx-height=(30) {}
-                    td sx-height=(30) {}
-                    td sx-height=(30) {}
-                }
-            }
-        }
-        .try_into()
-        .unwrap();
-
-        container.overflow_y = LayoutOverflow::Squash;
-        container.calculated_width = Some(50.0);
-        container.calculated_height = Some(100.0);
-
-        CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
-
-        compare_containers(
-            &container,
-            &Container {
-                children: vec![
-                    Container {
-                        calculated_height: Some(10.0),
-                        ..container.children[0].clone()
-                    },
-                    Container {
-                        calculated_height: Some(90.0),
-                        ..container.children[1].clone()
-                    },
-                ],
-                calculated_height: Some(100.0),
-                ..container.clone()
-            },
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn calc_overflow_y_expand_calculates_table_sibling_element_height_correctly() {
-        let mut container: Container = html! {
-            div {}
-            table {
-                tr sx-height=(30) {
-                    td sx-height=(30) {}
-                    td sx-height=(30) {}
-                    td sx-height=(30) {}
-                }
-                tr sx-height=(30) {
-                    td sx-height=(30) {}
-                    td sx-height=(30) {}
-                    td sx-height=(30) {}
-                }
-                tr sx-height=(30) {
-                    td sx-height=(30) {}
-                    td sx-height=(30) {}
-                    td sx-height=(30) {}
-                }
-            }
-        }
-        .try_into()
-        .unwrap();
-
-        container.calculated_width = Some(50.0);
-        container.calculated_height = Some(100.0);
-
-        CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
-
-        compare_containers(
-            &container,
-            &Container {
-                children: vec![
-                    Container {
-                        calculated_height: Some(10.0),
-                        ..container.children[0].clone()
-                    },
-                    Container {
-                        calculated_height: Some(90.0),
-                        ..container.children[1].clone()
-                    },
-                ],
-                calculated_height: Some(100.0),
-                ..container.clone()
-            },
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn calc_calculates_table_column_widths_the_same_across_headers_and_body() {
-        let mut container: Container = html! {
-            table {
-                thead {
-                  tr {
-                    th { "#" }
-                    th { "Time" }
-                  }
-                }
-                tbody id="album-page-tracks" {
-                    tr sx-border-radius=(5) {
-                        td sx-padding-x=(10) sx-padding-y=(15) {
-                            span class="track-number" { "1" }
-                            button class="play-button" sx-visibility="hidden" {
-                                img sx-width=(12) sx-height=(12);
-                            }
-                        }
-                        td sx-padding-x=(10) sx-padding-y=(15) {
-                            "Even Still I Want To"
-                        }
-                    }
-                }
-            }
-        }
-        .try_into()
-        .unwrap();
-
-        container.calculated_width = Some(1232.0);
-        container.calculated_height = Some(500.0);
-
-        CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
-
-        compare_containers(
-            &container.clone(),
-            &Container {
-                children: vec![Container {
-                    children: vec![
-                        Container {
-                            children: vec![Container {
-                                children: vec![
-                                    Container {
-                                        calculated_width: Some(616.0),
-                                        ..container.children[0].children[0].children[0].children[0]
-                                            .clone()
-                                    },
-                                    Container {
-                                        calculated_width: Some(616.0),
-                                        ..container.children[0].children[0].children[0].children[1]
-                                            .clone()
-                                    },
-                                ],
-                                ..container.children[0].children[0].children[0].clone()
-                            }],
-                            ..container.children[0].children[0].clone()
-                        },
-                        Container {
-                            children: vec![Container {
-                                children: vec![
-                                    Container {
-                                        calculated_width: Some(596.0),
-                                        ..container.children[0].children[1].children[0].children[0]
-                                            .clone()
-                                    },
-                                    Container {
-                                        calculated_width: Some(596.0),
-                                        ..container.children[0].children[1].children[0].children[1]
-                                            .clone()
-                                    },
-                                ],
-                                ..container.children[0].children[1].children[0].clone()
-                            }],
-                            ..container.children[0].children[1].clone()
-                        },
-                    ],
-                    ..container.children[0].clone()
-                }],
-                ..container
-            },
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn calc_calculates_table_th_sizes_with_padding_taken_into_account() {
-        let mut container: Container = html! {
-            table {
-                thead {
-                    tr {
-                        th sx-padding-x=(10) sx-padding-y=(15) {}
-                    }
-                }
-            }
-        }
-        .try_into()
-        .unwrap();
-
-        container.calculated_width = Some(1232.0);
-        container.calculated_height = Some(500.0);
-
-        CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
-
-        compare_containers(
-            &container,
-            &Container {
-                children: vec![Container {
-                    children: vec![Container {
-                        children: vec![Container {
-                            children: vec![Container {
-                                calculated_width: Some(1212.0),
-                                calculated_height: Some(25.0),
-                                ..container.children[0].children[0].children[0].children[0].clone()
-                            }],
-                            ..container.children[0].children[0].children[0].clone()
-                        }],
-                        ..container.children[0].children[0].clone()
-                    }],
-                    ..container.children[0].clone()
-                }],
-                ..container.clone()
-            },
-        );
-    }
-
-    #[test_log::test]
-    #[ignore]
-    fn calc_calculates_table_td_sizes_with_padding_taken_into_account() {
-        let mut container: Container = html! {
-            table {
-                tr {
-                    td sx-padding-x=(10) sx-padding-y=(15) {}
-                }
-            }
-        }
-        .try_into()
-        .unwrap();
-
-        container.calculated_width = Some(1232.0);
-        container.calculated_height = Some(500.0);
-
-        CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
-
-        compare_containers(
-            &container,
-            &Container {
-                children: vec![Container {
-                    children: vec![Container {
-                        children: vec![Container {
-                            calculated_width: Some(1212.0),
-                            calculated_height: Some(25.0),
-                            ..container.children[0].children[0].children[0].clone()
-                        }],
-                        ..container.children[0].children[0].clone()
-                    }],
-                    ..container.children[0].clone()
-                }],
-                ..container.clone()
             },
         );
     }
