@@ -16,6 +16,7 @@ impl<F: FontMetrics> CalcV2Calculator<F> {
 }
 
 impl<F: FontMetrics> Calc for CalcV2Calculator<F> {
+    #[allow(clippy::let_and_return)]
     fn calc(&self, container: &mut Container) -> bool {
         use pass_flex_height::Pass as _;
         use pass_flex_width::Pass as _;
@@ -29,14 +30,16 @@ impl<F: FontMetrics> Calc for CalcV2Calculator<F> {
         let bfs = container.bfs();
         let arena = Bump::new();
 
-        self.calc_widths(&bfs, container);
-        self.flex_width(&bfs, container);
-        self.wrap_horizontal(&bfs, container);
-        self.calc_heights(&bfs, container);
-        self.flex_height(&bfs, container);
-        self.position_elements(&arena, &bfs, container);
+        let changed = false;
 
-        false
+        let changed = self.calc_widths(&bfs, container) || changed;
+        let changed = self.flex_width(&bfs, container) || changed;
+        let changed = self.wrap_horizontal(&bfs, container) || changed;
+        let changed = self.calc_heights(&bfs, container) || changed;
+        let changed = self.flex_height(&bfs, container) || changed;
+        let changed = self.position_elements(&arena, &bfs, container) || changed;
+
+        changed
     }
 }
 
