@@ -61,7 +61,7 @@ macro_rules! calc_size_on_axis {
         $border_y:ident,
         $calculated_border_x:ident,
         $calculated_border_y:ident,
-        $border_radius:expr
+        $each_child:expr
         $(,)?
     ) => {{
         const LABEL: &str = $label;
@@ -169,7 +169,7 @@ macro_rules! calc_size_on_axis {
                         changed = true;
                     }
                 }
-                $border_radius(child, view_width, view_height);
+                $each_child(child, view_width, view_height);
             }
 
             set_float(&mut parent.$calculated_min, min_size);
@@ -211,7 +211,7 @@ macro_rules! flex_on_axis {
         $border_y:ident,
         $calculated_border_x:ident,
         $calculated_border_y:ident,
-        $border_radius:expr
+        $each_child:expr
         $(,)?
     ) => {{
         const LABEL: &str = $label;
@@ -291,7 +291,7 @@ macro_rules! flex_on_axis {
                             changed = true;
                         }
                     }
-                    $border_radius(child, container_size, view_width, view_height);
+                    $each_child(child, container_size, view_width, view_height);
                 }
 
                 if parent.relative_positioned_elements().any(|x| x.$fixed.as_ref().is_none_or(crate::Number::is_dynamic)) {
@@ -608,7 +608,7 @@ mod pass_widths {
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
         fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-            let calc_borders = |container: &mut Container, view_width, view_height| {
+            let each_child = |container: &mut Container, view_width, view_height| {
                 if let Some(radius) = &container
                     .border_top_left_radius
                     .as_ref()
@@ -663,7 +663,7 @@ mod pass_widths {
                 border_right,
                 calculated_border_left,
                 calculated_border_right,
-                calc_borders,
+                each_child,
             )
         }
     }
@@ -685,7 +685,7 @@ mod pass_flex_width {
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
         fn flex_width(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-            let calc_borders =
+            let each_child =
                 |container: &mut Container, container_width, view_width, view_height| {
                     if let Some(radius) = &container
                         .border_top_left_radius
@@ -744,7 +744,7 @@ mod pass_flex_width {
                 border_right,
                 calculated_border_left,
                 calculated_border_right,
-                calc_borders,
+                each_child,
             )
         }
     }
