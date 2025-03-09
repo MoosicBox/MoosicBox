@@ -861,7 +861,9 @@ mod pass_flex_height {
 
 mod pass_positioning {
     use bumpalo::Bump;
-    use hyperchad_transformer_models::{LayoutDirection, LayoutOverflow, LayoutPosition, Position};
+    use hyperchad_transformer_models::{
+        JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition, Position,
+    };
 
     use crate::{
         BfsPaths, Container,
@@ -923,9 +925,6 @@ mod pass_positioning {
                     }
                 },
                 |parent, relative_container| {
-                    let mut x = 0.0;
-                    let mut y = 0.0;
-
                     let direction = parent.direction;
                     let justify_content = parent.justify_content.unwrap_or_default();
                     let container_width = parent.calculated_width.unwrap();
@@ -953,8 +952,19 @@ mod pass_positioning {
                                 moosicbox_assert::assert!(row > last_row);
 
                                 let remainder = container_width - row_width;
+
                                 #[allow(clippy::cast_precision_loss)]
-                                let gap = remainder / ((col_count + 1) as f32);
+                                let gap = match justify_content {
+                                    JustifyContent::Start
+                                    | JustifyContent::Center
+                                    | JustifyContent::End => 0.0,
+                                    JustifyContent::SpaceBetween => {
+                                        remainder / ((col_count - 1) as f32)
+                                    }
+                                    JustifyContent::SpaceEvenly => {
+                                        remainder / ((col_count + 1) as f32)
+                                    }
+                                };
                                 gaps.push(gap);
 
                                 if grid && col_count > max_col_count {
@@ -982,17 +992,27 @@ mod pass_positioning {
                         }
 
                         let mut gap = match justify_content {
-                            hyperchad_transformer_models::JustifyContent::Start => 0.0,
-                            hyperchad_transformer_models::JustifyContent::Center => todo!(),
-                            hyperchad_transformer_models::JustifyContent::End => todo!(),
-                            hyperchad_transformer_models::JustifyContent::SpaceBetween => todo!(),
-                            hyperchad_transformer_models::JustifyContent::SpaceEvenly => {
+                            JustifyContent::Start
+                            | JustifyContent::Center
+                            | JustifyContent::End => 0.0,
+                            JustifyContent::SpaceBetween | JustifyContent::SpaceEvenly => {
                                 gaps.first().copied().unwrap_or_default()
                             }
                         };
+
+                        let first_gap = |gap| match justify_content {
+                            JustifyContent::Start
+                            | JustifyContent::Center
+                            | JustifyContent::End
+                            | JustifyContent::SpaceBetween => 0.0,
+                            JustifyContent::SpaceEvenly => gap,
+                        };
+
+                        let mut x = first_gap(gap);
+                        let mut y = 0.0;
+
                         let mut max_height = 0.0;
                         last_row = 0;
-                        x = gap;
 
                         for child in parent.relative_positioned_elements_mut() {
                             let Some(LayoutPosition::Wrap { row, .. }) = child.calculated_position
@@ -1011,11 +1031,10 @@ mod pass_positioning {
                                 moosicbox_assert::assert!(row > last_row);
 
                                 if !grid {
-                                    // FIXME: This could break if we allow jumping rows (e.g. from row 2 to 4)
                                     gap = gaps.get(row as usize).copied().unwrap_or_default();
                                 }
 
-                                x = gap;
+                                x = first_gap(gap);
                                 y += max_height;
                                 max_height = 0.0;
                                 last_row = row;
@@ -1038,11 +1057,13 @@ mod pass_positioning {
                             x += child_width + gap;
                         }
                     } else {
+                        let mut x = 0.0;
+                        let mut y = 0.0;
                         let mut gap = 0.0;
 
                         match justify_content {
-                            hyperchad_transformer_models::JustifyContent::Start => {}
-                            hyperchad_transformer_models::JustifyContent::Center => {
+                            JustifyContent::Start => {}
+                            JustifyContent::Center => {
                                 let size: f32 = parent
                                     .relative_positioned_elements()
                                     .filter_map(|x| match direction {
@@ -1056,7 +1077,7 @@ mod pass_positioning {
                                     LayoutDirection::Column => y += (container_height - size) / 2.0,
                                 }
                             }
-                            hyperchad_transformer_models::JustifyContent::End => {
+                            JustifyContent::End => {
                                 let size: f32 = parent
                                     .relative_positioned_elements()
                                     .filter_map(|x| match direction {
@@ -1070,7 +1091,7 @@ mod pass_positioning {
                                     LayoutDirection::Column => y += container_height - size,
                                 }
                             }
-                            hyperchad_transformer_models::JustifyContent::SpaceBetween => {
+                            JustifyContent::SpaceBetween => {
                                 let count = parent.relative_positioned_elements().count();
                                 let size: f32 = parent
                                     .relative_positioned_elements()
@@ -1090,7 +1111,7 @@ mod pass_positioning {
                                     }
                                 }
                             }
-                            hyperchad_transformer_models::JustifyContent::SpaceEvenly => {
+                            JustifyContent::SpaceEvenly => {
                                 let count = parent.relative_positioned_elements().count();
                                 let size: f32 = parent
                                     .relative_positioned_elements()
@@ -3045,7 +3066,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn handles_justify_content_space_between_and_wraps_elements_properly() {
         let mut container = Container {
             children: vec![
@@ -3087,7 +3107,9 @@ mod test {
             justify_content: Some(JustifyContent::SpaceBetween),
             ..Default::default()
         };
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (75.0, 40.0)) {}
+
+        CALCULATOR.calc(&mut container);
+        log::trace!("container:\n{}", container);
 
         compare_containers(
             &container.clone(),
