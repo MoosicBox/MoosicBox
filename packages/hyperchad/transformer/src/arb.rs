@@ -841,6 +841,10 @@ impl Arbitrary for Container {
             #[cfg(feature = "layout")]
             calculated_border_bottom_right_radius: None,
             #[cfg(feature = "layout")]
+            calculated_column_gap: None,
+            #[cfg(feature = "layout")]
+            calculated_row_gap: None,
+            #[cfg(feature = "layout")]
             calculated_opacity: None,
             #[cfg(feature = "layout")]
             scrollbar_right: None,
