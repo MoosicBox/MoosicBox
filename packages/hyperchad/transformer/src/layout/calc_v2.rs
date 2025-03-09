@@ -280,121 +280,125 @@ macro_rules! flex_on_axis {
                         }
                     }
 
-                    let mut remaining_size = container_size;
-                    let mut last_cell = 0;
-                    let mut max_cell_size = 0.0;
+                    if parent.relative_positioned_elements().any(|x| x.$fixed.as_ref().is_none()) {
+                        let mut remaining_size = container_size;
+                        let mut last_cell = 0;
+                        let mut max_cell_size = 0.0;
 
-                    for child in &mut parent.relative_positioned_elements() {
-                        log::trace!("flex: calculating remaining size:\n{child}");
+                        for child in &mut parent.relative_positioned_elements() {
+                            log::trace!("flex: calculating remaining size:\n{child}");
 
-                        match direction  {
+                            match direction {
+                                LayoutDirection::$axis => {
+                                    if let Some(size) = child.$calculated {
+                                        log::trace!(
+                                            "flex: removing size={size} from remaining_size={remaining_size} ({})",
+                                            remaining_size - size
+                                        );
+                                        remaining_size -= size;
+                                    }
+                                }
+                                LayoutDirection::$cross_axis => {
+                                    if let Some(LayoutPosition::Wrap { $cell: cell, .. }) = child.calculated_position {
+                                        if cell != last_cell {
+                                            moosicbox_assert::assert!(cell > last_cell);
+                                            remaining_size -= max_cell_size;
+                                            max_cell_size = child.$calculated.unwrap_or_default();
+                                        }
+                                        last_cell = cell;
+                                    }
+                                }
+                            }
+                        }
+
+                        let cell_count = last_cell + 1;
+                        remaining_size -= max_cell_size;
+
+                        log::trace!("flex: remaining_size={remaining_size}\n{parent}");
+
+                        match direction {
                             LayoutDirection::$axis => {
-                                if let Some(size) = child.$calculated {
-                                    log::trace!(
-                                        "flex: removing size={size} from remaining_size={remaining_size} ({})",
-                                        remaining_size - size
-                                    );
-                                    remaining_size -= size;
+                                #[allow(clippy::while_float)]
+                                while remaining_size >= EPSILON {
+                                    let mut smallest = f32::INFINITY;
+                                    let mut target = f32::INFINITY;
+                                    let mut smallest_count = 0;
+
+                                    for size in parent
+                                        .relative_positioned_elements()
+                                        .filter(|x| x.$fixed.is_none())
+                                        .filter_map(|x| x.$calculated)
+                                    {
+                                        if smallest > size {
+                                            target = smallest;
+                                            smallest = size;
+                                            smallest_count = 1;
+                                        } else if (smallest - size).abs() < EPSILON {
+                                            smallest_count += 1;
+                                        }
+                                    }
+
+                                    moosicbox_assert::assert!(smallest_count > 0, "expected at least one smallest item");
+                                    moosicbox_assert::assert!(smallest.is_finite(), "expected smallest to be finite");
+
+                                    let target_delta = if target.is_infinite() {
+                                        remaining_size
+                                    } else {
+                                        target - smallest
+                                    };
+
+                                    let target_delta = if remaining_size < target_delta {
+                                        remaining_size
+                                    } else {
+                                        target_delta
+                                    };
+
+                                    #[allow(clippy::cast_precision_loss)]
+                                    let delta = target_delta / (smallest_count as f32);
+
+                                    log::trace!("flex: target={target} target_delta={target_delta} smallest={smallest} smallest_count={smallest_count} delta={delta} remaining_size={remaining_size} container_size={container_size}");
+
+                                    moosicbox_assert::assert!(delta > EPSILON, "expected target to be positive");
+
+                                    for child in parent
+                                        .relative_positioned_elements_mut()
+                                        .filter(|x| x.$fixed.is_none())
+                                        .filter(|x| x.$calculated.is_some_and(|x| (x - smallest).abs() < EPSILON))
+                                    {
+                                        let size = child.$calculated.expect("Missing child calculated size");
+                                        log::trace!("flex: distributing evenly split remaining_size={remaining_size} delta={delta}:\n{child}");
+                                        set_float(&mut child.$calculated, size + delta);
+                                    }
+
+                                    remaining_size -= target_delta;
                                 }
                             }
                             LayoutDirection::$cross_axis => {
-                                if let Some(LayoutPosition::Wrap { $cell: cell, .. }) = child.calculated_position {
-                                    if cell != last_cell {
-                                        moosicbox_assert::assert!(cell > last_cell);
-                                        remaining_size -= max_cell_size;
-                                        max_cell_size = child.$calculated.unwrap_or_default();
+                                for child in parent.relative_positioned_elements_mut() {
+                                    log::trace!("flex: setting size to remaining_size={remaining_size}:\n{child}");
+                                    let mut remaining_container_size = remaining_size;
+
+                                    if let Some(size) = child.$margin_axis() {
+                                        log::trace!(
+                                            "flex: removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
+                                            remaining_container_size - size
+                                        );
+                                        remaining_container_size -= size;
                                     }
-                                    last_cell = cell;
-                                }
-                            }
-                        }
-                    }
-
-                    let cell_count = last_cell + 1;
-                    remaining_size -= max_cell_size;
-
-                    log::trace!("flex: remaining_size={remaining_size}");
-
-                    match direction {
-                        LayoutDirection::$axis => {
-                            #[allow(clippy::while_float)]
-                            while remaining_size >= EPSILON {
-                                let mut smallest = f32::INFINITY;
-                                let mut target = f32::INFINITY;
-                                let mut smallest_count = 0;
-
-                                for size in parent
-                                    .relative_positioned_elements()
-                                    .filter(|x| x.$fixed.is_none())
-                                    .filter_map(|x| x.$calculated)
-                                {
-                                    if smallest > size {
-                                        target = smallest;
-                                        smallest = size;
-                                        smallest_count = 1;
-                                    } else if (smallest - size).abs() < EPSILON {
-                                        smallest_count += 1;
+                                    if let Some(size) = child.$padding_axis() {
+                                        log::trace!(
+                                            "flex: removing padding size={size} from remaining_container_size={remaining_container_size} ({})",
+                                            remaining_container_size - size
+                                        );
+                                        remaining_container_size -= size;
                                     }
-                                }
 
-                                moosicbox_assert::assert!(smallest_count > 0);
-                                moosicbox_assert::assert!(smallest.is_finite());
-
-                                if target.is_infinite() {
-                                    target = remaining_size;
-                                }
-
-                                let target_delta = target - smallest;
-                                let target_delta = if remaining_size < target_delta {
-                                    remaining_size
-                                } else {
-                                    target_delta
-                                };
-                                remaining_size -= target_delta;
-
-                                #[allow(clippy::cast_precision_loss)]
-                                let delta = target_delta / (smallest_count as f32);
-
-                                log::trace!("flex: target={target} target_delta={target_delta} smallest={smallest} smallest_count={smallest_count} delta={delta} remaining_size={remaining_size} container_size={container_size}");
-
-                                moosicbox_assert::assert!(delta > EPSILON);
-
-                                for child in parent
-                                    .relative_positioned_elements_mut()
-                                    .filter(|x| x.$fixed.is_none())
-                                    .filter(|x| x.$calculated.is_some_and(|x| (x - smallest).abs() < EPSILON))
-                                {
-                                    let size = child.$calculated.expect("Missing child calculated size");
-                                    log::trace!("flex: distributing evenly split remaining_size={remaining_size} delta={delta}:\n{child}");
-                                    set_float(&mut child.$calculated, size + delta);
-                                }
-                            }
-                        }
-                        LayoutDirection::$cross_axis => {
-                            for child in parent.relative_positioned_elements_mut() {
-                                log::trace!("flex: setting size to remaining_size={remaining_size}:\n{child}");
-                                let mut remaining_container_size = remaining_size;
-
-                                if let Some(size) = child.$margin_axis() {
-                                    log::trace!(
-                                        "flex: removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
-                                        remaining_container_size - size
-                                    );
-                                    remaining_container_size -= size;
-                                }
-                                if let Some(size) = child.$padding_axis() {
-                                    log::trace!(
-                                        "flex: removing padding size={size} from remaining_container_size={remaining_container_size} ({})",
-                                        remaining_container_size - size
-                                    );
-                                    remaining_container_size -= size;
-                                }
-
-                                #[allow(clippy::cast_precision_loss)]
-                                if child.$fixed.is_none()
-                                    && set_float(&mut child.$calculated, remaining_container_size / (cell_count as f32)).is_some()
-                                {
-                                    $changed = true;
+                                    #[allow(clippy::cast_precision_loss)]
+                                    if child.$fixed.is_none()
+                                        && set_float(&mut child.$calculated, remaining_container_size / (cell_count as f32)).is_some()
+                                    {
+                                        $changed = true;
+                                    }
                                 }
                             }
                         }
@@ -6880,7 +6884,93 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
+    fn calc_calculates_flex_height_for_single_unsized_child_with_sized_child() {
+        let mut container: Container = html! {
+            div {
+                div sx-dir="row" {
+                    div sx-width=(50) sx-height=(36) { "Albums" }
+                }
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(160.0);
+        container.calculated_height = Some(100.0);
+
+        CALCULATOR.calc(&mut container);
+        log::trace!("container:\n{}", container);
+
+        compare_containers(
+            &container,
+            &Container {
+                children: vec![Container {
+                    children: vec![Container {
+                        children: vec![Container {
+                            calculated_width: Some(50.0),
+                            calculated_height: Some(36.0),
+                            ..container.children[0].children[0].children[0].clone()
+                        }],
+                        ..container.children[0].children[0].clone()
+                    }],
+                    ..container.children[0].clone()
+                }],
+                ..container.clone()
+            },
+        );
+    }
+
+    #[test_log::test]
+    fn calc_calculates_flex_height_for_two_unsized_children_with_sized_child() {
+        let mut container: Container = html! {
+            div {
+                div sx-dir="row" {
+                    div sx-width=(50) sx-height=(36) { "Albums" }
+                }
+                div sx-dir="row" {
+                    div sx-width=(50) sx-height=(36) { "Albums2" }
+                }
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(160.0);
+        container.calculated_height = Some(100.0);
+
+        CALCULATOR.calc(&mut container);
+        log::trace!("container:\n{}", container);
+
+        compare_containers(
+            &container,
+            &Container {
+                children: vec![Container {
+                    children: vec![
+                        Container {
+                            children: vec![Container {
+                                calculated_width: Some(50.0),
+                                calculated_height: Some(36.0),
+                                ..container.children[0].children[0].children[0].clone()
+                            }],
+                            ..container.children[0].children[0].clone()
+                        },
+                        Container {
+                            children: vec![Container {
+                                calculated_width: Some(50.0),
+                                calculated_height: Some(36.0),
+                                ..container.children[0].children[1].children[0].clone()
+                            }],
+                            ..container.children[0].children[1].clone()
+                        },
+                    ],
+                    ..container.children[0].clone()
+                }],
+                ..container.clone()
+            },
+        );
+    }
+
+    #[test_log::test]
     fn calc_calculates_width_minus_the_horizontal_padding_for_nested_children_with_calc_parent_sizes()
      {
         let mut container: Container = html! {
@@ -6951,7 +7041,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_calculates_horizontal_position_from_right_for_absolute_position_with_padding() {
         let mut container: Container = html! {
             div
@@ -6991,7 +7080,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_calculates_vertical_position_from_right_for_absolute_position_with_padding() {
         let mut container: Container = html! {
             div
@@ -7031,7 +7119,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_calculates_horizontal_and_vertical_position_from_right_for_absolute_position_with_padding()
      {
         let mut container: Container = html! {
@@ -7074,7 +7161,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_calculates_horizontal_and_vertical_position_from_right_for_nested_absolute_position_with_padding()
      {
         let mut container: Container = html! {
@@ -7182,7 +7268,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_calculates_horizontal_padding_on_sized_element_correctly() {
         let mut container: Container = html! {
             div sx-width="100%" sx-height="100%" sx-position="relative" {
@@ -7230,7 +7315,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_calculates_vertical_padding_on_sized_element_correctly() {
         let mut container: Container = html! {
             div sx-width="100%" sx-height="100%" sx-position="relative" {
@@ -7683,7 +7767,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_overflow_y_squash_expands_height_of_largest_child_as_much_as_possible() {
         let mut container: Container = html! {
             div {
@@ -7746,6 +7829,10 @@ mod test {
             &Container {
                 children: vec![Container {
                     children: vec![Container {
+                        children: vec![Container {
+                            calculated_height: Some(600.0),
+                            ..container.children[0].children[0].children[0].clone()
+                        }],
                         calculated_height: Some(600.0),
                         ..container.children[0].children[0].clone()
                     }],
@@ -7805,7 +7892,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_overflow_y_auto_justify_content_start_only_takes_up_sized_height() {
         let mut container: Container = html! {
             div sx-overflow-y="auto" {
