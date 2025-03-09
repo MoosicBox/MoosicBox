@@ -251,30 +251,6 @@ macro_rules! flex_on_axis {
                 let container_size = parent.$calculated.expect("Missing container size");
 
                 for child in &mut parent.relative_positioned_elements_mut() {
-                    if let Some(margin) = child.$margin_x.as_ref().and_then(crate::Number::as_dynamic) {
-                        let size = margin.calc(container_size, view_width, view_height);
-                        if set_float(&mut child.$calculated_margin_x, size).is_some() {
-                            changed = true;
-                        }
-                    }
-                    if let Some(margin) = child.$margin_y.as_ref().and_then(crate::Number::as_dynamic) {
-                        let size = margin.calc(container_size, view_width, view_height);
-                        if set_float(&mut child.$calculated_margin_y, size).is_some() {
-                            changed = true;
-                        }
-                    }
-                    if let Some(padding) = child.$padding_x.as_ref().and_then(crate::Number::as_dynamic) {
-                        let size = padding.calc(container_size, view_width, view_height);
-                        if set_float(&mut child.$calculated_padding_x, size).is_some() {
-                            changed = true;
-                        }
-                    }
-                    if let Some(padding) = child.$padding_y.as_ref().and_then(crate::Number::as_dynamic) {
-                        let size = padding.calc(container_size, view_width, view_height);
-                        if set_float(&mut child.$calculated_padding_y, size).is_some() {
-                            changed = true;
-                        }
-                    }
                     if let Some((&color, size)) = child
                         .$border_x
                         .as_ref()
@@ -318,150 +294,39 @@ macro_rules! flex_on_axis {
                     $border_radius(child, container_size, view_width, view_height);
                 }
 
-                let mut remaining_container_size = container_size;
-
-                for child in &mut parent.relative_positioned_elements() {
-                    match direction {
-                        LayoutDirection::$axis => {
-                            if let Some(size) = child.$margin_axis() {
-                                log::trace!(
-                                    "{LABEL}: removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
-                                    remaining_container_size - size
-                                );
-                                remaining_container_size -= size;
-                            }
-                            if let Some(size) = child.$padding_axis() {
-                                log::trace!(
-                                    "{LABEL}: removing padding size={size} from remaining_container_size={remaining_container_size} ({})",
-                                    remaining_container_size - size
-                                );
-                                remaining_container_size -= size;
+                if parent.relative_positioned_elements().any(|x| x.$fixed.as_ref().is_none_or(crate::Number::is_dynamic)) {
+                    for child in &mut parent.relative_positioned_elements_mut() {
+                        if let Some(margin) = child.$margin_x.as_ref().and_then(crate::Number::as_dynamic) {
+                            let size = margin.calc(container_size, view_width, view_height);
+                            if set_float(&mut child.$calculated_margin_x, size).is_some() {
+                                changed = true;
                             }
                         }
-                        LayoutDirection::$cross_axis => {}
-                    }
-                }
-
-                log::trace!("{LABEL}: container_size={container_size} remaining_container_size={remaining_container_size}");
-                let container_size = remaining_container_size;
-
-                for child in &mut parent.relative_positioned_elements_mut() {
-                    if let Some(size) = child.$fixed.as_ref().and_then(crate::Number::as_dynamic) {
-                        let container_size = match direction {
-                            LayoutDirection::$axis => container_size,
-                            LayoutDirection::$cross_axis => {
-                                container_size
-                                    - child.$margin_axis().unwrap_or_default()
-                                    - child.$padding_axis().unwrap_or_default()
+                        if let Some(margin) = child.$margin_y.as_ref().and_then(crate::Number::as_dynamic) {
+                            let size = margin.calc(container_size, view_width, view_height);
+                            if set_float(&mut child.$calculated_margin_y, size).is_some() {
+                                changed = true;
                             }
-                        };
-                        log::trace!("{LABEL}: calculating dynamic size={size:?}");
-                        let size = size.calc(container_size, view_width, view_height);
-                        log::trace!("{LABEL}: calculated dynamic size={size}");
-                        if set_float(&mut child.$calculated, size).is_some() {
-                            changed = true;
+                        }
+                        if let Some(padding) = child.$padding_x.as_ref().and_then(crate::Number::as_dynamic) {
+                            let size = padding.calc(container_size, view_width, view_height);
+                            if set_float(&mut child.$calculated_padding_x, size).is_some() {
+                                changed = true;
+                            }
+                        }
+                        if let Some(padding) = child.$padding_y.as_ref().and_then(crate::Number::as_dynamic) {
+                            let size = padding.calc(container_size, view_width, view_height);
+                            if set_float(&mut child.$calculated_padding_y, size).is_some() {
+                                changed = true;
+                            }
                         }
                     }
-                }
 
-                if parent.relative_positioned_elements().any(|x| x.$fixed.as_ref().is_none()) {
-                    let mut remaining_size = container_size;
-                    let mut last_cell = 0;
-                    let mut max_cell_size = 0.0;
+                    let mut remaining_container_size = container_size;
 
                     for child in &mut parent.relative_positioned_elements() {
-                        log::trace!("{LABEL}: calculating remaining size:\n{child}");
-
                         match direction {
                             LayoutDirection::$axis => {
-                                if let Some(size) = child.$calculated {
-                                    log::trace!(
-                                        "{LABEL}: removing size={size} from remaining_size={remaining_size} ({})",
-                                        remaining_size - size
-                                    );
-                                    remaining_size -= size;
-                                }
-                            }
-                            LayoutDirection::$cross_axis => {
-                                if let Some(LayoutPosition::Wrap { $cell: cell, .. }) = child.calculated_position {
-                                    if cell != last_cell {
-                                        moosicbox_assert::assert!(cell > last_cell);
-                                        remaining_size -= max_cell_size;
-                                        max_cell_size = child.$calculated.unwrap_or_default();
-                                    }
-                                    last_cell = cell;
-                                }
-                            }
-                        }
-                    }
-
-                    let cell_count = last_cell + 1;
-                    remaining_size -= max_cell_size;
-
-                    log::trace!("{LABEL}: remaining_size={remaining_size}\n{parent}");
-
-                    match direction {
-                        LayoutDirection::$axis => {
-                            #[allow(clippy::while_float)]
-                            while remaining_size >= EPSILON {
-                                let mut smallest = f32::INFINITY;
-                                let mut target = f32::INFINITY;
-                                let mut smallest_count = 0;
-
-                                for size in parent
-                                    .relative_positioned_elements()
-                                    .filter(|x| x.$fixed.is_none())
-                                    .filter_map(|x| x.$calculated)
-                                {
-                                    if smallest > size {
-                                        target = smallest;
-                                        smallest = size;
-                                        smallest_count = 1;
-                                    } else if (smallest - size).abs() < EPSILON {
-                                        smallest_count += 1;
-                                    }
-                                }
-
-                                moosicbox_assert::assert!(smallest_count > 0, "expected at least one smallest item");
-                                moosicbox_assert::assert!(smallest.is_finite(), "expected smallest to be finite");
-
-                                let target_delta = if target.is_infinite() {
-                                    remaining_size
-                                } else {
-                                    target - smallest
-                                };
-
-                                let target_delta = if remaining_size < target_delta {
-                                    remaining_size
-                                } else {
-                                    target_delta
-                                };
-
-                                #[allow(clippy::cast_precision_loss)]
-                                let delta = target_delta / (smallest_count as f32);
-
-                                log::trace!("{LABEL}: target={target} target_delta={target_delta} smallest={smallest} smallest_count={smallest_count} delta={delta} remaining_size={remaining_size} container_size={container_size}");
-
-                                moosicbox_assert::assert!(delta > EPSILON, "expected target to be positive");
-
-                                for child in parent
-                                    .relative_positioned_elements_mut()
-                                    .filter(|x| x.$fixed.is_none())
-                                    .filter(|x| x.$calculated.is_some_and(|x| (x - smallest).abs() < EPSILON))
-                                {
-                                    let size = child.$calculated.expect("Missing child calculated size");
-                                    log::trace!("{LABEL}: distributing evenly split remaining_size={remaining_size} delta={delta}:\n{child}");
-                                    set_float(&mut child.$calculated, size + delta);
-                                }
-
-                                remaining_size -= target_delta;
-                            }
-                        }
-                        LayoutDirection::$cross_axis => {
-                            for child in parent.relative_positioned_elements_mut() {
-                                log::trace!("{LABEL}: setting size to remaining_size={remaining_size}:\n{child}");
-                                let mut remaining_container_size = remaining_size;
-
                                 if let Some(size) = child.$margin_axis() {
                                     log::trace!(
                                         "{LABEL}: removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
@@ -476,12 +341,152 @@ macro_rules! flex_on_axis {
                                     );
                                     remaining_container_size -= size;
                                 }
+                            }
+                            LayoutDirection::$cross_axis => {}
+                        }
+                    }
 
-                                #[allow(clippy::cast_precision_loss)]
-                                if child.$fixed.is_none()
-                                    && set_float(&mut child.$calculated, remaining_container_size / (cell_count as f32)).is_some()
-                                {
-                                    changed = true;
+                    log::trace!("{LABEL}: container_size={container_size} remaining_container_size={remaining_container_size}");
+                    let container_size = remaining_container_size;
+
+                    for child in &mut parent.relative_positioned_elements_mut() {
+                        if let Some(size) = child.$fixed.as_ref().and_then(crate::Number::as_dynamic) {
+                            let container_size = match direction {
+                                LayoutDirection::$axis => container_size,
+                                LayoutDirection::$cross_axis => {
+                                    container_size
+                                        - child.$margin_axis().unwrap_or_default()
+                                        - child.$padding_axis().unwrap_or_default()
+                                }
+                            };
+                            log::trace!("{LABEL}: calculating dynamic size={size:?}");
+                            let size = size.calc(container_size, view_width, view_height);
+                            log::trace!("{LABEL}: calculated dynamic size={size}");
+                            if set_float(&mut child.$calculated, size).is_some() {
+                                changed = true;
+                            }
+                        }
+                    }
+
+                    if parent.relative_positioned_elements().any(|x| x.$fixed.as_ref().is_none()) {
+                        let mut remaining_size = container_size;
+                        let mut last_cell = 0;
+                        let mut max_cell_size = 0.0;
+
+                        for child in &mut parent.relative_positioned_elements() {
+                            log::trace!("{LABEL}: calculating remaining size:\n{child}");
+
+                            match direction {
+                                LayoutDirection::$axis => {
+                                    if let Some(size) = child.$calculated {
+                                        log::trace!(
+                                            "{LABEL}: removing size={size} from remaining_size={remaining_size} ({})",
+                                            remaining_size - size
+                                        );
+                                        remaining_size -= size;
+                                    }
+                                }
+                                LayoutDirection::$cross_axis => {
+                                    if let Some(LayoutPosition::Wrap { $cell: cell, .. }) = child.calculated_position {
+                                        if cell != last_cell {
+                                            moosicbox_assert::assert!(cell > last_cell);
+                                            remaining_size -= max_cell_size;
+                                            max_cell_size = child.$calculated.unwrap_or_default();
+                                        }
+                                        last_cell = cell;
+                                    }
+                                }
+                            }
+                        }
+
+                        let cell_count = last_cell + 1;
+                        remaining_size -= max_cell_size;
+
+                        log::trace!("{LABEL}: remaining_size={remaining_size}\n{parent}");
+
+                        match direction {
+                            LayoutDirection::$axis => {
+                                #[allow(clippy::while_float)]
+                                while remaining_size >= EPSILON {
+                                    let mut smallest = f32::INFINITY;
+                                    let mut target = f32::INFINITY;
+                                    let mut smallest_count = 0;
+
+                                    for size in parent
+                                        .relative_positioned_elements()
+                                        .filter(|x| x.$fixed.is_none())
+                                        .filter_map(|x| x.$calculated)
+                                    {
+                                        if smallest > size {
+                                            target = smallest;
+                                            smallest = size;
+                                            smallest_count = 1;
+                                        } else if (smallest - size).abs() < EPSILON {
+                                            smallest_count += 1;
+                                        }
+                                    }
+
+                                    moosicbox_assert::assert!(smallest_count > 0, "expected at least one smallest item");
+                                    moosicbox_assert::assert!(smallest.is_finite(), "expected smallest to be finite");
+
+                                    let target_delta = if target.is_infinite() {
+                                        remaining_size
+                                    } else {
+                                        target - smallest
+                                    };
+
+                                    let target_delta = if remaining_size < target_delta {
+                                        remaining_size
+                                    } else {
+                                        target_delta
+                                    };
+
+                                    #[allow(clippy::cast_precision_loss)]
+                                    let delta = target_delta / (smallest_count as f32);
+
+                                    log::trace!("{LABEL}: target={target} target_delta={target_delta} smallest={smallest} smallest_count={smallest_count} delta={delta} remaining_size={remaining_size} container_size={container_size}");
+
+                                    moosicbox_assert::assert!(delta > EPSILON, "expected target to be positive");
+
+                                    for child in parent
+                                        .relative_positioned_elements_mut()
+                                        .filter(|x| x.$fixed.is_none())
+                                        .filter(|x| x.$calculated.is_some_and(|x| (x - smallest).abs() < EPSILON))
+                                    {
+                                        let size = child.$calculated.expect("Missing child calculated size");
+                                        log::trace!("{LABEL}: distributing evenly split remaining_size={remaining_size} delta={delta}:\n{child}");
+                                        set_float(&mut child.$calculated, size + delta);
+                                    }
+
+                                    remaining_size -= target_delta;
+                                }
+                            }
+                            LayoutDirection::$cross_axis => {
+                                for child in parent.relative_positioned_elements_mut() {
+                                    log::trace!("{LABEL}: setting size to remaining_size={remaining_size}:\n{child}");
+                                    let mut remaining_container_size = remaining_size;
+
+                                    if let Some(size) = child.$margin_axis() {
+                                        log::trace!(
+                                            "{LABEL}: removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
+                                            remaining_container_size - size
+                                        );
+                                        remaining_container_size -= size;
+                                    }
+                                    if let Some(size) = child.$padding_axis() {
+                                        log::trace!(
+                                            "{LABEL}: removing padding size={size} from remaining_container_size={remaining_container_size} ({})",
+                                            remaining_container_size - size
+                                        );
+                                        remaining_container_size -= size;
+                                    }
+
+                                    #[allow(clippy::cast_precision_loss)]
+                                    if child.$fixed.is_none()
+                                        && set_float(&mut child.$calculated, remaining_container_size / (cell_count as f32)).is_some()
+                                    {
+                                        changed = true;
+                                    }
                                 }
                             }
                         }
