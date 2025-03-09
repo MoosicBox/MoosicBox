@@ -405,23 +405,23 @@ macro_rules! flex_on_axis {
 
                     if let Some(size) = child.$margin_axis() {
                         log::trace!(
-                            "flex: absolute removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
+                            "{LABEL}: absolute removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
                             remaining_container_size - size
                         );
                         remaining_container_size -= size;
                     }
                     if let Some(size) = child.$padding_axis() {
                         log::trace!(
-                            "flex: absolute removing padding size={size} from remaining_container_size={remaining_container_size} ({})",
+                            "{LABEL}: absolute removing padding size={size} from remaining_container_size={remaining_container_size} ({})",
                             remaining_container_size - size
                         );
                         remaining_container_size -= size;
                     }
 
                     if let Some(size) = &child.$fixed {
-                        log::trace!("flex: calculating absolute child size={size:?}");
+                        log::trace!("{LABEL}: calculating absolute child size={size:?}");
                         let size = size.calc(remaining_container_size, view_width, view_height);
-                        log::trace!("flex: calculated absolute child size={size}");
+                        log::trace!("{LABEL}: calculated absolute child size={size}");
                         if set_float(&mut child.$calculated, size).is_some() {
                             changed = true;
                         }
