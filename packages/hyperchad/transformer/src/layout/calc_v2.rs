@@ -31,9 +31,7 @@ impl<F: FontMetrics> Calc for CalcV2Calculator<F> {
 
         self.calc_widths(&bfs, container);
         self.flex_width(&bfs, container);
-        if self.wrap(&bfs, container) {
-            self.flex_width(&bfs, container);
-        }
+        self.wrap(&bfs, container);
         self.calc_heights(&bfs, container);
         self.flex_height(&bfs, container);
         self.position_elements(&arena, &bfs, container);
