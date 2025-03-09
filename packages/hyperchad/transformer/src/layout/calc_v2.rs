@@ -95,27 +95,13 @@ macro_rules! calc_size_on_axis {
             for child in &mut parent.children {
                 log::trace!("{LABEL}: container:\n{child}");
 
-                if let Some(size) = child.$fixed.as_ref().and_then(Number::as_fixed) {
+                let size = if let Some(size) = child.$fixed.as_ref().and_then(Number::as_fixed) {
                     let new_size = size.calc(0.0, view_width, view_height);
-
-                    match overflow {
-                        LayoutOverflow::Auto
-                        | LayoutOverflow::Scroll
-                        | LayoutOverflow::Expand
-                        | LayoutOverflow::Squash => {
-                            min_size += new_size;
-                        }
-                        LayoutOverflow::Wrap { .. } => {
-                            if new_size > min_size {
-                                min_size = new_size;
-                            }
-                        }
-                        LayoutOverflow::Hidden => {}
-                    }
 
                     if set_float(&mut child.$calculated, new_size).is_some() {
                         changed = true;
                     }
+                    new_size
                 } else if let crate::Element::Raw { value } = &child.element {
                     log::trace!("{LABEL}: measuring text={value}");
                     let bounds = $self.font_metrics.measure_text(value, 14.0, f32::INFINITY);
@@ -126,12 +112,27 @@ macro_rules! calc_size_on_axis {
                     if set_float(&mut child.$calculated, new_size).is_some() {
                         changed = true;
                     }
+                    new_size
                 } else if let Some(size) = child.$calculated_min {
                     if set_float(&mut child.$calculated, size).is_some() {
                         changed = true;
                     }
+                    size
                 } else {
                     set_float(&mut child.$calculated, 0.0);
+                    0.0
+                };
+
+                match overflow {
+                    LayoutOverflow::Expand | LayoutOverflow::Squash => {
+                        min_size += size;
+                    }
+                    LayoutOverflow::Wrap { .. } => {
+                        if size > min_size {
+                            min_size = size;
+                        }
+                    }
+                    LayoutOverflow::Auto | LayoutOverflow::Scroll | LayoutOverflow::Hidden => {}
                 }
 
                 if let Some(margin) = child.$margin_x.as_ref().and_then(crate::Number::as_fixed) {
@@ -439,11 +440,7 @@ macro_rules! flex_on_axis {
                         let cell_count = last_cell + 1;
                         remaining_size -= max_cell_size;
 
-                        if let Some(min) = parent.$calculated_min {
-                            if remaining_size < min {
-                                remaining_size = min;
-                            }
-                        } else if remaining_size < 0.0 {
+                        if remaining_size < 0.0 {
                             remaining_size = 0.0;
                         }
 
@@ -7437,7 +7434,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_overflow_y_expand_expands_height_when_contained_height_is_greater_than_single_unsized_div()
      {
         let mut container: Container = html! {
@@ -7478,7 +7474,6 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn calc_overflow_y_expand_expands_height_when_contained_height_is_greater_than_two_unsized_divs()
      {
         let mut container: Container = html! {
