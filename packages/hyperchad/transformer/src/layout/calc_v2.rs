@@ -64,6 +64,8 @@ macro_rules! calc_size_on_axis {
         $border_y:ident,
         $calculated_border_x:ident,
         $calculated_border_y:ident,
+        $gap:ident,
+        $calculated_gap:ident,
         $each_child:expr
         $(,)?
     ) => {{
@@ -78,6 +80,12 @@ macro_rules! calc_size_on_axis {
 
         $bfs.traverse_rev_mut($container, |parent| {
             let mut min_size = 0.0;
+
+            if let Some(gap) = &parent.$gap.as_ref().and_then(crate::Number::as_fixed) {
+                let gap = gap.calc(0.0, view_width, view_height);
+                log::trace!("{LABEL}: setting gap={gap}");
+                parent.$calculated_gap = Some(gap);
+            }
 
             for child in &mut parent.children {
                 log::trace!("{LABEL}: container:\n{child}");
@@ -214,6 +222,8 @@ macro_rules! flex_on_axis {
         $border_y:ident,
         $calculated_border_x:ident,
         $calculated_border_y:ident,
+        $gap:ident,
+        $calculated_gap:ident,
         $each_child:expr
         $(,)?
     ) => {{
@@ -252,6 +262,11 @@ macro_rules! flex_on_axis {
             |parent, relative_container| {
                 let direction = parent.direction;
                 let container_size = parent.$calculated.expect("Missing container size");
+
+                if let Some(gap) = &parent.$gap.as_ref().and_then(crate::Number::as_dynamic) {
+                    parent.$calculated_gap =
+                        Some(gap.calc(container_size, view_width, view_height));
+                }
 
                 for child in &mut parent.relative_positioned_elements_mut() {
                     if let Some((&color, size)) = child
@@ -542,7 +557,10 @@ macro_rules! wrap_on_axis {
         $bfs:ident,
         $container:ident,
         $calculated:ident,
-        $overflow:ident
+        $overflow:ident,
+        $margin_axis:ident,
+        $padding_axis:ident,
+        $calculated_gap:ident
         $(,)?
     ) => {{
         const LABEL: &str = $label;
@@ -562,9 +580,14 @@ macro_rules! wrap_on_axis {
             let mut pos = 0.0;
             let mut row = 0;
             let mut col = 0;
+            let gap = parent.$calculated_gap;
 
             for child in parent.relative_positioned_elements_mut() {
-                let child_size = child.$calculated.unwrap();
+                let child_size =
+                    child.$calculated.unwrap()
+                        + child.$margin_axis().unwrap_or_default()
+                        + child.$padding_axis().unwrap_or_default();
+
                 let mut position = LayoutPosition::Wrap { row, col };
 
                 if direction == LayoutDirection::$axis {
@@ -572,10 +595,12 @@ macro_rules! wrap_on_axis {
 
                     if pos > container_size {
                         log::trace!("{LABEL}: wrapping to next row");
-                        pos = child_size;
+                        pos = child_size + gap.unwrap_or_default();
                         col = 0;
                         row += 1;
                         position = LayoutPosition::Wrap { row, col };
+                    } else if let Some(gap) = gap {
+                        pos += gap;
                     }
 
                     col += 1;
@@ -671,6 +696,8 @@ mod pass_widths {
                 border_right,
                 calculated_border_left,
                 calculated_border_right,
+                column_gap,
+                calculated_column_gap,
                 each_child,
             )
         }
@@ -752,6 +779,8 @@ mod pass_flex_width {
                 border_right,
                 calculated_border_left,
                 calculated_border_right,
+                column_gap,
+                calculated_column_gap,
                 each_child,
             )
         }
@@ -774,7 +803,17 @@ mod pass_wrap_horizontal {
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
         fn wrap_horizontal(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-            wrap_on_axis!("wrap", Row, bfs, container, calculated_width, overflow_x)
+            wrap_on_axis!(
+                "wrap",
+                Row,
+                bfs,
+                container,
+                calculated_width,
+                overflow_x,
+                horizontal_margin,
+                horizontal_padding,
+                calculated_column_gap,
+            )
         }
     }
 }
@@ -813,6 +852,8 @@ mod pass_heights {
                 border_bottom,
                 calculated_border_top,
                 calculated_border_bottom,
+                row_gap,
+                calculated_row_gap,
                 |_, _, _| {},
             )
         }
@@ -858,6 +899,8 @@ mod pass_flex_height {
                 border_bottom,
                 calculated_border_top,
                 calculated_border_bottom,
+                row_gap,
+                calculated_row_gap,
                 |_, _, _, _| {},
             )
         }
@@ -1018,6 +1061,7 @@ mod pass_positioning {
 
                         let mut max_height = 0.0;
                         last_row = 0;
+                        let row_gap = parent.calculated_row_gap.unwrap_or_default();
 
                         for child in parent.relative_positioned_elements_mut() {
                             let Some(LayoutPosition::Wrap { row, .. }) = child.calculated_position
@@ -1040,7 +1084,7 @@ mod pass_positioning {
                                 }
 
                                 x = first_gap(gap);
-                                y += max_height;
+                                y += max_height + row_gap;
                                 max_height = 0.0;
                                 last_row = row;
                             }
@@ -1064,7 +1108,8 @@ mod pass_positioning {
                     } else {
                         let mut x = 0.0;
                         let mut y = 0.0;
-                        let mut gap = 0.0;
+                        let mut col_gap = 0.0;
+                        let row_gap = parent.calculated_row_gap.unwrap_or_default();
 
                         match justify_content {
                             JustifyContent::Start => {}
@@ -1109,10 +1154,10 @@ mod pass_positioning {
                                 #[allow(clippy::cast_precision_loss)]
                                 match direction {
                                     LayoutDirection::Row => {
-                                        gap = (container_width - size) / ((count - 1) as f32);
+                                        col_gap = (container_width - size) / ((count - 1) as f32);
                                     }
                                     LayoutDirection::Column => {
-                                        gap = (container_height - size) / ((count - 1) as f32);
+                                        col_gap = (container_height - size) / ((count - 1) as f32);
                                     }
                                 }
                             }
@@ -1129,14 +1174,14 @@ mod pass_positioning {
                                 #[allow(clippy::cast_precision_loss)]
                                 match direction {
                                     LayoutDirection::Row => {
-                                        gap = (container_width - size) / ((count + 1) as f32);
+                                        col_gap = (container_width - size) / ((count + 1) as f32);
                                     }
                                     LayoutDirection::Column => {
-                                        gap = (container_height - size) / ((count + 1) as f32);
+                                        col_gap = (container_height - size) / ((count + 1) as f32);
                                     }
                                 }
 
-                                x += gap;
+                                x += col_gap;
                             }
                         };
 
@@ -1154,13 +1199,13 @@ mod pass_positioning {
                                     x += child.calculated_width.unwrap()
                                         + child.horizontal_margin().unwrap_or_default()
                                         + child.horizontal_padding().unwrap_or_default()
-                                        + gap;
+                                        + col_gap;
                                 }
                                 LayoutDirection::Column => {
                                     y += child.calculated_height.unwrap()
                                         + child.vertical_margin().unwrap_or_default()
                                         + child.vertical_padding().unwrap_or_default()
-                                        + gap;
+                                        + row_gap;
                                 }
                             }
                         }
@@ -3412,15 +3457,12 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn handle_overflow_y_expand_handles_justify_content_space_between_and_wraps_elements_properly_and_can_recalc_with_new_rows()
      {
-        const ROW_HEIGHT: f32 = 20.0;
+        const ROW_HEIGHT: f32 = 10.0;
 
         let div = Container {
             width: Some(Number::Integer(20)),
-            calculated_width: Some(20.0),
-            calculated_height: Some(20.0),
             ..Default::default()
         };
 
@@ -3441,8 +3483,9 @@ mod test {
             ..Default::default()
         };
 
-        log::debug!("First handle_overflow");
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (75.0, 40.0)) {}
+        log::debug!("First calc");
+        CALCULATOR.calc(&mut container);
+        log::trace!("first container:\n{}", container);
 
         container.children.extend(vec![
             div.clone(),
@@ -3452,8 +3495,9 @@ mod test {
             div,
         ]);
 
-        log::debug!("Second handle_overflow");
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (75.0, 40.0)) {}
+        log::debug!("Second calc");
+        CALCULATOR.calc(&mut container);
+        log::trace!("second container:\n{}", container);
 
         compare_containers(
             &container.clone(),
@@ -3462,7 +3506,7 @@ mod test {
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(0.0),
                         calculated_y: Some(ROW_HEIGHT * 0.0),
                         ..container.children[0].clone()
@@ -3470,7 +3514,7 @@ mod test {
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(20.0 + 7.5),
                         calculated_y: Some(ROW_HEIGHT * 0.0),
                         ..container.children[1].clone()
@@ -3478,7 +3522,7 @@ mod test {
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 2 }),
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(40.0 + 7.5 + 7.5),
                         calculated_y: Some(ROW_HEIGHT * 0.0),
                         ..container.children[2].clone()
@@ -3486,7 +3530,7 @@ mod test {
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(0.0),
                         calculated_y: Some(ROW_HEIGHT * 1.0),
                         ..container.children[3].clone()
@@ -3494,7 +3538,7 @@ mod test {
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(20.0 + 7.5),
                         calculated_y: Some(ROW_HEIGHT * 1.0),
                         ..container.children[4].clone()
@@ -3502,7 +3546,7 @@ mod test {
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 2 }),
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(40.0 + 7.5 + 7.5),
                         calculated_y: Some(ROW_HEIGHT * 1.0),
                         ..container.children[5].clone()
@@ -3510,7 +3554,7 @@ mod test {
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(0.0),
                         calculated_y: Some(ROW_HEIGHT * 2.0),
                         ..container.children[6].clone()
@@ -3518,7 +3562,7 @@ mod test {
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 1 }),
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(20.0 + 7.5),
                         calculated_y: Some(ROW_HEIGHT * 2.0),
                         ..container.children[7].clone()
@@ -3526,7 +3570,7 @@ mod test {
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 2 }),
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(40.0 + 7.5 + 7.5),
                         calculated_y: Some(ROW_HEIGHT * 2.0),
                         ..container.children[8].clone()
@@ -3534,52 +3578,43 @@ mod test {
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 3, col: 0 }),
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(0.0),
                         calculated_y: Some(ROW_HEIGHT * 3.0),
                         ..container.children[9].clone()
                     },
                 ],
                 calculated_width: Some(75.0),
-                calculated_height: Some(80.0),
+                calculated_height: Some(40.0),
                 ..container
             },
         );
     }
 
     #[test_log::test]
-    #[ignore]
     fn handles_justify_content_space_between_with_gap_and_wraps_elements_properly() {
+        const ROW_HEIGHT: f32 = 40.0 / 3.0;
+
         let mut container = Container {
             children: vec![
                 Container {
                     width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
                     ..Default::default()
                 },
             ],
@@ -3593,15 +3628,17 @@ mod test {
             row_gap: Some(Number::Integer(10)),
             ..Default::default()
         };
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (75.0, 40.0)) {}
+
+        CALCULATOR.calc(&mut container);
+        log::trace!("container:\n{}", container);
 
         compare_containers(
-            &container.clone(),
+            &container,
             &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(0.0),
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
@@ -3609,7 +3646,7 @@ mod test {
                     },
                     Container {
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(75.0 - 20.0),
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
@@ -3617,69 +3654,60 @@ mod test {
                     },
                     Container {
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(0.0),
-                        calculated_y: Some(20.0 + 10.0),
+                        calculated_y: Some(ROW_HEIGHT.mul_add(1.0, 10.0)),
                         calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
                         ..container.children[2].clone()
                     },
                     Container {
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(75.0 - 20.0),
-                        calculated_y: Some(20.0 + 10.0),
+                        calculated_y: Some(ROW_HEIGHT.mul_add(1.0, 10.0)),
                         calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
                         ..container.children[3].clone()
                     },
                     Container {
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(0.0),
-                        calculated_y: Some(40.0 + 10.0 + 10.0),
+                        calculated_y: Some(ROW_HEIGHT.mul_add(2.0, 10.0 + 10.0)),
                         calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
                         ..container.children[4].clone()
                     },
                 ],
                 calculated_width: Some(75.0),
-                calculated_height: Some(60.0),
-                ..container
+                calculated_height: Some(40.0),
+                ..container.clone()
             },
         );
     }
 
     #[test_log::test]
-    #[ignore]
     fn handles_justify_content_space_between_with_gap_and_wraps_elements_properly_and_can_recalc() {
+        const ROW_HEIGHT: f32 = 40.0 / 3.0;
+
         let mut container = Container {
             children: vec![
                 Container {
                     width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
                     ..Default::default()
                 },
             ],
@@ -3693,14 +3721,16 @@ mod test {
             row_gap: Some(Number::Integer(10)),
             ..Default::default()
         };
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (75.0, 40.0)) {}
+
+        CALCULATOR.calc(&mut container);
+        log::trace!("first container:\n{}", container);
 
         let mut actual = container.clone();
         let expected = Container {
             children: vec![
                 Container {
                     calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
+                    calculated_height: Some(ROW_HEIGHT),
                     calculated_x: Some(0.0),
                     calculated_y: Some(0.0),
                     calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
@@ -3708,7 +3738,7 @@ mod test {
                 },
                 Container {
                     calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
+                    calculated_height: Some(ROW_HEIGHT),
                     calculated_x: Some(75.0 - 20.0),
                     calculated_y: Some(0.0),
                     calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
@@ -3716,74 +3746,66 @@ mod test {
                 },
                 Container {
                     calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
+                    calculated_height: Some(ROW_HEIGHT),
                     calculated_x: Some(0.0),
-                    calculated_y: Some(20.0 + 10.0),
+                    calculated_y: Some(ROW_HEIGHT.mul_add(1.0, 10.0)),
                     calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
                     ..container.children[2].clone()
                 },
                 Container {
                     calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
+                    calculated_height: Some(ROW_HEIGHT),
                     calculated_x: Some(75.0 - 20.0),
-                    calculated_y: Some(20.0 + 10.0),
+                    calculated_y: Some(ROW_HEIGHT.mul_add(1.0, 10.0)),
                     calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
                     ..container.children[3].clone()
                 },
                 Container {
                     calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
+                    calculated_height: Some(ROW_HEIGHT),
                     calculated_x: Some(0.0),
-                    calculated_y: Some(40.0 + 10.0 + 10.0),
+                    calculated_y: Some(ROW_HEIGHT.mul_add(2.0, 10.0 + 10.0)),
                     calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
                     ..container.children[4].clone()
                 },
             ],
             calculated_width: Some(75.0),
-            calculated_height: Some(60.0),
+            calculated_height: Some(40.0),
             ..container
         };
 
         compare_containers(&actual, &expected);
 
-        while actual.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (75.0, 60.0)) {}
+        CALCULATOR.calc(&mut actual);
+        log::trace!("second container:\n{}", actual);
 
         compare_containers(&actual, &expected);
     }
 
     #[test_log::test]
-    #[ignore]
     fn handles_justify_content_space_evenly_and_wraps_elements_properly() {
+        const ROW_HEIGHT: f32 = 40.0 / 2.0;
+
         let mut container = Container {
             children: vec![
                 Container {
                     width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
                     ..Default::default()
                 },
                 Container {
                     width: Some(Number::Integer(20)),
-                    calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
                     ..Default::default()
                 },
             ],
@@ -3794,56 +3816,58 @@ mod test {
             justify_content: Some(JustifyContent::SpaceEvenly),
             ..Default::default()
         };
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (75.0, 40.0)) {}
+
+        CALCULATOR.calc(&mut container);
+        log::trace!("container:\n{}", container);
 
         compare_containers(
-            &container.clone(),
+            &container,
             &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(3.75),
-                        calculated_y: Some(0.0),
+                        calculated_y: Some(ROW_HEIGHT * 0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
                         ..container.children[0].clone()
                     },
                     Container {
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(20.0 + 3.75 + 3.75),
-                        calculated_y: Some(0.0),
+                        calculated_y: Some(ROW_HEIGHT * 0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
                         ..container.children[1].clone()
                     },
                     Container {
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(40.0 + 3.75 + 3.75 + 3.75),
-                        calculated_y: Some(0.0),
+                        calculated_y: Some(ROW_HEIGHT * 0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 2 }),
                         ..container.children[2].clone()
                     },
                     Container {
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(3.75),
-                        calculated_y: Some(20.0),
+                        calculated_y: Some(ROW_HEIGHT * 1.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
                         ..container.children[3].clone()
                     },
                     Container {
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(20.0 + 3.75 + 3.75),
-                        calculated_y: Some(20.0),
+                        calculated_y: Some(ROW_HEIGHT * 1.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
                         ..container.children[4].clone()
                     },
                 ],
                 calculated_width: Some(75.0),
                 calculated_height: Some(40.0),
-                ..container
+                ..container.clone()
             },
         );
     }
@@ -4094,15 +4118,12 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn handle_overflow_y_squash_handles_justify_content_space_evenly_and_wraps_elements_properly_and_can_recalc_with_new_rows()
      {
         const ROW_HEIGHT: f32 = 40.0 / 4.0;
 
         let div = Container {
             width: Some(Number::Integer(20)),
-            calculated_width: Some(20.0),
-            calculated_height: Some(20.0),
             ..Default::default()
         };
 
@@ -4123,8 +4144,9 @@ mod test {
             ..Default::default()
         };
 
-        log::debug!("First handle_overflow");
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (75.0, 40.0)) {}
+        log::debug!("First calc");
+        CALCULATOR.calc(&mut container);
+        log::trace!("first container:\n{}", container);
 
         container.children.extend(vec![
             div.clone(),
@@ -4134,8 +4156,9 @@ mod test {
             div,
         ]);
 
-        log::debug!("Second handle_overflow");
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (75.0, 40.0)) {}
+        log::debug!("Second calc");
+        CALCULATOR.calc(&mut container);
+        log::trace!("second container:\n{}", container);
 
         compare_containers(
             &container.clone(),
@@ -4230,15 +4253,12 @@ mod test {
     }
 
     #[test_log::test]
-    #[ignore]
     fn handle_overflow_y_expand_handles_justify_content_space_evenly_and_wraps_elements_properly_and_can_recalc_with_new_rows()
      {
-        const ROW_HEIGHT: f32 = 20.0;
+        const ROW_HEIGHT: f32 = 40.0 / 4.0;
 
         let div = Container {
             width: Some(Number::Integer(20)),
-            calculated_width: Some(20.0),
-            calculated_height: Some(20.0),
             ..Default::default()
         };
 
@@ -4259,8 +4279,9 @@ mod test {
             ..Default::default()
         };
 
-        log::debug!("First handle_overflow");
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (75.0, 40.0)) {}
+        log::debug!("First calc");
+        CALCULATOR.calc(&mut container);
+        log::trace!("first container:\n{}", container);
 
         container.children.extend(vec![
             div.clone(),
@@ -4270,17 +4291,18 @@ mod test {
             div,
         ]);
 
-        log::debug!("Second handle_overflow");
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (75.0, 40.0)) {}
+        log::debug!("Second calc");
+        CALCULATOR.calc(&mut container);
+        log::trace!("second container:\n{}", container);
 
         compare_containers(
-            &container.clone(),
+            &container,
             &Container {
                 children: vec![
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(3.75),
                         calculated_y: Some(ROW_HEIGHT * 0.0),
                         ..container.children[0].clone()
@@ -4288,7 +4310,7 @@ mod test {
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(20.0 + 3.75 + 3.75),
                         calculated_y: Some(ROW_HEIGHT * 0.0),
                         ..container.children[1].clone()
@@ -4296,7 +4318,7 @@ mod test {
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 2 }),
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(40.0 + 3.75 + 3.75 + 3.75),
                         calculated_y: Some(ROW_HEIGHT * 0.0),
                         ..container.children[2].clone()
@@ -4304,7 +4326,7 @@ mod test {
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(3.75),
                         calculated_y: Some(ROW_HEIGHT * 1.0),
                         ..container.children[3].clone()
@@ -4312,7 +4334,7 @@ mod test {
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(20.0 + 3.75 + 3.75),
                         calculated_y: Some(ROW_HEIGHT * 1.0),
                         ..container.children[4].clone()
@@ -4320,7 +4342,7 @@ mod test {
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 2 }),
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(40.0 + 3.75 + 3.75 + 3.75),
                         calculated_y: Some(ROW_HEIGHT * 1.0),
                         ..container.children[5].clone()
@@ -4328,7 +4350,7 @@ mod test {
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(3.75),
                         calculated_y: Some(ROW_HEIGHT * 2.0),
                         ..container.children[6].clone()
@@ -4336,7 +4358,7 @@ mod test {
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 1 }),
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(20.0 + 3.75 + 3.75),
                         calculated_y: Some(ROW_HEIGHT * 2.0),
                         ..container.children[7].clone()
@@ -4344,7 +4366,7 @@ mod test {
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 2 }),
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(40.0 + 3.75 + 3.75 + 3.75),
                         calculated_y: Some(ROW_HEIGHT * 2.0),
                         ..container.children[8].clone()
@@ -4352,22 +4374,23 @@ mod test {
                     Container {
                         calculated_position: Some(LayoutPosition::Wrap { row: 3, col: 0 }),
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(3.75),
                         calculated_y: Some(ROW_HEIGHT * 3.0),
                         ..container.children[9].clone()
                     },
                 ],
                 calculated_width: Some(75.0),
-                calculated_height: Some(80.0),
-                ..container
+                calculated_height: Some(40.0),
+                ..container.clone()
             },
         );
     }
 
     #[test_log::test]
-    #[ignore]
     fn handles_justify_content_space_evenly_with_gap_and_wraps_elements_properly() {
+        const ROW_HEIGHT: f32 = 40.0 / 3.0;
+
         let mut container = Container {
             children: vec![
                 Container {
@@ -4411,15 +4434,17 @@ mod test {
             row_gap: Some(Number::Integer(10)),
             ..Default::default()
         };
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (75.0, 40.0)) {}
+
+        CALCULATOR.calc(&mut container);
+        log::trace!("container:\n{}", container);
 
         compare_containers(
-            &container.clone(),
+            &container,
             &Container {
                 children: vec![
                     Container {
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(11.666_667),
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
@@ -4427,7 +4452,7 @@ mod test {
                     },
                     Container {
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(43.333_336),
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
@@ -4435,39 +4460,40 @@ mod test {
                     },
                     Container {
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(11.666_667),
-                        calculated_y: Some(20.0 + 10.0),
+                        calculated_y: Some(ROW_HEIGHT + 10.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
                         ..container.children[2].clone()
                     },
                     Container {
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(43.333_336),
-                        calculated_y: Some(20.0 + 10.0),
+                        calculated_y: Some(ROW_HEIGHT + 10.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
                         ..container.children[3].clone()
                     },
                     Container {
                         calculated_width: Some(20.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(ROW_HEIGHT),
                         calculated_x: Some(11.666_667),
-                        calculated_y: Some(40.0 + 10.0 + 10.0),
+                        calculated_y: Some(ROW_HEIGHT.mul_add(2.0, 10.0 + 10.0)),
                         calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
                         ..container.children[4].clone()
                     },
                 ],
                 calculated_width: Some(75.0),
-                calculated_height: Some(60.0),
-                ..container
+                calculated_height: Some(40.0),
+                ..container.clone()
             },
         );
     }
 
     #[test_log::test]
-    #[ignore]
     fn handles_justify_content_space_evenly_with_gap_and_wraps_elements_properly_and_can_recalc() {
+        const ROW_HEIGHT: f32 = 40.0 / 3.0;
+
         let mut container = Container {
             children: vec![
                 Container {
@@ -4511,14 +4537,16 @@ mod test {
             row_gap: Some(Number::Integer(10)),
             ..Default::default()
         };
-        while container.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (75.0, 40.0)) {}
+
+        CALCULATOR.calc(&mut container);
+        log::trace!("first container:\n{}", container);
 
         let mut actual = container.clone();
         let expected = Container {
             children: vec![
                 Container {
                     calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
+                    calculated_height: Some(ROW_HEIGHT),
                     calculated_x: Some(11.666_667),
                     calculated_y: Some(0.0),
                     calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
@@ -4526,7 +4554,7 @@ mod test {
                 },
                 Container {
                     calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
+                    calculated_height: Some(ROW_HEIGHT),
                     calculated_x: Some(43.333_336),
                     calculated_y: Some(0.0),
                     calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
@@ -4534,37 +4562,38 @@ mod test {
                 },
                 Container {
                     calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
+                    calculated_height: Some(ROW_HEIGHT),
                     calculated_x: Some(11.666_667),
-                    calculated_y: Some(20.0 + 10.0),
+                    calculated_y: Some(ROW_HEIGHT + 10.0),
                     calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
                     ..container.children[2].clone()
                 },
                 Container {
                     calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
+                    calculated_height: Some(ROW_HEIGHT),
                     calculated_x: Some(43.333_336),
-                    calculated_y: Some(20.0 + 10.0),
+                    calculated_y: Some(ROW_HEIGHT + 10.0),
                     calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 1 }),
                     ..container.children[3].clone()
                 },
                 Container {
                     calculated_width: Some(20.0),
-                    calculated_height: Some(20.0),
+                    calculated_height: Some(ROW_HEIGHT),
                     calculated_x: Some(11.666_667),
-                    calculated_y: Some(40.0 + 10.0 + 10.0),
+                    calculated_y: Some(ROW_HEIGHT.mul_add(2.0, 10.0 + 10.0)),
                     calculated_position: Some(LayoutPosition::Wrap { row: 2, col: 0 }),
                     ..container.children[4].clone()
                 },
             ],
             calculated_width: Some(75.0),
-            calculated_height: Some(60.0),
+            calculated_height: Some(40.0),
             ..container
         };
 
         compare_containers(&actual, &expected);
 
-        while actual.handle_overflow(&Bump::new(), &DefaultFontMetrics, None, (75.0, 60.0)) {}
+        CALCULATOR.calc(&mut actual);
+        log::trace!("second container:\n{}", actual);
 
         compare_containers(&actual, &expected);
     }
@@ -4577,31 +4606,22 @@ mod test {
                 children: vec![
                     Container {
                         width: Some(Number::Integer(25)),
-                        calculated_width: Some(25.0),
-                        calculated_height: Some(40.0),
-                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
+                        height: Some(Number::Integer(40)),
                         ..Default::default()
                     },
                     Container {
                         width: Some(Number::Integer(25)),
-                        calculated_width: Some(25.0),
-                        calculated_height: Some(40.0),
-                        calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
+                        height: Some(Number::Integer(40)),
                         ..Default::default()
                     },
                     Container {
                         width: Some(Number::Integer(25)),
-                        calculated_width: Some(25.0),
-                        calculated_height: Some(40.0),
-                        calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
+                        height: Some(Number::Integer(40)),
                         ..Default::default()
                     },
                 ],
-                calculated_width: Some(50.0),
-                calculated_height: Some(80.0),
                 ..Default::default()
             }],
-
             calculated_width: Some(50.0),
             calculated_height: Some(40.0),
             direction: LayoutDirection::Row,
@@ -4609,43 +4629,22 @@ mod test {
             overflow_y: LayoutOverflow::Expand,
             ..Default::default()
         };
-        let resized = container.resize_children(
-            &Bump::new(),
-            &DefaultFontMetrics,
-            (
-                container.calculated_width.unwrap(),
-                container.calculated_height.unwrap(),
-            ),
-        );
 
-        assert_eq!(resized, true);
+        CALCULATOR.calc(&mut container);
+        log::trace!("container:\n{}", container);
+
         compare_containers(
-            &container.clone(),
+            &container,
             &Container {
                 children: vec![Container {
-                    children: vec![
-                        Container {
-                            calculated_height: Some(40.0),
-                            ..container.children[0].children[0].clone()
-                        },
-                        Container {
-                            calculated_height: Some(40.0),
-                            ..container.children[0].children[1].clone()
-                        },
-                        Container {
-                            calculated_height: Some(40.0),
-                            ..container.children[0].children[2].clone()
-                        },
-                    ],
                     calculated_width: Some(50.0),
                     calculated_height: Some(80.0),
-                    ..Default::default()
+                    ..container.children[0].clone()
                 }],
-
                 calculated_width: Some(50.0),
                 calculated_height: Some(80.0),
                 direction: LayoutDirection::Row,
-                ..container
+                ..container.clone()
             },
         );
     }
