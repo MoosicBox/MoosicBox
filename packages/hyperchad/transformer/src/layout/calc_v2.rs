@@ -22,7 +22,7 @@ impl<F: FontMetrics> Calc for CalcV2Calculator<F> {
         use pass_heights::Pass as _;
         use pass_positioning::Pass as _;
         use pass_widths::Pass as _;
-        use pass_wrap::Pass as _;
+        use pass_wrap_horizontal::Pass as _;
 
         log::trace!("calc: container={container}");
 
@@ -31,7 +31,7 @@ impl<F: FontMetrics> Calc for CalcV2Calculator<F> {
 
         self.calc_widths(&bfs, container);
         self.flex_width(&bfs, container);
-        self.wrap(&bfs, container);
+        self.wrap_horizontal(&bfs, container);
         self.calc_heights(&bfs, container);
         self.flex_height(&bfs, container);
         self.position_elements(&arena, &bfs, container);
@@ -575,7 +575,7 @@ mod pass_flex_width {
     impl<F: FontMetrics> CalcV2Calculator<F> {}
 }
 
-mod pass_wrap {
+mod pass_wrap_horizontal {
     use hyperchad_transformer_models::{LayoutDirection, LayoutOverflow, LayoutPosition};
 
     use crate::{
@@ -586,11 +586,11 @@ mod pass_wrap {
     use super::CalcV2Calculator;
 
     pub trait Pass {
-        fn wrap(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
+        fn wrap_horizontal(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
     }
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
-        fn wrap(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
+        fn wrap_horizontal(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
             wrap_on_axis!(
                 "wrap",
                 Row,
