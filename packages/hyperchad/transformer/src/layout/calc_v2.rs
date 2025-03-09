@@ -435,6 +435,63 @@ macro_rules! flex_on_axis {
     }};
 }
 
+macro_rules! wrap_on_axis {
+    (
+        $label:tt,
+        $axis:ident,
+        $bfs:ident,
+        $container:ident,
+        $calculated:ident,
+        $overflow:ident,
+    ) => {{
+        const LABEL: &str = $label;
+
+        moosicbox_logging::debug_or_trace!(("{LABEL}"), ("{LABEL}:\n{}", $container));
+
+        let mut changed = true;
+
+        $bfs.traverse_mut($container, |parent| {
+            if !matches!(parent.$overflow, LayoutOverflow::Wrap { .. }) {
+                return;
+            }
+
+            let container_size = parent.$calculated.unwrap();
+
+            let direction = parent.direction;
+            let mut pos = 0.0;
+            let mut row = 0;
+            let mut col = 0;
+
+            for child in parent.relative_positioned_elements_mut() {
+                log::trace!("{LABEL}: positioning child ({row}, {col}):\n{child}");
+
+                let child_size = child.$calculated.unwrap();
+                let mut position = LayoutPosition::Wrap { row, col };
+
+                if direction == LayoutDirection::$axis {
+                    pos += child_size;
+
+                    if pos > container_size {
+                        log::trace!("{LABEL}: wrapping to next row");
+                        pos = 0.0;
+                        col = 0;
+                        row += 1;
+                        position = LayoutPosition::Wrap { row, col };
+                    }
+
+                    col += 1;
+                }
+
+                if set_value(&mut child.calculated_position, position).is_some() {
+                    changed = true;
+                }
+            }
+        });
+
+        changed
+    }};
+}
+
 /// # Pass 1: Widths
 ///
 /// This pass traverses the `Container` children in reverse BFS (Breadth-First Search)
@@ -534,49 +591,14 @@ mod pass_wrap {
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
         fn wrap(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-            moosicbox_logging::debug_or_trace!(("wrap"), ("wrap:\n{container}"));
-
-            let mut changed = true;
-
-            bfs.traverse_mut(container, |parent| {
-                if !matches!(parent.overflow_x, LayoutOverflow::Wrap { .. }) {
-                    return;
-                }
-
-                let container_width = parent.calculated_width.unwrap();
-
-                let direction = parent.direction;
-                let mut x = 0.0;
-                let mut row = 0;
-                let mut col = 0;
-
-                for child in parent.relative_positioned_elements_mut() {
-                    log::trace!("wrap: positioning child ({row}, {col}):\n{child}");
-
-                    let child_width = child.calculated_width.unwrap();
-                    let mut position = LayoutPosition::Wrap { row, col };
-
-                    if direction == LayoutDirection::Row {
-                        x += child_width;
-
-                        if x > container_width {
-                            log::trace!("wrap: wrapping to next row");
-                            x = 0.0;
-                            col = 0;
-                            row += 1;
-                            position = LayoutPosition::Wrap { row, col };
-                        }
-
-                        col += 1;
-                    }
-
-                    if set_value(&mut child.calculated_position, position).is_some() {
-                        changed = true;
-                    }
-                }
-            });
-
-            changed
+            wrap_on_axis!(
+                "wrap",
+                Row,
+                bfs,
+                container,
+                calculated_width,
+                overflow_x,
+            )
         }
     }
 
