@@ -129,46 +129,6 @@ macro_rules! calc_size_on_axis {
     }};
 }
 
-/// # Pass 1: Widths
-///
-/// This pass traverses the `Container` children in reverse BFS (Breadth-First Search)
-/// and calculates the widths required for each of the `Container`s.
-mod pass_widths {
-    use crate::{
-        BfsPaths, Container, Number,
-        layout::{font::FontMetrics, set_float},
-    };
-
-    use super::CalcV2Calculator;
-
-    pub trait Pass {
-        fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
-    }
-
-    impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
-        fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-            calc_size_on_axis!(
-                self,
-                bfs,
-                container,
-                width,
-                calculated_width,
-                calculated_min_width,
-                margin_left,
-                margin_right,
-                calculated_margin_left,
-                calculated_margin_right,
-                padding_left,
-                padding_right,
-                calculated_padding_left,
-                calculated_padding_right,
-            )
-        }
-    }
-
-    impl<F: FontMetrics> CalcV2Calculator<F> {}
-}
-
 #[derive(Clone, Copy, Default)]
 pub struct Rect {
     pub x: f32,
@@ -464,6 +424,46 @@ macro_rules! flex_on_axis {
     };
 }
 
+/// # Pass 1: Widths
+///
+/// This pass traverses the `Container` children in reverse BFS (Breadth-First Search)
+/// and calculates the widths required for each of the `Container`s.
+mod pass_widths {
+    use crate::{
+        BfsPaths, Container, Number,
+        layout::{font::FontMetrics, set_float},
+    };
+
+    use super::CalcV2Calculator;
+
+    pub trait Pass {
+        fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
+    }
+
+    impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
+        fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
+            calc_size_on_axis!(
+                self,
+                bfs,
+                container,
+                width,
+                calculated_width,
+                calculated_min_width,
+                margin_left,
+                margin_right,
+                calculated_margin_left,
+                calculated_margin_right,
+                padding_left,
+                padding_right,
+                calculated_padding_left,
+                calculated_padding_right,
+            )
+        }
+    }
+
+    impl<F: FontMetrics> CalcV2Calculator<F> {}
+}
+
 mod pass_flex_width {
     use hyperchad_transformer_models::{LayoutDirection, LayoutPosition, Position};
 
@@ -504,6 +504,71 @@ mod pass_flex_width {
                 calculated_padding_right,
                 horizontal_padding,
             );
+
+            changed
+        }
+    }
+
+    impl<F: FontMetrics> CalcV2Calculator<F> {}
+}
+
+mod pass_wrap {
+    use hyperchad_transformer_models::{LayoutDirection, LayoutOverflow, LayoutPosition};
+
+    use crate::{
+        BfsPaths, Container,
+        layout::{font::FontMetrics, set_value},
+    };
+
+    use super::CalcV2Calculator;
+
+    pub trait Pass {
+        fn wrap(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
+    }
+
+    impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
+        fn wrap(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
+            moosicbox_logging::debug_or_trace!(("wrap"), ("wrap:\n{container}"));
+
+            let mut changed = true;
+
+            bfs.traverse_mut(container, |parent| {
+                if !matches!(parent.overflow_x, LayoutOverflow::Wrap { .. }) {
+                    return;
+                }
+
+                let container_width = parent.calculated_width.unwrap();
+
+                let direction = parent.direction;
+                let mut x = 0.0;
+                let mut row = 0;
+                let mut col = 0;
+
+                for child in parent.relative_positioned_elements_mut() {
+                    log::trace!("wrap: positioning child ({row}, {col}):\n{child}");
+
+                    let child_width = child.calculated_width.unwrap();
+                    let mut position = LayoutPosition::Wrap { row, col };
+
+                    if direction == LayoutDirection::Row {
+                        x += child_width;
+
+                        if x > container_width {
+                            log::trace!("wrap: wrapping to next row");
+                            x = 0.0;
+                            col = 0;
+                            row += 1;
+                            position = LayoutPosition::Wrap { row, col };
+                        }
+
+                        col += 1;
+                    }
+
+                    if set_value(&mut child.calculated_position, position).is_some() {
+                        changed = true;
+                    }
+                }
+            });
 
             changed
         }
@@ -588,71 +653,6 @@ mod pass_flex_height {
                 calculated_padding_bottom,
                 vertical_padding,
             );
-
-            changed
-        }
-    }
-
-    impl<F: FontMetrics> CalcV2Calculator<F> {}
-}
-
-mod pass_wrap {
-    use hyperchad_transformer_models::{LayoutDirection, LayoutOverflow, LayoutPosition};
-
-    use crate::{
-        BfsPaths, Container,
-        layout::{font::FontMetrics, set_value},
-    };
-
-    use super::CalcV2Calculator;
-
-    pub trait Pass {
-        fn wrap(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
-    }
-
-    impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
-        fn wrap(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-            moosicbox_logging::debug_or_trace!(("wrap"), ("wrap:\n{container}"));
-
-            let mut changed = true;
-
-            bfs.traverse_mut(container, |parent| {
-                if !matches!(parent.overflow_x, LayoutOverflow::Wrap { .. }) {
-                    return;
-                }
-
-                let container_width = parent.calculated_width.unwrap();
-
-                let direction = parent.direction;
-                let mut x = 0.0;
-                let mut row = 0;
-                let mut col = 0;
-
-                for child in parent.relative_positioned_elements_mut() {
-                    log::trace!("wrap: positioning child ({row}, {col}):\n{child}");
-
-                    let child_width = child.calculated_width.unwrap();
-                    let mut position = LayoutPosition::Wrap { row, col };
-
-                    if direction == LayoutDirection::Row {
-                        x += child_width;
-
-                        if x > container_width {
-                            log::trace!("wrap: wrapping to next row");
-                            x = 0.0;
-                            col = 0;
-                            row += 1;
-                            position = LayoutPosition::Wrap { row, col };
-                        }
-
-                        col += 1;
-                    }
-
-                    if set_value(&mut child.calculated_position, position).is_some() {
-                        changed = true;
-                    }
-                }
-            });
 
             changed
         }
