@@ -56,7 +56,8 @@ macro_rules! calc_size_on_axis {
         $padding_x:ident,
         $padding_y:ident,
         $calculated_padding_x:ident,
-        $calculated_padding_y:ident,
+        $calculated_padding_y:ident
+        $(,)?
     ) => {{
         const LABEL: &str = $label;
 
@@ -159,7 +160,8 @@ macro_rules! flex_on_axis {
         $padding_y:ident,
         $calculated_padding_x:ident,
         $calculated_padding_y:ident,
-        $padding_axis:ident,
+        $padding_axis:ident
+        $(,)?
     ) => {{
         const LABEL: &str = $label;
 
@@ -442,7 +444,8 @@ macro_rules! wrap_on_axis {
         $bfs:ident,
         $container:ident,
         $calculated:ident,
-        $overflow:ident,
+        $overflow:ident
+        $(,)?
     ) => {{
         const LABEL: &str = $label;
 
@@ -591,14 +594,7 @@ mod pass_wrap_horizontal {
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
         fn wrap_horizontal(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-            wrap_on_axis!(
-                "wrap",
-                Row,
-                bfs,
-                container,
-                calculated_width,
-                overflow_x,
-            )
+            wrap_on_axis!("wrap", Row, bfs, container, calculated_width, overflow_x)
         }
     }
 
