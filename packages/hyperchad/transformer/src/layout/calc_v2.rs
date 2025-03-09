@@ -42,13 +42,102 @@ impl<F: FontMetrics> Calc for CalcV2Calculator<F> {
     }
 }
 
+macro_rules! calc_size_on_axis {
+    (
+        $self:ident,
+        $bfs:ident,
+        $container:ident,
+        $fixed:ident,
+        $calculated:ident,
+        $calculated_min:ident,
+        $margin_x:ident,
+        $margin_y:ident,
+        $calculated_margin_x:ident,
+        $calculated_margin_y:ident,
+        $padding_x:ident,
+        $padding_y:ident,
+        $calculated_padding_x:ident,
+        $calculated_padding_y:ident,
+    ) => {{
+        moosicbox_logging::debug_or_trace!(("calc_size"), ("calc_size:\n{}", $container));
+
+        let view_width = $container.calculated_width.unwrap();
+        let view_height = $container.calculated_height.unwrap();
+
+        let mut changed = false;
+
+        $bfs.traverse_rev_mut($container, |parent| {
+            let mut min_size = 0.0;
+
+            for child in &mut parent.children {
+                log::trace!("calc_size: container:\n{child}");
+
+                if let Some(size) = child.$fixed.as_ref().and_then(Number::as_fixed) {
+                    let new_size = size.calc(0.0, view_width, view_height);
+
+                    min_size += new_size;
+
+                    if set_float(&mut child.$calculated, new_size).is_some() {
+                        changed = true;
+                    }
+                } else if let crate::Element::Raw { value } = &child.element {
+                    log::trace!("calc_size: measuring text={value}");
+                    let bounds = $self.font_metrics.measure_text(value, 14.0, f32::INFINITY);
+                    log::trace!("calc_size: measured bounds={bounds:?}");
+                    let new_size = bounds.$fixed();
+                    log::trace!("calc_size: measured size={new_size}");
+
+                    if set_float(&mut child.$calculated, new_size).is_some() {
+                        changed = true;
+                    }
+                } else if let Some(size) = child.$calculated_min {
+                    if set_float(&mut child.$calculated, size).is_some() {
+                        changed = true;
+                    }
+                } else {
+                    set_float(&mut child.$calculated, 0.0);
+                }
+
+                if let Some(margin) = child.$margin_x.as_ref().and_then(crate::Number::as_fixed) {
+                    let size = margin.calc(0.0, view_width, view_height);
+                    if set_float(&mut child.$calculated_margin_x, size).is_some() {
+                        changed = true;
+                    }
+                }
+                if let Some(margin) = child.$margin_y.as_ref().and_then(crate::Number::as_fixed) {
+                    let size = margin.calc(0.0, view_width, view_height);
+                    if set_float(&mut child.$calculated_margin_y, size).is_some() {
+                        changed = true;
+                    }
+                }
+                if let Some(padding) = child.$padding_x.as_ref().and_then(crate::Number::as_fixed) {
+                    let size = padding.calc(0.0, view_width, view_height);
+                    if set_float(&mut child.$calculated_padding_x, size).is_some() {
+                        changed = true;
+                    }
+                }
+                if let Some(padding) = child.$padding_y.as_ref().and_then(crate::Number::as_fixed) {
+                    let size = padding.calc(0.0, view_width, view_height);
+                    if set_float(&mut child.$calculated_padding_y, size).is_some() {
+                        changed = true;
+                    }
+                }
+            }
+
+            set_float(&mut parent.$calculated_min, min_size);
+        });
+
+        changed
+    }};
+}
+
 /// # Pass 1: Widths
 ///
 /// This pass traverses the `Container` children in reverse BFS (Breadth-First Search)
 /// and calculates the widths required for each of the `Container`s.
 mod pass_widths {
     use crate::{
-        BfsPaths, Container, Element, Number,
+        BfsPaths, Container, Number,
         layout::{font::FontMetrics, set_float},
     };
 
@@ -60,89 +149,22 @@ mod pass_widths {
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
         fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-            moosicbox_logging::debug_or_trace!(("calc_width"), ("calc_width:\n{container}"));
-
-            let view_width = container.calculated_width.unwrap();
-            let view_height = container.calculated_height.unwrap();
-
-            let mut changed = false;
-
-            bfs.traverse_rev_mut(container, |parent| {
-                let mut min_width = 0.0;
-
-                for child in &mut parent.children {
-                    log::trace!("calc_widths: container:\n{child}");
-
-                    if let Some(width) = child.width.as_ref().and_then(Number::as_fixed) {
-                        let new_width = width.calc(0.0, view_width, view_height);
-
-                        min_width += new_width;
-
-                        if set_float(&mut child.calculated_width, new_width).is_some() {
-                            changed = true;
-                        }
-                    } else if let Element::Raw { value } = &child.element {
-                        log::trace!("calc_widths: measuring text={value}");
-                        let bounds = self.font_metrics.measure_text(value, 14.0, f32::INFINITY);
-                        log::trace!("calc_widths: measured bounds={bounds:?}");
-                        let new_width = bounds.width();
-                        log::trace!("calc_widths: measured width={new_width}");
-
-                        if set_float(&mut child.calculated_width, new_width).is_some() {
-                            changed = true;
-                        }
-                    } else if let Some(width) = child.calculated_min_width {
-                        if set_float(&mut child.calculated_width, width).is_some() {
-                            changed = true;
-                        }
-                    } else {
-                        set_float(&mut child.calculated_width, 0.0);
-                    }
-
-                    if let Some(margin) =
-                        child.margin_left.as_ref().and_then(crate::Number::as_fixed)
-                    {
-                        let size = margin.calc(0.0, view_width, view_height);
-                        if set_float(&mut child.calculated_margin_left, size).is_some() {
-                            changed = true;
-                        }
-                    }
-                    if let Some(margin) = child
-                        .margin_right
-                        .as_ref()
-                        .and_then(crate::Number::as_fixed)
-                    {
-                        let size = margin.calc(0.0, view_width, view_height);
-                        if set_float(&mut child.calculated_margin_right, size).is_some() {
-                            changed = true;
-                        }
-                    }
-                    if let Some(padding) = child
-                        .padding_left
-                        .as_ref()
-                        .and_then(crate::Number::as_fixed)
-                    {
-                        let size = padding.calc(0.0, view_width, view_height);
-                        if set_float(&mut child.calculated_padding_left, size).is_some() {
-                            changed = true;
-                        }
-                    }
-                    if let Some(padding) = child
-                        .padding_right
-                        .as_ref()
-                        .and_then(crate::Number::as_fixed)
-                    {
-                        let size = padding.calc(0.0, view_width, view_height);
-                        if set_float(&mut child.calculated_padding_right, size).is_some() {
-                            changed = true;
-                        }
-                    }
-                }
-
-                set_float(&mut parent.calculated_min_width, min_width);
-            });
-
-            changed
+            calc_size_on_axis!(
+                self,
+                bfs,
+                container,
+                width,
+                calculated_width,
+                calculated_min_width,
+                margin_left,
+                margin_right,
+                calculated_margin_left,
+                calculated_margin_right,
+                padding_left,
+                padding_right,
+                calculated_padding_left,
+                calculated_padding_right,
+            )
         }
     }
 
@@ -504,77 +526,22 @@ mod pass_heights {
 
     impl<F: FontMetrics> Pass for CalcV2Calculator<F> {
         fn calc_heights(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-            moosicbox_logging::debug_or_trace!(("calc_heights"), ("calc_heights:\n{container}"));
-
-            let view_width = container.calculated_width.unwrap();
-            let view_height = container.calculated_height.unwrap();
-
-            let mut changed = false;
-
-            bfs.traverse_rev_mut(container, |parent| {
-                let mut min_height = 0.0;
-
-                for child in &mut parent.children {
-                    log::trace!("calc_heights: container:\n{child}");
-
-                    if let Some(height) = child.height.as_ref().and_then(Number::as_fixed) {
-                        let new_height = height.calc(0.0, view_width, view_height);
-
-                        min_height += new_height;
-
-                        if set_float(&mut child.calculated_height, new_height).is_some() {
-                            changed = true;
-                        }
-                    } else if let Some(height) = child.calculated_min_height {
-                        if set_float(&mut child.calculated_height, height).is_some() {
-                            changed = true;
-                        }
-                    } else {
-                        set_float(&mut child.calculated_height, 0.0);
-                    }
-
-                    if let Some(margin) =
-                        child.margin_top.as_ref().and_then(crate::Number::as_fixed)
-                    {
-                        let size = margin.calc(0.0, view_width, view_height);
-                        if set_float(&mut child.calculated_margin_top, size).is_some() {
-                            changed = true;
-                        }
-                    }
-                    if let Some(margin) = child
-                        .margin_bottom
-                        .as_ref()
-                        .and_then(crate::Number::as_fixed)
-                    {
-                        let size = margin.calc(0.0, view_width, view_height);
-                        if set_float(&mut child.calculated_margin_bottom, size).is_some() {
-                            changed = true;
-                        }
-                    }
-                    if let Some(padding) =
-                        child.padding_top.as_ref().and_then(crate::Number::as_fixed)
-                    {
-                        let size = padding.calc(0.0, view_width, view_height);
-                        if set_float(&mut child.calculated_padding_top, size).is_some() {
-                            changed = true;
-                        }
-                    }
-                    if let Some(padding) = child
-                        .padding_bottom
-                        .as_ref()
-                        .and_then(crate::Number::as_fixed)
-                    {
-                        let size = padding.calc(0.0, view_width, view_height);
-                        if set_float(&mut child.calculated_padding_bottom, size).is_some() {
-                            changed = true;
-                        }
-                    }
-                }
-
-                set_float(&mut parent.calculated_min_height, min_height);
-            });
-
-            changed
+            calc_size_on_axis!(
+                self,
+                bfs,
+                container,
+                height,
+                calculated_height,
+                calculated_min_height,
+                margin_top,
+                margin_bottom,
+                calculated_margin_top,
+                calculated_margin_bottom,
+                padding_top,
+                padding_bottom,
+                calculated_padding_top,
+                calculated_padding_bottom,
+            )
         }
     }
 
