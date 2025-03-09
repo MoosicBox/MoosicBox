@@ -1207,6 +1207,11 @@ impl Container {
 
         iter
     }
+
+    #[must_use]
+    pub fn bfs(&self) -> BfsPaths {
+        self.into()
+    }
 }
 
 impl From<&Container> for BfsPaths {

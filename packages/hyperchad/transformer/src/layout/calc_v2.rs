@@ -1,6 +1,6 @@
 use bumpalo::Bump;
 
-use crate::{BfsPaths, Container};
+use crate::Container;
 
 use super::{Calc, font::FontMetrics};
 
@@ -26,7 +26,7 @@ impl<F: FontMetrics> Calc for CalcV2Calculator<F> {
 
         log::trace!("calc: container={container}");
 
-        let bfs: BfsPaths = (&*container).into();
+        let bfs = container.bfs();
         let arena = Bump::new();
 
         self.calc_widths(&bfs, container);
