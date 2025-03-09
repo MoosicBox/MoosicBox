@@ -1290,12 +1290,13 @@ impl BfsPaths {
         }
     }
 
-    pub fn traverse_with_parents(
+    pub fn traverse_with_parents<R: Clone>(
         &self,
         inclusive: bool,
+        initial: R,
         root: &Container,
-        mut parent: impl FnMut(&Container),
-        mut visitor: impl FnMut(&Container),
+        mut parent: impl FnMut(&Container, R) -> R,
+        mut visitor: impl FnMut(&Container, R),
     ) {
         // Follow paths to apply visitor to each node
         for level_nodes in &self.levels {
@@ -1304,27 +1305,29 @@ impl BfsPaths {
 
                 // Follow the path to find the node
                 let mut current = root;
+                let mut data = initial.clone();
 
                 for &child_idx in path {
-                    parent(current);
+                    data = parent(current, data);
                     current = &current.children[child_idx];
                 }
 
                 if inclusive {
-                    parent(current);
+                    data = parent(current, data);
                 }
 
-                visitor(current);
+                visitor(current, data);
             }
         }
     }
 
-    pub fn traverse_with_parents_mut(
+    pub fn traverse_with_parents_mut<R: Clone>(
         &self,
         inclusive: bool,
+        initial: R,
         root: &mut Container,
-        mut parent: impl FnMut(&mut Container),
-        mut visitor: impl FnMut(&mut Container),
+        mut parent: impl FnMut(&mut Container, R) -> R,
+        mut visitor: impl FnMut(&mut Container, R),
     ) {
         // Follow paths to apply visitor to each node
         for level_nodes in &self.levels {
@@ -1333,17 +1336,18 @@ impl BfsPaths {
 
                 // Follow the path to find the node
                 let mut current = &mut *root;
+                let mut data = initial.clone();
 
                 for &child_idx in path {
-                    parent(current);
+                    data = parent(current, data);
                     current = &mut current.children[child_idx];
                 }
 
                 if inclusive {
-                    parent(current);
+                    data = parent(current, data);
                 }
 
-                visitor(current);
+                visitor(current, data);
             }
         }
     }

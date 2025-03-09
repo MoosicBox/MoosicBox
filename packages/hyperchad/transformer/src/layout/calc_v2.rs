@@ -203,28 +203,30 @@ macro_rules! flex_on_axis {
         let root_id = $container.id;
         let view_width = $container.calculated_width.expect("Missing view_width");
         let view_height = $container.calculated_height.expect("Missing view_height");
-        let relative_container = std::sync::Arc::new(std::sync::RwLock::new(super::Rect::default()));
 
         #[allow(clippy::cognitive_complexity)]
         $bfs.traverse_with_parents_mut(
             true,
+            super::Rect::default(),
             $container,
-            |parent| {
+            |parent, relative_container| {
                 if parent.id == root_id {
-                    *relative_container.write().expect("Missing relative_container") = super::Rect {
+                    super::Rect {
                         x: 0.0,
                         y: 0.0,
                         width: view_width,
                         height: view_height,
-                    };
+                    }
                 } else if parent.position == Some(Position::Relative) {
-                    *relative_container.write().expect("Missing relative_container") = super::Rect {
+                    super::Rect {
                         $fixed: parent.$calculated.expect("Missing parent calculated size"),
                         ..Default::default()
-                    };
+                    }
+                } else {
+                    relative_container
                 }
             },
-            |parent| {
+            |parent, relative_container| {
                 let direction = parent.direction;
                 let container_size = parent.$calculated.expect("Missing container size");
 
@@ -429,7 +431,7 @@ macro_rules! flex_on_axis {
 
                 // absolute positioned
 
-                let super::Rect { $fixed: relative_size, .. } = *relative_container.read().expect("Missing relative_container");
+                let super::Rect { $fixed: relative_size, .. } = relative_container;
 
                 for child in parent.absolute_positioned_elements_mut() {
                     let mut remaining_container_size = relative_size;
@@ -662,8 +664,6 @@ mod pass_wrap {
 }
 
 mod pass_positioning {
-    use std::sync::{Arc, RwLock};
-
     use bumpalo::Bump;
     use hyperchad_transformer_models::{LayoutDirection, LayoutOverflow, LayoutPosition, Position};
 
@@ -702,30 +702,31 @@ mod pass_positioning {
 
             let mut changed = false;
 
-            let relative_container = Arc::new(RwLock::new(super::Rect::default()));
-
             #[allow(clippy::cognitive_complexity)]
             bfs.traverse_with_parents_mut(
                 true,
+                super::Rect::default(),
                 container,
-                |parent| {
+                |parent, relative_container| {
                     if parent.id == root_id {
-                        *relative_container.write().unwrap() = super::Rect {
+                        super::Rect {
                             x: 0.0,
                             y: 0.0,
                             width: view_width,
                             height: view_height,
-                        };
+                        }
                     } else if parent.position == Some(Position::Relative) {
-                        *relative_container.write().unwrap() = super::Rect {
+                        super::Rect {
                             x: parent.calculated_x.unwrap(),
                             y: parent.calculated_y.unwrap(),
                             width: parent.calculated_width.unwrap(),
                             height: parent.calculated_height.unwrap(),
-                        };
+                        }
+                    } else {
+                        relative_container
                     }
                 },
-                |parent| {
+                |parent, relative_container| {
                     let mut x = 0.0;
                     let mut y = 0.0;
 
@@ -945,7 +946,7 @@ mod pass_positioning {
 
                     // absolute positioned
 
-                    let super::Rect { width, height, .. } = *relative_container.read().unwrap();
+                    let super::Rect { width, height, .. } = relative_container;
 
                     for child in parent.absolute_positioned_elements_mut() {
                         if let Some(left) = &child.left {
