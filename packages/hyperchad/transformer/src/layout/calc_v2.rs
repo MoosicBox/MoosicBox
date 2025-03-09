@@ -532,8 +532,6 @@ mod pass_widths {
             )
         }
     }
-
-    impl<F: FontMetrics> CalcV2Calculator<F> {}
 }
 
 mod pass_flex_width {
@@ -574,8 +572,6 @@ mod pass_flex_width {
             )
         }
     }
-
-    impl<F: FontMetrics> CalcV2Calculator<F> {}
 }
 
 mod pass_wrap_horizontal {
@@ -597,8 +593,6 @@ mod pass_wrap_horizontal {
             wrap_on_axis!("wrap", Row, bfs, container, calculated_width, overflow_x)
         }
     }
-
-    impl<F: FontMetrics> CalcV2Calculator<F> {}
 }
 
 mod pass_heights {
@@ -634,8 +628,6 @@ mod pass_heights {
             )
         }
     }
-
-    impl<F: FontMetrics> CalcV2Calculator<F> {}
 }
 
 mod pass_flex_height {
@@ -676,8 +668,6 @@ mod pass_flex_height {
             )
         }
     }
-
-    impl<F: FontMetrics> CalcV2Calculator<F> {}
 }
 
 mod pass_positioning {
@@ -1048,8 +1038,6 @@ mod pass_positioning {
             changed
         }
     }
-
-    impl<F: FontMetrics> CalcV2Calculator<F> {}
 }
 
 #[cfg(test)]
