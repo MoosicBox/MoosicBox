@@ -1214,12 +1214,6 @@ impl Container {
 
     #[must_use]
     pub fn bfs(&self) -> BfsPaths {
-        self.into()
-    }
-}
-
-impl From<&Container> for BfsPaths {
-    fn from(root: &Container) -> Self {
         // Collect nodes in pre-order, recording their path
         fn collect_paths(
             node: &Container,
@@ -1238,10 +1232,10 @@ impl From<&Container> for BfsPaths {
                 }
                 levels[level].push(paths.len() - 1);
                 // Process children
-                for (i, _) in node.children.iter().enumerate() {
+                for (i, child) in node.children.iter().enumerate() {
                     let mut child_path = path.to_owned();
                     child_path.push(i);
-                    collect_paths(&node.children[i], &child_path, paths, levels);
+                    collect_paths(child, &child_path, paths, levels);
                 }
             }
         }
@@ -1251,9 +1245,99 @@ impl From<&Container> for BfsPaths {
 
         // Start by collecting all paths to nodes
         let mut paths: Vec<Vec<usize>> = Vec::new();
-        collect_paths(root, &[], &mut paths, &mut levels);
+        collect_paths(self, &[], &mut paths, &mut levels);
 
-        Self { levels, paths }
+        BfsPaths { levels, paths }
+    }
+
+    #[must_use]
+    pub fn bfs_visit(&self, mut visitor: impl FnMut(&Self)) -> BfsPaths {
+        // Collect nodes in pre-order, recording their path
+        fn collect_paths(
+            node: &Container,
+            path: &[usize],
+            paths: &mut Vec<Vec<usize>>,
+            levels: &mut Vec<Vec<usize>>,
+            visitor: &mut impl FnMut(&Container),
+        ) {
+            if !node.children.is_empty() {
+                // Store the path to this node
+                paths.push(path.to_owned());
+
+                // Add this node's index to the appropriate level
+                let level = path.len(); // Path length = level + 1 (root is at index 0)
+                if levels.len() <= level {
+                    levels.resize(level + 1, Vec::new());
+                }
+                levels[level].push(paths.len() - 1);
+                // Process children
+                for (i, child) in node.children.iter().enumerate() {
+                    visitor(child);
+                    let mut child_path = path.to_owned();
+                    child_path.push(i);
+                    collect_paths(child, &child_path, paths, levels, visitor);
+                }
+            }
+        }
+
+        // Collect nodes by level
+        let mut levels: Vec<Vec<usize>> = Vec::new();
+
+        // Start by collecting all paths to nodes
+        let mut paths: Vec<Vec<usize>> = Vec::new();
+
+        visitor(self);
+        collect_paths(self, &[], &mut paths, &mut levels, &mut visitor);
+
+        BfsPaths { levels, paths }
+    }
+
+    #[must_use]
+    pub fn bfs_visit_mut(&mut self, mut visitor: impl FnMut(&mut Self)) -> BfsPaths {
+        // Collect nodes in pre-order, recording their path
+        fn collect_paths(
+            node: &mut Container,
+            path: &[usize],
+            paths: &mut Vec<Vec<usize>>,
+            levels: &mut Vec<Vec<usize>>,
+            visitor: &mut impl FnMut(&mut Container),
+        ) {
+            if !node.children.is_empty() {
+                // Store the path to this node
+                paths.push(path.to_owned());
+
+                // Add this node's index to the appropriate level
+                let level = path.len(); // Path length = level + 1 (root is at index 0)
+                if levels.len() <= level {
+                    levels.resize(level + 1, Vec::new());
+                }
+                levels[level].push(paths.len() - 1);
+                // Process children
+                for (i, child) in node.children.iter_mut().enumerate() {
+                    visitor(child);
+                    let mut child_path = path.to_owned();
+                    child_path.push(i);
+                    collect_paths(child, &child_path, paths, levels, visitor);
+                }
+            }
+        }
+
+        // Collect nodes by level
+        let mut levels: Vec<Vec<usize>> = Vec::new();
+
+        // Start by collecting all paths to nodes
+        let mut paths: Vec<Vec<usize>> = Vec::new();
+
+        visitor(self);
+        collect_paths(self, &[], &mut paths, &mut levels, &mut visitor);
+
+        BfsPaths { levels, paths }
+    }
+}
+
+impl From<&Container> for BfsPaths {
+    fn from(root: &Container) -> Self {
+        root.bfs()
     }
 }
 
