@@ -76,8 +76,8 @@ macro_rules! calc_size_on_axis {
 
         moosicbox_logging::debug_or_trace!(("{LABEL}"), ("{LABEL}:\n{}", $container));
 
-        let view_width = $container.calculated_width.unwrap();
-        let view_height = $container.calculated_height.unwrap();
+        let view_width = $container.calculated_width.expect("Missing view_width");
+        let view_height = $container.calculated_height.expect("Missing view_height");
 
         let mut changed = false;
 
@@ -606,7 +606,7 @@ macro_rules! wrap_on_axis {
                 return;
             }
 
-            let container_size = parent.$calculated.unwrap();
+            let container_size = parent.$calculated.expect("Missing parent container_size");
 
             let direction = parent.direction;
             let mut pos = 0.0;
@@ -616,7 +616,7 @@ macro_rules! wrap_on_axis {
 
             for child in parent.relative_positioned_elements_mut() {
                 let child_size =
-                    child.$calculated.unwrap()
+                    child.$calculated.expect("Missing child calculated size")
                         + child.$margin_axis().unwrap_or_default()
                         + child.$padding_axis().unwrap_or_default();
 
@@ -979,8 +979,8 @@ mod pass_positioning {
             );
 
             let root_id = container.id;
-            let view_width = container.calculated_width.unwrap();
-            let view_height = container.calculated_height.unwrap();
+            let view_width = container.calculated_width.expect("Missing view_width");
+            let view_height = container.calculated_height.expect("Missing view_height");
 
             let mut changed = false;
 
@@ -999,10 +999,10 @@ mod pass_positioning {
                         }
                     } else if parent.position == Some(Position::Relative) {
                         super::Rect {
-                            x: parent.calculated_x.unwrap(),
-                            y: parent.calculated_y.unwrap(),
-                            width: parent.calculated_width.unwrap(),
-                            height: parent.calculated_height.unwrap(),
+                            x: parent.calculated_x.expect("Missing calculated_x"),
+                            y: parent.calculated_y.expect("Missing calculated_y"),
+                            width: parent.calculated_width.expect("Missing calculated_width"),
+                            height: parent.calculated_height.expect("Missing calculated_height"),
                         }
                     } else {
                         relative_container
@@ -1011,8 +1011,12 @@ mod pass_positioning {
                 |parent, relative_container| {
                     let direction = parent.direction;
                     let justify_content = parent.justify_content.unwrap_or_default();
-                    let container_width = parent.calculated_width.unwrap();
-                    let container_height = parent.calculated_height.unwrap();
+                    let container_width = parent
+                        .calculated_width
+                        .expect("Missing parent calculated_width");
+                    let container_height = parent
+                        .calculated_height
+                        .expect("Missing parent calculated_height");
 
                     if let LayoutOverflow::Wrap { grid } = parent.overflow_x {
                         let mut last_row = 0;
@@ -1060,8 +1064,11 @@ mod pass_positioning {
                                 last_row = row;
                             }
 
-                            row_width +=
-                                grid_cell_size.unwrap_or_else(|| child.calculated_width.unwrap());
+                            row_width += grid_cell_size.unwrap_or_else(|| {
+                                child
+                                    .calculated_width
+                                    .expect("Child missing calculated_width")
+                            });
                             col_count += 1;
                         }
 
