@@ -130,7 +130,7 @@ edition = "2024"
 
 [workspace.dependencies]
 actix = "0.13.5"
-actix-cors = "0.7.0"
+actix-cors = "0.7.1"
 actix-files = "0.6.6"
 actix-htmx = "0.3.0"
 actix-http = "3.10.0"
@@ -161,7 +161,7 @@ chrono = { version = "0.4.40", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = { version = "4.5.31", features = ["derive"] }
+clap = { version = "4.5.32", features = ["derive"] }
 color-hex = "0.2.0"
 colored = { version = "3.0.0" }
 console-subscriber = "0.4.1"
@@ -304,7 +304,7 @@ tauri = { version = "2.3.1", features = ["protocol-asset"] }
 tauri-build = { version = "2.0.6", features = [] }
 tauri-plugin = { version = "2.0.5", features = ["build"] }
 tauri-plugin-dialog = "2.2.0"
-tauri-plugin-notification = "2.2.1"
+tauri-plugin-notification = "2.2.2"
 test-log = "0.2.17"
 thiserror = "2.0.12"
 throttle = "0.1.0"
