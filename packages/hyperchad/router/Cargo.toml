@@ -32,7 +32,8 @@ fail-on-warnings = []
 
 simd = ["hyperchad_transformer/simd"]
 
-format = ["hyperchad_transformer/format"]
+format              = ["hyperchad_transformer/format"]
+syntax-highlighting = ["hyperchad_transformer/syntax-highlighting"]
 
 json = ["hyperchad_renderer/json"]
 

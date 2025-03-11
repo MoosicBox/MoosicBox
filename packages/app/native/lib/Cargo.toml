@@ -99,6 +99,7 @@ profiling-tracy = [
     "hyperchad_renderer/profiling-tracy",
     "hyperchad_renderer_egui?/profiling-tracy",
 ]
+syntax-highlighting = ["hyperchad_router/syntax-highlighting"]
 unsafe = ["hyperchad_renderer_fltk?/unsafe"]
 
 assets = ["hyperchad_renderer/assets", "hyperchad_renderer_html?/assets"]
