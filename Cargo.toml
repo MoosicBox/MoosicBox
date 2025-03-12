@@ -150,9 +150,9 @@ async-trait = "0.1.87"
 atomic_float = "1.1.0"
 audiopus = "0.2.0"
 awc = "3.6.0"
-aws-config = "1.5.18"
-aws-sdk-apigatewaymanagement = "1.61.0"
-aws-sdk-ssm = "1.67.0"
+aws-config = "1.6.0"
+aws-sdk-apigatewaymanagement = "1.62.0"
+aws-sdk-ssm = "1.68.0"
 base64 = "0.22.1"
 bumpalo = "3.17.0"
 bytes = "1.10.1"
@@ -260,7 +260,7 @@ rangemap = "1.5.1"
 rb = "0.4.1"
 rcgen = "0.13.2"
 regex = "1.11.1"
-reqwest = { version = "0.12.12", default-features = false, features = [
+reqwest = { version = "0.12.13", default-features = false, features = [
     "rustls-tls",
     "stream",
 ] }
