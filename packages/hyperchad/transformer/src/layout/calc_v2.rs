@@ -454,11 +454,10 @@ macro_rules! flex_on_axis {
 
                         match direction {
                             LayoutDirection::$axis => {
-                                #[allow(clippy::while_float)]
-                                while remaining_size >= EPSILON {
+                                loop {
                                     let mut smallest = f32::INFINITY;
                                     let mut target = f32::INFINITY;
-                                    let mut smallest_count = 0;
+                                    let mut smallest_count = 0_u16;
 
                                     for size in parent
                                         .relative_positioned_elements()
@@ -477,36 +476,38 @@ macro_rules! flex_on_axis {
                                     moosicbox_assert::assert!(smallest_count > 0, "expected at least one smallest item");
                                     moosicbox_assert::assert!(smallest.is_finite(), "expected smallest to be finite");
 
-                                    let target_delta = if target.is_infinite() {
-                                        remaining_size
+                                    let mut last_iteration = target.is_infinite();
+                                    let smallest_countf = f32::from(smallest_count);
+
+                                    if last_iteration {
+                                        log::trace!("{LABEL}: last iteration");
+                                        target = smallest + (remaining_size / smallest_countf);
+                                        remaining_size = 0.0;
+                                    } else if target > remaining_size {
+                                        log::trace!("{LABEL}: target > remaining_size");
+                                        target = remaining_size / smallest_countf;
+                                        remaining_size = 0.0;
+                                        last_iteration = true;
                                     } else {
-                                        target - smallest
-                                    };
+                                        remaining_size -= (target - smallest) * smallest_countf;
+                                    }
 
-                                    let target_delta = if remaining_size < target_delta {
-                                        remaining_size
-                                    } else {
-                                        target_delta
-                                    };
+                                    log::trace!("{LABEL}: target={target} smallest={smallest} smallest_count={smallest_count} remaining_size={remaining_size} container_size={container_size}");
 
-                                    #[allow(clippy::cast_precision_loss)]
-                                    let delta = target_delta / (smallest_count as f32);
-
-                                    log::trace!("{LABEL}: target={target} target_delta={target_delta} smallest={smallest} smallest_count={smallest_count} delta={delta} remaining_size={remaining_size} container_size={container_size}");
-
-                                    moosicbox_assert::assert!(delta > EPSILON, "expected target to be positive");
+                                    moosicbox_assert::assert!(target.is_finite(), "expected target to be finite");
 
                                     for child in parent
                                         .relative_positioned_elements_mut()
                                         .filter(|x| x.$fixed.is_none())
                                         .filter(|x| x.$calculated.is_some_and(|x| float_eq!(x, smallest)))
                                     {
-                                        let size = child.$calculated.expect("Missing child calculated size");
-                                        log::trace!("{LABEL}: distributing evenly split remaining_size={remaining_size} delta={delta}:\n{child}");
-                                        set_float(&mut child.$calculated, size + delta);
+                                        log::trace!("{LABEL}: increasing child size to target={target}:\n{child}");
+                                        set_float(&mut child.$calculated, target);
                                     }
 
-                                    remaining_size -= target_delta;
+                                    if last_iteration {
+                                        break;
+                                    }
                                 }
                             }
                             LayoutDirection::$cross_axis => {
