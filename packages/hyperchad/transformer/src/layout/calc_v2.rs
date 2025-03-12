@@ -43,6 +43,12 @@ impl<F: FontMetrics> Calc for CalcV2Calculator<F> {
     }
 }
 
+macro_rules! float_eq {
+    ($a:expr, $b:expr $(,)?) => {{
+        ($a - $b).abs() < crate::layout::EPSILON
+    }};
+}
+
 macro_rules! calc_size_on_axis {
     (
         $label:tt,
@@ -170,7 +176,7 @@ macro_rules! calc_size_on_axis {
                             calculated.0 = color;
                             changed = true;
                         }
-                        if calculated.1 - size >= crate::layout::EPSILON {
+                        if !float_eq!(calculated.1, size) {
                             calculated.1 = size;
                             changed = true;
                         }
@@ -190,7 +196,7 @@ macro_rules! calc_size_on_axis {
                             calculated.0 = color;
                             changed = true;
                         }
-                        if calculated.1 - size >= crate::layout::EPSILON {
+                        if !float_eq!(calculated.1, size) {
                             calculated.1 = size;
                             changed = true;
                         }
@@ -300,7 +306,7 @@ macro_rules! flex_on_axis {
                                 calculated.0 = color;
                                 changed = true;
                             }
-                            if calculated.1 - size >= crate::layout::EPSILON {
+                            if !float_eq!(calculated.1, size) {
                                 calculated.1 = size;
                                 changed = true;
                             }
@@ -320,7 +326,7 @@ macro_rules! flex_on_axis {
                                 calculated.0 = color;
                                 changed = true;
                             }
-                            if calculated.1 - size >= crate::layout::EPSILON {
+                            if !float_eq!(calculated.1, size) {
                                 calculated.1 = size;
                                 changed = true;
                             }
@@ -463,7 +469,7 @@ macro_rules! flex_on_axis {
                                             target = smallest;
                                             smallest = size;
                                             smallest_count = 1;
-                                        } else if (smallest - size).abs() < EPSILON {
+                                        } else if float_eq!(smallest, size) {
                                             smallest_count += 1;
                                         }
                                     }
@@ -493,7 +499,7 @@ macro_rules! flex_on_axis {
                                     for child in parent
                                         .relative_positioned_elements_mut()
                                         .filter(|x| x.$fixed.is_none())
-                                        .filter(|x| x.$calculated.is_some_and(|x| (x - smallest).abs() < EPSILON))
+                                        .filter(|x| x.$calculated.is_some_and(|x| float_eq!(x, smallest)))
                                     {
                                         let size = child.$calculated.expect("Missing child calculated size");
                                         log::trace!("{LABEL}: distributing evenly split remaining_size={remaining_size} delta={delta}:\n{child}");
@@ -742,7 +748,7 @@ mod pass_flex_width {
 
     use crate::{
         BfsPaths, Container,
-        layout::{EPSILON, font::FontMetrics, set_float},
+        layout::{font::FontMetrics, set_float},
     };
 
     use super::CalcV2Calculator;
@@ -900,7 +906,7 @@ mod pass_flex_height {
 
     use crate::{
         BfsPaths, Container,
-        layout::{EPSILON, font::FontMetrics, set_float},
+        layout::{font::FontMetrics, set_float},
     };
 
     use super::CalcV2Calculator;
@@ -1352,7 +1358,7 @@ mod test {
     use crate::{
         Calculation, Container, Element, HeaderSize, Number, Position,
         layout::{
-            Calc as _, EPSILON,
+            Calc as _,
             font::{FontMetrics, FontMetricsBounds, FontMetricsRow},
             get_scrollbar_size,
         },
@@ -1618,7 +1624,7 @@ mod test {
             let expected = 25.0;
 
             assert_eq!(
-                (width - expected).abs() < EPSILON,
+                float_eq!(width, expected),
                 true,
                 "width expected to be {expected} (actual={width})"
             );
