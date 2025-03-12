@@ -476,21 +476,30 @@ macro_rules! flex_on_axis {
                                     moosicbox_assert::assert!(smallest_count > 0, "expected at least one smallest item");
                                     moosicbox_assert::assert!(smallest.is_finite(), "expected smallest to be finite");
 
-                                    let mut last_iteration = target.is_infinite();
                                     let smallest_countf = f32::from(smallest_count);
 
-                                    if last_iteration {
+                                    let last_iteration = if target.is_infinite() {
                                         log::trace!("{LABEL}: last iteration");
-                                        target = smallest + (remaining_size / smallest_countf);
+                                        target = smallest + if smallest_count == 1 {
+                                            remaining_size
+                                        } else {
+                                            remaining_size / smallest_countf
+                                        };
                                         remaining_size = 0.0;
+                                        true
                                     } else if target > remaining_size {
                                         log::trace!("{LABEL}: target > remaining_size");
-                                        target = remaining_size / smallest_countf;
+                                        target = if smallest_count == 1 {
+                                            remaining_size
+                                        } else {
+                                            remaining_size / smallest_countf
+                                        };
                                         remaining_size = 0.0;
-                                        last_iteration = true;
+                                        true
                                     } else {
                                         remaining_size -= (target - smallest) * smallest_countf;
-                                    }
+                                        false
+                                    };
 
                                     log::trace!("{LABEL}: target={target} smallest={smallest} smallest_count={smallest_count} remaining_size={remaining_size} container_size={container_size}");
 
