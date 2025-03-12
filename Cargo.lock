@@ -670,9 +670,9 @@ dependencies = [
 
 [[package]]
 name = "ashpd"
-version = "0.10.2"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9c39d707614dbcc6bed00015539f488d8e3fe3e66ed60961efc0c90f4b380b3"
+checksum = "de3d60bee1a1d38c2077030f4788e1b4e31058d2e79a8cfc8f2b440bd44db290"
 dependencies = [
  "enumflags2",
  "futures-channel",
@@ -683,9 +683,6 @@ dependencies = [
  "serde_repr",
  "tokio",
  "url",
- "wayland-backend",
- "wayland-client",
- "wayland-protocols",
  "zbus 5.5.0",
 ]
 
@@ -12325,9 +12322,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_minifier"
-version = "12.0.3"
+version = "12.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ab1450f85ca7d1bb35cd913227d31f01a744f25cd22026f735a2128c9fa4c61"
+checksum = "c5dd01ef93c81cc5765a545f289f2254320a8ecb52b3c30bdb2bf703541e89ad"
 dependencies = [
  "arrayvec",
  "indexmap 2.8.0",
@@ -12489,9 +12486,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_usage_analyzer"
-version = "12.0.0"
+version = "12.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ed536f224b5dd9c6c9431c3fca48f572324c485a15d865fa84a22a639e6be59"
+checksum = "384c49a5891a06857543370518bd37e1e27727e3174e439dc662b79333d6a652"
 dependencies = [
  "indexmap 2.8.0",
  "rustc-hash 2.1.1",
