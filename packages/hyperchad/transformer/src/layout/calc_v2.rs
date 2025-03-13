@@ -5064,7 +5064,7 @@ mod test {
         log::trace!("container:\n{}", container);
 
         compare_containers(
-            &container.clone(),
+            &container,
             &Container {
                 children: vec![
                     Container {
@@ -5074,7 +5074,7 @@ mod test {
                         calculated_x: Some(0.0),
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 0 }),
-                        ..Default::default()
+                        ..container.children[0].clone()
                     },
                     Container {
                         width: Some(Number::Integer(25)),
@@ -5083,7 +5083,7 @@ mod test {
                         calculated_x: Some(25.0),
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 0, col: 1 }),
-                        ..Default::default()
+                        ..container.children[1].clone()
                     },
                     Container {
                         width: Some(Number::Integer(25)),
@@ -5092,10 +5092,10 @@ mod test {
                         calculated_x: Some(0.0),
                         calculated_y: Some(20.0),
                         calculated_position: Some(LayoutPosition::Wrap { row: 1, col: 0 }),
-                        ..Default::default()
+                        ..container.children[2].clone()
                     },
                 ],
-                ..container
+                ..container.clone()
             },
         );
     }
