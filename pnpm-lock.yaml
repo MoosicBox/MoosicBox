@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@pulumi/pulumi':
-        specifier: ^3.154.0
-        version: 3.154.0(typescript@5.8.2)
+        specifier: ^3.155.0
+        version: 3.155.0(typescript@5.8.2)
       '@tsconfig/node18':
         specifier: 18.2.2
         version: 18.2.2
@@ -48,8 +48,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.9.36
-        version: 3.9.36
+        specifier: ^3.9.37
+        version: 3.9.37
       typescript:
         specifier: ^5.8.2
         version: 5.8.2
@@ -62,8 +62,8 @@ packages:
   '@astrojs/compiler@1.8.2':
     resolution: {integrity: sha512-o/ObKgtMzl8SlpIdzaxFnt7SATKPxu4oIP/1NL+HDJRzxfJcAkOTAb/ZKMRyULbz4q+1t2/DAebs2Z1QairkZw==}
 
-  '@astrojs/compiler@2.10.4':
-    resolution: {integrity: sha512-86B3QGagP99MvSNwuJGiYSBHnh8nLvm2Q1IFI15wIUJJsPeQTO3eb2uwBmrqRsXykeR/mBzH8XCgz5AAt1BJrQ==}
+  '@astrojs/compiler@2.11.0':
+    resolution: {integrity: sha512-zZOO7i+JhojO8qmlyR/URui6LyfHJY6m+L9nwyX5GiKD78YoRaZ5tzz6X0fkl+5bD3uwlDHayf6Oe8Fu36RKNg==}
 
   '@eslint-community/eslint-utils@4.5.0':
     resolution: {integrity: sha512-RoV8Xs9eNwiDvhv7M+xcL4PWyRyIXRY/FLp3buU4h1EYfdF7unWUy3dOjPqb3C7rMUewIcqwW850PgS8h1o1yg==}
@@ -310,8 +310,8 @@ packages:
   '@protobufjs/utf8@1.1.0':
     resolution: {integrity: sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==}
 
-  '@pulumi/pulumi@3.154.0':
-    resolution: {integrity: sha512-FT2jHqxV0dtUK1gQy6drL8SzigygBmAc+gi0jBt+AOxWCEjAIBSYY6cmBIzi5HyuAHASiT//L6/+AWBQfpT6aA==}
+  '@pulumi/pulumi@3.155.0':
+    resolution: {integrity: sha512-22loMkRFGKIXrRvvRkOoafQn7QdiGYM26FkV76gz8kHQ77/itZ7FT7BhDmlff1CdoB41TXH/Sp3p2fotGE/FPg==}
     engines: {node: '>=18'}
     peerDependencies:
       ts-node: '>= 7.0.1 < 12'
@@ -2225,33 +2225,33 @@ packages:
     resolution: {integrity: sha512-MGrFH9Z4NP9Iyhqn16sDtBpRRNJ0Y2hNa6D65h736fVSaPCHr4DM4sWUNvVaSuC+0OBGhwsrydQwmgfg5LncqQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
-  sst-darwin-arm64@3.9.36:
-    resolution: {integrity: sha512-kAN6huPZt8NN1/Rb+qqQ8PyTdjN0Kutaro5DZriWu+1unT1gIjYyDwCw1tbq0MiMIePflHo+Dv+t0etxoseotw==}
+  sst-darwin-arm64@3.9.37:
+    resolution: {integrity: sha512-gSsElRf33f20f5hEX6eIs2wdFizkmRE/ks1NNgVQJyOWkJFmQz82XhZq/aDevYn7VBFLdY+J48mo1Ttq2AbHSw==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.9.36:
-    resolution: {integrity: sha512-hc80MWfUQZChpVry/OOWOXlOOjYa8yNbpkLg478RzCeMvhnkclTvulnzQ4NSm7C5I8a3o1/UXxCXEUvgWxWqiQ==}
+  sst-darwin-x64@3.9.37:
+    resolution: {integrity: sha512-sM1JAWPMfwvsK+1nHwlSkY5c4o+M5gryEura0yzlK/hcwRDmcdWUgvruwlXWD8nVRYmHoDffS/J0qTRlh9smoQ==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.9.36:
-    resolution: {integrity: sha512-FxbgiCaPZI5+eqHadP23tG9rOgGZUTu6HsEg2xt9kcuOvrdTv3avLbxUQdfjWMj6CebQc3OCQK7KS+LwRe9D+A==}
+  sst-linux-arm64@3.9.37:
+    resolution: {integrity: sha512-FrFZ5qGfnhiHQ6SBgFlYndJwv5gYuHtUhzUmx08CInKXcSnh+oz+neScIduf+8iSj/6Bnnu9oJ9CGMcDYAFBFw==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.9.36:
-    resolution: {integrity: sha512-Lklp1hEfIUMa+q3Lj9VrquWXiOPVgWv3UW0DLMeVpC2/78UN50/JeIeT/gedLYJbKGTBaMW7vREuKq/dV4cc9A==}
+  sst-linux-x64@3.9.37:
+    resolution: {integrity: sha512-0wmXzASl/R6FZWMzDwrKkujQd3UuQ045MtCJ2ymF7HfUciBrnfZgmTQTUZYN4GaVRCbz6h4c+IJ5z9P9M0g3TA==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.9.36:
-    resolution: {integrity: sha512-bxygU6/OtSkCP4qj+bJlST2TKMiSExuIVFuOjQJil6IW/i4O7ux5t4pbEd0NSiFnC5LXVSk80sFhPn2nDxfltQ==}
+  sst-linux-x86@3.9.37:
+    resolution: {integrity: sha512-jps8S0z97zo4qukzcYzHJ2lFWpxYfEl/ut3bvD0WCxWO/vjBXW4eUnGr7JwDTOR1VHt0yekZqP221W6WXpTUEQ==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.9.36:
-    resolution: {integrity: sha512-/ouzDpeT42Byea7yE71l8Wk49ZNE3PnrfXJHivmCfm5o11holhm1rWYaydPvPgTK85TckICEeD1NcjOUeGnaNg==}
+  sst@3.9.37:
+    resolution: {integrity: sha512-i9U9nnjW2rI4uDtH7nxFPimHncHWhPkw95niUfMT5idz36bkeEOXow0hmNw3L62SyJ3PiDcdpRavoBwmJbD8cQ==}
     hasBin: true
 
   statuses@2.0.1:
@@ -2539,7 +2539,7 @@ snapshots:
 
   '@astrojs/compiler@1.8.2': {}
 
-  '@astrojs/compiler@2.10.4': {}
+  '@astrojs/compiler@2.11.0': {}
 
   '@eslint-community/eslint-utils@4.5.0(eslint@8.57.1)':
     dependencies:
@@ -2869,7 +2869,7 @@ snapshots:
 
   '@protobufjs/utf8@1.1.0': {}
 
-  '@pulumi/pulumi@3.154.0(typescript@5.8.2)':
+  '@pulumi/pulumi@3.155.0(typescript@5.8.2)':
     dependencies:
       '@grpc/grpc-js': 1.13.0
       '@logdna/tail-file': 2.2.0
@@ -3187,10 +3187,10 @@ snapshots:
 
   astro-eslint-parser@1.2.1:
     dependencies:
-      '@astrojs/compiler': 2.10.4
+      '@astrojs/compiler': 2.11.0
       '@typescript-eslint/scope-manager': 8.26.1
       '@typescript-eslint/types': 8.26.1
-      astrojs-compiler-sync: 1.0.1(@astrojs/compiler@2.10.4)
+      astrojs-compiler-sync: 1.0.1(@astrojs/compiler@2.11.0)
       debug: 4.4.0
       entities: 6.0.0
       eslint-scope: 8.3.0
@@ -3202,9 +3202,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  astrojs-compiler-sync@1.0.1(@astrojs/compiler@2.10.4):
+  astrojs-compiler-sync@1.0.1(@astrojs/compiler@2.11.0):
     dependencies:
-      '@astrojs/compiler': 2.10.4
+      '@astrojs/compiler': 2.11.0
       synckit: 0.9.2
 
   async-function@1.0.0: {}
@@ -5068,22 +5068,22 @@ snapshots:
     dependencies:
       minipass: 7.1.2
 
-  sst-darwin-arm64@3.9.36:
+  sst-darwin-arm64@3.9.37:
     optional: true
 
-  sst-darwin-x64@3.9.36:
+  sst-darwin-x64@3.9.37:
     optional: true
 
-  sst-linux-arm64@3.9.36:
+  sst-linux-arm64@3.9.37:
     optional: true
 
-  sst-linux-x64@3.9.36:
+  sst-linux-x64@3.9.37:
     optional: true
 
-  sst-linux-x86@3.9.36:
+  sst-linux-x86@3.9.37:
     optional: true
 
-  sst@3.9.36:
+  sst@3.9.37:
     dependencies:
       aws-sdk: 2.1692.0
       aws4fetch: 1.0.18
@@ -5091,11 +5091,11 @@ snapshots:
       opencontrol: 0.0.6
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.9.36
-      sst-darwin-x64: 3.9.36
-      sst-linux-arm64: 3.9.36
-      sst-linux-x64: 3.9.36
-      sst-linux-x86: 3.9.36
+      sst-darwin-arm64: 3.9.37
+      sst-darwin-x64: 3.9.37
+      sst-linux-arm64: 3.9.37
+      sst-linux-x64: 3.9.37
+      sst-linux-x86: 3.9.37
     transitivePeerDependencies:
       - supports-color
 
