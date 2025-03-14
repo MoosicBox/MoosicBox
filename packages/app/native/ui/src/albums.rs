@@ -543,7 +543,7 @@ pub fn album_display(
                         sx-justify-content="center"
                         sx-align-items="center"
                         sx-background="#fff"
-                        sx-border-radius="100%"
+                        sx-border-radius=(button_size)
                         fx-click=(Action::PlayAlbum {
                             album_id: album.album_id.clone(),
                             api_source: album.api_source,
@@ -568,7 +568,7 @@ pub fn album_display(
                         sx-justify-content="center"
                         sx-align-items="center"
                         sx-background="#fff"
-                        sx-border-radius="100%"
+                        sx-border-radius=(button_size)
                         fx-click=(Action::AddAlbumToQueue {
                             album_id: album.album_id.clone(),
                             api_source: album.api_source,
