@@ -58,6 +58,8 @@ macro_rules! calc_size_on_axis {
         $fixed:ident,
         $calculated:ident,
         $calculated_min:ident,
+        $axis:ident,
+        $cross_axis:ident,
         $margin_x:ident,
         $margin_y:ident,
         $calculated_margin_x:ident,
@@ -76,7 +78,7 @@ macro_rules! calc_size_on_axis {
         $each_child:expr
         $(,)?
     ) => {{
-        use crate::LayoutOverflow;
+        use crate::{LayoutDirection, LayoutOverflow, Position};
 
         const LABEL: &str = $label;
 
@@ -96,18 +98,19 @@ macro_rules! calc_size_on_axis {
                 parent.$calculated_gap = Some(gap);
             }
 
+            let direction = parent.direction;
             let overflow = parent.$overflow;
 
             for child in &mut parent.children {
                 log::trace!("{LABEL}: container:\n{child}");
 
-                let size = if let Some(size) = child.$fixed.as_ref().and_then(Number::as_fixed) {
+                let min = if let Some(size) = child.$fixed.as_ref().and_then(Number::as_fixed) {
                     let new_size = size.calc(0.0, view_width, view_height);
 
                     if set_float(&mut child.$calculated, new_size).is_some() {
                         changed = true;
                     }
-                    new_size
+                    Some(new_size)
                 } else if let crate::Element::Raw { value } = &child.element {
                     log::trace!("{LABEL}: measuring text={value}");
                     let bounds = $self.font_metrics.measure_text(value, 14.0, f32::INFINITY);
@@ -118,27 +121,53 @@ macro_rules! calc_size_on_axis {
                     if set_float(&mut child.$calculated, new_size).is_some() {
                         changed = true;
                     }
-                    new_size
+                    None
                 } else if let Some(size) = child.$calculated_min {
-                    if set_float(&mut child.$calculated, size).is_some() {
-                        changed = true;
-                    }
-                    size
+                    set_float(&mut child.$calculated, size);
+                    Some(size)
                 } else {
                     set_float(&mut child.$calculated, 0.0);
-                    0.0
+                    None
                 };
 
-                match overflow {
-                    LayoutOverflow::Expand | LayoutOverflow::Squash => {
-                        min_size += size;
+                if let Some(size) = min {
+                    enum MinSizeHandling {
+                        Add,
+                        Max,
                     }
-                    LayoutOverflow::Wrap { .. } => {
-                        if size > min_size {
-                            min_size = size;
+
+                    child.$calculated_min = Some(size);
+
+                    let handling = match child.position.unwrap_or_default() {
+                        Position::Static | Position::Relative => match overflow {
+                            LayoutOverflow::Expand | LayoutOverflow::Squash => {
+                                Some(match direction {
+                                    LayoutDirection::$axis => MinSizeHandling::Add,
+                                    LayoutDirection::$cross_axis => MinSizeHandling::Max,
+                                })
+                            }
+                            LayoutOverflow::Wrap { .. } => {
+                                Some(MinSizeHandling::Max)
+                            }
+                            LayoutOverflow::Auto | LayoutOverflow::Scroll | LayoutOverflow::Hidden => None
+                        },
+                        Position::Absolute | Position::Sticky | Position::Fixed => None
+                    };
+
+                    if let Some(handling) = handling {
+                        match handling {
+                            MinSizeHandling::Add => {
+                                log::trace!("{LABEL}: MinSizeHandling::Add min_size={min_size} += size={size} ({})", min_size + size);
+                                min_size += size;
+                            }
+                            MinSizeHandling::Max => {
+                                log::trace!("{LABEL}: MinSizeHandling::Add size={size} > min_size={min_size} ({})", if size > min_size { size } else { min_size });
+                                if size > min_size {
+                                    min_size = size;
+                                }
+                            }
                         }
                     }
-                    LayoutOverflow::Auto | LayoutOverflow::Scroll | LayoutOverflow::Hidden => {}
                 }
 
                 if let Some(margin) = child.$margin_x.as_ref().and_then(crate::Number::as_fixed) {
@@ -732,6 +761,8 @@ mod pass_widths {
                 width,
                 calculated_width,
                 calculated_min_width,
+                Row,
+                Column,
                 margin_left,
                 margin_right,
                 calculated_margin_left,
@@ -890,6 +921,8 @@ mod pass_heights {
                 height,
                 calculated_height,
                 calculated_min_height,
+                Column,
+                Row,
                 margin_top,
                 margin_bottom,
                 calculated_margin_top,
@@ -4695,7 +4728,62 @@ mod test {
             &container,
             &Container {
                 children: vec![Container {
-                    calculated_width: Some(75.0),
+                    calculated_min_width: Some(25.0),
+                    calculated_width: Some(50.0),
+                    calculated_height: Some(120.0),
+                    ..container.children[0].clone()
+                }],
+                calculated_width: Some(50.0),
+                calculated_height: Some(40.0),
+                direction: LayoutDirection::Row,
+                ..container.clone()
+            },
+        );
+    }
+
+    #[test_log::test]
+    fn calc_child_minimum_height_is_propagated_upward_and_recalc() {
+        let mut container = Container {
+            children: vec![Container {
+                children: vec![
+                    Container {
+                        width: Some(Number::Integer(25)),
+                        height: Some(Number::Integer(40)),
+                        ..Default::default()
+                    },
+                    Container {
+                        width: Some(Number::Integer(25)),
+                        height: Some(Number::Integer(40)),
+                        ..Default::default()
+                    },
+                    Container {
+                        width: Some(Number::Integer(25)),
+                        height: Some(Number::Integer(40)),
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            }],
+            calculated_width: Some(50.0),
+            calculated_height: Some(40.0),
+            direction: LayoutDirection::Row,
+            overflow_x: LayoutOverflow::Wrap { grid: true },
+            overflow_y: LayoutOverflow::Expand,
+            ..Default::default()
+        };
+
+        CALCULATOR.calc(&mut container);
+        log::trace!("first container:\n{}", container);
+
+        CALCULATOR.calc(&mut container);
+        log::trace!("second container:\n{}", container);
+
+        compare_containers(
+            &container,
+            &Container {
+                children: vec![Container {
+                    calculated_min_width: Some(25.0),
+                    calculated_width: Some(50.0),
                     calculated_height: Some(120.0),
                     ..container.children[0].clone()
                 }],
