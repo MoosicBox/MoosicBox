@@ -449,7 +449,7 @@ macro_rules! flex_on_axis {
                         let mut last_cell = 0;
                         let mut max_cell_size = 0.0;
 
-                        for child in &mut parent.relative_positioned_elements() {
+                        for child in parent.relative_positioned_elements() {
                             log::trace!("{LABEL}: calculating remaining size:\n{child}");
 
                             match direction {
@@ -502,6 +502,8 @@ macro_rules! flex_on_axis {
                                             smallest_count = 1;
                                         } else if float_eq!(smallest, size) {
                                             smallest_count += 1;
+                                        } else if size < target {
+                                            target = size;
                                         }
                                     }
 
@@ -511,7 +513,7 @@ macro_rules! flex_on_axis {
                                     let smallest_countf = f32::from(smallest_count);
 
                                     let last_iteration = if target.is_infinite() {
-                                        log::trace!("{LABEL}: last iteration");
+                                        log::trace!("{LABEL}: last iteration remaining_size={remaining_size}");
                                         target = smallest + if smallest_count == 1 {
                                             remaining_size
                                         } else {
@@ -542,6 +544,17 @@ macro_rules! flex_on_axis {
                                         .filter(|x| x.$fixed.is_none())
                                         .filter(|x| x.$calculated.is_some_and(|x| float_eq!(x, smallest)))
                                     {
+                                        let mut target = target;
+
+                                        if let Some(min) = child.$calculated_min {
+                                            log::trace!("{LABEL}: calculated_min={min}");
+                                            let min = min - child.$padding_axis().unwrap_or_default() - child.$margin_axis().unwrap_or_default();
+                                            log::trace!("{LABEL}: without padding/margins calculated_min={min}");
+                                            if target < min {
+                                                target = min;
+                                            }
+                                        }
+
                                         log::trace!("{LABEL}: increasing child size to target={target}:\n{child}");
                                         set_float(&mut child.$calculated, target);
                                     }
@@ -6822,6 +6835,7 @@ mod test {
             calculated_height: Some(50.0),
             ..Default::default()
         };
+
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
 
@@ -8363,6 +8377,51 @@ mod test {
                     calculated_min_height: Some(75.0),
                     ..container.children[0].clone()
                 }],
+                ..container.clone()
+            },
+        );
+    }
+
+    #[test_log::test]
+    fn calc_evenly_distributes_row_width_even_when_one_child_has_a_min_width() {
+        let mut container: Container = html! {
+            div sx-dir="row" {
+                div {}
+                div {
+                    div sx-width=(50) {}
+                }
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(400.0);
+        container.calculated_height = Some(100.0);
+        CALCULATOR.calc(&mut container);
+        log::trace!("container:\n{}", container);
+
+        compare_containers(
+            &container,
+            &Container {
+                children: vec![Container {
+                    children: vec![
+                        Container {
+                            calculated_width: Some(200.0),
+                            calculated_height: Some(100.0),
+                            ..container.children[0].children[0].clone()
+                        },
+                        Container {
+                            calculated_width: Some(200.0),
+                            calculated_height: Some(100.0),
+                            ..container.children[0].children[1].clone()
+                        },
+                    ],
+                    calculated_width: Some(400.0),
+                    calculated_height: Some(100.0),
+                    ..container.children[0].clone()
+                }],
+                calculated_width: Some(400.0),
+                calculated_height: Some(100.0),
                 ..container.clone()
             },
         );
