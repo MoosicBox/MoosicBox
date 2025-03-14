@@ -309,13 +309,13 @@ test-log = "0.2.17"
 thiserror = "2.0.12"
 throttle = "0.1.0"
 tl = "0.7.8"
-tokio = { version = "1.44.0" }
+tokio = { version = "1.44.1" }
 tokio-postgres = { version = "0.7.13", features = ["with-chrono-0_4"] }
 tokio-stream = "0.1.17"
 tokio-tungstenite = { version = "0.26.2", features = [
     "rustls-tls-webpki-roots",
 ] }
-tokio-util = "0.7.13"
+tokio-util = "0.7.14"
 toml = "0.8.20"
 tracing = "0.1.41"
 tracing-opentelemetry = { version = "0.29.0" }
@@ -329,7 +329,7 @@ utoipa-rapidoc = { version = "6.0.0", features = ["actix-web"] }
 utoipa-redoc = { version = "6.0.0", features = ["actix-web"] }
 utoipa-scalar = { version = "0.3.0", features = ["actix-web"] }
 utoipa-swagger-ui = { version = "9.0.0", features = ["actix-web"] }
-uuid = { version = "1.15.1", features = ["v4"] }
+uuid = { version = "1.16.0", features = ["v4"] }
 webp = "0.3.0"
 whoami = "1.5.2"
 xml = "0.8.20"
