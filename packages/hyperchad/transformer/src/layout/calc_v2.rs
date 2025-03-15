@@ -1028,12 +1028,12 @@ mod pass_flex_height {
 mod pass_positioning {
     use bumpalo::Bump;
     use hyperchad_transformer_models::{
-        JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition, Position,
+        AlignItems, JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition, Position,
     };
 
     use crate::{
         BfsPaths, Container,
-        layout::{font::FontMetrics, set_float},
+        layout::{font::FontMetrics, order_float, set_float},
     };
 
     use super::CalcV2Calculator;
@@ -1093,6 +1093,7 @@ mod pass_positioning {
                 |parent, relative_container| {
                     let direction = parent.direction;
                     let justify_content = parent.justify_content.unwrap_or_default();
+                    let align_items = parent.align_items.unwrap_or_default();
                     let container_width = parent
                         .calculated_width
                         .expect("Missing parent calculated_width");
@@ -1303,6 +1304,44 @@ mod pass_positioning {
                                 }
 
                                 x += col_gap;
+                            }
+                        };
+
+                        match align_items {
+                            AlignItems::Start => {}
+                            AlignItems::Center | AlignItems::End => {
+                                let sizes = parent.relative_positioned_elements().filter_map(|x| {
+                                    match direction {
+                                        LayoutDirection::Row => x.bounding_calculated_height(),
+                                        LayoutDirection::Column => x.bounding_calculated_width(),
+                                    }
+                                });
+                                let size = match direction {
+                                    LayoutDirection::Row => {
+                                        sizes.max_by(order_float).unwrap_or_default()
+                                    }
+                                    LayoutDirection::Column => sizes.sum(),
+                                };
+
+                                match align_items {
+                                    AlignItems::Start => unreachable!(),
+                                    AlignItems::Center => match direction {
+                                        LayoutDirection::Row => {
+                                            y += (container_height - size) / 2.0;
+                                        }
+                                        LayoutDirection::Column => {
+                                            x += (container_width - size) / 2.0;
+                                        }
+                                    },
+                                    AlignItems::End => match direction {
+                                        LayoutDirection::Row => {
+                                            y += container_height - size;
+                                        }
+                                        LayoutDirection::Column => {
+                                            x += container_width - size;
+                                        }
+                                    },
+                                }
                             }
                         };
 
@@ -8535,5 +8574,96 @@ mod test {
                 ..container.clone()
             },
         );
+    }
+
+    mod positioning {
+        use hyperchad_transformer_models::AlignItems;
+
+        use super::*;
+
+        #[test_log::test]
+        fn does_center_child_correctly() {
+            let mut container: Container = html! {
+                div
+                    sx-width=(100)
+                    sx-height=(50)
+                    sx-justify-content=(JustifyContent::Center)
+                    sx-align-items=(AlignItems::Center)
+                {
+                    div sx-width=(20) sx-height=(10) {}
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        calculated_x: Some(40.0),
+                        calculated_y: Some(20.0),
+                        ..container.children[0].clone()
+                    }],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_center_child_correctly_with_dir_row_and_multiple_children() {
+            let mut container: Container = html! {
+                div
+                    sx-dir=(LayoutDirection::Row)
+                    sx-width=(100)
+                    sx-height=(50)
+                    sx-justify-content=(JustifyContent::Center)
+                    sx-align-items=(AlignItems::Center)
+                {
+                    div sx-width=(20) sx-height=(10) {}
+                    div sx-width=(20) sx-height=(10) {}
+                    div sx-width=(20) sx-height=(10) {}
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![
+                        Container {
+                            calculated_x: Some(20.0),
+                            calculated_y: Some(20.0),
+                            ..container.children[0].clone()
+                        },
+                        Container {
+                            calculated_x: Some(40.0),
+                            calculated_y: Some(20.0),
+                            ..container.children[1].clone()
+                        },
+                        Container {
+                            calculated_x: Some(60.0),
+                            calculated_y: Some(20.0),
+                            ..container.children[2].clone()
+                        },
+                    ],
+                    ..container.clone()
+                },
+            );
+        }
     }
 }
