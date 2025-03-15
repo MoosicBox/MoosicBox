@@ -144,13 +144,6 @@ pub fn calc_to_css_string(calc: &Calculation, px: bool) -> String {
     }
 }
 
-// TODO: handle vertical flex
-fn is_flex_container(container: &Container) -> bool {
-    container.direction == LayoutDirection::Row
-        || container.justify_content.is_some()
-        || container.align_items.is_some()
-}
-
 const fn is_grid_container(container: &Container) -> bool {
     matches!(container.overflow_x, LayoutOverflow::Wrap { grid: true })
 }
@@ -217,7 +210,7 @@ pub fn element_style_to_html(
     }
 
     let is_grid = is_grid_container(container);
-    let is_flex = !is_grid && is_flex_container(container);
+    let is_flex = !is_grid && container.is_flex_container();
 
     if is_flex {
         write_css_attr!(b"display", b"flex");
@@ -812,7 +805,7 @@ pub fn element_to_html(
                 f,
                 &container.children,
                 tag_renderer,
-                is_flex_container(container),
+                container.is_flex_container(),
             )?;
             f.write_all(b"</")?;
             f.write_all(TAG_NAME)?;
@@ -845,7 +838,7 @@ pub fn element_to_html(
                 f,
                 &container.children,
                 tag_renderer,
-                is_flex_container(container),
+                container.is_flex_container(),
             )?;
             f.write_all(b"</")?;
             f.write_all(TAG_NAME)?;
@@ -869,7 +862,7 @@ pub fn element_to_html(
                 f,
                 &container.children,
                 tag_renderer,
-                is_flex_container(container),
+                container.is_flex_container(),
             )?;
             f.write_all(b"</")?;
             f.write_all(tag_name)?;
@@ -955,7 +948,7 @@ pub fn element_to_html(
             f,
             &container.children,
             tag_renderer,
-            is_flex_container(container),
+            container.is_flex_container(),
         )?;
         f.write_all(b"</")?;
         f.write_all(tag_name.as_bytes())?;
@@ -978,7 +971,7 @@ pub fn container_element_to_html(
         &mut buffer,
         &container.children,
         tag_renderer,
-        is_flex_container(container),
+        container.is_flex_container(),
     )?;
 
     Ok(std::str::from_utf8(&buffer)

@@ -1548,6 +1548,14 @@ impl Container {
         self.hidden == Some(true)
     }
 
+    #[must_use]
+    pub fn is_flex_container(&self) -> bool {
+        self.direction == LayoutDirection::Row
+            || self.justify_content.is_some()
+            || self.align_items.is_some()
+            || self.children.iter().any(|x| x.flex.is_some())
+    }
+
     pub fn visible_elements(&self) -> impl Iterator<Item = &Self> {
         visible_elements(&self.children)
     }
