@@ -27,7 +27,13 @@ on:
         branches: ['master']
     schedule:
         - cron: '0 7 * * *'
-
+    workflow_dispatch:
+        inputs:
+            edge:
+                description: 'Edge'
+                required: false
+                type: boolean
+                default: false
 env:
     CARGO_TERM_COLOR: always
 
@@ -134,10 +140,15 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
 
             - name: Enable patches
-              if: ${{ github.event_name == 'schedule' }}
-              run: git revert 92885c315509
+              if: ${{ github.event_name == 'schedule' || github.event.inputs.edge }}
+              run: |
+                  git config user.name "MoosicBoxBot"
+                  git config user.email "MoosicBoxBot@gmail.com"
+                  git revert 92885c315509
 
             - uses: dtolnay/rust-toolchain@stable
 
@@ -265,7 +276,7 @@ jobs:
                   ${{ matrix.package.env }} ~/.cargo/bin/cargo-machete.exe --with-metadata ${{ matrix.package.path }}
 
     create-tauri-app-release:
-        if: ${{ github.event_name != 'schedule' }}
+        if: ${{ github.event_name != 'schedule' && !github.event.inputs.edge }}
 
         runs-on: ubuntu-latest
 
