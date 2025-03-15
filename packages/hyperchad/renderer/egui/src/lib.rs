@@ -1297,7 +1297,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         relative_container: Option<(egui::Rect, &Container)>,
     ) -> Option<Response> {
         if container.debug == Some(true) {
-            log::info!("render_container: DEBUG {container}");
+            log::info!("render_container: DEBUG\n{container}");
         }
 
         if container.is_hidden() || Self::container_hidden(render_context, container) {
