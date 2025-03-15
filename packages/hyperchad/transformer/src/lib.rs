@@ -2862,7 +2862,12 @@ impl std::fmt::Display for Container {
                         std::env::var("DEBUG_ATTRS")
                             .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str()))
                     },
-                    false,
+                    if cfg!(test) {
+                        true
+                    } else {
+                        std::env::var("DEBUG_RAW_ATTRS")
+                            .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str()))
+                    },
                     #[cfg(feature = "format")]
                     true,
                     #[cfg(feature = "syntax-highlighting")]
