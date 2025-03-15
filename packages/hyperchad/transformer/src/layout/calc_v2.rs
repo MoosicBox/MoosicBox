@@ -285,6 +285,8 @@ macro_rules! flex_on_axis {
         $each_child:expr
         $(,)?
     ) => {{
+        use crate::Element;
+
         const LABEL: &str = $label;
 
         moosicbox_logging::debug_or_trace!(("{LABEL}"), ("{LABEL}:\n{}", $container));
@@ -487,6 +489,10 @@ macro_rules! flex_on_axis {
 
                         let mut position_cross_axis = |parent: &mut Container| {
                             for child in parent.relative_positioned_elements_mut() {
+                                if matches!(child.element, Element::Raw { .. }) {
+                                    continue;
+                                }
+
                                 log::trace!("{LABEL}: setting size to remaining_size={remaining_size}:\n{child}");
                                 let mut remaining_container_size = remaining_size;
 
@@ -1029,10 +1035,11 @@ mod pass_positioning {
     use bumpalo::Bump;
     use hyperchad_transformer_models::{
         AlignItems, JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition, Position,
+        TextAlign,
     };
 
     use crate::{
-        BfsPaths, Container,
+        BfsPaths, Container, Element,
         layout::{font::FontMetrics, order_float, set_float},
     };
 
@@ -1069,26 +1076,30 @@ mod pass_positioning {
             #[allow(clippy::cognitive_complexity)]
             bfs.traverse_with_parents_mut(
                 true,
-                super::Rect::default(),
+                Container::default(),
                 container,
-                |parent, relative_container| {
+                |parent, mut relative_container| {
                     if parent.id == root_id {
-                        super::Rect {
-                            x: 0.0,
-                            y: 0.0,
-                            width: view_width,
-                            height: view_height,
-                        }
+                        relative_container.calculated_x = Some(0.0);
+                        relative_container.calculated_y = Some(0.0);
+                        relative_container.calculated_width = Some(view_width);
+                        relative_container.calculated_height = Some(view_height);
                     } else if parent.position == Some(Position::Relative) {
-                        super::Rect {
-                            x: parent.calculated_x.expect("Missing calculated_x"),
-                            y: parent.calculated_y.expect("Missing calculated_y"),
-                            width: parent.calculated_width.expect("Missing calculated_width"),
-                            height: parent.calculated_height.expect("Missing calculated_height"),
-                        }
-                    } else {
-                        relative_container
+                        relative_container.calculated_x =
+                            Some(parent.calculated_x.expect("Missing calculated_x"));
+                        relative_container.calculated_y =
+                            Some(parent.calculated_y.expect("Missing calculated_y"));
+                        relative_container.calculated_width =
+                            Some(parent.calculated_width.expect("Missing calculated_width"));
+                        relative_container.calculated_height =
+                            Some(parent.calculated_height.expect("Missing calculated_height"));
                     }
+
+                    if let Some(align) = parent.text_align {
+                        relative_container.text_align = Some(align);
+                    }
+
+                    relative_container
                 },
                 |parent, relative_container| {
                     let direction = parent.direction;
@@ -1307,6 +1318,39 @@ mod pass_positioning {
                             }
                         };
 
+                        if let Some(text_align) = relative_container.text_align {
+                            if parent
+                                .relative_positioned_elements()
+                                .all(|x| matches!(x.element, Element::Raw { .. }))
+                            {
+                                match text_align {
+                                    TextAlign::Start => {}
+                                    TextAlign::Center => {
+                                        let size: f32 = parent
+                                            .relative_positioned_elements()
+                                            .filter_map(Container::bounding_calculated_width)
+                                            .sum();
+
+                                        x += (container_width - size) / 2.0;
+                                    }
+                                    TextAlign::End => {
+                                        let size: f32 = parent
+                                            .relative_positioned_elements()
+                                            .filter_map(Container::bounding_calculated_width)
+                                            .sum();
+
+                                        x += container_width - size;
+                                    }
+                                    TextAlign::Justify => {
+                                        // TODO:
+                                        // https://github.com/emilk/egui/issues/1724
+                                        // https://docs.rs/egui/latest/egui/text/struct.LayoutJob.html
+                                        todo!();
+                                    }
+                                }
+                            }
+                        }
+
                         match align_items {
                             AlignItems::Start => {}
                             AlignItems::Center | AlignItems::End => {
@@ -1367,7 +1411,14 @@ mod pass_positioning {
 
                     // absolute positioned
 
-                    let super::Rect { width, height, .. } = relative_container;
+                    let Container {
+                        calculated_width: Some(width),
+                        calculated_height: Some(height),
+                        ..
+                    } = relative_container
+                    else {
+                        panic!("Missing relative_container size");
+                    };
 
                     for child in parent.absolute_positioned_elements_mut() {
                         if let Some(left) = &child.left {
@@ -8579,7 +8630,7 @@ mod test {
     }
 
     mod positioning {
-        use hyperchad_transformer_models::AlignItems;
+        use hyperchad_transformer_models::{AlignItems, TextAlign};
 
         use super::*;
 
@@ -8661,6 +8712,41 @@ mod test {
                             calculated_x: Some(60.0),
                             calculated_y: Some(20.0),
                             ..container.children[2].clone()
+                        },
+                    ],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_center_row_text_when_text_align_is_center() {
+            let mut container: Container = html! {
+                div
+                    sx-width=(100)
+                    sx-height=(50)
+                    sx-text-align=(TextAlign::Center)
+                {
+                    "test"
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![
+                        Container {
+                            calculated_x: Some(22.0),
+                            ..container.children[0].clone()
                         },
                     ],
                     ..container.clone()
