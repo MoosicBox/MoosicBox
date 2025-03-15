@@ -2,7 +2,7 @@ name: Build and Test
 
 on:
     push:
-        branches: ['master']
+        branches: ['master', 'edge']
         paths:
             - packages/**
             - '**/*.toml'
@@ -25,6 +25,8 @@ on:
             - '!**/*.dockerignore'
     pull_request:
         branches: ['master']
+    schedule:
+        - cron: '0 7 * * *'
 
 env:
     CARGO_TERM_COLOR: always
@@ -51,6 +53,7 @@ jobs:
               if: ${{ matrix.os == 'ubuntu-latest' }}
               uses: actions/checkout@v4
               with:
+                  ref: ${{ github.event_name == 'schedule' && 'edge' || 'master' }}
                   fetch-depth: 0
 
             - name: Build matrix JSON
@@ -132,6 +135,8 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.event_name == 'schedule' && 'edge' || 'master' }}
 
             - uses: dtolnay/rust-toolchain@stable
 
@@ -266,6 +271,7 @@ jobs:
         steps:
             - uses: actions/checkout@v4
               with:
+                  ref: ${{ github.event_name == 'schedule' && 'edge' || 'master' }}
                   token: ${{ secrets.WORKFLOW_MANAGEMENT_TOKEN }}
                   path: MoosicBox
 
