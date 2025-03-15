@@ -399,6 +399,7 @@ macro_rules! flex_on_axis {
                 if parent.relative_positioned_elements().any(|x| x.$fixed.as_ref().is_none_or(crate::Number::is_dynamic)) {
                     let mut remaining_container_size = container_size;
 
+                    // Remove margins & padding from remaining_container_size
                     for child in parent.relative_positioned_elements() {
                         match direction {
                             LayoutDirection::$axis => {
@@ -424,6 +425,7 @@ macro_rules! flex_on_axis {
                     log::trace!("{LABEL}: container_size={container_size} remaining_container_size={remaining_container_size}");
                     let container_size = remaining_container_size;
 
+                    // Calculate relative positioned children dynamic sizes
                     for child in parent.relative_positioned_elements_mut() {
                         if let Some(size) = child.$fixed.as_ref().and_then(crate::Number::as_dynamic) {
                             let container_size = match direction {
@@ -443,11 +445,13 @@ macro_rules! flex_on_axis {
                         }
                     }
 
+                    // Fit all unsized children
                     if parent.relative_positioned_elements().any(|x| x.$fixed.as_ref().is_none()) {
                         let mut remaining_size = container_size;
                         let mut last_cell = 0;
                         let mut max_cell_size = 0.0;
 
+                        // Remove sized children sizes from remaining_size
                         for child in parent.relative_positioned_elements() {
                             log::trace!("{LABEL}: calculating remaining size:\n{child}");
 
@@ -481,122 +485,136 @@ macro_rules! flex_on_axis {
                             remaining_size = 0.0;
                         }
 
+                        let mut position_cross_axis = |parent: &mut Container| {
+                            for child in parent.relative_positioned_elements_mut() {
+                                log::trace!("{LABEL}: setting size to remaining_size={remaining_size}:\n{child}");
+                                let mut remaining_container_size = remaining_size;
+
+                                if let Some(size) = child.$margin_axis() {
+                                    log::trace!(
+                                        "{LABEL}: removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
+                                        remaining_container_size - size
+                                    );
+                                    remaining_container_size -= size;
+                                }
+                                if let Some(size) = child.$padding_axis() {
+                                    log::trace!(
+                                        "{LABEL}: removing padding size={size} from remaining_container_size={remaining_container_size} ({})",
+                                        remaining_container_size - size
+                                    );
+                                    remaining_container_size -= size;
+                                }
+
+                                #[allow(clippy::cast_precision_loss)]
+                                let mut new_size = remaining_container_size / (cell_count as f32);
+
+                                if let Some(min) = child.$calculated_min {
+                                    if new_size < min {
+                                        new_size = min;
+                                    }
+                                } else if new_size < 0.0 {
+                                    new_size = 0.0;
+                                }
+
+                                if child.$fixed.is_none() && set_float(&mut child.$calculated, new_size).is_some() {
+                                    changed = true;
+                                }
+                            }
+                        };
+
                         log::trace!("{LABEL}: remaining_size={remaining_size}\n{parent}");
 
-                        match direction {
-                            LayoutDirection::$axis => {
-                                loop {
-                                    let mut smallest = f32::INFINITY;
-                                    let mut target = f32::INFINITY;
-                                    let mut smallest_count = 0_u16;
+                        if parent.is_flex_container() {
+                            // Fit all unsized children to remaining_size
+                            match direction {
+                                LayoutDirection::$axis => {
+                                    loop {
+                                        let mut smallest = f32::INFINITY;
+                                        let mut target = f32::INFINITY;
+                                        let mut smallest_count = 0_u16;
 
-                                    for size in parent
-                                        .relative_positioned_elements()
-                                        .filter(|x| x.$fixed.is_none())
-                                        .filter_map(|x| x.$calculated)
-                                    {
-                                        if smallest > size {
-                                            target = smallest;
-                                            smallest = size;
-                                            smallest_count = 1;
-                                        } else if float_eq!(smallest, size) {
-                                            smallest_count += 1;
-                                        } else if size < target {
-                                            target = size;
-                                        }
-                                    }
-
-                                    moosicbox_assert::assert!(smallest_count > 0, "expected at least one smallest item");
-                                    moosicbox_assert::assert!(smallest.is_finite(), "expected smallest to be finite");
-
-                                    let smallest_countf = f32::from(smallest_count);
-
-                                    let last_iteration = if target.is_infinite() {
-                                        log::trace!("{LABEL}: last iteration remaining_size={remaining_size}");
-                                        target = smallest + if smallest_count == 1 {
-                                            remaining_size
-                                        } else {
-                                            remaining_size / smallest_countf
-                                        };
-                                        remaining_size = 0.0;
-                                        true
-                                    } else if target > remaining_size {
-                                        log::trace!("{LABEL}: target > remaining_size");
-                                        target = if smallest_count == 1 {
-                                            remaining_size
-                                        } else {
-                                            remaining_size / smallest_countf
-                                        };
-                                        remaining_size = 0.0;
-                                        true
-                                    } else {
-                                        remaining_size -= (target - smallest) * smallest_countf;
-                                        false
-                                    };
-
-                                    log::trace!("{LABEL}: target={target} smallest={smallest} smallest_count={smallest_count} remaining_size={remaining_size} container_size={container_size}");
-
-                                    moosicbox_assert::assert!(target.is_finite(), "expected target to be finite");
-
-                                    for child in parent
-                                        .relative_positioned_elements_mut()
-                                        .filter(|x| x.$fixed.is_none())
-                                        .filter(|x| x.$calculated.is_some_and(|x| float_eq!(x, smallest)))
-                                    {
-                                        let mut target = target;
-
-                                        if let Some(min) = child.$calculated_min {
-                                            log::trace!("{LABEL}: calculated_min={min}");
-                                            let min = min - child.$padding_axis().unwrap_or_default() - child.$margin_axis().unwrap_or_default();
-                                            log::trace!("{LABEL}: without padding/margins calculated_min={min}");
-                                            if target < min {
-                                                target = min;
+                                        for size in parent
+                                            .relative_positioned_elements()
+                                            .filter(|x| x.$fixed.is_none())
+                                            .filter_map(|x| x.$calculated)
+                                        {
+                                            if smallest > size {
+                                                target = smallest;
+                                                smallest = size;
+                                                smallest_count = 1;
+                                            } else if float_eq!(smallest, size) {
+                                                smallest_count += 1;
+                                            } else if size < target {
+                                                target = size;
                                             }
                                         }
 
-                                        log::trace!("{LABEL}: increasing child size to target={target}:\n{child}");
-                                        set_float(&mut child.$calculated, target);
-                                    }
+                                        moosicbox_assert::assert!(smallest_count > 0, "expected at least one smallest item");
+                                        moosicbox_assert::assert!(smallest.is_finite(), "expected smallest to be finite");
 
-                                    if last_iteration {
-                                        break;
+                                        let smallest_countf = f32::from(smallest_count);
+
+                                        let last_iteration = if target.is_infinite() {
+                                            log::trace!("{LABEL}: last iteration remaining_size={remaining_size}");
+                                            target = smallest + if smallest_count == 1 {
+                                                remaining_size
+                                            } else {
+                                                remaining_size / smallest_countf
+                                            };
+                                            remaining_size = 0.0;
+                                            true
+                                        } else if target > remaining_size {
+                                            log::trace!("{LABEL}: target > remaining_size");
+                                            target = if smallest_count == 1 {
+                                                remaining_size
+                                            } else {
+                                                remaining_size / smallest_countf
+                                            };
+                                            remaining_size = 0.0;
+                                            true
+                                        } else {
+                                            remaining_size -= (target - smallest) * smallest_countf;
+                                            false
+                                        };
+
+                                        log::trace!("{LABEL}: target={target} smallest={smallest} smallest_count={smallest_count} remaining_size={remaining_size} container_size={container_size}");
+
+                                        moosicbox_assert::assert!(target.is_finite(), "expected target to be finite");
+
+                                        for child in parent
+                                            .relative_positioned_elements_mut()
+                                            .filter(|x| x.$fixed.is_none())
+                                            .filter(|x| x.$calculated.is_some_and(|x| float_eq!(x, smallest)))
+                                        {
+                                            let mut target = target;
+
+                                            if let Some(min) = child.$calculated_min {
+                                                log::trace!("{LABEL}: calculated_min={min}");
+                                                let min = min - child.$padding_axis().unwrap_or_default() - child.$margin_axis().unwrap_or_default();
+                                                log::trace!("{LABEL}: without padding/margins calculated_min={min}");
+                                                if target < min {
+                                                    target = min;
+                                                }
+                                            }
+
+                                            log::trace!("{LABEL}: increasing child size to target={target}:\n{child}");
+                                            set_float(&mut child.$calculated, target);
+                                        }
+
+                                        if last_iteration {
+                                            break;
+                                        }
                                     }
                                 }
+                                LayoutDirection::$cross_axis => {
+                                    position_cross_axis(parent);
+                                }
                             }
-                            LayoutDirection::$cross_axis => {
-                                for child in parent.relative_positioned_elements_mut() {
-                                    log::trace!("{LABEL}: setting size to remaining_size={remaining_size}:\n{child}");
-                                    let mut remaining_container_size = remaining_size;
-
-                                    if let Some(size) = child.$margin_axis() {
-                                        log::trace!(
-                                            "{LABEL}: removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
-                                            remaining_container_size - size
-                                        );
-                                        remaining_container_size -= size;
-                                    }
-                                    if let Some(size) = child.$padding_axis() {
-                                        log::trace!(
-                                            "{LABEL}: removing padding size={size} from remaining_container_size={remaining_container_size} ({})",
-                                            remaining_container_size - size
-                                        );
-                                        remaining_container_size -= size;
-                                    }
-
-                                    #[allow(clippy::cast_precision_loss)]
-                                    let mut new_size = remaining_container_size / (cell_count as f32);
-
-                                    if let Some(min) = child.$calculated_min {
-                                        if new_size < min {
-                                            new_size = min;
-                                        }
-                                    } else if new_size < 0.0 {
-                                        new_size = 0.0;
-                                    }
-
-                                    if child.$fixed.is_none() && set_float(&mut child.$calculated, new_size).is_some() {
-                                        changed = true;
-                                    }
+                        } else {
+                            match direction {
+                                LayoutDirection::$axis => {}
+                                LayoutDirection::$cross_axis => {
+                                    position_cross_axis(parent);
                                 }
                             }
                         }
@@ -3027,6 +3045,7 @@ mod test {
             children: vec![Container::default()],
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -3060,6 +3079,7 @@ mod test {
 
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(40.0);
+        container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
@@ -3102,7 +3122,7 @@ mod test {
     #[test_log::test]
     fn calc_can_calc_horizontal_split_above_a_vertial_split() {
         let mut container: Container = html! {
-            div sx-dir=(LayoutDirection::Row) {
+            div sx-dir=(LayoutDirection::Row) sx-justify-content=(JustifyContent::Start) {
                 div {} div {}
             }
             div {}
@@ -3112,6 +3132,7 @@ mod test {
 
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(40.0);
+        container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
@@ -5214,6 +5235,7 @@ mod test {
                     }],
                     overflow_x: LayoutOverflow::Squash,
                     overflow_y: LayoutOverflow::Squash,
+                    justify_content: Some(JustifyContent::Start),
                     ..Default::default()
                 },
                 Container {
@@ -5223,6 +5245,7 @@ mod test {
                     }],
                     overflow_x: LayoutOverflow::Squash,
                     overflow_y: LayoutOverflow::Squash,
+                    justify_content: Some(JustifyContent::Start),
                     ..Default::default()
                 },
                 Container {
@@ -5232,6 +5255,7 @@ mod test {
                     }],
                     overflow_x: LayoutOverflow::Squash,
                     overflow_y: LayoutOverflow::Squash,
+                    justify_content: Some(JustifyContent::Start),
                     ..Default::default()
                 },
             ],
@@ -5240,6 +5264,7 @@ mod test {
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Squash,
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -5316,6 +5341,7 @@ mod test {
                     }],
                     overflow_x: LayoutOverflow::Expand,
                     overflow_y: LayoutOverflow::Expand,
+                    justify_content: Some(JustifyContent::Start),
                     ..Default::default()
                 },
                 Container {
@@ -5325,6 +5351,7 @@ mod test {
                     }],
                     overflow_x: LayoutOverflow::Expand,
                     overflow_y: LayoutOverflow::Expand,
+                    justify_content: Some(JustifyContent::Start),
                     ..Default::default()
                 },
                 Container {
@@ -5334,6 +5361,7 @@ mod test {
                     }],
                     overflow_x: LayoutOverflow::Expand,
                     overflow_y: LayoutOverflow::Expand,
+                    justify_content: Some(JustifyContent::Start),
                     ..Default::default()
                 },
             ],
@@ -5342,6 +5370,7 @@ mod test {
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Squash,
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
 
@@ -5422,6 +5451,7 @@ mod test {
                     }],
                     overflow_x: LayoutOverflow::Squash,
                     overflow_y: LayoutOverflow::Squash,
+                    justify_content: Some(JustifyContent::Start),
                     ..Default::default()
                 },
                 Container {
@@ -5432,6 +5462,7 @@ mod test {
                     }],
                     overflow_x: LayoutOverflow::Squash,
                     overflow_y: LayoutOverflow::Squash,
+                    justify_content: Some(JustifyContent::Start),
                     ..Default::default()
                 },
                 Container {
@@ -5442,6 +5473,7 @@ mod test {
                     }],
                     overflow_x: LayoutOverflow::Squash,
                     overflow_y: LayoutOverflow::Squash,
+                    justify_content: Some(JustifyContent::Start),
                     ..Default::default()
                 },
             ],
@@ -5450,6 +5482,7 @@ mod test {
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Squash,
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -5532,6 +5565,7 @@ mod test {
                     }],
                     overflow_x: LayoutOverflow::Expand,
                     overflow_y: LayoutOverflow::Expand,
+                    justify_content: Some(JustifyContent::Start),
                     ..Default::default()
                 },
                 Container {
@@ -5542,6 +5576,7 @@ mod test {
                     }],
                     overflow_x: LayoutOverflow::Expand,
                     overflow_y: LayoutOverflow::Expand,
+                    justify_content: Some(JustifyContent::Start),
                     ..Default::default()
                 },
                 Container {
@@ -5552,6 +5587,7 @@ mod test {
                     }],
                     overflow_x: LayoutOverflow::Expand,
                     overflow_y: LayoutOverflow::Expand,
+                    justify_content: Some(JustifyContent::Start),
                     ..Default::default()
                 },
             ],
@@ -5560,6 +5596,7 @@ mod test {
             direction: LayoutDirection::Row,
             overflow_x: LayoutOverflow::Wrap { grid: true },
             overflow_y: LayoutOverflow::Squash,
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -5639,16 +5676,19 @@ mod test {
                         Container {
                             children: vec![Container::default(), Container::default()],
                             direction: LayoutDirection::Row,
+                            justify_content: Some(JustifyContent::Start),
                             ..Default::default()
                         },
                     ],
                     direction: LayoutDirection::Row,
+                    justify_content: Some(JustifyContent::Start),
                     ..Default::default()
                 },
                 Container::default(),
             ],
             calculated_width: Some(100.0),
             calculated_height: Some(40.0),
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -5729,10 +5769,12 @@ mod test {
                         Container {
                             children: vec![Container::default(), Container::default()],
                             direction: LayoutDirection::Row,
+                            justify_content: Some(JustifyContent::Start),
                             ..Default::default()
                         },
                     ],
                     direction: LayoutDirection::Row,
+                    justify_content: Some(JustifyContent::Start),
                     ..Default::default()
                 },
                 Container {
@@ -5742,6 +5784,7 @@ mod test {
             ],
             calculated_width: Some(100.0),
             calculated_height: Some(80.0),
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -5825,6 +5868,7 @@ mod test {
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             position: Some(Position::Relative),
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -5869,11 +5913,13 @@ mod test {
                         ..Default::default()
                     },
                 ],
+                justify_content: Some(JustifyContent::Start),
                 ..Default::default()
             }],
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             position: Some(Position::Relative),
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -5922,6 +5968,7 @@ mod test {
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             position: Some(Position::Relative),
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -5969,6 +6016,7 @@ mod test {
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             position: Some(Position::Relative),
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -6014,6 +6062,7 @@ mod test {
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             position: Some(Position::Relative),
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -6058,11 +6107,13 @@ mod test {
                         ..Default::default()
                     },
                 ],
+                justify_content: Some(JustifyContent::Start),
                 ..Default::default()
             }],
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             position: Some(Position::Relative),
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -6111,6 +6162,7 @@ mod test {
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             position: Some(Position::Relative),
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -6159,6 +6211,7 @@ mod test {
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             position: Some(Position::Relative),
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -6209,6 +6262,7 @@ mod test {
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             position: Some(Position::Relative),
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -6832,6 +6886,7 @@ mod test {
             }],
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
 
@@ -6864,6 +6919,7 @@ mod test {
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             height: Some(Number::Integer(50)),
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -6899,12 +6955,13 @@ mod test {
                 padding_left: Some(Number::Integer(10)),
                 padding_right: Some(Number::Integer(20)),
                 padding_top: Some(Number::Integer(15)),
+                justify_content: Some(JustifyContent::Start),
                 ..Default::default()
             }],
-
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             height: Some(Number::Integer(50)),
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -6955,12 +7012,13 @@ mod test {
                 padding_left: Some(Number::Integer(10)),
                 padding_right: Some(Number::Integer(20)),
                 padding_top: Some(Number::Integer(15)),
+                justify_content: Some(JustifyContent::Start),
                 ..Default::default()
             }],
-
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             height: Some(Number::Integer(50)),
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -7010,6 +7068,7 @@ mod test {
             calculated_width: Some(100.0),
             calculated_height: Some(50.0),
             position: Some(Position::Relative),
+            justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
@@ -7167,7 +7226,7 @@ mod test {
                 section sx-dir="row" sx-height=("calc(100% - 140px)") {
                     aside sx-width="calc(max(240, min(280, 15%)))" {}
                     main sx-overflow-y="auto" {
-                        div sx-height=(76) {
+                        div sx-height=(76) sx-justify-content=(JustifyContent::Start) {
                             div
                                 sx-padding-left=(30)
                                 sx-padding-right=(30)
@@ -7187,6 +7246,7 @@ mod test {
 
         container.calculated_width = Some(1600.0);
         container.calculated_height = Some(1000.0);
+        container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
@@ -7447,10 +7507,14 @@ mod test {
         let mut container: Container = html! {
             div sx-width="100%" sx-height="100%" sx-position="relative" {
                 section sx-dir="row" sx-height=("calc(100% - 140)") {
-                    aside sx-width="calc(max(240, min(280, 15%)))" sx-padding=(20) {
-                        div {
+                    aside
+                        sx-justify-content=(JustifyContent::Start)
+                        sx-width="calc(max(240, min(280, 15%)))"
+                        sx-padding=(20)
+                    {
+                        div sx-justify-content=(JustifyContent::Start) {
                             div {}
-                            ul { li {} li {} }
+                            ul sx-justify-content=(JustifyContent::Start) { li {} li {} }
                         }
                     }
                     main sx-overflow-y="auto" {}
@@ -7463,6 +7527,7 @@ mod test {
 
         container.calculated_width = Some(1600.0);
         container.calculated_height = Some(1000.0);
+        container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
@@ -7648,7 +7713,7 @@ mod test {
     #[test_log::test]
     fn calc_overflow_y_auto_justify_content_start_only_takes_up_sized_height() {
         let mut container: Container = html! {
-            div sx-overflow-y="auto" {
+            div sx-overflow-y="auto" sx-justify-content=(JustifyContent::Start) {
                 div {
                     div sx-height=(40) {}
                 }
@@ -7662,6 +7727,7 @@ mod test {
 
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(500.0);
+        container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
@@ -8013,6 +8079,7 @@ mod test {
 
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(500.0);
+        container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
@@ -8040,6 +8107,7 @@ mod test {
 
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(500.0);
+        container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
@@ -8067,6 +8135,7 @@ mod test {
 
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(500.0);
+        container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
@@ -8094,6 +8163,7 @@ mod test {
 
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(500.0);
+        container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
@@ -8121,6 +8191,7 @@ mod test {
 
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(500.0);
+        container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
@@ -8148,6 +8219,7 @@ mod test {
 
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(500.0);
+        container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
@@ -8175,6 +8247,7 @@ mod test {
 
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(500.0);
+        container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
@@ -8202,6 +8275,7 @@ mod test {
 
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(500.0);
+        container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
@@ -8229,6 +8303,7 @@ mod test {
 
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(500.0);
+        container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
@@ -8256,6 +8331,7 @@ mod test {
 
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(500.0);
+        container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
@@ -8283,6 +8359,7 @@ mod test {
 
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(500.0);
+        container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
@@ -8310,6 +8387,7 @@ mod test {
 
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(500.0);
+        container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
@@ -8337,6 +8415,7 @@ mod test {
 
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(500.0);
+        container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
@@ -8364,6 +8443,7 @@ mod test {
 
         container.calculated_width = Some(100.0);
         container.calculated_height = Some(500.0);
+        container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
@@ -8396,6 +8476,7 @@ mod test {
 
         container.calculated_width = Some(400.0);
         container.calculated_height = Some(100.0);
+        container.justify_content = Some(JustifyContent::Start);
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
 
@@ -8419,6 +8500,46 @@ mod test {
                     calculated_height: Some(100.0),
                     ..container.children[0].clone()
                 }],
+                calculated_width: Some(400.0),
+                calculated_height: Some(100.0),
+                ..container.clone()
+            },
+        );
+    }
+
+    #[test_log::test]
+    fn calc_only_takes_height_necessary_for_non_flex_container_contents() {
+        let mut container: Container = html! {
+            div {
+                div sx-height=(10) {}
+            }
+            div {
+                div sx-height=(15) {}
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(400.0);
+        container.calculated_height = Some(100.0);
+        CALCULATOR.calc(&mut container);
+        log::trace!("container:\n{}", container);
+
+        compare_containers(
+            &container,
+            &Container {
+                children: vec![
+                    Container {
+                        calculated_width: Some(400.0),
+                        calculated_height: Some(10.0),
+                        ..container.children[0].clone()
+                    },
+                    Container {
+                        calculated_width: Some(400.0),
+                        calculated_height: Some(15.0),
+                        ..container.children[1].clone()
+                    },
+                ],
                 calculated_width: Some(400.0),
                 calculated_height: Some(100.0),
                 ..container.clone()
