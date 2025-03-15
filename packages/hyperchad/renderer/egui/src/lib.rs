@@ -20,8 +20,8 @@ use hyperchad_router::{ClientInfo, RequestInfo, Router};
 use hyperchad_transformer::{
     Container, Element, Input, ResponsiveTrigger, TableIter,
     models::{
-        AlignItems, Cursor, JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition,
-        Position, Route, SwapTarget, Visibility,
+        Cursor, LayoutDirection, LayoutOverflow, LayoutPosition, Position, Route, SwapTarget,
+        Visibility,
     },
 };
 use itertools::Itertools;
@@ -1799,17 +1799,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                         for row in rows {
                             let render_context = &mut *render_context;
                             ui.horizontal(move |ui| {
-                                let offset = row.first().and_then(|x| {
-                                    if x.internal_margin_left.is_none() {
-                                        x.calculated_x
-                                    } else {
-                                        None
-                                    }
-                                });
-                                if let Some(offset) = offset {
-                                    ui.allocate_space(egui::vec2(offset, 0.0));
-                                }
-
                                 self.render_elements_ref(
                                     render_context,
                                     ctx,
@@ -1831,19 +1820,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                     .response
                 } else {
                     ui.horizontal(move |ui| {
-                        let offset = container.children.first().and_then(|x| {
-                            if matches!(x.calculated_position, Some(LayoutPosition::Wrap { .. }))
-                                && x.internal_margin_left.is_none()
-                            {
-                                x.calculated_x
-                            } else {
-                                None
-                            }
-                        });
-                        if let Some(offset) = offset {
-                            ui.allocate_space(egui::vec2(offset, 0.0));
-                        }
-
                         self.render_elements(
                             render_context,
                             ctx,
@@ -1881,17 +1857,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                         for col in cols {
                             let render_context = &mut *render_context;
                             ui.vertical(move |ui| {
-                                let offset = col.first().and_then(|x| {
-                                    if x.internal_margin_top.is_none() {
-                                        x.calculated_y
-                                    } else {
-                                        None
-                                    }
-                                });
-                                if let Some(offset) = offset {
-                                    ui.allocate_space(egui::vec2(0.0, offset));
-                                }
-
                                 self.render_elements_ref(
                                     render_context,
                                     ctx,
@@ -1913,19 +1878,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                     .response
                 } else {
                     ui.vertical(move |ui| {
-                        let offset = container.children.first().and_then(|x| {
-                            if matches!(x.calculated_position, Some(LayoutPosition::Wrap { .. }))
-                                && x.internal_margin_top.is_none()
-                            {
-                                x.calculated_y
-                            } else {
-                                None
-                            }
-                        });
-                        if let Some(offset) = offset {
-                            ui.allocate_space(egui::vec2(0.0, offset));
-                        }
-
                         self.render_elements(
                             render_context,
                             ctx,
@@ -1952,51 +1904,32 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         relative_container: Option<(egui::Rect, &'a Container)>,
         inner: impl FnOnce(&mut Ui, Option<(egui::Rect, &'a Container)>) -> Response,
     ) -> Response {
-        let justify_content = container.justify_content.unwrap_or_default();
-        let align_items = container.align_items.unwrap_or_default();
+        let (offset_x, offset_y) = container
+            .children
+            .first()
+            .map(|x| (get_left_offset(x), get_top_offset(x)))
+            .unwrap_or_default();
 
-        if matches!(justify_content, JustifyContent::Start)
-            && matches!(align_items, AlignItems::Start)
-        {
-            return inner(ui, relative_container);
-        }
+        if offset_x.is_some() || offset_y.is_some() {
+            let rect = egui::Rect::from_min_size(
+                egui::pos2(
+                    ui.cursor().left() + offset_x.unwrap_or_default(),
+                    ui.cursor().top() + offset_y.unwrap_or_default(),
+                ),
+                egui::vec2(
+                    container.calculated_width.unwrap(),
+                    container.calculated_height.unwrap(),
+                ),
+            );
 
-        let contained_calculated_width = container.contained_calculated_width();
-        let contained_calculated_height = container.contained_calculated_height();
-        if justify_content == JustifyContent::End {
-            ui.add_space(container.calculated_width.unwrap() - contained_calculated_width);
-        }
-        ui.allocate_new_ui(
-            egui::UiBuilder::new().layout(match align_items {
-                AlignItems::Center => {
-                    egui::Layout::centered_and_justified(egui::Direction::TopDown)
-                }
-                AlignItems::End | AlignItems::Start => match justify_content {
-                    JustifyContent::Center => egui::Layout::top_down_justified(egui::Align::Center),
-                    JustifyContent::End => egui::Layout::top_down_justified(egui::Align::Max),
-                    _ => egui::Layout::top_down_justified(egui::Align::Min),
-                },
-            }),
-            |ui| {
-                egui::Frame::new().show(ui, |ui| {
-                    ui.set_width(contained_calculated_width);
-                    ui.set_height(contained_calculated_height);
-                    if align_items == AlignItems::End {
-                        let rect = egui::Rect::from_min_size(
-                            ui.cursor().left_top(),
-                            egui::vec2(
-                                0.0,
-                                container.calculated_height.unwrap() - contained_calculated_height,
-                            ),
-                        );
-                        ui.advance_cursor_after_rect(rect);
-                    }
-
+            return ui
+                .allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
                     inner(ui, relative_container)
                 })
-            },
-        )
-        .response
+                .response;
+        }
+
+        inner(ui, relative_container)
     }
 
     fn get_container_style_override<'a, T>(
@@ -4157,6 +4090,22 @@ const fn cursor_to_cursor_icon(cursor: Cursor) -> CursorIcon {
         Cursor::ZoomIn => CursorIcon::ZoomIn,
         Cursor::ZoomOut => CursorIcon::ZoomOut,
     }
+}
+
+const EPSILON: f32 = 0.001;
+
+fn get_left_offset(x: impl AsRef<Container>) -> Option<f32> {
+    let x = x.as_ref();
+
+    x.calculated_x
+        .and_then(|x| if x < EPSILON { None } else { Some(x) })
+}
+
+fn get_top_offset(x: impl AsRef<Container>) -> Option<f32> {
+    let x = x.as_ref();
+
+    x.calculated_y
+        .and_then(|x| if x < EPSILON { None } else { Some(x) })
 }
 
 #[cfg(feature = "profiling-puffin")]
