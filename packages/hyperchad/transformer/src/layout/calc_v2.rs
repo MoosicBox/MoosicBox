@@ -1194,12 +1194,8 @@ mod pass_positioning {
                                 continue;
                             };
 
-                            let child_width = child.calculated_width.unwrap()
-                                + child.horizontal_margin().unwrap_or_default()
-                                + child.horizontal_padding().unwrap_or_default();
-                            let child_height = child.calculated_height.unwrap()
-                                + child.vertical_margin().unwrap_or_default()
-                                + child.vertical_padding().unwrap_or_default();
+                            let child_width = child.bounding_calculated_width().unwrap();
+                            let child_height = child.bounding_calculated_height().unwrap();
 
                             if row != last_row {
                                 moosicbox_assert::assert!(row > last_row);
@@ -1242,8 +1238,8 @@ mod pass_positioning {
                                 let size: f32 = parent
                                     .relative_positioned_elements()
                                     .filter_map(|x| match direction {
-                                        LayoutDirection::Row => x.calculated_width,
-                                        LayoutDirection::Column => x.calculated_height,
+                                        LayoutDirection::Row => x.bounding_calculated_width(),
+                                        LayoutDirection::Column => x.bounding_calculated_height(),
                                     })
                                     .sum();
 
@@ -1256,8 +1252,8 @@ mod pass_positioning {
                                 let size: f32 = parent
                                     .relative_positioned_elements()
                                     .filter_map(|x| match direction {
-                                        LayoutDirection::Row => x.calculated_width,
-                                        LayoutDirection::Column => x.calculated_height,
+                                        LayoutDirection::Row => x.bounding_calculated_width(),
+                                        LayoutDirection::Column => x.bounding_calculated_height(),
                                     })
                                     .sum();
 
@@ -1271,8 +1267,8 @@ mod pass_positioning {
                                 let size: f32 = parent
                                     .relative_positioned_elements()
                                     .filter_map(|x| match direction {
-                                        LayoutDirection::Row => x.calculated_width,
-                                        LayoutDirection::Column => x.calculated_height,
+                                        LayoutDirection::Row => x.bounding_calculated_width(),
+                                        LayoutDirection::Column => x.bounding_calculated_height(),
                                     })
                                     .sum();
 
@@ -1291,8 +1287,8 @@ mod pass_positioning {
                                 let size: f32 = parent
                                     .relative_positioned_elements()
                                     .filter_map(|x| match direction {
-                                        LayoutDirection::Row => x.calculated_width,
-                                        LayoutDirection::Column => x.calculated_height,
+                                        LayoutDirection::Row => x.bounding_calculated_width(),
+                                        LayoutDirection::Column => x.bounding_calculated_height(),
                                     })
                                     .sum();
 
@@ -1321,16 +1317,10 @@ mod pass_positioning {
 
                             match direction {
                                 LayoutDirection::Row => {
-                                    x += child.calculated_width.unwrap()
-                                        + child.horizontal_margin().unwrap_or_default()
-                                        + child.horizontal_padding().unwrap_or_default()
-                                        + col_gap;
+                                    x += child.bounding_calculated_width().unwrap() + col_gap;
                                 }
                                 LayoutDirection::Column => {
-                                    y += child.calculated_height.unwrap()
-                                        + child.vertical_margin().unwrap_or_default()
-                                        + child.vertical_padding().unwrap_or_default()
-                                        + row_gap;
+                                    y += child.bounding_calculated_height().unwrap() + row_gap;
                                 }
                             }
                         }
