@@ -3,7 +3,6 @@ use std::sync::atomic::AtomicU16;
 use crate::Container;
 
 pub mod calc;
-pub mod calc_v2;
 pub mod font;
 
 static EPSILON: f32 = 0.001;

@@ -5042,7 +5042,6 @@ dependencies = [
  "hyperchad_actions",
  "hyperchad_color",
  "hyperchad_transformer_models",
- "itertools 0.14.0",
  "log",
  "maud",
  "moosicbox_arb",

@@ -32,7 +32,7 @@ use hyperchad_renderer::viewport::retained::{
 };
 use hyperchad_transformer::{
     Container, Element, HeaderSize, ResponsiveTrigger,
-    layout::{Calc as _, calc::CalcCalculator},
+    layout::{Calc as _, calc::Calculator},
     models::{LayoutDirection, LayoutOverflow, LayoutPosition},
 };
 use thiserror::Error;
@@ -50,8 +50,8 @@ static DEBUG: LazyLock<RwLock<bool>> = LazyLock::new(|| {
     )
 });
 
-static FLTK_CALCULATOR: CalcCalculator<font_metrics::FltkFontMetrics> =
-    CalcCalculator::new(font_metrics::FltkFontMetrics);
+static FLTK_CALCULATOR: Calculator<font_metrics::FltkFontMetrics> =
+    Calculator::new(font_metrics::FltkFontMetrics);
 
 #[derive(Debug, Error)]
 pub enum LoadImageError {
@@ -550,8 +550,8 @@ impl FltkRenderer {
                 None
             };
 
-        let contained_width = element.contained_calculated_width();
-        let contained_height = element.contained_calculated_height();
+        let contained_width = element.calculated_width.unwrap();
+        let contained_height = element.calculated_height.unwrap();
 
         moosicbox_assert::assert!(
             contained_width > 0.0 && contained_height > 0.0

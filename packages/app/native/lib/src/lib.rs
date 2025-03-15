@@ -43,11 +43,7 @@ pub static CLIENT_INFO: std::sync::LazyLock<Arc<hyperchad_router::ClientInfo>> =
 mod egui {
     use std::sync::Arc;
 
-    #[cfg(not(feature = "calc-v2"))]
-    use hyperchad_renderer::transformer::layout::calc::CalcCalculator as Calculator;
-    #[cfg(feature = "calc-v2")]
-    use hyperchad_renderer::transformer::layout::calc_v2::CalcV2Calculator as Calculator;
-
+    use hyperchad_renderer::transformer::layout::calc::Calculator as Calculator;
     use hyperchad_renderer_egui::eframe::egui::{self};
     use hyperchad_renderer_egui::font_metrics::EguiFontMetrics;
 

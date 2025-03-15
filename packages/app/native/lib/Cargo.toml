@@ -132,5 +132,3 @@ plugin-idiomorph = ["hyperchad_renderer_vanilla_js?/plugin-idiomorph"]
 plugin-nav       = ["hyperchad_renderer_vanilla_js?/plugin-nav"]
 plugin-routing   = ["hyperchad_renderer_vanilla_js?/plugin-routing"]
 plugin-sse       = ["hyperchad_renderer_vanilla_js?/plugin-sse"]
-
-calc-v2 = []

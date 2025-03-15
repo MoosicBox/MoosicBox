@@ -25,7 +25,6 @@ moosicbox_logging = { version = "0.1.0", path = "../../logging", default-feature
 
 bumpalo     = { workspace = true, features = ["collections"], optional = true }
 html-escape = { workspace = true }
-itertools   = { workspace = true, optional = true }
 log         = { workspace = true }
 maud        = { workspace = true, optional = true }
 profiling   = { workspace = true, optional = true }
@@ -88,7 +87,7 @@ profiling-tracing = [
 ]
 profiling-tracy = ["profiling", "profiling/profile-with-tracy"]
 
-layout = ["dep:bumpalo", "dep:itertools", "hyperchad_transformer_models/layout"]
+layout = ["dep:bumpalo", "hyperchad_transformer_models/layout"]
 logic  = ["hyperchad_actions/logic"]
 maud   = ["dep:maud", "html"]
 
