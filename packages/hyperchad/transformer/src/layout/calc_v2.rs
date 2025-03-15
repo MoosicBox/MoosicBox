@@ -1476,6 +1476,7 @@ mod test {
         assert_eq!(
             a.display_to_string(
                 true,
+                true,
                 #[cfg(feature = "format")]
                 true,
                 #[cfg(feature = "syntax-highlighting")]
@@ -1483,6 +1484,7 @@ mod test {
             )
             .unwrap(),
             b.display_to_string(
+                true,
                 true,
                 #[cfg(feature = "format")]
                 true,

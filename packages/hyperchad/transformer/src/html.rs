@@ -1498,6 +1498,7 @@ mod test {
         let markup = container
             .display_to_string(
                 true,
+                false,
                 #[cfg(feature = "format")]
                 false,
                 #[cfg(feature = "syntax-highlighting")]
@@ -1525,6 +1526,7 @@ mod test {
                 re_parsed
                     .display_to_string(
                         true,
+                        true,
                         #[cfg(feature = "format")]
                         true,
                         #[cfg(feature = "syntax-highlighting")]
@@ -1533,6 +1535,7 @@ mod test {
                     .unwrap(),
                 container
                     .display_to_string(
+                        true,
                         true,
                         #[cfg(feature = "format")]
                         true,

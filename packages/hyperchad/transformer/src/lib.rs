@@ -2501,17 +2501,30 @@ impl Container {
 
     #[cfg_attr(feature = "profiling", profiling::function)]
     #[allow(clippy::too_many_lines)]
-    fn display(&self, f: &mut dyn Write, with_debug_attrs: bool) -> Result<(), std::io::Error> {
+    fn display(
+        &self,
+        f: &mut dyn Write,
+        with_debug_attrs: bool,
+        wrap_raw_in_element: bool,
+    ) -> Result<(), std::io::Error> {
         match &self.element {
             Element::Raw { value } => {
-                f.write_fmt(format_args!("{value}"))?;
+                if wrap_raw_in_element {
+                    f.write_fmt(format_args!(
+                        "<raw{attrs}>",
+                        attrs = self.attrs_to_string_pad_left(with_debug_attrs)
+                    ))?;
+                    f.write_fmt(format_args!("{value}</raw>"))?;
+                } else {
+                    f.write_fmt(format_args!("{value}"))?;
+                }
             }
             Element::Div => {
                 f.write_fmt(format_args!(
                     "<div{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
-                display_elements(&self.children, f, with_debug_attrs)?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</div>"))?;
             }
             Element::Aside => {
@@ -2519,7 +2532,7 @@ impl Container {
                     "<aside{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
-                display_elements(&self.children, f, with_debug_attrs)?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</aside>"))?;
             }
 
@@ -2528,7 +2541,7 @@ impl Container {
                     "<main{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
-                display_elements(&self.children, f, with_debug_attrs)?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</main>"))?;
             }
             Element::Header => {
@@ -2536,7 +2549,7 @@ impl Container {
                     "<header{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
-                display_elements(&self.children, f, with_debug_attrs)?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</header>"))?;
             }
             Element::Footer => {
@@ -2544,7 +2557,7 @@ impl Container {
                     "<footer{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
-                display_elements(&self.children, f, with_debug_attrs)?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</footer>"))?;
             }
             Element::Section => {
@@ -2552,7 +2565,7 @@ impl Container {
                     "<section{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
-                display_elements(&self.children, f, with_debug_attrs)?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</section>"))?;
             }
             Element::Form => {
@@ -2560,7 +2573,7 @@ impl Container {
                     "<form{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
-                display_elements(&self.children, f, with_debug_attrs)?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</form>"))?;
             }
             Element::Span => {
@@ -2568,7 +2581,7 @@ impl Container {
                     "<span{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
-                display_elements(&self.children, f, with_debug_attrs)?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</span>"))?;
             }
             Element::Input { input, .. } => {
@@ -2579,7 +2592,7 @@ impl Container {
                     "<button{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
-                display_elements(&self.children, f, with_debug_attrs)?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</button>"))?;
             }
             Element::Image { source, .. } => {
@@ -2599,7 +2612,7 @@ impl Container {
                         .with_attr_opt("href", href.to_owned())
                         .to_string_pad_left(),
                 ))?;
-                display_elements(&self.children, f, with_debug_attrs)?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</a>"))?;
             }
             Element::Heading { size } => {
@@ -2607,7 +2620,7 @@ impl Container {
                     "<{size}{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
-                display_elements(&self.children, f, with_debug_attrs)?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</{size}>"))?;
             }
             Element::UnorderedList => {
@@ -2615,7 +2628,7 @@ impl Container {
                     "<ul{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
-                display_elements(&self.children, f, with_debug_attrs)?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</ul>"))?;
             }
             Element::OrderedList => {
@@ -2623,7 +2636,7 @@ impl Container {
                     "<ol{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
-                display_elements(&self.children, f, with_debug_attrs)?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</ol>"))?;
             }
             Element::ListItem => {
@@ -2631,7 +2644,7 @@ impl Container {
                     "<li{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
-                display_elements(&self.children, f, with_debug_attrs)?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</li>"))?;
             }
             Element::Table => {
@@ -2639,7 +2652,7 @@ impl Container {
                     "<table{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
-                display_elements(&self.children, f, with_debug_attrs)?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</table>"))?;
             }
             Element::THead => {
@@ -2647,7 +2660,7 @@ impl Container {
                     "<thead{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
-                display_elements(&self.children, f, with_debug_attrs)?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</thead>"))?;
             }
             Element::TH => {
@@ -2655,7 +2668,7 @@ impl Container {
                     "<th{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
-                display_elements(&self.children, f, with_debug_attrs)?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</th>"))?;
             }
             Element::TBody => {
@@ -2663,7 +2676,7 @@ impl Container {
                     "<tbody{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
-                display_elements(&self.children, f, with_debug_attrs)?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</tbody>"))?;
             }
             Element::TR => {
@@ -2671,7 +2684,7 @@ impl Container {
                     "<tr{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
-                display_elements(&self.children, f, with_debug_attrs)?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</tr>"))?;
             }
             Element::TD => {
@@ -2679,7 +2692,7 @@ impl Container {
                     "<td{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
-                display_elements(&self.children, f, with_debug_attrs)?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</td>"))?;
             }
             #[cfg(feature = "canvas")]
@@ -2688,7 +2701,7 @@ impl Container {
                     "<canvas{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
-                display_elements(&self.children, f, with_debug_attrs)?;
+                display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</canvas>"))?;
             }
         }
@@ -2697,15 +2710,17 @@ impl Container {
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
+    #[allow(clippy::fn_params_excessive_bools)]
     fn display_to_string(
         &self,
         with_debug_attrs: bool,
+        wrap_raw_in_element: bool,
         #[cfg(feature = "format")] format: bool,
         #[cfg(feature = "syntax-highlighting")] highlight: bool,
     ) -> Result<String, Box<dyn std::error::Error>> {
         let mut data = Vec::new();
 
-        let _ = self.display(&mut data, with_debug_attrs);
+        let _ = self.display(&mut data, with_debug_attrs, wrap_raw_in_element);
 
         #[cfg(feature = "format")]
         let data = if format {
@@ -2847,6 +2862,7 @@ impl std::fmt::Display for Container {
                         std::env::var("DEBUG_ATTRS")
                             .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str()))
                     },
+                    false,
                     #[cfg(feature = "format")]
                     true,
                     #[cfg(feature = "syntax-highlighting")]
@@ -2863,9 +2879,10 @@ fn display_elements(
     elements: &[Container],
     f: &mut dyn Write,
     with_debug_attrs: bool,
+    wrap_raw_in_element: bool,
 ) -> Result<(), std::io::Error> {
     for element in elements {
-        element.display(f, with_debug_attrs)?;
+        element.display(f, with_debug_attrs, wrap_raw_in_element)?;
     }
 
     Ok(())
