@@ -1194,6 +1194,12 @@ pub struct Container {
     pub scrollbar_bottom: Option<f32>,
 }
 
+impl AsRef<Self> for Container {
+    fn as_ref(&self) -> &Self {
+        self
+    }
+}
+
 impl Container {
     pub fn iter_overrides(&self, recurse: bool) -> impl Iterator<Item = (&Self, &ConfigOverride)> {
         let mut iter: Box<dyn Iterator<Item = (&Self, &ConfigOverride)>> =
