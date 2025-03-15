@@ -335,23 +335,23 @@ whoami = "1.5.2"
 xml = "0.8.20"
 
 [patch.crates-io]
-# actix-files              = { git = "https://github.com/actix/actix-web" }
-# actix-http               = { git = "https://github.com/actix/actix-web" }
-# actix-http-test          = { git = "https://github.com/actix/actix-web" }
-# actix-multipart          = { git = "https://github.com/actix/actix-web" }
-# actix-multipart-derive   = { git = "https://github.com/actix/actix-web" }
-# actix-router             = { git = "https://github.com/actix/actix-web" }
-# actix-test               = { git = "https://github.com/actix/actix-web" }
-# actix-web                = { git = "https://github.com/actix/actix-web" }
-# actix-web-actors         = { git = "https://github.com/actix/actix-web" }
-# actix-web-codegen        = { git = "https://github.com/actix/actix-web" }
-# actix-web-opentelemetry  = { git = "https://github.com/OutThereLabs/actix-web-opentelemetry" }
-# awc                      = { git = "https://github.com/actix/actix-web" }
-# eframe                   = { git = "https://github.com/BSteffaniak/egui" }
-# egui                     = { git = "https://github.com/BSteffaniak/egui" }
-# egui_extras              = { git = "https://github.com/BSteffaniak/egui" }
-# opentelemetry            = { git = "https://github.com/open-telemetry/opentelemetry-rust" }
-# opentelemetry-otlp       = { git = "https://github.com/open-telemetry/opentelemetry-rust" }
-# opentelemetry-prometheus = { git = "https://github.com/open-telemetry/opentelemetry-rust" }
-# opentelemetry_sdk        = { git = "https://github.com/open-telemetry/opentelemetry-rust" }
-# tracing-opentelemetry    = { git = "https://github.com/tokio-rs/tracing-opentelemetry" }
+actix-files              = { git = "https://github.com/actix/actix-web" }
+actix-http               = { git = "https://github.com/actix/actix-web" }
+actix-http-test          = { git = "https://github.com/actix/actix-web" }
+actix-multipart          = { git = "https://github.com/actix/actix-web" }
+actix-multipart-derive   = { git = "https://github.com/actix/actix-web" }
+actix-router             = { git = "https://github.com/actix/actix-web" }
+actix-test               = { git = "https://github.com/actix/actix-web" }
+actix-web                = { git = "https://github.com/actix/actix-web" }
+actix-web-actors         = { git = "https://github.com/actix/actix-web" }
+actix-web-codegen        = { git = "https://github.com/actix/actix-web" }
+actix-web-opentelemetry  = { git = "https://github.com/OutThereLabs/actix-web-opentelemetry" }
+awc                      = { git = "https://github.com/actix/actix-web" }
+eframe                   = { git = "https://github.com/BSteffaniak/egui" }
+egui                     = { git = "https://github.com/BSteffaniak/egui" }
+egui_extras              = { git = "https://github.com/BSteffaniak/egui" }
+opentelemetry            = { git = "https://github.com/open-telemetry/opentelemetry-rust" }
+opentelemetry-otlp       = { git = "https://github.com/open-telemetry/opentelemetry-rust" }
+opentelemetry-prometheus = { git = "https://github.com/open-telemetry/opentelemetry-rust" }
+opentelemetry_sdk        = { git = "https://github.com/open-telemetry/opentelemetry-rust" }
+tracing-opentelemetry    = { git = "https://github.com/tokio-rs/tracing-opentelemetry" }
