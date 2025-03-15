@@ -1772,6 +1772,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             );
         }
 
+        let gap_x = container.calculated_column_gap;
+        let gap_y = container.calculated_row_gap;
+
         match container.direction {
             LayoutDirection::Row => {
                 let rows = container
@@ -1796,6 +1799,17 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                         for row in rows {
                             let render_context = &mut *render_context;
                             ui.horizontal(move |ui| {
+                                let offset = row.first().and_then(|x| {
+                                    if x.internal_margin_left.is_none() {
+                                        x.calculated_x
+                                    } else {
+                                        None
+                                    }
+                                });
+                                if let Some(offset) = offset {
+                                    ui.allocate_space(egui::vec2(offset, 0.0));
+                                }
+
                                 self.render_elements_ref(
                                     render_context,
                                     ctx,
@@ -1805,13 +1819,31 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                     rect,
                                     relative_container,
                                     !vscroll && rect.is_some(),
+                                    LayoutDirection::Row,
+                                    gap_x,
                                 );
                             });
+                            if let Some(gap_y) = gap_y {
+                                ui.allocate_space(egui::vec2(0.0, gap_y));
+                            }
                         }
                     })
                     .response
                 } else {
                     ui.horizontal(move |ui| {
+                        let offset = container.children.first().and_then(|x| {
+                            if matches!(x.calculated_position, Some(LayoutPosition::Wrap { .. }))
+                                && x.internal_margin_left.is_none()
+                            {
+                                x.calculated_x
+                            } else {
+                                None
+                            }
+                        });
+                        if let Some(offset) = offset {
+                            ui.allocate_space(egui::vec2(offset, 0.0));
+                        }
+
                         self.render_elements(
                             render_context,
                             ctx,
@@ -1821,6 +1853,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                             rect,
                             relative_container,
                             !vscroll && rect.is_some(),
+                            LayoutDirection::Row,
+                            gap_x,
                         );
                     })
                     .response
@@ -1847,6 +1881,17 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                         for col in cols {
                             let render_context = &mut *render_context;
                             ui.vertical(move |ui| {
+                                let offset = col.first().and_then(|x| {
+                                    if x.internal_margin_top.is_none() {
+                                        x.calculated_y
+                                    } else {
+                                        None
+                                    }
+                                });
+                                if let Some(offset) = offset {
+                                    ui.allocate_space(egui::vec2(0.0, offset));
+                                }
+
                                 self.render_elements_ref(
                                     render_context,
                                     ctx,
@@ -1856,13 +1901,31 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                     rect,
                                     relative_container,
                                     !vscroll && rect.is_some(),
+                                    LayoutDirection::Column,
+                                    gap_y,
                                 );
                             });
+                            if let Some(gap_x) = gap_x {
+                                ui.allocate_space(egui::vec2(gap_x, 0.0));
+                            }
                         }
                     })
                     .response
                 } else {
                     ui.vertical(move |ui| {
+                        let offset = container.children.first().and_then(|x| {
+                            if matches!(x.calculated_position, Some(LayoutPosition::Wrap { .. }))
+                                && x.internal_margin_top.is_none()
+                            {
+                                x.calculated_y
+                            } else {
+                                None
+                            }
+                        });
+                        if let Some(offset) = offset {
+                            ui.allocate_space(egui::vec2(0.0, offset));
+                        }
+
                         self.render_elements(
                             render_context,
                             ctx,
@@ -1872,6 +1935,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                             rect,
                             relative_container,
                             !vscroll && rect.is_some(),
+                            LayoutDirection::Column,
+                            gap_y,
                         );
                     })
                     .response
@@ -2243,6 +2308,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &Container)>,
         scroll_child: bool,
+        direction: LayoutDirection,
+        gap: Option<f32>,
     ) {
         log::trace!("render_elements: {} elements", elements.len());
         for element in elements {
@@ -2256,6 +2323,12 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                 relative_container,
                 scroll_child,
             );
+            if let Some(gap) = gap {
+                ui.allocate_space(match direction {
+                    LayoutDirection::Row => egui::vec2(gap, 0.0),
+                    LayoutDirection::Column => egui::vec2(0.0, gap),
+                });
+            }
         }
     }
 
@@ -2271,6 +2344,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         rect: Option<egui::Rect>,
         relative_container: Option<(egui::Rect, &Container)>,
         scroll_child: bool,
+        direction: LayoutDirection,
+        gap: Option<f32>,
     ) {
         log::trace!("render_elements_ref: {} elements", elements.len());
         for element in elements {
@@ -2284,6 +2359,12 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                 relative_container,
                 scroll_child,
             );
+            if let Some(gap) = gap {
+                ui.allocate_space(match direction {
+                    LayoutDirection::Row => egui::vec2(gap, 0.0),
+                    LayoutDirection::Column => egui::vec2(0.0, gap),
+                });
+            }
         }
     }
 
