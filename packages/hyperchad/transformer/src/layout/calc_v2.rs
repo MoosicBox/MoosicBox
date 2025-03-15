@@ -326,7 +326,7 @@ macro_rules! flex_on_axis {
                         Some(gap.calc(container_size, view_width, view_height));
                 }
 
-                for child in parent.relative_positioned_elements_mut() {
+                for child in &mut parent.children {
                     if let Some((&color, size)) = child
                         .$border_x
                         .as_ref()
@@ -367,40 +367,36 @@ macro_rules! flex_on_axis {
                             changed = true;
                         }
                     }
-                }
 
-                for child in &mut parent.children {
+                    if let Some(margin) = child.$margin_x.as_ref().and_then(crate::Number::as_dynamic) {
+                        let size = margin.calc(container_size, view_width, view_height);
+                        if set_float(&mut child.$calculated_margin_x, size).is_some() {
+                            changed = true;
+                        }
+                    }
+                    if let Some(margin) = child.$margin_y.as_ref().and_then(crate::Number::as_dynamic) {
+                        let size = margin.calc(container_size, view_width, view_height);
+                        if set_float(&mut child.$calculated_margin_y, size).is_some() {
+                            changed = true;
+                        }
+                    }
+                    if let Some(padding) = child.$padding_x.as_ref().and_then(crate::Number::as_dynamic) {
+                        let size = padding.calc(container_size, view_width, view_height);
+                        if set_float(&mut child.$calculated_padding_x, size).is_some() {
+                            changed = true;
+                        }
+                    }
+                    if let Some(padding) = child.$padding_y.as_ref().and_then(crate::Number::as_dynamic) {
+                        let size = padding.calc(container_size, view_width, view_height);
+                        if set_float(&mut child.$calculated_padding_y, size).is_some() {
+                            changed = true;
+                        }
+                    }
+
                     $each_child(child, container_size, view_width, view_height);
                 }
 
                 if parent.relative_positioned_elements().any(|x| x.$fixed.as_ref().is_none_or(crate::Number::is_dynamic)) {
-                    for child in parent.relative_positioned_elements_mut() {
-                        if let Some(margin) = child.$margin_x.as_ref().and_then(crate::Number::as_dynamic) {
-                            let size = margin.calc(container_size, view_width, view_height);
-                            if set_float(&mut child.$calculated_margin_x, size).is_some() {
-                                changed = true;
-                            }
-                        }
-                        if let Some(margin) = child.$margin_y.as_ref().and_then(crate::Number::as_dynamic) {
-                            let size = margin.calc(container_size, view_width, view_height);
-                            if set_float(&mut child.$calculated_margin_y, size).is_some() {
-                                changed = true;
-                            }
-                        }
-                        if let Some(padding) = child.$padding_x.as_ref().and_then(crate::Number::as_dynamic) {
-                            let size = padding.calc(container_size, view_width, view_height);
-                            if set_float(&mut child.$calculated_padding_x, size).is_some() {
-                                changed = true;
-                            }
-                        }
-                        if let Some(padding) = child.$padding_y.as_ref().and_then(crate::Number::as_dynamic) {
-                            let size = padding.calc(container_size, view_width, view_height);
-                            if set_float(&mut child.$calculated_padding_y, size).is_some() {
-                                changed = true;
-                            }
-                        }
-                    }
-
                     let mut remaining_container_size = container_size;
 
                     for child in parent.relative_positioned_elements() {
