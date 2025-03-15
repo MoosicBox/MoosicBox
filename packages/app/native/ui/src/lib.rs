@@ -209,50 +209,48 @@ pub fn player(state: &State) -> Markup {
                 div sx-flex=(1) {
                     (player_current_album_from_state(state, 70))
                 }
-                div sx-flex=(2) sx-align-items="center" {
+                div sx-flex=(2) sx-align-items="center" sx-justify-content="center" {
                     @let button_size = 40;
                     @let progress_size = 20;
-                    div sx-height=(button_size + progress_size) {
-                        div sx-height=(button_size) sx-dir="row" sx-justify-content="center" sx-align-items="center" {
-                            button
-                                sx-width=(button_size)
-                                sx-height=(button_size)
-                                sx-margin-x=(5)
-                                sx-dir="row"
-                                sx-justify-content="center"
-                                sx-align-items="center"
-                                sx-background="#181a1b"
-                                sx-border-radius="100%"
-                                fx-click=(Action::PreviousTrack)
-                            {
-                                @let icon_size = 18;
-                                img
-                                    sx-width=(icon_size)
-                                    sx-height=(icon_size)
-                                    src=(public_img!("previous-button-white.svg"));
-                            }
-                            (player_play_button_from_state(state))
-                            button
-                                sx-width=(button_size)
-                                sx-height=(button_size)
-                                sx-margin-x=(5)
-                                sx-dir="row"
-                                sx-justify-content="center"
-                                sx-align-items="center"
-                                sx-background="#181a1b"
-                                sx-border-radius="100%"
-                                fx-click=(Action::NextTrack)
-                            {
-                                @let icon_size = 18;
-                                img
-                                    sx-width=(icon_size)
-                                    sx-height=(icon_size)
-                                    src=(public_img!("next-button-white.svg"));
-                            }
+                    div sx-height=(button_size) sx-dir="row" sx-justify-content="center" {
+                        button
+                            sx-width=(button_size)
+                            sx-height=(button_size)
+                            sx-margin-x=(5)
+                            sx-dir="row"
+                            sx-justify-content="center"
+                            sx-align-items="center"
+                            sx-background="#181a1b"
+                            sx-border-radius="100%"
+                            fx-click=(Action::PreviousTrack)
+                        {
+                            @let icon_size = 18;
+                            img
+                                sx-width=(icon_size)
+                                sx-height=(icon_size)
+                                src=(public_img!("previous-button-white.svg"));
                         }
-                        div sx-height=(progress_size) sx-margin-top=(10) {
-                            (player_current_progress_from_state(state))
+                        (player_play_button_from_state(state))
+                        button
+                            sx-width=(button_size)
+                            sx-height=(button_size)
+                            sx-margin-x=(5)
+                            sx-dir="row"
+                            sx-justify-content="center"
+                            sx-align-items="center"
+                            sx-background="#181a1b"
+                            sx-border-radius="100%"
+                            fx-click=(Action::NextTrack)
+                        {
+                            @let icon_size = 18;
+                            img
+                                sx-width=(icon_size)
+                                sx-height=(icon_size)
+                                src=(public_img!("next-button-white.svg"));
                         }
+                    }
+                    div sx-height=(progress_size) sx-margin-top=(10) {
+                        (player_current_progress_from_state(state))
                     }
                 }
                 div sx-flex=(1) sx-dir="row" sx-justify-content="end" sx-align-items="center" sx-padding-right=(20) {
