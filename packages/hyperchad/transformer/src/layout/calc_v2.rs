@@ -119,7 +119,11 @@ macro_rules! calc_size_on_axis {
                     if set_float(&mut child.$calculated, new_size).is_some() {
                         changed = true;
                     }
-                    None
+                    if LayoutDirection::$axis == LayoutDirection::Column {
+                        Some(new_size)
+                    } else {
+                        None
+                    }
                 } else if let Some(size) = child.$calculated_min {
                     set_float(&mut child.$calculated, size);
                     Some(size)
@@ -8629,6 +8633,65 @@ mod test {
         );
     }
 
+    mod text {
+        use super::*;
+
+        #[test_log::test]
+        fn does_calculate_text_height_properly() {
+            let mut container: Container = html! {
+                div { "test" }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        calculated_height: Some(14.0),
+                        ..container.children[0].clone()
+                    }],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_propagate_text_height_properly() {
+            let mut container: Container = html! {
+                div { "test" }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        calculated_height: Some(14.0),
+                        ..container.children[0].clone()
+                    }],
+                    calculated_height: Some(14.0),
+                    ..container.clone()
+                },
+            );
+        }
+    }
+
     mod positioning {
         use hyperchad_transformer_models::{AlignItems, TextAlign};
 
@@ -8743,12 +8806,10 @@ mod test {
             compare_containers(
                 &container,
                 &Container {
-                    children: vec![
-                        Container {
-                            calculated_x: Some(22.0),
-                            ..container.children[0].clone()
-                        },
-                    ],
+                    children: vec![Container {
+                        calculated_x: Some(22.0),
+                        ..container.children[0].clone()
+                    }],
                     ..container.clone()
                 },
             );
