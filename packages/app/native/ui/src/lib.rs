@@ -206,7 +206,7 @@ pub fn player(state: &State) -> Markup {
                 {}
             }
             div sx-height=(100) sx-dir="row" {
-                div sx-flex=(1) {
+                div sx-flex=(1) sx-justify-content="center" {
                     (player_current_album_from_state(state, 70))
                 }
                 div sx-flex=(2) sx-align-items="center" sx-justify-content="center" {
@@ -447,22 +447,20 @@ fn player_play_button_from_state(state: &State) -> Markup {
 fn player_current_album(track: &ApiTrack, size: u16) -> Markup {
     html! {
         div id="player-current-playing" sx-dir="row" sx-align-items="center" {
-            div sx-width=(size) sx-padding-x=(20) sx-align-items="center" {
+            div sx-width=(size) sx-padding-x=(20) sx-align-items="center" sx-justify-content="center" {
                 a href=(pre_escaped!("/albums?albumId={}&source={}", track.album_id, track.api_source)) sx-width=(size) sx-height=(size) {
                     (album_cover_img_from_album(&track.into(), size))
                 }
             }
-            div sx-dir="row" sx-align-items="center" {
-                div sx-height=(60) {
-                    div sx-height=(20) {
-                        a href=(pre_escaped!("/albums?albumId={}&source={}", track.album_id, track.api_source)) { (track.title) }
-                    }
-                    div sx-height=(20) {
-                        a href=(pre_escaped!("/artists?artistId={}&source={}", track.artist_id, track.api_source)) { (track.artist) }
-                    }
-                    div sx-height=(20) sx-dir="row" {
-                        "Playing from:" a href=(pre_escaped!("/albums?albumId={}&source={}", track.album_id, track.api_source)) { (track.album) }
-                    }
+            div sx-justify-content="center" {
+                div {
+                    a href=(pre_escaped!("/albums?albumId={}&source={}", track.album_id, track.api_source)) { (track.title) }
+                }
+                div {
+                    a href=(pre_escaped!("/artists?artistId={}&source={}", track.artist_id, track.api_source)) { (track.artist) }
+                }
+                div sx-dir="row" {
+                    "Playing from:" a href=(pre_escaped!("/albums?albumId={}&source={}", track.album_id, track.api_source)) { (track.album) }
                 }
             }
         }
