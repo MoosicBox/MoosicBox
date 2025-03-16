@@ -3564,9 +3564,9 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "foldhash"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0d2fde1f7b3d48b8395d5f2de76c18a528bd6a9cdde438df747bfcba3e05d6f"
+checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
 name = "foreign-types"
@@ -12333,9 +12333,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_minifier"
-version = "12.0.4"
+version = "12.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5dd01ef93c81cc5765a545f289f2254320a8ecb52b3c30bdb2bf703541e89ad"
+checksum = "89c92ef9459af28b4c3fad45fc5f82213a26f28bda3242895644c7d53e994fb6"
 dependencies = [
  "arrayvec",
  "indexmap 2.8.0",
@@ -12428,9 +12428,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_transforms_optimization"
-version = "11.0.0"
+version = "11.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93e98cb0e4e10a839c553d610082b4b920a430019a0150067ac415e6049f12b2"
+checksum = "d8461bd302613e5144a2685a38bd34dad74eb362d99a343d556a497451603605"
 dependencies = [
  "dashmap",
  "indexmap 2.8.0",
@@ -15798,9 +15798,9 @@ checksum = "1e9df38ee2d2c3c5948ea468a8406ff0db0b29ae1ffde1bcf20ef305bcc95c51"
 
 [[package]]
 name = "wry"
-version = "0.50.4"
+version = "0.50.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "804a7d1613bd699beccaa60f3b3c679acee21cebba1945a693f5eab95c08d1fa"
+checksum = "b19b78efae8b853c6c817e8752fc1dbf9cab8a8ffe9c30f399bd750ccf0f0730"
 dependencies = [
  "base64 0.22.1",
  "block2 0.6.0",
