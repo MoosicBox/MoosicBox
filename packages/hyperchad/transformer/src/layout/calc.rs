@@ -468,7 +468,7 @@ macro_rules! flex_on_axis {
                     }
 
                     // Fit all unsized children
-                    if parent.align_items.is_none() && parent.relative_positioned_elements().any(|x| x.$fixed.is_none() && !x.is_span()) {
+                    if parent.align_items.is_none() && parent.relative_positioned_elements().any(|x| x.$fixed.is_none()) {
                         let mut remaining_size = container_size;
                         let mut last_cell = 0;
                         let mut max_cell_size = 0.0;
@@ -563,7 +563,7 @@ macro_rules! flex_on_axis {
 
                                         for size in parent
                                             .relative_positioned_elements()
-                                            .filter(|x| x.$fixed.is_none() && !x.is_span())
+                                            .filter(|x| x.$fixed.is_none())
                                             .filter_map(|x| x.$calculated)
                                         {
                                             if smallest > size {
@@ -611,7 +611,7 @@ macro_rules! flex_on_axis {
 
                                         for child in parent
                                             .relative_positioned_elements_mut()
-                                            .filter(|x| x.$fixed.is_none() && !x.is_span())
+                                            .filter(|x| x.$fixed.is_none())
                                             .filter(|x| x.$calculated.is_some_and(|x| float_eq!(x, smallest)))
                                         {
                                             let mut target = target;
