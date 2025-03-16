@@ -1058,7 +1058,7 @@ mod pass_positioning {
 
     use crate::{
         BfsPaths, Container, Element,
-        layout::{font::FontMetrics, order_float, set_float},
+        layout::{font::FontMetrics, set_float},
     };
 
     use super::Calculator;
@@ -1369,45 +1369,39 @@ mod pass_positioning {
                             }
                         }
 
-                        match align_items {
-                            AlignItems::Start => {}
-                            AlignItems::Center | AlignItems::End => {
-                                let sizes = parent.relative_positioned_elements().filter_map(|x| {
-                                    match direction {
-                                        LayoutDirection::Row => x.bounding_calculated_height(),
-                                        LayoutDirection::Column => x.bounding_calculated_width(),
-                                    }
-                                });
-                                let size = match direction {
-                                    LayoutDirection::Row => {
-                                        sizes.max_by(order_float).unwrap_or_default()
-                                    }
-                                    LayoutDirection::Column => sizes.sum(),
-                                };
-
-                                match align_items {
-                                    AlignItems::Start => unreachable!(),
-                                    AlignItems::Center => match direction {
-                                        LayoutDirection::Row => {
-                                            y += (container_height - size) / 2.0;
-                                        }
-                                        LayoutDirection::Column => {
-                                            x += (container_width - size) / 2.0;
-                                        }
-                                    },
-                                    AlignItems::End => match direction {
-                                        LayoutDirection::Row => {
-                                            y += container_height - size;
-                                        }
-                                        LayoutDirection::Column => {
-                                            x += container_width - size;
-                                        }
-                                    },
-                                }
-                            }
-                        };
-
                         for child in parent.relative_positioned_elements_mut() {
+                            match align_items {
+                                AlignItems::Start => {}
+                                AlignItems::Center | AlignItems::End => {
+                                    let size = match direction {
+                                        LayoutDirection::Row => child.bounding_calculated_height(),
+                                        LayoutDirection::Column => child.bounding_calculated_width(),
+                                    }.unwrap_or_default();
+
+                                    log::trace!("position_elements: AlignItems::{align_items:?} container_width={container_width} container_height={container_height} size={size}:\n{child}");
+
+                                    match align_items {
+                                        AlignItems::Start => unreachable!(),
+                                        AlignItems::Center => match direction {
+                                            LayoutDirection::Row => {
+                                                y += (container_height - size) / 2.0;
+                                            }
+                                            LayoutDirection::Column => {
+                                                x += (container_width - size) / 2.0;
+                                            }
+                                        },
+                                        AlignItems::End => match direction {
+                                            LayoutDirection::Row => {
+                                                y += container_height - size;
+                                            }
+                                            LayoutDirection::Column => {
+                                                x += container_width - size;
+                                            }
+                                        },
+                                    }
+                                }
+                            };
+
                             log::trace!("position_elements: setting position ({x}, {y}):\n{child}");
                             if set_float(&mut child.calculated_x, x).is_some() {
                                 changed = true;
@@ -1419,8 +1413,10 @@ mod pass_positioning {
                             match direction {
                                 LayoutDirection::Row => {
                                     x += child.bounding_calculated_width().unwrap() + col_gap;
+                                    y = 0.0;
                                 }
                                 LayoutDirection::Column => {
+                                    x = 0.0;
                                     y += child.bounding_calculated_height().unwrap() + row_gap;
                                 }
                             }
@@ -8884,6 +8880,80 @@ mod test {
                         calculated_x: Some(22.0),
                         ..container.children[0].clone()
                     }],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_center_vertical_row_children() {
+            let mut container: Container = html! {
+                div sx-dir=(LayoutDirection::Row) sx-width=(100) sx-height=(100) sx-align-items=(AlignItems::Center) {
+                    div sx-height=(70) {}
+                    div sx-height=(48) {}
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![
+                        Container {
+                            calculated_y: Some(15.0),
+                            ..container.children[0].clone()
+                        },
+                        Container {
+                            calculated_y: Some(26.0),
+                            ..container.children[1].clone()
+                        },
+                    ],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_center_horizontal_column_children() {
+            let mut container: Container = html! {
+                div sx-width=(100) sx-height=(100) sx-align-items=(AlignItems::Center) {
+                    div sx-width=(70) {}
+                    div sx-width=(48) {}
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![
+                        Container {
+                            calculated_x: Some(15.0),
+                            ..container.children[0].clone()
+                        },
+                        Container {
+                            calculated_x: Some(26.0),
+                            ..container.children[1].clone()
+                        },
+                    ],
                     ..container.clone()
                 },
             );
