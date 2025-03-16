@@ -854,6 +854,10 @@ impl Arbitrary for Container {
             scrollbar_right: None,
             #[cfg(feature = "layout")]
             scrollbar_bottom: None,
+            #[cfg(feature = "layout-offset")]
+            calculated_offset_x: None,
+            #[cfg(feature = "layout-offset")]
+            calculated_offset_y: None,
         }
     }
 }

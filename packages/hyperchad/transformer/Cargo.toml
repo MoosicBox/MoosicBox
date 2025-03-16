@@ -65,6 +65,7 @@ default = [
     "format",
     "html",
     "layout",
+    "layout-offset",
     "logic",
     "maud",
     "syntax-highlighting",
@@ -87,9 +88,10 @@ profiling-tracing = [
 ]
 profiling-tracy = ["profiling", "profiling/profile-with-tracy"]
 
-layout = ["dep:bumpalo", "hyperchad_transformer_models/layout"]
-logic  = ["hyperchad_actions/logic"]
-maud   = ["dep:maud", "html"]
+layout        = ["dep:bumpalo", "hyperchad_transformer_models/layout"]
+layout-offset = ["layout"]
+logic         = ["hyperchad_actions/logic"]
+maud          = ["dep:maud", "html"]
 
 html = ["dep:tl", "hyperchad_actions/serde"]
 simd = ["tl?/simd"]

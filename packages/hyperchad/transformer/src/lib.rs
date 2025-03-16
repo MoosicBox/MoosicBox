@@ -1196,6 +1196,10 @@ pub struct Container {
     pub scrollbar_right: Option<f32>,
     #[cfg(feature = "layout")]
     pub scrollbar_bottom: Option<f32>,
+    #[cfg(feature = "layout-offset")]
+    pub calculated_offset_x: Option<f32>,
+    #[cfg(feature = "layout-offset")]
+    pub calculated_offset_y: Option<f32>,
 }
 
 impl AsRef<Self> for Container {
@@ -2369,6 +2373,11 @@ impl Container {
                 attrs.add_opt("calc-internal-padding-right", self.internal_padding_right);
                 attrs.add_opt("calc-internal-padding-top", self.internal_padding_top);
                 attrs.add_opt("calc-internal-padding-bottom", self.internal_padding_bottom);
+                #[cfg(feature = "layout-offset")]
+                {
+                    attrs.add_opt("calc-offset-x", self.calculated_offset_x);
+                    attrs.add_opt("calc-offset-y", self.calculated_offset_y);
+                }
                 attrs.add_opt(
                     "calc-border-left",
                     self.calculated_border_left

@@ -1140,32 +1140,42 @@ mod pass_positioning {
                             .grid_cell_size
                             .as_ref()
                             .map(|x| x.calc(container_width, view_width, view_height));
+                        let row_gap = parent.calculated_row_gap.unwrap_or_default();
+                        let column_gap = parent.calculated_column_gap.unwrap_or_default();
+
+                        let mut add_gap = |row_width, col_count| {
+                            let remainder = container_width - row_width;
+
+                            #[allow(clippy::cast_precision_loss)]
+                            let gap = match justify_content {
+                                JustifyContent::Start
+                                | JustifyContent::Center
+                                | JustifyContent::End => column_gap,
+                                JustifyContent::SpaceBetween => {
+                                    remainder / ((col_count - 1) as f32)
+                                }
+                                JustifyContent::SpaceEvenly => {
+                                    remainder / ((col_count + 1) as f32)
+                                }
+                            };
+
+                            gaps.push(gap);
+
+                            gap
+                        };
 
                         for child in parent.relative_positioned_elements_mut() {
                             let Some(LayoutPosition::Wrap { row, col }) = child.calculated_position
                             else {
                                 continue;
                             };
-                            log::trace!("position_elements: wrap calculating gaps ({row}, {col})");
+                            log::trace!("position_elements: wrap calculating gaps (r{row}, c{col})");
 
                             if row != last_row {
                                 moosicbox_assert::assert!(row > last_row);
 
-                                let remainder = container_width - row_width;
-
-                                #[allow(clippy::cast_precision_loss)]
-                                let gap = match justify_content {
-                                    JustifyContent::Start
-                                    | JustifyContent::Center
-                                    | JustifyContent::End => 0.0,
-                                    JustifyContent::SpaceBetween => {
-                                        remainder / ((col_count - 1) as f32)
-                                    }
-                                    JustifyContent::SpaceEvenly => {
-                                        remainder / ((col_count + 1) as f32)
-                                    }
-                                };
-                                gaps.push(gap);
+                                let gap = add_gap(row_width, col_count);
+                                log::trace!("position_elements: (r{row}, c{col}) gap={gap}");
 
                                 if grid && col_count > max_col_count {
                                     max_col_count = col_count;
@@ -1184,24 +1194,14 @@ mod pass_positioning {
                             col_count += 1;
                         }
 
-                        let remainder = container_width - row_width;
-                        #[allow(clippy::cast_precision_loss)]
-                        let gap = remainder / ((col_count + 1) as f32);
-                        gaps.push(gap);
+                        add_gap(row_width, col_count);
 
                         #[allow(unused_assignments)]
                         if col_count > max_col_count {
                             max_col_count = col_count;
                         }
 
-                        let mut gap = match justify_content {
-                            JustifyContent::Start
-                            | JustifyContent::Center
-                            | JustifyContent::End => 0.0,
-                            JustifyContent::SpaceBetween | JustifyContent::SpaceEvenly => {
-                                gaps.first().copied().unwrap_or_default()
-                            }
-                        };
+                        let mut gap = gaps.first().copied().unwrap_or_default();
 
                         let first_gap = |gap| match justify_content {
                             JustifyContent::Start
@@ -1216,13 +1216,13 @@ mod pass_positioning {
 
                         let mut max_height = 0.0;
                         last_row = 0;
-                        let row_gap = parent.calculated_row_gap.unwrap_or_default();
 
                         for child in parent.relative_positioned_elements_mut() {
-                            let Some(LayoutPosition::Wrap { row, .. }) = child.calculated_position
+                            let Some(LayoutPosition::Wrap { row, col }) = child.calculated_position
                             else {
                                 continue;
                             };
+                            log::trace!("position_elements: (r{row}, c{col}) gap={gap} row_gap={row_gap} last_row={last_row} ({x}, {y})");
 
                             let child_width = child.bounding_calculated_width().unwrap();
                             let child_height = child.bounding_calculated_height().unwrap();
@@ -1238,6 +1238,14 @@ mod pass_positioning {
                                 y += max_height + row_gap;
                                 max_height = 0.0;
                                 last_row = row;
+                                #[cfg(feature = "layout-offset")]
+                                set_float(&mut child.calculated_offset_x, x);
+                            }
+
+                            #[cfg(feature = "layout-offset")]
+                            {
+                                set_float(&mut child.calculated_offset_x, if col > 0 { gap } else { x });
+                                set_float(&mut child.calculated_offset_y, if row > 0 { row_gap } else { 0.0 });
                             }
 
                             if child_height > max_height {
@@ -1373,7 +1381,7 @@ mod pass_positioning {
                             }
                         }
 
-                        for child in parent.relative_positioned_elements_mut() {
+                        for (i, child) in parent.relative_positioned_elements_mut().enumerate() {
                             let start_x = x;
                             let start_y = y;
 
@@ -1407,9 +1415,9 @@ mod pass_positioning {
                                         },
                                     }
                                 }
-                            };
+                            }
 
-                            log::trace!("position_elements: setting position ({x}, {y}):\n{child}");
+                            log::trace!("position_elements: setting position ({x}, {y}) i={i}:\n{child}");
                             if set_float(&mut child.calculated_x, x).is_some() {
                                 changed = true;
                             }
@@ -1419,10 +1427,20 @@ mod pass_positioning {
 
                             match direction {
                                 LayoutDirection::Row => {
+                                    #[cfg(feature = "layout-offset")]
+                                    {
+                                        set_float(&mut child.calculated_offset_x, if i == 0 { start_x } else { col_gap });
+                                        set_float(&mut child.calculated_offset_y, y);
+                                    }
                                     x += child.bounding_calculated_width().unwrap() + col_gap;
                                     y = start_y;
                                 }
                                 LayoutDirection::Column => {
+                                    #[cfg(feature = "layout-offset")]
+                                    {
+                                        set_float(&mut child.calculated_offset_x, x);
+                                        set_float(&mut child.calculated_offset_y, if i == 0 { start_y } else { row_gap });
+                                    }
                                     x = start_x;
                                     y += child.bounding_calculated_height().unwrap() + row_gap;
                                 }
@@ -8999,6 +9017,479 @@ mod test {
                     ..container.clone()
                 },
             );
+        }
+
+        #[cfg(feature = "layout-offset")]
+        mod offset {
+            use super::*;
+
+            #[test_log::test]
+            fn does_set_offset_x_for_single_element() {
+                let mut container: Container = html! {
+                    div {}
+                }
+                .try_into()
+                .unwrap();
+
+                container.calculated_width = Some(400.0);
+                container.calculated_height = Some(100.0);
+
+                CALCULATOR.calc(&mut container);
+                log::trace!("full container:\n{}", container);
+                container = container.children[0].clone();
+                log::trace!("container:\n{}", container);
+
+                compare_containers(
+                    &container,
+                    &Container {
+                        calculated_offset_x: Some(0.0),
+                        ..container.clone()
+                    },
+                );
+            }
+
+            #[test_log::test]
+            fn does_set_offset_y_for_single_element() {
+                let mut container: Container = html! {
+                    div {}
+                }
+                .try_into()
+                .unwrap();
+
+                container.calculated_width = Some(400.0);
+                container.calculated_height = Some(100.0);
+
+                CALCULATOR.calc(&mut container);
+                log::trace!("full container:\n{}", container);
+                container = container.children[0].clone();
+                log::trace!("container:\n{}", container);
+
+                compare_containers(
+                    &container,
+                    &Container {
+                        calculated_offset_y: Some(0.0),
+                        ..container.clone()
+                    },
+                );
+            }
+
+            #[test_log::test]
+            fn does_set_offset_x_for_two_elements_col() {
+                let mut container: Container = html! {
+                    div {
+                        div {}
+                        div {}
+                    }
+                }
+                .try_into()
+                .unwrap();
+
+                container.calculated_width = Some(400.0);
+                container.calculated_height = Some(100.0);
+
+                CALCULATOR.calc(&mut container);
+                log::trace!("full container:\n{}", container);
+                container = container.children[0].clone();
+                log::trace!("container:\n{}", container);
+
+                compare_containers(
+                    &container,
+                    &Container {
+                        children: vec![
+                            Container {
+                                calculated_offset_x: Some(0.0),
+                                ..container.children[0].clone()
+                            },
+                            Container {
+                                calculated_offset_x: Some(0.0),
+                                ..container.children[1].clone()
+                            },
+                        ],
+                        ..container.clone()
+                    },
+                );
+            }
+
+            #[test_log::test]
+            fn does_set_offset_x_for_justify_content_end_row() {
+                let mut container: Container = html! {
+                    div sx-dir=(LayoutDirection::Row) sx-justify-content=(JustifyContent::End) {
+                        div sx-width=(50) {}
+                    }
+                }
+                .try_into()
+                .unwrap();
+
+                container.calculated_width = Some(400.0);
+                container.calculated_height = Some(100.0);
+
+                CALCULATOR.calc(&mut container);
+                log::trace!("full container:\n{}", container);
+                container = container.children[0].clone();
+                log::trace!("container:\n{}", container);
+
+                compare_containers(
+                    &container,
+                    &Container {
+                        children: vec![Container {
+                            calculated_offset_x: Some(400.0 - 50.0),
+                            ..container.children[0].clone()
+                        }],
+                        ..container.clone()
+                    },
+                );
+            }
+
+            #[test_log::test]
+            fn does_set_offset_y_for_justify_content_end_col() {
+                let mut container: Container = html! {
+                    div sx-height=(100) sx-justify-content=(JustifyContent::End) {
+                        div sx-height=(20) {}
+                    }
+                }
+                .try_into()
+                .unwrap();
+
+                container.calculated_width = Some(400.0);
+                container.calculated_height = Some(100.0);
+
+                CALCULATOR.calc(&mut container);
+                log::trace!("full container:\n{}", container);
+                container = container.children[0].clone();
+                log::trace!("container:\n{}", container);
+
+                compare_containers(
+                    &container,
+                    &Container {
+                        children: vec![Container {
+                            calculated_offset_y: Some(100.0 - 20.0),
+                            ..container.children[0].clone()
+                        }],
+                        ..container.clone()
+                    },
+                );
+            }
+
+            #[test_log::test]
+            fn does_set_offset_y_for_align_items_end_row() {
+                let mut container: Container = html! {
+                    div sx-height=(100) sx-dir=(LayoutDirection::Row) sx-align-items=(JustifyContent::End) {
+                        div sx-height=(20) {}
+                    }
+                }
+                .try_into()
+                .unwrap();
+
+                container.calculated_width = Some(400.0);
+                container.calculated_height = Some(100.0);
+
+                CALCULATOR.calc(&mut container);
+                log::trace!("full container:\n{}", container);
+                container = container.children[0].clone();
+                log::trace!("container:\n{}", container);
+
+                compare_containers(
+                    &container,
+                    &Container {
+                        children: vec![Container {
+                            calculated_offset_y: Some(100.0 - 20.0),
+                            ..container.children[0].clone()
+                        }],
+                        ..container.clone()
+                    },
+                );
+            }
+
+            #[test_log::test]
+            fn does_set_offset_x_for_align_items_end_col() {
+                let mut container: Container = html! {
+                    div sx-align-items=(JustifyContent::End) {
+                        div sx-width=(50) {}
+                    }
+                }
+                .try_into()
+                .unwrap();
+
+                container.calculated_width = Some(400.0);
+                container.calculated_height = Some(100.0);
+
+                CALCULATOR.calc(&mut container);
+                log::trace!("full container:\n{}", container);
+                container = container.children[0].clone();
+                log::trace!("container:\n{}", container);
+
+                compare_containers(
+                    &container,
+                    &Container {
+                        children: vec![Container {
+                            calculated_offset_x: Some(400.0 - 50.0),
+                            ..container.children[0].clone()
+                        }],
+                        ..container.clone()
+                    },
+                );
+            }
+
+            #[test_log::test]
+            fn does_set_offset_x_for_two_elements_row() {
+                let mut container: Container = html! {
+                    div sx-dir=(LayoutDirection::Row) {
+                        div {}
+                        div {}
+                    }
+                }
+                .try_into()
+                .unwrap();
+
+                container.calculated_width = Some(400.0);
+                container.calculated_height = Some(100.0);
+
+                CALCULATOR.calc(&mut container);
+                log::trace!("full container:\n{}", container);
+                container = container.children[0].clone();
+                log::trace!("container:\n{}", container);
+
+                compare_containers(
+                    &container,
+                    &Container {
+                        children: vec![
+                            Container {
+                                calculated_offset_x: Some(0.0),
+                                ..container.children[0].clone()
+                            },
+                            Container {
+                                calculated_offset_x: Some(0.0),
+                                ..container.children[1].clone()
+                            },
+                        ],
+                        ..container.clone()
+                    },
+                );
+            }
+
+            #[test_log::test]
+            fn does_set_offset_y_for_two_elements_col() {
+                let mut container: Container = html! {
+                    div {
+                        div {}
+                        div {}
+                    }
+                }
+                .try_into()
+                .unwrap();
+
+                container.calculated_width = Some(400.0);
+                container.calculated_height = Some(100.0);
+
+                CALCULATOR.calc(&mut container);
+                log::trace!("full container:\n{}", container);
+                container = container.children[0].clone();
+                log::trace!("container:\n{}", container);
+
+                compare_containers(
+                    &container,
+                    &Container {
+                        children: vec![
+                            Container {
+                                calculated_offset_y: Some(0.0),
+                                ..container.children[0].clone()
+                            },
+                            Container {
+                                calculated_offset_y: Some(0.0),
+                                ..container.children[1].clone()
+                            },
+                        ],
+                        ..container.clone()
+                    },
+                );
+            }
+
+            #[test_log::test]
+            fn does_set_offset_y_for_two_elements_row() {
+                let mut container: Container = html! {
+                    div sx-dir=(LayoutDirection::Row) {
+                        div {}
+                        div {}
+                    }
+                }
+                .try_into()
+                .unwrap();
+
+                container.calculated_width = Some(400.0);
+                container.calculated_height = Some(100.0);
+
+                CALCULATOR.calc(&mut container);
+                log::trace!("full container:\n{}", container);
+                container = container.children[0].clone();
+                log::trace!("container:\n{}", container);
+
+                compare_containers(
+                    &container,
+                    &Container {
+                        children: vec![
+                            Container {
+                                calculated_offset_y: Some(0.0),
+                                ..container.children[0].clone()
+                            },
+                            Container {
+                                calculated_offset_y: Some(0.0),
+                                ..container.children[1].clone()
+                            },
+                        ],
+                        ..container.clone()
+                    },
+                );
+            }
+
+            #[test_log::test]
+            fn does_include_gap_in_offset_x_overflow_x_wrap() {
+                let mut container: Container = html! {
+                    div sx-dir=(LayoutDirection::Row) sx-overflow-x=(LayoutOverflow::Wrap { grid: false }) sx-gap=(10) {
+                        div sx-width=(50) {}
+                        div sx-width=(50) {}
+                    }
+                }
+                .try_into()
+                .unwrap();
+
+                container.calculated_width = Some(400.0);
+                container.calculated_height = Some(100.0);
+
+                CALCULATOR.calc(&mut container);
+                log::trace!("full container:\n{}", container);
+                container = container.children[0].clone();
+                log::trace!("container:\n{}", container);
+
+                compare_containers(
+                    &container,
+                    &Container {
+                        children: vec![
+                            Container {
+                                calculated_offset_x: Some(0.0),
+                                ..container.children[0].clone()
+                            },
+                            Container {
+                                calculated_offset_x: Some(10.0),
+                                ..container.children[1].clone()
+                            },
+                        ],
+                        ..container.clone()
+                    },
+                );
+            }
+
+            #[test_log::test]
+            #[ignore]
+            fn does_include_gap_in_offset_y_overflow_y_wrap() {
+                let mut container: Container = html! {
+                    div sx-overflow-y=(LayoutOverflow::Wrap { grid: false }) sx-gap=(10) {
+                        div sx-height=(50) {}
+                        div sx-height=(50) {}
+                    }
+                }
+                .try_into()
+                .unwrap();
+
+                container.calculated_width = Some(400.0);
+                container.calculated_height = Some(100.0);
+
+                CALCULATOR.calc(&mut container);
+                log::trace!("full container:\n{}", container);
+                container = container.children[0].clone();
+                log::trace!("container:\n{}", container);
+
+                compare_containers(
+                    &container,
+                    &Container {
+                        children: vec![
+                            Container {
+                                calculated_offset_y: Some(0.0),
+                                ..container.children[0].clone()
+                            },
+                            Container {
+                                calculated_offset_y: Some(10.0),
+                                ..container.children[1].clone()
+                            },
+                        ],
+                        ..container.clone()
+                    },
+                );
+            }
+
+            #[test_log::test]
+            fn does_include_gap_in_offset_y_overflow_x_wrap() {
+                let mut container: Container = html! {
+                    div sx-width=(50) sx-dir=(LayoutDirection::Row) sx-overflow-x=(LayoutOverflow::Wrap { grid: false }) sx-gap=(10) {
+                        div sx-width=(50) {}
+                        div sx-width=(50) {}
+                    }
+                }
+                .try_into()
+                .unwrap();
+
+                container.calculated_width = Some(400.0);
+                container.calculated_height = Some(100.0);
+
+                CALCULATOR.calc(&mut container);
+                log::trace!("full container:\n{}", container);
+                container = container.children[0].clone();
+                log::trace!("container:\n{}", container);
+
+                compare_containers(
+                    &container,
+                    &Container {
+                        children: vec![
+                            Container {
+                                calculated_offset_y: Some(0.0),
+                                ..container.children[0].clone()
+                            },
+                            Container {
+                                calculated_offset_y: Some(10.0),
+                                ..container.children[1].clone()
+                            },
+                        ],
+                        ..container.clone()
+                    },
+                );
+            }
+
+            #[test_log::test]
+            #[ignore]
+            fn does_include_gap_in_offset_x_overflow_y_wrap() {
+                let mut container: Container = html! {
+                    div sx-height=(50) sx-overflow-y=(LayoutOverflow::Wrap { grid: false }) sx-gap=(10) {
+                        div sx-height=(50) {}
+                        div sx-height=(50) {}
+                    }
+                }
+                .try_into()
+                .unwrap();
+
+                container.calculated_width = Some(400.0);
+                container.calculated_height = Some(100.0);
+
+                CALCULATOR.calc(&mut container);
+                log::trace!("full container:\n{}", container);
+                container = container.children[0].clone();
+                log::trace!("container:\n{}", container);
+
+                compare_containers(
+                    &container,
+                    &Container {
+                        children: vec![
+                            Container {
+                                calculated_offset_x: Some(0.0),
+                                ..container.children[0].clone()
+                            },
+                            Container {
+                                calculated_offset_x: Some(10.0),
+                                ..container.children[1].clone()
+                            },
+                        ],
+                        ..container.clone()
+                    },
+                );
+            }
         }
     }
 }

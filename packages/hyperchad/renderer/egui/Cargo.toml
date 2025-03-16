@@ -27,7 +27,7 @@ hyperchad_renderer = { version = "0.1.0", path = "../", default-features = false
 hyperchad_router = { version = "0.1.0", path = "../../router", default-features = false }
 hyperchad_transformer = { version = "0.1.0", path = "../../transformer", default-features = false, features = [
     "html",
-    "layout",
+    "layout-offset",
     "logic",
 ] }
 moosicbox_app_native_image = { version = "0.1.0", path = "../../../app/native/image", default-features = false }
