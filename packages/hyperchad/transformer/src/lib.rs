@@ -1559,6 +1559,19 @@ impl Container {
     }
 
     #[must_use]
+    pub fn is_span(&self) -> bool {
+        matches!(
+            self.element,
+            Element::Raw { .. }
+                | Element::Span
+                | Element::Anchor { .. }
+                | Element::Input { .. }
+                | Element::Button
+                | Element::Image { .. }
+        ) && self.children.iter().all(Self::is_span)
+    }
+
+    #[must_use]
     pub fn is_flex_container(&self) -> bool {
         self.direction == LayoutDirection::Row
             || self.justify_content.is_some()
