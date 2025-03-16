@@ -1898,38 +1898,46 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
+    fn render_offset<'a>(
+        ui: &mut Ui,
+        child: Option<&'a Container>,
+        relative_container: Option<(egui::Rect, &'a Container)>,
+        inner: impl FnOnce(&mut Ui, Option<(egui::Rect, &'a Container)>) -> Response,
+    ) -> Response {
+        if let Some(child) = child {
+            let (offset_x, offset_y) = (get_left_offset(child), get_top_offset(child));
+
+            if offset_x.is_some() || offset_y.is_some() {
+                let rect = egui::Rect::from_min_size(
+                    egui::pos2(
+                        ui.cursor().left() + offset_x.unwrap_or_default(),
+                        ui.cursor().top() + offset_y.unwrap_or_default(),
+                    ),
+                    egui::vec2(
+                        child.calculated_width.unwrap(),
+                        child.calculated_height.unwrap(),
+                    ),
+                );
+
+                return ui
+                    .allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
+                        inner(ui, relative_container)
+                    })
+                    .response;
+            }
+        }
+
+        inner(ui, relative_container)
+    }
+
+    #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_layout<'a>(
         ui: &mut Ui,
         container: &'a Container,
         relative_container: Option<(egui::Rect, &'a Container)>,
         inner: impl FnOnce(&mut Ui, Option<(egui::Rect, &'a Container)>) -> Response,
     ) -> Response {
-        let (offset_x, offset_y) = container
-            .children
-            .first()
-            .map(|x| (get_left_offset(x), get_top_offset(x)))
-            .unwrap_or_default();
-
-        if offset_x.is_some() || offset_y.is_some() {
-            let rect = egui::Rect::from_min_size(
-                egui::pos2(
-                    ui.cursor().left() + offset_x.unwrap_or_default(),
-                    ui.cursor().top() + offset_y.unwrap_or_default(),
-                ),
-                egui::vec2(
-                    container.calculated_width.unwrap(),
-                    container.calculated_height.unwrap(),
-                ),
-            );
-
-            return ui
-                .allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
-                    inner(ui, relative_container)
-                })
-                .response;
-        }
-
-        inner(ui, relative_container)
+        Self::render_offset(ui, container.children.first(), relative_container, inner)
     }
 
     fn get_container_style_override<'a, T>(
