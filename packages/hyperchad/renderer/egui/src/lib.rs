@@ -1930,16 +1930,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         inner(ui, relative_container)
     }
 
-    #[cfg_attr(feature = "profiling", profiling::function)]
-    fn render_layout<'a>(
-        ui: &mut Ui,
-        container: &'a Container,
-        relative_container: Option<(egui::Rect, &'a Container)>,
-        inner: impl FnOnce(&mut Ui, Option<(egui::Rect, &'a Container)>) -> Response,
-    ) -> Response {
-        Self::render_offset(ui, container.children.first(), relative_container, inner)
-    }
-
     fn get_container_style_override<'a, T>(
         container: &'a Container,
         overrides: &'a HashMap<usize, Vec<StyleOverride<T>>>,
@@ -2049,9 +2039,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                 }
                             }
 
-                            let response = Self::render_layout(
+                            let response = Self::render_offset(
                                 ui,
-                                container,
+                                container.children.first(),
                                 relative_container,
                                 move |ui, relative_container| {
                                     self.render_direction(
