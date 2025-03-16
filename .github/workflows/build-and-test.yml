@@ -148,7 +148,8 @@ jobs:
               run: |
                   git config user.name "MoosicBoxBot"
                   git config user.email "MoosicBoxBot@gmail.com"
-                  git revert 404332127fc4
+                  git checkout edge
+                  git rebase master
 
             - uses: dtolnay/rust-toolchain@stable
 
