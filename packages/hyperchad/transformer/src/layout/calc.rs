@@ -468,7 +468,7 @@ macro_rules! flex_on_axis {
                     }
 
                     // Fit all unsized children
-                    if parent.relative_positioned_elements().any(|x| x.$fixed.as_ref().is_none()) {
+                    if parent.align_items.is_none() && parent.relative_positioned_elements().any(|x| x.$fixed.as_ref().is_none()) {
                         let mut remaining_size = container_size;
                         let mut last_cell = 0;
                         let mut max_cell_size = 0.0;
@@ -508,6 +508,8 @@ macro_rules! flex_on_axis {
                         }
 
                         let mut position_cross_axis = |parent: &mut Container| {
+                            log::trace!("{LABEL}: position_cross_axis\n{parent}");
+
                             for child in parent.relative_positioned_elements_mut() {
                                 if matches!(child.element, Element::Raw { .. }) {
                                     continue;
@@ -550,10 +552,10 @@ macro_rules! flex_on_axis {
 
                         log::trace!("{LABEL}: remaining_size={remaining_size}\n{parent}");
 
-                        if parent.is_flex_container() {
-                            // Fit all unsized children to remaining_size
-                            match direction {
-                                LayoutDirection::$axis => {
+                        // Fit all unsized children to remaining_size
+                        match direction {
+                            LayoutDirection::$axis => {
+                                if parent.is_flex_container() && !float_eq!(remaining_size, 0.0) {
                                     loop {
                                         let mut smallest = f32::INFINITY;
                                         let mut target = f32::INFINITY;
@@ -590,7 +592,7 @@ macro_rules! flex_on_axis {
                                             remaining_size = 0.0;
                                             true
                                         } else if target > remaining_size {
-                                            log::trace!("{LABEL}: target > remaining_size");
+                                            log::trace!("{LABEL}: target={target} > remaining_size={remaining_size}");
                                             target = if smallest_count == 1 {
                                                 remaining_size
                                             } else {
@@ -623,8 +625,9 @@ macro_rules! flex_on_axis {
                                                 }
                                             }
 
-                                            log::trace!("{LABEL}: increasing child size to target={target}:\n{child}");
+                                            let prev = child.$calculated.unwrap();
                                             set_float(&mut child.$calculated, target);
+                                            log::trace!("{LABEL}: increasing child size prev={prev} to target={target}:\n{child}");
                                         }
 
                                         if last_iteration {
@@ -632,16 +635,9 @@ macro_rules! flex_on_axis {
                                         }
                                     }
                                 }
-                                LayoutDirection::$cross_axis => {
-                                    position_cross_axis(parent);
-                                }
                             }
-                        } else {
-                            match direction {
-                                LayoutDirection::$axis => {}
-                                LayoutDirection::$cross_axis => {
-                                    position_cross_axis(parent);
-                                }
+                            LayoutDirection::$cross_axis => {
+                                position_cross_axis(parent);
                             }
                         }
                     }
@@ -1643,6 +1639,7 @@ impl Container {
 
 #[cfg(test)]
 mod test {
+    use hyperchad_transformer_models::AlignItems;
     use maud::html;
     use pretty_assertions::assert_eq;
 
@@ -8518,6 +8515,7 @@ mod test {
 
         container.calculated_width = Some(400.0);
         container.calculated_height = Some(100.0);
+
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
 
@@ -8543,6 +8541,84 @@ mod test {
         );
     }
 
+    #[test_log::test]
+    fn calc_only_takes_height_necessary_for_flex_cross_axis_column_container_contents_when_align_items_is_set()
+     {
+        let mut container: Container = html! {
+            div sx-dir=(LayoutDirection::Row) sx-align-items=(AlignItems::Center) sx-height=(50) {
+                div { div { "one" } div { "two" } }
+                div { "three" }
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(400.0);
+        container.calculated_height = Some(100.0);
+
+        CALCULATOR.calc(&mut container);
+        log::trace!("full container:\n{}", container);
+        container = container.children[0].clone();
+        log::trace!("container:\n{}", container);
+
+        compare_containers(
+            &container,
+            &Container {
+                children: vec![
+                    Container {
+                        calculated_height: Some(14.0 * 2.0),
+                        ..container.children[0].clone()
+                    },
+                    Container {
+                        calculated_height: Some(14.0),
+                        ..container.children[1].clone()
+                    },
+                ],
+                calculated_height: Some(50.0),
+                ..container.clone()
+            },
+        );
+    }
+
+    #[test_log::test]
+    fn calc_only_takes_height_necessary_for_flex_cross_axis_row_container_contents_when_align_items_is_set()
+     {
+        let mut container: Container = html! {
+            div sx-align-items=(AlignItems::Center) sx-width=(150) {
+                div sx-dir=(LayoutDirection::Row) { div { "one" } div { "two" } }
+                div sx-dir=(LayoutDirection::Row) { "three" }
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(400.0);
+        container.calculated_height = Some(100.0);
+
+        CALCULATOR.calc(&mut container);
+        log::trace!("full container:\n{}", container);
+        container = container.children[0].clone();
+        log::trace!("container:\n{}", container);
+
+        compare_containers(
+            &container,
+            &Container {
+                children: vec![
+                    Container {
+                        calculated_width: Some(14.0 * 6.0),
+                        ..container.children[0].clone()
+                    },
+                    Container {
+                        calculated_width: Some(14.0 * 5.0),
+                        ..container.children[1].clone()
+                    },
+                ],
+                calculated_width: Some(150.0),
+                ..container.clone()
+            },
+        );
+    }
+
     mod text {
         use super::*;
 
@@ -8556,6 +8632,7 @@ mod test {
 
             container.calculated_width = Some(400.0);
             container.calculated_height = Some(100.0);
+
             CALCULATOR.calc(&mut container);
             log::trace!("full container:\n{}", container);
             container = container.children[0].clone();
@@ -8583,6 +8660,7 @@ mod test {
 
             container.calculated_width = Some(400.0);
             container.calculated_height = Some(100.0);
+
             CALCULATOR.calc(&mut container);
             log::trace!("full container:\n{}", container);
             container = container.children[0].clone();
@@ -8596,6 +8674,89 @@ mod test {
                         ..container.children[0].clone()
                     }],
                     calculated_height: Some(14.0),
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_use_preferred_width_for_nested_text() {
+            let mut container: Container = html! {
+                div sx-dir=(LayoutDirection::Row) sx-align-items=(AlignItems::Start) {
+                    "test" span { "two" }
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![
+                        Container {
+                            calculated_width: Some(14.0 * 4.0),
+                            ..container.children[0].clone()
+                        },
+                        Container {
+                            calculated_width: Some(14.0 * 3.0),
+                            ..container.children[1].clone()
+                        },
+                    ],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_use_preferred_width_for_nested_text_in_dynamically_sized_child() {
+            let mut container: Container = html! {
+                div sx-dir=(LayoutDirection::Row) sx-align-items=(AlignItems::Center) {
+                    div sx-justify-content=(JustifyContent::Center) {
+                        div sx-dir=(LayoutDirection::Row) {
+                            "test" span { "two" }
+                        }
+                    }
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        children: vec![Container {
+                            children: vec![
+                                Container {
+                                    calculated_width: Some(14.0 * 4.0),
+                                    ..container.children[0].children[0].children[0].clone()
+                                },
+                                Container {
+                                    calculated_width: Some(14.0 * 3.0),
+                                    ..container.children[0].children[0].children[1].clone()
+                                },
+                            ],
+                            calculated_width: Some(14.0 * (4.0 + 3.0)),
+                            ..container.children[0].children[0].clone()
+                        }],
+                        ..container.children[0].clone()
+                    }],
                     ..container.clone()
                 },
             );
@@ -8624,6 +8785,7 @@ mod test {
 
             container.calculated_width = Some(400.0);
             container.calculated_height = Some(100.0);
+
             CALCULATOR.calc(&mut container);
             log::trace!("full container:\n{}", container);
             container = container.children[0].clone();
@@ -8662,6 +8824,7 @@ mod test {
 
             container.calculated_width = Some(400.0);
             container.calculated_height = Some(100.0);
+
             CALCULATOR.calc(&mut container);
             log::trace!("full container:\n{}", container);
             container = container.children[0].clone();
@@ -8708,6 +8871,7 @@ mod test {
 
             container.calculated_width = Some(400.0);
             container.calculated_height = Some(100.0);
+
             CALCULATOR.calc(&mut container);
             log::trace!("full container:\n{}", container);
             container = container.children[0].clone();
