@@ -21,7 +21,7 @@ use hyperchad_actions::{
     },
 };
 use hyperchad_transformer_models::{
-    AlignItems, JustifyContent, LayoutOverflow, Position, TextAlign, Visibility
+    AlignItems, JustifyContent, LayoutOverflow, Position, Visibility,
 };
 use maud::{Markup, html};
 use moosicbox_music_models::{AlbumSort, ApiSource, TrackApiSource, api::ApiTrack, id::Id};
@@ -483,11 +483,7 @@ fn player_current_album_from_state(state: &State, size: u16) -> Markup {
 
 fn player_current_progress(progress: f64, duration: f64) -> Markup {
     html! {
-        div
-            id="player-current-progress"
-            sx-justify-content=(JustifyContent::Center)
-            sx-text-align=(TextAlign::Center)
-        {
+        div id="player-current-progress" {
             (progress.into_formatted()) " // " (duration.into_formatted())
         }
     }
