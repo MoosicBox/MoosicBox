@@ -111,7 +111,7 @@ macro_rules! calc_size_on_axis {
                         changed = true;
                     }
                     (Some(new_size), new_size)
-                } else if let crate::Element::Raw { value } = &child.element {
+                } else if let (LayoutDirection::Row, crate::Element::Raw { value }) = (LayoutDirection::$axis, &child.element) {
                     log::trace!("{LABEL}: measuring text={value}");
                     let bounds = $self.font_metrics.measure_text(value, 14.0, f32::INFINITY);
                     log::trace!("{LABEL}: measured bounds={bounds:?}");
@@ -710,19 +710,32 @@ macro_rules! wrap_on_axis {
         $bfs:ident,
         $container:ident,
         $calculated:ident,
+        $bounding:ident,
         $overflow:ident,
         $margin_axis:ident,
         $padding_axis:ident,
-        $calculated_gap:ident
+        $calculated_gap:ident,
+        $each_child:expr
         $(,)?
     ) => {{
+        use hyperchad_transformer_models::{LayoutDirection, LayoutOverflow, LayoutPosition};
+
         const LABEL: &str = $label;
 
         moosicbox_logging::debug_or_trace!(("{LABEL}"), ("{LABEL}:\n{}", $container));
 
+        let view_width = $container.calculated_width.expect("Missing view_width");
+        let view_height = $container.calculated_height.expect("Missing view_height");
+
         let mut changed = true;
 
         $bfs.traverse_mut($container, |parent| {
+            let container_width = parent.calculated_width.expect("Missing parent calculated_width");
+
+            for child in &mut parent.children {
+                $each_child(child, container_width, view_width, view_height);
+            }
+
             if !matches!(parent.$overflow, LayoutOverflow::Wrap { .. }) {
                 return;
             }
@@ -736,10 +749,7 @@ macro_rules! wrap_on_axis {
             let gap = parent.$calculated_gap;
 
             for child in parent.relative_positioned_elements_mut() {
-                let child_size =
-                    child.$calculated.expect("Missing child calculated size")
-                        + child.$margin_axis().unwrap_or_default()
-                        + child.$padding_axis().unwrap_or_default();
+                let child_size = child.$bounding().expect("Missing child calculated bounding size");
 
                 let mut position = LayoutPosition::Wrap { row, col };
 
@@ -947,11 +957,9 @@ mod pass_flex_width {
 }
 
 mod pass_wrap_horizontal {
-    use hyperchad_transformer_models::{LayoutDirection, LayoutOverflow, LayoutPosition};
-
     use crate::{
-        BfsPaths, Container,
-        layout::{font::FontMetrics, set_value},
+        BfsPaths, Container, Element,
+        layout::{font::FontMetrics, set_float, set_value},
     };
 
     use super::Calculator;
@@ -962,16 +970,37 @@ mod pass_wrap_horizontal {
 
     impl<F: FontMetrics> Pass for Calculator<F> {
         fn wrap_horizontal(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
+            let each_child =
+                |container: &mut Container, container_width, _view_width, _view_height| {
+                    let Element::Raw { value } = &container.element else {
+                        return;
+                    };
+
+                    log::trace!("wrap_horizontal: measuring text={value} container_width={container_width}");
+                    let bounds = self.font_metrics.measure_text(value, 14.0, container_width);
+                    log::trace!("wrap_horizontal: measured bounds={bounds:?}");
+                    let new_width = bounds.width();
+                    let new_height = bounds.height();
+                    log::trace!("wrap_horizontal: measured width={new_width} height={new_height}");
+
+                    set_float(&mut container.calculated_preferred_width, new_width);
+                    set_float(&mut container.calculated_width, new_width);
+                    set_float(&mut container.calculated_preferred_height, new_height);
+                    set_float(&mut container.calculated_height, new_height);
+                };
+
             wrap_on_axis!(
                 "wrap",
                 Row,
                 bfs,
                 container,
                 calculated_width,
+                bounding_calculated_width,
                 overflow_x,
                 horizontal_margin,
                 horizontal_padding,
                 calculated_column_gap,
+                each_child,
             )
         }
     }
@@ -8827,6 +8856,36 @@ mod test {
                 &Container {
                     children: vec![Container {
                         calculated_width: Some(14.0 * 4.0),
+                        ..container.children[0].clone()
+                    }],
+                    calculated_width: Some(100.0),
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_wrap_long_line_of_text_to_2_lines() {
+            let mut container: Container = html! {
+                div sx-width=(100) { "test test" }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        calculated_width: Some(100.0),
+                        calculated_height: Some(14.0 * 2.0),
                         ..container.children[0].clone()
                     }],
                     calculated_width: Some(100.0),
