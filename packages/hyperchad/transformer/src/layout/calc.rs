@@ -283,6 +283,7 @@ macro_rules! flex_on_axis {
         $fixed:ident,
         $calculated:ident,
         $calculated_min:ident,
+        $calculated_preferred:ident,
         $axis:ident,
         $cross_axis:ident,
         $cell:ident,
@@ -602,27 +603,47 @@ macro_rules! flex_on_axis {
                                             true
                                         } else {
                                             remaining_size -= (target - smallest) * smallest_countf;
-                                            false
+                                            float_eq!(remaining_size, 0.0)
                                         };
 
                                         log::trace!("{LABEL}: target={target} smallest={smallest} smallest_count={smallest_count} remaining_size={remaining_size} container_size={container_size}");
 
                                         moosicbox_assert::assert!(target.is_finite(), "expected target to be finite");
 
+                                        let mut dynamic_child_size = false;
+
                                         for child in parent
                                             .relative_positioned_elements_mut()
                                             .filter(|x| x.$fixed.is_none())
                                             .filter(|x| x.$calculated.is_some_and(|x| float_eq!(x, smallest)))
                                         {
+                                            let mut clipped = false;
                                             let mut target = target;
 
                                             if let Some(min) = child.$calculated_min {
                                                 log::trace!("{LABEL}: calculated_min={min}");
                                                 let min = min - child.$padding_axis().unwrap_or_default() - child.$margin_axis().unwrap_or_default();
-                                                log::trace!("{LABEL}: without padding/margins calculated_min={min}");
+                                                log::trace!("{LABEL}: calculated_min={min} without padding/margins");
                                                 if target < min {
+                                                    remaining_size -= min - target;
                                                     target = min;
                                                 }
+                                            }
+                                            if direction == LayoutDirection::Row && child.is_span() {
+                                                if let Some(preferred) = child.$calculated_preferred {
+                                                    log::trace!("{LABEL}: calculated_preferred={preferred}");
+                                                    let preferred = preferred - child.$padding_axis().unwrap_or_default() - child.$margin_axis().unwrap_or_default();
+                                                    log::trace!("{LABEL}: calculated_preferred={preferred} without padding/margins");
+                                                    if target > preferred {
+                                                        remaining_size += target - preferred;
+                                                        target = preferred;
+                                                        clipped = true;
+                                                    }
+                                                }
+                                            }
+
+                                            if !clipped {
+                                                dynamic_child_size = true;
                                             }
 
                                             let prev = child.$calculated.unwrap();
@@ -630,7 +651,7 @@ macro_rules! flex_on_axis {
                                             log::trace!("{LABEL}: increasing child size prev={prev} to target={target}:\n{child}");
                                         }
 
-                                        if last_iteration {
+                                        if last_iteration || !dynamic_child_size {
                                             break;
                                         }
                                     }
@@ -899,6 +920,7 @@ mod pass_flex_width {
                 width,
                 calculated_width,
                 calculated_min_width,
+                calculated_preferred_width,
                 Row,
                 Column,
                 col,
@@ -1024,6 +1046,7 @@ mod pass_flex_height {
                 height,
                 calculated_height,
                 calculated_min_height,
+                calculated_preferred_height,
                 Column,
                 Row,
                 row,
@@ -8778,6 +8801,35 @@ mod test {
                         }],
                         ..container.children[0].clone()
                     }],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_not_expand_past_preferred_width() {
+            let mut container: Container = html! {
+                div sx-width=(100) { "test" }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        calculated_width: Some(14.0 * 4.0),
+                        ..container.children[0].clone()
+                    }],
+                    calculated_width: Some(100.0),
                     ..container.clone()
                 },
             );
