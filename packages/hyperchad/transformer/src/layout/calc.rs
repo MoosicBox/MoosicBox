@@ -469,7 +469,7 @@ macro_rules! flex_on_axis {
                     }
 
                     // Fit all unsized children
-                    if parent.align_items.is_none() && parent.relative_positioned_elements().any(|x| x.$fixed.is_none()) {
+                    if parent.align_items.is_none() && parent.relative_positioned_elements().any(|x| x.$fixed.is_none() && !x.is_span()) {
                         let mut remaining_size = container_size;
                         let mut last_cell = 0;
                         let mut max_cell_size = 0.0;
@@ -564,7 +564,7 @@ macro_rules! flex_on_axis {
 
                                         for size in parent
                                             .relative_positioned_elements()
-                                            .filter(|x| x.$fixed.is_none())
+                                            .filter(|x| x.$fixed.is_none() && !x.is_span())
                                             .filter_map(|x| x.$calculated)
                                         {
                                             if smallest > size {
@@ -614,7 +614,7 @@ macro_rules! flex_on_axis {
 
                                         for child in parent
                                             .relative_positioned_elements_mut()
-                                            .filter(|x| x.$fixed.is_none())
+                                            .filter(|x| x.$fixed.is_none() && !x.is_span())
                                             .filter(|x| x.$calculated.is_some_and(|x| float_eq!(x, smallest)))
                                         {
                                             let mut clipped = false;
@@ -8929,6 +8929,40 @@ mod test {
                     children: vec![Container {
                         calculated_x: Some(40.0),
                         calculated_y: Some(20.0),
+                        ..container.children[0].clone()
+                    }],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_center_raw_content_vertically_correctly() {
+            let mut container: Container = html! {
+                div
+                    sx-width=(100)
+                    sx-height=(50)
+                    sx-justify-content=(JustifyContent::Center)
+                {
+                    "test"
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        calculated_y: Some(18.0),
                         ..container.children[0].clone()
                     }],
                     ..container.clone()
