@@ -2,7 +2,7 @@ name: Build and Test
 
 on:
     push:
-        branches: ['master']
+        branches: ['master', 'edge']
         paths:
             - packages/**
             - '**/*.toml'
@@ -24,7 +24,7 @@ on:
             - '!**/*.Dockerfile'
             - '!**/*.dockerignore'
     pull_request:
-        branches: ['master']
+        branches: ['master', 'edge']
     schedule:
         - cron: '0 7 * * *'
     workflow_dispatch:
