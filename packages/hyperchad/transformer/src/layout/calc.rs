@@ -56,6 +56,7 @@ macro_rules! calc_size_on_axis {
         $fixed:ident,
         $calculated:ident,
         $calculated_min:ident,
+        $calculated_preferred:ident,
         $axis:ident,
         $cross_axis:ident,
         $margin_x:ident,
@@ -89,6 +90,7 @@ macro_rules! calc_size_on_axis {
 
         $bfs.traverse_rev_mut($container, |parent| {
             let mut min_size = 0.0;
+            let mut preferred_size = 0.0;
 
             if let Some(gap) = &parent.$gap.as_ref().and_then(crate::Number::as_fixed) {
                 let gap = gap.calc(0.0, view_width, view_height);
@@ -102,13 +104,13 @@ macro_rules! calc_size_on_axis {
             for child in &mut parent.children {
                 log::trace!("{LABEL}: container:\n{child}");
 
-                let mut min = if let Some(size) = child.$fixed.as_ref().and_then(Number::as_fixed) {
+                let (mut min, mut preferred) = if let Some(size) = child.$fixed.as_ref().and_then(Number::as_fixed) {
                     let new_size = size.calc(0.0, view_width, view_height);
 
                     if set_float(&mut child.$calculated, new_size).is_some() {
                         changed = true;
                     }
-                    Some(new_size)
+                    (Some(new_size), new_size)
                 } else if let crate::Element::Raw { value } = &child.element {
                     log::trace!("{LABEL}: measuring text={value}");
                     let bounds = $self.font_metrics.measure_text(value, 14.0, f32::INFINITY);
@@ -120,16 +122,19 @@ macro_rules! calc_size_on_axis {
                         changed = true;
                     }
                     if LayoutDirection::$axis == LayoutDirection::Column {
-                        Some(new_size)
+                        (Some(new_size), new_size)
                     } else {
-                        None
+                        (None, new_size)
                     }
+                } else if let Some(size) = child.$calculated_preferred {
+                    set_float(&mut child.$calculated, size);
+                    (child.$calculated_min, size)
                 } else if let Some(size) = child.$calculated_min {
                     set_float(&mut child.$calculated, size);
-                    Some(size)
+                    (Some(size), size)
                 } else {
                     set_float(&mut child.$calculated, 0.0);
-                    None
+                    (None, 0.0)
                 };
 
                 if let Some(margin) = child.$margin_x.as_ref().and_then(crate::Number::as_fixed) {
@@ -137,6 +142,7 @@ macro_rules! calc_size_on_axis {
                     if set_float(&mut child.$calculated_margin_x, size).is_some() {
                         changed = true;
                     }
+                    preferred += size;
                     crate::layout::increase_opt(&mut min, size);
                 }
                 if let Some(margin) = child.$margin_y.as_ref().and_then(crate::Number::as_fixed) {
@@ -144,6 +150,7 @@ macro_rules! calc_size_on_axis {
                     if set_float(&mut child.$calculated_margin_y, size).is_some() {
                         changed = true;
                     }
+                    preferred += size;
                     crate::layout::increase_opt(&mut min, size);
                 }
                 if let Some(padding) = child.$padding_x.as_ref().and_then(crate::Number::as_fixed) {
@@ -151,6 +158,7 @@ macro_rules! calc_size_on_axis {
                     if set_float(&mut child.$calculated_padding_x, size).is_some() {
                         changed = true;
                     }
+                    preferred += size;
                     crate::layout::increase_opt(&mut min, size);
                 }
                 if let Some(padding) = child.$padding_y.as_ref().and_then(crate::Number::as_fixed) {
@@ -158,6 +166,7 @@ macro_rules! calc_size_on_axis {
                     if set_float(&mut child.$calculated_padding_y, size).is_some() {
                         changed = true;
                     }
+                    preferred += size;
                     crate::layout::increase_opt(&mut min, size);
                 }
                 if let Some((&color, size)) = child
@@ -201,13 +210,11 @@ macro_rules! calc_size_on_axis {
                     }
                 }
 
-                if let Some(size) = min {
+                let handle_sizing = |child: &mut Container, size, output: &mut f32| {
                     enum MinSizeHandling {
                         Add,
                         Max,
                     }
-
-                    child.$calculated_min = Some(size);
 
                     let handling = match child.position.unwrap_or_default() {
                         Position::Static | Position::Relative => match overflow {
@@ -228,23 +235,32 @@ macro_rules! calc_size_on_axis {
                     if let Some(handling) = handling {
                         match handling {
                             MinSizeHandling::Add => {
-                                log::trace!("{LABEL}: MinSizeHandling::Add min_size={min_size} += size={size} ({})", min_size + size);
-                                min_size += size;
+                                log::trace!("{LABEL}: MinSizeHandling::Add output={output} += size={size} ({})", *output + size);
+                                *output += size;
                             }
                             MinSizeHandling::Max => {
-                                log::trace!("{LABEL}: MinSizeHandling::Add size={size} > min_size={min_size} ({})", if size > min_size { size } else { min_size });
-                                if size > min_size {
-                                    min_size = size;
+                                log::trace!("{LABEL}: MinSizeHandling::Add size={size} > output={output} ({})", if size > *output { size } else { *output });
+                                if size > *output {
+                                    *output = size;
                                 }
                             }
                         }
                     }
+                };
+
+                child.$calculated_preferred = Some(preferred);
+                handle_sizing(child, preferred, &mut preferred_size);
+
+                if let Some(size) = min {
+                    child.$calculated_min = Some(size);
+                    handle_sizing(child, size, &mut min_size);
                 }
 
                 $each_child(child, view_width, view_height);
             }
 
             set_float(&mut parent.$calculated_min, min_size);
+            set_float(&mut parent.$calculated_preferred, preferred_size);
         });
 
         changed
@@ -804,6 +820,7 @@ mod pass_widths {
                 width,
                 calculated_width,
                 calculated_min_width,
+                calculated_preferred_width,
                 Row,
                 Column,
                 margin_left,
@@ -964,6 +981,7 @@ mod pass_heights {
                 height,
                 calculated_height,
                 calculated_min_height,
+                calculated_preferred_height,
                 Column,
                 Row,
                 margin_top,

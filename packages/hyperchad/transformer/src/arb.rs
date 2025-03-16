@@ -813,9 +813,13 @@ impl Arbitrary for Container {
             #[cfg(feature = "layout")]
             calculated_min_width: None,
             #[cfg(feature = "layout")]
+            calculated_preferred_width: None,
+            #[cfg(feature = "layout")]
             calculated_width: None,
             #[cfg(feature = "layout")]
             calculated_min_height: None,
+            #[cfg(feature = "layout")]
+            calculated_preferred_height: None,
             #[cfg(feature = "layout")]
             calculated_height: None,
             #[cfg(feature = "layout")]
