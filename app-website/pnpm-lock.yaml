@@ -130,8 +130,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.9.37
-        version: 3.9.37
+        specifier: ^3.9.39
+        version: 3.9.39
       typescript:
         specifier: ^5.8.2
         version: 5.8.2
@@ -1770,8 +1770,8 @@ packages:
     resolution: {integrity: sha512-8WB3Jcas3swSvjIeA2yvCJ+Miyz5l1ZmB6HFb9R1317dt9LCQoswg/BGrmAmkWVEszSrrg4RwmO46qIm2OEnSA==}
     engines: {node: '>=16'}
 
-  caniuse-lite@1.0.30001704:
-    resolution: {integrity: sha512-+L2IgBbV6gXB4ETf0keSvLr7JUrRVbIaB/lrQ1+z8mRcQiisG5k+lG6O4n6Y5q6f5EuNfaYXKgymucphlEXQew==}
+  caniuse-lite@1.0.30001705:
+    resolution: {integrity: sha512-S0uyMMiYvA7CxNgomYBwwwPUnWzFD83f3B1ce5jHUfHTH//QL6hHsreI8RVC5606R4ssqravelYO5TU6t8sEyg==}
 
   ccount@2.0.1:
     resolution: {integrity: sha512-eyrF0jiFpY+3drT6383f1qhkbGsLSifNAjA61IUjZjmLCWjItY6LB9ft9YhoDgwfmclB2zhu51Lc7+95b8NRAg==}
@@ -2063,8 +2063,8 @@ packages:
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
 
-  electron-to-chromium@1.5.118:
-    resolution: {integrity: sha512-yNDUus0iultYyVoEFLnQeei7LOQkL8wg8GQpkPCRrOlJXlcCwa6eGKZkxQ9ciHsqZyYbj8Jd94X1CTPzGm+uIA==}
+  electron-to-chromium@1.5.119:
+    resolution: {integrity: sha512-Ku4NMzUjz3e3Vweh7PhApPrZSS4fyiCIbcIrG9eKrriYVLmbMepETR/v6SU7xPm98QTqMSYiCwfO89QNjXLkbQ==}
 
   emmet@2.4.11:
     resolution: {integrity: sha512-23QPJB3moh/U9sT4rQzGgeyyGIrcM+GH5uVYg2C6wZIxAIJq7Ng3QLT79tl8FUwDXhyq9SusfknOrofAKqvgyQ==}
@@ -3207,8 +3207,8 @@ packages:
   muggle-string@0.4.1:
     resolution: {integrity: sha512-VNTrAak/KhO2i8dqqnqnAHOa3cYBwXEZe9h+D5h/1ZqFSTEFHdM65lR7RoIqq3tBBYavsOXV84NoHXZ0AkPyqQ==}
 
-  nanoid@3.3.9:
-    resolution: {integrity: sha512-SppoicMGpZvbF1l3z4x7No3OlIjP7QJvC9XR7AhZr1kL133KHnKPztkKDc+Ir4aJ/1VhTySrtKhrsycmrMQfvg==}
+  nanoid@3.3.10:
+    resolution: {integrity: sha512-vSJJTG+t/dIKAUhUDw/dLdZ9s//5OxcHqLaDWWrW4Cdq7o6tdLIczUkMXt2MBNmk6sJRZBZRXVixs7URY1CmIg==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
@@ -3819,33 +3819,33 @@ packages:
   split2@3.2.2:
     resolution: {integrity: sha512-9NThjpgZnifTkJpzTZ7Eue85S49QwpNhZTq6GRJwObb6jnLFNGB7Qm73V5HewTROPyxD0C29xqmaI68bQtV+hg==}
 
-  sst-darwin-arm64@3.9.37:
-    resolution: {integrity: sha512-gSsElRf33f20f5hEX6eIs2wdFizkmRE/ks1NNgVQJyOWkJFmQz82XhZq/aDevYn7VBFLdY+J48mo1Ttq2AbHSw==}
+  sst-darwin-arm64@3.9.39:
+    resolution: {integrity: sha512-uDr1CIRoFv8atS+WgR2vj6SA4ELUhTSfpMTzV48AleQiiLwzvMLVWxhJr1b8c9rwrSPymojk17sL6b2sscpvKQ==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.9.37:
-    resolution: {integrity: sha512-sM1JAWPMfwvsK+1nHwlSkY5c4o+M5gryEura0yzlK/hcwRDmcdWUgvruwlXWD8nVRYmHoDffS/J0qTRlh9smoQ==}
+  sst-darwin-x64@3.9.39:
+    resolution: {integrity: sha512-NJ1zRTy1zqf+vmqCKADbK1ijUB7At2ONjR594H2NvYcjgLFDtKk8KHjoAQI4DQpFd0Swx/2QfEu5xv722rRXxw==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.9.37:
-    resolution: {integrity: sha512-FrFZ5qGfnhiHQ6SBgFlYndJwv5gYuHtUhzUmx08CInKXcSnh+oz+neScIduf+8iSj/6Bnnu9oJ9CGMcDYAFBFw==}
+  sst-linux-arm64@3.9.39:
+    resolution: {integrity: sha512-QgvvxVyrDjxkbGn/UDKM1v2bbecXeIbc1OFs+ixm90vMx3JTmW2wISYtK7ek9GL7Ls9b4oEdbyP5UiKpeoNVLw==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.9.37:
-    resolution: {integrity: sha512-0wmXzASl/R6FZWMzDwrKkujQd3UuQ045MtCJ2ymF7HfUciBrnfZgmTQTUZYN4GaVRCbz6h4c+IJ5z9P9M0g3TA==}
+  sst-linux-x64@3.9.39:
+    resolution: {integrity: sha512-GS4QU5fpAWOInBXgFL/IrTtgHhnQGvmvVyuwPW7q3xE/Zh9W4ClNzRy9XPu8Kw176XB624aNzuZ7zAAz8c22mQ==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.9.37:
-    resolution: {integrity: sha512-jps8S0z97zo4qukzcYzHJ2lFWpxYfEl/ut3bvD0WCxWO/vjBXW4eUnGr7JwDTOR1VHt0yekZqP221W6WXpTUEQ==}
+  sst-linux-x86@3.9.39:
+    resolution: {integrity: sha512-AklTtNIaVByxv9KWRj9ADxT7ah/vugi+xTDiFHKqc02fuHvWKndAMIR0GoSc7HWJs0QAfbKww+sYMgO/ARehsw==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.9.37:
-    resolution: {integrity: sha512-i9U9nnjW2rI4uDtH7nxFPimHncHWhPkw95niUfMT5idz36bkeEOXow0hmNw3L62SyJ3PiDcdpRavoBwmJbD8cQ==}
+  sst@3.9.39:
+    resolution: {integrity: sha512-kPoMXAuslfbERc5UY7YjIBvvs7zNGKcXX53gC46absskMtimg8kBXu2CZaWjz5EHMIREvWfr3scz++uEKCUhRw==}
     hasBin: true
 
   stack-utils@2.0.6:
@@ -3984,8 +3984,8 @@ packages:
     resolution: {integrity: sha512-Loo5UUvLD9ScZ6jh8beX1T6sO1w2/MpCRpEP7V280GKMVUQ0Jzar2U3UJPsrdbziLEMMhu3Ujnq//rhiFuIeag==}
     engines: {node: '>=6'}
 
-  tr46@5.0.0:
-    resolution: {integrity: sha512-tk2G5R2KRwBd+ZN0zaEXpmzdKyOYksXwywulIX95MBODjSzMIuQnQ3m8JxgbhnL1LeVo7lqQKsYa1O3Htl7K5g==}
+  tr46@5.1.0:
+    resolution: {integrity: sha512-IUWnUK7ADYR5Sl1fZlO1INDUhVhatWl7BtJWsIhwJ0UAK7ilzzIa8uIqOO/aYVWHZPJkKbEL+362wrzoeRF7bw==}
     engines: {node: '>=18'}
 
   trim-lines@3.0.1:
@@ -4472,8 +4472,8 @@ packages:
     resolution: {integrity: sha512-QaKxh0eNIi2mE9p2vEdzfagOKHCcj1pJ56EEHGQOVxp8r9/iszLUUV7v89x9O1p/T+NlTM5W7jW6+cz4Fq1YVg==}
     engines: {node: '>=18'}
 
-  whatwg-url@14.1.1:
-    resolution: {integrity: sha512-mDGf9diDad/giZ/Sm9Xi2YcyzaFpbdLpJPr+E9fSkyQ7KpQD4SdFcugkRQYzhmfI4KeV4Qpnn2sKPdo+kmsgRQ==}
+  whatwg-url@14.2.0:
+    resolution: {integrity: sha512-De72GdQZzNTUBBChsXueQUnPKDkg/5A5zp7pFDuQAj5UFoENpiACU0wlCvzpAGnTkj++ihpKwKyYewn/XNUbKw==}
     engines: {node: '>=18'}
 
   which-boxed-primitive@1.1.1:
@@ -4620,6 +4620,11 @@ packages:
 
   zod-to-json-schema@3.24.3:
     resolution: {integrity: sha512-HIAfWdYIt1sssHfYZFCXp4rU1w2r8hVVXYIlmoa0r0gABLs5di3RCqPU5DDROogVz1pAdYBaz7HK5n9pSUNs3A==}
+    peerDependencies:
+      zod: ^3.24.1
+
+  zod-to-json-schema@3.24.4:
+    resolution: {integrity: sha512-0uNlcvgabyrni9Ag8Vghj21drk7+7tp7VTwwR7KxxXXc/3pbXz2PHlDgj3cICahgF1kHm4dExBFj7BXrZJXzig==}
     peerDependencies:
       zod: ^3.24.1
 
@@ -6560,7 +6565,7 @@ snapshots:
       yargs-parser: 21.1.1
       yocto-spinner: 0.2.1
       zod: 3.24.2
-      zod-to-json-schema: 3.24.3(zod@3.24.2)
+      zod-to-json-schema: 3.24.4(zod@3.24.2)
       zod-to-ts: 1.2.0(typescript@5.8.2)(zod@3.24.2)
     optionalDependencies:
       sharp: 0.33.5
@@ -6730,8 +6735,8 @@ snapshots:
 
   browserslist@4.24.4:
     dependencies:
-      caniuse-lite: 1.0.30001704
-      electron-to-chromium: 1.5.118
+      caniuse-lite: 1.0.30001705
+      electron-to-chromium: 1.5.119
       node-releases: 2.0.19
       update-browserslist-db: 1.1.3(browserslist@4.24.4)
 
@@ -6781,7 +6786,7 @@ snapshots:
 
   camelcase@8.0.0: {}
 
-  caniuse-lite@1.0.30001704: {}
+  caniuse-lite@1.0.30001705: {}
 
   ccount@2.0.1: {}
 
@@ -6932,7 +6937,7 @@ snapshots:
   data-urls@5.0.0:
     dependencies:
       whatwg-mimetype: 4.0.0
-      whatwg-url: 14.1.1
+      whatwg-url: 14.2.0
 
   data-view-buffer@1.0.2:
     dependencies:
@@ -7053,7 +7058,7 @@ snapshots:
 
   ee-first@1.1.1: {}
 
-  electron-to-chromium@1.5.118: {}
+  electron-to-chromium@1.5.119: {}
 
   emmet@2.4.11:
     dependencies:
@@ -8114,7 +8119,7 @@ snapshots:
       webidl-conversions: 7.0.0
       whatwg-encoding: 3.1.1
       whatwg-mimetype: 4.0.0
-      whatwg-url: 14.1.1
+      whatwg-url: 14.2.0
       ws: 8.18.1
       xml-name-validator: 5.0.0
     transitivePeerDependencies:
@@ -8625,7 +8630,7 @@ snapshots:
 
   muggle-string@0.4.1: {}
 
-  nanoid@3.3.9: {}
+  nanoid@3.3.10: {}
 
   nanostores@0.9.5: {}
 
@@ -8843,7 +8848,7 @@ snapshots:
 
   postcss@8.5.3:
     dependencies:
-      nanoid: 3.3.9
+      nanoid: 3.3.10
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
@@ -9375,22 +9380,22 @@ snapshots:
       readable-stream: 3.6.2
     optional: true
 
-  sst-darwin-arm64@3.9.37:
+  sst-darwin-arm64@3.9.39:
     optional: true
 
-  sst-darwin-x64@3.9.37:
+  sst-darwin-x64@3.9.39:
     optional: true
 
-  sst-linux-arm64@3.9.37:
+  sst-linux-arm64@3.9.39:
     optional: true
 
-  sst-linux-x64@3.9.37:
+  sst-linux-x64@3.9.39:
     optional: true
 
-  sst-linux-x86@3.9.37:
+  sst-linux-x86@3.9.39:
     optional: true
 
-  sst@3.9.37:
+  sst@3.9.39:
     dependencies:
       aws-sdk: 2.1692.0
       aws4fetch: 1.0.18
@@ -9398,11 +9403,11 @@ snapshots:
       opencontrol: 0.0.6
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.9.37
-      sst-darwin-x64: 3.9.37
-      sst-linux-arm64: 3.9.37
-      sst-linux-x64: 3.9.37
-      sst-linux-x86: 3.9.37
+      sst-darwin-arm64: 3.9.39
+      sst-darwin-x64: 3.9.39
+      sst-linux-arm64: 3.9.39
+      sst-linux-x64: 3.9.39
+      sst-linux-x86: 3.9.39
     transitivePeerDependencies:
       - supports-color
 
@@ -9550,7 +9555,7 @@ snapshots:
       universalify: 0.2.0
       url-parse: 1.5.10
 
-  tr46@5.0.0:
+  tr46@5.1.0:
     dependencies:
       punycode: 2.3.1
 
@@ -9993,9 +9998,9 @@ snapshots:
 
   whatwg-mimetype@4.0.0: {}
 
-  whatwg-url@14.1.1:
+  whatwg-url@14.2.0:
     dependencies:
-      tr46: 5.0.0
+      tr46: 5.1.0
       webidl-conversions: 7.0.0
 
   which-boxed-primitive@1.1.1:
@@ -10139,6 +10144,10 @@ snapshots:
   yoctocolors@2.1.1: {}
 
   zod-to-json-schema@3.24.3(zod@3.24.2):
+    dependencies:
+      zod: 3.24.2
+
+  zod-to-json-schema@3.24.4(zod@3.24.2):
     dependencies:
       zod: 3.24.2
 
