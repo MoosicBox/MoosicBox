@@ -6,7 +6,7 @@ use hyperchad_actions::{
         get_data_attr_value_self, get_event_value, get_visibility_self, get_visibility_str_id,
     },
 };
-use hyperchad_transformer_models::{ImageLoading, JustifyContent, Visibility};
+use hyperchad_transformer_models::{AlignItems, ImageLoading, JustifyContent, Visibility};
 use maud::{Markup, PreEscaped, html};
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_music_models::{
@@ -675,16 +675,10 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
     let size: u16 = 200;
 
     html! {
-        div
-            sx-height=(36 + 40)
-            sx-background="#080a0b"
-        {
-            div
-                sx-padding-x=(30)
-                sx-padding-top=(15)
-            {
-                div sx-dir="row" {
-                    h1 sx-width=(50) sx-height=(36) { "Albums" }
+        div sx-background="#080a0b" {
+            div sx-padding-x=(30) sx-padding-y=(15) {
+                div sx-dir="row" sx-align-items=(AlignItems::Center) {
+                    h1 { "Albums" }
                     @let button_size = 30;
                     @let icon_size = button_size - 10;
                     div sx-position="relative" sx-width=(button_size) sx-height=(button_size) {
