@@ -976,7 +976,9 @@ mod pass_wrap_horizontal {
                         return;
                     };
 
-                    log::trace!("wrap_horizontal: measuring text={value} container_width={container_width}");
+                    log::trace!(
+                        "wrap_horizontal: measuring text={value} container_width={container_width}"
+                    );
                     let bounds = self.font_metrics.measure_text(value, 14.0, container_width);
                     log::trace!("wrap_horizontal: measured bounds={bounds:?}");
                     let new_width = bounds.width();
@@ -1105,7 +1107,7 @@ mod pass_positioning {
     use bumpalo::Bump;
     use hyperchad_transformer_models::{
         AlignItems, JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition, Position,
-        TextAlign,
+        TextAlign, Visibility,
     };
 
     use crate::{
@@ -1216,7 +1218,7 @@ mod pass_positioning {
                             gap
                         };
 
-                        for child in parent.relative_positioned_elements_mut() {
+                        for child in parent.relative_positioned_elements_mut().filter(|x| x.visibility != Some(Visibility::Hidden)) {
                             let Some(LayoutPosition::Wrap { row, col }) = child.calculated_position
                             else {
                                 continue;
@@ -1269,7 +1271,7 @@ mod pass_positioning {
                         let mut max_height = 0.0;
                         last_row = 0;
 
-                        for child in parent.relative_positioned_elements_mut() {
+                        for child in parent.relative_positioned_elements_mut().filter(|x| x.visibility != Some(Visibility::Hidden)) {
                             let Some(LayoutPosition::Wrap { row, col }) = child.calculated_position
                             else {
                                 continue;
@@ -1327,6 +1329,7 @@ mod pass_positioning {
                             JustifyContent::Center => {
                                 let size: f32 = parent
                                     .relative_positioned_elements()
+                                    .filter(|x| x.visibility != Some(Visibility::Hidden))
                                     .filter_map(|x| match direction {
                                         LayoutDirection::Row => x.bounding_calculated_width(),
                                         LayoutDirection::Column => x.bounding_calculated_height(),
@@ -1341,6 +1344,7 @@ mod pass_positioning {
                             JustifyContent::End => {
                                 let size: f32 = parent
                                     .relative_positioned_elements()
+                                    .filter(|x| x.visibility != Some(Visibility::Hidden))
                                     .filter_map(|x| match direction {
                                         LayoutDirection::Row => x.bounding_calculated_width(),
                                         LayoutDirection::Column => x.bounding_calculated_height(),
@@ -1353,9 +1357,13 @@ mod pass_positioning {
                                 }
                             }
                             JustifyContent::SpaceBetween => {
-                                let count = parent.relative_positioned_elements().count();
+                                let count = parent
+                                    .relative_positioned_elements()
+                                    .filter(|x| x.visibility != Some(Visibility::Hidden))
+                                    .count();
                                 let size: f32 = parent
                                     .relative_positioned_elements()
+                                    .filter(|x| x.visibility != Some(Visibility::Hidden))
                                     .filter_map(|x| match direction {
                                         LayoutDirection::Row => x.bounding_calculated_width(),
                                         LayoutDirection::Column => x.bounding_calculated_height(),
@@ -1373,9 +1381,13 @@ mod pass_positioning {
                                 }
                             }
                             JustifyContent::SpaceEvenly => {
-                                let count = parent.relative_positioned_elements().count();
+                                let count = parent
+                                    .relative_positioned_elements()
+                                    .filter(|x| x.visibility != Some(Visibility::Hidden))
+                                    .count();
                                 let size: f32 = parent
                                     .relative_positioned_elements()
+                                    .filter(|x| x.visibility != Some(Visibility::Hidden))
                                     .filter_map(|x| match direction {
                                         LayoutDirection::Row => x.bounding_calculated_width(),
                                         LayoutDirection::Column => x.bounding_calculated_height(),
@@ -1399,6 +1411,7 @@ mod pass_positioning {
                         if let Some(text_align) = relative_container.text_align {
                             if parent
                                 .relative_positioned_elements()
+                                .filter(|x| x.visibility != Some(Visibility::Hidden))
                                 .all(|x| matches!(x.element, Element::Raw { .. }))
                             {
                                 match text_align {
@@ -1406,6 +1419,7 @@ mod pass_positioning {
                                     TextAlign::Center => {
                                         let size: f32 = parent
                                             .relative_positioned_elements()
+                                            .filter(|x| x.visibility != Some(Visibility::Hidden))
                                             .filter_map(Container::bounding_calculated_width)
                                             .sum();
 
@@ -1416,6 +1430,7 @@ mod pass_positioning {
                                     TextAlign::End => {
                                         let size: f32 = parent
                                             .relative_positioned_elements()
+                                            .filter(|x| x.visibility != Some(Visibility::Hidden))
                                             .filter_map(Container::bounding_calculated_width)
                                             .sum();
 
@@ -1433,7 +1448,11 @@ mod pass_positioning {
                             }
                         }
 
-                        for (i, child) in parent.relative_positioned_elements_mut().enumerate() {
+                        for (i, child) in parent
+                            .relative_positioned_elements_mut()
+                            .filter(|x| x.visibility != Some(Visibility::Hidden))
+                            .enumerate()
+                        {
                             let start_x = x;
                             let start_y = y;
 
@@ -8896,7 +8915,7 @@ mod test {
     }
 
     mod positioning {
-        use hyperchad_transformer_models::{AlignItems, TextAlign};
+        use hyperchad_transformer_models::{AlignItems, TextAlign, Visibility};
 
         use super::*;
 
@@ -8965,6 +8984,43 @@ mod test {
                         calculated_y: Some(18.0),
                         ..container.children[0].clone()
                     }],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_not_include_invisible_children_in_position() {
+            let mut container: Container = html! {
+                div sx-width=(100) sx-height=(50) {
+                    div sx-visibility=(Visibility::Hidden) sx-height=(20) {}
+                    "test"
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![
+                        Container {
+                            calculated_y: None,
+                            ..container.children[0].clone()
+                        },
+                        Container {
+                            calculated_y: Some(0.0),
+                            ..container.children[1].clone()
+                        },
+                    ],
                     ..container.clone()
                 },
             );
