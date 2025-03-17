@@ -6,7 +6,7 @@ use hyperchad_actions::{
         get_data_attr_value_self, get_event_value, get_visibility_self, get_visibility_str_id,
     },
 };
-use hyperchad_transformer_models::{ImageLoading, Visibility};
+use hyperchad_transformer_models::{ImageLoading, JustifyContent, Visibility};
 use maud::{Markup, PreEscaped, html};
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_music_models::{
@@ -249,10 +249,10 @@ pub fn album_page_content(
             @if let Some(version) = selected_version {
                 div {
                     div sx-dir="row" {
-                        div sx-padding-x=(10) sx-height=(50) sx-align-items="center" { "#" }
-                        div sx-padding-x=(10) sx-height=(50) sx-align-items="center" { "Title" }
-                        div sx-padding-x=(10) sx-height=(50) sx-align-items="center" { "Artist" }
-                        div sx-padding-x=(10) sx-height=(50) sx-align-items="center" { "Time" }
+                        div sx-padding-x=(10) sx-height=(50) sx-justify-content=(JustifyContent::Center) { "#" }
+                        div sx-padding-x=(10) sx-height=(50) sx-justify-content=(JustifyContent::Center) { "Title" }
+                        div sx-padding-x=(10) sx-height=(50) sx-justify-content=(JustifyContent::Center) { "Artist" }
+                        div sx-padding-x=(10) sx-height=(50) sx-justify-content=(JustifyContent::Center) { "Time" }
                     }
                     (album_page_tracks_table_body_from_state(state, &version))
                 }
@@ -295,7 +295,7 @@ pub fn album_page_tracks_table_body(version: &ApiAlbumVersion, track_id: Option<
                 ))
                 sx-background=[if current_track { Some("#333") } else { None }]
             {
-                div sx-padding-x=(10) sx-height=(50) sx-align-items="center" {
+                div sx-padding-x=(10) sx-height=(50) sx-justify-content=(JustifyContent::Center) {
                     span
                         class="track-number"
                         sx-visibility=(if current_track { Visibility::Hidden } else { Visibility::Visible })
@@ -331,13 +331,13 @@ pub fn album_page_tracks_table_body(version: &ApiAlbumVersion, track_id: Option<
                             src=(public_img!("play-button-white.svg"));
                     }
                 }
-                div sx-padding-x=(10) sx-height=(50) sx-align-items="center" {
+                div sx-padding-x=(10) sx-height=(50) sx-justify-content=(JustifyContent::Center) {
                     (track.title)
                 }
-                div sx-padding-x=(10) sx-height=(50) sx-align-items="center" {
+                div sx-padding-x=(10) sx-height=(50) sx-justify-content=(JustifyContent::Center) {
                     a href=(pre_escaped!("/artists?artistId={}&source={}", track.artist_id, track.api_source)) { (track.artist) }
                 }
-                div sx-padding-x=(10) sx-height=(50) sx-align-items="center" {
+                div sx-padding-x=(10) sx-height=(50) sx-justify-content=(JustifyContent::Center) {
                     (track.duration.into_formatted())
                 }
             }
