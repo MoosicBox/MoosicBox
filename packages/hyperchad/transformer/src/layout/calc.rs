@@ -469,7 +469,7 @@ macro_rules! flex_on_axis {
                     }
 
                     // Fit all unsized children
-                    if parent.align_items.is_none() && parent.relative_positioned_elements().any(|x| x.$fixed.is_none() && !x.is_span()) {
+                    if parent.align_items.is_none() && parent.relative_positioned_elements().any(|x| x.$fixed.is_none() && !x.is_raw()) {
                         let mut remaining_size = container_size;
                         let mut last_cell = 0;
                         let mut max_cell_size = 0.0;
@@ -564,7 +564,7 @@ macro_rules! flex_on_axis {
 
                                         for size in parent
                                             .relative_positioned_elements()
-                                            .filter(|x| x.$fixed.is_none() && !x.is_span())
+                                            .filter(|x| x.$fixed.is_none() && !x.is_raw())
                                             .filter_map(|x| x.$calculated)
                                         {
                                             if smallest > size {
@@ -614,7 +614,7 @@ macro_rules! flex_on_axis {
 
                                         for child in parent
                                             .relative_positioned_elements_mut()
-                                            .filter(|x| x.$fixed.is_none() && !x.is_span())
+                                            .filter(|x| x.$fixed.is_none() && !x.is_raw())
                                             .filter(|x| x.$calculated.is_some_and(|x| float_eq!(x, smallest)))
                                         {
                                             let mut clipped = false;
@@ -629,7 +629,7 @@ macro_rules! flex_on_axis {
                                                     target = min;
                                                 }
                                             }
-                                            if direction == LayoutDirection::Row && child.is_span() {
+                                            if direction == LayoutDirection::Row && child.is_raw() {
                                                 if let Some(preferred) = child.$calculated_preferred {
                                                     log::trace!("{LABEL}: calculated_preferred={preferred}");
                                                     let preferred = preferred - child.$padding_axis().unwrap_or_default() - child.$margin_axis().unwrap_or_default();
@@ -8908,6 +8908,38 @@ mod test {
                         ..container.children[0].clone()
                     }],
                     calculated_width: Some(100.0),
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_wrap_nested_text_longer_than_container_can_fit() {
+            let mut container: Container = html! {
+                div sx-width=(200) {
+                    span { "aoeu aoeu aoeu aoeu aoeu" }
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        calculated_width: Some(200.0),
+                        calculated_height: Some(14.0 * 2.0),
+                        ..container.children[0].clone()
+                    }],
+                    calculated_width: Some(200.0),
                     ..container.clone()
                 },
             );
