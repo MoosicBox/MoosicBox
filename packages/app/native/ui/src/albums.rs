@@ -498,7 +498,7 @@ pub fn album_display(
         let artist_page_url = artist_page_url(&album.artist_id.to_string());
 
         html! {
-            div {
+            div sx-padding-top=(5) {
                 div {
                     a href=(album_page_url) { (album.title) }
                 }
