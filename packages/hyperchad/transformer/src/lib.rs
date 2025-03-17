@@ -1548,6 +1548,11 @@ impl Container {
     pub const fn is_fixed(&self) -> bool {
         matches!(self.position, Some(Position::Fixed | Position::Sticky))
     }
+
+    #[must_use]
+    pub const fn is_raw(&self) -> bool {
+        matches!(self.element, Element::Raw { .. })
+    }
 }
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
