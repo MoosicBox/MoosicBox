@@ -319,7 +319,7 @@ macro_rules! flex_on_axis {
         let view_height = $container.calculated_height.expect("Missing view_height");
 
         #[allow(clippy::cognitive_complexity)]
-        $bfs.traverse_with_parents_mut(
+        $bfs.traverse_with_parents_ref_mut(
             true,
             super::Rect::default(),
             $container,
@@ -669,7 +669,7 @@ macro_rules! flex_on_axis {
                 let super::Rect { $fixed: relative_size, .. } = relative_container;
 
                 for child in parent.absolute_positioned_elements_mut() {
-                    let mut remaining_container_size = relative_size;
+                    let mut remaining_container_size = *relative_size;
 
                     if let Some(size) = child.$margin_axis() {
                         log::trace!(
@@ -1140,13 +1140,14 @@ mod pass_positioning {
             );
 
             let root_id = container.id;
+            let root_text_align = container.text_align;
             let view_width = container.calculated_width.expect("Missing view_width");
             let view_height = container.calculated_height.expect("Missing view_height");
 
             let mut changed = false;
 
             #[allow(clippy::cognitive_complexity)]
-            bfs.traverse_with_parents_mut(
+            bfs.traverse_with_parents_ref_mut(
                 true,
                 Container::default(),
                 container,
@@ -1156,6 +1157,7 @@ mod pass_positioning {
                         relative_container.calculated_y = Some(0.0);
                         relative_container.calculated_width = Some(view_width);
                         relative_container.calculated_height = Some(view_height);
+                        relative_container.text_align = root_text_align;
                     } else if parent.position == Some(Position::Relative) {
                         relative_container.calculated_x =
                             Some(parent.calculated_x.expect("Missing calculated_x"));
@@ -1529,6 +1531,8 @@ mod pass_positioning {
                     else {
                         panic!("Missing relative_container size");
                     };
+                    let width = *width;
+                    let height = *height;
 
                     for child in parent.absolute_positioned_elements_mut() {
                         if let Some(left) = &child.left {
