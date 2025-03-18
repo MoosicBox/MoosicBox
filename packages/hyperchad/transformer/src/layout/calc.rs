@@ -267,14 +267,6 @@ macro_rules! calc_size_on_axis {
     }};
 }
 
-#[derive(Clone, Copy, Default)]
-pub struct Rect {
-    pub x: f32,
-    pub y: f32,
-    pub width: f32,
-    pub height: f32,
-}
-
 macro_rules! flex_on_axis {
     (
         $label:tt,
@@ -321,18 +313,18 @@ macro_rules! flex_on_axis {
         #[allow(clippy::cognitive_complexity)]
         $bfs.traverse_with_parents_ref_mut(
             true,
-            super::Rect::default(),
+            crate::layout::Rect::default(),
             $container,
             |parent, relative_container| {
                 if parent.id == root_id {
-                    super::Rect {
+                    crate::layout::Rect {
                         x: 0.0,
                         y: 0.0,
                         width: view_width,
                         height: view_height,
                     }
                 } else if parent.position == Some(Position::Relative) {
-                    super::Rect {
+                    crate::layout::Rect {
                         $fixed: parent.$calculated.expect("Missing parent calculated size"),
                         ..Default::default()
                     }
@@ -666,7 +658,7 @@ macro_rules! flex_on_axis {
 
                 // absolute positioned
 
-                let super::Rect { $fixed: relative_size, .. } = relative_container;
+                let crate::layout::Rect { $fixed: relative_size, .. } = relative_container;
 
                 for child in parent.absolute_positioned_elements_mut() {
                     let mut remaining_container_size = *relative_size;

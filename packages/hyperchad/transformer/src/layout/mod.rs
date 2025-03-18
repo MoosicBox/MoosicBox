@@ -20,6 +20,14 @@ pub trait Calc {
     fn calc(&self, container: &mut Container) -> bool;
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct Rect {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
 #[allow(clippy::trivially_copy_pass_by_ref)]
 #[inline]
 #[must_use]
