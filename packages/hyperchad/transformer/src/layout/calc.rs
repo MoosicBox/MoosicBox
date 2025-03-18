@@ -218,7 +218,10 @@ macro_rules! calc_size_on_axis {
 
                     let handling = match child.position.unwrap_or_default() {
                         Position::Static | Position::Relative => match overflow {
-                            LayoutOverflow::Expand | LayoutOverflow::Squash => {
+                            LayoutOverflow::Auto
+                            | LayoutOverflow::Scroll
+                            | LayoutOverflow::Expand
+                            | LayoutOverflow::Squash => {
                                 Some(match direction {
                                     LayoutDirection::$axis => MinSizeHandling::Add,
                                     LayoutDirection::$cross_axis => MinSizeHandling::Max,
@@ -227,7 +230,7 @@ macro_rules! calc_size_on_axis {
                             LayoutOverflow::Wrap { .. } => {
                                 Some(MinSizeHandling::Max)
                             }
-                            LayoutOverflow::Auto | LayoutOverflow::Scroll | LayoutOverflow::Hidden => None
+                            LayoutOverflow::Hidden => None
                         },
                         Position::Absolute | Position::Sticky | Position::Fixed => None
                     };
@@ -239,7 +242,7 @@ macro_rules! calc_size_on_axis {
                                 *output += size;
                             }
                             MinSizeHandling::Max => {
-                                log::trace!("{LABEL}: MinSizeHandling::Add size={size} > output={output} ({})", if size > *output { size } else { *output });
+                                log::trace!("{LABEL}: MinSizeHandling::Max size={size} > output={output} ({})", if size > *output { size } else { *output });
                                 if size > *output {
                                     *output = size;
                                 }
@@ -295,10 +298,11 @@ macro_rules! flex_on_axis {
         $calculated_border_y:ident,
         $gap:ident,
         $calculated_gap:ident,
+        $overflow:ident,
         $each_child:expr
         $(,)?
     ) => {{
-        use crate::Element;
+        use crate::{Element, LayoutOverflow};
 
         const LABEL: &str = $label;
 
@@ -342,6 +346,16 @@ macro_rules! flex_on_axis {
                 }
 
                 for child in &mut parent.children {
+                    if matches!(child.$overflow, LayoutOverflow::Auto | LayoutOverflow::Scroll) {
+                        if let Some(min) = &mut child.$calculated_min {
+                            log::trace!("{LABEL}: checking if min={min} > container_size={container_size}");
+                            if *min > container_size {
+                                *min = container_size;
+                                child.$calculated = Some(container_size);
+                            }
+                        }
+                    }
+
                     if let Some((&color, size)) = child
                         .$border_x
                         .as_ref()
@@ -942,6 +956,7 @@ mod pass_flex_width {
                 calculated_border_right,
                 column_gap,
                 calculated_column_gap,
+                overflow_x,
                 each_child,
             )
         }
@@ -1089,6 +1104,7 @@ mod pass_flex_height {
                 calculated_border_bottom,
                 row_gap,
                 calculated_row_gap,
+                overflow_y,
                 |_, _, _, _| {},
             )
         }
