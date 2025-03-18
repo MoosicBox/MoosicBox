@@ -47,7 +47,7 @@ impl std::fmt::Display for LayoutOverflow {
             Self::Scroll => f.write_str("scroll"),
             Self::Expand => f.write_str("expand"),
             Self::Squash => f.write_str("squash"),
-            Self::Wrap { .. } => f.write_str("wrap"),
+            Self::Wrap { grid } => f.write_str(if *grid { "wrap-grid" } else { "wrap" }),
             Self::Hidden => f.write_str("hidden"),
         }
     }
