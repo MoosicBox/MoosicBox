@@ -18,12 +18,12 @@ impl<F: FontMetrics> Calculator<F> {
 impl<F: FontMetrics> Calc for Calculator<F> {
     #[allow(clippy::let_and_return)]
     fn calc(&self, container: &mut Container) -> bool {
-        use pass_flex_height::Pass as _;
-        use pass_flex_width::Pass as _;
-        use pass_heights::Pass as _;
-        use pass_positioning::Pass as _;
-        use pass_widths::Pass as _;
-        use pass_wrap_horizontal::Pass as _;
+        use passes::pass_flex_height::Pass as _;
+        use passes::pass_flex_width::Pass as _;
+        use passes::pass_heights::Pass as _;
+        use passes::pass_positioning::Pass as _;
+        use passes::pass_widths::Pass as _;
+        use passes::pass_wrap_horizontal::Pass as _;
 
         log::trace!("calc: container={container}");
 
@@ -279,6 +279,7 @@ macro_rules! flex_on_axis {
         $calculated:ident,
         $calculated_min:ident,
         $calculated_preferred:ident,
+        $can_shrink:ident,
         $axis:ident,
         $cross_axis:ident,
         $cell:ident,
@@ -475,7 +476,7 @@ macro_rules! flex_on_axis {
                     }
 
                     // Fit all unsized children
-                    if parent.align_items.is_none() && parent.relative_positioned_elements().any(|x| x.$fixed.is_none() && !x.is_raw()) {
+                    if parent.align_items.is_none() && parent.relative_positioned_elements().any(|x| x.$fixed.is_none()) {
                         let mut remaining_size = container_size;
                         let mut last_cell = 0;
                         let mut max_cell_size = 0.0;
@@ -562,103 +563,212 @@ macro_rules! flex_on_axis {
                         // Fit all unsized children to remaining_size
                         match direction {
                             LayoutDirection::$axis => {
-                                if parent.is_flex_container() && !float_eq!(remaining_size, 0.0) {
-                                    loop {
-                                        let mut smallest = f32::INFINITY;
-                                        let mut target = f32::INFINITY;
-                                        let mut smallest_count = 0_u16;
-
-                                        for size in parent
+                                if parent.is_flex_container() {
+                                    if remaining_size <= -crate::layout::EPSILON
+                                        && parent
                                             .relative_positioned_elements()
-                                            .filter(|x| x.$fixed.is_none() && !x.is_raw())
-                                            .filter_map(|x| x.$calculated)
-                                        {
-                                            if smallest > size {
-                                                target = smallest;
-                                                smallest = size;
-                                                smallest_count = 1;
-                                            } else if float_eq!(smallest, size) {
-                                                smallest_count += 1;
-                                            } else if size < target {
-                                                target = size;
-                                            }
-                                        }
+                                            .any(|x| x.$fixed.is_none() && x.$can_shrink())
+                                    {
+                                        loop {
+                                            let mut largest = f32::INFINITY;
+                                            let mut target = f32::INFINITY;
+                                            let mut largest_count = 0_u16;
 
-                                        moosicbox_assert::assert!(smallest_count > 0, "expected at least one smallest item");
-                                        moosicbox_assert::assert!(smallest.is_finite(), "expected smallest to be finite");
-
-                                        let smallest_countf = f32::from(smallest_count);
-
-                                        let last_iteration = if target.is_infinite() {
-                                            log::trace!("{LABEL}: last iteration remaining_size={remaining_size}");
-                                            target = smallest + if smallest_count == 1 {
-                                                remaining_size
-                                            } else {
-                                                remaining_size / smallest_countf
-                                            };
-                                            remaining_size = 0.0;
-                                            true
-                                        } else if target > remaining_size {
-                                            log::trace!("{LABEL}: target={target} > remaining_size={remaining_size}");
-                                            target = if smallest_count == 1 {
-                                                remaining_size
-                                            } else {
-                                                remaining_size / smallest_countf
-                                            };
-                                            remaining_size = 0.0;
-                                            true
-                                        } else {
-                                            remaining_size -= (target - smallest) * smallest_countf;
-                                            float_eq!(remaining_size, 0.0)
-                                        };
-
-                                        log::trace!("{LABEL}: target={target} smallest={smallest} smallest_count={smallest_count} remaining_size={remaining_size} container_size={container_size}");
-
-                                        moosicbox_assert::assert!(target.is_finite(), "expected target to be finite");
-
-                                        let mut dynamic_child_size = false;
-
-                                        for child in parent
-                                            .relative_positioned_elements_mut()
-                                            .filter(|x| x.$fixed.is_none() && !x.is_raw())
-                                            .filter(|x| x.$calculated.is_some_and(|x| float_eq!(x, smallest)))
-                                        {
-                                            let mut clipped = false;
-                                            let mut target = target;
-
-                                            if let Some(min) = child.$calculated_min {
-                                                log::trace!("{LABEL}: calculated_min={min}");
-                                                let min = min - child.$padding_axis().unwrap_or_default() - child.$margin_axis().unwrap_or_default();
-                                                log::trace!("{LABEL}: calculated_min={min} without padding/margins");
-                                                if target < min {
-                                                    remaining_size -= min - target;
-                                                    target = min;
+                                            for size in parent
+                                                .relative_positioned_elements()
+                                                .filter(|x| x.$fixed.is_none() && x.$can_shrink())
+                                                .filter_map(|x| x.$calculated)
+                                            {
+                                                if size > largest {
+                                                    target = largest;
+                                                    largest = size;
+                                                    largest_count = 1;
+                                                } else if float_eq!(largest, size) {
+                                                    largest_count += 1;
+                                                } else if target < size {
+                                                    target = size;
                                                 }
                                             }
-                                            if direction == LayoutDirection::Row && child.is_raw() {
-                                                if let Some(preferred) = child.$calculated_preferred {
-                                                    log::trace!("{LABEL}: calculated_preferred={preferred}");
-                                                    let preferred = preferred - child.$padding_axis().unwrap_or_default() - child.$margin_axis().unwrap_or_default();
-                                                    log::trace!("{LABEL}: calculated_preferred={preferred} without padding/margins");
-                                                    if target > preferred {
-                                                        remaining_size += target - preferred;
-                                                        target = preferred;
-                                                        clipped = true;
+
+                                            moosicbox_assert::assert!(largest_count > 0, "expected at least one largest item");
+                                            moosicbox_assert::assert!(largest.is_finite(), "expected largest to be finite");
+
+                                            let largest_countf = f32::from(largest_count);
+
+                                            let last_iteration = if target.is_infinite() {
+                                                log::trace!("{LABEL}: last iteration remaining_size={remaining_size}");
+                                                target = largest + if largest_count == 1 {
+                                                    remaining_size
+                                                } else {
+                                                    remaining_size / largest_countf
+                                                };
+                                                remaining_size = 0.0;
+                                                true
+                                            } else if target > remaining_size {
+                                                log::trace!("{LABEL}: target={target} > remaining_size={remaining_size}");
+                                                target = if largest_count == 1 {
+                                                    remaining_size
+                                                } else {
+                                                    remaining_size / largest_countf
+                                                };
+                                                remaining_size = 0.0;
+                                                true
+                                            } else {
+                                                remaining_size -= (target - largest) * largest_countf;
+                                                float_eq!(remaining_size, 0.0)
+                                            };
+
+                                            log::trace!("{LABEL}: target={target} largest={largest} largest_count={largest_count} remaining_size={remaining_size} container_size={container_size}");
+
+                                            moosicbox_assert::assert!(target.is_finite(), "expected target to be finite");
+
+                                            let mut dynamic_child_size = false;
+
+                                            for child in parent
+                                                .relative_positioned_elements_mut()
+                                                .filter(|x| x.$fixed.is_none() && x.$can_shrink())
+                                                .filter(|x| x.$calculated.is_some_and(|x| float_eq!(x, largest)))
+                                            {
+                                                let mut clipped = false;
+                                                let mut target = target;
+
+                                                if let Some(min) = child.$calculated_min {
+                                                    log::trace!("{LABEL}: calculated_min={min}");
+                                                    let min = min - child.$padding_axis().unwrap_or_default() - child.$margin_axis().unwrap_or_default();
+                                                    log::trace!("{LABEL}: calculated_min={min} without padding/margins");
+                                                    if target < min {
+                                                        remaining_size -= min - target;
+                                                        target = min;
                                                     }
                                                 }
+                                                if direction == LayoutDirection::Row && child.is_raw() {
+                                                    if let Some(preferred) = child.$calculated_preferred {
+                                                        log::trace!("{LABEL}: calculated_preferred={preferred}");
+                                                        let preferred = preferred - child.$padding_axis().unwrap_or_default() - child.$margin_axis().unwrap_or_default();
+                                                        log::trace!("{LABEL}: calculated_preferred={preferred} without padding/margins");
+                                                        if target > preferred {
+                                                            remaining_size += target - preferred;
+                                                            target = preferred;
+                                                            clipped = true;
+                                                        }
+                                                    }
+                                                }
+
+                                                if !clipped {
+                                                    dynamic_child_size = true;
+                                                }
+
+                                                let prev = child.$calculated.unwrap();
+                                                set_float(&mut child.$calculated, target);
+                                                log::trace!("{LABEL}: increasing child size prev={prev} to target={target}:\n{child}");
                                             }
 
-                                            if !clipped {
-                                                dynamic_child_size = true;
+                                            if last_iteration || !dynamic_child_size {
+                                                break;
                                             }
-
-                                            let prev = child.$calculated.unwrap();
-                                            set_float(&mut child.$calculated, target);
-                                            log::trace!("{LABEL}: increasing child size prev={prev} to target={target}:\n{child}");
                                         }
+                                    } else if !float_eq!(remaining_size, 0.0)
+                                        && parent
+                                            .relative_positioned_elements()
+                                            .any(|x| x.$fixed.is_none() && x.is_expandable(parent))
+                                    {
+                                        loop {
+                                            let mut smallest = f32::INFINITY;
+                                            let mut target = f32::INFINITY;
+                                            let mut smallest_count = 0_u16;
 
-                                        if last_iteration || !dynamic_child_size {
-                                            break;
+                                            for size in parent
+                                                .relative_positioned_elements()
+                                                .filter(|x| x.$fixed.is_none() && x.is_expandable(parent))
+                                                .filter_map(|x| x.$calculated)
+                                            {
+                                                if smallest > size {
+                                                    target = smallest;
+                                                    smallest = size;
+                                                    smallest_count = 1;
+                                                } else if float_eq!(smallest, size) {
+                                                    smallest_count += 1;
+                                                } else if size < target {
+                                                    target = size;
+                                                }
+                                            }
+
+                                            moosicbox_assert::assert!(smallest_count > 0, "expected at least one smallest item");
+                                            moosicbox_assert::assert!(smallest.is_finite(), "expected smallest to be finite");
+
+                                            let smallest_countf = f32::from(smallest_count);
+
+                                            let last_iteration = if target.is_infinite() {
+                                                log::trace!("{LABEL}: last iteration remaining_size={remaining_size}");
+                                                target = smallest + if smallest_count == 1 {
+                                                    remaining_size
+                                                } else {
+                                                    remaining_size / smallest_countf
+                                                };
+                                                remaining_size = 0.0;
+                                                true
+                                            } else if target > remaining_size {
+                                                log::trace!("{LABEL}: target={target} > remaining_size={remaining_size}");
+                                                target = if smallest_count == 1 {
+                                                    remaining_size
+                                                } else {
+                                                    remaining_size / smallest_countf
+                                                };
+                                                remaining_size = 0.0;
+                                                true
+                                            } else {
+                                                remaining_size -= (target - smallest) * smallest_countf;
+                                                float_eq!(remaining_size, 0.0)
+                                            };
+
+                                            log::trace!("{LABEL}: target={target} smallest={smallest} smallest_count={smallest_count} remaining_size={remaining_size} container_size={container_size}");
+
+                                            moosicbox_assert::assert!(target.is_finite(), "expected target to be finite");
+
+                                            let mut dynamic_child_size = false;
+
+                                            for child in parent
+                                                .relative_positioned_elements_mut()
+                                                .filter(|x| x.$fixed.is_none())
+                                                .filter(|x| x.$calculated.is_some_and(|x| float_eq!(x, smallest)))
+                                            {
+                                                let mut clipped = false;
+                                                let mut target = target;
+
+                                                if let Some(min) = child.$calculated_min {
+                                                    log::trace!("{LABEL}: calculated_min={min}");
+                                                    let min = min - child.$padding_axis().unwrap_or_default() - child.$margin_axis().unwrap_or_default();
+                                                    log::trace!("{LABEL}: calculated_min={min} without padding/margins");
+                                                    if target < min {
+                                                        remaining_size -= min - target;
+                                                        target = min;
+                                                    }
+                                                }
+                                                if direction == LayoutDirection::Row && child.is_raw() {
+                                                    if let Some(preferred) = child.$calculated_preferred {
+                                                        log::trace!("{LABEL}: calculated_preferred={preferred}");
+                                                        let preferred = preferred - child.$padding_axis().unwrap_or_default() - child.$margin_axis().unwrap_or_default();
+                                                        log::trace!("{LABEL}: calculated_preferred={preferred} without padding/margins");
+                                                        if target > preferred {
+                                                            remaining_size += target - preferred;
+                                                            target = preferred;
+                                                            clipped = true;
+                                                        }
+                                                    }
+                                                }
+
+                                                if !clipped {
+                                                    dynamic_child_size = true;
+                                                }
+
+                                                let prev = child.$calculated.unwrap();
+                                                set_float(&mut child.$calculated, target);
+                                                log::trace!("{LABEL}: increasing child size prev={prev} to target={target}:\n{child}");
+                                            }
+
+                                            if last_iteration || !dynamic_child_size {
+                                                break;
+                                            }
                                         }
                                     }
                                 }
@@ -789,196 +899,197 @@ macro_rules! wrap_on_axis {
     }};
 }
 
-/// # Pass 1: Widths
-///
-/// This pass traverses the `Container` children in reverse BFS (Breadth-First Search)
-/// and calculates the widths required for each of the `Container`s.
-mod pass_widths {
-    use crate::{
-        BfsPaths, Container, Number,
-        layout::{font::FontMetrics, set_float},
-    };
+mod passes {
+    use crate::Container;
 
-    use super::Calculator;
+    /// # Pass 1: Widths
+    ///
+    /// This pass traverses the `Container` children in reverse BFS (Breadth-First Search)
+    /// and calculates the widths required for each of the `Container`s.
+    pub mod pass_widths {
+        use crate::{
+            BfsPaths, Container, Number,
+            layout::{calc::Calculator, font::FontMetrics, set_float},
+        };
 
-    pub trait Pass {
-        fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
-    }
-
-    impl<F: FontMetrics> Pass for Calculator<F> {
-        fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-            let each_child = |container: &mut Container, view_width, view_height| {
-                if let Some(opacity) = &container.opacity {
-                    container.calculated_opacity = Some(opacity.calc(1.0, view_width, view_height));
-                }
-                if let Some(radius) = &container
-                    .border_top_left_radius
-                    .as_ref()
-                    .and_then(crate::Number::as_fixed)
-                {
-                    container.calculated_border_top_left_radius =
-                        Some(radius.calc(0.0, view_width, view_height));
-                }
-                if let Some(radius) = &container
-                    .border_top_right_radius
-                    .as_ref()
-                    .and_then(crate::Number::as_fixed)
-                {
-                    container.calculated_border_top_right_radius =
-                        Some(radius.calc(0.0, view_width, view_height));
-                }
-                if let Some(radius) = &container
-                    .border_bottom_left_radius
-                    .as_ref()
-                    .and_then(crate::Number::as_fixed)
-                {
-                    container.calculated_border_bottom_left_radius =
-                        Some(radius.calc(0.0, view_width, view_height));
-                }
-                if let Some(radius) = &container
-                    .border_bottom_right_radius
-                    .as_ref()
-                    .and_then(crate::Number::as_fixed)
-                {
-                    container.calculated_border_bottom_right_radius =
-                        Some(radius.calc(0.0, view_width, view_height));
-                }
-            };
-
-            calc_size_on_axis!(
-                "calc_widths",
-                self,
-                bfs,
-                container,
-                width,
-                calculated_width,
-                calculated_min_width,
-                calculated_preferred_width,
-                Row,
-                Column,
-                margin_left,
-                margin_right,
-                calculated_margin_left,
-                calculated_margin_right,
-                padding_left,
-                padding_right,
-                calculated_padding_left,
-                calculated_padding_right,
-                border_left,
-                border_right,
-                calculated_border_left,
-                calculated_border_right,
-                column_gap,
-                calculated_column_gap,
-                overflow_x,
-                each_child,
-            )
+        pub trait Pass {
+            fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
         }
-    }
-}
 
-mod pass_flex_width {
-    use hyperchad_transformer_models::{LayoutDirection, LayoutPosition, Position};
-
-    use crate::{
-        BfsPaths, Container,
-        layout::{font::FontMetrics, set_float},
-    };
-
-    use super::Calculator;
-
-    pub trait Pass {
-        fn flex_width(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
-    }
-
-    impl<F: FontMetrics> Pass for Calculator<F> {
-        fn flex_width(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-            let each_child =
-                |container: &mut Container, container_width, view_width, view_height| {
+        impl<F: FontMetrics> Pass for Calculator<F> {
+            fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
+                let each_child = |container: &mut Container, view_width, view_height| {
+                    if let Some(opacity) = &container.opacity {
+                        container.calculated_opacity =
+                            Some(opacity.calc(1.0, view_width, view_height));
+                    }
                     if let Some(radius) = &container
                         .border_top_left_radius
                         .as_ref()
-                        .and_then(crate::Number::as_dynamic)
+                        .and_then(crate::Number::as_fixed)
                     {
                         container.calculated_border_top_left_radius =
-                            Some(radius.calc(container_width, view_width, view_height));
+                            Some(radius.calc(0.0, view_width, view_height));
                     }
                     if let Some(radius) = &container
                         .border_top_right_radius
                         .as_ref()
-                        .and_then(crate::Number::as_dynamic)
+                        .and_then(crate::Number::as_fixed)
                     {
                         container.calculated_border_top_right_radius =
-                            Some(radius.calc(container_width, view_width, view_height));
+                            Some(radius.calc(0.0, view_width, view_height));
                     }
                     if let Some(radius) = &container
                         .border_bottom_left_radius
                         .as_ref()
-                        .and_then(crate::Number::as_dynamic)
+                        .and_then(crate::Number::as_fixed)
                     {
                         container.calculated_border_bottom_left_radius =
-                            Some(radius.calc(container_width, view_width, view_height));
+                            Some(radius.calc(0.0, view_width, view_height));
                     }
                     if let Some(radius) = &container
                         .border_bottom_right_radius
                         .as_ref()
-                        .and_then(crate::Number::as_dynamic)
+                        .and_then(crate::Number::as_fixed)
                     {
                         container.calculated_border_bottom_right_radius =
-                            Some(radius.calc(container_width, view_width, view_height));
+                            Some(radius.calc(0.0, view_width, view_height));
                     }
                 };
 
-            flex_on_axis!(
-                "flex_width",
-                bfs,
-                container,
-                width,
-                calculated_width,
-                calculated_min_width,
-                calculated_preferred_width,
-                Row,
-                Column,
-                col,
-                margin_left,
-                margin_right,
-                calculated_margin_left,
-                calculated_margin_right,
-                horizontal_margin,
-                padding_left,
-                padding_right,
-                calculated_padding_left,
-                calculated_padding_right,
-                horizontal_padding,
-                border_left,
-                border_right,
-                calculated_border_left,
-                calculated_border_right,
-                column_gap,
-                calculated_column_gap,
-                overflow_x,
-                each_child,
-            )
+                calc_size_on_axis!(
+                    "calc_widths",
+                    self,
+                    bfs,
+                    container,
+                    width,
+                    calculated_width,
+                    calculated_min_width,
+                    calculated_preferred_width,
+                    Row,
+                    Column,
+                    margin_left,
+                    margin_right,
+                    calculated_margin_left,
+                    calculated_margin_right,
+                    padding_left,
+                    padding_right,
+                    calculated_padding_left,
+                    calculated_padding_right,
+                    border_left,
+                    border_right,
+                    calculated_border_left,
+                    calculated_border_right,
+                    column_gap,
+                    calculated_column_gap,
+                    overflow_x,
+                    each_child,
+                )
+            }
         }
     }
-}
 
-mod pass_wrap_horizontal {
-    use crate::{
-        BfsPaths, Container, Element,
-        layout::{font::FontMetrics, set_float, set_value},
-    };
+    pub mod pass_flex_width {
+        use hyperchad_transformer_models::{LayoutDirection, LayoutPosition, Position};
 
-    use super::Calculator;
+        use crate::{
+            BfsPaths, Container,
+            layout::{calc::Calculator, font::FontMetrics, set_float},
+        };
 
-    pub trait Pass {
-        fn wrap_horizontal(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
+        pub trait Pass {
+            fn flex_width(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
+        }
+
+        impl<F: FontMetrics> Pass for Calculator<F> {
+            fn flex_width(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
+                let each_child =
+                    |container: &mut Container, container_width, view_width, view_height| {
+                        if let Some(radius) = &container
+                            .border_top_left_radius
+                            .as_ref()
+                            .and_then(crate::Number::as_dynamic)
+                        {
+                            container.calculated_border_top_left_radius =
+                                Some(radius.calc(container_width, view_width, view_height));
+                        }
+                        if let Some(radius) = &container
+                            .border_top_right_radius
+                            .as_ref()
+                            .and_then(crate::Number::as_dynamic)
+                        {
+                            container.calculated_border_top_right_radius =
+                                Some(radius.calc(container_width, view_width, view_height));
+                        }
+                        if let Some(radius) = &container
+                            .border_bottom_left_radius
+                            .as_ref()
+                            .and_then(crate::Number::as_dynamic)
+                        {
+                            container.calculated_border_bottom_left_radius =
+                                Some(radius.calc(container_width, view_width, view_height));
+                        }
+                        if let Some(radius) = &container
+                            .border_bottom_right_radius
+                            .as_ref()
+                            .and_then(crate::Number::as_dynamic)
+                        {
+                            container.calculated_border_bottom_right_radius =
+                                Some(radius.calc(container_width, view_width, view_height));
+                        }
+                    };
+
+                flex_on_axis!(
+                    "flex_width",
+                    bfs,
+                    container,
+                    width,
+                    calculated_width,
+                    calculated_min_width,
+                    calculated_preferred_width,
+                    can_shrink_width,
+                    Row,
+                    Column,
+                    col,
+                    margin_left,
+                    margin_right,
+                    calculated_margin_left,
+                    calculated_margin_right,
+                    horizontal_margin,
+                    padding_left,
+                    padding_right,
+                    calculated_padding_left,
+                    calculated_padding_right,
+                    horizontal_padding,
+                    border_left,
+                    border_right,
+                    calculated_border_left,
+                    calculated_border_right,
+                    column_gap,
+                    calculated_column_gap,
+                    overflow_x,
+                    each_child,
+                )
+            }
+        }
     }
 
-    impl<F: FontMetrics> Pass for Calculator<F> {
-        fn wrap_horizontal(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-            let each_child =
-                |container: &mut Container, container_width, _view_width, _view_height| {
+    pub mod pass_wrap_horizontal {
+        use crate::{
+            BfsPaths, Container, Element,
+            layout::{calc::Calculator, font::FontMetrics, set_float, set_value},
+        };
+
+        pub trait Pass {
+            fn wrap_horizontal(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
+        }
+
+        impl<F: FontMetrics> Pass for Calculator<F> {
+            fn wrap_horizontal(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
+                let each_child = |container: &mut Container,
+                                  container_width,
+                                  _view_width,
+                                  _view_height| {
                     let Element::Raw { value } = &container.element else {
                         return;
                     };
@@ -998,631 +1109,651 @@ mod pass_wrap_horizontal {
                     set_float(&mut container.calculated_height, new_height);
                 };
 
-            wrap_on_axis!(
-                "wrap",
-                Row,
-                bfs,
-                container,
-                calculated_width,
-                bounding_calculated_width,
-                overflow_x,
-                horizontal_margin,
-                horizontal_padding,
-                calculated_column_gap,
-                each_child,
-            )
+                wrap_on_axis!(
+                    "wrap",
+                    Row,
+                    bfs,
+                    container,
+                    calculated_width,
+                    bounding_calculated_width,
+                    overflow_x,
+                    horizontal_margin,
+                    horizontal_padding,
+                    calculated_column_gap,
+                    each_child,
+                )
+            }
         }
     }
-}
 
-mod pass_heights {
-    use crate::{
-        BfsPaths, Container, Number,
-        layout::{font::FontMetrics, set_float},
-    };
+    pub mod pass_heights {
+        use crate::{
+            BfsPaths, Container, Number,
+            layout::{calc::Calculator, font::FontMetrics, set_float},
+        };
 
-    use super::Calculator;
+        pub trait Pass {
+            fn calc_heights(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
+        }
 
-    pub trait Pass {
-        fn calc_heights(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
-    }
-
-    impl<F: FontMetrics> Pass for Calculator<F> {
-        fn calc_heights(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-            calc_size_on_axis!(
-                "calc_heights",
-                self,
-                bfs,
-                container,
-                height,
-                calculated_height,
-                calculated_min_height,
-                calculated_preferred_height,
-                Column,
-                Row,
-                margin_top,
-                margin_bottom,
-                calculated_margin_top,
-                calculated_margin_bottom,
-                padding_top,
-                padding_bottom,
-                calculated_padding_top,
-                calculated_padding_bottom,
-                border_top,
-                border_bottom,
-                calculated_border_top,
-                calculated_border_bottom,
-                row_gap,
-                calculated_row_gap,
-                overflow_y,
-                |_, _, _| {},
-            )
+        impl<F: FontMetrics> Pass for Calculator<F> {
+            fn calc_heights(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
+                calc_size_on_axis!(
+                    "calc_heights",
+                    self,
+                    bfs,
+                    container,
+                    height,
+                    calculated_height,
+                    calculated_min_height,
+                    calculated_preferred_height,
+                    Column,
+                    Row,
+                    margin_top,
+                    margin_bottom,
+                    calculated_margin_top,
+                    calculated_margin_bottom,
+                    padding_top,
+                    padding_bottom,
+                    calculated_padding_top,
+                    calculated_padding_bottom,
+                    border_top,
+                    border_bottom,
+                    calculated_border_top,
+                    calculated_border_bottom,
+                    row_gap,
+                    calculated_row_gap,
+                    overflow_y,
+                    |_, _, _| {},
+                )
+            }
         }
     }
-}
 
-mod pass_flex_height {
-    use hyperchad_transformer_models::{LayoutDirection, LayoutPosition, Position};
+    pub mod pass_flex_height {
+        use hyperchad_transformer_models::{LayoutDirection, LayoutPosition, Position};
 
-    use crate::{
-        BfsPaths, Container,
-        layout::{font::FontMetrics, set_float},
-    };
+        use crate::{
+            BfsPaths, Container,
+            layout::{calc::Calculator, font::FontMetrics, set_float},
+        };
 
-    use super::Calculator;
+        pub trait Pass {
+            fn flex_height(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
+        }
 
-    pub trait Pass {
-        fn flex_height(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
-    }
-
-    impl<F: FontMetrics> Pass for Calculator<F> {
-        fn flex_height(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-            flex_on_axis!(
-                "flex_height",
-                bfs,
-                container,
-                height,
-                calculated_height,
-                calculated_min_height,
-                calculated_preferred_height,
-                Column,
-                Row,
-                row,
-                margin_top,
-                margin_bottom,
-                calculated_margin_top,
-                calculated_margin_bottom,
-                vertical_margin,
-                padding_top,
-                padding_bottom,
-                calculated_padding_top,
-                calculated_padding_bottom,
-                vertical_padding,
-                border_top,
-                border_bottom,
-                calculated_border_top,
-                calculated_border_bottom,
-                row_gap,
-                calculated_row_gap,
-                overflow_y,
-                |_, _, _, _| {},
-            )
+        impl<F: FontMetrics> Pass for Calculator<F> {
+            fn flex_height(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
+                flex_on_axis!(
+                    "flex_height",
+                    bfs,
+                    container,
+                    height,
+                    calculated_height,
+                    calculated_min_height,
+                    calculated_preferred_height,
+                    can_shrink_height,
+                    Column,
+                    Row,
+                    row,
+                    margin_top,
+                    margin_bottom,
+                    calculated_margin_top,
+                    calculated_margin_bottom,
+                    vertical_margin,
+                    padding_top,
+                    padding_bottom,
+                    calculated_padding_top,
+                    calculated_padding_bottom,
+                    vertical_padding,
+                    border_top,
+                    border_bottom,
+                    calculated_border_top,
+                    calculated_border_bottom,
+                    row_gap,
+                    calculated_row_gap,
+                    overflow_y,
+                    |_, _, _, _| {},
+                )
+            }
         }
     }
-}
 
-mod pass_positioning {
-    use bumpalo::Bump;
-    use hyperchad_transformer_models::{
-        AlignItems, JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition, Position,
-        TextAlign, Visibility,
-    };
+    pub mod pass_positioning {
+        use bumpalo::Bump;
+        use hyperchad_transformer_models::{
+            AlignItems, JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition, Position,
+            TextAlign, Visibility,
+        };
 
-    use crate::{
-        BfsPaths, Container, Element,
-        layout::{font::FontMetrics, set_float},
-    };
+        use crate::{
+            BfsPaths, Container, Element,
+            layout::{calc::Calculator, font::FontMetrics, set_float},
+        };
 
-    use super::Calculator;
+        pub trait Pass {
+            fn position_elements(
+                &self,
+                arena: &Bump,
+                bfs: &BfsPaths,
+                container: &mut Container,
+            ) -> bool;
+        }
 
-    pub trait Pass {
-        fn position_elements(
-            &self,
-            arena: &Bump,
-            bfs: &BfsPaths,
-            container: &mut Container,
-        ) -> bool;
-    }
+        impl<F: FontMetrics> Pass for Calculator<F> {
+            #[allow(clippy::too_many_lines)]
+            fn position_elements(
+                &self,
+                arena: &Bump,
+                bfs: &BfsPaths,
+                container: &mut Container,
+            ) -> bool {
+                moosicbox_logging::debug_or_trace!(
+                    ("position_elements"),
+                    ("position_elements:\n{container}")
+                );
 
-    impl<F: FontMetrics> Pass for Calculator<F> {
-        #[allow(clippy::too_many_lines)]
-        fn position_elements(
-            &self,
-            arena: &Bump,
-            bfs: &BfsPaths,
-            container: &mut Container,
-        ) -> bool {
-            moosicbox_logging::debug_or_trace!(
-                ("position_elements"),
-                ("position_elements:\n{container}")
-            );
+                let root_id = container.id;
+                let root_text_align = container.text_align;
+                let view_width = container.calculated_width.expect("Missing view_width");
+                let view_height = container.calculated_height.expect("Missing view_height");
 
-            let root_id = container.id;
-            let root_text_align = container.text_align;
-            let view_width = container.calculated_width.expect("Missing view_width");
-            let view_height = container.calculated_height.expect("Missing view_height");
+                let mut changed = false;
 
-            let mut changed = false;
+                #[allow(clippy::cognitive_complexity)]
+                bfs.traverse_with_parents_ref_mut(
+                    true,
+                    Container::default(),
+                    container,
+                    |parent, mut relative_container| {
+                        if parent.id == root_id {
+                            relative_container.calculated_x = Some(0.0);
+                            relative_container.calculated_y = Some(0.0);
+                            relative_container.calculated_width = Some(view_width);
+                            relative_container.calculated_height = Some(view_height);
+                            relative_container.text_align = root_text_align;
+                        } else if parent.position == Some(Position::Relative) {
+                            relative_container.calculated_x =
+                                Some(parent.calculated_x.expect("Missing calculated_x"));
+                            relative_container.calculated_y =
+                                Some(parent.calculated_y.expect("Missing calculated_y"));
+                            relative_container.calculated_width =
+                                Some(parent.calculated_width.expect("Missing calculated_width"));
+                            relative_container.calculated_height =
+                                Some(parent.calculated_height.expect("Missing calculated_height"));
+                        }
 
-            #[allow(clippy::cognitive_complexity)]
-            bfs.traverse_with_parents_ref_mut(
-                true,
-                Container::default(),
-                container,
-                |parent, mut relative_container| {
-                    if parent.id == root_id {
-                        relative_container.calculated_x = Some(0.0);
-                        relative_container.calculated_y = Some(0.0);
-                        relative_container.calculated_width = Some(view_width);
-                        relative_container.calculated_height = Some(view_height);
-                        relative_container.text_align = root_text_align;
-                    } else if parent.position == Some(Position::Relative) {
-                        relative_container.calculated_x =
-                            Some(parent.calculated_x.expect("Missing calculated_x"));
-                        relative_container.calculated_y =
-                            Some(parent.calculated_y.expect("Missing calculated_y"));
-                        relative_container.calculated_width =
-                            Some(parent.calculated_width.expect("Missing calculated_width"));
-                        relative_container.calculated_height =
-                            Some(parent.calculated_height.expect("Missing calculated_height"));
-                    }
+                        if let Some(align) = parent.text_align {
+                            relative_container.text_align = Some(align);
+                        }
 
-                    if let Some(align) = parent.text_align {
-                        relative_container.text_align = Some(align);
-                    }
+                        relative_container
+                    },
+                    |parent, relative_container| {
+                        let direction = parent.direction;
+                        let justify_content = parent.justify_content.unwrap_or_default();
+                        let align_items = parent.align_items.unwrap_or_default();
+                        let container_width = parent
+                            .calculated_width
+                            .expect("Missing parent calculated_width");
+                        let container_height = parent
+                            .calculated_height
+                            .expect("Missing parent calculated_height");
 
-                    relative_container
-                },
-                |parent, relative_container| {
-                    let direction = parent.direction;
-                    let justify_content = parent.justify_content.unwrap_or_default();
-                    let align_items = parent.align_items.unwrap_or_default();
-                    let container_width = parent
-                        .calculated_width
-                        .expect("Missing parent calculated_width");
-                    let container_height = parent
-                        .calculated_height
-                        .expect("Missing parent calculated_height");
+                        if let LayoutOverflow::Wrap { grid } = parent.overflow_x {
+                            let mut last_row = 0;
+                            let mut col_count = 0;
+                            let mut max_col_count = 0;
+                            let mut row_width = 0.0;
+                            let gaps = &mut bumpalo::collections::Vec::new_in(arena);
+                            let grid_cell_size = parent
+                                .grid_cell_size
+                                .as_ref()
+                                .map(|x| x.calc(container_width, view_width, view_height));
+                            let row_gap = parent.calculated_row_gap.unwrap_or_default();
+                            let column_gap = parent.calculated_column_gap.unwrap_or_default();
 
-                    if let LayoutOverflow::Wrap { grid } = parent.overflow_x {
-                        let mut last_row = 0;
-                        let mut col_count = 0;
-                        let mut max_col_count = 0;
-                        let mut row_width = 0.0;
-                        let gaps = &mut bumpalo::collections::Vec::new_in(arena);
-                        let grid_cell_size = parent
-                            .grid_cell_size
-                            .as_ref()
-                            .map(|x| x.calc(container_width, view_width, view_height));
-                        let row_gap = parent.calculated_row_gap.unwrap_or_default();
-                        let column_gap = parent.calculated_column_gap.unwrap_or_default();
+                            let mut add_gap = |row_width, col_count| {
+                                let remainder = container_width - row_width;
 
-                        let mut add_gap = |row_width, col_count| {
-                            let remainder = container_width - row_width;
+                                #[allow(clippy::cast_precision_loss)]
+                                let gap = match justify_content {
+                                    JustifyContent::Start
+                                    | JustifyContent::Center
+                                    | JustifyContent::End => column_gap,
+                                    JustifyContent::SpaceBetween => {
+                                        remainder / ((col_count - 1) as f32)
+                                    }
+                                    JustifyContent::SpaceEvenly => {
+                                        remainder / ((col_count + 1) as f32)
+                                    }
+                                };
 
-                            #[allow(clippy::cast_precision_loss)]
-                            let gap = match justify_content {
+                                gaps.push(gap);
+
+                                gap
+                            };
+
+                            for child in parent.relative_positioned_elements_mut().filter(|x| x.visibility != Some(Visibility::Hidden)) {
+                                let Some(LayoutPosition::Wrap { row, col }) = child.calculated_position
+                                else {
+                                    continue;
+                                };
+                                log::trace!("position_elements: wrap calculating gaps (r{row}, c{col})");
+
+                                if row != last_row {
+                                    moosicbox_assert::assert!(row > last_row);
+
+                                    let gap = add_gap(row_width, col_count);
+                                    log::trace!("position_elements: (r{row}, c{col}) gap={gap}");
+
+                                    if grid && col_count > max_col_count {
+                                        max_col_count = col_count;
+                                    }
+
+                                    row_width = 0.0;
+                                    col_count = 0;
+                                    last_row = row;
+                                }
+
+                                row_width += grid_cell_size.unwrap_or_else(|| {
+                                    child
+                                        .calculated_width
+                                        .expect("Child missing calculated_width")
+                                });
+                                col_count += 1;
+                            }
+
+                            add_gap(row_width, col_count);
+
+                            #[allow(unused_assignments)]
+                            if col_count > max_col_count {
+                                max_col_count = col_count;
+                            }
+
+                            let mut gap = gaps.first().copied().unwrap_or_default();
+
+                            let first_gap = |gap| match justify_content {
                                 JustifyContent::Start
                                 | JustifyContent::Center
-                                | JustifyContent::End => column_gap,
+                                | JustifyContent::End
+                                | JustifyContent::SpaceBetween => 0.0,
+                                JustifyContent::SpaceEvenly => gap,
+                            };
+
+                            let mut x = first_gap(gap);
+                            let mut y = 0.0;
+
+                            let mut max_height = 0.0;
+                            last_row = 0;
+
+                            for child in parent.relative_positioned_elements_mut().filter(|x| x.visibility != Some(Visibility::Hidden)) {
+                                let Some(LayoutPosition::Wrap { row, col }) = child.calculated_position
+                                else {
+                                    continue;
+                                };
+                                log::trace!("position_elements: (r{row}, c{col}) gap={gap} row_gap={row_gap} last_row={last_row} ({x}, {y})");
+
+                                let child_width = child.bounding_calculated_width().unwrap();
+                                let child_height = child.bounding_calculated_height().unwrap();
+
+                                if row != last_row {
+                                    moosicbox_assert::assert!(row > last_row);
+
+                                    if !grid {
+                                        gap = gaps.get(row as usize).copied().unwrap_or_default();
+                                    }
+
+                                    x = first_gap(gap);
+                                    y += max_height + row_gap;
+                                    max_height = 0.0;
+                                    last_row = row;
+                                    #[cfg(feature = "layout-offset")]
+                                    set_float(&mut child.calculated_offset_x, x);
+                                }
+
+                                #[cfg(feature = "layout-offset")]
+                                {
+                                    set_float(&mut child.calculated_offset_x, if col > 0 { gap } else { x });
+                                    set_float(&mut child.calculated_offset_y, if row > 0 { row_gap } else { 0.0 });
+                                }
+
+                                if child_height > max_height {
+                                    max_height = child_height;
+                                }
+
+                                log::trace!(
+                                    "position_elements: setting wrapped position ({x}, {y}):\n{child}"
+                                );
+                                if set_float(&mut child.calculated_x, x).is_some() {
+                                    changed = true;
+                                }
+                                if set_float(&mut child.calculated_y, y).is_some() {
+                                    changed = true;
+                                }
+
+                                x += child_width + gap;
+                            }
+                        } else {
+                            let mut x = 0.0;
+                            let mut y = 0.0;
+                            let mut col_gap = 0.0;
+                            let row_gap = parent.calculated_row_gap.unwrap_or_default();
+
+                            match justify_content {
+                                JustifyContent::Start => {}
+                                JustifyContent::Center => {
+                                    let size: f32 = parent
+                                        .relative_positioned_elements()
+                                        .filter(|x| x.visibility != Some(Visibility::Hidden))
+                                        .filter_map(|x| match direction {
+                                            LayoutDirection::Row => x.bounding_calculated_width(),
+                                            LayoutDirection::Column => x.bounding_calculated_height(),
+                                        })
+                                        .sum();
+
+                                    match direction {
+                                        LayoutDirection::Row => x += (container_width - size) / 2.0,
+                                        LayoutDirection::Column => y += (container_height - size) / 2.0,
+                                    }
+                                }
+                                JustifyContent::End => {
+                                    let size: f32 = parent
+                                        .relative_positioned_elements()
+                                        .filter(|x| x.visibility != Some(Visibility::Hidden))
+                                        .filter_map(|x| match direction {
+                                            LayoutDirection::Row => x.bounding_calculated_width(),
+                                            LayoutDirection::Column => x.bounding_calculated_height(),
+                                        })
+                                        .sum();
+
+                                    match direction {
+                                        LayoutDirection::Row => x += container_width - size,
+                                        LayoutDirection::Column => y += container_height - size,
+                                    }
+                                }
                                 JustifyContent::SpaceBetween => {
-                                    remainder / ((col_count - 1) as f32)
+                                    let count = parent
+                                        .relative_positioned_elements()
+                                        .filter(|x| x.visibility != Some(Visibility::Hidden))
+                                        .count();
+                                    let size: f32 = parent
+                                        .relative_positioned_elements()
+                                        .filter(|x| x.visibility != Some(Visibility::Hidden))
+                                        .filter_map(|x| match direction {
+                                            LayoutDirection::Row => x.bounding_calculated_width(),
+                                            LayoutDirection::Column => x.bounding_calculated_height(),
+                                        })
+                                        .sum();
+
+                                    #[allow(clippy::cast_precision_loss)]
+                                    match direction {
+                                        LayoutDirection::Row => {
+                                            col_gap = (container_width - size) / ((count - 1) as f32);
+                                        }
+                                        LayoutDirection::Column => {
+                                            col_gap = (container_height - size) / ((count - 1) as f32);
+                                        }
+                                    }
                                 }
                                 JustifyContent::SpaceEvenly => {
-                                    remainder / ((col_count + 1) as f32)
+                                    let count = parent
+                                        .relative_positioned_elements()
+                                        .filter(|x| x.visibility != Some(Visibility::Hidden))
+                                        .count();
+                                    let size: f32 = parent
+                                        .relative_positioned_elements()
+                                        .filter(|x| x.visibility != Some(Visibility::Hidden))
+                                        .filter_map(|x| match direction {
+                                            LayoutDirection::Row => x.bounding_calculated_width(),
+                                            LayoutDirection::Column => x.bounding_calculated_height(),
+                                        })
+                                        .sum();
+
+                                    #[allow(clippy::cast_precision_loss)]
+                                    match direction {
+                                        LayoutDirection::Row => {
+                                            col_gap = (container_width - size) / ((count + 1) as f32);
+                                        }
+                                        LayoutDirection::Column => {
+                                            col_gap = (container_height - size) / ((count + 1) as f32);
+                                        }
+                                    }
+
+                                    x += col_gap;
                                 }
                             };
 
-                            gaps.push(gap);
-
-                            gap
-                        };
-
-                        for child in parent.relative_positioned_elements_mut().filter(|x| x.visibility != Some(Visibility::Hidden)) {
-                            let Some(LayoutPosition::Wrap { row, col }) = child.calculated_position
-                            else {
-                                continue;
-                            };
-                            log::trace!("position_elements: wrap calculating gaps (r{row}, c{col})");
-
-                            if row != last_row {
-                                moosicbox_assert::assert!(row > last_row);
-
-                                let gap = add_gap(row_width, col_count);
-                                log::trace!("position_elements: (r{row}, c{col}) gap={gap}");
-
-                                if grid && col_count > max_col_count {
-                                    max_col_count = col_count;
-                                }
-
-                                row_width = 0.0;
-                                col_count = 0;
-                                last_row = row;
-                            }
-
-                            row_width += grid_cell_size.unwrap_or_else(|| {
-                                child
-                                    .calculated_width
-                                    .expect("Child missing calculated_width")
-                            });
-                            col_count += 1;
-                        }
-
-                        add_gap(row_width, col_count);
-
-                        #[allow(unused_assignments)]
-                        if col_count > max_col_count {
-                            max_col_count = col_count;
-                        }
-
-                        let mut gap = gaps.first().copied().unwrap_or_default();
-
-                        let first_gap = |gap| match justify_content {
-                            JustifyContent::Start
-                            | JustifyContent::Center
-                            | JustifyContent::End
-                            | JustifyContent::SpaceBetween => 0.0,
-                            JustifyContent::SpaceEvenly => gap,
-                        };
-
-                        let mut x = first_gap(gap);
-                        let mut y = 0.0;
-
-                        let mut max_height = 0.0;
-                        last_row = 0;
-
-                        for child in parent.relative_positioned_elements_mut().filter(|x| x.visibility != Some(Visibility::Hidden)) {
-                            let Some(LayoutPosition::Wrap { row, col }) = child.calculated_position
-                            else {
-                                continue;
-                            };
-                            log::trace!("position_elements: (r{row}, c{col}) gap={gap} row_gap={row_gap} last_row={last_row} ({x}, {y})");
-
-                            let child_width = child.bounding_calculated_width().unwrap();
-                            let child_height = child.bounding_calculated_height().unwrap();
-
-                            if row != last_row {
-                                moosicbox_assert::assert!(row > last_row);
-
-                                if !grid {
-                                    gap = gaps.get(row as usize).copied().unwrap_or_default();
-                                }
-
-                                x = first_gap(gap);
-                                y += max_height + row_gap;
-                                max_height = 0.0;
-                                last_row = row;
-                                #[cfg(feature = "layout-offset")]
-                                set_float(&mut child.calculated_offset_x, x);
-                            }
-
-                            #[cfg(feature = "layout-offset")]
-                            {
-                                set_float(&mut child.calculated_offset_x, if col > 0 { gap } else { x });
-                                set_float(&mut child.calculated_offset_y, if row > 0 { row_gap } else { 0.0 });
-                            }
-
-                            if child_height > max_height {
-                                max_height = child_height;
-                            }
-
-                            log::trace!(
-                                "position_elements: setting wrapped position ({x}, {y}):\n{child}"
-                            );
-                            if set_float(&mut child.calculated_x, x).is_some() {
-                                changed = true;
-                            }
-                            if set_float(&mut child.calculated_y, y).is_some() {
-                                changed = true;
-                            }
-
-                            x += child_width + gap;
-                        }
-                    } else {
-                        let mut x = 0.0;
-                        let mut y = 0.0;
-                        let mut col_gap = 0.0;
-                        let row_gap = parent.calculated_row_gap.unwrap_or_default();
-
-                        match justify_content {
-                            JustifyContent::Start => {}
-                            JustifyContent::Center => {
-                                let size: f32 = parent
+                            if let Some(text_align) = relative_container.text_align {
+                                if parent
                                     .relative_positioned_elements()
                                     .filter(|x| x.visibility != Some(Visibility::Hidden))
-                                    .filter_map(|x| match direction {
-                                        LayoutDirection::Row => x.bounding_calculated_width(),
-                                        LayoutDirection::Column => x.bounding_calculated_height(),
-                                    })
-                                    .sum();
+                                    .all(|x| matches!(x.element, Element::Raw { .. }))
+                                {
+                                    match text_align {
+                                        TextAlign::Start => {}
+                                        TextAlign::Center => {
+                                            let size: f32 = parent
+                                                .relative_positioned_elements()
+                                                .filter(|x| x.visibility != Some(Visibility::Hidden))
+                                                .filter_map(Container::bounding_calculated_width)
+                                                .sum();
 
-                                match direction {
-                                    LayoutDirection::Row => x += (container_width - size) / 2.0,
-                                    LayoutDirection::Column => y += (container_height - size) / 2.0,
-                                }
-                            }
-                            JustifyContent::End => {
-                                let size: f32 = parent
-                                    .relative_positioned_elements()
-                                    .filter(|x| x.visibility != Some(Visibility::Hidden))
-                                    .filter_map(|x| match direction {
-                                        LayoutDirection::Row => x.bounding_calculated_width(),
-                                        LayoutDirection::Column => x.bounding_calculated_height(),
-                                    })
-                                    .sum();
+                                            log::trace!("position_elements: TextAlign::{text_align:?} container_width={container_width} container_height={container_height} size={size}");
 
-                                match direction {
-                                    LayoutDirection::Row => x += container_width - size,
-                                    LayoutDirection::Column => y += container_height - size,
-                                }
-                            }
-                            JustifyContent::SpaceBetween => {
-                                let count = parent
-                                    .relative_positioned_elements()
-                                    .filter(|x| x.visibility != Some(Visibility::Hidden))
-                                    .count();
-                                let size: f32 = parent
-                                    .relative_positioned_elements()
-                                    .filter(|x| x.visibility != Some(Visibility::Hidden))
-                                    .filter_map(|x| match direction {
-                                        LayoutDirection::Row => x.bounding_calculated_width(),
-                                        LayoutDirection::Column => x.bounding_calculated_height(),
-                                    })
-                                    .sum();
+                                            x += (container_width - size) / 2.0;
+                                        }
+                                        TextAlign::End => {
+                                            let size: f32 = parent
+                                                .relative_positioned_elements()
+                                                .filter(|x| x.visibility != Some(Visibility::Hidden))
+                                                .filter_map(Container::bounding_calculated_width)
+                                                .sum();
 
-                                #[allow(clippy::cast_precision_loss)]
-                                match direction {
-                                    LayoutDirection::Row => {
-                                        col_gap = (container_width - size) / ((count - 1) as f32);
-                                    }
-                                    LayoutDirection::Column => {
-                                        col_gap = (container_height - size) / ((count - 1) as f32);
+                                            log::trace!("position_elements: TextAlign::{text_align:?} container_width={container_width} container_height={container_height} size={size}");
+
+                                            x += container_width - size;
+                                        }
+                                        TextAlign::Justify => {
+                                            // TODO:
+                                            // https://github.com/emilk/egui/issues/1724
+                                            // https://docs.rs/egui/latest/egui/text/struct.LayoutJob.html
+                                            todo!();
+                                        }
                                     }
                                 }
                             }
-                            JustifyContent::SpaceEvenly => {
-                                let count = parent
-                                    .relative_positioned_elements()
-                                    .filter(|x| x.visibility != Some(Visibility::Hidden))
-                                    .count();
-                                let size: f32 = parent
-                                    .relative_positioned_elements()
-                                    .filter(|x| x.visibility != Some(Visibility::Hidden))
-                                    .filter_map(|x| match direction {
-                                        LayoutDirection::Row => x.bounding_calculated_width(),
-                                        LayoutDirection::Column => x.bounding_calculated_height(),
-                                    })
-                                    .sum();
 
-                                #[allow(clippy::cast_precision_loss)]
-                                match direction {
-                                    LayoutDirection::Row => {
-                                        col_gap = (container_width - size) / ((count + 1) as f32);
-                                    }
-                                    LayoutDirection::Column => {
-                                        col_gap = (container_height - size) / ((count + 1) as f32);
-                                    }
-                                }
-
-                                x += col_gap;
-                            }
-                        };
-
-                        if let Some(text_align) = relative_container.text_align {
-                            if parent
-                                .relative_positioned_elements()
+                            for (i, child) in parent
+                                .relative_positioned_elements_mut()
                                 .filter(|x| x.visibility != Some(Visibility::Hidden))
-                                .all(|x| matches!(x.element, Element::Raw { .. }))
+                                .enumerate()
                             {
-                                match text_align {
-                                    TextAlign::Start => {}
-                                    TextAlign::Center => {
-                                        let size: f32 = parent
-                                            .relative_positioned_elements()
-                                            .filter(|x| x.visibility != Some(Visibility::Hidden))
-                                            .filter_map(Container::bounding_calculated_width)
-                                            .sum();
+                                let start_x = x;
+                                let start_y = y;
 
-                                        log::trace!("position_elements: TextAlign::{text_align:?} container_width={container_width} container_height={container_height} size={size}");
+                                match align_items {
+                                    AlignItems::Start => {}
+                                    AlignItems::Center | AlignItems::End => {
+                                        let size = match direction {
+                                            LayoutDirection::Row => child.bounding_calculated_height(),
+                                            LayoutDirection::Column => child.bounding_calculated_width(),
+                                        }.unwrap_or_default();
 
-                                        x += (container_width - size) / 2.0;
+                                        log::trace!("position_elements: AlignItems::{align_items:?} container_width={container_width} container_height={container_height} size={size}:\n{child}");
+
+                                        match align_items {
+                                            AlignItems::Start => unreachable!(),
+                                            AlignItems::Center => match direction {
+                                                LayoutDirection::Row => {
+                                                    y += (container_height - size) / 2.0;
+                                                }
+                                                LayoutDirection::Column => {
+                                                    x += (container_width - size) / 2.0;
+                                                }
+                                            },
+                                            AlignItems::End => match direction {
+                                                LayoutDirection::Row => {
+                                                    y += container_height - size;
+                                                }
+                                                LayoutDirection::Column => {
+                                                    x += container_width - size;
+                                                }
+                                            },
+                                        }
                                     }
-                                    TextAlign::End => {
-                                        let size: f32 = parent
-                                            .relative_positioned_elements()
-                                            .filter(|x| x.visibility != Some(Visibility::Hidden))
-                                            .filter_map(Container::bounding_calculated_width)
-                                            .sum();
+                                }
 
-                                        log::trace!("position_elements: TextAlign::{text_align:?} container_width={container_width} container_height={container_height} size={size}");
+                                log::trace!("position_elements: setting position ({x}, {y}) i={i}:\n{child}");
+                                if set_float(&mut child.calculated_x, x).is_some() {
+                                    changed = true;
+                                }
+                                if set_float(&mut child.calculated_y, y).is_some() {
+                                    changed = true;
+                                }
 
-                                        x += container_width - size;
+                                match direction {
+                                    LayoutDirection::Row => {
+                                        #[cfg(feature = "layout-offset")]
+                                        {
+                                            set_float(&mut child.calculated_offset_x, if i == 0 { start_x } else { col_gap });
+                                            set_float(&mut child.calculated_offset_y, y);
+                                        }
+                                        x += child.bounding_calculated_width().unwrap() + col_gap;
+                                        y = start_y;
                                     }
-                                    TextAlign::Justify => {
-                                        // TODO:
-                                        // https://github.com/emilk/egui/issues/1724
-                                        // https://docs.rs/egui/latest/egui/text/struct.LayoutJob.html
-                                        todo!();
+                                    LayoutDirection::Column => {
+                                        #[cfg(feature = "layout-offset")]
+                                        {
+                                            set_float(&mut child.calculated_offset_x, x);
+                                            set_float(&mut child.calculated_offset_y, if i == 0 { start_y } else { row_gap });
+                                        }
+                                        x = start_x;
+                                        y += child.bounding_calculated_height().unwrap() + row_gap;
                                     }
                                 }
                             }
                         }
 
-                        for (i, child) in parent
-                            .relative_positioned_elements_mut()
-                            .filter(|x| x.visibility != Some(Visibility::Hidden))
-                            .enumerate()
-                        {
-                            let start_x = x;
-                            let start_y = y;
+                        // absolute positioned
 
-                            match align_items {
-                                AlignItems::Start => {}
-                                AlignItems::Center | AlignItems::End => {
-                                    let size = match direction {
-                                        LayoutDirection::Row => child.bounding_calculated_height(),
-                                        LayoutDirection::Column => child.bounding_calculated_width(),
-                                    }.unwrap_or_default();
+                        let Container {
+                            calculated_width: Some(width),
+                            calculated_height: Some(height),
+                            ..
+                        } = relative_container
+                        else {
+                            panic!("Missing relative_container size");
+                        };
+                        let width = *width;
+                        let height = *height;
 
-                                    log::trace!("position_elements: AlignItems::{align_items:?} container_width={container_width} container_height={container_height} size={size}:\n{child}");
-
-                                    match align_items {
-                                        AlignItems::Start => unreachable!(),
-                                        AlignItems::Center => match direction {
-                                            LayoutDirection::Row => {
-                                                y += (container_height - size) / 2.0;
-                                            }
-                                            LayoutDirection::Column => {
-                                                x += (container_width - size) / 2.0;
-                                            }
-                                        },
-                                        AlignItems::End => match direction {
-                                            LayoutDirection::Row => {
-                                                y += container_height - size;
-                                            }
-                                            LayoutDirection::Column => {
-                                                x += container_width - size;
-                                            }
-                                        },
-                                    }
+                        for child in parent.absolute_positioned_elements_mut() {
+                            if let Some(left) = &child.left {
+                                let left = left.calc(width, view_width, view_height);
+                                if set_float(&mut child.calculated_x, left).is_some() {
+                                    changed = true;
+                                }
+                            }
+                            if let Some(right) = &child.right {
+                                let right = right.calc(width, view_width, view_height);
+                                let bounding_width = child.bounding_calculated_width().unwrap();
+                                let right = width - right - bounding_width;
+                                if set_float(&mut child.calculated_x, right).is_some() {
+                                    changed = true;
+                                }
+                            }
+                            if let Some(top) = &child.top {
+                                let top = top.calc(height, view_width, view_height);
+                                if set_float(&mut child.calculated_y, top).is_some() {
+                                    changed = true;
+                                }
+                            }
+                            if let Some(bottom) = &child.bottom {
+                                let bottom = bottom.calc(height, view_width, view_height);
+                                let bounding_height = child.bounding_calculated_height().unwrap();
+                                let bottom = height - bottom - bounding_height;
+                                if set_float(&mut child.calculated_y, bottom).is_some() {
+                                    changed = true;
                                 }
                             }
 
-                            log::trace!("position_elements: setting position ({x}, {y}) i={i}:\n{child}");
-                            if set_float(&mut child.calculated_x, x).is_some() {
-                                changed = true;
+                            if child.calculated_x.is_none() {
+                                child.calculated_x = Some(0.0);
                             }
-                            if set_float(&mut child.calculated_y, y).is_some() {
-                                changed = true;
+                            if child.calculated_y.is_none() {
+                                child.calculated_y = Some(0.0);
                             }
+                        }
 
-                            match direction {
-                                LayoutDirection::Row => {
-                                    #[cfg(feature = "layout-offset")]
-                                    {
-                                        set_float(&mut child.calculated_offset_x, if i == 0 { start_x } else { col_gap });
-                                        set_float(&mut child.calculated_offset_y, y);
-                                    }
-                                    x += child.bounding_calculated_width().unwrap() + col_gap;
-                                    y = start_y;
-                                }
-                                LayoutDirection::Column => {
-                                    #[cfg(feature = "layout-offset")]
-                                    {
-                                        set_float(&mut child.calculated_offset_x, x);
-                                        set_float(&mut child.calculated_offset_y, if i == 0 { start_y } else { row_gap });
-                                    }
-                                    x = start_x;
-                                    y += child.bounding_calculated_height().unwrap() + row_gap;
+                        // fixed positioned
+
+                        for child in parent.fixed_positioned_elements_mut() {
+                            if let Some(left) = &child.left {
+                                let left = left.calc(view_width, view_width, view_height);
+                                if set_float(&mut child.calculated_x, left).is_some() {
+                                    changed = true;
                                 }
                             }
-                        }
-                    }
+                            if let Some(right) = &child.right {
+                                let right = right.calc(view_width, view_width, view_height);
+                                let bounding_width = child.bounding_calculated_width().unwrap();
+                                let right = width - right - bounding_width;
+                                if set_float(&mut child.calculated_x, right).is_some() {
+                                    changed = true;
+                                }
+                            }
+                            if let Some(top) = &child.top {
+                                let top = top.calc(view_height, view_width, view_height);
+                                if set_float(&mut child.calculated_y, top).is_some() {
+                                    changed = true;
+                                }
+                            }
+                            if let Some(bottom) = &child.bottom {
+                                let bottom = bottom.calc(view_height, view_width, view_height);
+                                let bounding_height = child.bounding_calculated_height().unwrap();
+                                let bottom = height - bottom - bounding_height;
+                                if set_float(&mut child.calculated_y, bottom).is_some() {
+                                    changed = true;
+                                }
+                            }
 
-                    // absolute positioned
-
-                    let Container {
-                        calculated_width: Some(width),
-                        calculated_height: Some(height),
-                        ..
-                    } = relative_container
-                    else {
-                        panic!("Missing relative_container size");
-                    };
-                    let width = *width;
-                    let height = *height;
-
-                    for child in parent.absolute_positioned_elements_mut() {
-                        if let Some(left) = &child.left {
-                            let left = left.calc(width, view_width, view_height);
-                            if set_float(&mut child.calculated_x, left).is_some() {
-                                changed = true;
+                            if child.calculated_x.is_none() {
+                                child.calculated_x = Some(0.0);
+                            }
+                            if child.calculated_y.is_none() {
+                                child.calculated_y = Some(0.0);
                             }
                         }
-                        if let Some(right) = &child.right {
-                            let right = right.calc(width, view_width, view_height);
-                            let bounding_width = child.bounding_calculated_width().unwrap();
-                            let right = width - right - bounding_width;
-                            if set_float(&mut child.calculated_x, right).is_some() {
-                                changed = true;
-                            }
-                        }
-                        if let Some(top) = &child.top {
-                            let top = top.calc(height, view_width, view_height);
-                            if set_float(&mut child.calculated_y, top).is_some() {
-                                changed = true;
-                            }
-                        }
-                        if let Some(bottom) = &child.bottom {
-                            let bottom = bottom.calc(height, view_width, view_height);
-                            let bounding_height = child.bounding_calculated_height().unwrap();
-                            let bottom = height - bottom - bounding_height;
-                            if set_float(&mut child.calculated_y, bottom).is_some() {
-                                changed = true;
-                            }
-                        }
+                    },
+                );
 
-                        if child.calculated_x.is_none() {
-                            child.calculated_x = Some(0.0);
-                        }
-                        if child.calculated_y.is_none() {
-                            child.calculated_y = Some(0.0);
-                        }
-                    }
+                changed
+            }
+        }
+    }
 
-                    // fixed positioned
+    impl Container {
+        fn is_expandable(&self, parent: &Self) -> bool {
+            !self.is_span() && (!parent.is_flex_container() || self.flex.is_some())
+        }
 
-                    for child in parent.fixed_positioned_elements_mut() {
-                        if let Some(left) = &child.left {
-                            let left = left.calc(view_width, view_width, view_height);
-                            if set_float(&mut child.calculated_x, left).is_some() {
-                                changed = true;
-                            }
-                        }
-                        if let Some(right) = &child.right {
-                            let right = right.calc(view_width, view_width, view_height);
-                            let bounding_width = child.bounding_calculated_width().unwrap();
-                            let right = width - right - bounding_width;
-                            if set_float(&mut child.calculated_x, right).is_some() {
-                                changed = true;
-                            }
-                        }
-                        if let Some(top) = &child.top {
-                            let top = top.calc(view_height, view_width, view_height);
-                            if set_float(&mut child.calculated_y, top).is_some() {
-                                changed = true;
-                            }
-                        }
-                        if let Some(bottom) = &child.bottom {
-                            let bottom = bottom.calc(view_height, view_width, view_height);
-                            let bounding_height = child.bounding_calculated_height().unwrap();
-                            let bottom = height - bottom - bounding_height;
-                            if set_float(&mut child.calculated_y, bottom).is_some() {
-                                changed = true;
-                            }
-                        }
+        fn is_shrinkable(&self) -> bool {
+            self.is_span()
+        }
 
-                        if child.calculated_x.is_none() {
-                            child.calculated_x = Some(0.0);
-                        }
-                        if child.calculated_y.is_none() {
-                            child.calculated_y = Some(0.0);
-                        }
-                    }
-                },
-            );
+        fn can_shrink_width(&self) -> bool {
+            self.is_shrinkable()
+                && self.calculated_width.unwrap_or_default()
+                    - self.calculated_min_width.unwrap_or_default()
+                    >= crate::layout::EPSILON
+        }
 
-            changed
+        fn can_shrink_height(&self) -> bool {
+            self.is_shrinkable()
+                && self.calculated_height.unwrap_or_default()
+                    - self.calculated_min_height.unwrap_or_default()
+                    >= crate::layout::EPSILON
         }
     }
 }
@@ -3153,7 +3284,7 @@ mod test {
             &Container {
                 children: vec![Container {
                     calculated_width: Some(100.0),
-                    calculated_height: Some(50.0),
+                    calculated_height: Some(0.0),
                     calculated_x: Some(0.0),
                     calculated_y: Some(0.0),
                     calculated_position: Some(LayoutPosition::Default),
@@ -3187,24 +3318,24 @@ mod test {
                 children: vec![Container {
                     children: vec![
                         Container {
-                            calculated_width: Some(50.0),
-                            calculated_height: Some(40.0),
+                            calculated_width: Some(0.0),
+                            calculated_height: Some(0.0),
                             calculated_x: Some(0.0),
                             calculated_y: Some(0.0),
                             calculated_position: Some(LayoutPosition::Default),
                             ..container.children[0].children[0].clone()
                         },
                         Container {
-                            calculated_width: Some(50.0),
-                            calculated_height: Some(40.0),
-                            calculated_x: Some(50.0),
+                            calculated_width: Some(0.0),
+                            calculated_height: Some(0.0),
+                            calculated_x: Some(0.0),
                             calculated_y: Some(0.0),
                             calculated_position: Some(LayoutPosition::Default),
                             ..container.children[0].children[1].clone()
                         },
                     ],
                     calculated_width: Some(100.0),
-                    calculated_height: Some(40.0),
+                    calculated_height: Some(0.0),
                     calculated_x: Some(0.0),
                     calculated_y: Some(0.0),
                     calculated_position: Some(LayoutPosition::Default),
@@ -3241,24 +3372,20 @@ mod test {
                     Container {
                         children: vec![
                             Container {
-                                calculated_width: Some(50.0),
-                                calculated_height: Some(20.0),
-                                calculated_x: Some(0.0),
+                                calculated_height: Some(0.0),
                                 calculated_y: Some(0.0),
                                 calculated_position: Some(LayoutPosition::Default),
                                 ..container.children[0].children[0].clone()
                             },
                             Container {
-                                calculated_width: Some(50.0),
-                                calculated_height: Some(20.0),
-                                calculated_x: Some(50.0),
+                                calculated_height: Some(0.0),
                                 calculated_y: Some(0.0),
                                 calculated_position: Some(LayoutPosition::Default),
                                 ..container.children[0].children[1].clone()
                             },
                         ],
                         calculated_width: Some(100.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(0.0),
                         calculated_x: Some(0.0),
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Default),
@@ -3267,9 +3394,9 @@ mod test {
                     },
                     Container {
                         calculated_width: Some(100.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(0.0),
                         calculated_x: Some(0.0),
-                        calculated_y: Some(20.0),
+                        calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Default),
                         ..container.children[1].clone()
                     },
@@ -3305,33 +3432,21 @@ mod test {
             &Container {
                 children: vec![
                     Container {
-                        calculated_width: Some(50.0),
                         calculated_height: Some(40.0),
-                        calculated_x: Some(0.0),
-                        calculated_y: Some(0.0),
                         ..container.children[0].clone()
                     },
                     Container {
                         children: vec![
                             Container {
-                                calculated_width: Some(25.0),
                                 calculated_height: Some(40.0),
-                                calculated_x: Some(0.0),
-                                calculated_y: Some(0.0),
                                 ..container.children[1].children[0].clone()
                             },
                             Container {
-                                calculated_width: Some(25.0),
                                 calculated_height: Some(40.0),
-                                calculated_x: Some(25.0),
-                                calculated_y: Some(0.0),
                                 ..container.children[1].children[1].clone()
                             },
                         ],
-                        calculated_width: Some(50.0),
                         calculated_height: Some(40.0),
-                        calculated_x: Some(50.0),
-                        calculated_y: Some(0.0),
                         ..container.children[1].clone()
                     },
                 ],
@@ -4862,7 +4977,7 @@ mod test {
             &Container {
                 children: vec![Container {
                     calculated_min_width: Some(25.0),
-                    calculated_width: Some(50.0),
+                    calculated_width: Some(25.0),
                     calculated_height: Some(120.0),
                     ..container.children[0].clone()
                 }],
@@ -4916,7 +5031,7 @@ mod test {
             &Container {
                 children: vec![Container {
                     calculated_min_width: Some(25.0),
-                    calculated_width: Some(50.0),
+                    calculated_width: Some(25.0),
                     calculated_height: Some(120.0),
                     ..container.children[0].clone()
                 }],
@@ -5374,7 +5489,7 @@ mod test {
                     Container {
                         children: vec![Container {
                             calculated_width: Some(25.0),
-                            calculated_height: Some(20.0),
+                            calculated_height: Some(0.0),
                             calculated_x: Some(0.0),
                             calculated_y: Some(0.0),
                             calculated_position: Some(LayoutPosition::default()),
@@ -5391,7 +5506,7 @@ mod test {
                         children: vec![Container {
                             width: Some(Number::Integer(25)),
                             calculated_width: Some(25.0),
-                            calculated_height: Some(20.0),
+                            calculated_height: Some(0.0),
                             calculated_x: Some(0.0),
                             calculated_y: Some(0.0),
                             calculated_position: Some(LayoutPosition::default()),
@@ -5408,7 +5523,7 @@ mod test {
                         children: vec![Container {
                             width: Some(Number::Integer(25)),
                             calculated_width: Some(25.0),
-                            calculated_height: Some(20.0),
+                            calculated_height: Some(0.0),
                             calculated_x: Some(0.0),
                             calculated_y: Some(0.0),
                             calculated_position: Some(LayoutPosition::default()),
@@ -5482,7 +5597,7 @@ mod test {
                         children: vec![Container {
                             width: Some(Number::Integer(25)),
                             calculated_width: Some(25.0),
-                            calculated_height: Some(20.0),
+                            calculated_height: Some(0.0),
                             calculated_x: Some(0.0),
                             calculated_y: Some(0.0),
                             calculated_position: Some(LayoutPosition::default()),
@@ -5499,7 +5614,7 @@ mod test {
                         children: vec![Container {
                             width: Some(Number::Integer(25)),
                             calculated_width: Some(25.0),
-                            calculated_height: Some(20.0),
+                            calculated_height: Some(0.0),
                             calculated_x: Some(0.0),
                             calculated_y: Some(0.0),
                             calculated_position: Some(LayoutPosition::default()),
@@ -5516,7 +5631,7 @@ mod test {
                         children: vec![Container {
                             width: Some(Number::Integer(25)),
                             calculated_width: Some(25.0),
-                            calculated_height: Some(20.0),
+                            calculated_height: Some(0.0),
                             calculated_x: Some(0.0),
                             calculated_y: Some(0.0),
                             calculated_position: Some(LayoutPosition::default()),
@@ -5594,7 +5709,7 @@ mod test {
                         children: vec![Container {
                             width: Some(Number::Integer(25)),
                             calculated_width: Some(25.0),
-                            calculated_height: Some(20.0),
+                            calculated_height: Some(0.0),
                             calculated_x: Some(0.0),
                             calculated_y: Some(0.0),
                             calculated_position: Some(LayoutPosition::default()),
@@ -5612,7 +5727,7 @@ mod test {
                         children: vec![Container {
                             width: Some(Number::Integer(25)),
                             calculated_width: Some(25.0),
-                            calculated_height: Some(20.0),
+                            calculated_height: Some(0.0),
                             calculated_x: Some(0.0),
                             calculated_y: Some(0.0),
                             calculated_position: Some(LayoutPosition::default()),
@@ -5630,7 +5745,7 @@ mod test {
                         children: vec![Container {
                             width: Some(Number::Integer(25)),
                             calculated_width: Some(25.0),
-                            calculated_height: Some(20.0),
+                            calculated_height: Some(0.0),
                             calculated_x: Some(0.0),
                             calculated_y: Some(0.0),
                             calculated_position: Some(LayoutPosition::default()),
@@ -5708,7 +5823,7 @@ mod test {
                         children: vec![Container {
                             width: Some(Number::Integer(25)),
                             calculated_width: Some(25.0),
-                            calculated_height: Some(20.0),
+                            calculated_height: Some(0.0),
                             calculated_x: Some(0.0),
                             calculated_y: Some(0.0),
                             calculated_position: Some(LayoutPosition::default()),
@@ -5726,7 +5841,7 @@ mod test {
                         children: vec![Container {
                             width: Some(Number::Integer(25)),
                             calculated_width: Some(25.0),
-                            calculated_height: Some(20.0),
+                            calculated_height: Some(0.0),
                             calculated_x: Some(0.0),
                             calculated_y: Some(0.0),
                             calculated_position: Some(LayoutPosition::default()),
@@ -5744,7 +5859,7 @@ mod test {
                         children: vec![Container {
                             width: Some(Number::Integer(25)),
                             calculated_width: Some(25.0),
-                            calculated_height: Some(20.0),
+                            calculated_height: Some(0.0),
                             calculated_x: Some(0.0),
                             calculated_y: Some(0.0),
                             calculated_position: Some(LayoutPosition::default()),
@@ -5798,33 +5913,33 @@ mod test {
                     Container {
                         children: vec![
                             Container {
-                                calculated_width: Some(50.0),
-                                calculated_height: Some(20.0),
+                                calculated_width: Some(0.0),
+                                calculated_height: Some(0.0),
                                 calculated_x: Some(0.0),
                                 calculated_y: Some(0.0),
                                 calculated_position: Some(LayoutPosition::Default),
                                 ..container.children[0].children[0].clone()
                             },
                             Container {
-                                calculated_width: Some(50.0),
-                                calculated_height: Some(20.0),
-                                calculated_x: Some(50.0),
+                                calculated_width: Some(0.0),
+                                calculated_height: Some(0.0),
+                                calculated_x: Some(0.0),
                                 calculated_y: Some(0.0),
                                 calculated_position: Some(LayoutPosition::Default),
                                 direction: LayoutDirection::Row,
                                 children: vec![
                                     Container {
-                                        calculated_width: Some(25.0),
-                                        calculated_height: Some(20.0),
+                                        calculated_width: Some(0.0),
+                                        calculated_height: Some(0.0),
                                         calculated_x: Some(0.0),
                                         calculated_y: Some(0.0),
                                         calculated_position: Some(LayoutPosition::Default),
                                         ..container.children[0].children[1].children[0].clone()
                                     },
                                     Container {
-                                        calculated_width: Some(25.0),
-                                        calculated_height: Some(20.0),
-                                        calculated_x: Some(25.0),
+                                        calculated_width: Some(0.0),
+                                        calculated_height: Some(0.0),
+                                        calculated_x: Some(0.0),
                                         calculated_y: Some(0.0),
                                         calculated_position: Some(LayoutPosition::Default),
                                         ..container.children[0].children[1].children[1].clone()
@@ -5834,7 +5949,7 @@ mod test {
                             },
                         ],
                         calculated_width: Some(100.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(0.0),
                         calculated_x: Some(0.0),
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Default),
@@ -5843,9 +5958,9 @@ mod test {
                     },
                     Container {
                         calculated_width: Some(100.0),
-                        calculated_height: Some(20.0),
+                        calculated_height: Some(0.0),
                         calculated_x: Some(0.0),
-                        calculated_y: Some(20.0),
+                        calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Default),
                         ..container.children[1].clone()
                     },
@@ -5894,33 +6009,33 @@ mod test {
                     Container {
                         children: vec![
                             Container {
-                                calculated_width: Some(50.0),
-                                calculated_height: Some(70.0),
+                                calculated_width: Some(0.0),
+                                calculated_height: Some(0.0),
                                 calculated_x: Some(0.0),
                                 calculated_y: Some(0.0),
                                 calculated_position: Some(LayoutPosition::Default),
                                 ..container.children[0].children[0].clone()
                             },
                             Container {
-                                calculated_width: Some(50.0),
-                                calculated_height: Some(70.0),
-                                calculated_x: Some(50.0),
+                                calculated_width: Some(0.0),
+                                calculated_height: Some(0.0),
+                                calculated_x: Some(0.0),
                                 calculated_y: Some(0.0),
                                 calculated_position: Some(LayoutPosition::Default),
                                 direction: LayoutDirection::Row,
                                 children: vec![
                                     Container {
-                                        calculated_width: Some(25.0),
-                                        calculated_height: Some(70.0),
+                                        calculated_width: Some(0.0),
+                                        calculated_height: Some(0.0),
                                         calculated_x: Some(0.0),
                                         calculated_y: Some(0.0),
                                         calculated_position: Some(LayoutPosition::Default),
                                         ..container.children[0].children[1].children[0].clone()
                                     },
                                     Container {
-                                        calculated_width: Some(25.0),
-                                        calculated_height: Some(70.0),
-                                        calculated_x: Some(25.0),
+                                        calculated_width: Some(0.0),
+                                        calculated_height: Some(0.0),
+                                        calculated_x: Some(0.0),
                                         calculated_y: Some(0.0),
                                         calculated_position: Some(LayoutPosition::Default),
                                         ..container.children[0].children[1].children[1].clone()
@@ -5930,7 +6045,7 @@ mod test {
                             },
                         ],
                         calculated_width: Some(100.0),
-                        calculated_height: Some(70.0),
+                        calculated_height: Some(0.0),
                         calculated_x: Some(0.0),
                         calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Default),
@@ -5942,7 +6057,7 @@ mod test {
                         calculated_width: Some(100.0),
                         calculated_height: Some(10.0),
                         calculated_x: Some(0.0),
-                        calculated_y: Some(70.0),
+                        calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Default),
                         ..container.children[1].clone()
                     },
@@ -5977,9 +6092,7 @@ mod test {
                 children: vec![
                     Container {
                         calculated_width: Some(100.0),
-                        calculated_height: Some(50.0),
                         calculated_x: Some(0.0),
-                        calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Default),
                         ..container.children[0].clone()
                     },
@@ -6029,7 +6142,7 @@ mod test {
                     children: vec![
                         Container {
                             calculated_width: Some(100.0),
-                            calculated_height: Some(50.0),
+                            calculated_height: Some(0.0),
                             calculated_x: Some(0.0),
                             calculated_y: Some(0.0),
                             calculated_position: Some(LayoutPosition::Default),
@@ -6077,9 +6190,7 @@ mod test {
                 children: vec![
                     Container {
                         calculated_width: Some(100.0),
-                        calculated_height: Some(50.0),
                         calculated_x: Some(0.0),
-                        calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Default),
                         ..container.children[0].clone()
                     },
@@ -6125,9 +6236,7 @@ mod test {
                 children: vec![
                     Container {
                         calculated_width: Some(100.0),
-                        calculated_height: Some(50.0),
                         calculated_x: Some(0.0),
-                        calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Default),
                         ..container.children[0].clone()
                     },
@@ -6171,9 +6280,7 @@ mod test {
                 children: vec![
                     Container {
                         calculated_width: Some(100.0),
-                        calculated_height: Some(50.0),
                         calculated_x: Some(0.0),
-                        calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Default),
                         ..container.children[0].clone()
                     },
@@ -6223,9 +6330,7 @@ mod test {
                     children: vec![
                         Container {
                             calculated_width: Some(100.0),
-                            calculated_height: Some(50.0),
                             calculated_x: Some(0.0),
-                            calculated_y: Some(0.0),
                             calculated_position: Some(LayoutPosition::Default),
                             ..container.children[0].children[0].clone()
                         },
@@ -6271,9 +6376,7 @@ mod test {
                 children: vec![
                     Container {
                         calculated_width: Some(100.0),
-                        calculated_height: Some(50.0),
                         calculated_x: Some(0.0),
-                        calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Default),
                         ..container.children[0].clone()
                     },
@@ -6320,9 +6423,7 @@ mod test {
                 children: vec![
                     Container {
                         calculated_width: Some(100.0),
-                        calculated_height: Some(50.0),
                         calculated_x: Some(0.0),
-                        calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Default),
                         ..container.children[0].clone()
                     },
@@ -6362,6 +6463,7 @@ mod test {
             justify_content: Some(JustifyContent::Start),
             ..Default::default()
         };
+
         CALCULATOR.calc(&mut container);
         log::trace!("container:\n{}", container);
 
@@ -6371,25 +6473,19 @@ mod test {
                 children: vec![
                     Container {
                         calculated_width: Some(100.0),
-                        calculated_height: Some(25.0),
                         calculated_x: Some(0.0),
-                        calculated_y: Some(0.0),
                         calculated_position: Some(LayoutPosition::Default),
                         ..container.children[0].clone()
                     },
                     Container {
                         children: vec![Container {
                             calculated_width: Some(0.0),
-                            calculated_height: Some(0.0),
                             calculated_x: Some(0.0),
-                            calculated_y: Some(0.0),
                             position: Some(Position::Fixed),
                             ..container.children[1].children[0].clone()
                         }],
                         calculated_width: Some(100.0),
-                        calculated_height: Some(25.0),
                         calculated_x: Some(0.0),
-                        calculated_y: Some(25.0),
                         position: Some(Position::Relative),
                         ..container.children[1].clone()
                     },
@@ -6582,14 +6678,14 @@ mod test {
             &Container {
                 children: vec![
                     Container {
-                        calculated_width: Some(35.0),
+                        calculated_width: Some(0.0),
                         calculated_x: Some(0.0),
                         ..container.children[0].clone()
                     },
                     Container {
-                        calculated_width: Some(35.0),
+                        calculated_width: Some(0.0),
                         calculated_padding_right: Some(30.0),
-                        calculated_x: Some(35.0),
+                        calculated_x: Some(0.0),
                         ..container.children[1].clone()
                     },
                 ],
@@ -6622,14 +6718,14 @@ mod test {
             &Container {
                 children: vec![
                     Container {
-                        calculated_width: Some(35.0),
+                        calculated_width: Some(0.0),
                         calculated_x: Some(0.0),
                         ..container.children[0].clone()
                     },
                     Container {
-                        calculated_width: Some(35.0),
+                        calculated_width: Some(0.0),
                         calculated_margin_right: Some(30.0),
-                        calculated_x: Some(35.0),
+                        calculated_x: Some(0.0),
                         ..container.children[1].clone()
                     },
                 ],
@@ -6714,7 +6810,7 @@ mod test {
                         ..container.children[0].clone()
                     },
                     Container {
-                        calculated_width: Some(40.0),
+                        calculated_width: Some(0.0),
                         calculated_x: Some(60.0),
                         ..container.children[1].clone()
                     },
@@ -6756,7 +6852,7 @@ mod test {
                         ..container.children[0].clone()
                     },
                     Container {
-                        calculated_width: Some(40.0),
+                        calculated_width: Some(0.0),
                         calculated_padding_right: Some(20.0),
                         calculated_x: Some(40.0),
                         ..container.children[1].clone()
@@ -6830,19 +6926,19 @@ mod test {
             &Container {
                 children: vec![
                     Container {
-                        calculated_width: Some(30.0),
+                        calculated_width: Some(0.0),
                         calculated_padding_right: Some(20.0),
                         calculated_x: Some(0.0),
                         ..container.children[0].clone()
                     },
                     Container {
-                        calculated_width: Some(30.0),
-                        calculated_x: Some(50.0),
+                        calculated_width: Some(0.0),
+                        calculated_x: Some(20.0),
                         ..container.children[1].clone()
                     },
                     Container {
-                        calculated_width: Some(30.0),
-                        calculated_x: Some(80.0),
+                        calculated_width: Some(0.0),
+                        calculated_x: Some(20.0),
                         ..container.children[2].clone()
                     },
                 ],
@@ -6884,19 +6980,18 @@ mod test {
                             calculated_x: Some(0.0),
                             ..container.children[0].children[0].clone()
                         }],
-
-                        calculated_width: Some(30.0),
+                        calculated_width: Some(20.0),
                         calculated_x: Some(0.0),
                         ..container.children[0].clone()
                     },
                     Container {
-                        calculated_width: Some(30.0),
-                        calculated_x: Some(30.0),
+                        calculated_width: Some(0.0),
+                        calculated_x: Some(20.0),
                         ..container.children[1].clone()
                     },
                     Container {
-                        calculated_width: Some(30.0),
-                        calculated_x: Some(60.0),
+                        calculated_width: Some(0.0),
+                        calculated_x: Some(20.0),
                         ..container.children[2].clone()
                     },
                 ],
@@ -6934,7 +7029,7 @@ mod test {
                 children: vec![
                     container.children[0].clone(),
                     Container {
-                        calculated_width: Some(100.0 - text_width),
+                        calculated_width: Some(0.0),
                         calculated_x: Some(text_width),
                         ..container.children[1].clone()
                     },
@@ -6994,7 +7089,7 @@ mod test {
             &container.clone(),
             &Container {
                 children: vec![Container {
-                    calculated_height: Some(20.0),
+                    calculated_height: Some(0.0),
                     calculated_y: Some(0.0),
                     ..container.children[0].clone()
                 }],
@@ -7027,9 +7122,7 @@ mod test {
             &Container {
                 children: vec![Container {
                     calculated_width: Some(35.0),
-                    calculated_height: Some(35.0),
                     calculated_x: Some(0.0),
-                    calculated_y: Some(0.0),
                     ..container.children[0].clone()
                 }],
                 ..container
@@ -7070,18 +7163,14 @@ mod test {
                 children: vec![Container {
                     children: vec![Container {
                         calculated_width: Some(32.5),
-                        calculated_height: Some(34.0),
                         calculated_x: Some(0.0),
-                        calculated_y: Some(0.0),
                         calculated_padding_left: Some(2.0),
                         calculated_padding_right: Some(3.0),
                         calculated_padding_top: Some(1.0),
                         ..container.children[0].children[0].clone()
                     }],
                     calculated_width: Some(70.0),
-                    calculated_height: Some(35.0),
                     calculated_x: Some(0.0),
-                    calculated_y: Some(0.0),
                     calculated_padding_left: Some(10.0),
                     calculated_padding_right: Some(20.0),
                     calculated_padding_top: Some(15.0),
@@ -7127,18 +7216,14 @@ mod test {
                 children: vec![Container {
                     children: vec![Container {
                         calculated_width: Some(32.5),
-                        calculated_height: Some(34.0),
                         calculated_x: Some(0.0),
-                        calculated_y: Some(0.0),
                         calculated_padding_left: Some(2.0),
                         calculated_padding_right: Some(3.0),
                         calculated_padding_top: Some(1.0),
                         ..container.children[0].children[0].clone()
                     }],
                     calculated_width: Some(70.0),
-                    calculated_height: Some(35.0),
                     calculated_x: Some(0.0),
-                    calculated_y: Some(0.0),
                     calculated_padding_left: Some(10.0),
                     calculated_padding_right: Some(20.0),
                     calculated_padding_top: Some(15.0),
@@ -7322,7 +7407,7 @@ mod test {
             div sx-width="100%" sx-height="100%" sx-position="relative" {
                 section sx-dir="row" sx-height=("calc(100% - 140px)") {
                     aside sx-width="calc(max(240, min(280, 15%)))" {}
-                    main sx-overflow-y="auto" {
+                    main sx-overflow-y="auto" sx-flex=(1) {
                         div sx-height=(76) sx-justify-content=(JustifyContent::Start) {
                             div
                                 sx-padding-left=(30)
@@ -7367,7 +7452,7 @@ mod test {
                             ..container.children[0].children[0].children[0].clone()
                         }],
                         calculated_width: Some(1300.0),
-                        calculated_height: Some(61.0),
+                        calculated_height: Some(36.0),
                         calculated_padding_left: Some(30.0),
                         calculated_padding_right: Some(30.0),
                         calculated_padding_top: Some(15.0),
@@ -7558,7 +7643,7 @@ mod test {
             div sx-width="100%" sx-height="100%" sx-position="relative" {
                 section sx-dir="row" sx-height=("calc(100% - 140)") {
                     aside sx-width="calc(max(240, min(280, 15%)))" sx-padding=(20) {}
-                    main sx-overflow-y="auto" {}
+                    main sx-overflow-y="auto" sx-flex=(1) {}
                 }
             }
         }
@@ -7614,7 +7699,7 @@ mod test {
                             ul sx-justify-content=(JustifyContent::Start) { li {} li {} }
                         }
                     }
-                    main sx-overflow-y="auto" {}
+                    main sx-overflow-y="auto" sx-flex=(1) {}
                 }
                 footer sx-height=(140) {}
             }
@@ -7647,33 +7732,6 @@ mod test {
         compare_containers(
             &aside.clone(),
             &Container {
-                children: vec![Container {
-                    children: vec![
-                        Container {
-                            calculated_height: Some(410.0),
-                            ..aside.children[0].children[0].clone()
-                        },
-                        Container {
-                            element: Element::UnorderedList,
-                            children: vec![
-                                Container {
-                                    element: Element::ListItem,
-                                    calculated_height: Some(205.0),
-                                    ..aside.children[0].children[1].children[0].clone()
-                                },
-                                Container {
-                                    element: Element::ListItem,
-                                    calculated_height: Some(205.0),
-                                    ..aside.children[0].children[1].children[1].clone()
-                                },
-                            ],
-                            calculated_height: Some(410.0),
-                            ..aside.children[0].children[1].clone()
-                        },
-                    ],
-                    ..aside.children[0].clone()
-                }],
-
                 calculated_height: Some(820.0),
                 calculated_x: Some(0.0),
                 calculated_y: Some(0.0),
@@ -8185,7 +8243,7 @@ mod test {
             &container,
             &Container {
                 children: vec![Container {
-                    calculated_height: Some(450.0),
+                    calculated_height: Some(0.0),
                     calculated_min_height: Some(50.0),
                     ..container.children[0].clone()
                 }],
@@ -8213,7 +8271,7 @@ mod test {
             &container,
             &Container {
                 children: vec![Container {
-                    calculated_height: Some(450.0),
+                    calculated_height: Some(0.0),
                     calculated_min_height: Some(50.0),
                     ..container.children[0].clone()
                 }],
@@ -8409,7 +8467,7 @@ mod test {
             &container,
             &Container {
                 children: vec![Container {
-                    calculated_height: Some(450.0),
+                    calculated_height: Some(0.0),
                     calculated_min_height: Some(50.0),
                     ..container.children[0].clone()
                 }],
@@ -8437,7 +8495,7 @@ mod test {
             &container,
             &Container {
                 children: vec![Container {
-                    calculated_height: Some(450.0),
+                    calculated_height: Some(0.0),
                     calculated_min_height: Some(50.0),
                     ..container.children[0].clone()
                 }],
@@ -8583,18 +8641,18 @@ mod test {
                 children: vec![Container {
                     children: vec![
                         Container {
-                            calculated_width: Some(200.0),
-                            calculated_height: Some(100.0),
+                            calculated_width: Some(0.0),
+                            calculated_height: Some(0.0),
                             ..container.children[0].children[0].clone()
                         },
                         Container {
-                            calculated_width: Some(200.0),
-                            calculated_height: Some(100.0),
+                            calculated_width: Some(50.0),
+                            calculated_height: Some(0.0),
                             ..container.children[0].children[1].clone()
                         },
                     ],
                     calculated_width: Some(400.0),
-                    calculated_height: Some(100.0),
+                    calculated_height: Some(0.0),
                     ..container.children[0].clone()
                 }],
                 calculated_width: Some(400.0),
@@ -8718,6 +8776,44 @@ mod test {
                     },
                 ],
                 calculated_width: Some(150.0),
+                ..container.clone()
+            },
+        );
+    }
+
+    #[test_log::test]
+    fn calc_direction_row_doesnt_take_full_width() {
+        let mut container: Container = html! {
+            div sx-width=(200) sx-dir=(LayoutDirection::Row) {
+                h1 { "test" }
+                div sx-width=(10) {}
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        container.calculated_width = Some(400.0);
+        container.calculated_height = Some(100.0);
+
+        CALCULATOR.calc(&mut container);
+        log::trace!("full container:\n{}", container);
+        container = container.children[0].clone();
+        log::trace!("container:\n{}", container);
+
+        compare_containers(
+            &container,
+            &Container {
+                children: vec![
+                    Container {
+                        calculated_width: Some(14.0 * 4.0),
+                        ..container.children[0].clone()
+                    },
+                    Container {
+                        calculated_width: Some(10.0),
+                        ..container.children[1].clone()
+                    },
+                ],
+                calculated_width: Some(200.0),
                 ..container.clone()
             },
         );
