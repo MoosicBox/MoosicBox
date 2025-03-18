@@ -1,6 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use hyperchad_transformer_models::ImageLoading;
+use hyperchad_transformer_models::{ImageLoading, LayoutOverflow};
 use maud::{Markup, PreEscaped, html};
 use moosicbox_music_models::{
     AlbumType, ApiSource,
@@ -114,15 +114,16 @@ pub fn artists_page_content(artists: &[ApiArtist]) -> Markup {
     html! {
         div
             sx-dir="row"
-            sx-overflow-x="wrap"
+            sx-overflow-x=(LayoutOverflow::Wrap { grid: true })
+            sx-grid-cell-size=(size)
             sx-justify-content="space-evenly"
             sx-gap=(15)
             sx-padding-x=(30)
             sx-padding-y=(15)
         {
             @for artist in artists {
-                a href=(artist_page_url(&artist.artist_id.to_string())) sx-width=(size) sx-height=(size + 30) {
-                    div sx-width=(size) sx-height=(size + 30) {
+                a href=(artist_page_url(&artist.artist_id.to_string())) sx-width=(size) {
+                    div sx-width=(size) {
                         img loading=(ImageLoading::Lazy) src=(artist_cover_url(artist, request_size, request_size)) sx-width=(size) sx-height=(size);
                         (artist.title)
                     }
@@ -164,7 +165,13 @@ pub fn albums_list(
     html! {
         div sx-padding-y=(20) {
             h2 { (header) }
-            div sx-dir="row" sx-overflow-x="wrap" sx-justify-content="space-evenly" sx-gap=(15) {
+            div
+                sx-dir="row"
+                sx-overflow-x=(LayoutOverflow::Wrap { grid: true })
+                sx-grid-cell-size=(size)
+                sx-justify-content="space-evenly"
+                sx-gap=(15)
+            {
                 (crate::albums::show_albums(albums.iter(), size))
             }
         }

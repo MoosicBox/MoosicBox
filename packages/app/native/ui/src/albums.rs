@@ -6,7 +6,9 @@ use hyperchad_actions::{
         get_data_attr_value_self, get_event_value, get_visibility_self, get_visibility_str_id,
     },
 };
-use hyperchad_transformer_models::{AlignItems, ImageLoading, JustifyContent, Visibility};
+use hyperchad_transformer_models::{
+    AlignItems, ImageLoading, JustifyContent, LayoutOverflow, Visibility,
+};
 use maud::{Markup, PreEscaped, html};
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_music_models::{
@@ -844,7 +846,7 @@ pub fn load_albums(
             hx-trigger="load"
             hx-swap="children"
             sx-dir="row"
-            sx-overflow-x="wrap-grid"
+            sx-overflow-x=(LayoutOverflow::Wrap { grid: true })
             sx-grid-cell-size=(size)
             sx-justify-content="space-evenly"
             sx-gap=(15)
