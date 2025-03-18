@@ -169,7 +169,6 @@ pub fn albums_list(
                 sx-dir="row"
                 sx-overflow-x=(LayoutOverflow::Wrap { grid: true })
                 sx-grid-cell-size=(size)
-                sx-justify-content="space-evenly"
                 sx-gap=(15)
             {
                 (crate::albums::show_albums(albums.iter(), size))
