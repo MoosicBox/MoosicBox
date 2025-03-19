@@ -18,8 +18,8 @@ importers:
         specifier: ^6.72.0
         version: 6.72.0(typescript@5.8.2)
       '@pulumi/pulumi':
-        specifier: ^3.156.0
-        version: 3.156.0(typescript@5.8.2)
+        specifier: ^3.157.0
+        version: 3.157.0(typescript@5.8.2)
       '@tsconfig/node18':
         specifier: 18.2.2
         version: 18.2.2
@@ -324,8 +324,8 @@ packages:
   '@pulumi/aws@6.72.0':
     resolution: {integrity: sha512-TdzEaLbkVNN64AhAsubVrVyVhjuYuK/geXHQXQcAuro17wxsWu0M/7MHy5z2ux6hKD7e6HpcFqO4CqKUHdtoFw==}
 
-  '@pulumi/pulumi@3.156.0':
-    resolution: {integrity: sha512-QRMrL8wQDjPqT/7y7uz94wCahxIbZ7Zb14YFaUW7M6+6VsnHr79hqCj99euwk+QQeCe25nVUnVVfQlrjJBHLnw==}
+  '@pulumi/pulumi@3.157.0':
+    resolution: {integrity: sha512-28XN8M8XLnSgimWYX2TECTlReUifrdxiRsai1rBlmGyMnN+n90bgWSibLqRwOb/AKdDilwfHiY6JrV5/SuNjOQ==}
     engines: {node: '>=18'}
     peerDependencies:
       ts-node: '>= 7.0.1 < 12'
@@ -1497,8 +1497,8 @@ packages:
     resolution: {integrity: sha512-sPU4uV7dYlvtWJxwwxHD0PuihVNiE7TyAbQ5SWxDCB9mUYvOgroQOwYQQOKPJ8CIbE+1ETVlOoK1UC2nU3gYvg==}
     engines: {node: '>= 0.6'}
 
-  mime-db@1.53.0:
-    resolution: {integrity: sha512-oHlN/w+3MQ3rba9rqFr6V/ypF10LSkdwUysQL7GkXoTgIWeV+tcXGA852TBxH+gsh8UWoyhR1hKcoMJTuWflpg==}
+  mime-db@1.54.0:
+    resolution: {integrity: sha512-aU5EJuIN2WDemCcAp2vFBfp/m4EAhWJnUNSSw0ixs7/kXbd6Pg64EmwJkNdFhB8aWt1sH2CTXrLxo/iAGV3oPQ==}
     engines: {node: '>= 0.6'}
 
   mime-types@2.1.35:
@@ -2709,7 +2709,7 @@ snapshots:
 
   '@pulumi/aws@6.72.0(typescript@5.8.2)':
     dependencies:
-      '@pulumi/pulumi': 3.156.0(typescript@5.8.2)
+      '@pulumi/pulumi': 3.157.0(typescript@5.8.2)
       mime: 2.6.0
     transitivePeerDependencies:
       - bluebird
@@ -2717,7 +2717,7 @@ snapshots:
       - ts-node
       - typescript
 
-  '@pulumi/pulumi@3.156.0(typescript@5.8.2)':
+  '@pulumi/pulumi@3.157.0(typescript@5.8.2)':
     dependencies:
       '@grpc/grpc-js': 1.13.0
       '@logdna/tail-file': 2.2.0
@@ -4084,7 +4084,7 @@ snapshots:
 
   mime-db@1.52.0: {}
 
-  mime-db@1.53.0: {}
+  mime-db@1.54.0: {}
 
   mime-types@2.1.35:
     dependencies:
@@ -4092,7 +4092,7 @@ snapshots:
 
   mime-types@3.0.0:
     dependencies:
-      mime-db: 1.53.0
+      mime-db: 1.54.0
 
   mime@2.6.0: {}
 
