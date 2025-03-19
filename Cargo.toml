@@ -260,7 +260,7 @@ rangemap = "1.5.1"
 rb = "0.4.1"
 rcgen = "0.13.2"
 regex = "1.11.1"
-reqwest = { version = "0.12.14", default-features = false, features = [
+reqwest = { version = "0.12.15", default-features = false, features = [
     "rustls-tls",
     "stream",
 ] }
