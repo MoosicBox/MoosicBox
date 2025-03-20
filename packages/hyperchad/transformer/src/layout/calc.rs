@@ -813,6 +813,34 @@ macro_rules! flex_on_axis {
                         changed = true;
                     }
                 }
+
+                for child in parent.fixed_positioned_elements_mut() {
+                    let mut remaining_container_size = *relative_size;
+
+                    if let Some(size) = child.$margin_axis() {
+                        log::trace!(
+                            "{LABEL}: fixed removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
+                            remaining_container_size - size
+                        );
+                        remaining_container_size -= size;
+                    }
+                    if let Some(size) = child.$padding_axis() {
+                        log::trace!(
+                            "{LABEL}: fixed removing padding size={size} from remaining_container_size={remaining_container_size} ({})",
+                            remaining_container_size - size
+                        );
+                        remaining_container_size -= size;
+                    }
+
+                    if let Some(size) = &child.$fixed {
+                        log::trace!("{LABEL}: calculating fixed child size={size:?}");
+                        let size = size.calc(remaining_container_size, view_width, view_height);
+                        log::trace!("{LABEL}: calculated fixed child size={size}");
+                        if set_float(&mut child.$calculated, size).is_some() {
+                            changed = true;
+                        }
+                    }
+                }
             });
 
         changed
@@ -6255,247 +6283,6 @@ mod test {
     }
 
     #[test_log::test]
-    fn calc_can_calc_fixed_positioned_element_on_top_of_a_relative_element_and_have_it_not_inherit_position_or_size()
-     {
-        let mut container = Container {
-            children: vec![
-                Container::default(),
-                Container {
-                    position: Some(Position::Fixed),
-                    ..Default::default()
-                },
-            ],
-            calculated_width: Some(100.0),
-            calculated_height: Some(50.0),
-            position: Some(Position::Relative),
-            justify_content: Some(JustifyContent::Start),
-            ..Default::default()
-        };
-        CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
-
-        compare_containers(
-            &container.clone(),
-            &Container {
-                children: vec![
-                    Container {
-                        calculated_width: Some(100.0),
-                        calculated_x: Some(0.0),
-                        calculated_position: Some(LayoutPosition::Default),
-                        ..container.children[0].clone()
-                    },
-                    Container {
-                        calculated_width: Some(0.0),
-                        calculated_height: Some(0.0),
-                        calculated_x: Some(0.0),
-                        calculated_y: Some(0.0),
-                        position: Some(Position::Fixed),
-                        ..container.children[1].clone()
-                    },
-                ],
-                ..container
-            },
-        );
-    }
-
-    #[test_log::test]
-    fn calc_can_calc_fixed_positioned_element_nested_on_top_of_a_relative_element_with_left_offset()
-    {
-        let mut container = Container {
-            children: vec![Container {
-                children: vec![
-                    Container::default(),
-                    Container {
-                        left: Some(Number::Integer(30)),
-                        position: Some(Position::Fixed),
-                        ..Default::default()
-                    },
-                ],
-                justify_content: Some(JustifyContent::Start),
-                ..Default::default()
-            }],
-            calculated_width: Some(100.0),
-            calculated_height: Some(50.0),
-            position: Some(Position::Relative),
-            justify_content: Some(JustifyContent::Start),
-            ..Default::default()
-        };
-        CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
-
-        compare_containers(
-            &container.clone(),
-            &Container {
-                children: vec![Container {
-                    children: vec![
-                        Container {
-                            calculated_width: Some(100.0),
-                            calculated_x: Some(0.0),
-                            calculated_position: Some(LayoutPosition::Default),
-                            ..container.children[0].children[0].clone()
-                        },
-                        Container {
-                            calculated_width: Some(0.0),
-                            calculated_height: Some(0.0),
-                            calculated_x: Some(30.0),
-                            calculated_y: Some(0.0),
-                            position: Some(Position::Fixed),
-                            ..container.children[0].children[1].clone()
-                        },
-                    ],
-                    ..container.children[0].clone()
-                }],
-                ..container
-            },
-        );
-    }
-
-    #[test_log::test]
-    fn calc_can_calc_fixed_positioned_element_on_top_of_a_relative_element_with_left_offset() {
-        let mut container = Container {
-            children: vec![
-                Container::default(),
-                Container {
-                    left: Some(Number::Integer(30)),
-                    position: Some(Position::Fixed),
-                    ..Default::default()
-                },
-            ],
-            calculated_width: Some(100.0),
-            calculated_height: Some(50.0),
-            position: Some(Position::Relative),
-            justify_content: Some(JustifyContent::Start),
-            ..Default::default()
-        };
-        CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
-
-        compare_containers(
-            &container.clone(),
-            &Container {
-                children: vec![
-                    Container {
-                        calculated_width: Some(100.0),
-                        calculated_x: Some(0.0),
-                        calculated_position: Some(LayoutPosition::Default),
-                        ..container.children[0].clone()
-                    },
-                    Container {
-                        left: Some(Number::Integer(30)),
-                        calculated_width: Some(0.0),
-                        calculated_height: Some(0.0),
-                        calculated_x: Some(30.0),
-                        calculated_y: Some(0.0),
-                        position: Some(Position::Fixed),
-                        ..container.children[1].clone()
-                    },
-                ],
-                ..container
-            },
-        );
-    }
-
-    #[test_log::test]
-    fn calc_can_calc_fixed_positioned_element_with_explicit_sizes() {
-        let mut container = Container {
-            children: vec![
-                Container::default(),
-                Container {
-                    width: Some(Number::Integer(30)),
-                    height: Some(Number::Integer(20)),
-                    left: Some(Number::Integer(30)),
-                    position: Some(Position::Fixed),
-                    ..Default::default()
-                },
-            ],
-            calculated_width: Some(100.0),
-            calculated_height: Some(50.0),
-            position: Some(Position::Relative),
-            justify_content: Some(JustifyContent::Start),
-            ..Default::default()
-        };
-        CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
-
-        compare_containers(
-            &container.clone(),
-            &Container {
-                children: vec![
-                    Container {
-                        calculated_width: Some(100.0),
-                        calculated_x: Some(0.0),
-                        calculated_position: Some(LayoutPosition::Default),
-                        ..container.children[0].clone()
-                    },
-                    Container {
-                        calculated_width: Some(30.0),
-                        calculated_height: Some(20.0),
-                        calculated_x: Some(30.0),
-                        calculated_y: Some(0.0),
-                        position: Some(Position::Fixed),
-                        ..container.children[1].clone()
-                    },
-                ],
-                ..container
-            },
-        );
-    }
-
-    #[test_log::test]
-    fn calc_can_calc_fixed_positioned_element_on_top_of_a_relative_element_doesnt_affect_fixed_position_element_location()
-     {
-        let mut container = Container {
-            children: vec![
-                Container::default(),
-                Container {
-                    children: vec![Container {
-                        position: Some(Position::Fixed),
-                        ..Default::default()
-                    }],
-                    left: Some(Number::Integer(30)),
-                    position: Some(Position::Relative),
-                    ..Default::default()
-                },
-            ],
-            calculated_width: Some(100.0),
-            calculated_height: Some(50.0),
-            position: Some(Position::Relative),
-            justify_content: Some(JustifyContent::Start),
-            ..Default::default()
-        };
-
-        CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
-
-        compare_containers(
-            &container.clone(),
-            &Container {
-                children: vec![
-                    Container {
-                        calculated_width: Some(100.0),
-                        calculated_x: Some(0.0),
-                        calculated_position: Some(LayoutPosition::Default),
-                        ..container.children[0].clone()
-                    },
-                    Container {
-                        children: vec![Container {
-                            calculated_width: Some(0.0),
-                            calculated_x: Some(0.0),
-                            position: Some(Position::Fixed),
-                            ..container.children[1].children[0].clone()
-                        }],
-                        calculated_width: Some(100.0),
-                        calculated_x: Some(0.0),
-                        position: Some(Position::Relative),
-                        ..container.children[1].clone()
-                    },
-                ],
-                ..container
-            },
-        );
-    }
-
-    #[test_log::test]
     fn calc_can_calc_justify_content_center_horizontally() {
         let mut container = Container {
             children: vec![Container {
@@ -9049,6 +8836,303 @@ mod test {
                     }],
                     calculated_width: Some(200.0),
                     ..container.clone()
+                },
+            );
+        }
+    }
+
+    mod position_fixed {
+        use super::*;
+
+        #[test_log::test]
+        fn does_size_dynamic_width_correctly() {
+            let mut container: Container = html! {
+                div sx-position=(Position::Fixed) sx-width="100%" {}
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        calculated_width: Some(400.0),
+                        ..container.children[0].clone()
+                    }],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_size_dynamic_height_correctly() {
+            let mut container: Container = html! {
+                div sx-position=(Position::Fixed) sx-height="100%" {}
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        calculated_height: Some(100.0),
+                        ..container.children[0].clone()
+                    }],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn calc_can_calc_fixed_positioned_element_nested_on_top_of_a_relative_element_with_left_offset()
+         {
+            let mut container = Container {
+                children: vec![Container {
+                    children: vec![
+                        Container::default(),
+                        Container {
+                            left: Some(Number::Integer(30)),
+                            position: Some(Position::Fixed),
+                            ..Default::default()
+                        },
+                    ],
+                    justify_content: Some(JustifyContent::Start),
+                    ..Default::default()
+                }],
+                calculated_width: Some(100.0),
+                calculated_height: Some(50.0),
+                position: Some(Position::Relative),
+                justify_content: Some(JustifyContent::Start),
+                ..Default::default()
+            };
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container.clone(),
+                &Container {
+                    children: vec![Container {
+                        children: vec![
+                            Container {
+                                calculated_width: Some(100.0),
+                                calculated_x: Some(0.0),
+                                calculated_position: Some(LayoutPosition::Default),
+                                ..container.children[0].children[0].clone()
+                            },
+                            Container {
+                                calculated_width: Some(0.0),
+                                calculated_height: Some(0.0),
+                                calculated_x: Some(30.0),
+                                calculated_y: Some(0.0),
+                                position: Some(Position::Fixed),
+                                ..container.children[0].children[1].clone()
+                            },
+                        ],
+                        ..container.children[0].clone()
+                    }],
+                    ..container
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn calc_can_calc_fixed_positioned_element_on_top_of_a_relative_element_with_left_offset() {
+            let mut container = Container {
+                children: vec![
+                    Container::default(),
+                    Container {
+                        left: Some(Number::Integer(30)),
+                        position: Some(Position::Fixed),
+                        ..Default::default()
+                    },
+                ],
+                calculated_width: Some(100.0),
+                calculated_height: Some(50.0),
+                position: Some(Position::Relative),
+                justify_content: Some(JustifyContent::Start),
+                ..Default::default()
+            };
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container.clone(),
+                &Container {
+                    children: vec![
+                        Container {
+                            calculated_width: Some(100.0),
+                            calculated_x: Some(0.0),
+                            calculated_position: Some(LayoutPosition::Default),
+                            ..container.children[0].clone()
+                        },
+                        Container {
+                            left: Some(Number::Integer(30)),
+                            calculated_width: Some(0.0),
+                            calculated_height: Some(0.0),
+                            calculated_x: Some(30.0),
+                            calculated_y: Some(0.0),
+                            position: Some(Position::Fixed),
+                            ..container.children[1].clone()
+                        },
+                    ],
+                    ..container
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn calc_can_calc_fixed_positioned_element_with_explicit_sizes() {
+            let mut container = Container {
+                children: vec![
+                    Container::default(),
+                    Container {
+                        width: Some(Number::Integer(30)),
+                        height: Some(Number::Integer(20)),
+                        left: Some(Number::Integer(30)),
+                        position: Some(Position::Fixed),
+                        ..Default::default()
+                    },
+                ],
+                calculated_width: Some(100.0),
+                calculated_height: Some(50.0),
+                position: Some(Position::Relative),
+                justify_content: Some(JustifyContent::Start),
+                ..Default::default()
+            };
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container.clone(),
+                &Container {
+                    children: vec![
+                        Container {
+                            calculated_width: Some(100.0),
+                            calculated_x: Some(0.0),
+                            calculated_position: Some(LayoutPosition::Default),
+                            ..container.children[0].clone()
+                        },
+                        Container {
+                            calculated_width: Some(30.0),
+                            calculated_height: Some(20.0),
+                            calculated_x: Some(30.0),
+                            calculated_y: Some(0.0),
+                            position: Some(Position::Fixed),
+                            ..container.children[1].clone()
+                        },
+                    ],
+                    ..container
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn calc_can_calc_fixed_positioned_element_on_top_of_a_relative_element_doesnt_affect_fixed_position_element_location()
+         {
+            let mut container = Container {
+                children: vec![
+                    Container::default(),
+                    Container {
+                        children: vec![Container {
+                            position: Some(Position::Fixed),
+                            ..Default::default()
+                        }],
+                        left: Some(Number::Integer(30)),
+                        position: Some(Position::Relative),
+                        ..Default::default()
+                    },
+                ],
+                calculated_width: Some(100.0),
+                calculated_height: Some(50.0),
+                position: Some(Position::Relative),
+                justify_content: Some(JustifyContent::Start),
+                ..Default::default()
+            };
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container.clone(),
+                &Container {
+                    children: vec![
+                        Container {
+                            calculated_width: Some(100.0),
+                            calculated_x: Some(0.0),
+                            calculated_position: Some(LayoutPosition::Default),
+                            ..container.children[0].clone()
+                        },
+                        Container {
+                            children: vec![Container {
+                                calculated_width: Some(0.0),
+                                calculated_x: Some(0.0),
+                                position: Some(Position::Fixed),
+                                ..container.children[1].children[0].clone()
+                            }],
+                            calculated_width: Some(100.0),
+                            calculated_x: Some(0.0),
+                            position: Some(Position::Relative),
+                            ..container.children[1].clone()
+                        },
+                    ],
+                    ..container
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn calc_can_calc_fixed_positioned_element_on_top_of_a_relative_element_and_have_it_not_inherit_position_or_size()
+         {
+            let mut container = Container {
+                children: vec![
+                    Container::default(),
+                    Container {
+                        position: Some(Position::Fixed),
+                        ..Default::default()
+                    },
+                ],
+                calculated_width: Some(100.0),
+                calculated_height: Some(50.0),
+                position: Some(Position::Relative),
+                justify_content: Some(JustifyContent::Start),
+                ..Default::default()
+            };
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container.clone(),
+                &Container {
+                    children: vec![
+                        Container {
+                            calculated_width: Some(100.0),
+                            calculated_x: Some(0.0),
+                            calculated_position: Some(LayoutPosition::Default),
+                            ..container.children[0].clone()
+                        },
+                        Container {
+                            calculated_width: Some(0.0),
+                            calculated_height: Some(0.0),
+                            calculated_x: Some(0.0),
+                            calculated_y: Some(0.0),
+                            position: Some(Position::Fixed),
+                            ..container.children[1].clone()
+                        },
+                    ],
+                    ..container
                 },
             );
         }
