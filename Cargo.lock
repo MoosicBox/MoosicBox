@@ -12342,9 +12342,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_minifier"
-version = "12.2.0"
+version = "12.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ecb9f5964120e890a88ec048f049fe1f5e525d54aa394b50de2fcf2fd9bbb228"
+checksum = "a7866d3eea5cfafe9fc730f5d3bf1eba60d5d63e4823ec83dd15acfcce21cc8d"
 dependencies = [
  "arrayvec",
  "indexmap 2.8.0",
@@ -12506,9 +12506,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_usage_analyzer"
-version = "12.0.1"
+version = "12.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "384c49a5891a06857543370518bd37e1e27727e3174e439dc662b79333d6a652"
+checksum = "8af89be14ef84b16529f89a70972c7f85b0e9e2599ea09d9f7c3e5b186b8f225"
 dependencies = [
  "indexmap 2.8.0",
  "rustc-hash 2.1.1",
@@ -12606,9 +12606,9 @@ dependencies = [
 
 [[package]]
 name = "swc_parallel"
-version = "1.2.0"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5f75f1094d69174ef628e3665fff0f81d58e9f568802e3c90d332c72b0b6026"
+checksum = "8f16052d5123ec45c1c49100781363f3f4e4a6be2da6d82f473b79db1e3abeb8"
 dependencies = [
  "once_cell",
 ]
@@ -16304,18 +16304,18 @@ dependencies = [
 
 [[package]]
 name = "zstd-safe"
-version = "7.2.3"
+version = "7.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3051792fbdc2e1e143244dc28c60f73d8470e93f3f9cbd0ead44da5ed802722"
+checksum = "8f49c4d5f0abb602a93fb8736af2a4f4dd9512e36f7f570d66e65ff867ed3b9d"
 dependencies = [
  "zstd-sys",
 ]
 
 [[package]]
 name = "zstd-sys"
-version = "2.0.14+zstd.1.5.7"
+version = "2.0.15+zstd.1.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fb060d4926e4ac3a3ad15d864e99ceb5f343c6b34f5bd6d81ae6ed417311be5"
+checksum = "eb81183ddd97d0c74cedf1d50d85c8d08c1b8b68ee863bdee9e706eedba1a237"
 dependencies = [
  "cc",
  "pkg-config",
