@@ -7489,7 +7489,6 @@ dependencies = [
  "console-subscriber",
  "flume",
  "futures-util",
- "kanal",
  "local-ip-address",
  "log",
  "moosicbox_admin_htmx",

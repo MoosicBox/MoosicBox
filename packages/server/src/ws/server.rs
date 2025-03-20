@@ -7,7 +7,6 @@ use std::{
     },
 };
 
-use kanal::OneshotAsyncSender;
 use moosicbox_async_service::async_trait;
 use moosicbox_database::{config::ConfigDatabase, profiles::PROFILES};
 use moosicbox_ws::{
@@ -79,7 +78,7 @@ pub enum Command {
     Connect {
         profile: String,
         conn_tx: mpsc::UnboundedSender<Msg>,
-        res_tx: OneshotAsyncSender<ConnId>,
+        res_tx: tokio::sync::oneshot::Sender<ConnId>,
     },
 
     Disconnect {
@@ -89,24 +88,24 @@ pub enum Command {
     Send {
         msg: Msg,
         conn: ConnId,
-        res_tx: OneshotAsyncSender<()>,
+        res_tx: tokio::sync::oneshot::Sender<()>,
     },
 
     Broadcast {
         msg: Msg,
-        res_tx: OneshotAsyncSender<()>,
+        res_tx: tokio::sync::oneshot::Sender<()>,
     },
 
     BroadcastExcept {
         msg: Msg,
         conn: ConnId,
-        res_tx: OneshotAsyncSender<()>,
+        res_tx: tokio::sync::oneshot::Sender<()>,
     },
 
     Message {
         msg: Msg,
         conn: ConnId,
-        res_tx: OneshotAsyncSender<()>,
+        res_tx: tokio::sync::oneshot::Sender<()>,
     },
 }
 
@@ -339,7 +338,7 @@ impl WsServer {
                 res_tx,
             } => {
                 let conn_id = ctx.write().await.connect(profile, conn_tx);
-                res_tx.send(conn_id).await.map_err(|e| {
+                res_tx.send(conn_id).map_err(|e| {
                     std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send: {e:?}"))
                 })?;
             }
@@ -361,7 +360,7 @@ impl WsServer {
                         "Failed to send message to {conn} {msg:?}: {error:?}",
                     );
                 }
-                let _ = res_tx.send(()).await;
+                let _ = res_tx.send(());
             }
 
             Command::Broadcast { msg, res_tx } => {
@@ -371,7 +370,7 @@ impl WsServer {
                         "Failed to broadcast message {msg:?}: {error:?}",
                     );
                 }
-                let _ = res_tx.send(()).await;
+                let _ = res_tx.send(());
             }
 
             Command::BroadcastExcept { msg, conn, res_tx } => {
@@ -385,7 +384,7 @@ impl WsServer {
                         "Failed to broadcast message {msg:?}: {error:?}",
                     );
                 }
-                let _ = res_tx.send(()).await;
+                let _ = res_tx.send(());
             }
 
             Command::Message { conn, msg, res_tx } => {
@@ -404,7 +403,7 @@ impl WsServer {
                         );
                     }
                 }
-                let _ = res_tx.send(()).await;
+                let _ = res_tx.send(());
             }
         }
 
@@ -508,7 +507,7 @@ impl WsServerHandle {
     pub async fn connect(&self, profile: String, conn_tx: mpsc::UnboundedSender<String>) -> ConnId {
         log::trace!("Sending Connect command");
 
-        let (res_tx, res_rx) = kanal::oneshot_async();
+        let (res_tx, res_rx) = tokio::sync::oneshot::channel();
 
         moosicbox_task::spawn("ws server connect", {
             let cmd_tx = self.cmd_tx.clone();
@@ -526,14 +525,14 @@ impl WsServerHandle {
             }
         });
 
-        res_rx.recv().await.unwrap_or_else(|e| {
+        res_rx.await.unwrap_or_else(|e| {
             moosicbox_assert::die_or_panic!("Failed to recv response from ws server: {e:?}")
         })
     }
 
     pub async fn send(&self, conn: ConnId, msg: impl Into<String> + Send) {
         log::trace!("Sending Send command");
-        let (res_tx, res_rx) = kanal::oneshot_async();
+        let (res_tx, res_rx) = tokio::sync::oneshot::channel();
 
         moosicbox_task::spawn("ws server send", {
             let cmd_tx = self.cmd_tx.clone();
@@ -545,14 +544,14 @@ impl WsServerHandle {
             }
         });
 
-        res_rx.recv().await.unwrap_or_else(|e| {
+        res_rx.await.unwrap_or_else(|e| {
             moosicbox_assert::die_or_error!("Failed to recv response from ws server: {e:?}");
         });
     }
 
     pub async fn broadcast(&self, msg: impl Into<String> + Send) {
         log::trace!("Sending Broadcast command");
-        let (res_tx, res_rx) = kanal::oneshot_async();
+        let (res_tx, res_rx) = tokio::sync::oneshot::channel();
 
         moosicbox_task::spawn("ws server broadcast", {
             let cmd_tx = self.cmd_tx.clone();
@@ -564,14 +563,14 @@ impl WsServerHandle {
             }
         });
 
-        res_rx.recv().await.unwrap_or_else(|e| {
+        res_rx.await.unwrap_or_else(|e| {
             moosicbox_assert::die_or_error!("Failed to recv response from ws server: {e:?}");
         });
     }
 
     pub async fn broadcast_except(&self, conn: ConnId, msg: impl Into<String> + Send) {
         log::trace!("Sending BroadcastExcept command");
-        let (res_tx, res_rx) = kanal::oneshot_async();
+        let (res_tx, res_rx) = tokio::sync::oneshot::channel();
 
         moosicbox_task::spawn("ws server broadcast_except", {
             let cmd_tx = self.cmd_tx.clone();
@@ -586,7 +585,7 @@ impl WsServerHandle {
             }
         });
 
-        res_rx.recv().await.unwrap_or_else(|e| {
+        res_rx.await.unwrap_or_else(|e| {
             moosicbox_assert::die_or_error!("Failed to recv response from ws server: {e:?}");
         });
     }
@@ -594,7 +593,7 @@ impl WsServerHandle {
     /// Broadcast message to current room.
     pub async fn send_message(&self, conn: ConnId, msg: impl Into<String> + Send) {
         log::trace!("Sending Message command");
-        let (res_tx, res_rx) = kanal::oneshot_async();
+        let (res_tx, res_rx) = tokio::sync::oneshot::channel();
 
         moosicbox_task::spawn("ws server send_message", {
             let cmd_tx = self.cmd_tx.clone();
@@ -609,7 +608,7 @@ impl WsServerHandle {
             }
         });
 
-        res_rx.recv().await.unwrap_or_else(|e| {
+        res_rx.await.unwrap_or_else(|e| {
             moosicbox_assert::die_or_error!("Failed to recv response from ws server: {e:?}");
         });
     }

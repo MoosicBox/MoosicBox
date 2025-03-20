@@ -134,7 +134,6 @@ actix-ws           = { workspace = true }
 console-subscriber = { workspace = true }
 flume              = { workspace = true }
 futures-util       = { workspace = true }
-kanal              = { workspace = true }
 local-ip-address   = { workspace = true }
 log                = { workspace = true }
 openssl            = { workspace = true, optional = true }
