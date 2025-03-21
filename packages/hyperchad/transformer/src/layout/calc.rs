@@ -1450,14 +1450,19 @@ mod passes {
                                     max_height = child_height;
                                 }
 
-                                log::trace!(
-                                    "position_elements: setting wrapped position ({x}, {y}):\n{child}"
-                                );
-                                if set_float(&mut child.calculated_x, x).is_some() {
-                                    changed = true;
-                                }
-                                if set_float(&mut child.calculated_y, y).is_some() {
-                                    changed = true;
+                                {
+                                    let x = x + child.calculated_margin_left.unwrap_or_default();
+                                    let y = y + child.calculated_margin_top.unwrap_or_default();
+
+                                    log::trace!(
+                                        "position_elements: setting wrapped position ({x}, {y}):\n{child}"
+                                    );
+                                    if set_float(&mut child.calculated_x, x).is_some() {
+                                        changed = true;
+                                    }
+                                    if set_float(&mut child.calculated_y, y).is_some() {
+                                        changed = true;
+                                    }
                                 }
 
                                 x += child_width + gap;
@@ -1632,12 +1637,17 @@ mod passes {
                                     }
                                 }
 
-                                log::trace!("position_elements: setting position ({x}, {y}) i={i}:\n{child}");
-                                if set_float(&mut child.calculated_x, x).is_some() {
-                                    changed = true;
-                                }
-                                if set_float(&mut child.calculated_y, y).is_some() {
-                                    changed = true;
+                                {
+                                    let x = x + child.calculated_margin_left.unwrap_or_default();
+                                    let y = y + child.calculated_margin_top.unwrap_or_default();
+
+                                    log::trace!("position_elements: setting position ({x}, {y}) i={i}:\n{child}");
+                                    if set_float(&mut child.calculated_x, x).is_some() {
+                                        changed = true;
+                                    }
+                                    if set_float(&mut child.calculated_y, y).is_some() {
+                                        changed = true;
+                                    }
                                 }
 
                                 match direction {
@@ -1677,80 +1687,76 @@ mod passes {
                         let height = *height;
 
                         for child in parent.absolute_positioned_elements_mut() {
+                            let mut x = 0.0;
+                            let mut y = 0.0;
+
+                            let margin_left = child.calculated_margin_left.unwrap_or_default();
+                            let margin_top = child.calculated_margin_top.unwrap_or_default();
+
                             if let Some(left) = &child.left {
                                 let left = left.calc(width, view_width, view_height);
-                                if set_float(&mut child.calculated_x, left).is_some() {
-                                    changed = true;
-                                }
+                                x = left + margin_left;
                             }
                             if let Some(right) = &child.right {
                                 let right = right.calc(width, view_width, view_height);
                                 let bounding_width = child.bounding_calculated_width().unwrap();
                                 let right = width - right - bounding_width;
-                                if set_float(&mut child.calculated_x, right).is_some() {
-                                    changed = true;
-                                }
+                                x = right + margin_left;
                             }
                             if let Some(top) = &child.top {
                                 let top = top.calc(height, view_width, view_height);
-                                if set_float(&mut child.calculated_y, top).is_some() {
-                                    changed = true;
-                                }
+                                y = top + margin_top;
                             }
                             if let Some(bottom) = &child.bottom {
                                 let bottom = bottom.calc(height, view_width, view_height);
                                 let bounding_height = child.bounding_calculated_height().unwrap();
                                 let bottom = height - bottom - bounding_height;
-                                if set_float(&mut child.calculated_y, bottom).is_some() {
-                                    changed = true;
-                                }
+                                y = bottom + margin_top;
                             }
 
-                            if child.calculated_x.is_none() {
-                                child.calculated_x = Some(0.0);
+                            if set_float(&mut child.calculated_x, x).is_some() {
+                                changed = true;
                             }
-                            if child.calculated_y.is_none() {
-                                child.calculated_y = Some(0.0);
+                            if set_float(&mut child.calculated_y, y).is_some() {
+                                changed = true;
                             }
                         }
 
                         // fixed positioned
 
                         for child in parent.fixed_positioned_elements_mut() {
+                            let mut x = 0.0;
+                            let mut y = 0.0;
+
+                            let margin_left = child.calculated_margin_left.unwrap_or_default();
+                            let margin_top = child.calculated_margin_top.unwrap_or_default();
+
                             if let Some(left) = &child.left {
-                                let left = left.calc(view_width, view_width, view_height);
-                                if set_float(&mut child.calculated_x, left).is_some() {
-                                    changed = true;
-                                }
+                                let left = left.calc(width, view_width, view_height);
+                                x = left + margin_left;
                             }
                             if let Some(right) = &child.right {
-                                let right = right.calc(view_width, view_width, view_height);
+                                let right = right.calc(width, view_width, view_height);
                                 let bounding_width = child.bounding_calculated_width().unwrap();
                                 let right = width - right - bounding_width;
-                                if set_float(&mut child.calculated_x, right).is_some() {
-                                    changed = true;
-                                }
+                                x = right + margin_left;
                             }
                             if let Some(top) = &child.top {
-                                let top = top.calc(view_height, view_width, view_height);
-                                if set_float(&mut child.calculated_y, top).is_some() {
-                                    changed = true;
-                                }
+                                let top = top.calc(height, view_width, view_height);
+                                y = top + margin_top;
                             }
                             if let Some(bottom) = &child.bottom {
-                                let bottom = bottom.calc(view_height, view_width, view_height);
+                                let bottom = bottom.calc(height, view_width, view_height);
                                 let bounding_height = child.bounding_calculated_height().unwrap();
                                 let bottom = height - bottom - bounding_height;
-                                if set_float(&mut child.calculated_y, bottom).is_some() {
-                                    changed = true;
-                                }
+                                y = bottom + margin_top;
                             }
 
-                            if child.calculated_x.is_none() {
-                                child.calculated_x = Some(0.0);
+                            if set_float(&mut child.calculated_x, x).is_some() {
+                                changed = true;
                             }
-                            if child.calculated_y.is_none() {
-                                child.calculated_y = Some(0.0);
+                            if set_float(&mut child.calculated_y, y).is_some() {
+                                changed = true;
                             }
                         }
                     },
@@ -6384,7 +6390,7 @@ mod test {
                     Container {
                         calculated_width: Some(30.0),
                         calculated_margin_left: Some(35.0),
-                        calculated_x: Some(0.0),
+                        calculated_x: Some(35.0),
                         ..container.children[0].clone()
                     },
                     Container {
@@ -8889,6 +8895,51 @@ mod test {
                 &Container {
                     children: vec![Container {
                         calculated_height: Some(100.0),
+                        ..container.children[0].clone()
+                    }],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_place_child_element_correctly() {
+            let mut container: Container = html! {
+                div
+                    sx-position=(Position::Fixed)
+                    sx-width="100%"
+                    sx-height="100%"
+                    sx-justify-content=(JustifyContent::Center)
+                {
+                    div
+                        sx-flex=(1)
+                        sx-margin-x="calc(20vw)"
+                        sx-min-height="calc(min(90vh, 300px))"
+                        sx-max-height="90vh"
+                        sx-overflow-y=(LayoutOverflow::Auto)
+                    {}
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(1000.0);
+            container.calculated_height = Some(500.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        children: vec![Container {
+                            calculated_x: Some(200.0),
+                            calculated_y: Some(0.0),
+                            calculated_width: Some(600.0),
+                            calculated_height: Some(500.0),
+                            ..container.children[0].children[0].clone()
+                        }],
                         ..container.children[0].clone()
                     }],
                     ..container.clone()
