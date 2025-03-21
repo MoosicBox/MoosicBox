@@ -41,7 +41,7 @@ pub(crate) fn order_float(a: &f32, b: &f32) -> std::cmp::Ordering {
     }
 }
 
-pub(crate) fn increase_opt(opt: &mut Option<f32>, value: f32) -> f32 {
+pub fn increase_opt(opt: &mut Option<f32>, value: f32) -> f32 {
     if let Some(existing) = *opt {
         opt.replace(existing + value);
         existing + value
@@ -51,7 +51,7 @@ pub(crate) fn increase_opt(opt: &mut Option<f32>, value: f32) -> f32 {
     }
 }
 
-pub(crate) fn set_value<T: PartialEq + Copy>(opt: &mut Option<T>, value: T) -> Option<T> {
+pub fn set_value<T: PartialEq + Copy>(opt: &mut Option<T>, value: T) -> Option<T> {
     if let Some(existing) = *opt {
         if existing != value {
             *opt = Some(value);
@@ -65,7 +65,7 @@ pub(crate) fn set_value<T: PartialEq + Copy>(opt: &mut Option<T>, value: T) -> O
     None
 }
 
-pub(crate) fn set_float(opt: &mut Option<f32>, value: f32) -> Option<f32> {
+pub fn set_float(opt: &mut Option<f32>, value: f32) -> Option<f32> {
     if let Some(existing) = *opt {
         if (existing - value).abs() >= EPSILON {
             *opt = Some(value);
