@@ -1327,17 +1327,13 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             ) = egui::Frame::new()
                 .inner_margin(egui::Margin {
                     left:
-                        container.internal_margin_left.map_or(0,|x| x.round() as i8)
-                        + container.calculated_margin_left.map_or(0,|x| x.round() as i8),
+                        container.internal_margin_left.map_or(0,|x| x.round() as i8),
                     right:
-                        container.internal_margin_right.map_or(0,|x| x.round() as i8)
-                        + container.calculated_margin_right.map_or(0,|x| x.round() as i8),
+                        container.internal_margin_right.map_or(0,|x| x.round() as i8),
                     top:
-                        container.internal_margin_top.map_or(0,|x| x.round() as i8)
-                        + container.calculated_margin_top.map_or(0,|x| x.round() as i8),
+                        container.internal_margin_top.map_or(0,|x| x.round() as i8),
                     bottom:
-                        container.internal_margin_bottom.map_or(0,|x| x.round() as i8)
-                        + container.calculated_margin_bottom.map_or(0,|x| x.round() as i8),
+                        container.internal_margin_bottom.map_or(0,|x| x.round() as i8),
                 })
                 .show(ui, {
                     move |ui| {
@@ -1678,16 +1674,13 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                 }
             }
             Some(Position::Fixed | Position::Sticky) => {
+                let (x, y) = (get_left_offset(container), get_top_offset(container));
+                let (x, y) = (x.unwrap_or_default(), y.unwrap_or_default());
                 let rect = egui::Rect::from_min_size(
-                    egui::pos2(
-                        container.calculated_x.unwrap(),
-                        container.calculated_y.unwrap(),
-                    ),
+                    egui::pos2(x, y),
                     egui::vec2(
-                        container.calculated_x.unwrap()
-                            + container.bounding_calculated_width().unwrap(),
-                        container.calculated_y.unwrap()
-                            + container.bounding_calculated_height().unwrap(),
+                        x + get_remaining_offset_width(container),
+                        y + get_remaining_offset_height(container),
                     ),
                 );
 
@@ -1890,14 +1883,13 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         let (offset_x, offset_y) = (get_left_offset(container), get_top_offset(container));
 
         if offset_x.is_some() || offset_y.is_some() {
+            let (offset_x, offset_y) = (offset_x.unwrap_or_default(), offset_y.unwrap_or_default());
+            let (x, y) = (ui.cursor().left() + offset_x, ui.cursor().top() + offset_y);
             let rect = egui::Rect::from_min_size(
-                egui::pos2(
-                    ui.cursor().left() + offset_x.unwrap_or_default(),
-                    ui.cursor().top() + offset_y.unwrap_or_default(),
-                ),
+                egui::pos2(x, y),
                 egui::vec2(
-                    container.calculated_width.unwrap(),
-                    container.calculated_height.unwrap(),
+                    get_remaining_offset_width(container),
+                    get_remaining_offset_height(container),
                 ),
             );
 
@@ -4057,15 +4049,31 @@ const EPSILON: f32 = 0.001;
 fn get_left_offset(x: impl AsRef<Container>) -> Option<f32> {
     let x = x.as_ref();
 
-    x.calculated_offset_x
-        .and_then(|x| if x < EPSILON { None } else { Some(x) })
+    let offset =
+        x.calculated_offset_x.unwrap_or_default() + x.calculated_margin_left.unwrap_or_default();
+
+    if offset < EPSILON { None } else { Some(offset) }
 }
 
 fn get_top_offset(x: impl AsRef<Container>) -> Option<f32> {
     let x = x.as_ref();
 
-    x.calculated_offset_y
-        .and_then(|x| if x < EPSILON { None } else { Some(x) })
+    let offset =
+        x.calculated_offset_y.unwrap_or_default() + x.calculated_margin_top.unwrap_or_default();
+
+    if offset < EPSILON { None } else { Some(offset) }
+}
+
+fn get_remaining_offset_width(x: impl AsRef<Container>) -> f32 {
+    let x = x.as_ref();
+
+    x.bounding_calculated_width().unwrap_or_default() - x.calculated_margin_left.unwrap_or_default()
+}
+
+fn get_remaining_offset_height(x: impl AsRef<Container>) -> f32 {
+    let x = x.as_ref();
+
+    x.bounding_calculated_height().unwrap_or_default() - x.calculated_margin_top.unwrap_or_default()
 }
 
 #[cfg(feature = "profiling-puffin")]
