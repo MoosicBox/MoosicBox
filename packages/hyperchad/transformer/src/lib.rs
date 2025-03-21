@@ -1558,6 +1558,132 @@ impl BfsPaths {
             }
         }
     }
+
+    pub fn traverse_rev_with_parents<R: Clone>(
+        &self,
+        inclusive: bool,
+        initial: R,
+        root: &Container,
+        mut parent: impl FnMut(&Container, R) -> R,
+        mut visitor: impl FnMut(&Container, R),
+    ) {
+        // Follow paths to apply visitor to each node
+        for level_nodes in self.levels.iter().rev() {
+            for &node_idx in level_nodes {
+                let path = &self.paths[node_idx];
+
+                // Follow the path to find the node
+                let mut current = root;
+                let mut data = initial.clone();
+
+                for &child_idx in path {
+                    data = parent(current, data);
+                    current = &current.children[child_idx];
+                }
+
+                if inclusive {
+                    data = parent(current, data);
+                }
+
+                visitor(current, data);
+            }
+        }
+    }
+
+    pub fn traverse_rev_with_parents_mut<R: Clone>(
+        &self,
+        inclusive: bool,
+        initial: R,
+        root: &mut Container,
+        mut parent: impl FnMut(&mut Container, R) -> R,
+        mut visitor: impl FnMut(&mut Container, R),
+    ) {
+        // Follow paths to apply visitor to each node
+        for level_nodes in self.levels.iter().rev() {
+            for &node_idx in level_nodes {
+                let path = &self.paths[node_idx];
+
+                // Follow the path to find the node
+                let mut current = &mut *root;
+                let mut data = initial.clone();
+
+                for &child_idx in path {
+                    data = parent(current, data);
+                    current = &mut current.children[child_idx];
+                }
+
+                if inclusive {
+                    data = parent(current, data);
+                }
+
+                visitor(current, data);
+            }
+        }
+    }
+
+    pub fn traverse_rev_with_parents_ref<R>(
+        &self,
+        inclusive: bool,
+        initial: R,
+        root: &Container,
+        mut parent: impl FnMut(&Container, R) -> R,
+        mut visitor: impl FnMut(&Container, &R),
+    ) {
+        let mut data = initial;
+
+        // Follow paths to apply visitor to each node
+        for level_nodes in self.levels.iter().rev() {
+            for &node_idx in level_nodes {
+                let path = &self.paths[node_idx];
+
+                // Follow the path to find the node
+                let mut current = root;
+
+                for &child_idx in path {
+                    data = parent(current, data);
+                    current = &current.children[child_idx];
+                }
+
+                if inclusive {
+                    data = parent(current, data);
+                }
+
+                visitor(current, &data);
+            }
+        }
+    }
+
+    pub fn traverse_rev_with_parents_ref_mut<R>(
+        &self,
+        inclusive: bool,
+        initial: R,
+        root: &mut Container,
+        mut parent: impl FnMut(&mut Container, R) -> R,
+        mut visitor: impl FnMut(&mut Container, &R),
+    ) {
+        let mut data = initial;
+
+        // Follow paths to apply visitor to each node
+        for level_nodes in self.levels.iter().rev() {
+            for &node_idx in level_nodes {
+                let path = &self.paths[node_idx];
+
+                // Follow the path to find the node
+                let mut current = &mut *root;
+
+                for &child_idx in path {
+                    data = parent(current, data);
+                    current = &mut current.children[child_idx];
+                }
+
+                if inclusive {
+                    data = parent(current, data);
+                }
+
+                visitor(current, &data);
+            }
+        }
+    }
 }
 
 #[cfg(any(test, feature = "maud"))]
