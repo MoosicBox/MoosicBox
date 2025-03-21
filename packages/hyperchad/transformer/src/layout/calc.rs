@@ -476,7 +476,7 @@ macro_rules! flex_on_axis {
                     }
 
                     // Fit all unsized children
-                    if parent.align_items.is_none() && parent.relative_positioned_elements().any(|x| x.$fixed.is_none()) {
+                    if parent.relative_positioned_elements().any(|x| x.$fixed.is_none()) {
                         let mut remaining_size = container_size;
                         let mut last_cell = 0;
                         let mut max_cell_size = 0.0;
@@ -774,7 +774,9 @@ macro_rules! flex_on_axis {
                                 }
                             }
                             LayoutDirection::$cross_axis => {
-                                position_cross_axis(parent);
+                                if parent.align_items.is_none() {
+                                    position_cross_axis(parent);
+                                }
                             }
                         }
                     }
@@ -8898,6 +8900,49 @@ mod test {
                         }],
                         ..container.children[0].clone()
                     }],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_size_horizontally_child_element_correctly_with_flex_1_and_direction_row_parent() {
+            let mut container: Container = html! {
+                div
+                    sx-dir=(LayoutDirection::Row)
+                    sx-position=(Position::Fixed)
+                    sx-width="100%"
+                    sx-align-items=(AlignItems::Center)
+                    sx-justify-content=(JustifyContent::Center)
+                {
+                    div
+                        sx-flex=(1)
+                        sx-margin-x="calc(20vw)"
+                        sx-overflow-y=(LayoutOverflow::Auto)
+                    { "test" }
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(1000.0);
+            container.calculated_height = Some(500.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        children: vec![Container {
+                            calculated_width: Some(600.0),
+                            ..container.children[0].children[0].clone()
+                        }],
+                        calculated_width: Some(1000.0),
+                        ..container.children[0].clone()
+                    }],
+                    calculated_width: Some(1000.0),
                     ..container.clone()
                 },
             );
