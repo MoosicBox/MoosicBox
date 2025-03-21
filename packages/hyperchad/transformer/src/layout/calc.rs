@@ -1686,79 +1686,48 @@ mod passes {
                         let width = *width;
                         let height = *height;
 
-                        for child in parent.absolute_positioned_elements_mut() {
-                            let mut x = 0.0;
-                            let mut y = 0.0;
+                        macro_rules! position_absolute {
+                            ($iter:expr) => {
+                                for child in ($iter) {
+                                    let mut x = 0.0;
+                                    let mut y = 0.0;
 
-                            let margin_left = child.calculated_margin_left.unwrap_or_default();
-                            let margin_top = child.calculated_margin_top.unwrap_or_default();
+                                    let margin_left = child.calculated_margin_left.unwrap_or_default();
+                                    let margin_top = child.calculated_margin_top.unwrap_or_default();
 
-                            if let Some(left) = &child.left {
-                                let left = left.calc(width, view_width, view_height);
-                                x = left + margin_left;
-                            }
-                            if let Some(right) = &child.right {
-                                let right = right.calc(width, view_width, view_height);
-                                let bounding_width = child.bounding_calculated_width().unwrap();
-                                let right = width - right - bounding_width;
-                                x = right + margin_left;
-                            }
-                            if let Some(top) = &child.top {
-                                let top = top.calc(height, view_width, view_height);
-                                y = top + margin_top;
-                            }
-                            if let Some(bottom) = &child.bottom {
-                                let bottom = bottom.calc(height, view_width, view_height);
-                                let bounding_height = child.bounding_calculated_height().unwrap();
-                                let bottom = height - bottom - bounding_height;
-                                y = bottom + margin_top;
-                            }
+                                    if let Some(left) = &child.left {
+                                        let left = left.calc(width, view_width, view_height);
+                                        x = left + margin_left;
+                                    }
+                                    if let Some(right) = &child.right {
+                                        let right = right.calc(width, view_width, view_height);
+                                        let bounding_width = child.bounding_calculated_width().unwrap();
+                                        let right = width - right - bounding_width;
+                                        x = right + margin_left;
+                                    }
+                                    if let Some(top) = &child.top {
+                                        let top = top.calc(height, view_width, view_height);
+                                        y = top + margin_top;
+                                    }
+                                    if let Some(bottom) = &child.bottom {
+                                        let bottom = bottom.calc(height, view_width, view_height);
+                                        let bounding_height = child.bounding_calculated_height().unwrap();
+                                        let bottom = height - bottom - bounding_height;
+                                        y = bottom + margin_top;
+                                    }
 
-                            if set_float(&mut child.calculated_x, x).is_some() {
-                                changed = true;
-                            }
-                            if set_float(&mut child.calculated_y, y).is_some() {
-                                changed = true;
-                            }
+                                    if set_float(&mut child.calculated_x, x).is_some() {
+                                        changed = true;
+                                    }
+                                    if set_float(&mut child.calculated_y, y).is_some() {
+                                        changed = true;
+                                    }
+                                }
+                            };
                         }
 
-                        // fixed positioned
-
-                        for child in parent.fixed_positioned_elements_mut() {
-                            let mut x = 0.0;
-                            let mut y = 0.0;
-
-                            let margin_left = child.calculated_margin_left.unwrap_or_default();
-                            let margin_top = child.calculated_margin_top.unwrap_or_default();
-
-                            if let Some(left) = &child.left {
-                                let left = left.calc(width, view_width, view_height);
-                                x = left + margin_left;
-                            }
-                            if let Some(right) = &child.right {
-                                let right = right.calc(width, view_width, view_height);
-                                let bounding_width = child.bounding_calculated_width().unwrap();
-                                let right = width - right - bounding_width;
-                                x = right + margin_left;
-                            }
-                            if let Some(top) = &child.top {
-                                let top = top.calc(height, view_width, view_height);
-                                y = top + margin_top;
-                            }
-                            if let Some(bottom) = &child.bottom {
-                                let bottom = bottom.calc(height, view_width, view_height);
-                                let bounding_height = child.bounding_calculated_height().unwrap();
-                                let bottom = height - bottom - bounding_height;
-                                y = bottom + margin_top;
-                            }
-
-                            if set_float(&mut child.calculated_x, x).is_some() {
-                                changed = true;
-                            }
-                            if set_float(&mut child.calculated_y, y).is_some() {
-                                changed = true;
-                            }
-                        }
+                        position_absolute!(parent.absolute_positioned_elements_mut());
+                        position_absolute!(parent.fixed_positioned_elements_mut());
                     },
                 );
 
