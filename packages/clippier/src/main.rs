@@ -54,6 +54,19 @@ enum Commands {
         #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
         output: OutputType,
     },
+    CiSteps {
+        #[arg(index = 1)]
+        file: String,
+
+        #[arg(long)]
+        os: Option<String>,
+
+        #[arg(long)]
+        features: Option<String>,
+
+        #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
+        output: OutputType,
+    },
     Features {
         #[arg(index = 1)]
         file: String,
@@ -95,6 +108,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let cmd_dependencies = matches!(args.cmd, Commands::Dependencies { .. });
     let cmd_environment = matches!(args.cmd, Commands::Environment { .. });
+    let cmd_ci_steps = matches!(args.cmd, Commands::CiSteps { .. });
 
     match args.cmd {
         Commands::Dependencies {
@@ -104,6 +118,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             output,
         }
         | Commands::Environment {
+            file,
+            os,
+            features: specific_features,
+            output,
+        }
+        | Commands::CiSteps {
             file,
             os,
             features: specific_features,
@@ -157,6 +177,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         "dependencies"
                     } else if cmd_environment {
                         "env"
+                    } else if cmd_ci_steps {
+                        "ciSteps"
                     } else {
                         unimplemented!()
                     })
