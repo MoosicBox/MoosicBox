@@ -33,6 +33,9 @@ enum Commands {
         file: String,
 
         #[arg(long)]
+        os: Option<String>,
+
+        #[arg(long)]
         features: Option<String>,
 
         #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
@@ -80,6 +83,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match args.cmd {
         Commands::Dependencies {
             file,
+            os,
             features: specific_features,
             output,
         } => {
@@ -120,6 +124,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let dependencies = packages
                 .iter()
+                .filter(|x| {
+                    os.as_deref().is_none_or(|os| {
+                        x.get("os")
+                            .is_some_and(|x| x.as_str().is_some_and(|x| x == os))
+                    })
+                })
                 .filter_map(|x| {
                     x.get("dependencies")
                         .and_then(|x| x.as_str())
