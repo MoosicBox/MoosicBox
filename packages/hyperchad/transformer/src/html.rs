@@ -703,6 +703,46 @@ fn parse_element(
             )
         },
     )?;
+    let border_radius_top = pmrv(
+        tag,
+        once("sx-border-top-radius"),
+        &mut overrides,
+        parse_number,
+        |x| {
+            std::iter::once(OverrideItem::BorderTopLeftRadius(x.clone()))
+                .chain(std::iter::once(OverrideItem::BorderTopRightRadius(x)))
+        },
+    )?;
+    let border_radius_right = pmrv(
+        tag,
+        once("sx-border-right-radius"),
+        &mut overrides,
+        parse_number,
+        |x| {
+            std::iter::once(OverrideItem::BorderTopRightRadius(x.clone()))
+                .chain(std::iter::once(OverrideItem::BorderBottomRightRadius(x)))
+        },
+    )?;
+    let border_radius_bottom = pmrv(
+        tag,
+        once("sx-border-bottom-radius"),
+        &mut overrides,
+        parse_number,
+        |x| {
+            std::iter::once(OverrideItem::BorderBottomLeftRadius(x.clone()))
+                .chain(std::iter::once(OverrideItem::BorderBottomRightRadius(x)))
+        },
+    )?;
+    let border_radius_left = pmrv(
+        tag,
+        once("sx-border-left-radius"),
+        &mut overrides,
+        parse_number,
+        |x| {
+            std::iter::once(OverrideItem::BorderTopLeftRadius(x.clone()))
+                .chain(std::iter::once(OverrideItem::BorderBottomLeftRadius(x)))
+        },
+    )?;
     let border_top_left_radius = pmrv(
         tag,
         once("sx-border-top-left-radius"),
@@ -710,6 +750,8 @@ fn parse_element(
         parse_number,
         iter_once!(OverrideItem::BorderTopLeftRadius),
     )?
+    .or_else(|| border_radius_top.clone())
+    .or_else(|| border_radius_left.clone())
     .or_else(|| border_radius.clone());
     let border_top_right_radius = pmrv(
         tag,
@@ -718,6 +760,8 @@ fn parse_element(
         parse_number,
         iter_once!(OverrideItem::BorderTopRightRadius),
     )?
+    .or_else(|| border_radius_top.clone())
+    .or_else(|| border_radius_right.clone())
     .or_else(|| border_radius.clone());
     let border_bottom_left_radius = pmrv(
         tag,
@@ -726,6 +770,8 @@ fn parse_element(
         parse_number,
         iter_once!(OverrideItem::BorderBottomLeftRadius),
     )?
+    .or_else(|| border_radius_bottom.clone())
+    .or_else(|| border_radius_left.clone())
     .or_else(|| border_radius.clone());
     let border_bottom_right_radius = pmrv(
         tag,
@@ -734,6 +780,8 @@ fn parse_element(
         parse_number,
         iter_once!(OverrideItem::BorderBottomRightRadius),
     )?
+    .or_else(|| border_radius_bottom.clone())
+    .or_else(|| border_radius_right.clone())
     .or_else(|| border_radius.clone());
 
     let margin = pmrv(tag, once("sx-margin"), &mut overrides, parse_number, |x| {
