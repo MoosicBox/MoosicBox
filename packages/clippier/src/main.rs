@@ -41,6 +41,19 @@ enum Commands {
         #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
         output: OutputType,
     },
+    Environment {
+        #[arg(index = 1)]
+        file: String,
+
+        #[arg(long)]
+        os: Option<String>,
+
+        #[arg(long)]
+        features: Option<String>,
+
+        #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
+        output: OutputType,
+    },
     Features {
         #[arg(index = 1)]
         file: String,
@@ -80,8 +93,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let args = Args::parse();
 
+    let cmd_dependencies = matches!(args.cmd, Commands::Dependencies { .. });
+    let cmd_environment = matches!(args.cmd, Commands::Environment { .. });
+
     match args.cmd {
         Commands::Dependencies {
+            file,
+            os,
+            features: specific_features,
+            output,
+        }
+        | Commands::Environment {
             file,
             os,
             features: specific_features,
@@ -131,9 +153,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     })
                 })
                 .filter_map(|x| {
-                    x.get("dependencies")
-                        .and_then(|x| x.as_str())
-                        .map(ToString::to_string)
+                    x.get(if cmd_dependencies {
+                        "dependencies"
+                    } else if cmd_environment {
+                        "env"
+                    } else {
+                        unimplemented!()
+                    })
+                    .and_then(|x| x.as_str())
+                    .map(ToString::to_string)
                 })
                 .unique()
                 .collect::<Vec<_>>();
