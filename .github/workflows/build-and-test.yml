@@ -63,12 +63,22 @@ jobs:
                   echo "$DEPENDENCIES" >> $GITHUB_OUTPUT
                   echo 'EOF' >> $GITHUB_OUTPUT
 
+            - name: Get environment
+              id: environment
+              run: |
+                  ENVIRONMENT="$(cargo run -p clippier environment . --os ubuntu -o json | jq -cr 'join(" ")')"
+                  echo "Using environment:"
+                  echo "$ENVIRONMENT"
+                  echo 'environment<<EOF' >> $GITHUB_OUTPUT
+                  echo "$ENVIRONMENT" >> $GITHUB_OUTPUT
+                  echo 'EOF' >> $GITHUB_OUTPUT
+
             - name: Install dependencies
               if: ${{ steps.dependencies.outputs.dependencies }}
               run: ${{ steps.dependencies.outputs.dependencies }}
 
             - name: cargo llvm-cov
-              run: cargo +nightly llvm-cov --locked --all-features --workspace --lcov --output-path lcov.info
+              run: ${{ steps.environment.outputs.environment }} cargo +nightly llvm-cov --locked --all-features --workspace --lcov --output-path lcov.info
 
             - name: Upload coverage reports to Codecov
               uses: codecov/codecov-action@v5
