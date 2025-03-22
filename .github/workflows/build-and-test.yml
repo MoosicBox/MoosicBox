@@ -73,6 +73,20 @@ jobs:
                   echo "$ENVIRONMENT" >> $GITHUB_OUTPUT
                   echo 'EOF' >> $GITHUB_OUTPUT
 
+            - name: Get ci_steps
+              id: ci_steps
+              run: |
+                  CI_STEPS="$(cargo run -p clippier ci-steps . --os ubuntu -o json | jq -cr 'join(" ")')"
+                  echo "Using ci_steps:"
+                  echo "$CI_STEPS"
+                  echo 'ci_steps<<EOF' >> $GITHUB_OUTPUT
+                  echo "$CI_STEPS" >> $GITHUB_OUTPUT
+                  echo 'EOF' >> $GITHUB_OUTPUT
+
+            - name: Setup CI
+              if: ${{ steps.ci_steps.outputs.ci_steps }}
+              run: ${{ steps.ci_steps.outputs.ci_steps }}
+
             - name: Install dependencies
               if: ${{ steps.dependencies.outputs.dependencies }}
               run: ${{ steps.dependencies.outputs.dependencies }}
