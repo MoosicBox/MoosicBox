@@ -668,7 +668,7 @@ pub fn modal(id: &str, header: &Markup, content: &Markup) -> Markup {
                 sx-flex=(1)
                 sx-background="#080a0b"
                 sx-margin-x="calc(20vw)"
-                sx-min-height="calc(min(90vh, 300px))"
+                sx-min-height="calc(min(90vh, 300))"
                 sx-max-height="90vh"
                 sx-border-radius=(15)
                 fx-click-outside=(
