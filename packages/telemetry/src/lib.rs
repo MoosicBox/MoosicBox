@@ -11,9 +11,9 @@ use moosicbox_logging::free_log_client::DynLayer;
 use opentelemetry::{
     InstrumentationScope, KeyValue,
     global::{self},
-    trace::TracerProvider as _,
+    trace::{TraceError, TracerProvider as _},
 };
-use opentelemetry_otlp::{ExporterBuildError, WithExportConfig};
+use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{
     Resource,
     metrics::{MeterProviderBuilder, MetricError, SdkMeterProvider},
@@ -24,7 +24,7 @@ use opentelemetry_sdk::{
 /// # Errors
 ///
 /// * If the otlp fails to build
-pub fn init_tracer(name: &'static str) -> Result<DynLayer, ExporterBuildError> {
+pub fn init_tracer(name: &'static str) -> Result<DynLayer, TraceError> {
     global::set_text_map_propagator(TraceContextPropagator::new());
 
     let provider = SdkTracerProvider::builder()
