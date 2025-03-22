@@ -56,7 +56,7 @@ jobs:
             - name: Get dependencies
               id: dependencies
               run: |
-                  DEPENDENCIES="$(cargo run -p clippier dependencies .)"
+                  DEPENDENCIES="$(cargo run -p clippier dependencies . --os ubuntu)"
                   echo "Using dependencies:"
                   echo "$DEPENDENCIES"
                   echo 'dependencies<<EOF' >> $GITHUB_OUTPUT
