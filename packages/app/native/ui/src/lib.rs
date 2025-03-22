@@ -683,6 +683,8 @@ pub fn modal(id: &str, header: &Markup, content: &Markup) -> Markup {
                     sx-background="#080a0b"
                     sx-padding-x=(30)
                     sx-padding-top=(20)
+                    sx-border-top-left-radius=(15)
+                    sx-border-top-right-radius=(15)
                     sx-justify-content=(JustifyContent::SpaceBetween)
                     sx-position=(Position::Sticky)
                     sx-top=(0)
