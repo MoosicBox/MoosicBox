@@ -28,6 +28,16 @@ struct Args {
 
 #[derive(Subcommand, Debug, Clone)]
 enum Commands {
+    Dependencies {
+        #[arg(index = 1)]
+        file: String,
+
+        #[arg(long)]
+        features: Option<String>,
+
+        #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
+        output: OutputType,
+    },
     Features {
         #[arg(index = 1)]
         file: String,
@@ -61,12 +71,72 @@ enum Commands {
     },
 }
 
+#[allow(clippy::too_many_lines)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     moosicbox_logging::init(None, None).expect("Failed to initialize logging");
 
     let args = Args::parse();
 
     match args.cmd {
+        Commands::Dependencies {
+            file,
+            features: specific_features,
+            output,
+        } => {
+            let path = PathBuf::from_str(&file)?;
+            let cargo_path = path.join("Cargo.toml");
+            log::debug!("Loading file '{:?}'", cargo_path);
+            let source = std::fs::read_to_string(&cargo_path)?;
+            let value: Value = toml::from_str(&source)?;
+
+            let specific_features =
+                specific_features.map(|x| x.split(',').map(str::to_string).collect_vec());
+
+            let packages = if let Some(workspace_members) = value
+                .get("workspace")
+                .and_then(|x| x.get("members"))
+                .and_then(|x| x.as_array())
+                .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
+            {
+                let mut packages = vec![];
+
+                for file in workspace_members {
+                    let path = PathBuf::from_str(file)?;
+
+                    packages.extend(process_configs(
+                        &path,
+                        None,
+                        None,
+                        None,
+                        false,
+                        specific_features.as_deref(),
+                    )?);
+                }
+
+                packages
+            } else {
+                process_configs(&path, None, None, None, false, specific_features.as_deref())?
+            };
+
+            let dependencies = packages
+                .iter()
+                .filter_map(|x| {
+                    x.get("dependencies")
+                        .and_then(|x| x.as_str())
+                        .map(ToString::to_string)
+                })
+                .unique()
+                .collect::<Vec<_>>();
+
+            match output {
+                OutputType::Json => {
+                    println!("{}", serde_json::to_value(dependencies).unwrap());
+                }
+                OutputType::Raw => {
+                    println!("{}", dependencies.join("\n"));
+                }
+            }
+        }
         Commands::Features {
             file,
             offset,
