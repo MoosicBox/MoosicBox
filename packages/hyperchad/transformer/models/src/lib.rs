@@ -264,8 +264,8 @@ impl Position {
     #[must_use]
     pub const fn is_relative(self) -> bool {
         match self {
-            Self::Static | Self::Relative => true,
-            Self::Absolute | Self::Fixed | Self::Sticky => false,
+            Self::Static | Self::Relative | Self::Sticky => true,
+            Self::Absolute | Self::Fixed => false,
         }
     }
 }

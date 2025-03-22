@@ -1673,7 +1673,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                     Self::get_relative_render_rect(render_context, ui, container)
                 }
             }
-            Some(Position::Fixed | Position::Sticky) => {
+            Some(Position::Fixed) => {
                 let (x, y) = (get_left_offset(container), get_top_offset(container));
                 let (x, y) = (x.unwrap_or_default(), y.unwrap_or_default());
                 let rect = egui::Rect::from_min_size(
@@ -1690,7 +1690,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
                 rect
             }
-            Some(Position::Static | Position::Relative) | None => {
+            Some(Position::Static | Position::Relative | Position::Sticky) | None => {
                 Self::get_relative_render_rect(render_context, ui, container)
             }
         }
@@ -1706,7 +1706,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         inner: impl FnOnce(&mut RenderContext, &mut Ui, Option<(egui::Rect, &'a Container)>) -> Response,
     ) -> Response {
         match container.position {
-            Some(Position::Relative) => {
+            Some(Position::Relative | Position::Sticky) => {
                 let pos = ui.cursor().left_top();
                 let size = egui::vec2(
                     container.calculated_width.unwrap(),
@@ -1714,9 +1714,10 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                 );
                 relative_container = Some((egui::Rect::from_min_size(pos, size), container));
             }
-            Some(Position::Absolute | Position::Fixed | Position::Sticky) => {
+            Some(Position::Absolute | Position::Fixed) => {
                 let abs_rect =
                     Self::get_render_rect(render_context, ui, container, relative_container);
+                relative_container = Some((abs_rect, container));
 
                 let id = ui.next_auto_id();
 

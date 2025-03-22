@@ -217,7 +217,7 @@ macro_rules! calc_size_on_axis {
                     }
 
                     let handling = match child.position.unwrap_or_default() {
-                        Position::Static | Position::Relative => match overflow {
+                        Position::Static | Position::Relative | Position::Sticky => match overflow {
                             LayoutOverflow::Auto
                             | LayoutOverflow::Scroll
                             | LayoutOverflow::Expand
@@ -232,7 +232,7 @@ macro_rules! calc_size_on_axis {
                             }
                             LayoutOverflow::Hidden => None
                         },
-                        Position::Absolute | Position::Sticky | Position::Fixed => None
+                        Position::Absolute | Position::Fixed => None
                     };
 
                     if let Some(handling) = handling {
@@ -8799,6 +8799,76 @@ mod test {
                         ..container.children[0].clone()
                     }],
                     calculated_width: Some(200.0),
+                    ..container.clone()
+                },
+            );
+        }
+    }
+
+    mod position_sticky {
+        use super::*;
+
+        #[test_log::test]
+        fn does_include_size_in_parent_width() {
+            let mut container: Container = html! {
+                div {
+                    div sx-position=(Position::Sticky) sx-width=(100) {}
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.direction = LayoutDirection::Row;
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        children: vec![Container {
+                            calculated_width: Some(100.0),
+                            ..container.children[0].children[0].clone()
+                        }],
+                        calculated_width: Some(100.0),
+                        ..container.children[0].clone()
+                    }],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_include_size_in_parent_height() {
+            let mut container: Container = html! {
+                div {
+                    div sx-position=(Position::Sticky) sx-height=(100) {}
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.direction = LayoutDirection::Column;
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(200.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        children: vec![Container {
+                            calculated_height: Some(100.0),
+                            ..container.children[0].children[0].clone()
+                        }],
+                        calculated_height: Some(100.0),
+                        ..container.children[0].clone()
+                    }],
                     ..container.clone()
                 },
             );
