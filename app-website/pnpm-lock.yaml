@@ -130,8 +130,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.10.6
-        version: 3.10.6
+        specifier: ^3.10.8
+        version: 3.10.8
       typescript:
         specifier: ^5.8.2
         version: 5.8.2
@@ -3819,33 +3819,33 @@ packages:
   split2@3.2.2:
     resolution: {integrity: sha512-9NThjpgZnifTkJpzTZ7Eue85S49QwpNhZTq6GRJwObb6jnLFNGB7Qm73V5HewTROPyxD0C29xqmaI68bQtV+hg==}
 
-  sst-darwin-arm64@3.10.6:
-    resolution: {integrity: sha512-SZ9ClUejUPpLZ1+JA24z3JUbNvv6H5/q8alR32YowhrhS1hUonVhexFdEwnPoc2Kxd93IKb6tqPSWIBcuZNrvw==}
+  sst-darwin-arm64@3.10.8:
+    resolution: {integrity: sha512-T+VGqjq3Pa+nvCtTqwM21hjijYNhiLPXgxEcCx5WMp4vQVKHN1bM7gm3x3SlO1y1IKSA/T8yUXC3V9Epb2M+LQ==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.10.6:
-    resolution: {integrity: sha512-fuay91PCFAKEXHGSD0fKiqBiGpzP0G9Th00U30Ebw9AVYtfOrdNvvOV35sGbSY17zuTXp1t/erLJbHcA9y/Veg==}
+  sst-darwin-x64@3.10.8:
+    resolution: {integrity: sha512-kVQvslsBB/epok7YUShrPUtcwyL5PV4FMV/QVFvN1B7D52Hw2y5n1CO5FIVaZcKOwNbhrq+gfospHRNAJJp6nQ==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.10.6:
-    resolution: {integrity: sha512-O5gTJtpAFO1idTaQShJ1cdT+xEHz2SZhH9tN5T3VhzNZLv+tUkDxFdwDMbcmsg2TMmXjrQUbHHa0JeCulGNa2g==}
+  sst-linux-arm64@3.10.8:
+    resolution: {integrity: sha512-VNE7VcSaq2McjX2iY3GcaBtM+7GaQ/G2jNIEFbSgMhvuPPiOFmQdnwwPIxQzMZ0rTtCJdx7PW8HKUwjl7ZpeDg==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.10.6:
-    resolution: {integrity: sha512-pRWcoNIbiGqWjUA5DKxYDlGsyK1cLTHVTt7Dkeb7evEezttXobbNmNNfvyYlydkXBhIRQGx3qvYYhQc1X4bwoQ==}
+  sst-linux-x64@3.10.8:
+    resolution: {integrity: sha512-uCnPxGkd28m4RHIgzdIjqLu8/lgH9IkuGTEiquGWWABFmdZtlsjiwwPPTgpQrrC7EhjeIjmksxFF3Isj69cnoQ==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.10.6:
-    resolution: {integrity: sha512-V4yVf/o53zIrobJoAiAYcEnjUtYJPAxwqglSYCge9Dmm+Ar1Un+Bpt8rc38IJdGa9gPxY98hIwJS84Uonf8Vkw==}
+  sst-linux-x86@3.10.8:
+    resolution: {integrity: sha512-Bx8TWbsbwSB+xKben7YE+k/UkWf8bydUPQ7Pe9uDu4+UTZkjYNPb4048z9l4VJ8nicZSemAppDII6kyyS4niGg==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.10.6:
-    resolution: {integrity: sha512-DT5dKjux4NUl8x4JBcaynFGBYLgOVRW9CNwea/AIwae0XIOCn3YRtApG8Ky/BU0RWcgeTdDUrwk9WypSuUc1Ow==}
+  sst@3.10.8:
+    resolution: {integrity: sha512-jeP2oQk5qDN8o6fhVmOKXesXmZXoer4wBvXCh87lwcyxeFYy3szog8nKFTwAYCP3zOps1lANjLA9Q9iIT1verQ==}
     hasBin: true
 
   stack-utils@2.0.6:
@@ -4606,8 +4606,8 @@ packages:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
 
-  yocto-queue@1.2.0:
-    resolution: {integrity: sha512-KHBC7z61OJeaMGnF3wqNZj+GGNXOyypZviiKpQeiHirG5Ib1ImwcLBH70rbMSkKfSmUNBsdf2PwaEJtKvgmkNw==}
+  yocto-queue@1.2.1:
+    resolution: {integrity: sha512-AyeEbWOu/TAXdxlV9wmGcR0+yh2j3vYPGOECcIj2S7MkrLyC7ne+oye2BKTItt0ii2PHk4cDy+95+LshzbXnGg==}
     engines: {node: '>=12.20'}
 
   yocto-spinner@0.2.1:
@@ -8765,11 +8765,11 @@ snapshots:
 
   p-limit@5.0.0:
     dependencies:
-      yocto-queue: 1.2.0
+      yocto-queue: 1.2.1
 
   p-limit@6.2.0:
     dependencies:
-      yocto-queue: 1.2.0
+      yocto-queue: 1.2.1
 
   p-locate@5.0.0:
     dependencies:
@@ -9377,22 +9377,22 @@ snapshots:
       readable-stream: 3.6.2
     optional: true
 
-  sst-darwin-arm64@3.10.6:
+  sst-darwin-arm64@3.10.8:
     optional: true
 
-  sst-darwin-x64@3.10.6:
+  sst-darwin-x64@3.10.8:
     optional: true
 
-  sst-linux-arm64@3.10.6:
+  sst-linux-arm64@3.10.8:
     optional: true
 
-  sst-linux-x64@3.10.6:
+  sst-linux-x64@3.10.8:
     optional: true
 
-  sst-linux-x86@3.10.6:
+  sst-linux-x86@3.10.8:
     optional: true
 
-  sst@3.10.6:
+  sst@3.10.8:
     dependencies:
       aws-sdk: 2.1692.0
       aws4fetch: 1.0.18
@@ -9400,11 +9400,11 @@ snapshots:
       opencontrol: 0.0.6
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.10.6
-      sst-darwin-x64: 3.10.6
-      sst-linux-arm64: 3.10.6
-      sst-linux-x64: 3.10.6
-      sst-linux-x86: 3.10.6
+      sst-darwin-arm64: 3.10.8
+      sst-darwin-x64: 3.10.8
+      sst-linux-arm64: 3.10.8
+      sst-linux-x64: 3.10.8
+      sst-linux-x86: 3.10.8
     transitivePeerDependencies:
       - supports-color
 
@@ -10132,7 +10132,7 @@ snapshots:
 
   yocto-queue@0.1.0: {}
 
-  yocto-queue@1.2.0: {}
+  yocto-queue@1.2.1: {}
 
   yocto-spinner@0.2.1:
     dependencies:
