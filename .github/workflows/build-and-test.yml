@@ -44,11 +44,10 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - uses: actions-rs/toolchain@v1
+            - uses: dtolnay/rust-toolchain@stable
               with:
                   toolchain: nightly
                   components: rustfmt,llvm-tools-preview
-                  override: true
 
             - name: cargo install cargo-llvm-cov
               uses: taiki-e/install-action@cargo-llvm-cov
