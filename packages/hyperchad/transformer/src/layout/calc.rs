@@ -55,6 +55,7 @@ macro_rules! calc_size_on_axis {
         $container:ident,
         $fixed:ident,
         $calculated:ident,
+        $min:ident,
         $calculated_min:ident,
         $calculated_preferred:ident,
         $axis:ident,
@@ -104,6 +105,13 @@ macro_rules! calc_size_on_axis {
             for child in &mut parent.children {
                 log::trace!("{LABEL}: container:\n{child}");
 
+                if let Some(min) = child.$min.as_ref().and_then(crate::Number::as_fixed) {
+                    let size = min.calc(0.0, view_width, view_height);
+                    if set_float(&mut child.$calculated_min, size).is_some() {
+                        changed = true;
+                    }
+                }
+
                 let (mut min, mut preferred) = if let Some(size) = child.$fixed.as_ref().and_then(Number::as_fixed) {
                     let new_size = size.calc(0.0, view_width, view_height);
 
@@ -136,6 +144,18 @@ macro_rules! calc_size_on_axis {
                     set_float(&mut child.$calculated, 0.0);
                     (None, 0.0)
                 };
+
+                if let Some(calculated_min) = child.$calculated_min {
+                    if let Some(existing) = &mut child.$calculated {
+                        if *existing < calculated_min {
+                            *existing = calculated_min;
+                            preferred = calculated_min;
+                        }
+                    } else {
+                        set_float(&mut child.$calculated, calculated_min);
+                        preferred = calculated_min;
+                    }
+                }
 
                 if let Some(margin) = child.$margin_x.as_ref().and_then(crate::Number::as_fixed) {
                     let size = margin.calc(0.0, view_width, view_height);
@@ -277,6 +297,7 @@ macro_rules! flex_on_axis {
         $container:ident,
         $fixed:ident,
         $calculated:ident,
+        $min:ident,
         $calculated_min:ident,
         $calculated_preferred:ident,
         $can_shrink:ident,
@@ -347,6 +368,18 @@ macro_rules! flex_on_axis {
                 }
 
                 for child in &mut parent.children {
+                    if let Some(min) = child.$min.as_ref().and_then(crate::Number::as_dynamic) {
+                        let calculated = child.$calculated.expect("Missing calculated size");
+                        let size = min.calc(container_size, view_width, view_height);
+
+                        if size > calculated {
+                            if set_float(&mut child.$calculated_min, size).is_some() {
+                                changed = true;
+                            }
+                            child.$calculated = Some(size);
+                        }
+                    }
+
                     if matches!(child.$overflow, LayoutOverflow::Auto | LayoutOverflow::Scroll) {
                         if let Some(min) = &mut child.$calculated_min {
                             log::trace!("{LABEL}: checking if min={min} > container_size={container_size}");
@@ -994,6 +1027,7 @@ mod passes {
                     container,
                     width,
                     calculated_width,
+                    min_width,
                     calculated_min_width,
                     calculated_preferred_width,
                     Row,
@@ -1075,6 +1109,7 @@ mod passes {
                     container,
                     width,
                     calculated_width,
+                    min_width,
                     calculated_min_width,
                     calculated_preferred_width,
                     can_shrink_width,
@@ -1175,6 +1210,7 @@ mod passes {
                     container,
                     height,
                     calculated_height,
+                    min_height,
                     calculated_min_height,
                     calculated_preferred_height,
                     Column,
@@ -1220,6 +1256,7 @@ mod passes {
                     container,
                     height,
                     calculated_height,
+                    min_height,
                     calculated_min_height,
                     calculated_preferred_height,
                     can_shrink_height,
@@ -8799,6 +8836,266 @@ mod test {
                         ..container.children[0].clone()
                     }],
                     calculated_width: Some(200.0),
+                    ..container.clone()
+                },
+            );
+        }
+    }
+
+    mod sizing {
+        use super::*;
+
+        #[test_log::test]
+        fn does_take_into_account_explicit_fixed_min_width() {
+            let mut container: Container = html! {
+                div sx-dir=(LayoutDirection::Row) {
+                    div sx-min-width=(100) {}
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        calculated_width: Some(100.0),
+                        ..container.children[0].clone()
+                    }],
+                    calculated_width: Some(400.0),
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_take_into_account_explicit_fixed_min_width_with_fixed_child_content() {
+            let mut container: Container = html! {
+                div sx-dir=(LayoutDirection::Row) {
+                    div sx-min-width=(100) {
+                        div sx-width=(10) {}
+                    }
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        calculated_width: Some(100.0),
+                        ..container.children[0].clone()
+                    }],
+                    calculated_width: Some(400.0),
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_take_into_account_explicit_fixed_min_height() {
+            let mut container: Container = html! {
+                div sx-dir=(LayoutDirection::Column) sx-height="100%" {
+                    div sx-min-height=(100) {}
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(100.0);
+            container.calculated_height = Some(400.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        calculated_height: Some(100.0),
+                        ..container.children[0].clone()
+                    }],
+                    calculated_height: Some(400.0),
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_take_into_account_explicit_fixed_min_height_with_fixed_child_content() {
+            let mut container: Container = html! {
+                div sx-dir=(LayoutDirection::Column) sx-height="100%" {
+                    div sx-min-height=(100) {
+                        div sx-height=(10) {}
+                    }
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(100.0);
+            container.calculated_height = Some(400.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        calculated_height: Some(100.0),
+                        ..container.children[0].clone()
+                    }],
+                    calculated_height: Some(400.0),
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_take_into_account_explicit_dynamic_min_width() {
+            let mut container: Container = html! {
+                div sx-dir=(LayoutDirection::Row) {
+                    div sx-min-width="50%" {}
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        calculated_width: Some(200.0),
+                        ..container.children[0].clone()
+                    }],
+                    calculated_width: Some(400.0),
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_take_into_account_explicit_dynamic_min_width_with_fixed_child_content() {
+            let mut container: Container = html! {
+                div sx-dir=(LayoutDirection::Row) {
+                    div sx-min-width="50%" {
+                        div sx-width=(10) {}
+                    }
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        calculated_width: Some(200.0),
+                        ..container.children[0].clone()
+                    }],
+                    calculated_width: Some(400.0),
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_take_into_account_explicit_dynamic_min_height() {
+            let mut container: Container = html! {
+                div sx-dir=(LayoutDirection::Column) sx-height="100%" {
+                    div sx-min-height="50%" {}
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(100.0);
+            container.calculated_height = Some(400.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        calculated_height: Some(200.0),
+                        ..container.children[0].clone()
+                    }],
+                    calculated_height: Some(400.0),
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_take_into_account_explicit_dynamic_min_height_with_fixed_child_content() {
+            let mut container: Container = html! {
+                div sx-dir=(LayoutDirection::Column) sx-height="100%" {
+                    div sx-min-height="50%" {
+                        div sx-height=(10) {}
+                    }
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(100.0);
+            container.calculated_height = Some(400.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        calculated_height: Some(200.0),
+                        ..container.children[0].clone()
+                    }],
+                    calculated_height: Some(400.0),
                     ..container.clone()
                 },
             );
