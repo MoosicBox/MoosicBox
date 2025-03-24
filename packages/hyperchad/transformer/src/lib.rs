@@ -1121,22 +1121,6 @@ pub struct Container {
     pub actions: Vec<Action>,
     pub overrides: Vec<ConfigOverride>,
     #[cfg(feature = "layout")]
-    pub internal_margin_left: Option<f32>,
-    #[cfg(feature = "layout")]
-    pub internal_margin_right: Option<f32>,
-    #[cfg(feature = "layout")]
-    pub internal_margin_top: Option<f32>,
-    #[cfg(feature = "layout")]
-    pub internal_margin_bottom: Option<f32>,
-    #[cfg(feature = "layout")]
-    pub internal_padding_left: Option<f32>,
-    #[cfg(feature = "layout")]
-    pub internal_padding_right: Option<f32>,
-    #[cfg(feature = "layout")]
-    pub internal_padding_top: Option<f32>,
-    #[cfg(feature = "layout")]
-    pub internal_padding_bottom: Option<f32>,
-    #[cfg(feature = "layout")]
     pub calculated_margin_left: Option<f32>,
     #[cfg(feature = "layout")]
     pub calculated_margin_right: Option<f32>,
@@ -2572,14 +2556,6 @@ impl Container {
                 attrs.add_opt("calc-padding-right", self.calculated_padding_right);
                 attrs.add_opt("calc-padding-top", self.calculated_padding_top);
                 attrs.add_opt("calc-padding-bottom", self.calculated_padding_bottom);
-                attrs.add_opt("calc-internal-margin-left", self.internal_margin_left);
-                attrs.add_opt("calc-internal-margin-right", self.internal_margin_right);
-                attrs.add_opt("calc-internal-margin-top", self.internal_margin_top);
-                attrs.add_opt("calc-internal-margin-bottom", self.internal_margin_bottom);
-                attrs.add_opt("calc-internal-padding-left", self.internal_padding_left);
-                attrs.add_opt("calc-internal-padding-right", self.internal_padding_right);
-                attrs.add_opt("calc-internal-padding-top", self.internal_padding_top);
-                attrs.add_opt("calc-internal-padding-bottom", self.internal_padding_bottom);
                 #[cfg(feature = "layout-offset")]
                 {
                     attrs.add_opt("calc-offset-x", self.calculated_offset_x);

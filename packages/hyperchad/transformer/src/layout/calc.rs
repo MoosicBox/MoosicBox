@@ -6415,14 +6415,10 @@ mod test {
             &Container {
                 children: vec![
                     Container {
-                        internal_margin_left: None,
-                        internal_margin_right: None,
                         calculated_x: Some(0.0),
                         ..container.children[0].clone()
                     },
                     Container {
-                        internal_margin_left: None,
-                        internal_margin_right: None,
                         calculated_x: Some(30.0),
                         ..container.children[1].clone()
                     },

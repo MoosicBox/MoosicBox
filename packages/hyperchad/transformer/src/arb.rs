@@ -779,22 +779,6 @@ impl Arbitrary for Container {
             actions: Vec::arbitrary(smaller_g),
             overrides,
             #[cfg(feature = "layout")]
-            internal_margin_left: None,
-            #[cfg(feature = "layout")]
-            internal_margin_right: None,
-            #[cfg(feature = "layout")]
-            internal_margin_top: None,
-            #[cfg(feature = "layout")]
-            internal_margin_bottom: None,
-            #[cfg(feature = "layout")]
-            internal_padding_left: None,
-            #[cfg(feature = "layout")]
-            internal_padding_right: None,
-            #[cfg(feature = "layout")]
-            internal_padding_top: None,
-            #[cfg(feature = "layout")]
-            internal_padding_bottom: None,
-            #[cfg(feature = "layout")]
             calculated_margin_left: None,
             #[cfg(feature = "layout")]
             calculated_margin_right: None,

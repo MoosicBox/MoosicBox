@@ -1325,16 +1325,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                 render_context,
                 response,
             ) = egui::Frame::new()
-                .inner_margin(egui::Margin {
-                    left:
-                        container.internal_margin_left.map_or(0,|x| x.round() as i8),
-                    right:
-                        container.internal_margin_right.map_or(0,|x| x.round() as i8),
-                    top:
-                        container.internal_margin_top.map_or(0,|x| x.round() as i8),
-                    bottom:
-                        container.internal_margin_bottom.map_or(0,|x| x.round() as i8),
-                })
                 .show(ui, {
                     move |ui| {
                         ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
@@ -2091,76 +2081,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                         container.calculated_margin_right.unwrap_or(0.0),
                                         container.calculated_margin_top.unwrap_or(0.0),
                                         container.calculated_margin_bottom.unwrap_or(0.0),
-                                    );
-                                    let galley = painter.layout_no_wrap(
-                                        text.clone(),
-                                        egui::FontId::default(),
-                                        Color32::WHITE,
-                                    );
-                                    let rect =
-                                        egui::Align2::LEFT_TOP.anchor_size(pos, galley.size());
-                                    painter.add(egui::Shape::rect_filled(
-                                        rect,
-                                        0.0,
-                                        Color32::WHITE,
-                                    ));
-                                    ui.painter().text(
-                                        pos,
-                                        egui::Align2::LEFT_TOP,
-                                        text,
-                                        egui::FontId::default(),
-                                        Color32::RED,
-                                    );
-
-                                    pos.y += rect.height();
-                                }
-
-                                if container.internal_padding_top.is_some()
-                                    || container.internal_padding_right.is_some()
-                                    || container.internal_padding_top.is_some()
-                                    || container.internal_padding_bottom.is_some()
-                                {
-                                    let text = format!(
-                                        "ip({}, {}, {}, {})",
-                                        container.internal_padding_left.unwrap_or(0.0),
-                                        container.internal_padding_right.unwrap_or(0.0),
-                                        container.internal_padding_top.unwrap_or(0.0),
-                                        container.internal_padding_bottom.unwrap_or(0.0),
-                                    );
-                                    let galley = painter.layout_no_wrap(
-                                        text.clone(),
-                                        egui::FontId::default(),
-                                        Color32::WHITE,
-                                    );
-                                    let rect =
-                                        egui::Align2::LEFT_TOP.anchor_size(pos, galley.size());
-                                    painter.add(egui::Shape::rect_filled(
-                                        rect,
-                                        0.0,
-                                        Color32::WHITE,
-                                    ));
-                                    ui.painter().text(
-                                        pos,
-                                        egui::Align2::LEFT_TOP,
-                                        text,
-                                        egui::FontId::default(),
-                                        Color32::RED,
-                                    );
-
-                                    pos.y += rect.height();
-                                }
-
-                                if container.internal_margin_top.is_some()
-                                    || container.internal_margin_right.is_some()
-                                    || container.internal_margin_top.is_some()
-                                    || container.internal_margin_bottom.is_some()
-                                {
-                                    let text = format!(
-                                        "im({}, {}, {}, {})",
-                                        container.internal_margin_left.unwrap_or(0.0),
-                                        container.internal_margin_right.unwrap_or(0.0),
-                                        container.internal_margin_top.unwrap_or(0.0),
-                                        container.internal_margin_bottom.unwrap_or(0.0),
                                     );
                                     let galley = painter.layout_no_wrap(
                                         text.clone(),
