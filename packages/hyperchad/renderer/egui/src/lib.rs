@@ -475,7 +475,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
     /// Will panic if elements `Mutex` is poisoned.
     async fn render(&self, view: View) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         if self.app.ctx.read().unwrap().is_none() {
-            // FIXME: queue the views to process after `ctx` is loaded
             self.app
                 .render_queue
                 .write()
