@@ -1315,24 +1315,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             return None;
         }
 
-        let body_font_size = ctx
-            .style()
-            .text_styles
-            .get(&egui::TextStyle::Body)
-            .expect("Missing body font size")
-            .size;
-
-        let font_size = container
-            .calculated_font_size
-            .expect("Missing calculated_font_size");
-
-        if !float_eq!(body_font_size, font_size) {
-            ctx.style_mut(|style| {
-                for font in style.text_styles.values_mut() {
-                    font.size = font_size;
-                }
-            });
-        }
+        Self::set_font_size(container, ctx);
 
         if let Some(opacity) = container.calculated_opacity {
             ui.set_opacity(opacity);
@@ -3295,9 +3278,13 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         }
 
         let response = match &element.element {
-            Element::Input { input } => {
-                Some(Self::render_input(ui, input, render_context.checkboxes))
-            }
+            Element::Input { input } => Some(Self::render_input(
+                element,
+                ui,
+                ctx,
+                input,
+                render_context.checkboxes,
+            )),
             Element::Raw { value } => Some(ui.label(value)),
             Element::Image { source, .. } => source
                 .as_ref()
@@ -3336,18 +3323,27 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
     #[cfg_attr(feature = "profiling", profiling::function)]
     fn render_input(
+        container: &Container,
         ui: &mut Ui,
+        ctx: &egui::Context,
         input: &Input,
         checkboxes: &mut HashMap<egui::Id, bool>,
     ) -> Response {
         match input {
-            Input::Text { .. } | Input::Password { .. } => Self::render_text_input(ui, input),
+            Input::Text { .. } | Input::Password { .. } => {
+                Self::render_text_input(container, ui, ctx, input)
+            }
             Input::Checkbox { .. } => Self::render_checkbox_input(ui, input, checkboxes),
         }
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
-    fn render_text_input(ui: &mut Ui, input: &Input) -> Response {
+    fn render_text_input(
+        container: &Container,
+        ui: &mut Ui,
+        ctx: &egui::Context,
+        input: &Input,
+    ) -> Response {
         let (Input::Text { value, .. } | Input::Password { value, .. }) = input else {
             unreachable!()
         };
@@ -3362,9 +3358,60 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             text_edit = text_edit.password(true);
         }
 
+        let (font_size, _) = Self::set_font_size(container, ctx);
+
+        if container.width.is_some() {
+            text_edit = text_edit.desired_width(container.calculated_width.unwrap());
+        }
+
+        if container.height.is_some() {
+            let height = container.calculated_height.unwrap();
+            let remaining_height = height % font_size;
+            let rows = (height / font_size).floor();
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let rows = rows as usize;
+            text_edit = text_edit.desired_rows(rows);
+
+            let margin = (remaining_height / 2.0).round();
+            #[allow(clippy::cast_possible_truncation)]
+            let margin = margin as i8;
+
+            text_edit = text_edit.margin(egui::Margin {
+                left: 0,
+                right: 0,
+                top: margin,
+                bottom: margin,
+            });
+        }
+
         let response = text_edit.ui(ui);
         ui.data_mut(|data| data.insert_temp(id, value_text));
         response
+    }
+
+    fn set_font_size(container: &Container, ctx: &egui::Context) -> (f32, bool) {
+        let body_font_size = ctx
+            .style()
+            .text_styles
+            .get(&egui::TextStyle::Body)
+            .expect("Missing body font size")
+            .size;
+
+        let font_size = container
+            .calculated_font_size
+            .expect("Missing calculated_font_size");
+
+        if float_eq!(body_font_size, font_size) {
+            (font_size, false)
+        } else {
+            ctx.style_mut(|style| {
+                for font in style.text_styles.values_mut() {
+                    font.size = font_size;
+                }
+            });
+
+            (font_size, true)
+        }
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
