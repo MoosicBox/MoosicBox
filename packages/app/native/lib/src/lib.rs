@@ -58,7 +58,10 @@ mod egui {
 
     impl hyperchad_renderer_egui::layout::EguiCalc for EguiCalculator {
         fn with_context(mut self, context: egui::Context) -> Self {
-            self.0 = Some(Arc::new(Calculator::new(EguiFontMetrics::new(context))));
+            self.0 = Some(Arc::new(Calculator::new(
+                EguiFontMetrics::new(context),
+                14.0,
+            )));
             self
         }
     }

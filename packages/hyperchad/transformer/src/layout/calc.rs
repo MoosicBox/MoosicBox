@@ -5,13 +5,16 @@ use crate::Container;
 use super::{Calc, font::FontMetrics};
 
 pub struct Calculator<F: FontMetrics> {
-    #[allow(unused)]
     font_metrics: F,
+    default_font_size: f32,
 }
 
 impl<F: FontMetrics> Calculator<F> {
-    pub const fn new(font_metrics: F) -> Self {
-        Self { font_metrics }
+    pub const fn new(font_metrics: F, default_font_size: f32) -> Self {
+        Self {
+            font_metrics,
+            default_font_size,
+        }
     }
 }
 
@@ -74,6 +77,7 @@ macro_rules! calc_size_on_axis {
         $gap:ident,
         $calculated_gap:ident,
         $overflow:ident,
+        $each_parent:expr,
         $each_child:expr
         $(,)?
     ) => {{
@@ -83,226 +87,245 @@ macro_rules! calc_size_on_axis {
 
         moosicbox_logging::debug_or_trace!(("{LABEL}"), ("{LABEL}:\n{}", $container));
 
+        let root_id = $container.id;
+        let default_font_size = $self.default_font_size;
         let view_width = $container.calculated_width.expect("Missing view_width");
         let view_height = $container.calculated_height.expect("Missing view_height");
 
         let mut changed = false;
 
-        $bfs.traverse_rev_mut($container, |parent| {
-            let mut min_size = 0.0;
-            let mut preferred_size = 0.0;
-
-            if let Some(gap) = &parent.$gap.as_ref().and_then(crate::Number::as_fixed) {
-                let gap = gap.calc(0.0, view_width, view_height);
-                log::trace!("{LABEL}: setting gap={gap}");
-                parent.$calculated_gap = Some(gap);
-            }
-
-            let direction = parent.direction;
-            let overflow = parent.$overflow;
-
-            for child in &mut parent.children {
-                log::trace!("{LABEL}: container:\n{child}");
-
-                if let Some(max) = child.$max.as_ref().and_then(crate::Number::as_fixed) {
-                    let size = max.calc(0.0, view_width, view_height);
-                    log::trace!("{LABEL}: calculated_max_size={size}");
-                    if set_float(&mut child.$calculated_max, size).is_some() {
-                        changed = true;
-                    }
-                }
-                if let Some(min) = child.$min.as_ref().and_then(crate::Number::as_fixed) {
-                    let size = min.calc(0.0, view_width, view_height);
-                    log::trace!("{LABEL}: calculated_min_size={size}");
-                    if set_float(&mut child.$calculated_min, size).is_some() {
-                        changed = true;
-                    }
+        $bfs.traverse_rev_with_parents_ref_mut(
+            true,
+            Container::default(),
+            $container,
+            |parent, mut context| {
+                if parent.id == root_id {
+                    context.calculated_font_size = Some(default_font_size);
                 }
 
-                let (mut min, mut preferred) = if let Some(size) = child.$fixed.as_ref().and_then(Number::as_fixed) {
-                    let new_size = size.calc(0.0, view_width, view_height);
+                $each_parent(&mut *parent, view_width, view_height, &context);
 
-                    if set_float(&mut child.$calculated, new_size).is_some() {
-                        changed = true;
-                    }
-                    (Some(new_size), new_size)
-                } else if let (LayoutDirection::Row, crate::Element::Raw { value }) = (LayoutDirection::$axis, &child.element) {
-                    log::trace!("{LABEL}: measuring text={value}");
-                    let bounds = $self.font_metrics.measure_text(value, 14.0, f32::INFINITY);
-                    log::trace!("{LABEL}: measured bounds={bounds:?}");
-                    let new_size = bounds.$fixed();
-                    log::trace!("{LABEL}: measured size={new_size}");
+                if let Some(font_size) = parent.calculated_font_size {
+                    context.calculated_font_size = Some(font_size);
+                }
 
-                    if set_float(&mut child.$calculated, new_size).is_some() {
-                        changed = true;
+                context
+            },
+            |parent, context| {
+                let mut min_size = 0.0;
+                let mut preferred_size = 0.0;
+
+                if let Some(gap) = &parent.$gap.as_ref().and_then(crate::Number::as_fixed) {
+                    let gap = gap.calc(0.0, view_width, view_height);
+                    log::trace!("{LABEL}: setting gap={gap}");
+                    parent.$calculated_gap = Some(gap);
+                }
+
+                let direction = parent.direction;
+                let overflow = parent.$overflow;
+
+                for child in &mut parent.children {
+                    log::trace!("{LABEL}: container:\n{child}");
+
+                    if let Some(max) = child.$max.as_ref().and_then(crate::Number::as_fixed) {
+                        let size = max.calc(0.0, view_width, view_height);
+                        log::trace!("{LABEL}: calculated_max_size={size}");
+                        if set_float(&mut child.$calculated_max, size).is_some() {
+                            changed = true;
+                        }
                     }
-                    if LayoutDirection::$axis == LayoutDirection::Column {
+                    if let Some(min) = child.$min.as_ref().and_then(crate::Number::as_fixed) {
+                        let size = min.calc(0.0, view_width, view_height);
+                        log::trace!("{LABEL}: calculated_min_size={size}");
+                        if set_float(&mut child.$calculated_min, size).is_some() {
+                            changed = true;
+                        }
+                    }
+
+                    let (mut min, mut preferred) = if let Some(size) = child.$fixed.as_ref().and_then(Number::as_fixed) {
+                        let new_size = size.calc(0.0, view_width, view_height);
+
+                        if set_float(&mut child.$calculated, new_size).is_some() {
+                            changed = true;
+                        }
                         (Some(new_size), new_size)
-                    } else {
-                        (None, new_size)
-                    }
-                } else if let Some(size) = child.$calculated_preferred {
-                    set_float(&mut child.$calculated, size);
-                    (child.$calculated_child_min, size)
-                } else if let Some(size) = child.$calculated_child_min {
-                    set_float(&mut child.$calculated, size);
-                    (Some(size), size)
-                } else {
-                    set_float(&mut child.$calculated, 0.0);
-                    (None, 0.0)
-                };
+                    } else if let (LayoutDirection::Row, crate::Element::Raw { value }) = (LayoutDirection::$axis, &child.element) {
+                        log::trace!("{LABEL}: measuring text={value}");
+                        let bounds = $self.font_metrics.measure_text(value, 14.0, f32::INFINITY);
+                        log::trace!("{LABEL}: measured bounds={bounds:?}");
+                        let new_size = bounds.$fixed();
+                        log::trace!("{LABEL}: measured size={new_size}");
 
-                if let Some(calculated_max) = child.$calculated_max {
-                    if let Some(existing) = &mut child.$calculated {
-                        if *existing > calculated_max {
-                            *existing = calculated_max;
-                            preferred = calculated_max;
-                        }
-                    } else {
-                        set_float(&mut child.$calculated, calculated_max);
-                        preferred = calculated_max;
-                    }
-                }
-                if let Some(calculated_min) = child.$calculated_min {
-                    if let Some(existing) = &mut child.$calculated {
-                        if *existing < calculated_min {
-                            *existing = calculated_min;
-                            preferred = calculated_min;
-                        }
-                    } else {
-                        set_float(&mut child.$calculated, calculated_min);
-                        preferred = calculated_min;
-                    }
-                }
-
-                if let Some(margin) = child.$margin_x.as_ref().and_then(crate::Number::as_fixed) {
-                    let size = margin.calc(0.0, view_width, view_height);
-                    if set_float(&mut child.$calculated_margin_x, size).is_some() {
-                        changed = true;
-                    }
-                    preferred += size;
-                    crate::layout::increase_opt(&mut min, size);
-                }
-                if let Some(margin) = child.$margin_y.as_ref().and_then(crate::Number::as_fixed) {
-                    let size = margin.calc(0.0, view_width, view_height);
-                    if set_float(&mut child.$calculated_margin_y, size).is_some() {
-                        changed = true;
-                    }
-                    preferred += size;
-                    crate::layout::increase_opt(&mut min, size);
-                }
-                if let Some(padding) = child.$padding_x.as_ref().and_then(crate::Number::as_fixed) {
-                    let size = padding.calc(0.0, view_width, view_height);
-                    if set_float(&mut child.$calculated_padding_x, size).is_some() {
-                        changed = true;
-                    }
-                    preferred += size;
-                    crate::layout::increase_opt(&mut min, size);
-                }
-                if let Some(padding) = child.$padding_y.as_ref().and_then(crate::Number::as_fixed) {
-                    let size = padding.calc(0.0, view_width, view_height);
-                    if set_float(&mut child.$calculated_padding_y, size).is_some() {
-                        changed = true;
-                    }
-                    preferred += size;
-                    crate::layout::increase_opt(&mut min, size);
-                }
-                if let Some((&color, size)) = child
-                    .$border_x
-                    .as_ref()
-                    .and_then(|(color, size)| size.as_fixed().map(|size| (color, size)))
-                {
-                    let size = size.calc(0.0, view_width, view_height);
-                    if let Some(calculated) = &mut child.$calculated_border_x {
-                        if calculated.0 != color {
-                            calculated.0 = color;
+                        if set_float(&mut child.$calculated, new_size).is_some() {
                             changed = true;
                         }
-                        if !float_eq!(calculated.1, size) {
-                            calculated.1 = size;
-                            changed = true;
+                        if LayoutDirection::$axis == LayoutDirection::Column {
+                            (Some(new_size), new_size)
+                        } else {
+                            (None, new_size)
                         }
+                    } else if let Some(size) = child.$calculated_preferred {
+                        set_float(&mut child.$calculated, size);
+                        (child.$calculated_child_min, size)
+                    } else if let Some(size) = child.$calculated_child_min {
+                        set_float(&mut child.$calculated, size);
+                        (Some(size), size)
                     } else {
-                        child.$calculated_border_x = Some((color, size));
-                        changed = true;
-                    }
-                }
-                if let Some((&color, size)) = child
-                    .$border_y
-                    .as_ref()
-                    .and_then(|(color, size)| size.as_fixed().map(|size| (color, size)))
-                {
-                    let size = size.calc(0.0, view_width, view_height);
-                    if let Some(calculated) = &mut child.$calculated_border_y {
-                        if calculated.0 != color {
-                            calculated.0 = color;
-                            changed = true;
-                        }
-                        if !float_eq!(calculated.1, size) {
-                            calculated.1 = size;
-                            changed = true;
-                        }
-                    } else {
-                        child.$calculated_border_y = Some((color, size));
-                        changed = true;
-                    }
-                }
-
-                let handle_auto_sizing = |child: &mut Container, size, output: &mut f32| {
-                    enum AutoMinSizeHandling {
-                        Add,
-                        Max,
-                    }
-
-                    let handling = match child.position.unwrap_or_default() {
-                        Position::Static | Position::Relative | Position::Sticky => match overflow {
-                            LayoutOverflow::Auto
-                            | LayoutOverflow::Scroll
-                            | LayoutOverflow::Expand
-                            | LayoutOverflow::Squash => {
-                                Some(match direction {
-                                    LayoutDirection::$axis => AutoMinSizeHandling::Add,
-                                    LayoutDirection::$cross_axis => AutoMinSizeHandling::Max,
-                                })
-                            }
-                            LayoutOverflow::Wrap { .. } => {
-                                Some(AutoMinSizeHandling::Max)
-                            }
-                            LayoutOverflow::Hidden => None
-                        },
-                        Position::Absolute | Position::Fixed => None
+                        set_float(&mut child.$calculated, 0.0);
+                        (None, 0.0)
                     };
 
-                    if let Some(handling) = handling {
-                        match handling {
-                            AutoMinSizeHandling::Add => {
-                                log::trace!("{LABEL}: AutoMinSizeHandling::Add output={output} += size={size} ({})", *output + size);
-                                *output += size;
+                    if let Some(calculated_max) = child.$calculated_max {
+                        if let Some(existing) = &mut child.$calculated {
+                            if *existing > calculated_max {
+                                *existing = calculated_max;
+                                preferred = calculated_max;
                             }
-                            AutoMinSizeHandling::Max => {
-                                log::trace!("{LABEL}: AutoMinSizeHandling::Max size={size} > output={output} ({})", if size > *output { size } else { *output });
-                                if size > *output {
-                                    *output = size;
+                        } else {
+                            set_float(&mut child.$calculated, calculated_max);
+                            preferred = calculated_max;
+                        }
+                    }
+                    if let Some(calculated_min) = child.$calculated_min {
+                        if let Some(existing) = &mut child.$calculated {
+                            if *existing < calculated_min {
+                                *existing = calculated_min;
+                                preferred = calculated_min;
+                            }
+                        } else {
+                            set_float(&mut child.$calculated, calculated_min);
+                            preferred = calculated_min;
+                        }
+                    }
+
+                    if let Some(margin) = child.$margin_x.as_ref().and_then(crate::Number::as_fixed) {
+                        let size = margin.calc(0.0, view_width, view_height);
+                        if set_float(&mut child.$calculated_margin_x, size).is_some() {
+                            changed = true;
+                        }
+                        preferred += size;
+                        crate::layout::increase_opt(&mut min, size);
+                    }
+                    if let Some(margin) = child.$margin_y.as_ref().and_then(crate::Number::as_fixed) {
+                        let size = margin.calc(0.0, view_width, view_height);
+                        if set_float(&mut child.$calculated_margin_y, size).is_some() {
+                            changed = true;
+                        }
+                        preferred += size;
+                        crate::layout::increase_opt(&mut min, size);
+                    }
+                    if let Some(padding) = child.$padding_x.as_ref().and_then(crate::Number::as_fixed) {
+                        let size = padding.calc(0.0, view_width, view_height);
+                        if set_float(&mut child.$calculated_padding_x, size).is_some() {
+                            changed = true;
+                        }
+                        preferred += size;
+                        crate::layout::increase_opt(&mut min, size);
+                    }
+                    if let Some(padding) = child.$padding_y.as_ref().and_then(crate::Number::as_fixed) {
+                        let size = padding.calc(0.0, view_width, view_height);
+                        if set_float(&mut child.$calculated_padding_y, size).is_some() {
+                            changed = true;
+                        }
+                        preferred += size;
+                        crate::layout::increase_opt(&mut min, size);
+                    }
+                    if let Some((&color, size)) = child
+                        .$border_x
+                        .as_ref()
+                        .and_then(|(color, size)| size.as_fixed().map(|size| (color, size)))
+                    {
+                        let size = size.calc(0.0, view_width, view_height);
+                        if let Some(calculated) = &mut child.$calculated_border_x {
+                            if calculated.0 != color {
+                                calculated.0 = color;
+                                changed = true;
+                            }
+                            if !float_eq!(calculated.1, size) {
+                                calculated.1 = size;
+                                changed = true;
+                            }
+                        } else {
+                            child.$calculated_border_x = Some((color, size));
+                            changed = true;
+                        }
+                    }
+                    if let Some((&color, size)) = child
+                        .$border_y
+                        .as_ref()
+                        .and_then(|(color, size)| size.as_fixed().map(|size| (color, size)))
+                    {
+                        let size = size.calc(0.0, view_width, view_height);
+                        if let Some(calculated) = &mut child.$calculated_border_y {
+                            if calculated.0 != color {
+                                calculated.0 = color;
+                                changed = true;
+                            }
+                            if !float_eq!(calculated.1, size) {
+                                calculated.1 = size;
+                                changed = true;
+                            }
+                        } else {
+                            child.$calculated_border_y = Some((color, size));
+                            changed = true;
+                        }
+                    }
+
+                    let handle_auto_sizing = |child: &mut Container, size, output: &mut f32| {
+                        enum AutoMinSizeHandling {
+                            Add,
+                            Max,
+                        }
+
+                        let handling = match child.position.unwrap_or_default() {
+                            Position::Static | Position::Relative | Position::Sticky => match overflow {
+                                LayoutOverflow::Auto
+                                | LayoutOverflow::Scroll
+                                | LayoutOverflow::Expand
+                                | LayoutOverflow::Squash => {
+                                    Some(match direction {
+                                        LayoutDirection::$axis => AutoMinSizeHandling::Add,
+                                        LayoutDirection::$cross_axis => AutoMinSizeHandling::Max,
+                                    })
+                                }
+                                LayoutOverflow::Wrap { .. } => {
+                                    Some(AutoMinSizeHandling::Max)
+                                }
+                                LayoutOverflow::Hidden => None
+                            },
+                            Position::Absolute | Position::Fixed => None
+                        };
+
+                        if let Some(handling) = handling {
+                            match handling {
+                                AutoMinSizeHandling::Add => {
+                                    log::trace!("{LABEL}: AutoMinSizeHandling::Add output={output} += size={size} ({})", *output + size);
+                                    *output += size;
+                                }
+                                AutoMinSizeHandling::Max => {
+                                    log::trace!("{LABEL}: AutoMinSizeHandling::Max size={size} > output={output} ({})", if size > *output { size } else { *output });
+                                    if size > *output {
+                                        *output = size;
+                                    }
                                 }
                             }
                         }
+                    };
+
+                    child.$calculated_preferred = Some(preferred);
+                    handle_auto_sizing(child, preferred, &mut preferred_size);
+
+                    if let Some(size) = min {
+                        child.$calculated_child_min = Some(size);
+                        handle_auto_sizing(child, size, &mut min_size);
                     }
-                };
 
-                child.$calculated_preferred = Some(preferred);
-                handle_auto_sizing(child, preferred, &mut preferred_size);
-
-                if let Some(size) = min {
-                    child.$calculated_child_min = Some(size);
-                    handle_auto_sizing(child, size, &mut min_size);
+                    $each_child(child, view_width, view_height, context);
                 }
 
-                $each_child(child, view_width, view_height);
-            }
-
-            set_float(&mut parent.$calculated_child_min, min_size);
-            set_float(&mut parent.$calculated_preferred, preferred_size);
-        });
+                set_float(&mut parent.$calculated_child_min, min_size);
+                set_float(&mut parent.$calculated_preferred, preferred_size);
+            });
 
         changed
     }};
@@ -1042,46 +1065,82 @@ mod passes {
             fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
         }
 
+        impl<F: FontMetrics> Calculator<F> {
+            fn calculate_font_size(
+                container: &mut Container,
+                view_width: f32,
+                view_height: f32,
+                context: &Container,
+            ) {
+                if container.calculated_font_size.is_some() {
+                    return;
+                }
+
+                container.calculated_font_size = container.font_size.as_ref().map_or(
+                    context.calculated_font_size,
+                    |font_size| {
+                        let calculated_font_size = font_size.calc(
+                            context
+                                .calculated_font_size
+                                .expect("Missing calculated_font_size"),
+                            view_width,
+                            view_height,
+                        );
+                        log::trace!("calculate_font_size: setting font_size={font_size} to calculated_font_size={calculated_font_size}");
+
+                        Some(calculated_font_size)
+                    },
+                );
+            }
+        }
+
         impl<F: FontMetrics> Pass for Calculator<F> {
             fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-                let each_child = |container: &mut Container, view_width, view_height| {
-                    if let Some(opacity) = &container.opacity {
-                        container.calculated_opacity =
-                            Some(opacity.calc(1.0, view_width, view_height));
-                    }
-                    if let Some(radius) = &container
-                        .border_top_left_radius
-                        .as_ref()
-                        .and_then(crate::Number::as_fixed)
-                    {
-                        container.calculated_border_top_left_radius =
-                            Some(radius.calc(0.0, view_width, view_height));
-                    }
-                    if let Some(radius) = &container
-                        .border_top_right_radius
-                        .as_ref()
-                        .and_then(crate::Number::as_fixed)
-                    {
-                        container.calculated_border_top_right_radius =
-                            Some(radius.calc(0.0, view_width, view_height));
-                    }
-                    if let Some(radius) = &container
-                        .border_bottom_left_radius
-                        .as_ref()
-                        .and_then(crate::Number::as_fixed)
-                    {
-                        container.calculated_border_bottom_left_radius =
-                            Some(radius.calc(0.0, view_width, view_height));
-                    }
-                    if let Some(radius) = &container
-                        .border_bottom_right_radius
-                        .as_ref()
-                        .and_then(crate::Number::as_fixed)
-                    {
-                        container.calculated_border_bottom_right_radius =
-                            Some(radius.calc(0.0, view_width, view_height));
-                    }
-                };
+                let each_parent =
+                    |container: &mut Container, view_width, view_height, context: &Container| {
+                        Self::calculate_font_size(container, view_width, view_height, context);
+                    };
+                let each_child =
+                    |container: &mut Container, view_width, view_height, context: &Container| {
+                        Self::calculate_font_size(container, view_width, view_height, context);
+
+                        if let Some(opacity) = &container.opacity {
+                            container.calculated_opacity =
+                                Some(opacity.calc(1.0, view_width, view_height));
+                        }
+                        if let Some(radius) = &container
+                            .border_top_left_radius
+                            .as_ref()
+                            .and_then(crate::Number::as_fixed)
+                        {
+                            container.calculated_border_top_left_radius =
+                                Some(radius.calc(0.0, view_width, view_height));
+                        }
+                        if let Some(radius) = &container
+                            .border_top_right_radius
+                            .as_ref()
+                            .and_then(crate::Number::as_fixed)
+                        {
+                            container.calculated_border_top_right_radius =
+                                Some(radius.calc(0.0, view_width, view_height));
+                        }
+                        if let Some(radius) = &container
+                            .border_bottom_left_radius
+                            .as_ref()
+                            .and_then(crate::Number::as_fixed)
+                        {
+                            container.calculated_border_bottom_left_radius =
+                                Some(radius.calc(0.0, view_width, view_height));
+                        }
+                        if let Some(radius) = &container
+                            .border_bottom_right_radius
+                            .as_ref()
+                            .and_then(crate::Number::as_fixed)
+                        {
+                            container.calculated_border_bottom_right_radius =
+                                Some(radius.calc(0.0, view_width, view_height));
+                        }
+                    };
 
                 calc_size_on_axis!(
                     "calc_widths",
@@ -1113,6 +1172,7 @@ mod passes {
                     column_gap,
                     calculated_column_gap,
                     overflow_x,
+                    each_parent,
                     each_child,
                 )
             }
@@ -1228,10 +1288,14 @@ mod passes {
                         return;
                     };
 
+                    let font_size = container.calculated_font_size.expect("Missing font_size");
+
                     log::trace!(
                         "wrap_horizontal: measuring text={value} container_width={container_width}"
                     );
-                    let bounds = self.font_metrics.measure_text(value, 14.0, container_width);
+                    let bounds = self
+                        .font_metrics
+                        .measure_text(value, font_size, container_width);
                     log::trace!("wrap_horizontal: measured bounds={bounds:?}");
                     let new_width = bounds.width();
                     let new_height = bounds.height();
@@ -1302,7 +1366,8 @@ mod passes {
                     row_gap,
                     calculated_row_gap,
                     overflow_y,
-                    |_, _, _| {},
+                    |_, _, _, _| {},
+                    |_, _, _, _| {},
                 )
             }
         }
@@ -2045,7 +2110,7 @@ mod test {
         }
     }
 
-    static CALCULATOR: Calculator<DefaultFontMetrics> = Calculator::new(DefaultFontMetrics);
+    static CALCULATOR: Calculator<DefaultFontMetrics> = Calculator::new(DefaultFontMetrics, 14.0);
 
     mod scrollbar {
         use super::*;
@@ -8907,6 +8972,243 @@ mod test {
                         ..container.children[0].clone()
                     }],
                     calculated_width: Some(200.0),
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_use_default_font_size() {
+            let mut container: Container = html! {
+                "aoeu"
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_font_size = Some(20.0);
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            let calculator = Calculator::new(DefaultFontMetrics, 20.0);
+            calculator.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        calculated_width: Some(20.0 * 4.0),
+                        calculated_height: Some(20.0),
+                        ..container.children[0].clone()
+                    }],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_use_direct_parent_fixed_font_size() {
+            let mut container: Container = html! {
+                div sx-font-size=(10) {
+                    "aoeu"
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            let calculator = Calculator::new(DefaultFontMetrics, 20.0);
+            calculator.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        children: vec![Container {
+                            calculated_width: Some(10.0 * 4.0),
+                            calculated_height: Some(10.0),
+                            ..container.children[0].children[0].clone()
+                        }],
+                        ..container.children[0].clone()
+                    }],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_use_direct_parent_dynamic_font_size() {
+            let mut container: Container = html! {
+                div sx-font-size="80%" {
+                    "aoeu"
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            let calculator = Calculator::new(DefaultFontMetrics, 20.0);
+            calculator.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        children: vec![Container {
+                            calculated_width: Some(16.0 * 4.0),
+                            calculated_height: Some(16.0),
+                            ..container.children[0].children[0].clone()
+                        }],
+                        ..container.children[0].clone()
+                    }],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_use_ascestor_fixed_font_size() {
+            let mut container: Container = html! {
+                div sx-font-size=(10) {
+                    div { "aoeu" }
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            let calculator = Calculator::new(DefaultFontMetrics, 20.0);
+            calculator.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        children: vec![Container {
+                            children: vec![Container {
+                                calculated_width: Some(10.0 * 4.0),
+                                calculated_height: Some(10.0),
+                                ..container.children[0].children[0].children[0].clone()
+                            }],
+                            ..container.children[0].children[0].clone()
+                        }],
+                        ..container.children[0].clone()
+                    }],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_use_ascestor_dynamic_font_size() {
+            let mut container: Container = html! {
+                div sx-font-size="80%" {
+                    div { "aoeu" }
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            let calculator = Calculator::new(DefaultFontMetrics, 20.0);
+            calculator.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        children: vec![Container {
+                            children: vec![Container {
+                                calculated_width: Some(16.0 * 4.0),
+                                calculated_height: Some(16.0),
+                                ..container.children[0].children[0].children[0].clone()
+                            }],
+                            ..container.children[0].children[0].clone()
+                        }],
+                        ..container.children[0].clone()
+                    }],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn doesnt_use_sibling_fixed_font_size() {
+            let mut container: Container = html! {
+                div sx-font-size=(10) {}
+                div { "aoeu" }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            let calculator = Calculator::new(DefaultFontMetrics, 20.0);
+            calculator.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![
+                        container.children[0].clone(),
+                        Container {
+                            children: vec![Container {
+                                calculated_width: Some(20.0 * 4.0),
+                                calculated_height: Some(20.0),
+                                ..container.children[1].children[0].clone()
+                            }],
+                            ..container.children[1].clone()
+                        },
+                    ],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn doesnt_use_sibling_dynamic_font_size() {
+            let mut container: Container = html! {
+                div sx-font-size="80%" {}
+                div { "aoeu" }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            let calculator = Calculator::new(DefaultFontMetrics, 20.0);
+            calculator.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![
+                        container.children[0].clone(),
+                        Container {
+                            children: vec![Container {
+                                calculated_width: Some(20.0 * 4.0),
+                                calculated_height: Some(20.0),
+                                ..container.children[1].children[0].clone()
+                            }],
+                            ..container.children[1].clone()
+                        },
+                    ],
                     ..container.clone()
                 },
             );

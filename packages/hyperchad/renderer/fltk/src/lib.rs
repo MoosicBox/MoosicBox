@@ -51,7 +51,7 @@ static DEBUG: LazyLock<RwLock<bool>> = LazyLock::new(|| {
 });
 
 static FLTK_CALCULATOR: Calculator<font_metrics::FltkFontMetrics> =
-    Calculator::new(font_metrics::FltkFontMetrics);
+    Calculator::new(font_metrics::FltkFontMetrics, 14.0);
 
 #[derive(Debug, Error)]
 pub enum LoadImageError {

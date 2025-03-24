@@ -1185,6 +1185,8 @@ pub struct Container {
     #[cfg(feature = "layout")]
     pub calculated_opacity: Option<f32>,
     #[cfg(feature = "layout")]
+    pub calculated_font_size: Option<f32>,
+    #[cfg(feature = "layout")]
     pub scrollbar_right: Option<f32>,
     #[cfg(feature = "layout")]
     pub scrollbar_bottom: Option<f32>,
@@ -2600,6 +2602,7 @@ impl Container {
                 attrs.add_opt("calc-col-gap", self.calculated_column_gap);
                 attrs.add_opt("calc-row-gap", self.calculated_row_gap);
                 attrs.add_opt("calc-opacity", self.calculated_opacity);
+                attrs.add_opt("calc-font-size", self.calculated_font_size);
                 attrs.add_opt("calc-scrollbar-right", self.scrollbar_right);
                 attrs.add_opt("calc-scrollbar-bottom", self.scrollbar_bottom);
 

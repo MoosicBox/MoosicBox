@@ -18,7 +18,7 @@ use hyperchad_renderer::canvas::CanvasUpdate;
 use hyperchad_renderer::viewport::immediate::{Pos, Viewport, ViewportListener};
 use hyperchad_router::{ClientInfo, RequestInfo, Router};
 use hyperchad_transformer::{
-    Container, Element, Input, ResponsiveTrigger, TableIter,
+    Container, Element, Input, ResponsiveTrigger, TableIter, float_eq,
     models::{
         Cursor, LayoutDirection, LayoutOverflow, LayoutPosition, Position, Route, SwapTarget,
         Visibility,
@@ -1313,6 +1313,25 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                 true,
             );
             return None;
+        }
+
+        let body_font_size = ctx
+            .style()
+            .text_styles
+            .get(&egui::TextStyle::Body)
+            .expect("Missing body font size")
+            .size;
+
+        let font_size = container
+            .calculated_font_size
+            .expect("Missing calculated_font_size");
+
+        if !float_eq!(body_font_size, font_size) {
+            ctx.style_mut(|style| {
+                for font in style.text_styles.values_mut() {
+                    font.size = font_size;
+                }
+            });
         }
 
         if let Some(opacity) = container.calculated_opacity {
