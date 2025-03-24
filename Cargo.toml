@@ -182,8 +182,8 @@ env_logger = "0.11"
 fdk-aac = "0.7.0"
 flacenc = "0.4.0"
 flate2 = "1.1.0"
-fltk = "1.5.4"
-fltk-sys = "1.5.4"
+fltk = "1.5.5"
+fltk-sys = "1.5.5"
 flume = "0.11.1"
 free_log_client = { version = "0.5.0", default-features = false }
 futures = "0.3"
@@ -202,7 +202,7 @@ image = "0.25.5"
 io-streams = "0.16.3"
 itertools = "0.14.0"
 jni = "0.21.1"
-kanal = "0.1.0"
+kanal = "0.1.1"
 lambda_http = "0.14.0"
 lambda_runtime = "0.13.0"
 lazy_static = "1.5.0"
@@ -288,12 +288,12 @@ static_init = "1.0.3"
 strum = "0.27.1"
 strum_macros = "0.27.1"
 swc_bundler = "11.0.0"
-swc_common = { version = "8.0.0", features = ["tty-emitter"] }
-swc_ecma_ast = "8.0.1"
+swc_common = { version = "8.0.1", features = ["tty-emitter"] }
+swc_ecma_ast = "8.1.0"
 swc_ecma_codegen = "8.0.2"
 swc_ecma_loader = { version = "8.0.0", features = ["cache", "node"] }
-swc_ecma_minifier = "12.3.0"
-swc_ecma_parser = "10.0.1"
+swc_ecma_minifier = "12.4.0"
+swc_ecma_parser = "10.0.2"
 swc_ecma_transforms_base = "11.2.0"
 swc_ecma_transforms_typescript = "12.0.1"
 swc_ecma_visit = "8.0.0"
@@ -331,7 +331,7 @@ utoipa-scalar = { version = "0.3.0", features = ["actix-web"] }
 utoipa-swagger-ui = { version = "9.0.0", features = ["actix-web"] }
 uuid = { version = "1.16.0", features = ["v4"] }
 webp = "0.3.0"
-whoami = "1.5.2"
+whoami = "1.6.0"
 xml = "0.8.20"
 
 [patch.crates-io]
