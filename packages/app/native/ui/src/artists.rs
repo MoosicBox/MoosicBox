@@ -149,27 +149,24 @@ pub fn albums_list(
         return html! {};
     }
 
-    let header = if source == ApiSource::Library {
-        format!(
-            "{} in {}",
-            album_type.into_formatted(),
-            source.into_formatted()
-        )
-    } else {
-        format!(
-            "{} on {}",
-            album_type.into_formatted(),
-            source.into_formatted()
-        )
-    };
     html! {
         div sx-padding-y=(20) {
-            h2 { (header) }
+            h2 {
+                (album_type.into_formatted())
+                @if source == ApiSource::Library {
+                    " in "
+                } @else {
+                    " on "
+                }
+                (source.into_formatted())
+            }
             div
                 sx-dir="row"
                 sx-overflow-x=(LayoutOverflow::Wrap { grid: true })
                 sx-grid-cell-size=(size)
+                sx-justify-content="space-evenly"
                 sx-gap=(15)
+                sx-padding-y=(15)
             {
                 (crate::albums::show_albums(albums.iter(), size))
             }
