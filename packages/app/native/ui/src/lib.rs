@@ -460,7 +460,7 @@ fn player_current_album(track: &ApiTrack, size: u16) -> Markup {
                     a href=(pre_escaped!("/artists?artistId={}&source={}", track.artist_id, track.api_source)) { (track.artist) }
                 }
                 div sx-dir="row" {
-                    "Playing from:" a href=(pre_escaped!("/albums?albumId={}&source={}", track.album_id, track.api_source)) { (track.album) }
+                    "Playing from: " a href=(pre_escaped!("/albums?albumId={}&source={}", track.album_id, track.api_source)) { (track.album) }
                 }
             }
         }
