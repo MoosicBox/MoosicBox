@@ -5,8 +5,13 @@ use crate::Container;
 pub mod calc;
 pub mod font;
 
-static EPSILON: f32 = 0.001;
+pub static EPSILON: f32 = 0.001;
 static SCROLLBAR_SIZE: AtomicU16 = AtomicU16::new(16);
+
+#[macro_export]
+macro_rules! float_eq {
+    ($a:expr, $b:expr $(,)?) => {{ ($a - $b).abs() < $crate::layout::EPSILON }};
+}
 
 pub fn get_scrollbar_size() -> u16 {
     SCROLLBAR_SIZE.load(std::sync::atomic::Ordering::SeqCst)
@@ -67,7 +72,7 @@ pub fn set_value<T: PartialEq + Copy>(opt: &mut Option<T>, value: T) -> Option<T
 
 pub fn set_float(opt: &mut Option<f32>, value: f32) -> Option<f32> {
     if let Some(existing) = *opt {
-        if (existing - value).abs() >= EPSILON {
+        if !float_eq!(existing, value) {
             *opt = Some(value);
             return *opt;
         }

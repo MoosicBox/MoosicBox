@@ -43,10 +43,6 @@ impl<F: FontMetrics> Calc for Calculator<F> {
     }
 }
 
-macro_rules! float_eq {
-    ($a:expr, $b:expr $(,)?) => {{ ($a - $b).abs() < crate::layout::EPSILON }};
-}
-
 macro_rules! calc_size_on_axis {
     (
         $label:tt,
@@ -81,7 +77,7 @@ macro_rules! calc_size_on_axis {
         $each_child:expr
         $(,)?
     ) => {{
-        use crate::{LayoutDirection, LayoutOverflow, Position};
+        use crate::{LayoutDirection, LayoutOverflow, Position, float_eq};
 
         const LABEL: &str = $label;
 
@@ -349,7 +345,7 @@ macro_rules! flex_on_axis {
         $each_child:expr
         $(,)?
     ) => {{
-        use crate::{Element, LayoutOverflow};
+        use crate::{Element, LayoutOverflow, float_eq};
 
         const LABEL: &str = $label;
 
