@@ -19,11 +19,7 @@ use moosicbox_music_models::{
 use moosicbox_paging::Page;
 
 use crate::{
-    Action,
-    artists::artist_page_url,
-    formatting::{TimeFormat as _, format_date_string},
-    page, pre_escaped, public_img,
-    state::State,
+    artists::artist_page_url, formatting::{display_album_version_qualities, format_date_string, TimeFormat as _, TrackApiSourceFormat}, page, pre_escaped, public_img, state::State, Action
 };
 
 #[must_use]
@@ -196,7 +192,7 @@ pub fn album_page_content(
                             ) {
                                 h3 {
                                     (if selected { "*" } else { "" })
-                                    (version.source)
+                                    (version.source.into_formatted())
                                     (if selected { "*" } else { "" })
                                 }
                             }
@@ -511,6 +507,9 @@ pub fn album_display(
                     div {
                         (format_date_string(date_released, "%Y"))
                     }
+                }
+                div {
+                    (display_album_version_qualities(album.versions.iter().copied(), Some(25)))
                 }
             }
         }

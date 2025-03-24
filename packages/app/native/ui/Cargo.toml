@@ -32,15 +32,25 @@ moosicbox_music_models = { version = "0.1.0", path = "../../../music/models", de
 moosicbox_paging = { version = "0.1.0", path = "../../../paging", default-features = false }
 moosicbox_session_models = { version = "0.1.0", path = "../../../session/models", default-features = false }
 
-log        = { workspace = true }
-maud       = { workspace = true }
-serde      = { workspace = true }
-serde_json = { workspace = true }
+log                 = { workspace = true }
+maud                = { workspace = true }
+rust_decimal        = { workspace = true }
+rust_decimal_macros = { workspace = true }
+serde               = { workspace = true }
+serde_json          = { workspace = true }
 
 [features]
-default = ["all-sources"]
+default = ["all-formats", "all-sources"]
 
 fail-on-warnings = []
+
+all-formats = ["aac", "flac", "mp3", "opus"]
+
+# Encoders
+aac  = ["moosicbox_music_models/aac", "moosicbox_session_models/aac"]
+flac = ["moosicbox_music_models/flac", "moosicbox_session_models/flac"]
+mp3  = ["moosicbox_music_models/mp3", "moosicbox_session_models/mp3"]
+opus = ["moosicbox_music_models/opus", "moosicbox_session_models/opus"]
 
 all-sources = ["qobuz", "tidal", "yt"]
 

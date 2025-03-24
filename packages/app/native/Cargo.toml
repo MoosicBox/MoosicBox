@@ -136,10 +136,10 @@ unsafe              = ["moosicbox_app_native_lib/unsafe"]
 
 all-formats = ["aac", "flac", "mp3", "opus"]
 
-aac  = ["moosicbox_music_models/aac"]
-flac = ["moosicbox_music_models/flac"]
-mp3  = ["moosicbox_music_models/mp3"]
-opus = ["moosicbox_music_models/opus"]
+aac  = ["moosicbox_app_native_ui/aac", "moosicbox_music_models/aac"]
+flac = ["moosicbox_app_native_ui/flac", "moosicbox_music_models/flac"]
+mp3  = ["moosicbox_app_native_ui/mp3", "moosicbox_music_models/mp3"]
+opus = ["moosicbox_app_native_ui/opus", "moosicbox_music_models/opus"]
 
 all-sources = ["qobuz", "tidal", "yt"]
 
