@@ -2246,12 +2246,32 @@ impl Attrs {
             ));
         }
     }
+
+    #[cfg(feature = "layout")]
+    fn add_opt_skip_default<K: Into<String>, V: Default + PartialEq + std::fmt::Display>(
+        &mut self,
+        name: K,
+        value: Option<V>,
+        skip_default: bool,
+    ) {
+        if let Some(value) = value {
+            if skip_default && value == Default::default() {
+                return;
+            }
+            self.values.push((
+                name.into(),
+                html_escape::encode_double_quoted_attribute(value.to_string().as_str())
+                    .to_string()
+                    .replace('\n', "&#10;"),
+            ));
+        }
+    }
 }
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Container {
     #[allow(clippy::too_many_lines)]
-    fn attrs(&self, with_debug_attrs: bool) -> Attrs {
+    fn attrs(&self, #[allow(unused)] with_debug_attrs: bool) -> Attrs {
         let mut attrs = Attrs { values: vec![] };
 
         attrs.add("dbg-id", self.id);
@@ -2535,83 +2555,140 @@ impl Container {
             }
         }
 
+        #[cfg(feature = "layout")]
         if with_debug_attrs {
-            #[cfg(feature = "layout")]
-            {
-                attrs.add_opt("calc-x", self.calculated_x);
-                attrs.add_opt("calc-y", self.calculated_y);
-                attrs.add_opt("calc-min-width", self.calculated_min_width);
-                attrs.add_opt("calc-child-min-width", self.calculated_child_min_width);
-                attrs.add_opt("calc-max-width", self.calculated_max_width);
-                attrs.add_opt("calc-preferred-width", self.calculated_preferred_width);
-                attrs.add_opt("calc-width", self.calculated_width);
-                attrs.add_opt("calc-min-height", self.calculated_min_height);
-                attrs.add_opt("calc-child-min-height", self.calculated_child_min_height);
-                attrs.add_opt("calc-max-height", self.calculated_max_height);
-                attrs.add_opt("calc-preferred-height", self.calculated_preferred_height);
-                attrs.add_opt("calc-height", self.calculated_height);
-                attrs.add_opt("calc-margin-left", self.calculated_margin_left);
-                attrs.add_opt("calc-margin-right", self.calculated_margin_right);
-                attrs.add_opt("calc-margin-top", self.calculated_margin_top);
-                attrs.add_opt("calc-margin-bottom", self.calculated_margin_bottom);
-                attrs.add_opt("calc-padding-left", self.calculated_padding_left);
-                attrs.add_opt("calc-padding-right", self.calculated_padding_right);
-                attrs.add_opt("calc-padding-top", self.calculated_padding_top);
-                attrs.add_opt("calc-padding-bottom", self.calculated_padding_bottom);
-                #[cfg(feature = "layout-offset")]
-                {
-                    attrs.add_opt("calc-offset-x", self.calculated_offset_x);
-                    attrs.add_opt("calc-offset-y", self.calculated_offset_y);
-                }
-                attrs.add_opt(
-                    "calc-border-left",
-                    self.calculated_border_left
-                        .map(|(color, size)| format!("{size}, {color}")),
-                );
-                attrs.add_opt(
-                    "calc-border-right",
-                    self.calculated_border_right
-                        .map(|(color, size)| format!("{size}, {color}")),
-                );
-                attrs.add_opt(
-                    "calc-border-top",
-                    self.calculated_border_top
-                        .map(|(color, size)| format!("{size}, {color}")),
-                );
-                attrs.add_opt(
-                    "calc-border-bottom",
-                    self.calculated_border_bottom
-                        .map(|(color, size)| format!("{size}, {color}")),
-                );
-                attrs.add_opt(
-                    "calc-border-top-left-radius",
-                    self.calculated_border_top_left_radius,
-                );
-                attrs.add_opt(
-                    "calc-border-top-right-radius",
-                    self.calculated_border_top_right_radius,
-                );
-                attrs.add_opt(
-                    "calc-border-bottom-left-radius",
-                    self.calculated_border_bottom_left_radius,
-                );
-                attrs.add_opt(
-                    "calc-border-bottom-right-radius",
-                    self.calculated_border_bottom_right_radius,
-                );
-                attrs.add_opt("calc-col-gap", self.calculated_column_gap);
-                attrs.add_opt("calc-row-gap", self.calculated_row_gap);
-                attrs.add_opt("calc-opacity", self.calculated_opacity);
-                attrs.add_opt("calc-font-size", self.calculated_font_size);
-                attrs.add_opt("calc-scrollbar-right", self.scrollbar_right);
-                attrs.add_opt("calc-scrollbar-bottom", self.scrollbar_bottom);
+            let skip_default = std::env::var("SKIP_DEFAULT_DEBUG_ATTRS")
+                .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str()));
 
-                if let Some(hyperchad_transformer_models::LayoutPosition::Wrap { row, col }) =
-                    &self.calculated_position
-                {
-                    attrs.add("calc-row", *row);
-                    attrs.add("calc-col", *col);
-                }
+            attrs.add_opt_skip_default("calc-x", self.calculated_x, skip_default);
+            attrs.add_opt_skip_default("calc-y", self.calculated_y, skip_default);
+            attrs.add_opt_skip_default("calc-min-width", self.calculated_min_width, skip_default);
+            attrs.add_opt_skip_default(
+                "calc-child-min-width",
+                self.calculated_child_min_width,
+                skip_default,
+            );
+            attrs.add_opt_skip_default("calc-max-width", self.calculated_max_width, skip_default);
+            attrs.add_opt_skip_default(
+                "calc-preferred-width",
+                self.calculated_preferred_width,
+                skip_default,
+            );
+            attrs.add_opt_skip_default("calc-width", self.calculated_width, skip_default);
+            attrs.add_opt_skip_default("calc-min-height", self.calculated_min_height, skip_default);
+            attrs.add_opt_skip_default(
+                "calc-child-min-height",
+                self.calculated_child_min_height,
+                skip_default,
+            );
+            attrs.add_opt_skip_default("calc-max-height", self.calculated_max_height, skip_default);
+            attrs.add_opt_skip_default(
+                "calc-preferred-height",
+                self.calculated_preferred_height,
+                skip_default,
+            );
+            attrs.add_opt_skip_default("calc-height", self.calculated_height, skip_default);
+            attrs.add_opt_skip_default(
+                "calc-margin-left",
+                self.calculated_margin_left,
+                skip_default,
+            );
+            attrs.add_opt_skip_default(
+                "calc-margin-right",
+                self.calculated_margin_right,
+                skip_default,
+            );
+            attrs.add_opt_skip_default("calc-margin-top", self.calculated_margin_top, skip_default);
+            attrs.add_opt_skip_default(
+                "calc-margin-bottom",
+                self.calculated_margin_bottom,
+                skip_default,
+            );
+            attrs.add_opt_skip_default(
+                "calc-padding-left",
+                self.calculated_padding_left,
+                skip_default,
+            );
+            attrs.add_opt_skip_default(
+                "calc-padding-right",
+                self.calculated_padding_right,
+                skip_default,
+            );
+            attrs.add_opt_skip_default(
+                "calc-padding-top",
+                self.calculated_padding_top,
+                skip_default,
+            );
+            attrs.add_opt_skip_default(
+                "calc-padding-bottom",
+                self.calculated_padding_bottom,
+                skip_default,
+            );
+            attrs.add_opt_skip_default(
+                "calc-border-left",
+                self.calculated_border_left
+                    .map(|(color, size)| format!("{size}, {color}")),
+                skip_default,
+            );
+            attrs.add_opt_skip_default(
+                "calc-border-right",
+                self.calculated_border_right
+                    .map(|(color, size)| format!("{size}, {color}")),
+                skip_default,
+            );
+            attrs.add_opt_skip_default(
+                "calc-border-top",
+                self.calculated_border_top
+                    .map(|(color, size)| format!("{size}, {color}")),
+                skip_default,
+            );
+            attrs.add_opt_skip_default(
+                "calc-border-bottom",
+                self.calculated_border_bottom
+                    .map(|(color, size)| format!("{size}, {color}")),
+                skip_default,
+            );
+            attrs.add_opt_skip_default(
+                "calc-border-top-left-radius",
+                self.calculated_border_top_left_radius,
+                skip_default,
+            );
+            attrs.add_opt_skip_default(
+                "calc-border-top-right-radius",
+                self.calculated_border_top_right_radius,
+                skip_default,
+            );
+            attrs.add_opt_skip_default(
+                "calc-border-bottom-left-radius",
+                self.calculated_border_bottom_left_radius,
+                skip_default,
+            );
+            attrs.add_opt_skip_default(
+                "calc-border-bottom-right-radius",
+                self.calculated_border_bottom_right_radius,
+                skip_default,
+            );
+            attrs.add_opt_skip_default("calc-col-gap", self.calculated_column_gap, skip_default);
+            attrs.add_opt_skip_default("calc-row-gap", self.calculated_row_gap, skip_default);
+            attrs.add_opt_skip_default("calc-opacity", self.calculated_opacity, skip_default);
+            attrs.add_opt_skip_default("calc-font-size", self.calculated_font_size, skip_default);
+            attrs.add_opt_skip_default("calc-scrollbar-right", self.scrollbar_right, skip_default);
+            attrs.add_opt_skip_default(
+                "calc-scrollbar-bottom",
+                self.scrollbar_bottom,
+                skip_default,
+            );
+
+            if let Some(hyperchad_transformer_models::LayoutPosition::Wrap { row, col }) =
+                &self.calculated_position
+            {
+                attrs.add("calc-row", *row);
+                attrs.add("calc-col", *col);
+            }
+            #[cfg(feature = "layout-offset")]
+            {
+                attrs.add_opt_skip_default("calc-offset-x", self.calculated_offset_x, skip_default);
+                attrs.add_opt_skip_default("calc-offset-y", self.calculated_offset_y, skip_default);
             }
         }
 
