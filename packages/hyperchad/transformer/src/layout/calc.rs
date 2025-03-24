@@ -1434,7 +1434,7 @@ mod passes {
         };
 
         use crate::{
-            BfsPaths, Container, Element,
+            BfsPaths, Container, Element, float_lte,
             layout::{calc::Calculator, font::FontMetrics, set_float},
         };
 
@@ -1520,10 +1520,24 @@ mod passes {
                             let row_gap = parent.calculated_row_gap.unwrap_or_default();
                             let column_gap = parent.calculated_column_gap.unwrap_or_default();
 
+                            #[allow(clippy::cast_precision_loss)]
                             let mut add_gap = |row_width, col_count| {
-                                let remainder = container_width - row_width;
+                                let mut col_count = col_count;
+                                let remainder = container_width - grid_cell_size.map_or(
+                                    row_width,
+                                    |cell_size| {
+                                        col_count = 1;
+                                        let mut size = cell_size + column_gap;
 
-                                #[allow(clippy::cast_precision_loss)]
+                                        while float_lte!(size + cell_size, container_width) {
+                                            col_count += 1;
+                                            size += cell_size + column_gap;
+                                        }
+
+                                        column_gap.mul_add(-(col_count as f32), size)
+                                    }
+                                );
+
                                 let gap = match justify_content {
                                     JustifyContent::Start
                                     | JustifyContent::Center
