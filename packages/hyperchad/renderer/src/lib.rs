@@ -8,11 +8,7 @@ pub mod canvas;
 #[cfg(feature = "viewport")]
 pub mod viewport;
 
-use std::{
-    future::Future,
-    pin::Pin,
-    sync::{RwLockReadGuard, RwLockWriteGuard},
-};
+use std::{future::Future, pin::Pin};
 
 use async_trait::async_trait;
 pub use hyperchad_color::Color;
@@ -229,9 +225,6 @@ pub trait Renderer: ToRenderRunner + Send + Sync {
         &self,
         update: canvas::CanvasUpdate,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
-
-    fn container(&self) -> RwLockReadGuard<Container>;
-    fn container_mut(&self) -> RwLockWriteGuard<Container>;
 }
 
 #[cfg(feature = "html")]

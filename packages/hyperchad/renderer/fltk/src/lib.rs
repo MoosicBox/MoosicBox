@@ -7,7 +7,7 @@ use std::{
     ops::Deref,
     str::FromStr as _,
     sync::{
-        Arc, LazyLock, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
+        Arc, LazyLock, Mutex, RwLock,
         atomic::{AtomicBool, AtomicI32},
     },
 };
@@ -1429,14 +1429,6 @@ impl Renderer for FltkRenderer {
         log::trace!("render_canvas");
 
         Ok(())
-    }
-
-    fn container(&self) -> RwLockReadGuard<Container> {
-        self.elements.read().unwrap()
-    }
-
-    fn container_mut(&self) -> RwLockWriteGuard<Container> {
-        self.elements.write().unwrap()
     }
 }
 

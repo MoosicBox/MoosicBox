@@ -3,7 +3,7 @@
 
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    sync::{Arc, LazyLock, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    sync::{Arc, LazyLock, Mutex, RwLock},
     time::Instant,
 };
 
@@ -650,14 +650,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
         .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)??;
 
         Ok(())
-    }
-
-    fn container(&self) -> RwLockReadGuard<Container> {
-        self.app.container.read().unwrap()
-    }
-
-    fn container_mut(&self) -> RwLockWriteGuard<Container> {
-        self.app.container.write().unwrap()
     }
 }
 

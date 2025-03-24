@@ -1,11 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use std::{
-    collections::HashMap,
-    io::Write,
-    sync::{RwLockReadGuard, RwLockWriteGuard},
-};
+use std::{collections::HashMap, io::Write};
 
 use async_trait::async_trait;
 use flume::Receiver;
@@ -625,13 +621,5 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> Renderer for HtmlRenderer<T> {
         log::debug!("render_canvas: finished");
 
         Ok(())
-    }
-
-    fn container(&self) -> RwLockReadGuard<Container> {
-        unimplemented!();
-    }
-
-    fn container_mut(&self) -> RwLockWriteGuard<Container> {
-        unimplemented!();
     }
 }
