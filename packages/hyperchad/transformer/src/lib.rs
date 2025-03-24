@@ -1155,11 +1155,19 @@ pub struct Container {
     #[cfg(feature = "layout")]
     pub calculated_min_width: Option<f32>,
     #[cfg(feature = "layout")]
+    pub calculated_child_min_width: Option<f32>,
+    #[cfg(feature = "layout")]
+    pub calculated_max_width: Option<f32>,
+    #[cfg(feature = "layout")]
     pub calculated_preferred_width: Option<f32>,
     #[cfg(feature = "layout")]
     pub calculated_width: Option<f32>,
     #[cfg(feature = "layout")]
     pub calculated_min_height: Option<f32>,
+    #[cfg(feature = "layout")]
+    pub calculated_child_min_height: Option<f32>,
+    #[cfg(feature = "layout")]
+    pub calculated_max_height: Option<f32>,
     #[cfg(feature = "layout")]
     pub calculated_preferred_height: Option<f32>,
     #[cfg(feature = "layout")]
@@ -2547,9 +2555,13 @@ impl Container {
                 attrs.add_opt("calc-x", self.calculated_x);
                 attrs.add_opt("calc-y", self.calculated_y);
                 attrs.add_opt("calc-min-width", self.calculated_min_width);
+                attrs.add_opt("calc-child-min-width", self.calculated_child_min_width);
+                attrs.add_opt("calc-max-width", self.calculated_max_width);
                 attrs.add_opt("calc-preferred-width", self.calculated_preferred_width);
                 attrs.add_opt("calc-width", self.calculated_width);
                 attrs.add_opt("calc-min-height", self.calculated_min_height);
+                attrs.add_opt("calc-child-min-height", self.calculated_child_min_height);
+                attrs.add_opt("calc-max-height", self.calculated_max_height);
                 attrs.add_opt("calc-preferred-height", self.calculated_preferred_height);
                 attrs.add_opt("calc-height", self.calculated_height);
                 attrs.add_opt("calc-margin-left", self.calculated_margin_left);
