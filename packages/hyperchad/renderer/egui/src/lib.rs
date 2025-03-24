@@ -499,13 +499,14 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
             element.calculated_width = app.width.read().unwrap().or(width);
             element.calculated_height = app.height.read().unwrap().or(height);
             app.calculator.read().unwrap().calc(&mut element);
+            moosicbox_assert::assert!(element.calculated_font_size.is_some());
 
             let mut watch_positions = app.watch_positions.write().unwrap();
             watch_positions.clear();
             add_watch_pos(&element, &element, &mut watch_positions);
             drop(watch_positions);
 
-            *app.container.write().unwrap() = element;
+            *app.container.write().unwrap() = Some(element);
             app.images.write().unwrap().clear();
             app.backgrounds.write().unwrap().clear();
             app.visibilities.write().unwrap().clear();
@@ -553,7 +554,10 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
                 ("render_partial: start {:?}", view)
             );
 
-            let mut page = app.container.write().unwrap();
+            let mut binding = app.container.write().unwrap();
+            let Some(page) = binding.as_mut() else {
+                return Ok(());
+            };
             let ids = view
                 .container
                 .children
@@ -572,7 +576,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
                 drop(calculator);
                 let mut watch_positions = app.watch_positions.write().unwrap();
                 watch_positions.clear();
-                add_watch_pos(&page, &page, &mut watch_positions);
+                add_watch_pos(page, page, &mut watch_positions);
                 drop(watch_positions);
 
                 let mut visibilities = app.visibilities.write().unwrap();
@@ -590,7 +594,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
                 }
                 drop(backgrounds);
 
-                drop(page);
+                drop(binding);
                 if let Some(ctx) = &*app.ctx.read().unwrap() {
                     ctx.request_repaint();
                 }
@@ -738,7 +742,7 @@ struct EguiApp<C: EguiCalc + Clone + Send + Sync> {
     render_buffer_rx: Arc<RwLock<Option<Receiver<()>>>>,
     width: Arc<RwLock<Option<f32>>>,
     height: Arc<RwLock<Option<f32>>>,
-    container: Arc<RwLock<Container>>,
+    container: Arc<RwLock<Option<Container>>>,
     sender: Sender<String>,
     event: Sender<AppEvent>,
     event_receiver: Receiver<AppEvent>,
@@ -791,7 +795,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             render_buffer_rx: Arc::new(RwLock::new(None)),
             width: Arc::new(RwLock::new(None)),
             height: Arc::new(RwLock::new(None)),
-            container: Arc::new(RwLock::new(Container::default())),
+            container: Arc::new(RwLock::new(None)),
             sender,
             event,
             event_receiver,
@@ -828,7 +832,10 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
     fn handle_event(&self, event_name: &str, event_value: Option<&str>) {
         log::debug!("handle_event: event_name={event_name} event_value={event_value:?}");
 
-        let container = self.container.write().unwrap();
+        let container_binding = self.container.write().unwrap();
+        let Some(container) = container_binding.as_ref() else {
+            return;
+        };
         let mut viewport_listeners = self.viewport_listeners.write().unwrap();
         let mut images = self.images.write().unwrap();
         let mut canvas_actions = self.canvas_actions.write().unwrap();
@@ -843,7 +850,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         let mut action_throttle = self.action_throttle.write().unwrap();
 
         let mut render_context = RenderContext {
-            container: &container,
+            container,
             viewport_listeners: &mut viewport_listeners,
             images: &mut images,
             canvas_actions: &mut canvas_actions,
@@ -874,7 +881,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             };
         }
 
-        drop(container);
+        drop(viewport_listeners);
+        drop(container_binding);
         drop(binding);
     }
 
@@ -942,8 +950,13 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                     route,
                     container_id,
                 } => {
-                    let router = self.router.clone();
                     let container = self.container.clone();
+                    {
+                        if container.read().unwrap().is_none() {
+                            return;
+                        }
+                    }
+                    let router = self.router.clone();
                     let calculator = self.calculator.clone();
                     let ctx = self.ctx.clone();
                     let client = self.client_info.clone();
@@ -1013,7 +1026,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
     fn swap_elements(
         swap: &SwapTarget,
         ctx: &egui::Context,
-        container: &RwLock<Container>,
+        container: &RwLock<Option<Container>>,
         calculator: &C,
         container_id: usize,
         result: Container,
@@ -1022,11 +1035,14 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             "ProcessRoute: replacing container_id={container_id} with {} elements",
             result.children.len()
         );
-        let mut page = container.write().unwrap();
+        let mut binding = container.write().unwrap();
+        let Some(page) = binding.as_mut() else {
+            return;
+        };
         match swap {
             SwapTarget::This => {
                 if page.replace_id_with_elements_calc(calculator, result.children, container_id) {
-                    drop(page);
+                    drop(binding);
                     ctx.request_repaint();
                 } else {
                     log::warn!("Unable to find element with id {container_id}");
@@ -1038,7 +1054,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                     result.children,
                     container_id,
                 ) {
-                    drop(page);
+                    drop(binding);
                     ctx.request_repaint();
                 } else {
                     log::warn!("Unable to find element with id {container_id}");
@@ -1058,11 +1074,13 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         );
 
         {
-            let mut container = self.container.write().unwrap();
-            container.calculated_width.replace(width);
-            container.calculated_height.replace(height);
-            self.calculator.read().unwrap().calc(&mut container);
-            drop(container);
+            let mut binding = self.container.write().unwrap();
+            if let Some(container) = binding.as_mut() {
+                container.calculated_width.replace(width);
+                container.calculated_height.replace(height);
+                self.calculator.read().unwrap().calc(container);
+                drop(binding);
+            }
         }
 
         self.width.write().unwrap().replace(width);
@@ -3390,7 +3408,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
         let font_size = container
             .calculated_font_size
-            .expect("Missing calculated_font_size");
+            .unwrap_or_else(|| panic!("Missing calculated_font_size:\n{container}"));
 
         if float_eq!(body_font_size, font_size) {
             (font_size, false)
@@ -3838,7 +3856,10 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
         self.event_handlers.write().unwrap().clear();
 
-        let container = self.container.write().unwrap();
+        let container_binding = self.container.write().unwrap();
+        let Some(container) = container_binding.as_ref() else {
+            return;
+        };
         let mut viewport_listeners = self.viewport_listeners.write().unwrap();
         let mut images = self.images.write().unwrap();
         let mut canvas_actions = self.canvas_actions.write().unwrap();
@@ -3866,7 +3887,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
         {
             let mut render_context = RenderContext {
-                container: &container,
+                container,
                 viewport_listeners: &mut viewport_listeners,
                 images: &mut images,
                 canvas_actions: &mut canvas_actions,
@@ -3951,7 +3972,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                 &mut render_context,
                                 ctx,
                                 ui,
-                                &container,
+                                container,
                                 None,
                                 None,
                                 None,
@@ -3977,7 +3998,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             log::trace!("paint: {handlers_count} handler(s) on render");
         }
 
-        drop(container);
+        drop(container_binding);
         drop(viewport_listeners);
         drop(images);
         drop(canvas_actions);
