@@ -3856,11 +3856,44 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             });
 
             ctx.style_mut(|style| {
-                style.spacing.window_margin.left = 0;
-                style.spacing.window_margin.right = 0;
-                style.spacing.window_margin.top = 0;
-                style.spacing.window_margin.bottom = 0;
-                style.spacing.item_spacing = egui::emath::Vec2::splat(0.0);
+                const ZERO_SPACING: egui::Spacing = egui::Spacing {
+                    item_spacing: egui::emath::Vec2::ZERO,
+                    window_margin: egui::Margin::ZERO,
+                    button_padding: egui::emath::Vec2::ZERO,
+                    menu_margin: egui::Margin::ZERO,
+                    indent: 0.0,
+                    interact_size: egui::emath::Vec2::ZERO,
+                    slider_width: 0.0,
+                    slider_rail_height: 0.0,
+                    combo_width: 0.0,
+                    text_edit_width: 0.0,
+                    icon_width: 0.0,
+                    icon_width_inner: 0.0,
+                    icon_spacing: 0.0,
+                    default_area_size: egui::emath::Vec2::ZERO,
+                    tooltip_width: 0.0,
+                    menu_width: 0.0,
+                    menu_spacing: 0.0,
+                    indent_ends_with_horizontal_line: false,
+                    combo_height: 0.0,
+                    scroll: egui::style::ScrollStyle {
+                        floating: true,
+                        bar_width: 10.0,
+                        foreground_color: true,
+                        floating_allocated_width: 0.0,
+                        dormant_background_opacity: 0.0,
+                        dormant_handle_opacity: 0.0,
+                        handle_min_length: 12.0,
+                        bar_inner_margin: 4.0,
+                        bar_outer_margin: 0.0,
+                        floating_width: 2.0,
+                        active_background_opacity: 0.4,
+                        interact_background_opacity: 0.7,
+                        active_handle_opacity: 0.6,
+                        interact_handle_opacity: 1.0,
+                    },
+                };
+                style.spacing = ZERO_SPACING;
                 #[cfg(all(debug_assertions, feature = "debug"))]
                 {
                     style.debug.debug_on_hover = true;
