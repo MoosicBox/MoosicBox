@@ -13,6 +13,26 @@ macro_rules! float_eq {
     ($a:expr, $b:expr $(,)?) => {{ ($a - $b).abs() < $crate::layout::EPSILON }};
 }
 
+#[macro_export]
+macro_rules! float_lt {
+    ($a:expr, $b:expr $(,)?) => {{ $a - $b <= -$crate::layout::EPSILON }};
+}
+
+#[macro_export]
+macro_rules! float_lte {
+    ($a:expr, $b:expr $(,)?) => {{ $a - $b < $crate::layout::EPSILON }};
+}
+
+#[macro_export]
+macro_rules! float_gt {
+    ($a:expr, $b:expr $(,)?) => {{ $a - $b >= $crate::layout::EPSILON }};
+}
+
+#[macro_export]
+macro_rules! float_gte {
+    ($a:expr, $b:expr $(,)?) => {{ $a - $b > -$crate::layout::EPSILON }};
+}
+
 pub fn get_scrollbar_size() -> u16 {
     SCROLLBAR_SIZE.load(std::sync::atomic::Ordering::SeqCst)
 }
