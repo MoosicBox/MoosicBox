@@ -369,7 +369,7 @@ macro_rules! flex_on_axis {
     ) => {{
         use paste::paste;
 
-        use crate::{Element, LayoutOverflow, float_eq};
+        use crate::{Element, LayoutOverflow, float_eq, float_gt};
 
         const LABEL: &str = $label;
 
@@ -578,67 +578,6 @@ macro_rules! flex_on_axis {
                         if remaining_size < 0.0 {
                             remaining_size = 0.0;
                         }
-
-                        let mut size_cross_axis = |parent: &mut Container| {
-                            log::trace!("{LABEL}: size_cross_axis\n{parent}");
-
-                            for child in parent.relative_positioned_elements_mut() {
-                                if matches!(child.element, Element::Raw { .. }) {
-                                    continue;
-                                }
-
-                                log::trace!("{LABEL}: setting size to remaining_size={remaining_size}:\n{child}");
-                                let mut remaining_container_size = remaining_size;
-
-                                if let Some(size) = paste!(child.[<margin_ $unit>]()) {
-                                    log::trace!(
-                                        "{LABEL}: removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
-                                        remaining_container_size - size
-                                    );
-                                    remaining_container_size -= size;
-                                }
-                                if let Some(size) = paste!(child.[<padding_ $unit>]()) {
-                                    log::trace!(
-                                        "{LABEL}: removing padding size={size} from remaining_container_size={remaining_container_size} ({})",
-                                        remaining_container_size - size
-                                    );
-                                    remaining_container_size -= size;
-                                }
-
-                                #[allow(clippy::cast_precision_loss)]
-                                let mut new_size = remaining_container_size / (cell_count as f32);
-
-                                if let Some(max) = paste!(child.[<calculated_max_ $size>]) {
-                                    if new_size > max {
-                                        log::trace!("{LABEL}: setting size to calculated_max={max}");
-                                        new_size = max;
-                                    }
-                                }
-                                if let Some(min) = paste!(child.[<calculated_min_ $size>]) {
-                                    if new_size < min {
-                                        log::trace!("{LABEL}: setting size to calculated_min={min}");
-                                        new_size = min;
-                                    }
-                                } else if let Some(min) = paste!(child.[<calculated_child_min_ $size>]) {
-                                    if new_size < min
-                                        && paste!(child.[<calculated_max_ $size>]).is_none_or(|x| min < x)
-                                        && paste!(child.[<calculated_min_ $size>]).is_none_or(|x| min > x)
-                                    {
-                                        log::trace!("{LABEL}: setting size to calculated_child_min={min}");
-                                        new_size = min;
-                                    }
-                                }
-
-                                if new_size < 0.0 {
-                                    log::trace!("{LABEL}: clamping size to 0.0");
-                                    new_size = 0.0;
-                                }
-
-                                if child.$size.is_none() && set_float(&mut paste!(child.[<calculated_ $size>]), new_size).is_some() {
-                                    changed = true;
-                                }
-                            }
-                        };
 
                         log::trace!("{LABEL}: remaining_size={remaining_size}\n{parent}");
 
@@ -865,8 +804,76 @@ macro_rules! flex_on_axis {
                                 }
                             }
                             LayoutDirection::$cross_axis => {
-                                if parent.align_items.is_none() {
-                                    size_cross_axis(parent);
+                                log::trace!("{LABEL}: size_cross_axis\n{parent}");
+
+                                let align_items = parent.align_items;
+
+                                for child in parent.relative_positioned_elements_mut() {
+                                    if matches!(child.element, Element::Raw { .. }) {
+                                        continue;
+                                    }
+
+                                    if float_gt!(paste!(child.[<calculated_ $size>]).expect("Missing calculated_size"), container_size) {
+                                        if set_float(
+                                            &mut paste!(child.[<calculated_ $size>]),
+                                            paste!(child.[<calculated_min_ $size>]).unwrap_or(container_size)
+                                        ).is_some() {
+                                            changed = true;
+                                        }
+                                    }
+
+                                    if align_items.is_none() {
+                                        log::trace!("{LABEL}: setting size to remaining_size={remaining_size}:\n{child}");
+                                        let mut remaining_container_size = remaining_size;
+
+                                        if let Some(size) = paste!(child.[<margin_ $unit>]()) {
+                                            log::trace!(
+                                                "{LABEL}: removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
+                                                remaining_container_size - size
+                                            );
+                                            remaining_container_size -= size;
+                                        }
+                                        if let Some(size) = paste!(child.[<padding_ $unit>]()) {
+                                            log::trace!(
+                                                "{LABEL}: removing padding size={size} from remaining_container_size={remaining_container_size} ({})",
+                                                remaining_container_size - size
+                                            );
+                                            remaining_container_size -= size;
+                                        }
+
+                                        #[allow(clippy::cast_precision_loss)]
+                                        let mut new_size = remaining_container_size / (cell_count as f32);
+
+                                        if let Some(max) = paste!(child.[<calculated_max_ $size>]) {
+                                            if new_size > max {
+                                                log::trace!("{LABEL}: setting size to calculated_max={max}");
+                                                new_size = max;
+                                            }
+                                        }
+                                        if let Some(min) = paste!(child.[<calculated_min_ $size>]) {
+                                            if new_size < min {
+                                                log::trace!("{LABEL}: setting size to calculated_min={min}");
+                                                new_size = min;
+                                            }
+                                        } else if let Some(min) = paste!(child.[<calculated_child_min_ $size>]) {
+                                            if new_size < min
+                                                && paste!(child.[<calculated_max_ $size>]).is_none_or(|x| min < x)
+                                                && paste!(child.[<calculated_min_ $size>]).is_none_or(|x| min > x)
+                                            {
+                                                log::trace!("{LABEL}: setting size to calculated_child_min={min}");
+                                                new_size = min;
+                                            }
+                                        }
+
+                                        if new_size < 0.0 {
+                                            log::trace!("{LABEL}: clamping size to 0.0");
+                                            new_size = 0.0;
+                                        }
+
+                                        if child.$size.is_none() && set_float(&mut paste!(child.[<calculated_ $size>]), new_size).is_some() {
+                                            changed = true;
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -8964,6 +8971,70 @@ mod test {
             let mut container: Container = html! {
                 div sx-width=(200) {
                     span { "aoeu aoeu aoeu aoeu aoeu" }
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        calculated_width: Some(200.0),
+                        calculated_height: Some(14.0 * 2.0),
+                        ..container.children[0].clone()
+                    }],
+                    calculated_width: Some(200.0),
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_wrap_nested_text_longer_than_container_can_fit_with_align_items_center() {
+            let mut container: Container = html! {
+                div sx-width=(200) sx-align-items=(AlignItems::Center) {
+                    span { "aoeu aoeu aoeu aoeu aoeu" }
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("full container:\n{}", container);
+            container = container.children[0].clone();
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        calculated_width: Some(200.0),
+                        calculated_height: Some(14.0 * 2.0),
+                        ..container.children[0].clone()
+                    }],
+                    calculated_width: Some(200.0),
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_wrap_text_longer_than_nested_div_container_can_fit_with_align_items_center() {
+            let mut container: Container = html! {
+                div sx-width=(200) sx-align-items=(AlignItems::Center) {
+                    div { "aoeu aoeu aoeu aoeu aoeu" }
                 }
             }
             .try_into()
