@@ -1759,20 +1759,12 @@ mod passes {
                                         match align_items {
                                             AlignItems::Start => unreachable!(),
                                             AlignItems::Center => match direction {
-                                                LayoutDirection::Row => {
-                                                    y += (container_height - size) / 2.0;
-                                                }
-                                                LayoutDirection::Column => {
-                                                    x += (container_width - size) / 2.0;
-                                                }
+                                                LayoutDirection::Row => y += (container_height - size) / 2.0,
+                                                LayoutDirection::Column => x += (container_width - size) / 2.0,
                                             },
                                             AlignItems::End => match direction {
-                                                LayoutDirection::Row => {
-                                                    y += container_height - size;
-                                                }
-                                                LayoutDirection::Column => {
-                                                    x += container_width - size;
-                                                }
+                                                LayoutDirection::Row => y += container_height - size,
+                                                LayoutDirection::Column => x += container_width - size,
                                             },
                                         }
                                     }
