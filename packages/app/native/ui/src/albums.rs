@@ -509,7 +509,7 @@ pub fn album_display(
         let artist_page_url = artist_page_url(&album.artist_id.to_string());
 
         html! {
-            div sx-padding-top=(5) {
+            div {
                 div {
                     a href=(album_page_url) { (album.title) }
                 }
@@ -604,7 +604,7 @@ pub fn album_display(
     };
 
     html! {
-        div sx-width=(size) {
+        div sx-width=(size) sx-gap=(5) {
             a href=(album_page_url) sx-width=(size) {
                 (album_cover)
             }
