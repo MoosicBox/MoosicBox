@@ -213,6 +213,9 @@ pub fn album_page_content(
                     sx-height=(40)
                     sx-background="#fff"
                     sx-border-radius=(5)
+                    sx-justify-content=(JustifyContent::Center)
+                    sx-align-items=(AlignItems::Center)
+                    sx-gap=(8)
                     fx-click=(Action::PlayAlbum {
                         album_id: album.album_id.clone(),
                         api_source: album.api_source,
@@ -234,6 +237,9 @@ pub fn album_page_content(
                     sx-height=(40)
                     sx-background="#fff"
                     sx-border-radius=(5)
+                    sx-justify-content=(JustifyContent::Center)
+                    sx-align-items=(AlignItems::Center)
+                    sx-gap=(8)
                     fx-click=(Action::AddAlbumToQueue {
                         album_id: album.album_id.clone(),
                         api_source: album.api_source,
