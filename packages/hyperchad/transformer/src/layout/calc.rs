@@ -10759,6 +10759,142 @@ mod test {
                 },
             );
         }
+
+        #[test_log::test]
+        fn does_include_margin_top_in_parent_height() {
+            let mut container: Container = html! {
+                div sx-dir=(LayoutDirection::Column) {
+                    div sx-margin-top=(5) sx-height=(10) {}
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.direction = LayoutDirection::Column;
+            container.calculated_width = Some(100.0);
+            container.calculated_height = Some(400.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        children: vec![Container {
+                            calculated_height: Some(10.0),
+                            ..container.children[0].children[0].clone()
+                        }],
+                        calculated_height: Some(15.0),
+                        ..container.children[0].clone()
+                    }],
+                    calculated_height: Some(400.0),
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_include_margin_bottom_in_parent_height() {
+            let mut container: Container = html! {
+                div sx-dir=(LayoutDirection::Column) {
+                    div sx-margin-bottom=(5) sx-height=(10) {}
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.direction = LayoutDirection::Column;
+            container.calculated_width = Some(100.0);
+            container.calculated_height = Some(400.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        children: vec![Container {
+                            calculated_height: Some(10.0),
+                            ..container.children[0].children[0].clone()
+                        }],
+                        calculated_height: Some(15.0),
+                        ..container.children[0].clone()
+                    }],
+                    calculated_height: Some(400.0),
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_include_margin_left_in_parent_width() {
+            let mut container: Container = html! {
+                div sx-dir=(LayoutDirection::Row) {
+                    div sx-margin-left=(5) sx-width=(10) {}
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.direction = LayoutDirection::Row;
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        children: vec![Container {
+                            calculated_width: Some(10.0),
+                            ..container.children[0].children[0].clone()
+                        }],
+                        calculated_width: Some(15.0),
+                        ..container.children[0].clone()
+                    }],
+                    calculated_width: Some(400.0),
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_include_margin_right_in_parent_width() {
+            let mut container: Container = html! {
+                div sx-dir=(LayoutDirection::Row) {
+                    div sx-margin-right=(5) sx-width=(10) {}
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.direction = LayoutDirection::Row;
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        children: vec![Container {
+                            calculated_width: Some(10.0),
+                            ..container.children[0].children[0].clone()
+                        }],
+                        calculated_width: Some(15.0),
+                        ..container.children[0].clone()
+                    }],
+                    calculated_width: Some(400.0),
+                    ..container.clone()
+                },
+            );
+        }
     }
 
     mod position_sticky {
