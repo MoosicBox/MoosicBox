@@ -27,6 +27,7 @@ bumpalo     = { workspace = true, features = ["collections"], optional = true }
 html-escape = { workspace = true }
 log         = { workspace = true }
 maud        = { workspace = true, optional = true }
+paste       = { workspace = true }
 profiling   = { workspace = true, optional = true }
 serde       = { workspace = true }
 serde_json  = { workspace = true }
@@ -53,7 +54,6 @@ moosicbox_arb = { path = "../../arb", default-features = false, features = [
     "serde",
     "xml",
 ] }
-paste = { workspace = true }
 pretty_assertions = { workspace = true }
 quickcheck = { workspace = true }
 quickcheck_macros = { workspace = true }
