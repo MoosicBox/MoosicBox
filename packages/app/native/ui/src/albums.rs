@@ -207,7 +207,7 @@ pub fn album_page_content(
                     }
                 }
             }
-            div sx-dir="row" sx-padding-y=(20) {
+            div sx-dir="row" sx-padding-y=(20) sx-gap=(8) {
                 button
                     sx-dir="row"
                     sx-width=(130)
