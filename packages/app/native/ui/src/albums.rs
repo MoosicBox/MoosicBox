@@ -509,7 +509,7 @@ pub fn album_display(
         let artist_page_url = artist_page_url(&album.artist_id.to_string());
 
         html! {
-            div {
+            div sx-align-items=(AlignItems::Center) {
                 div {
                     a href=(album_page_url) { (album.title) }
                 }
