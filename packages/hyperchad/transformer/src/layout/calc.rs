@@ -1624,8 +1624,12 @@ mod passes {
                         } else {
                             let mut x = 0.0;
                             let mut y = 0.0;
-                            let mut col_gap = 0.0;
+                            let mut col_gap = parent.calculated_column_gap.unwrap_or_default();
                             let row_gap = parent.calculated_row_gap.unwrap_or_default();
+                            let axis_gap = match direction {
+                                LayoutDirection::Row => col_gap,
+                                LayoutDirection::Column => row_gap,
+                            };
 
                             macro_rules! visible_elements {
                                 () => {{
@@ -1655,19 +1659,25 @@ mod passes {
                             match justify_content {
                                 JustifyContent::Start => {}
                                 JustifyContent::Center => {
+                                    let count = visible_elements!().count();
                                     let size: f32 = sizes_on_axis!(direction).sum();
+                                    #[allow(clippy::cast_precision_loss)]
+                                    let gap_offset = (count - 1) as f32 * axis_gap;
 
                                     match direction {
-                                        LayoutDirection::Row => x += (container_width - size) / 2.0,
-                                        LayoutDirection::Column => y += (container_height - size) / 2.0,
+                                        LayoutDirection::Row => x += (container_width - size - gap_offset) / 2.0,
+                                        LayoutDirection::Column => y += (container_height - size - gap_offset) / 2.0,
                                     }
                                 }
                                 JustifyContent::End => {
+                                    let count = visible_elements!().count();
                                     let size: f32 = sizes_on_axis!(direction).sum();
+                                    #[allow(clippy::cast_precision_loss)]
+                                    let gap_offset = (count - 1) as f32 * axis_gap;
 
                                     match direction {
-                                        LayoutDirection::Row => x += container_width - size,
-                                        LayoutDirection::Column => y += container_height - size,
+                                        LayoutDirection::Row => x += container_width - size - gap_offset,
+                                        LayoutDirection::Column => y += container_height - size - gap_offset,
                                     }
                                 }
                                 JustifyContent::SpaceBetween => {
@@ -11493,6 +11503,152 @@ mod test {
                         },
                         Container {
                             calculated_x: Some(26.0),
+                            ..container.children[1].clone()
+                        },
+                    ],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_take_into_account_column_gap_for_non_wrapping_div() {
+            let mut container: Container = html! {
+                div sx-width=(20) {}
+                div sx-width=(30) {}
+            }
+            .try_into()
+            .unwrap();
+
+            container.direction = LayoutDirection::Row;
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+            container.column_gap = Some(Number::Integer(5));
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![
+                        Container {
+                            calculated_x: Some(0.0),
+                            ..container.children[0].clone()
+                        },
+                        Container {
+                            calculated_x: Some(20.0 + 5.0),
+                            ..container.children[1].clone()
+                        },
+                    ],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_take_into_account_column_gap_for_non_wrapping_div_and_centers_properly() {
+            let mut container: Container = html! {
+                div sx-width=(20) {}
+                div sx-width=(30) {}
+            }
+            .try_into()
+            .unwrap();
+
+            container.direction = LayoutDirection::Row;
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+            container.column_gap = Some(Number::Integer(5));
+            container.justify_content = Some(JustifyContent::Center);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![
+                        Container {
+                            calculated_x: Some(400.0 / 2.0 - (20.0 + 30.0 + 5.0) / 2.0),
+                            ..container.children[0].clone()
+                        },
+                        Container {
+                            calculated_x: Some(
+                                400.0 / 2.0 - (20.0 + 30.0 + 5.0) / 2.0 + 20.0 + 5.0,
+                            ),
+                            ..container.children[1].clone()
+                        },
+                    ],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_take_into_account_row_gap_for_non_wrapping_div() {
+            let mut container: Container = html! {
+                div sx-height=(20) {}
+                div sx-height=(30) {}
+            }
+            .try_into()
+            .unwrap();
+
+            container.direction = LayoutDirection::Column;
+            container.calculated_width = Some(100.0);
+            container.calculated_height = Some(400.0);
+            container.row_gap = Some(Number::Integer(5));
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![
+                        Container {
+                            calculated_y: Some(0.0),
+                            ..container.children[0].clone()
+                        },
+                        Container {
+                            calculated_y: Some(20.0 + 5.0),
+                            ..container.children[1].clone()
+                        },
+                    ],
+                    ..container.clone()
+                },
+            );
+        }
+
+        #[test_log::test]
+        fn does_take_into_account_row_gap_for_non_wrapping_div_and_centers_properly() {
+            let mut container: Container = html! {
+                div sx-height=(20) {}
+                div sx-height=(30) {}
+            }
+            .try_into()
+            .unwrap();
+
+            container.direction = LayoutDirection::Column;
+            container.calculated_width = Some(100.0);
+            container.calculated_height = Some(400.0);
+            container.row_gap = Some(Number::Integer(5));
+            container.justify_content = Some(JustifyContent::Center);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{}", container);
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![
+                        Container {
+                            calculated_y: Some(400.0 / 2.0 - (20.0 + 30.0 + 5.0) / 2.0),
+                            ..container.children[0].clone()
+                        },
+                        Container {
+                            calculated_y: Some(
+                                400.0 / 2.0 - (20.0 + 30.0 + 5.0) / 2.0 + 20.0 + 5.0,
+                            ),
                             ..container.children[1].clone()
                         },
                     ],
