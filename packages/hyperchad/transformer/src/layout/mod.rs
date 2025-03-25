@@ -33,6 +33,16 @@ macro_rules! float_gte {
     ($a:expr, $b:expr $(,)?) => {{ $a - $b > -$crate::layout::EPSILON }};
 }
 
+#[macro_export]
+macro_rules! min_float {
+    ($a:expr, $b:expr $(,)?) => {{ if $a <= $b { $a } else { $b } }};
+}
+
+#[macro_export]
+macro_rules! max_float {
+    ($a:expr, $b:expr $(,)?) => {{ if $a > $b { $a } else { $b } }};
+}
+
 pub fn get_scrollbar_size() -> u16 {
     SCROLLBAR_SIZE.load(std::sync::atomic::Ordering::SeqCst)
 }
