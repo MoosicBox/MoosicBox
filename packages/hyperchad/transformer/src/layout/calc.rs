@@ -84,8 +84,7 @@ macro_rules! calc_size_on_axis {
         $cross_axis:ident,
         $x:ident,
         $y:ident,
-        $gap:ident,
-        $overflow:ident,
+        $unit:ident,
         $each_parent:expr,
         $each_child:expr
         $(,)?
@@ -136,14 +135,14 @@ macro_rules! calc_size_on_axis {
                 let mut min_size = 0.0;
                 let mut preferred_size = 0.0;
 
-                if let Some(gap) = parent.$gap.as_ref().and_then(crate::Number::as_fixed) {
+                if let Some(gap) = paste!(parent.[<$cross_axis:lower _gap>]).as_ref().and_then(crate::Number::as_fixed) {
                     let gap = gap.calc(0.0, view_width, view_height);
                     log::trace!("{LABEL}: setting gap={gap}");
-                    paste!(parent.[<calculated_ $gap>]) = Some(gap);
+                    paste!(parent.[<calculated_ $cross_axis:lower _gap>]) = Some(gap);
                 }
 
                 let direction = parent.direction;
-                let overflow = parent.$overflow;
+                let overflow = paste!(parent.[<overflow_ $unit>]);
 
                 for child in &mut parent.children {
                     log::trace!("{LABEL}: container:\n{child}");
@@ -365,10 +364,7 @@ macro_rules! flex_on_axis {
         $cell:ident,
         $x:ident,
         $y:ident,
-        $margin_axis:ident,
-        $padding_axis:ident,
-        $gap:ident,
-        $overflow:ident
+        $unit:ident
         $(,)?
     ) => {{
         use paste::paste;
@@ -411,8 +407,8 @@ macro_rules! flex_on_axis {
                 let direction = parent.direction;
                 let container_size = paste!(parent.[<calculated_ $size>]).expect("Missing container size");
 
-                if let Some(gap) = &parent.$gap.as_ref().and_then(crate::Number::as_dynamic) {
-                    paste!(parent.[<calculated_ $gap>]) =
+                if let Some(gap) = paste!(parent.[<$cross_axis:lower _gap>]).as_ref().and_then(crate::Number::as_dynamic) {
+                    paste!(parent.[<calculated_ $cross_axis:lower _gap>]) =
                         Some(gap.calc(container_size, view_width, view_height));
                 }
 
@@ -444,7 +440,7 @@ macro_rules! flex_on_axis {
                         }
                     }
 
-                    if matches!(child.$overflow, LayoutOverflow::Auto | LayoutOverflow::Scroll) {
+                    if matches!(paste!(child.[<overflow_ $unit>]), LayoutOverflow::Auto | LayoutOverflow::Scroll) {
                         if let Some(min) = &mut paste!(child.[<calculated_min_ $size>]).or(paste!(child.[<calculated_child_min_ $size>])) {
                             log::trace!("{LABEL}: checking if min={min} > container_size={container_size}");
                             if *min > container_size {
@@ -501,14 +497,14 @@ macro_rules! flex_on_axis {
                     for child in parent.relative_positioned_elements() {
                         match direction {
                             LayoutDirection::$axis => {
-                                if let Some(size) = child.$margin_axis() {
+                                if let Some(size) = paste!(child.[<margin_ $unit>]()) {
                                     log::trace!(
                                         "{LABEL}: removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
                                         remaining_container_size - size
                                     );
                                     remaining_container_size -= size;
                                 }
-                                if let Some(size) = child.$padding_axis() {
+                                if let Some(size) = paste!(child.[<padding_ $unit>]()) {
                                     log::trace!(
                                         "{LABEL}: removing padding size={size} from remaining_container_size={remaining_container_size} ({})",
                                         remaining_container_size - size
@@ -530,8 +526,8 @@ macro_rules! flex_on_axis {
                                 LayoutDirection::$axis => container_size,
                                 LayoutDirection::$cross_axis => {
                                     container_size
-                                        - child.$margin_axis().unwrap_or_default()
-                                        - child.$padding_axis().unwrap_or_default()
+                                        - paste!(child.[<margin_ $unit>]()).unwrap_or_default()
+                                        - paste!(child.[<padding_ $unit>]()).unwrap_or_default()
                                 }
                             };
                             log::trace!("{LABEL}: calculating dynamic size={size:?}");
@@ -594,14 +590,14 @@ macro_rules! flex_on_axis {
                                 log::trace!("{LABEL}: setting size to remaining_size={remaining_size}:\n{child}");
                                 let mut remaining_container_size = remaining_size;
 
-                                if let Some(size) = child.$margin_axis() {
+                                if let Some(size) = paste!(child.[<margin_ $unit>]()) {
                                     log::trace!(
                                         "{LABEL}: removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
                                         remaining_container_size - size
                                     );
                                     remaining_container_size -= size;
                                 }
-                                if let Some(size) = child.$padding_axis() {
+                                if let Some(size) = paste!(child.[<padding_ $unit>]()) {
                                     log::trace!(
                                         "{LABEL}: removing padding size={size} from remaining_container_size={remaining_container_size} ({})",
                                         remaining_container_size - size
@@ -720,7 +716,7 @@ macro_rules! flex_on_axis {
 
                                                 if let Some(max) = paste!(child.[<calculated_max_ $size>]) {
                                                     log::trace!("{LABEL}: calculated_max={max}");
-                                                    let max = max - child.$padding_axis().unwrap_or_default() - child.$margin_axis().unwrap_or_default();
+                                                    let max = max - paste!(child.[<padding_ $unit>]()).unwrap_or_default() - paste!(child.[<margin_ $unit>]()).unwrap_or_default();
                                                     log::trace!("{LABEL}: calculated_max={max} without padding/margins");
                                                     if target > max {
                                                         remaining_size -= max - target;
@@ -729,7 +725,7 @@ macro_rules! flex_on_axis {
                                                 }
                                                 if let Some(min) = paste!(child.[<calculated_min_ $size>]) {
                                                     log::trace!("{LABEL}: calculated_min={min}");
-                                                    let min = min - child.$padding_axis().unwrap_or_default() - child.$margin_axis().unwrap_or_default();
+                                                    let min = min - paste!(child.[<padding_ $unit>]()).unwrap_or_default() - paste!(child.[<margin_ $unit>]()).unwrap_or_default();
                                                     log::trace!("{LABEL}: calculated_min={min} without padding/margins");
                                                     if target < min {
                                                         remaining_size -= min - target;
@@ -739,7 +735,7 @@ macro_rules! flex_on_axis {
                                                 if direction == LayoutDirection::Row && child.is_raw() {
                                                     if let Some(preferred) = paste!(child.[<calculated_preferred_ $size>]) {
                                                         log::trace!("{LABEL}: calculated_preferred={preferred}");
-                                                        let preferred = preferred - child.$padding_axis().unwrap_or_default() - child.$margin_axis().unwrap_or_default();
+                                                        let preferred = preferred - paste!(child.[<padding_ $unit>]()).unwrap_or_default() - paste!(child.[<margin_ $unit>]()).unwrap_or_default();
                                                         log::trace!("{LABEL}: calculated_preferred={preferred} without padding/margins");
                                                         if target > preferred {
                                                             remaining_size += target - preferred;
@@ -832,7 +828,7 @@ macro_rules! flex_on_axis {
 
                                                 if let Some(min) = paste!(child.[<calculated_min_ $size>]) {
                                                     log::trace!("{LABEL}: calculated_min={min}");
-                                                    let min = min - child.$padding_axis().unwrap_or_default() - child.$margin_axis().unwrap_or_default();
+                                                    let min = min - paste!(child.[<padding_ $unit>]()).unwrap_or_default() - paste!(child.[<margin_ $unit>]()).unwrap_or_default();
                                                     log::trace!("{LABEL}: calculated_min={min} without padding/margins");
                                                     if target < min {
                                                         remaining_size -= min - target;
@@ -842,7 +838,7 @@ macro_rules! flex_on_axis {
                                                 if direction == LayoutDirection::Row && child.is_raw() {
                                                     if let Some(preferred) = paste!(child.[<calculated_preferred_ $size>]) {
                                                         log::trace!("{LABEL}: calculated_preferred={preferred}");
-                                                        let preferred = preferred - child.$padding_axis().unwrap_or_default() - child.$margin_axis().unwrap_or_default();
+                                                        let preferred = preferred - paste!(child.[<padding_ $unit>]()).unwrap_or_default() - paste!(child.[<margin_ $unit>]()).unwrap_or_default();
                                                         log::trace!("{LABEL}: calculated_preferred={preferred} without padding/margins");
                                                         if target > preferred {
                                                             remaining_size += target - preferred;
@@ -884,14 +880,14 @@ macro_rules! flex_on_axis {
                 for child in parent.absolute_positioned_elements_mut() {
                     let mut remaining_container_size = *relative_size;
 
-                    if let Some(size) = child.$margin_axis() {
+                    if let Some(size) = paste!(child.[<margin_ $unit>]()) {
                         log::trace!(
                             "{LABEL}: absolute removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
                             remaining_container_size - size
                         );
                         remaining_container_size -= size;
                     }
-                    if let Some(size) = child.$padding_axis() {
+                    if let Some(size) = paste!(child.[<padding_ $unit>]()) {
                         log::trace!(
                             "{LABEL}: absolute removing padding size={size} from remaining_container_size={remaining_container_size} ({})",
                             remaining_container_size - size
@@ -914,14 +910,14 @@ macro_rules! flex_on_axis {
                 for child in parent.fixed_positioned_elements_mut() {
                     let mut remaining_container_size = *relative_size;
 
-                    if let Some(size) = child.$margin_axis() {
+                    if let Some(size) = paste!(child.[<margin_ $unit>]()) {
                         log::trace!(
                             "{LABEL}: fixed removing margin size={size} from remaining_container_size={remaining_container_size} ({})",
                             remaining_container_size - size
                         );
                         remaining_container_size -= size;
                     }
-                    if let Some(size) = child.$padding_axis() {
+                    if let Some(size) = paste!(child.[<padding_ $unit>]()) {
                         log::trace!(
                             "{LABEL}: fixed removing padding size={size} from remaining_container_size={remaining_container_size} ({})",
                             remaining_container_size - size
@@ -952,8 +948,6 @@ macro_rules! wrap_on_axis {
         $container:ident,
         $size:ident,
         $overflow:ident,
-        $margin_axis:ident,
-        $padding_axis:ident,
         $gap:ident,
         $each_child:expr
         $(,)?
@@ -1064,15 +1058,13 @@ mod passes {
 
                 macro_rules! default_heading_prop {
                     ($size:expr, $prop:ident $(,)?) => {
-                        paste! {
-                            match $size {
-                                HeaderSize::H1 => defaults.[<h1_ $prop>],
-                                HeaderSize::H2 => defaults.[<h2_ $prop>],
-                                HeaderSize::H3 => defaults.[<h3_ $prop>],
-                                HeaderSize::H4 => defaults.[<h4_ $prop>],
-                                HeaderSize::H5 => defaults.[<h5_ $prop>],
-                                HeaderSize::H6 => defaults.[<h6_ $prop>],
-                            }
+                        match $size {
+                            HeaderSize::H1 => paste!(defaults.[<h1_ $prop>]),
+                            HeaderSize::H2 => paste!(defaults.[<h2_ $prop>]),
+                            HeaderSize::H3 => paste!(defaults.[<h3_ $prop>]),
+                            HeaderSize::H4 => paste!(defaults.[<h4_ $prop>]),
+                            HeaderSize::H5 => paste!(defaults.[<h5_ $prop>]),
+                            HeaderSize::H6 => paste!(defaults.[<h6_ $prop>]),
                         }
                     };
                 }
@@ -1180,8 +1172,7 @@ mod passes {
                     Column,
                     left,
                     right,
-                    column_gap,
-                    overflow_x,
+                    x,
                     each_parent,
                     each_child,
                 )
@@ -1289,10 +1280,7 @@ mod passes {
                     col,
                     left,
                     right,
-                    horizontal_margin,
-                    horizontal_padding,
-                    column_gap,
-                    overflow_x,
+                    x,
                 )
             }
         }
@@ -1338,16 +1326,7 @@ mod passes {
                 };
 
                 wrap_on_axis!(
-                    "wrap",
-                    Row,
-                    bfs,
-                    container,
-                    width,
-                    overflow_x,
-                    horizontal_margin,
-                    horizontal_padding,
-                    column_gap,
-                    each_child,
+                    "wrap", Row, bfs, container, width, overflow_x, column_gap, each_child,
                 )
             }
         }
@@ -1375,8 +1354,7 @@ mod passes {
                     Row,
                     top,
                     bottom,
-                    row_gap,
-                    overflow_y,
+                    y,
                     (|_, _, _, _, _| {}),
                     (|_, _, _, _, _| {}),
                 )
@@ -1408,10 +1386,7 @@ mod passes {
                     row,
                     top,
                     bottom,
-                    vertical_margin,
-                    vertical_padding,
-                    row_gap,
-                    overflow_y,
+                    y,
                 )
             }
         }
@@ -1911,7 +1886,7 @@ mod passes {
 
 impl Container {
     #[must_use]
-    pub fn horizontal_margin(&self) -> Option<f32> {
+    pub fn margin_x(&self) -> Option<f32> {
         let mut margin = None;
         if let Some(margin_left) = self.calculated_margin_left {
             margin = Some(margin_left);
@@ -1923,7 +1898,7 @@ impl Container {
     }
 
     #[must_use]
-    pub fn vertical_margin(&self) -> Option<f32> {
+    pub fn margin_y(&self) -> Option<f32> {
         let mut margin = None;
         if let Some(margin_top) = self.calculated_margin_top {
             margin = Some(margin_top);
@@ -1935,7 +1910,7 @@ impl Container {
     }
 
     #[must_use]
-    pub fn horizontal_padding(&self) -> Option<f32> {
+    pub fn padding_x(&self) -> Option<f32> {
         let mut padding = None;
         if let Some(padding_left) = self.calculated_padding_left {
             padding = Some(padding_left);
@@ -1947,7 +1922,7 @@ impl Container {
     }
 
     #[must_use]
-    pub fn vertical_padding(&self) -> Option<f32> {
+    pub fn padding_y(&self) -> Option<f32> {
         let mut padding = None;
         if let Some(padding_top) = self.calculated_padding_top {
             padding = Some(padding_top);
@@ -1959,7 +1934,7 @@ impl Container {
     }
 
     #[must_use]
-    pub fn horizontal_borders(&self) -> Option<f32> {
+    pub fn borders_x(&self) -> Option<f32> {
         let mut borders = None;
         if let Some((_, border_left)) = self.calculated_border_left {
             borders = Some(border_left);
@@ -1971,7 +1946,7 @@ impl Container {
     }
 
     #[must_use]
-    pub fn vertical_borders(&self) -> Option<f32> {
+    pub fn borders_y(&self) -> Option<f32> {
         let mut borders = None;
         if let Some((_, border_top)) = self.calculated_border_top {
             borders = Some(border_top);
@@ -1985,7 +1960,7 @@ impl Container {
     #[must_use]
     pub fn calculated_width_minus_borders(&self) -> Option<f32> {
         self.calculated_width.map(|x| {
-            self.horizontal_borders().map_or(x, |borders| {
+            self.borders_x().map_or(x, |borders| {
                 let x = x - borders;
                 if x < 0.0 { 0.0 } else { x }
             })
@@ -1995,7 +1970,7 @@ impl Container {
     #[must_use]
     pub fn calculated_height_minus_borders(&self) -> Option<f32> {
         self.calculated_height.map(|x| {
-            self.vertical_borders().map_or(x, |borders| {
+            self.borders_y().map_or(x, |borders| {
                 let x = x - borders;
                 if x < 0.0 { 0.0 } else { x }
             })
@@ -2006,9 +1981,9 @@ impl Container {
     pub fn bounding_calculated_width(&self) -> Option<f32> {
         self.calculated_width.map(|width| {
             width
-                + self.horizontal_padding().unwrap_or(0.0)
+                + self.padding_x().unwrap_or(0.0)
                 + self.scrollbar_right.unwrap_or(0.0)
-                + self.horizontal_margin().unwrap_or(0.0)
+                + self.margin_x().unwrap_or(0.0)
         })
     }
 
@@ -2016,9 +1991,9 @@ impl Container {
     pub fn bounding_calculated_height(&self) -> Option<f32> {
         self.calculated_height.map(|height| {
             height
-                + self.vertical_padding().unwrap_or(0.0)
+                + self.padding_y().unwrap_or(0.0)
                 + self.scrollbar_bottom.unwrap_or(0.0)
-                + self.vertical_margin().unwrap_or(0.0)
+                + self.margin_y().unwrap_or(0.0)
         })
     }
 }
