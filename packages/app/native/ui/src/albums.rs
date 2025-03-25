@@ -22,7 +22,8 @@ use crate::{
     Action,
     artists::artist_page_url,
     formatting::{
-        TimeFormat as _, TrackApiSourceFormat, display_album_version_qualities, format_date_string,
+        AlbumVersionQualityFormat as _, TimeFormat as _, display_album_version_qualities,
+        format_date_string,
     },
     page, pre_escaped, public_img,
     state::State,
@@ -184,8 +185,8 @@ pub fn album_page_content(
                         h2 { (format_date_string(date_released, "%B %d, %Y")) }
                     }
                     div sx-dir="row" {
-                        @for version in &album.versions {
-                            @let selected = selected_version.is_some_and(|x| same_version(version, &x.into()));
+                        @for version in album.versions.iter().copied() {
+                            @let selected = selected_version.is_some_and(|x| same_version(&version, &x.into()));
                             a href=(
                                 album_page_url(
                                     &album.album_id.to_string(),
@@ -198,7 +199,7 @@ pub fn album_page_content(
                             ) {
                                 h3 {
                                     (if selected { "*" } else { "" })
-                                    (version.source.into_formatted())
+                                    (version.into_formatted())
                                     (if selected { "*" } else { "" })
                                 }
                             }
