@@ -137,7 +137,7 @@ pub fn sidebar_navigation() -> Markup {
                             sx-height=(icon_size)
                             src=(public_img!("icon128.png"));
 
-                        h1 class="navigation-bar-header-home-link-text" {
+                        h1 class="navigation-bar-header-home-link-text" sx-font-size=(20) {
                             "MoosicBox"
                         }
                     }
@@ -169,7 +169,7 @@ pub fn sidebar_navigation() -> Markup {
                         }
                     }
                 }
-                h1 class="my-collection-header" {
+                h1 class="my-collection-header" sx-font-size=(20) {
                     "My Collection"
                 }
                 ul {

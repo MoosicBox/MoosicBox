@@ -43,7 +43,7 @@ pub static CLIENT_INFO: std::sync::LazyLock<Arc<hyperchad_router::ClientInfo>> =
 mod egui {
     use std::sync::Arc;
 
-    use hyperchad_renderer::transformer::layout::calc::Calculator;
+    use hyperchad_renderer::transformer::layout::calc::{Calculator, CalculatorDefaults};
     use hyperchad_renderer_egui::eframe::egui::{self};
     use hyperchad_renderer_egui::font_metrics::EguiFontMetrics;
 
@@ -58,9 +58,32 @@ mod egui {
 
     impl hyperchad_renderer_egui::layout::EguiCalc for EguiCalculator {
         fn with_context(mut self, context: egui::Context) -> Self {
+            const DELTA: f32 = 14.0f32 / 16.0;
             self.0 = Some(Arc::new(Calculator::new(
                 EguiFontMetrics::new(context),
-                14.0,
+                CalculatorDefaults {
+                    font_size: 16.0 * DELTA,
+                    font_margin_top: 0.0 * DELTA,
+                    font_margin_bottom: 0.0 * DELTA,
+                    h1_font_size: 32.0 * DELTA,
+                    h1_font_margin_top: 21.44 * DELTA,
+                    h1_font_margin_bottom: 21.44 * DELTA,
+                    h2_font_size: 24.0 * DELTA,
+                    h2_font_margin_top: 19.92 * DELTA,
+                    h2_font_margin_bottom: 19.92 * DELTA,
+                    h3_font_size: 18.72 * DELTA,
+                    h3_font_margin_top: 18.72 * DELTA,
+                    h3_font_margin_bottom: 18.72 * DELTA,
+                    h4_font_size: 16.0 * DELTA,
+                    h4_font_margin_top: 21.28 * DELTA,
+                    h4_font_margin_bottom: 21.28 * DELTA,
+                    h5_font_size: 13.28 * DELTA,
+                    h5_font_margin_top: 22.1776 * DELTA,
+                    h5_font_margin_bottom: 22.1776 * DELTA,
+                    h6_font_size: 10.72 * DELTA,
+                    h6_font_margin_top: 24.9776 * DELTA,
+                    h6_font_margin_bottom: 24.9776 * DELTA,
+                },
             )));
             self
         }

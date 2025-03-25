@@ -5049,6 +5049,7 @@ dependencies = [
  "moosicbox_arb",
  "moosicbox_assert",
  "moosicbox_logging",
+ "paste",
  "pretty_assertions",
  "profiling",
  "quickcheck",

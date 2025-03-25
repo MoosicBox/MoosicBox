@@ -32,7 +32,10 @@ use hyperchad_renderer::viewport::retained::{
 };
 use hyperchad_transformer::{
     Container, Element, HeaderSize, ResponsiveTrigger,
-    layout::{Calc as _, calc::Calculator},
+    layout::{
+        Calc as _,
+        calc::{Calculator, CalculatorDefaults},
+    },
     models::{LayoutDirection, LayoutOverflow, LayoutPosition},
 };
 use thiserror::Error;
@@ -50,8 +53,33 @@ static DEBUG: LazyLock<RwLock<bool>> = LazyLock::new(|| {
     )
 });
 
-static FLTK_CALCULATOR: Calculator<font_metrics::FltkFontMetrics> =
-    Calculator::new(font_metrics::FltkFontMetrics, 14.0);
+const DELTA: f32 = 14.0f32 / 16.0;
+static FLTK_CALCULATOR: Calculator<font_metrics::FltkFontMetrics> = Calculator::new(
+    font_metrics::FltkFontMetrics,
+    CalculatorDefaults {
+        font_size: 16.0 * DELTA,
+        font_margin_top: 0.0 * DELTA,
+        font_margin_bottom: 0.0 * DELTA,
+        h1_font_size: 32.0 * DELTA,
+        h1_font_margin_top: 21.44 * DELTA,
+        h1_font_margin_bottom: 21.44 * DELTA,
+        h2_font_size: 24.0 * DELTA,
+        h2_font_margin_top: 19.92 * DELTA,
+        h2_font_margin_bottom: 19.92 * DELTA,
+        h3_font_size: 18.72 * DELTA,
+        h3_font_margin_top: 18.72 * DELTA,
+        h3_font_margin_bottom: 18.72 * DELTA,
+        h4_font_size: 16.0 * DELTA,
+        h4_font_margin_top: 21.28 * DELTA,
+        h4_font_margin_bottom: 21.28 * DELTA,
+        h5_font_size: 13.28 * DELTA,
+        h5_font_margin_top: 22.1776 * DELTA,
+        h5_font_margin_bottom: 22.1776 * DELTA,
+        h6_font_size: 10.72 * DELTA,
+        h6_font_margin_top: 24.9776 * DELTA,
+        h6_font_margin_bottom: 24.9776 * DELTA,
+    },
+);
 
 #[derive(Debug, Error)]
 pub enum LoadImageError {

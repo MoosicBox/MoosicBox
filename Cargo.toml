@@ -235,6 +235,7 @@ opentelemetry-prometheus = { version = "0.28.0" }
 opentelemetry_sdk = { version = "0.28.0", features = ["rt-tokio"] }
 opus = "0.3.0"
 os_info = { version = "3.10.0", default-features = false }
+paste = "1.0.15"
 pin-project = "1.1.10"
 pin-utils = "0.1.0"
 pingora = "0.4.0"

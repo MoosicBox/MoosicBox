@@ -4,16 +4,41 @@ use crate::Container;
 
 use super::{Calc, font::FontMetrics};
 
+#[derive(Debug, Clone, Copy)]
+pub struct CalculatorDefaults {
+    pub font_size: f32,
+    pub font_margin_top: f32,
+    pub font_margin_bottom: f32,
+    pub h1_font_size: f32,
+    pub h1_font_margin_top: f32,
+    pub h1_font_margin_bottom: f32,
+    pub h2_font_size: f32,
+    pub h2_font_margin_top: f32,
+    pub h2_font_margin_bottom: f32,
+    pub h3_font_size: f32,
+    pub h3_font_margin_top: f32,
+    pub h3_font_margin_bottom: f32,
+    pub h4_font_size: f32,
+    pub h4_font_margin_top: f32,
+    pub h4_font_margin_bottom: f32,
+    pub h5_font_size: f32,
+    pub h5_font_margin_top: f32,
+    pub h5_font_margin_bottom: f32,
+    pub h6_font_size: f32,
+    pub h6_font_margin_top: f32,
+    pub h6_font_margin_bottom: f32,
+}
+
 pub struct Calculator<F: FontMetrics> {
     font_metrics: F,
-    default_font_size: f32,
+    defaults: CalculatorDefaults,
 }
 
 impl<F: FontMetrics> Calculator<F> {
-    pub const fn new(font_metrics: F, default_font_size: f32) -> Self {
+    pub const fn new(font_metrics: F, defaults: CalculatorDefaults) -> Self {
         Self {
             font_metrics,
-            default_font_size,
+            defaults,
         }
     }
 }
@@ -88,7 +113,7 @@ macro_rules! calc_size_on_axis {
         moosicbox_logging::debug_or_trace!(("{LABEL}"), ("{LABEL}:\n{}", $container));
 
         let root_id = $container.id;
-        let default_font_size = $self.default_font_size;
+        let defaults = $self.defaults;
         let view_width = $container.calculated_width.expect("Missing view_width");
         let view_height = $container.calculated_height.expect("Missing view_height");
 
@@ -100,13 +125,21 @@ macro_rules! calc_size_on_axis {
             $container,
             |parent, mut context| {
                 if parent.id == root_id {
-                    context.calculated_font_size = Some(default_font_size);
+                    context.calculated_font_size = Some(defaults.font_size);
+                    context.calculated_margin_top = Some(defaults.font_margin_top);
+                    context.calculated_margin_bottom = Some(defaults.font_margin_bottom);
                 }
 
-                $each_parent(&mut *parent, view_width, view_height, &context);
+                $each_parent(&mut *parent, view_width, view_height, &context, defaults);
 
                 if let Some(font_size) = parent.calculated_font_size {
                     context.calculated_font_size = Some(font_size);
+                }
+                if let Some(margin_top) = parent.calculated_margin_top {
+                    context.calculated_margin_top = Some(margin_top);
+                }
+                if let Some(margin_bottom) = parent.calculated_margin_bottom {
+                    context.calculated_margin_bottom = Some(margin_bottom);
                 }
 
                 context
@@ -126,6 +159,8 @@ macro_rules! calc_size_on_axis {
 
                 for child in &mut parent.children {
                     log::trace!("{LABEL}: container:\n{child}");
+
+                    $each_child(&mut *child, view_width, view_height, context, defaults);
 
                     if let Some(max) = child.$max.as_ref().and_then(crate::Number::as_fixed) {
                         let size = max.calc(0.0, view_width, view_height);
@@ -151,7 +186,11 @@ macro_rules! calc_size_on_axis {
                         (Some(new_size), new_size)
                     } else if let (LayoutDirection::Row, crate::Element::Raw { value }) = (LayoutDirection::$axis, &child.element) {
                         log::trace!("{LABEL}: measuring text={value}");
-                        let bounds = $self.font_metrics.measure_text(value, 14.0, f32::INFINITY);
+                        let bounds = $self.font_metrics.measure_text(
+                            value,
+                            context.calculated_font_size.expect("Missing calculated_font_size"),
+                            f32::INFINITY
+                        );
                         log::trace!("{LABEL}: measured bounds={bounds:?}");
                         let new_size = bounds.$fixed();
                         log::trace!("{LABEL}: measured size={new_size}");
@@ -319,8 +358,6 @@ macro_rules! calc_size_on_axis {
                         child.$calculated_child_min = Some(size);
                         handle_auto_sizing(child, size, &mut min_size);
                     }
-
-                    $each_child(child, view_width, view_height, context);
                 }
 
                 set_float(&mut parent.$calculated_child_min, min_size);
@@ -1057,8 +1094,12 @@ mod passes {
     /// and calculates the widths required for each of the `Container`s.
     pub mod pass_widths {
         use crate::{
-            BfsPaths, Container, Number,
-            layout::{calc::Calculator, font::FontMetrics, set_float},
+            BfsPaths, Container, Element, HeaderSize, Number,
+            layout::{
+                calc::{Calculator, CalculatorDefaults},
+                font::FontMetrics,
+                set_float,
+            },
         };
 
         pub trait Pass {
@@ -1071,13 +1112,30 @@ mod passes {
                 view_width: f32,
                 view_height: f32,
                 context: &Container,
+                defaults: CalculatorDefaults,
             ) {
                 if container.calculated_font_size.is_some() {
                     return;
                 }
 
-                container.calculated_font_size = container.font_size.as_ref().map_or(
-                    context.calculated_font_size,
+                container.calculated_font_size = container.font_size.as_ref().map_or_else(
+                    || {
+                        match container.element {
+                            Element::Heading { size } => {
+                                Some(match size {
+                                    HeaderSize::H1 => defaults.h1_font_size,
+                                    HeaderSize::H2 => defaults.h2_font_size,
+                                    HeaderSize::H3 => defaults.h3_font_size,
+                                    HeaderSize::H4 => defaults.h4_font_size,
+                                    HeaderSize::H5 => defaults.h5_font_size,
+                                    HeaderSize::H6 => defaults.h6_font_size,
+                                })
+                            }
+                            _ => {
+                                context.calculated_font_size
+                            }
+                        }
+                    },
                     |font_size| {
                         let calculated_font_size = font_size.calc(
                             context
@@ -1091,56 +1149,100 @@ mod passes {
                         Some(calculated_font_size)
                     },
                 );
+
+                if container.margin_top.is_none() {
+                    if let Element::Heading { size } = container.element {
+                        container.calculated_margin_top = Some(match size {
+                            HeaderSize::H1 => defaults.h1_font_margin_top,
+                            HeaderSize::H2 => defaults.h2_font_margin_top,
+                            HeaderSize::H3 => defaults.h3_font_margin_top,
+                            HeaderSize::H4 => defaults.h4_font_margin_top,
+                            HeaderSize::H5 => defaults.h5_font_margin_top,
+                            HeaderSize::H6 => defaults.h6_font_margin_top,
+                        });
+                    }
+                }
+
+                if container.margin_bottom.is_none() {
+                    if let Element::Heading { size } = container.element {
+                        container.calculated_margin_bottom = Some(match size {
+                            HeaderSize::H1 => defaults.h1_font_margin_bottom,
+                            HeaderSize::H2 => defaults.h2_font_margin_bottom,
+                            HeaderSize::H3 => defaults.h3_font_margin_bottom,
+                            HeaderSize::H4 => defaults.h4_font_margin_bottom,
+                            HeaderSize::H5 => defaults.h5_font_margin_bottom,
+                            HeaderSize::H6 => defaults.h6_font_margin_bottom,
+                        });
+                    }
+                }
             }
         }
 
         impl<F: FontMetrics> Pass for Calculator<F> {
             fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
-                let each_parent =
-                    |container: &mut Container, view_width, view_height, context: &Container| {
-                        Self::calculate_font_size(container, view_width, view_height, context);
-                    };
-                let each_child =
-                    |container: &mut Container, view_width, view_height, context: &Container| {
-                        Self::calculate_font_size(container, view_width, view_height, context);
+                let each_parent = |container: &mut Container,
+                                   view_width,
+                                   view_height,
+                                   context: &Container,
+                                   defaults| {
+                    Self::calculate_font_size(
+                        container,
+                        view_width,
+                        view_height,
+                        context,
+                        defaults,
+                    );
+                };
+                let each_child = |container: &mut Container,
+                                  view_width,
+                                  view_height,
+                                  context: &Container,
+                                  defaults| {
+                    Self::calculate_font_size(
+                        container,
+                        view_width,
+                        view_height,
+                        context,
+                        defaults,
+                    );
 
-                        if let Some(opacity) = &container.opacity {
-                            container.calculated_opacity =
-                                Some(opacity.calc(1.0, view_width, view_height));
-                        }
-                        if let Some(radius) = &container
-                            .border_top_left_radius
-                            .as_ref()
-                            .and_then(crate::Number::as_fixed)
-                        {
-                            container.calculated_border_top_left_radius =
-                                Some(radius.calc(0.0, view_width, view_height));
-                        }
-                        if let Some(radius) = &container
-                            .border_top_right_radius
-                            .as_ref()
-                            .and_then(crate::Number::as_fixed)
-                        {
-                            container.calculated_border_top_right_radius =
-                                Some(radius.calc(0.0, view_width, view_height));
-                        }
-                        if let Some(radius) = &container
-                            .border_bottom_left_radius
-                            .as_ref()
-                            .and_then(crate::Number::as_fixed)
-                        {
-                            container.calculated_border_bottom_left_radius =
-                                Some(radius.calc(0.0, view_width, view_height));
-                        }
-                        if let Some(radius) = &container
-                            .border_bottom_right_radius
-                            .as_ref()
-                            .and_then(crate::Number::as_fixed)
-                        {
-                            container.calculated_border_bottom_right_radius =
-                                Some(radius.calc(0.0, view_width, view_height));
-                        }
-                    };
+                    if let Some(opacity) = &container.opacity {
+                        container.calculated_opacity =
+                            Some(opacity.calc(1.0, view_width, view_height));
+                    }
+                    if let Some(radius) = &container
+                        .border_top_left_radius
+                        .as_ref()
+                        .and_then(crate::Number::as_fixed)
+                    {
+                        container.calculated_border_top_left_radius =
+                            Some(radius.calc(0.0, view_width, view_height));
+                    }
+                    if let Some(radius) = &container
+                        .border_top_right_radius
+                        .as_ref()
+                        .and_then(crate::Number::as_fixed)
+                    {
+                        container.calculated_border_top_right_radius =
+                            Some(radius.calc(0.0, view_width, view_height));
+                    }
+                    if let Some(radius) = &container
+                        .border_bottom_left_radius
+                        .as_ref()
+                        .and_then(crate::Number::as_fixed)
+                    {
+                        container.calculated_border_bottom_left_radius =
+                            Some(radius.calc(0.0, view_width, view_height));
+                    }
+                    if let Some(radius) = &container
+                        .border_bottom_right_radius
+                        .as_ref()
+                        .and_then(crate::Number::as_fixed)
+                    {
+                        container.calculated_border_bottom_right_radius =
+                            Some(radius.calc(0.0, view_width, view_height));
+                    }
+                };
 
                 calc_size_on_axis!(
                     "calc_widths",
@@ -1366,8 +1468,8 @@ mod passes {
                     row_gap,
                     calculated_row_gap,
                     overflow_y,
-                    |_, _, _, _| {},
-                    |_, _, _, _| {},
+                    |_, _, _, _, _| {},
+                    |_, _, _, _, _| {},
                 )
             }
         }
@@ -2071,7 +2173,7 @@ mod test {
         models::{JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition},
     };
 
-    use super::Calculator;
+    use super::{Calculator, CalculatorDefaults};
 
     fn compare_containers(a: &Container, b: &Container) {
         assert_eq!(
@@ -2124,7 +2226,61 @@ mod test {
         }
     }
 
-    static CALCULATOR: Calculator<DefaultFontMetrics> = Calculator::new(DefaultFontMetrics, 14.0);
+    #[allow(clippy::derivable_impls)]
+    impl Default for CalculatorDefaults {
+        fn default() -> Self {
+            Self {
+                font_size: Default::default(),
+                font_margin_top: Default::default(),
+                font_margin_bottom: Default::default(),
+                h1_font_size: Default::default(),
+                h1_font_margin_top: Default::default(),
+                h1_font_margin_bottom: Default::default(),
+                h2_font_size: Default::default(),
+                h2_font_margin_top: Default::default(),
+                h2_font_margin_bottom: Default::default(),
+                h3_font_size: Default::default(),
+                h3_font_margin_top: Default::default(),
+                h3_font_margin_bottom: Default::default(),
+                h4_font_size: Default::default(),
+                h4_font_margin_top: Default::default(),
+                h4_font_margin_bottom: Default::default(),
+                h5_font_size: Default::default(),
+                h5_font_margin_top: Default::default(),
+                h5_font_margin_bottom: Default::default(),
+                h6_font_size: Default::default(),
+                h6_font_margin_top: Default::default(),
+                h6_font_margin_bottom: Default::default(),
+            }
+        }
+    }
+
+    static CALCULATOR: Calculator<DefaultFontMetrics> = Calculator::new(
+        DefaultFontMetrics,
+        CalculatorDefaults {
+            font_size: 14.0,
+            font_margin_top: 0.0,
+            font_margin_bottom: 0.0,
+            h1_font_size: 32.0,
+            h1_font_margin_top: 0.0,
+            h1_font_margin_bottom: 0.0,
+            h2_font_size: 24.0,
+            h2_font_margin_top: 0.0,
+            h2_font_margin_bottom: 0.0,
+            h3_font_size: 18.72,
+            h3_font_margin_top: 0.0,
+            h3_font_margin_bottom: 0.0,
+            h4_font_size: 16.0,
+            h4_font_margin_top: 0.0,
+            h4_font_margin_bottom: 0.0,
+            h5_font_size: 13.28,
+            h5_font_margin_top: 0.0,
+            h5_font_margin_bottom: 0.0,
+            h6_font_size: 10.72,
+            h6_font_margin_top: 0.0,
+            h6_font_margin_bottom: 0.0,
+        },
+    );
 
     mod scrollbar {
         use super::*;
@@ -8743,7 +8899,7 @@ mod test {
             &Container {
                 children: vec![
                     Container {
-                        calculated_width: Some(14.0 * 4.0),
+                        calculated_width: Some(32.0 * 4.0),
                         ..container.children[0].clone()
                     },
                     Container {
@@ -9003,7 +9159,13 @@ mod test {
             container.calculated_width = Some(400.0);
             container.calculated_height = Some(100.0);
 
-            let calculator = Calculator::new(DefaultFontMetrics, 20.0);
+            let calculator = Calculator::new(
+                DefaultFontMetrics,
+                CalculatorDefaults {
+                    font_size: 20.0,
+                    ..Default::default()
+                },
+            );
             calculator.calc(&mut container);
             log::trace!("container:\n{}", container);
 
@@ -9033,7 +9195,13 @@ mod test {
             container.calculated_width = Some(400.0);
             container.calculated_height = Some(100.0);
 
-            let calculator = Calculator::new(DefaultFontMetrics, 20.0);
+            let calculator = Calculator::new(
+                DefaultFontMetrics,
+                CalculatorDefaults {
+                    font_size: 20.0,
+                    ..Default::default()
+                },
+            );
             calculator.calc(&mut container);
             log::trace!("container:\n{}", container);
 
@@ -9066,7 +9234,13 @@ mod test {
             container.calculated_width = Some(400.0);
             container.calculated_height = Some(100.0);
 
-            let calculator = Calculator::new(DefaultFontMetrics, 20.0);
+            let calculator = Calculator::new(
+                DefaultFontMetrics,
+                CalculatorDefaults {
+                    font_size: 20.0,
+                    ..Default::default()
+                },
+            );
             calculator.calc(&mut container);
             log::trace!("container:\n{}", container);
 
@@ -9099,7 +9273,13 @@ mod test {
             container.calculated_width = Some(400.0);
             container.calculated_height = Some(100.0);
 
-            let calculator = Calculator::new(DefaultFontMetrics, 20.0);
+            let calculator = Calculator::new(
+                DefaultFontMetrics,
+                CalculatorDefaults {
+                    font_size: 20.0,
+                    ..Default::default()
+                },
+            );
             calculator.calc(&mut container);
             log::trace!("container:\n{}", container);
 
@@ -9135,7 +9315,13 @@ mod test {
             container.calculated_width = Some(400.0);
             container.calculated_height = Some(100.0);
 
-            let calculator = Calculator::new(DefaultFontMetrics, 20.0);
+            let calculator = Calculator::new(
+                DefaultFontMetrics,
+                CalculatorDefaults {
+                    font_size: 20.0,
+                    ..Default::default()
+                },
+            );
             calculator.calc(&mut container);
             log::trace!("container:\n{}", container);
 
@@ -9170,7 +9356,13 @@ mod test {
             container.calculated_width = Some(400.0);
             container.calculated_height = Some(100.0);
 
-            let calculator = Calculator::new(DefaultFontMetrics, 20.0);
+            let calculator = Calculator::new(
+                DefaultFontMetrics,
+                CalculatorDefaults {
+                    font_size: 20.0,
+                    ..Default::default()
+                },
+            );
             calculator.calc(&mut container);
             log::trace!("container:\n{}", container);
 
@@ -9205,7 +9397,13 @@ mod test {
             container.calculated_width = Some(400.0);
             container.calculated_height = Some(100.0);
 
-            let calculator = Calculator::new(DefaultFontMetrics, 20.0);
+            let calculator = Calculator::new(
+                DefaultFontMetrics,
+                CalculatorDefaults {
+                    font_size: 20.0,
+                    ..Default::default()
+                },
+            );
             calculator.calc(&mut container);
             log::trace!("container:\n{}", container);
 
@@ -9227,6 +9425,305 @@ mod test {
                 },
             );
         }
+
+        macro_rules! test_heading {
+            ($heading:tt, $font_size:ident, $margin_top:ident, $margin_bottom:ident $(,)?) => {
+                paste::paste! {
+                    #[test_log::test]
+                    fn [<does_use_ $heading _font_size>]() {
+                        let mut container: Container = html! {
+                            $heading {
+                                "aoeu"
+                            }
+                        }
+                        .try_into()
+                        .unwrap();
+
+                        container.calculated_font_size = Some(20.0);
+                        container.calculated_width = Some(400.0);
+                        container.calculated_height = Some(100.0);
+
+                        let calculator = Calculator::new(
+                            DefaultFontMetrics,
+                            CalculatorDefaults {
+                                font_size: 20.0,
+                                $font_size: 30.0,
+                                ..Default::default()
+                            },
+                        );
+                        calculator.calc(&mut container);
+                        log::trace!("container:\n{}", container);
+
+                        compare_containers(
+                            &container,
+                            &Container {
+                                children: vec![Container {
+                                    calculated_font_size: Some(30.0),
+                                    ..container.children[0].clone()
+                                }],
+                                calculated_font_size: Some(20.0),
+                                ..container.clone()
+                            },
+                        );
+                    }
+
+                    #[test_log::test]
+                    fn [<does_use_ $heading _font_size_for_raw_child>]() {
+                        let mut container: Container = html! {
+                            $heading {
+                                "aoeu"
+                            }
+                        }
+                        .try_into()
+                        .unwrap();
+
+                        container.calculated_font_size = Some(20.0);
+                        container.calculated_width = Some(400.0);
+                        container.calculated_height = Some(100.0);
+
+                        let calculator = Calculator::new(
+                            DefaultFontMetrics,
+                            CalculatorDefaults {
+                                font_size: 20.0,
+                                $font_size: 30.0,
+                                ..Default::default()
+                            },
+                        );
+                        calculator.calc(&mut container);
+                        log::trace!("container:\n{}", container);
+
+                        compare_containers(
+                            &container,
+                            &Container {
+                                children: vec![Container {
+                                    children: vec![Container {
+                                        calculated_font_size: Some(30.0),
+                                        ..container.children[0].children[0].clone()
+                                    }],
+                                    calculated_font_size: Some(30.0),
+                                    ..container.children[0].clone()
+                                }],
+                                calculated_font_size: Some(20.0),
+                                ..container.clone()
+                            },
+                        );
+                    }
+
+                    #[test_log::test]
+                    fn [<does_use_ $heading _font_size_for_nested_raw_child>]() {
+                        let mut container: Container = html! {
+                            $heading {
+                                div {
+                                    "aoeu"
+                                }
+                            }
+                        }
+                        .try_into()
+                        .unwrap();
+
+                        container.calculated_font_size = Some(20.0);
+                        container.calculated_width = Some(400.0);
+                        container.calculated_height = Some(100.0);
+
+                        let calculator = Calculator::new(
+                            DefaultFontMetrics,
+                            CalculatorDefaults {
+                                font_size: 20.0,
+                                $font_size: 30.0,
+                                ..Default::default()
+                            },
+                        );
+                        calculator.calc(&mut container);
+                        log::trace!("container:\n{}", container);
+
+                        compare_containers(
+                            &container,
+                            &Container {
+                                children: vec![Container {
+                                    children: vec![Container {
+                                        children: vec![Container {
+                                            calculated_font_size: Some(30.0),
+                                            ..container.children[0].children[0].children[0].clone()
+                                        }],
+                                        calculated_font_size: Some(30.0),
+                                        ..container.children[0].children[0].clone()
+                                    }],
+                                    calculated_font_size: Some(30.0),
+                                    ..container.children[0].clone()
+                                }],
+                                calculated_font_size: Some(20.0),
+                                ..container.clone()
+                            },
+                        );
+                    }
+
+                    #[test_log::test]
+                    fn [<does_use_ $margin_top>]() {
+                        let mut container: Container = html! {
+                            $heading {
+                                "aoeu"
+                            }
+                        }
+                        .try_into()
+                        .unwrap();
+
+                        container.calculated_font_size = Some(20.0);
+                        container.calculated_width = Some(400.0);
+                        container.calculated_height = Some(100.0);
+
+                        let calculator = Calculator::new(
+                            DefaultFontMetrics,
+                            CalculatorDefaults {
+                                font_size: 20.0,
+                                $font_size: 30.0,
+                                $margin_top: 6.0,
+                                ..Default::default()
+                            },
+                        );
+                        calculator.calc(&mut container);
+                        log::trace!("container:\n{}", container);
+
+                        compare_containers(
+                            &container,
+                            &Container {
+                                children: vec![Container {
+                                    calculated_margin_top: Some(6.0),
+                                    ..container.children[0].clone()
+                                }],
+                                ..container.clone()
+                            },
+                        );
+                    }
+                    #[test_log::test]
+                    fn [<does_use_ $margin_bottom>]() {
+                        let mut container: Container = html! {
+                            $heading {
+                                "aoeu"
+                            }
+                        }
+                        .try_into()
+                        .unwrap();
+
+                        container.calculated_font_size = Some(20.0);
+                        container.calculated_width = Some(400.0);
+                        container.calculated_height = Some(100.0);
+
+                        let calculator = Calculator::new(
+                            DefaultFontMetrics,
+                            CalculatorDefaults {
+                                font_size: 20.0,
+                                $font_size: 30.0,
+                                $margin_bottom: 6.0,
+                                ..Default::default()
+                            },
+                        );
+                        calculator.calc(&mut container);
+                        log::trace!("container:\n{}", container);
+
+                        compare_containers(
+                            &container,
+                            &Container {
+                                children: vec![Container {
+                                    calculated_margin_bottom: Some(6.0),
+                                    ..container.children[0].clone()
+                                }],
+                                ..container.clone()
+                            },
+                        );
+                    }
+
+                    #[test_log::test]
+                    fn [<doesnt_propagate_ $margin_top _to_children>]() {
+                        let mut container: Container = html! {
+                            $heading {
+                                "aoeu"
+                            }
+                        }
+                        .try_into()
+                        .unwrap();
+
+                        container.calculated_font_size = Some(20.0);
+                        container.calculated_width = Some(400.0);
+                        container.calculated_height = Some(100.0);
+
+                        let calculator = Calculator::new(
+                            DefaultFontMetrics,
+                            CalculatorDefaults {
+                                font_size: 20.0,
+                                $font_size: 30.0,
+                                $margin_top: 6.0,
+                                ..Default::default()
+                            },
+                        );
+                        calculator.calc(&mut container);
+                        log::trace!("container:\n{}", container);
+
+                        compare_containers(
+                            &container,
+                            &Container {
+                                children: vec![Container {
+                                    children: vec![Container {
+                                        calculated_margin_bottom: None,
+                                        ..container.children[0].children[0].clone()
+                                    }],
+                                    calculated_margin_top: Some(6.0),
+                                    ..container.children[0].clone()
+                                }],
+                                ..container.clone()
+                            },
+                        );
+                    }
+                    #[test_log::test]
+                    fn [<doesnt_propagate_ $margin_bottom _to_children>]() {
+                        let mut container: Container = html! {
+                            $heading {
+                                "aoeu"
+                            }
+                        }
+                        .try_into()
+                        .unwrap();
+
+                        container.calculated_font_size = Some(20.0);
+                        container.calculated_width = Some(400.0);
+                        container.calculated_height = Some(100.0);
+
+                        let calculator = Calculator::new(
+                            DefaultFontMetrics,
+                            CalculatorDefaults {
+                                font_size: 20.0,
+                                $font_size: 30.0,
+                                $margin_bottom: 6.0,
+                                ..Default::default()
+                            },
+                        );
+                        calculator.calc(&mut container);
+                        log::trace!("container:\n{}", container);
+
+                        compare_containers(
+                            &container,
+                            &Container {
+                                children: vec![Container {
+                                    children: vec![Container {
+                                        calculated_margin_bottom: None,
+                                        ..container.children[0].children[0].clone()
+                                    }],
+                                    calculated_margin_bottom: Some(6.0),
+                                    ..container.children[0].clone()
+                                }],
+                                ..container.clone()
+                            },
+                        );
+                    }
+                }
+            };
+        }
+
+        test_heading!(h1, h1_font_size, h1_font_margin_top, h1_font_margin_bottom);
+        test_heading!(h2, h2_font_size, h2_font_margin_top, h2_font_margin_bottom);
+        test_heading!(h3, h3_font_size, h3_font_margin_top, h3_font_margin_bottom);
+        test_heading!(h4, h4_font_size, h4_font_margin_top, h4_font_margin_bottom);
+        test_heading!(h5, h5_font_size, h5_font_margin_top, h5_font_margin_bottom);
+        test_heading!(h6, h6_font_size, h6_font_margin_top, h6_font_margin_bottom);
     }
 
     mod sizing {

@@ -19,7 +19,13 @@ use moosicbox_music_models::{
 use moosicbox_paging::Page;
 
 use crate::{
-    artists::artist_page_url, formatting::{display_album_version_qualities, format_date_string, TimeFormat as _, TrackApiSourceFormat}, page, pre_escaped, public_img, state::State, Action
+    Action,
+    artists::artist_page_url,
+    formatting::{
+        TimeFormat as _, TrackApiSourceFormat, display_album_version_qualities, format_date_string,
+    },
+    page, pre_escaped, public_img,
+    state::State,
 };
 
 #[must_use]

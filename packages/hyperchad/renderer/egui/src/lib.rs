@@ -3294,7 +3294,15 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                 input,
                 render_context.checkboxes,
             )),
-            Element::Raw { value } => Some(ui.label(value)),
+            Element::Raw { value } => Some(
+                ui.label(
+                    egui::RichText::new(value).size(
+                        element
+                            .calculated_font_size
+                            .expect("Missing calculated_font_size"),
+                    ),
+                ),
+            ),
             Element::Image { source, .. } => source
                 .as_ref()
                 .map(|source| Self::render_image(render_context, ui, source, element)),
