@@ -285,7 +285,7 @@ jobs:
             - name: Format ${{ matrix.package.name }}
               shell: bash
               run: |
-                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo fmt ${{ runner.debug && '-vv' }})
+                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo ${{ runner.debug && '-vv' }} fmt --all -- --check)
 
             - uses: actions/download-artifact@master
               if: ${{ matrix.package.os == 'macos-latest' }}
