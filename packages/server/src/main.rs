@@ -19,12 +19,8 @@ fn main() -> std::io::Result<()> {
             .try_into()
             .expect("Invalid PORT environment variable")
     };
-    let actix_workers = option_env_usize("ACTIX_WORKERS").map_err(|e| {
-        std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Invalid ACTIX_WORKERS: {e:?}"),
-        )
-    })?;
+    let actix_workers = option_env_usize("ACTIX_WORKERS")
+        .map_err(|e| std::io::Error::other(format!("Invalid ACTIX_WORKERS: {e:?}")))?;
 
     actix_web::rt::System::with_tokio_rt(|| {
         let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
@@ -45,17 +41,15 @@ fn main() -> std::io::Result<()> {
         #[cfg(feature = "telemetry")]
         layers.push(
             moosicbox_telemetry::init_tracer(env!("CARGO_PKG_NAME"))
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?,
+                .map_err(std::io::Error::other)?,
         );
 
         moosicbox_logging::init(Some("moosicbox_server.log"), Some(layers))
             .expect("Failed to initialize FreeLog");
 
         #[cfg(feature = "telemetry")]
-        let otel = std::sync::Arc::new(
-            moosicbox_telemetry::Otel::new()
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?,
-        );
+        let otel =
+            std::sync::Arc::new(moosicbox_telemetry::Otel::new().map_err(std::io::Error::other)?);
 
         moosicbox_server::run(
             AppType::Server,

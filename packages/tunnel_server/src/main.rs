@@ -52,17 +52,15 @@ fn main() -> Result<(), std::io::Error> {
         #[cfg(feature = "telemetry")]
         layers.push(
             moosicbox_telemetry::init_tracer(env!("CARGO_PKG_NAME"))
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?,
+                .map_err(std::io::Error::other)?,
         );
 
         moosicbox_logging::init(Some("moosicbox_tunnel_server.log"), Some(layers))
             .expect("Failed to initialize FreeLog");
 
         #[cfg(feature = "telemetry")]
-        let otel = std::sync::Arc::new(
-            moosicbox_telemetry::Otel::new()
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?,
-        );
+        let otel =
+            std::sync::Arc::new(moosicbox_telemetry::Otel::new().map_err(std::io::Error::other)?);
 
         db::init().await.expect("Failed to init postgres DB");
 
@@ -185,7 +183,7 @@ fn main() -> Result<(), std::io::Error> {
                 let resp = ws_service
                     .await
                     .expect("Failed to shut down ws server")
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
+                    .map_err(std::io::Error::other);
                 log::debug!("WsServer connection closed");
                 resp
             },

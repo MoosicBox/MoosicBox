@@ -1717,7 +1717,7 @@ mod passes {
 
                                     x += col_gap;
                                 }
-                            };
+                            }
 
                             if let Some(text_align) = relative_container.text_align {
                                 if visible_elements!().all(|x| matches!(x.element, Element::Raw { .. }))

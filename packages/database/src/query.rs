@@ -886,7 +886,7 @@ impl<'a> SelectQuery<'a> {
     }
 
     #[must_use]
-    pub fn limit(mut self, limit: usize) -> Self {
+    pub const fn limit(mut self, limit: usize) -> Self {
         self.limit.replace(limit);
         self
     }
@@ -1048,13 +1048,13 @@ impl<'a> UpdateStatement<'a> {
     }
 
     #[must_use]
-    pub fn unique(mut self, unique: &'a [&'a str]) -> Self {
+    pub const fn unique(mut self, unique: &'a [&'a str]) -> Self {
         self.unique.replace(unique);
         self
     }
 
     #[must_use]
-    pub fn limit(mut self, limit: usize) -> Self {
+    pub const fn limit(mut self, limit: usize) -> Self {
         self.limit.replace(limit);
         self
     }
@@ -1138,13 +1138,13 @@ impl<'a> UpsertStatement<'a> {
     }
 
     #[must_use]
-    pub fn unique(mut self, unique: &'a [&'a str]) -> Self {
+    pub const fn unique(mut self, unique: &'a [&'a str]) -> Self {
         self.unique.replace(unique);
         self
     }
 
     #[must_use]
-    pub fn limit(mut self, limit: usize) -> Self {
+    pub const fn limit(mut self, limit: usize) -> Self {
         self.limit.replace(limit);
         self
     }
@@ -1222,7 +1222,7 @@ impl FilterableQuery for DeleteStatement<'_> {
 
 impl<'a> DeleteStatement<'a> {
     #[must_use]
-    pub fn limit(mut self, limit: usize) -> Self {
+    pub const fn limit(mut self, limit: usize) -> Self {
         self.limit.replace(limit);
         self
     }

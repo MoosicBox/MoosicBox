@@ -49,10 +49,8 @@ pub async fn run_basic(
     on_startup: impl FnOnce() + Send,
 ) -> std::io::Result<()> {
     #[cfg(feature = "telemetry")]
-    let otel = std::sync::Arc::new(
-        moosicbox_telemetry::Otel::new()
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?,
-    );
+    let otel =
+        std::sync::Arc::new(moosicbox_telemetry::Otel::new().map_err(std::io::Error::other)?);
 
     run(
         app_type,
@@ -101,7 +99,7 @@ pub async fn run(
         let path_str = path.to_str().expect("Failed to get DB path_str");
         if let Err(e) = moosicbox_schema::migrate_config(path_str) {
             moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
-        };
+        }
 
         path
     };
@@ -666,7 +664,7 @@ pub async fn run(
                 let resp = playback_join_handle
                     .await
                     .expect("Failed to shut down playback event handler")
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
+                    .map_err(std::io::Error::other);
                 log::debug!("PlaybackEventHandler connection closed");
                 resp
             } else {
@@ -679,7 +677,7 @@ pub async fn run(
             let resp = track_pool_join_handle
                 .await
                 .expect("Failed to shut down track_pool event handler")
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
+                .map_err(std::io::Error::other);
             log::debug!("PlaybackEventHandler connection closed");
             resp
         },
@@ -689,7 +687,7 @@ pub async fn run(
                 let resp = join_upnp_service
                     .await
                     .expect("Failed to shut down UPnP service")
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
+                    .map_err(std::io::Error::other);
                 log::debug!("UPnP service closed");
                 resp
             } else {

@@ -423,7 +423,7 @@ impl Drop for PulseAudioOutput {
         match self.stream.borrow_mut().disconnect() {
             Ok(()) => log::debug!("Disconnected stream"),
             Err(err) => log::error!("Failed to disconnect stream: {err:?}"),
-        };
+        }
         match wait_for_stream(
             &mut self.mainloop.borrow_mut(),
             &self.stream.borrow(),

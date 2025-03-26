@@ -252,8 +252,7 @@ impl SignalChainStepProcessor {}
 
 impl std::io::Seek for SignalChainStepProcessor {
     fn seek(&mut self, _pos: std::io::SeekFrom) -> std::io::Result<u64> {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        Err(std::io::Error::other(
             "SignalChainStepProcessor does not support seeking",
         ))
     }
@@ -283,9 +282,9 @@ impl std::io::Read for SignalChainStepProcessor {
                 let channels = audio.spec().channels.count();
 
                 log::debug!("Resampling frames...");
-                let samples = resampler.resample(&audio).ok_or_else(|| {
-                    std::io::Error::new(std::io::ErrorKind::Other, "Failed to resample")
-                })?;
+                let samples = resampler
+                    .resample(&audio)
+                    .ok_or_else(|| std::io::Error::other("Failed to resample"))?;
                 let buf = AudioBuffer::new((samples.len() / channels) as u64, resampler.spec);
                 log::debug!("Resampled into {} frames", buf.frames());
                 buf
@@ -295,9 +294,7 @@ impl std::io::Read for SignalChainStepProcessor {
 
             if let Some(encoder) = &mut self.encoder {
                 log::debug!("Encoding frames...");
-                let bytes = encoder
-                    .encode(audio)
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+                let bytes = encoder.encode(audio).map_err(std::io::Error::other)?;
                 log::debug!("Encoded into {} bytes", bytes.len());
 
                 if !bytes.is_empty() {

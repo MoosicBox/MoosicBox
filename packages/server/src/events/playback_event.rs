@@ -61,18 +61,12 @@ impl service::Processor for service::Service {
                     config_db.clone()
                 } else {
                     log::error!("No DB connection");
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "No CONFIG_DB connection",
-                    )
-                    .into());
+                    return Err(std::io::Error::other("No CONFIG_DB connection").into());
                 };
 
                 let Some(db) = PROFILES.get(&update.profile) else {
                     log::error!("No DB connection");
-                    return Err(
-                        std::io::Error::new(std::io::ErrorKind::Other, "No DB connection").into(),
-                    );
+                    return Err(std::io::Error::other("No DB connection").into());
                 };
 
                 let handle = { ctx.read().await.sender.clone() };

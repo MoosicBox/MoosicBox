@@ -356,8 +356,7 @@ impl Router {
                 Ok(view) => view,
                 Err(e) => {
                     log::error!("Failed to fetch route view: {e:?}");
-                    return Err(NavigateError::Handler(Box::new(std::io::Error::new(
-                        std::io::ErrorKind::Other,
+                    return Err(NavigateError::Handler(Box::new(std::io::Error::other(
                         e.to_string(),
                     ))));
                 }
@@ -387,8 +386,7 @@ impl Router {
                     Ok(view) => view,
                     Err(e) => {
                         log::error!("Failed to fetch route view: {e:?}");
-                        return Err(NavigateError::Handler(Box::new(std::io::Error::new(
-                            std::io::ErrorKind::Other,
+                        return Err(NavigateError::Handler(Box::new(std::io::Error::other(
                             e.to_string(),
                         ))));
                     }

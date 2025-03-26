@@ -436,7 +436,7 @@ impl WsServer {
         let message = msg.into();
 
         for (id, session) in &self.clients {
-            if ids.iter().any(|exclude| *exclude == *id) {
+            if ids.contains(id) {
                 continue;
             }
             // errors if client disconnected abruptly and hasn't been timed-out yet
@@ -503,7 +503,7 @@ impl WsServer {
         // remove sender
         if self.sessions.remove(&conn_id).is_some() {
             log::debug!("disconnect: Removed client session conn_id={conn_id}");
-        };
+        }
         if self.clients.remove(&conn_id).is_some() {
             log::info!("disconnect: Removed client connection conn_id={conn_id}");
         }

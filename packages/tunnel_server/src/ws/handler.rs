@@ -164,7 +164,7 @@ pub async fn handle_ws(
                 // send heartbeat ping
                 let _ = session.ping(b"").await;
             }
-        };
+        }
     };
 
     log::debug!("handle_ws: disconnecting connection");

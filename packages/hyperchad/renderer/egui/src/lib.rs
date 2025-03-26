@@ -878,7 +878,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
             if let Some(ctx) = &ctx {
                 ctx.request_repaint();
-            };
+            }
         }
 
         drop(viewport_listeners);
@@ -2221,12 +2221,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         if let Some(route) = &container.route {
             #[cfg(feature = "profiling")]
             profiling::scope!("route side effects");
-            let processed_route = {
-                render_context
-                    .route_requests
-                    .iter()
-                    .any(|x| *x == container.id)
-            };
+            let processed_route = { render_context.route_requests.contains(&container.id) };
             if !processed_route {
                 log::debug!(
                     "processing route route={route:?} container_id={}",
@@ -2650,7 +2645,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             });
 
             match element {
-                Element::Button { .. } => {
+                Element::Button => {
                     #[cfg(feature = "profiling")]
                     profiling::scope!("button side effects");
                     let response = response.clone();

@@ -219,7 +219,7 @@ pub fn filter_albums<'a>(
         })
     });
 
-    let albums = albums
+    albums
         .filter(|album| {
             request.sources.as_ref().is_none_or(|s| {
                 s.iter()
@@ -254,9 +254,7 @@ pub fn filter_albums<'a>(
                         || album.artist.to_lowercase().contains(s)
                 })
             })
-        });
-
-    albums
+        })
 }
 
 #[must_use]

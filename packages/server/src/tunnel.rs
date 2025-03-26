@@ -58,10 +58,7 @@ pub async fn setup_tunnel(
                 get_client_id_and_access_token(&config_db, &host)
                     .await
                     .map_err(|e| {
-                        std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("Could not get access token: {e:?}"),
-                        )
+                        std::io::Error::other(format!("Could not get access token: {e:?}"))
                     })?
             };
             let (mut tunnel, handle) = TunnelSender::new(

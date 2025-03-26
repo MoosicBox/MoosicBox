@@ -913,7 +913,7 @@ impl FltkRenderer {
                 flex_element =
                     Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
-            Element::Canvas { .. } | Element::Input { .. } => {}
+            Element::Canvas | Element::Input { .. } => {}
             Element::Button => {
                 context = context.with_container(container);
                 flex_element =

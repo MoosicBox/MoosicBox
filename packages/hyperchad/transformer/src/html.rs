@@ -479,18 +479,18 @@ fn parse_image_loading(value: &str) -> Result<ImageLoading, ParseAttrError> {
 fn parse_std_action(action: &str) -> Option<ActionEffect> {
     if let Ok(action) = serde_json::from_str::<ActionEffect>(action) {
         return Some(action);
-    };
+    }
 
     if let Ok(action) = serde_json::from_str::<ActionType>(action) {
         return Some(action.into());
-    };
+    }
 
     #[cfg(feature = "logic")]
     if let Ok(action) =
         serde_json::from_str::<hyperchad_actions::logic::If>(action).map(ActionType::Logic)
     {
         return Some(action.into());
-    };
+    }
 
     None
 }

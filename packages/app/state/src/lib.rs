@@ -986,7 +986,7 @@ impl AppState {
         if outputs.is_empty() {
             log::debug!("No players to register");
             return Ok(());
-        };
+        }
 
         let register_players_payload = outputs
             .iter()
@@ -1357,7 +1357,7 @@ impl AppState {
         if players.is_empty() {
             log::debug!("No players to register");
             return Ok(());
-        };
+        }
 
         let players = self.register_players(&players).await?;
 

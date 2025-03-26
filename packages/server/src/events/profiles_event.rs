@@ -23,7 +23,7 @@ async fn add_profile(
         let path_str = path.to_str().expect("Failed to get DB path_str");
         if let Err(e) = moosicbox_schema::migrate_library(path_str) {
             moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
-        };
+        }
 
         path
     };

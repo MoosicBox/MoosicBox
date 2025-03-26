@@ -400,7 +400,7 @@ pub async fn fetch_bytes_from_remote_url(
 
     Ok(response
         .bytes_stream()
-        .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
+        .map_err(std::io::Error::other)
         .boxed())
 }
 

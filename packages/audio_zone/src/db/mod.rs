@@ -41,7 +41,7 @@ pub async fn update_audio_zone(
             .await?
             .to_value_type()?;
 
-        existing.retain(|p| players.iter().any(|new_p| *new_p == p.player_id));
+        existing.retain(|p| players.contains(&p.player_id));
 
         db.delete("audio_zone_players")
             .where_eq("audio_zone_id", inserted.id)

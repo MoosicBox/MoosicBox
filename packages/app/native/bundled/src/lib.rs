@@ -112,7 +112,7 @@ impl Context {
 
     pub fn handle_event(&self, event: Arc<RunEvent>) -> Result<(), std::io::Error> {
         match *event {
-            tauri::RunEvent::Exit { .. } => {}
+            tauri::RunEvent::Exit => {}
             tauri::RunEvent::ExitRequested { .. } => {
                 self.shutdown()?;
             }

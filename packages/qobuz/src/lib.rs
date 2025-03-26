@@ -1947,7 +1947,7 @@ pub(crate) fn search_app_config(bundle: &str) -> Result<AppConfig, QobuzFetchApp
 
     if seed_timezones.is_empty() {
         return Err(QobuzFetchAppSecretsError::NoSeedAndTimezone);
-    };
+    }
 
     let mut name_info_extras = vec![];
 
@@ -1979,7 +1979,7 @@ pub(crate) fn search_app_config(bundle: &str) -> Result<AppConfig, QobuzFetchApp
 
     if name_info_extras.is_empty() {
         return Err(QobuzFetchAppSecretsError::NoInfoAndExtras);
-    };
+    }
 
     let mut secrets = HashMap::new();
 

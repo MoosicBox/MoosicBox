@@ -618,7 +618,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             while let Ok((action, value)) = action_rx.recv_async().await {
                 if let Err(e) = handle_action(action, value).await {
                     log::error!("Failed to handle action: {e:?}");
-                };
+                }
             }
         });
 

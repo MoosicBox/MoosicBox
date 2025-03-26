@@ -438,7 +438,7 @@ pub fn decode(
         Err(err) => {
             log::error!("Encountered error {err:?}");
         }
-    };
+    }
 
     result
 }

@@ -467,36 +467,36 @@ impl NativeAppBuilder {
     }
 
     #[must_use]
-    pub fn with_width(mut self, width: f32) -> Self {
+    pub const fn with_width(mut self, width: f32) -> Self {
         self.width.replace(width);
         self
     }
 
     #[must_use]
-    pub fn with_height(mut self, height: f32) -> Self {
+    pub const fn with_height(mut self, height: f32) -> Self {
         self.height.replace(height);
         self
     }
 
     #[must_use]
-    pub fn with_size(self, width: f32, height: f32) -> Self {
+    pub const fn with_size(self, width: f32, height: f32) -> Self {
         self.with_width(width).with_height(height)
     }
 
     #[must_use]
-    pub fn with_x(mut self, x: i32) -> Self {
+    pub const fn with_x(mut self, x: i32) -> Self {
         self.x.replace(x);
         self
     }
 
     #[must_use]
-    pub fn with_y(mut self, y: i32) -> Self {
+    pub const fn with_y(mut self, y: i32) -> Self {
         self.y.replace(y);
         self
     }
 
     #[must_use]
-    pub fn with_position(self, x: i32, y: i32) -> Self {
+    pub const fn with_position(self, x: i32, y: i32) -> Self {
         self.with_x(x).with_y(y)
     }
 
@@ -507,7 +507,7 @@ impl NativeAppBuilder {
     }
 
     #[must_use]
-    pub fn with_background(mut self, color: Color) -> Self {
+    pub const fn with_background(mut self, color: Color) -> Self {
         self.background.replace(color);
         self
     }

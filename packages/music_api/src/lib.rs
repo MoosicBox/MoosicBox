@@ -340,7 +340,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
         self
     }
 
-    pub fn set_cascade_delete(&mut self, cascade_delete: bool) {
+    pub const fn set_cascade_delete(&mut self, cascade_delete: bool) {
         self.cascade_delete = cascade_delete;
     }
 

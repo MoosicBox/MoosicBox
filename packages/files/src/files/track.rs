@@ -644,7 +644,7 @@ async fn request_track_bytes_from_url(
         .send()
         .await?
         .bytes_stream()
-        .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err));
+        .map_err(std::io::Error::other);
 
     Ok(TrackBytes {
         id: new_byte_writer_id(),

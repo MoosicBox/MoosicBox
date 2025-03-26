@@ -338,9 +338,9 @@ impl WsServer {
                 res_tx,
             } => {
                 let conn_id = ctx.write().await.connect(profile, conn_tx);
-                res_tx.send(conn_id).map_err(|e| {
-                    std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send: {e:?}"))
-                })?;
+                res_tx
+                    .send(conn_id)
+                    .map_err(|e| std::io::Error::other(format!("Failed to send: {e:?}")))?;
             }
 
             Command::Disconnect { conn } => {

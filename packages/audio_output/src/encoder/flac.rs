@@ -190,10 +190,7 @@ impl AudioDecode for FlacEncoder {
         }
 
         let bytes = self.encode(decoded).map_err(|e| {
-            AudioDecodeError::IO(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to encode: {e:?}"),
-            ))
+            AudioDecodeError::IO(std::io::Error::other(format!("Failed to encode: {e:?}")))
         })?;
 
         if let Some(writer) = self.writer.as_mut() {
