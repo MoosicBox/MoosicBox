@@ -70,7 +70,7 @@ impl service::Processor for service::Service {
                 let service_type = "_moosicboxserver._tcp.local.";
                 let receiver = mdns.browse(service_type)?;
 
-                log::debug!("mdns scanner: Browsing for {} services...", service_type);
+                log::debug!("mdns scanner: Browsing for {service_type} services...");
 
                 while let Ok(Some(event)) = {
                     moosicbox_async_service::tokio::select! {
@@ -86,7 +86,7 @@ impl service::Processor for service::Service {
 
                         for addr in info.get_addresses().iter().filter(|x| x.is_ipv4()).copied() {
                             let socket_addr = SocketAddr::new(addr, info.get_port());
-                            log::debug!("mdns scanner: Server address: {}", addr);
+                            log::debug!("mdns scanner: Server address: {addr}");
                             let dns = info.get_fullname().to_string();
 
                             let server = MoosicBox {

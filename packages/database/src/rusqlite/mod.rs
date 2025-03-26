@@ -417,10 +417,7 @@ fn update_and_get_row(
 
     let all_values = [all_values, all_filter_values].concat();
 
-    log::trace!(
-        "Running update query: {query} with params: {:?}",
-        all_values
-    );
+    log::trace!("Running update query: {query} with params: {all_values:?}");
 
     let mut statement = connection.prepare_cached(&query)?;
 
@@ -481,10 +478,7 @@ fn update_and_get_rows(
 
     let all_values = [all_values, all_filter_values].concat();
 
-    log::trace!(
-        "Running update query: {query} with params: {:?}",
-        all_values
-    );
+    log::trace!("Running update query: {query} with params: {all_values:?}");
 
     let mut statement = connection.prepare_cached(&query)?;
     bind_values(&mut statement, Some(&all_values), false, 0)?;
@@ -1079,10 +1073,7 @@ fn update_chunk(
 
     let all_values = [all_values, all_filter_values].concat();
 
-    log::trace!(
-        "Running update chunk query: {query} with params: {:?}",
-        all_values
-    );
+    log::trace!("Running update chunk query: {query} with params: {all_values:?}");
 
     let mut statement = connection.prepare_cached(&query)?;
     let column_names = statement
@@ -1209,10 +1200,7 @@ fn upsert_chunk(
         .map(std::convert::Into::into)
         .collect::<Vec<_>>();
 
-    log::trace!(
-        "Running upsert chunk query: {query} with params: {:?}",
-        all_values
-    );
+    log::trace!("Running upsert chunk query: {query} with params: {all_values:?}");
 
     let mut statement = connection.prepare_cached(&query)?;
     let column_names = statement

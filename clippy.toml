@@ -36,6 +36,7 @@ allowed-duplicate-crates = [
     "itoa",
     "libloading",
     "linux-raw-sys",
+    "local-ip-address",
     "lru",
     "memoffset",
     "miniz_oxide",

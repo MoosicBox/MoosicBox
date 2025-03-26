@@ -36,7 +36,7 @@ pub fn map_channels_to_pa_channelmap(channels: Channels) -> Option<pulse::channe
             _ => {
                 // If a Symphonia channel cannot map to a PulseAudio position then return None
                 // because PulseAudio will not be able to open a stream with invalid channels.
-                warn!("failed to map channel {:?} to output", channel);
+                warn!("failed to map channel {channel:?} to output");
                 return None;
             }
         }

@@ -547,10 +547,7 @@ async fn update_and_get_row(
 
     let all_values = [all_values, all_filter_values].concat();
 
-    log::trace!(
-        "Running update query: {query} with params: {:?}",
-        all_values
-    );
+    log::trace!("Running update query: {query} with params: {all_values:?}");
 
     let statement = connection.prepare(&query).await?;
 
@@ -627,10 +624,7 @@ async fn update_and_get_rows(
 
     let all_values = [all_values, all_filter_values].concat();
 
-    log::trace!(
-        "Running update query: {query} with params: {:?}",
-        all_values
-    );
+    log::trace!("Running update query: {query} with params: {all_values:?}");
 
     let statement = connection.prepare(&query).await?;
 
@@ -1196,10 +1190,7 @@ async fn update_chunk(
 
     let all_values = [all_values, all_filter_values].concat();
 
-    log::trace!(
-        "Running update chunk query: {query} with params: {:?}",
-        all_values
-    );
+    log::trace!("Running update chunk query: {query} with params: {all_values:?}");
 
     let statement = connection.prepare(&query).await?;
     let column_names = statement
@@ -1322,10 +1313,7 @@ async fn upsert_chunk(
         })
         .collect::<Vec<_>>();
 
-    log::trace!(
-        "Running upsert chunk query: {query} with params: {:?}",
-        all_values
-    );
+    log::trace!("Running upsert chunk query: {query} with params: {all_values:?}");
 
     let statement = connection.prepare(&query).await?;
     let column_names = statement

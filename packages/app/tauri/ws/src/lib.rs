@@ -259,7 +259,7 @@ impl WsClient {
                         let m = match m {
                             Ok(m) => m,
                             Err(e) => {
-                                log::error!("Send Loop error: {:?}", e);
+                                log::error!("Send Loop error: {e:?}");
                                 close_token.cancel();
                                 return;
                             }

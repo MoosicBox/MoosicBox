@@ -269,7 +269,7 @@ impl AsModelResultMapped<LibraryAlbum, DatabaseFetchError> for Vec<moosicbox_dat
                         results.push(album);
                     }
                     Err(err) => {
-                        log::error!("Failed to parse Album for album id={}: {err:?}", album_id);
+                        log::error!("Failed to parse Album for album id={album_id}: {err:?}");
                         continue;
                     }
                 }

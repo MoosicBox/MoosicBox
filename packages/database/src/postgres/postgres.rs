@@ -533,10 +533,7 @@ async fn update_and_get_row(
 
     let all_values = [all_values, all_filter_values].concat();
 
-    log::trace!(
-        "Running update_and_get_row query: {query} with params: {:?}",
-        all_values
-    );
+    log::trace!("Running update_and_get_row query: {query} with params: {all_values:?}");
 
     let statement = client.prepare(&query).await?;
 
@@ -614,10 +611,7 @@ async fn update_and_get_rows(
 
     let all_values = [all_values, all_filter_values].concat();
 
-    log::trace!(
-        "Running update_and_get_rows query: {query} with params: {:?}",
-        all_values
-    );
+    log::trace!("Running update_and_get_rows query: {query} with params: {all_values:?}");
 
     let statement = client.prepare(&query).await?;
 
@@ -919,7 +913,7 @@ async fn find_row(
     );
 
     let filters = bexprs_to_params_opt(filters);
-    log::trace!("Running find_row query: {query} with params: {:?}", filters);
+    log::trace!("Running find_row query: {query} with params: {filters:?}");
 
     let statement = client.prepare(&query).await?;
     let column_names = statement
@@ -962,10 +956,7 @@ async fn insert_and_get_row(
     );
 
     let values = exprs_to_params(values);
-    log::trace!(
-        "Running insert_and_get_row query: '{query}' with params: {:?}",
-        values
-    );
+    log::trace!("Running insert_and_get_row query: '{query}' with params: {values:?}");
 
     let statement = client.prepare(&query).await?;
     let column_names = statement
@@ -1128,10 +1119,7 @@ async fn update_chunk(
 
     let all_values = [all_values, all_filter_values].concat();
 
-    log::trace!(
-        "Running update chunk query: {query} with params: {:?}",
-        all_values
-    );
+    log::trace!("Running update chunk query: {query} with params: {all_values:?}");
 
     let statement = client.prepare(&query).await?;
     let column_names = statement
@@ -1253,10 +1241,7 @@ async fn upsert_chunk(
         })
         .collect::<Vec<PgDatabaseValue>>();
 
-    log::trace!(
-        "Running upsert chunk query: {query} with params: {:?}",
-        all_values
-    );
+    log::trace!("Running upsert chunk query: {query} with params: {all_values:?}");
 
     let statement = client.prepare(&query).await?;
     let column_names = statement

@@ -224,7 +224,7 @@ pub async fn get_silence_endpoint(query: web::Query<GetSilenceQuery>) -> Result<
             format!("bytes -{end}/{original_size}", end = original_size - 1),
         ));
 
-        log::debug!("Returning stream body with size={:?}", size);
+        log::debug!("Returning stream body with size={size:?}");
         Ok(response.body(actix_web::body::SizedStream::new(size, stream)))
     } else {
         log::debug!("No size was found for stream");
@@ -320,7 +320,7 @@ pub async fn track_endpoint(
         .get(actix_web::http::header::RANGE)
         .and_then(|x| x.to_str().ok())
         .map(|range| {
-            log::debug!("Got range request {:?}", range);
+            log::debug!("Got range request {range:?}");
 
             range
                 .strip_prefix("bytes=")
@@ -406,7 +406,7 @@ pub async fn track_endpoint(
                 #[allow(clippy::cast_possible_truncation)]
                 if end > size as usize {
                     let error = format!("Range end out of bounds: {end}");
-                    log::error!("{}", error);
+                    log::error!("{error}");
                     return Err(ErrorBadRequest(error));
                 }
                 size = end as u64;
@@ -415,7 +415,7 @@ pub async fn track_endpoint(
                 #[allow(clippy::cast_possible_truncation)]
                 if start > size as usize {
                     let error = format!("Range start out of bounds: {start}");
-                    log::error!("{}", error);
+                    log::error!("{error}");
                     return Err(ErrorBadRequest(error));
                 }
                 size -= start as u64;
@@ -442,7 +442,7 @@ pub async fn track_endpoint(
             response.status(actix_web::http::StatusCode::PARTIAL_CONTENT);
         }
 
-        log::debug!("Returning stream body with size={:?}", size);
+        log::debug!("Returning stream body with size={size:?}");
         Ok(response.body(actix_web::body::SizedStream::new(size, stream)))
     } else {
         log::debug!("No size was found for stream");

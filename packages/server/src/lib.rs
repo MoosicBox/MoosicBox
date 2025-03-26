@@ -518,7 +518,7 @@ pub async fn run(
                     .drain()
                     .collect::<Vec<_>>();
                 for (id, (_, mut player)) in players {
-                    log::debug!("Shutting down player id={}", id);
+                    log::debug!("Shutting down player id={id}");
                     if let Err(err) = player
                         .update_playback(
                             true,
@@ -538,9 +538,9 @@ pub async fn run(
                         )
                         .await
                     {
-                        log::error!("Failed to stop player id={}: {err:?}", id);
+                        log::error!("Failed to stop player id={id}: {err:?}");
                     } else {
-                        log::debug!("Successfully shut down player id={}", id);
+                        log::debug!("Successfully shut down player id={id}");
                     }
                 }
             }

@@ -2177,7 +2177,7 @@ mod test {
             container.calculated_height = Some(1000.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             let container = container.children[0].children[0].children[1].children[0].clone();
 
@@ -2238,7 +2238,7 @@ mod test {
                 ..Default::default()
             };
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container.clone(),
@@ -2369,7 +2369,7 @@ mod test {
                 ..Default::default()
             };
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container.clone(),
@@ -2513,7 +2513,7 @@ mod test {
                 ..Default::default()
             };
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container.clone(),
@@ -2649,7 +2649,7 @@ mod test {
                 ..Default::default()
             };
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container.clone(),
@@ -2764,7 +2764,7 @@ mod test {
                 ..Default::default()
             };
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container.clone(),
@@ -2865,7 +2865,7 @@ mod test {
             container.calculated_height = Some(80.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container.clone(),
@@ -3001,7 +3001,7 @@ mod test {
                 ..Default::default()
             };
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container.clone(),
@@ -3096,7 +3096,7 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             let td = container.children[0].children[0].children[0].clone();
 
@@ -3126,7 +3126,7 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             let tr = container.children[0].children[0].clone();
 
@@ -3168,7 +3168,7 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -3214,7 +3214,7 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -3265,7 +3265,7 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -3319,7 +3319,7 @@ mod test {
             container.calculated_height = Some(500.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container.clone(),
@@ -3393,7 +3393,7 @@ mod test {
             container.calculated_height = Some(500.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -3435,7 +3435,7 @@ mod test {
             container.calculated_height = Some(500.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -3467,7 +3467,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -3500,7 +3500,7 @@ mod test {
         container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -3553,7 +3553,7 @@ mod test {
         container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -3615,7 +3615,7 @@ mod test {
         container.overflow_y = LayoutOverflow::Squash;
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -3689,7 +3689,7 @@ mod test {
         };
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -3796,7 +3796,7 @@ mod test {
         };
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -3880,7 +3880,7 @@ mod test {
 
         log::debug!("First calc");
         CALCULATOR.calc(&mut container);
-        log::trace!("first container:\n{}", container);
+        log::trace!("first container:\n{container}");
 
         container.children.extend(vec![
             div.clone(),
@@ -3892,7 +3892,7 @@ mod test {
 
         log::debug!("Second calc");
         CALCULATOR.calc(&mut container);
-        log::trace!("second container:\n{}", container);
+        log::trace!("second container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -4015,7 +4015,7 @@ mod test {
 
         log::debug!("First calc");
         CALCULATOR.calc(&mut container);
-        log::trace!("first container:\n{}", container);
+        log::trace!("first container:\n{container}");
 
         container.children.extend(vec![
             div.clone(),
@@ -4027,7 +4027,7 @@ mod test {
 
         log::debug!("Second calc");
         CALCULATOR.calc(&mut container);
-        log::trace!("second container:\n{}", container);
+        log::trace!("second container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -4160,7 +4160,7 @@ mod test {
         };
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -4253,7 +4253,7 @@ mod test {
         };
 
         CALCULATOR.calc(&mut container);
-        log::trace!("first container:\n{}", container);
+        log::trace!("first container:\n{container}");
 
         let mut actual = container.clone();
         let expected = Container {
@@ -4307,7 +4307,7 @@ mod test {
         compare_containers(&actual, &expected);
 
         CALCULATOR.calc(&mut actual);
-        log::trace!("second container:\n{}", actual);
+        log::trace!("second container:\n{actual}");
 
         compare_containers(&actual, &expected);
     }
@@ -4348,7 +4348,7 @@ mod test {
         };
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -4444,7 +4444,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -4519,7 +4519,7 @@ mod test {
         container.justify_content = Some(JustifyContent::SpaceEvenly);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -4591,7 +4591,7 @@ mod test {
         container.justify_content = Some(JustifyContent::SpaceEvenly);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -4676,7 +4676,7 @@ mod test {
 
         log::debug!("First calc");
         CALCULATOR.calc(&mut container);
-        log::trace!("first container:\n{}", container);
+        log::trace!("first container:\n{container}");
 
         container.children.extend(vec![
             div.clone(),
@@ -4688,7 +4688,7 @@ mod test {
 
         log::debug!("Second calc");
         CALCULATOR.calc(&mut container);
-        log::trace!("second container:\n{}", container);
+        log::trace!("second container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -4811,7 +4811,7 @@ mod test {
 
         log::debug!("First calc");
         CALCULATOR.calc(&mut container);
-        log::trace!("first container:\n{}", container);
+        log::trace!("first container:\n{container}");
 
         container.children.extend(vec![
             div.clone(),
@@ -4823,7 +4823,7 @@ mod test {
 
         log::debug!("Second calc");
         CALCULATOR.calc(&mut container);
-        log::trace!("second container:\n{}", container);
+        log::trace!("second container:\n{container}");
 
         compare_containers(
             &container,
@@ -4966,7 +4966,7 @@ mod test {
         };
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -5069,7 +5069,7 @@ mod test {
         };
 
         CALCULATOR.calc(&mut container);
-        log::trace!("first container:\n{}", container);
+        log::trace!("first container:\n{container}");
 
         let mut actual = container.clone();
         let expected = Container {
@@ -5123,7 +5123,7 @@ mod test {
         compare_containers(&actual, &expected);
 
         CALCULATOR.calc(&mut actual);
-        log::trace!("second container:\n{}", actual);
+        log::trace!("second container:\n{actual}");
 
         compare_containers(&actual, &expected);
     }
@@ -5160,7 +5160,7 @@ mod test {
         };
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -5211,10 +5211,10 @@ mod test {
         };
 
         CALCULATOR.calc(&mut container);
-        log::trace!("first container:\n{}", container);
+        log::trace!("first container:\n{container}");
 
         CALCULATOR.calc(&mut container);
-        log::trace!("second container:\n{}", container);
+        log::trace!("second container:\n{container}");
 
         compare_containers(
             &container,
@@ -5262,7 +5262,7 @@ mod test {
         };
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -5315,7 +5315,7 @@ mod test {
         };
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -5368,7 +5368,7 @@ mod test {
         };
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -5445,7 +5445,7 @@ mod test {
         };
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -5526,7 +5526,7 @@ mod test {
         };
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -5587,7 +5587,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -5670,7 +5670,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -5777,7 +5777,7 @@ mod test {
         };
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -5888,7 +5888,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -6002,7 +6002,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -6094,7 +6094,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -6190,7 +6190,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -6274,7 +6274,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -6323,7 +6323,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -6372,7 +6372,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -6418,7 +6418,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -6459,7 +6459,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -6493,7 +6493,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -6533,7 +6533,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -6576,7 +6576,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -6616,7 +6616,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -6656,7 +6656,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -6700,7 +6700,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -6742,7 +6742,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -6785,7 +6785,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -6823,7 +6823,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -6864,7 +6864,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -6912,7 +6912,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -6966,7 +6966,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -6998,7 +6998,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -7028,7 +7028,7 @@ mod test {
         };
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -7060,7 +7060,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -7100,7 +7100,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -7153,7 +7153,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -7199,7 +7199,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -7239,7 +7239,7 @@ mod test {
             ..Default::default()
         };
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -7274,7 +7274,7 @@ mod test {
         container.calculated_height = Some(100.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -7314,7 +7314,7 @@ mod test {
         container.calculated_height = Some(100.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -7376,7 +7376,7 @@ mod test {
         container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         let container = container.children[0].children[0].children[1].clone();
 
@@ -7436,7 +7436,7 @@ mod test {
         container.position = Some(Position::Relative);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -7475,7 +7475,7 @@ mod test {
         container.position = Some(Position::Relative);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -7515,7 +7515,7 @@ mod test {
         container.position = Some(Position::Relative);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container.clone(),
@@ -7562,7 +7562,7 @@ mod test {
         container.calculated_height = Some(1000.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         let container = container.children[0].children[1].clone();
 
@@ -7599,7 +7599,7 @@ mod test {
         container.calculated_height = Some(1000.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         let main = container.children[0].children[0].children[1].clone();
 
@@ -7657,7 +7657,7 @@ mod test {
         container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         let main = container.children[0].children[0].children[1].clone();
 
@@ -7704,7 +7704,7 @@ mod test {
         container.calculated_height = Some(500.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -7742,7 +7742,7 @@ mod test {
         container.calculated_height = Some(500.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -7785,7 +7785,7 @@ mod test {
         container.calculated_height = Some(500.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -7830,7 +7830,7 @@ mod test {
         container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -7867,7 +7867,7 @@ mod test {
         container.calculated_height = Some(500.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -7893,7 +7893,7 @@ mod test {
         container.calculated_height = Some(500.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -7919,7 +7919,7 @@ mod test {
         container.calculated_height = Some(500.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -7945,7 +7945,7 @@ mod test {
         container.calculated_height = Some(500.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -7971,7 +7971,7 @@ mod test {
         container.calculated_height = Some(500.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -7997,7 +7997,7 @@ mod test {
         container.calculated_height = Some(500.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8023,7 +8023,7 @@ mod test {
         container.calculated_height = Some(500.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8049,7 +8049,7 @@ mod test {
         container.calculated_height = Some(500.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8075,7 +8075,7 @@ mod test {
         container.calculated_height = Some(500.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8101,7 +8101,7 @@ mod test {
         container.calculated_height = Some(500.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8127,7 +8127,7 @@ mod test {
         container.calculated_height = Some(500.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8154,7 +8154,7 @@ mod test {
         container.calculated_height = Some(500.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8182,7 +8182,7 @@ mod test {
         container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8210,7 +8210,7 @@ mod test {
         container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8238,7 +8238,7 @@ mod test {
         container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8266,7 +8266,7 @@ mod test {
         container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8294,7 +8294,7 @@ mod test {
         container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8322,7 +8322,7 @@ mod test {
         container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8350,7 +8350,7 @@ mod test {
         container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8378,7 +8378,7 @@ mod test {
         container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8406,7 +8406,7 @@ mod test {
         container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8434,7 +8434,7 @@ mod test {
         container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8462,7 +8462,7 @@ mod test {
         container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8490,7 +8490,7 @@ mod test {
         container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8518,7 +8518,7 @@ mod test {
         container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8546,7 +8546,7 @@ mod test {
         container.justify_content = Some(JustifyContent::Start);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8578,7 +8578,7 @@ mod test {
         container.calculated_height = Some(100.0);
         container.justify_content = Some(JustifyContent::Start);
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8624,7 +8624,7 @@ mod test {
         container.calculated_height = Some(100.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8664,9 +8664,9 @@ mod test {
         container.calculated_height = Some(100.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("full container:\n{}", container);
+        log::trace!("full container:\n{container}");
         container = container.children[0].clone();
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8703,9 +8703,9 @@ mod test {
         container.calculated_height = Some(100.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("full container:\n{}", container);
+        log::trace!("full container:\n{container}");
         container = container.children[0].clone();
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8741,9 +8741,9 @@ mod test {
         container.calculated_height = Some(100.0);
 
         CALCULATOR.calc(&mut container);
-        log::trace!("full container:\n{}", container);
+        log::trace!("full container:\n{container}");
         container = container.children[0].clone();
-        log::trace!("container:\n{}", container);
+        log::trace!("container:\n{container}");
 
         compare_containers(
             &container,
@@ -8779,9 +8779,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -8807,9 +8807,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -8838,9 +8838,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -8878,9 +8878,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -8919,9 +8919,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -8948,9 +8948,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -8980,9 +8980,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -9012,9 +9012,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -9044,9 +9044,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -9082,7 +9082,7 @@ mod test {
                 },
             );
             calculator.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -9118,7 +9118,7 @@ mod test {
                 },
             );
             calculator.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -9157,7 +9157,7 @@ mod test {
                 },
             );
             calculator.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -9196,7 +9196,7 @@ mod test {
                 },
             );
             calculator.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -9238,7 +9238,7 @@ mod test {
                 },
             );
             calculator.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -9279,7 +9279,7 @@ mod test {
                 },
             );
             calculator.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -9320,7 +9320,7 @@ mod test {
                 },
             );
             calculator.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -9659,9 +9659,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -9692,9 +9692,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -9723,9 +9723,9 @@ mod test {
             container.calculated_height = Some(400.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -9756,9 +9756,9 @@ mod test {
             container.calculated_height = Some(400.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -9787,9 +9787,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -9820,9 +9820,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -9851,9 +9851,9 @@ mod test {
             container.calculated_height = Some(400.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -9884,9 +9884,9 @@ mod test {
             container.calculated_height = Some(400.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -9915,9 +9915,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -9948,9 +9948,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -9979,9 +9979,9 @@ mod test {
             container.calculated_height = Some(400.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10012,9 +10012,9 @@ mod test {
             container.calculated_height = Some(400.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10043,9 +10043,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10076,9 +10076,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10107,9 +10107,9 @@ mod test {
             container.calculated_height = Some(400.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10140,9 +10140,9 @@ mod test {
             container.calculated_height = Some(400.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10171,9 +10171,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10204,9 +10204,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10235,9 +10235,9 @@ mod test {
             container.calculated_height = Some(400.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10269,9 +10269,9 @@ mod test {
             container.calculated_height = Some(400.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10300,9 +10300,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10334,9 +10334,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10365,9 +10365,9 @@ mod test {
             container.calculated_height = Some(400.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10399,9 +10399,9 @@ mod test {
             container.calculated_height = Some(400.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10430,9 +10430,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10464,9 +10464,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10495,9 +10495,9 @@ mod test {
             container.calculated_height = Some(400.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10529,9 +10529,9 @@ mod test {
             container.calculated_height = Some(400.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10560,9 +10560,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10594,9 +10594,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10625,9 +10625,9 @@ mod test {
             container.calculated_height = Some(400.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10659,9 +10659,9 @@ mod test {
             container.calculated_height = Some(400.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10691,7 +10691,7 @@ mod test {
             container.calculated_height = Some(400.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10725,7 +10725,7 @@ mod test {
             container.calculated_height = Some(400.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10759,7 +10759,7 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10793,7 +10793,7 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10831,7 +10831,7 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10864,7 +10864,7 @@ mod test {
             container.calculated_height = Some(200.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10898,7 +10898,7 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10924,7 +10924,7 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -10963,7 +10963,7 @@ mod test {
             container.calculated_height = Some(500.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -11007,7 +11007,7 @@ mod test {
             container.calculated_height = Some(500.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -11049,7 +11049,7 @@ mod test {
                 ..Default::default()
             };
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container.clone(),
@@ -11096,7 +11096,7 @@ mod test {
                 ..Default::default()
             };
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container.clone(),
@@ -11143,7 +11143,7 @@ mod test {
                 ..Default::default()
             };
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container.clone(),
@@ -11193,7 +11193,7 @@ mod test {
             };
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container.clone(),
@@ -11241,7 +11241,7 @@ mod test {
                 ..Default::default()
             };
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container.clone(),
@@ -11292,9 +11292,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -11327,9 +11327,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -11358,9 +11358,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -11402,9 +11402,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -11449,9 +11449,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -11484,9 +11484,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -11515,9 +11515,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -11552,9 +11552,9 @@ mod test {
             container.calculated_height = Some(100.0);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("full container:\n{}", container);
+            log::trace!("full container:\n{container}");
             container = container.children[0].clone();
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -11589,7 +11589,7 @@ mod test {
             container.column_gap = Some(Number::Integer(5));
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -11625,7 +11625,7 @@ mod test {
             container.justify_content = Some(JustifyContent::Center);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -11662,7 +11662,7 @@ mod test {
             container.row_gap = Some(Number::Integer(5));
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -11698,7 +11698,7 @@ mod test {
             container.justify_content = Some(JustifyContent::Center);
 
             CALCULATOR.calc(&mut container);
-            log::trace!("container:\n{}", container);
+            log::trace!("container:\n{container}");
 
             compare_containers(
                 &container,
@@ -11736,9 +11736,9 @@ mod test {
                 container.calculated_height = Some(100.0);
 
                 CALCULATOR.calc(&mut container);
-                log::trace!("full container:\n{}", container);
+                log::trace!("full container:\n{container}");
                 container = container.children[0].clone();
-                log::trace!("container:\n{}", container);
+                log::trace!("container:\n{container}");
 
                 compare_containers(
                     &container,
@@ -11761,9 +11761,9 @@ mod test {
                 container.calculated_height = Some(100.0);
 
                 CALCULATOR.calc(&mut container);
-                log::trace!("full container:\n{}", container);
+                log::trace!("full container:\n{container}");
                 container = container.children[0].clone();
-                log::trace!("container:\n{}", container);
+                log::trace!("container:\n{container}");
 
                 compare_containers(
                     &container,
@@ -11789,9 +11789,9 @@ mod test {
                 container.calculated_height = Some(100.0);
 
                 CALCULATOR.calc(&mut container);
-                log::trace!("full container:\n{}", container);
+                log::trace!("full container:\n{container}");
                 container = container.children[0].clone();
-                log::trace!("container:\n{}", container);
+                log::trace!("container:\n{container}");
 
                 compare_containers(
                     &container,
@@ -11825,9 +11825,9 @@ mod test {
                 container.calculated_height = Some(100.0);
 
                 CALCULATOR.calc(&mut container);
-                log::trace!("full container:\n{}", container);
+                log::trace!("full container:\n{container}");
                 container = container.children[0].clone();
-                log::trace!("container:\n{}", container);
+                log::trace!("container:\n{container}");
 
                 compare_containers(
                     &container,
@@ -11855,9 +11855,9 @@ mod test {
                 container.calculated_height = Some(100.0);
 
                 CALCULATOR.calc(&mut container);
-                log::trace!("full container:\n{}", container);
+                log::trace!("full container:\n{container}");
                 container = container.children[0].clone();
-                log::trace!("container:\n{}", container);
+                log::trace!("container:\n{container}");
 
                 compare_containers(
                     &container,
@@ -11885,9 +11885,9 @@ mod test {
                 container.calculated_height = Some(100.0);
 
                 CALCULATOR.calc(&mut container);
-                log::trace!("full container:\n{}", container);
+                log::trace!("full container:\n{container}");
                 container = container.children[0].clone();
-                log::trace!("container:\n{}", container);
+                log::trace!("container:\n{container}");
 
                 compare_containers(
                     &container,
@@ -11915,9 +11915,9 @@ mod test {
                 container.calculated_height = Some(100.0);
 
                 CALCULATOR.calc(&mut container);
-                log::trace!("full container:\n{}", container);
+                log::trace!("full container:\n{container}");
                 container = container.children[0].clone();
-                log::trace!("container:\n{}", container);
+                log::trace!("container:\n{container}");
 
                 compare_containers(
                     &container,
@@ -11946,9 +11946,9 @@ mod test {
                 container.calculated_height = Some(100.0);
 
                 CALCULATOR.calc(&mut container);
-                log::trace!("full container:\n{}", container);
+                log::trace!("full container:\n{container}");
                 container = container.children[0].clone();
-                log::trace!("container:\n{}", container);
+                log::trace!("container:\n{container}");
 
                 compare_containers(
                     &container,
@@ -11983,9 +11983,9 @@ mod test {
                 container.calculated_height = Some(100.0);
 
                 CALCULATOR.calc(&mut container);
-                log::trace!("full container:\n{}", container);
+                log::trace!("full container:\n{container}");
                 container = container.children[0].clone();
-                log::trace!("container:\n{}", container);
+                log::trace!("container:\n{container}");
 
                 compare_containers(
                     &container,
@@ -12020,9 +12020,9 @@ mod test {
                 container.calculated_height = Some(100.0);
 
                 CALCULATOR.calc(&mut container);
-                log::trace!("full container:\n{}", container);
+                log::trace!("full container:\n{container}");
                 container = container.children[0].clone();
-                log::trace!("container:\n{}", container);
+                log::trace!("container:\n{container}");
 
                 compare_containers(
                     &container,
@@ -12057,9 +12057,9 @@ mod test {
                 container.calculated_height = Some(100.0);
 
                 CALCULATOR.calc(&mut container);
-                log::trace!("full container:\n{}", container);
+                log::trace!("full container:\n{container}");
                 container = container.children[0].clone();
-                log::trace!("container:\n{}", container);
+                log::trace!("container:\n{container}");
 
                 compare_containers(
                     &container,
@@ -12095,9 +12095,9 @@ mod test {
                 container.calculated_height = Some(100.0);
 
                 CALCULATOR.calc(&mut container);
-                log::trace!("full container:\n{}", container);
+                log::trace!("full container:\n{container}");
                 container = container.children[0].clone();
-                log::trace!("container:\n{}", container);
+                log::trace!("container:\n{container}");
 
                 compare_containers(
                     &container,
@@ -12132,9 +12132,9 @@ mod test {
                 container.calculated_height = Some(100.0);
 
                 CALCULATOR.calc(&mut container);
-                log::trace!("full container:\n{}", container);
+                log::trace!("full container:\n{container}");
                 container = container.children[0].clone();
-                log::trace!("container:\n{}", container);
+                log::trace!("container:\n{container}");
 
                 compare_containers(
                     &container,
@@ -12170,9 +12170,9 @@ mod test {
                 container.calculated_height = Some(100.0);
 
                 CALCULATOR.calc(&mut container);
-                log::trace!("full container:\n{}", container);
+                log::trace!("full container:\n{container}");
                 container = container.children[0].clone();
-                log::trace!("container:\n{}", container);
+                log::trace!("container:\n{container}");
 
                 compare_containers(
                     &container,

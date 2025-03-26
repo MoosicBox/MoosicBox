@@ -63,12 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     )?;
 
-    log::debug!(
-        "Converting file ({:?}) => ({:?}) with {:?} encoding",
-        source,
-        output,
-        output_encoding
-    );
+    log::debug!("Converting file ({source:?}) => ({output:?}) with {output_encoding:?} encoding");
 
     let bytes = get_audio_bytes(
         TrackSource::LocalFilePath {

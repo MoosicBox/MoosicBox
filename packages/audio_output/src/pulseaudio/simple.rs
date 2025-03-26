@@ -59,7 +59,7 @@ impl PulseAudioOutput {
                 sample_buf: None,
             }),
             Err(err) => {
-                log::error!("audio output stream open error: {}", err);
+                log::error!("audio output stream open error: {err}");
 
                 Err(AudioOutputError::OpenStream)
             }
@@ -102,7 +102,7 @@ impl AudioWrite for PulseAudioOutput {
         let start = SystemTime::now();
         // Write interleaved samples to PulseAudio.
         if let Err(err) = self.pa.write(buffer) {
-            log::error!("audio output stream write error: {}", err);
+            log::error!("audio output stream write error: {err}");
 
             Err(AudioOutputError::StreamClosed)
         } else {
@@ -113,7 +113,7 @@ impl AudioWrite for PulseAudioOutput {
                 return Err(AudioOutputError::Interrupt);
             }
 
-            log::trace!("Successfully wrote to pulse audio. Took {}ms", took_ms);
+            log::trace!("Successfully wrote to pulse audio. Took {took_ms}ms");
 
             Ok(buffer.len())
         }

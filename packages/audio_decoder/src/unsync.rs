@@ -62,7 +62,7 @@ pub fn decode(
             }
             Err(err) => {
                 // Don't give-up on a seek error.
-                log::warn!("seek error: {}", err);
+                log::warn!("seek error: {err}");
                 0
             }
         }
@@ -136,7 +136,7 @@ fn decode_track(
                 Err(Error::DecodeError(err)) => {
                     // Decode errors are not fatal. Print the error message and try to decode the next
                     // packet as usual.
-                    log::warn!("decode error: {}", err);
+                    log::warn!("decode error: {err}");
                 }
                 Err(err) => break Err(DecodeError::Symphonia(err)),
             }

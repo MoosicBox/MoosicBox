@@ -160,7 +160,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
                     // Mute any remaining samples.
                     data[written..].iter_mut().for_each(|s| *s = T::MID);
                 },
-                move |err| log::error!("Audio output error: {}", err),
+                move |err| log::error!("Audio output error: {err}"),
                 None,
             )
             .map_err(|e| {
@@ -171,7 +171,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
 
         // Start the output stream.
         if let Err(err) = stream.play() {
-            log::error!("Audio output stream play error: {}", err);
+            log::error!("Audio output stream play error: {err}");
 
             return Err(AudioOutputError::PlayStream);
         }

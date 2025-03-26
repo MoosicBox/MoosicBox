@@ -234,7 +234,7 @@ fn wait_for_context(
     )
     .map_err(|e| match e {
         StateError::State(state) => {
-            log::error!("Context failure state {:?}, quitting...", state);
+            log::error!("Context failure state {state:?}, quitting...");
             match state {
                 State::Failed | State::Terminated => AudioOutputError::StreamClosed,
                 _ => unreachable!(),
@@ -260,7 +260,7 @@ fn wait_for_stream(
     )
     .map_err(|e| match e {
         StateError::State(state) => {
-            log::error!("Stream failure state {:?}, quitting...", state);
+            log::error!("Stream failure state {state:?}, quitting...");
             match state {
                 pulse::stream::State::Failed | pulse::stream::State::Terminated => {
                     AudioOutputError::StreamClosed
@@ -285,7 +285,7 @@ fn write_bytes(stream: &mut Stream, mut bytes: &[u8]) -> Result<usize, AudioOutp
         // Write interleaved samples to PulseAudio.
         let written =
             if let Err(err) = stream.write(buffer, None, 0, pulse::stream::SeekMode::Relative) {
-                log::error!("audio output stream write error: {}", err);
+                log::error!("audio output stream write error: {err}");
 
                 return Err(AudioOutputError::StreamClosed);
             } else {
@@ -367,7 +367,7 @@ impl AudioWrite for PulseAudioOutput {
         let mut bytes_written = 0;
 
         log::debug!("{bytes_available} bytes available");
-        log::debug!("Latency {:?}", latency);
+        log::debug!("Latency {latency:?}");
 
         let start = SystemTime::now();
         log::trace!("Writing bytes");

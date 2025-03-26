@@ -452,7 +452,7 @@ impl TunnelSender {
                             let m = match m {
                                 Ok(m) => m,
                                 Err(e) => {
-                                    log::error!("Send Loop error: {:?}", e);
+                                    log::error!("Send Loop error: {e:?}");
                                     close_token.cancel();
                                     return;
                                 }
@@ -951,7 +951,7 @@ impl TunnelSender {
                 Ok(size) => {
                     packet_id += 1;
                     bytes_read += size;
-                    log::debug!("Read {} bytes", bytes_read);
+                    log::debug!("Read {bytes_read} bytes");
                     let bytes = &buf[..size];
                     let mut prefix = format!("{request_id}|{packet_id}|");
                     let mut base64 = general_purpose::STANDARD.encode(bytes);
@@ -1050,7 +1050,7 @@ impl TunnelSender {
                     Some(Ok(data)) => {
                         let size = data.len();
                         bytes_read += size;
-                        log::debug!("Read {} bytes", bytes_read);
+                        log::debug!("Read {bytes_read} bytes");
                         let encoded = general_purpose::STANDARD.encode(data);
                         if encoded.len() + buf.len() <= buf_size - size_offset {
                             buf.push_str(&encoded);

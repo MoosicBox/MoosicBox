@@ -211,12 +211,7 @@ impl Read for RemoteByteStream {
             let fetcher_start = usize::try_from(fetcher.start).unwrap();
 
             log::debug!(
-                "Read: read_pos[{}] write_max[{}] fetcher_start[{}] buffer_len[{}] written[{}]",
-                read_position,
-                write_max,
-                fetcher_start,
-                buffer_len,
-                written
+                "Read: read_pos[{read_position}] write_max[{write_max}] fetcher_start[{fetcher_start}] buffer_len[{buffer_len}] written[{written}]"
             );
 
             let bytes_written = if fetcher_start + buffer_len > read_position {

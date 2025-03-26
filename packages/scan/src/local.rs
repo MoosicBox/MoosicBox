@@ -287,22 +287,22 @@ fn scan_track(
             let channels = moosicbox_lofty_tag.properties().channels();
 
             log::debug!("====== {} ======", path.clone().to_str().unwrap());
-            log::debug!("title: {}", title);
-            log::debug!("format: {:?}", format);
-            log::debug!("number: {}", number);
-            log::debug!("duration: {}", duration);
-            log::debug!("bytes: {}", bytes);
-            log::debug!("audio_bitrate: {:?}", audio_bitrate);
-            log::debug!("overall_bitrate: {:?}", overall_bitrate);
-            log::debug!("sample_rate: {:?}", sample_rate);
-            log::debug!("bit_depth: {:?}", bit_depth);
-            log::debug!("channels: {:?}", channels);
-            log::debug!("album title: {}", album);
-            log::debug!("artist directory name: {}", artist_dir_name);
-            log::debug!("album directory name: {}", album_dir_name);
-            log::debug!("artist: {}", artist_name);
-            log::debug!("album_artist: {}", album_artist);
-            log::debug!("date_released: {:?}", date_released);
+            log::debug!("title: {title}");
+            log::debug!("format: {format:?}");
+            log::debug!("number: {number}");
+            log::debug!("duration: {duration}");
+            log::debug!("bytes: {bytes}");
+            log::debug!("audio_bitrate: {audio_bitrate:?}");
+            log::debug!("overall_bitrate: {overall_bitrate:?}");
+            log::debug!("sample_rate: {sample_rate:?}");
+            log::debug!("bit_depth: {bit_depth:?}");
+            log::debug!("channels: {channels:?}");
+            log::debug!("album title: {album}");
+            log::debug!("artist directory name: {artist_dir_name}");
+            log::debug!("album directory name: {album_dir_name}");
+            log::debug!("artist: {artist_name}");
+            log::debug!("album_artist: {album_artist}");
+            log::debug!("date_released: {date_released:?}");
             log::debug!(
                 "contains cover: {:?}",
                 tag.as_ref().is_some_and(|tag| tag.album_cover().is_some())

@@ -85,7 +85,7 @@ pub async fn handle_ws(
 
             // client WebSocket stream error
             Either::Left((Either::Left((Some(Err(err)), _)), _)) => {
-                log::error!("{}", err);
+                log::error!("{err}");
                 break None;
             }
 
