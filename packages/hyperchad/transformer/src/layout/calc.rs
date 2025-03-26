@@ -1223,7 +1223,7 @@ mod passes {
                     }
 
                     for child in &mut parent.children {
-                        macro_rules! update_size {
+                        macro_rules! update_dynamic_prop {
                             ($prop:ident $(,)?) => {
                                 if let Some(value) =
                                     child.$prop.as_ref().and_then(crate::Number::as_dynamic)
@@ -1237,23 +1237,20 @@ mod passes {
                             };
                         }
 
-                        // dynamic borders
-                        update_size!(border_top_left_radius);
-                        update_size!(border_top_right_radius);
-                        update_size!(border_bottom_left_radius);
-                        update_size!(border_bottom_right_radius);
+                        update_dynamic_prop!(border_top_left_radius);
+                        update_dynamic_prop!(border_top_right_radius);
+                        update_dynamic_prop!(border_bottom_left_radius);
+                        update_dynamic_prop!(border_bottom_right_radius);
 
-                        // dynamic margin
-                        update_size!(margin_left);
-                        update_size!(margin_right);
-                        update_size!(margin_top);
-                        update_size!(margin_bottom);
+                        update_dynamic_prop!(margin_left);
+                        update_dynamic_prop!(margin_right);
+                        update_dynamic_prop!(margin_top);
+                        update_dynamic_prop!(margin_bottom);
 
-                        // dynamic padding
-                        update_size!(padding_left);
-                        update_size!(padding_right);
-                        update_size!(padding_top);
-                        update_size!(padding_bottom);
+                        update_dynamic_prop!(padding_left);
+                        update_dynamic_prop!(padding_right);
+                        update_dynamic_prop!(padding_top);
+                        update_dynamic_prop!(padding_bottom);
                     }
                 });
 
