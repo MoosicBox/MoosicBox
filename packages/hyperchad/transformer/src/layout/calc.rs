@@ -61,6 +61,7 @@ macro_rules! time {
     };
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl<F: FontMetrics> Calc for Calculator<F> {
     #[allow(clippy::let_and_return)]
     fn calc(&self, container: &mut Container) -> bool {
@@ -1078,6 +1079,7 @@ mod passes {
             fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
         }
 
+        #[cfg_attr(feature = "profiling", profiling::all_functions)]
         impl Container {
             fn calculate_font_size(
                 &mut self,
@@ -1177,6 +1179,7 @@ mod passes {
             }
         }
 
+        #[cfg_attr(feature = "profiling", profiling::all_functions)]
         impl<F: FontMetrics> Pass for Calculator<F> {
             fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
                 let each_parent = |container: &mut Container,
@@ -1226,6 +1229,7 @@ mod passes {
             fn calc_margin_and_padding(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
         }
 
+        #[cfg_attr(feature = "profiling", profiling::all_functions)]
         impl<F: FontMetrics> Pass for Calculator<F> {
             #[allow(clippy::too_many_lines)]
             fn calc_margin_and_padding(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
@@ -1298,6 +1302,7 @@ mod passes {
             fn flex_width(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
         }
 
+        #[cfg_attr(feature = "profiling", profiling::all_functions)]
         impl<F: FontMetrics> Pass for Calculator<F> {
             #[allow(clippy::too_many_lines)]
             fn flex_width(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
@@ -1327,6 +1332,7 @@ mod passes {
             fn wrap_horizontal(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
         }
 
+        #[cfg_attr(feature = "profiling", profiling::all_functions)]
         impl<F: FontMetrics> Pass for Calculator<F> {
             fn wrap_horizontal(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
                 let each_child = |container: &mut Container,
@@ -1373,6 +1379,7 @@ mod passes {
             fn calc_heights(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
         }
 
+        #[cfg_attr(feature = "profiling", profiling::all_functions)]
         impl<F: FontMetrics> Pass for Calculator<F> {
             fn calc_heights(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
                 calc_size_on_axis!(
@@ -1405,6 +1412,7 @@ mod passes {
             fn flex_height(&self, bfs: &BfsPaths, container: &mut Container) -> bool;
         }
 
+        #[cfg_attr(feature = "profiling", profiling::all_functions)]
         impl<F: FontMetrics> Pass for Calculator<F> {
             fn flex_height(&self, bfs: &BfsPaths, container: &mut Container) -> bool {
                 flex_on_axis!(
@@ -1444,6 +1452,7 @@ mod passes {
             ) -> bool;
         }
 
+        #[cfg_attr(feature = "profiling", profiling::all_functions)]
         impl<F: FontMetrics> Pass for Calculator<F> {
             #[allow(clippy::too_many_lines)]
             fn position_elements(
@@ -1892,6 +1901,7 @@ mod passes {
         }
     }
 
+    #[cfg_attr(feature = "profiling", profiling::all_functions)]
     impl Container {
         fn is_expandable(&self, parent: &Self) -> bool {
             !self.is_span() && (!parent.is_flex_container() || self.flex.is_some())
@@ -1917,6 +1927,7 @@ mod passes {
     }
 }
 
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Container {
     #[must_use]
     pub fn margin_x(&self) -> Option<f32> {
@@ -2075,6 +2086,7 @@ mod test {
 
     struct DefaultFontMetrics;
 
+    #[cfg_attr(feature = "profiling", profiling::all_functions)]
     impl FontMetrics for DefaultFontMetrics {
         fn measure_text(&self, text: &str, size: f32, wrap_width: f32) -> FontMetricsBounds {
             let mut rows = vec![];
