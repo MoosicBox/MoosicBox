@@ -6113,6 +6113,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lru"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "227748d55f2f0ab4735d87fd623798cb6b664512fe979705f829c9f81c934465"
+dependencies = [
+ "hashbrown 0.15.2",
+]
+
+[[package]]
 name = "lz4_flex"
 version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9390,7 +9399,7 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 [[package]]
 name = "pingora"
 version = "0.4.0"
-source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#fbb73bb675c27073c331300424013cf6fc882bdb"
+source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#e16ab9fa088d767cb450b3395778517fec820962"
 dependencies = [
  "pingora-cache",
  "pingora-core",
@@ -9403,7 +9412,7 @@ dependencies = [
 [[package]]
 name = "pingora-cache"
 version = "0.4.0"
-source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#fbb73bb675c27073c331300424013cf6fc882bdb"
+source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#e16ab9fa088d767cb450b3395778517fec820962"
 dependencies = [
  "ahash",
  "async-trait",
@@ -9417,7 +9426,7 @@ dependencies = [
  "httpdate",
  "indexmap 1.9.3",
  "log",
- "lru 0.12.5",
+ "lru 0.13.0",
  "once_cell",
  "parking_lot 0.12.3",
  "pingora-core",
@@ -9437,7 +9446,7 @@ dependencies = [
 [[package]]
 name = "pingora-core"
 version = "0.4.0"
-source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#fbb73bb675c27073c331300424013cf6fc882bdb"
+source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#e16ab9fa088d767cb450b3395778517fec820962"
 dependencies = [
  "ahash",
  "async-trait",
@@ -9485,12 +9494,12 @@ dependencies = [
 [[package]]
 name = "pingora-error"
 version = "0.4.0"
-source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#fbb73bb675c27073c331300424013cf6fc882bdb"
+source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#e16ab9fa088d767cb450b3395778517fec820962"
 
 [[package]]
 name = "pingora-header-serde"
 version = "0.4.0"
-source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#fbb73bb675c27073c331300424013cf6fc882bdb"
+source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#e16ab9fa088d767cb450b3395778517fec820962"
 dependencies = [
  "bytes",
  "http 1.3.1",
@@ -9505,7 +9514,7 @@ dependencies = [
 [[package]]
 name = "pingora-http"
 version = "0.4.0"
-source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#fbb73bb675c27073c331300424013cf6fc882bdb"
+source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#e16ab9fa088d767cb450b3395778517fec820962"
 dependencies = [
  "bytes",
  "http 1.3.1",
@@ -9515,7 +9524,7 @@ dependencies = [
 [[package]]
 name = "pingora-ketama"
 version = "0.4.0"
-source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#fbb73bb675c27073c331300424013cf6fc882bdb"
+source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#e16ab9fa088d767cb450b3395778517fec820962"
 dependencies = [
  "crc32fast",
 ]
@@ -9523,7 +9532,7 @@ dependencies = [
 [[package]]
 name = "pingora-load-balancing"
 version = "0.4.0"
-source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#fbb73bb675c27073c331300424013cf6fc882bdb"
+source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#e16ab9fa088d767cb450b3395778517fec820962"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -9544,7 +9553,7 @@ dependencies = [
 [[package]]
 name = "pingora-lru"
 version = "0.4.0"
-source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#fbb73bb675c27073c331300424013cf6fc882bdb"
+source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#e16ab9fa088d767cb450b3395778517fec820962"
 dependencies = [
  "arrayvec",
  "hashbrown 0.15.2",
@@ -9555,7 +9564,7 @@ dependencies = [
 [[package]]
 name = "pingora-openssl"
 version = "0.4.0"
-source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#fbb73bb675c27073c331300424013cf6fc882bdb"
+source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#e16ab9fa088d767cb450b3395778517fec820962"
 dependencies = [
  "foreign-types 0.3.2",
  "libc",
@@ -9567,11 +9576,11 @@ dependencies = [
 [[package]]
 name = "pingora-pool"
 version = "0.4.0"
-source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#fbb73bb675c27073c331300424013cf6fc882bdb"
+source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#e16ab9fa088d767cb450b3395778517fec820962"
 dependencies = [
  "crossbeam-queue",
  "log",
- "lru 0.12.5",
+ "lru 0.13.0",
  "parking_lot 0.12.3",
  "pingora-timeout",
  "thread_local",
@@ -9581,7 +9590,7 @@ dependencies = [
 [[package]]
 name = "pingora-proxy"
 version = "0.4.0"
-source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#fbb73bb675c27073c331300424013cf6fc882bdb"
+source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#e16ab9fa088d767cb450b3395778517fec820962"
 dependencies = [
  "async-trait",
  "bytes",
@@ -9602,7 +9611,7 @@ dependencies = [
 [[package]]
 name = "pingora-runtime"
 version = "0.4.0"
-source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#fbb73bb675c27073c331300424013cf6fc882bdb"
+source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#e16ab9fa088d767cb450b3395778517fec820962"
 dependencies = [
  "once_cell",
  "rand 0.8.5",
@@ -9613,7 +9622,7 @@ dependencies = [
 [[package]]
 name = "pingora-timeout"
 version = "0.4.0"
-source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#fbb73bb675c27073c331300424013cf6fc882bdb"
+source = "git+https://github.com/BSteffaniak/pingora?branch=fix-sfv-breaking-changes#e16ab9fa088d767cb450b3395778517fec820962"
 dependencies = [
  "once_cell",
  "parking_lot 0.12.3",
