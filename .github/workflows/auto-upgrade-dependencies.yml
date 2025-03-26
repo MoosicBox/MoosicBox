@@ -39,11 +39,19 @@ jobs:
                                       "name": (.name | sub("^moosicbox_"; "")),
                                       "path": (.path),
                                       "features": (.features),
+                                      "requiredFeatures": (if .requiredFeatures != null then .requiredFeatures | join(",") else null end),
                                       "os": (.os + "-latest"),
                                       "dependencies": (.dependencies),
+                                      "toolchains": (.toolchains),
+                                      "ciSteps": (.ciSteps),
+                                      "ciToolchains": (.ciToolchains),
                                       "env": (.env)
                                   }
+                                  | del(.requiredFeatures | nulls)
                                   | del(.dependencies | nulls)
+                                  | del(.toolchains | nulls)
+                                  | del(.ciSteps | nulls)
+                                  | del(.ciToolchains | nulls)
                                   | del(.env | nulls)
                               ]'
                   )
@@ -115,14 +123,18 @@ jobs:
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
-                          command="${{ matrix.package.env }} cargo clippy --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}"
+                          command="${{ matrix.package.env }} cargo clippy ${{ runner.debug && '-vv ' }}--no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
+                          # Trim whitespace
+                          command=$(echo "$command" | xargs)
                           echo "RUNNING \`$command\`"
                           if ${{ matrix.package.env }} cargo clippy \
+                              ${{ runner.debug && '-vv' }} \
                               --no-default-features \
-                              --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}; then
+                              --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
                               echo "SUCCESS \`$command\`";
                           else
                               >&2 echo "FAILED \`$command\`";
+                              >&2 echo "COMMAND: (cd ${{ matrix.package.path }}; $command)";
                               return 1
                           fi
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
@@ -133,14 +145,18 @@ jobs:
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
-                          command="${{ matrix.package.env }} cargo test --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}"
+                          command="${{ matrix.package.env }} cargo test --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
+                          # Trim whitespace
+                          command=$(echo "$command" | xargs)
                           echo "RUNNING \`$command\`"
                           if ${{ matrix.package.env }} cargo test \
+                              ${{ runner.debug && '-vv' }} \
                               --no-default-features \
-                              --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}; then
+                              --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
                               echo "SUCCESS \`$command\`";
                           else
                               >&2 echo "FAILED \`$command\`";
+                              >&2 echo "COMMAND: (cd ${{ matrix.package.path }}; $command)";
                               return 1
                           fi
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
@@ -149,7 +165,7 @@ jobs:
               if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
               shell: bash
               run: |
-                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo fmt)
+                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo ${{ runner.debug && '-vv' }} fmt --all -- --check)
 
             - name: Install cargo-machete
               if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
