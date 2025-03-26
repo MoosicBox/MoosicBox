@@ -62,6 +62,7 @@ tl = { workspace = true }
 
 [features]
 default = [
+    "benchmark",
     "canvas",
     "format",
     "html",
@@ -97,5 +98,6 @@ maud          = ["dep:maud", "html"]
 html = ["dep:tl", "hyperchad_actions/serde"]
 simd = ["tl?/simd"]
 
+benchmark           = []
 format              = ["dep:xml"]
 syntax-highlighting = ["dep:syntect"]

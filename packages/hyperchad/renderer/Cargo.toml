@@ -45,6 +45,8 @@ profiling-puffin  = ["hyperchad_transformer/profiling-puffin"]
 profiling-tracing = ["hyperchad_transformer/profiling-tracing"]
 profiling-tracy   = ["hyperchad_transformer/profiling-tracy"]
 
+benchmark = ["hyperchad_transformer/benchmark"]
+
 viewport           = []
 viewport-immediate = ["viewport"]
 viewport-retained  = ["viewport"]

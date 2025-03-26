@@ -43,6 +43,24 @@ impl<F: FontMetrics> Calculator<F> {
     }
 }
 
+#[cfg(feature = "benchmark")]
+macro_rules! time {
+    ($label:tt, $expr:expr $(,)?) => {{
+        let before = std::time::SystemTime::now();
+        let ret = $expr;
+        let duration = std::time::SystemTime::now().duration_since(before).unwrap();
+        log::info!("{}: took {} micro seconds", $label, duration.as_micros());
+        ret
+    }};
+}
+
+#[cfg(not(feature = "benchmark"))]
+macro_rules! time {
+    ($label:tt, $expr:expr $(,)?) => {
+        $expr
+    };
+}
+
 impl<F: FontMetrics> Calc for Calculator<F> {
     #[allow(clippy::let_and_return)]
     fn calc(&self, container: &mut Container) -> bool {
@@ -59,17 +77,26 @@ impl<F: FontMetrics> Calc for Calculator<F> {
         let bfs = container.bfs();
         let arena = Bump::new();
 
-        let changed = false;
+        time!("calc", {
+            let changed = false;
 
-        let changed = self.calc_widths(&bfs, container) || changed;
-        let changed = self.calc_margin_and_padding(&bfs, container) || changed;
-        let changed = self.flex_width(&bfs, container) || changed;
-        let changed = self.wrap_horizontal(&bfs, container) || changed;
-        let changed = self.calc_heights(&bfs, container) || changed;
-        let changed = self.flex_height(&bfs, container) || changed;
-        let changed = self.position_elements(&arena, &bfs, container) || changed;
+            let changed = time!("calc_widths", self.calc_widths(&bfs, container)) || changed;
+            let changed = time!(
+                "calc_margin_and_padding",
+                self.calc_margin_and_padding(&bfs, container)
+            ) || changed;
+            let changed = time!("flex_width", self.flex_width(&bfs, container)) || changed;
+            let changed =
+                time!("wrap_horizontal", self.wrap_horizontal(&bfs, container)) || changed;
+            let changed = time!("calc_heights", self.calc_heights(&bfs, container)) || changed;
+            let changed = time!("flex_height", self.flex_height(&bfs, container)) || changed;
+            let changed = time!(
+                "position_elements",
+                self.position_elements(&arena, &bfs, container)
+            ) || changed;
 
-        changed
+            changed
+        })
     }
 }
 

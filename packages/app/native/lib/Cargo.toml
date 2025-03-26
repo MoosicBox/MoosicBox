@@ -101,6 +101,8 @@ profiling-tracy = [
 syntax-highlighting = ["hyperchad_router/syntax-highlighting"]
 unsafe = ["hyperchad_renderer_fltk?/unsafe"]
 
+benchmark = ["hyperchad_renderer/benchmark"]
+
 assets = ["hyperchad_renderer/assets", "hyperchad_renderer_html?/assets"]
 
 static-routes = ["hyperchad_router/static-routes"]
