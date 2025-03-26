@@ -721,7 +721,7 @@ impl FltkRenderer {
         }
 
         log::debug!(
-            "draw_elements: finished draw: container_wrap_x={:?} container_wrap_y={:?} container_scroll_x={:?} container_scroll_y={:?} container={}",
+            "draw_elements: finished draw: container_wrap_x={:?} container_wrap_y={:?} container_scroll_x={:?} container_scroll_y={:?} container=({}, {})",
             container_wrap_x
                 .as_ref()
                 .map(|x| format!("({}, {})", x.wid(), x.hei())),
@@ -734,7 +734,8 @@ impl FltkRenderer {
             container_scroll_y
                 .as_ref()
                 .map(|x| format!("({}, {})", x.wid(), x.hei())),
-            format!("({}, {})", container.w(), container.h()),
+            container.w(),
+            container.h(),
         );
         flex.end();
 
