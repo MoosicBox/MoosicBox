@@ -50,7 +50,7 @@ macro_rules! time {
         let before = std::time::SystemTime::now();
         let ret = $expr;
         let duration = std::time::SystemTime::now().duration_since(before).unwrap();
-        log::info!("{}: took {} micro seconds", $label, duration.as_micros());
+        log::info!("{}: took {}µs", $label, duration.as_micros());
         ret
     }};
 }
