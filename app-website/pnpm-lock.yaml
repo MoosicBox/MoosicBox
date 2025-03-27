@@ -130,8 +130,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.10.16
-        version: 3.10.16
+        specifier: ^3.11.0
+        version: 3.11.0
       typescript:
         specifier: ^5.8.2
         version: 5.8.2
@@ -2064,8 +2064,8 @@ packages:
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
 
-  electron-to-chromium@1.5.125:
-    resolution: {integrity: sha512-A2+qEsSUc95QvyFDl7PNwkDDNphIKBVfBBtWWkPGRbiWEgzLo0SvLygYF6HgzVduHd+4WGPB/WD64POFgwzY3g==}
+  electron-to-chromium@1.5.126:
+    resolution: {integrity: sha512-AtH1uLcTC72LA4vfYcEJJkrMk/MY/X0ub8Hv7QGAePW2JkeUFHEL/QfS4J77R6M87Sss8O0OcqReSaN1bpyA+Q==}
 
   emmet@2.4.11:
     resolution: {integrity: sha512-23QPJB3moh/U9sT4rQzGgeyyGIrcM+GH5uVYg2C6wZIxAIJq7Ng3QLT79tl8FUwDXhyq9SusfknOrofAKqvgyQ==}
@@ -2294,12 +2294,12 @@ packages:
     resolution: {integrity: sha512-kEcvvCBByWXGnZy6JUlgAp2gBIUjfCAV6P6TgT1/aaQKcmuAEC4OZTV1I4EWQLz2gxZw76atuVyvHhTxvi0Flw==}
     engines: {node: '>=0.4.x'}
 
-  eventsource-parser@3.0.0:
-    resolution: {integrity: sha512-T1C0XCUimhxVQzW4zFipdx0SficT651NnkR0ZSH3yQwh+mFMdLfgjABVi4YtMTtaL4s168593DaoaRLMqryavA==}
+  eventsource-parser@3.0.1:
+    resolution: {integrity: sha512-VARTJ9CYeuQYb0pZEPbzi740OWFgpHe7AYJ2WFZVnUDUQp5Dk2yJUgF36YsZ81cOyxT0QxmXD2EQpapAouzWVA==}
     engines: {node: '>=18.0.0'}
 
-  eventsource@3.0.5:
-    resolution: {integrity: sha512-LT/5J605bx5SNyE+ITBDiM3FxffBiq9un7Vx0EwMDM3vg8sWKx/tO2zC+LMqZ+smAM0F2hblaDZUVZF0te2pSw==}
+  eventsource@3.0.6:
+    resolution: {integrity: sha512-l19WpE2m9hSuyP06+FbuUUf1G+R0SFLrtQfbRb9PRr+oimOfxQhgGCbVaXg5IvZyyTThJsxh6L/srkMiCeBPDA==}
     engines: {node: '>=18.0.0'}
 
   execa@8.0.1:
@@ -3815,33 +3815,33 @@ packages:
   split2@3.2.2:
     resolution: {integrity: sha512-9NThjpgZnifTkJpzTZ7Eue85S49QwpNhZTq6GRJwObb6jnLFNGB7Qm73V5HewTROPyxD0C29xqmaI68bQtV+hg==}
 
-  sst-darwin-arm64@3.10.16:
-    resolution: {integrity: sha512-cGeVeMu5BdV3sTHHxeFX4CKNxzdR38qz1Gq6uRtQ29Q9Z4UtGRHWoZ+k58Ac5osCPr0jF+i4jZa9FSdeZnlI6g==}
+  sst-darwin-arm64@3.11.0:
+    resolution: {integrity: sha512-kEb8G0PD5DxZKg9l5SUTN0iDsAuObN455vDXaBqe1OhA31kdsq3GE3RV6RlfM3owewrsaFS0RZv6UZwrExZnzw==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.10.16:
-    resolution: {integrity: sha512-dP1lgHmKf59yOHzZj8qUoL9eMFMGiLmlDJ225irzPguIu+OiACLFHW9G3GI9fPnsctyLXTXnOfiYWNk4ycP4Yg==}
+  sst-darwin-x64@3.11.0:
+    resolution: {integrity: sha512-Qesh1Hw+akVTHt9L+ABQjXuJvlIRYiRrQzsAVq7OmYGMbTLRj5O92vzTxd5vB+VEYF2z6HWmnY3nqenfQhxKSA==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.10.16:
-    resolution: {integrity: sha512-dFpUjvZwZd6uraFKgqTrQDC/LIZ+spWRWePxm17DsxTGxtrSa1LRTphinDtP6vZUYMDB1kD4oDKIhnEnVU8mqg==}
+  sst-linux-arm64@3.11.0:
+    resolution: {integrity: sha512-monE3O+qCBjwgnWDhb0h0zdIiTI4qhH5ZTUyR9OXMiAXAzTC45msqeaHBh4dNE5w+X7BJUJ5mAiJ+zRoh7DEiA==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.10.16:
-    resolution: {integrity: sha512-yanIjqfGW2JtfUDOOJHbXZzpLWBOQ3/+q8Y9Ilh1jJ4lDkpvYILgHN6YSME351gQ5GwnHishPUFhdNOB4UeITA==}
+  sst-linux-x64@3.11.0:
+    resolution: {integrity: sha512-dkEXlSX1LCmF0TGYy0JbX81H+g0NjfG/OIWurb+WA55rtFXBZM61IyQcZnQj46Vk7l5WFJm6SWBcAfB99puXNQ==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.10.16:
-    resolution: {integrity: sha512-iAsoqv6yvNcw9HhOnrQMTws8Wxpc+hoLiFkjLGXHOuyS1uQz1ICFyGhYi0YulGEdAl+fhkbjwWUg5Yf3SgYjCA==}
+  sst-linux-x86@3.11.0:
+    resolution: {integrity: sha512-PPdLHyzlX2Fy3GjwbViVLdxe5QAxuEB8qQ1apaSSHiyzHniFBS+L7VNW69XsewLZ3Ozl7axMGB8TAepchA2NJA==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.10.16:
-    resolution: {integrity: sha512-iKRV85uPwYw9335/YWNhpNrnzwzTuef69e4Ke01SCRVicXAl5PEXsQYwwEgSI1g6wSmJ1SAxiWA6iLQOXcn7dw==}
+  sst@3.11.0:
+    resolution: {integrity: sha512-1lazoXth7bgOIIiYMs19/6uINV0Pu1v1PCy5aw5O//mr2zPKRknrjjbDOSFlGroVFVWATqrkkqv5iMlU2wwTQg==}
     hasBin: true
 
   stack-utils@2.0.6:
@@ -5625,7 +5625,7 @@ snapshots:
     dependencies:
       content-type: 1.0.5
       cors: 2.8.5
-      eventsource: 3.0.5
+      eventsource: 3.0.6
       express: 5.0.1
       express-rate-limit: 7.5.0(express@5.0.1)
       pkce-challenge: 4.1.0
@@ -6732,7 +6732,7 @@ snapshots:
   browserslist@4.24.4:
     dependencies:
       caniuse-lite: 1.0.30001707
-      electron-to-chromium: 1.5.125
+      electron-to-chromium: 1.5.126
       node-releases: 2.0.19
       update-browserslist-db: 1.1.3(browserslist@4.24.4)
 
@@ -7052,7 +7052,7 @@ snapshots:
 
   ee-first@1.1.1: {}
 
-  electron-to-chromium@1.5.125: {}
+  electron-to-chromium@1.5.126: {}
 
   emmet@2.4.11:
     dependencies:
@@ -7415,11 +7415,11 @@ snapshots:
 
   events@1.1.1: {}
 
-  eventsource-parser@3.0.0: {}
+  eventsource-parser@3.0.1: {}
 
-  eventsource@3.0.5:
+  eventsource@3.0.6:
     dependencies:
-      eventsource-parser: 3.0.0
+      eventsource-parser: 3.0.1
 
   execa@8.0.1:
     dependencies:
@@ -9374,22 +9374,22 @@ snapshots:
       readable-stream: 3.6.2
     optional: true
 
-  sst-darwin-arm64@3.10.16:
+  sst-darwin-arm64@3.11.0:
     optional: true
 
-  sst-darwin-x64@3.10.16:
+  sst-darwin-x64@3.11.0:
     optional: true
 
-  sst-linux-arm64@3.10.16:
+  sst-linux-arm64@3.11.0:
     optional: true
 
-  sst-linux-x64@3.10.16:
+  sst-linux-x64@3.11.0:
     optional: true
 
-  sst-linux-x86@3.10.16:
+  sst-linux-x86@3.11.0:
     optional: true
 
-  sst@3.10.16:
+  sst@3.11.0:
     dependencies:
       aws-sdk: 2.1692.0
       aws4fetch: 1.0.18
@@ -9397,11 +9397,11 @@ snapshots:
       opencontrol: 0.0.6
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.10.16
-      sst-darwin-x64: 3.10.16
-      sst-linux-arm64: 3.10.16
-      sst-linux-x64: 3.10.16
-      sst-linux-x86: 3.10.16
+      sst-darwin-arm64: 3.11.0
+      sst-darwin-x64: 3.11.0
+      sst-linux-arm64: 3.11.0
+      sst-linux-x64: 3.11.0
+      sst-linux-x86: 3.11.0
     transitivePeerDependencies:
       - supports-color
 
