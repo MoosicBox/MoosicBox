@@ -123,7 +123,7 @@ macro_rules! calc_size_on_axis {
 
         const LABEL: &str = $label;
 
-        moosicbox_logging::debug_or_trace!(("{LABEL}"), ("{LABEL}:\n{}", $container));
+        log::trace!("{LABEL}:\n{}", $container);
 
         let root_id = $container.id;
         let defaults = $self.defaults;
@@ -401,7 +401,7 @@ macro_rules! flex_on_axis {
 
         const LABEL: &str = $label;
 
-        moosicbox_logging::debug_or_trace!(("{LABEL}"), ("{LABEL}:\n{}", $container));
+        log::trace!("{LABEL}:\n{}", $container);
 
         let mut changed = false;
 
@@ -994,7 +994,7 @@ macro_rules! wrap_on_axis {
         paste! {
             const LABEL: &str = $label;
 
-            moosicbox_logging::debug_or_trace!(("{LABEL}"), ("{LABEL}:\n{}", $container));
+            log::trace!("{LABEL}:\n{}", $container);
 
             let view_width = $container.calculated_width.expect("Missing view_width");
             let view_height = $container.calculated_height.expect("Missing view_height");
@@ -1461,10 +1461,7 @@ mod passes {
                 bfs: &BfsPaths,
                 container: &mut Container,
             ) -> bool {
-                moosicbox_logging::debug_or_trace!(
-                    ("position_elements"),
-                    ("position_elements:\n{container}")
-                );
+                log::trace!("position_elements:\n{container}");
 
                 let root_id = container.id;
                 let root_text_align = container.text_align;
