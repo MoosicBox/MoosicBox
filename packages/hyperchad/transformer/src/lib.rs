@@ -3,7 +3,6 @@
 
 use std::{any::Any, collections::HashMap, io::Write};
 
-use bumpalo::Bump;
 use hyperchad_actions::Action;
 use hyperchad_color::Color;
 use hyperchad_transformer_models::{
@@ -1222,58 +1221,140 @@ impl Container {
     }
 
     #[must_use]
-    pub fn bfs_in<'a>(&self, arena: &'a Bump) -> BfsPaths<'a> {
+    pub fn bfs(&self) -> BfsPaths {
         // Collect nodes in pre-order, recording their path
-        fn collect_paths<'a>(
-            arena: &'a Bump,
+        fn collect_paths(
             node: &Container,
-            path: &bumpalo::collections::Vec<'a, usize>,
-            paths: &mut bumpalo::collections::Vec<'a, bumpalo::collections::Vec<'a, usize>>,
-            levels: &mut bumpalo::collections::Vec<'a, bumpalo::collections::Vec<'a, usize>>,
+            path: &[usize],
+            paths: &mut Vec<Vec<usize>>,
+            levels: &mut Vec<Vec<usize>>,
         ) {
             if !node.children.is_empty() {
                 // Store the path to this node
-                paths.push(path.clone());
+                paths.push(path.to_owned());
 
                 // Add this node's index to the appropriate level
                 let level = path.len(); // Path length = level + 1 (root is at index 0)
                 if levels.len() <= level {
-                    levels.resize(level + 1, bumpalo::collections::Vec::new_in(arena));
+                    levels.resize(level + 1, Vec::new());
                 }
                 levels[level].push(paths.len() - 1);
                 // Process children
                 for (i, child) in node.children.iter().enumerate() {
-                    let mut child_path = path.clone();
+                    let mut child_path = path.to_owned();
                     child_path.push(i);
-                    collect_paths(arena, child, &child_path, paths, levels);
+                    collect_paths(child, &child_path, paths, levels);
                 }
             }
         }
 
         // Collect nodes by level
-        let mut levels = bumpalo::collections::Vec::new_in(arena);
+        let mut levels: Vec<Vec<usize>> = Vec::new();
 
         // Start by collecting all paths to nodes
-        let mut paths = bumpalo::collections::Vec::new_in(arena);
+        let mut paths: Vec<Vec<usize>> = Vec::new();
+        collect_paths(self, &[], &mut paths, &mut levels);
 
-        collect_paths(
-            arena,
-            self,
-            &bumpalo::collections::Vec::new_in(arena),
-            &mut paths,
-            &mut levels,
-        );
+        BfsPaths { levels, paths }
+    }
+
+    #[must_use]
+    pub fn bfs_visit(&self, mut visitor: impl FnMut(&Self)) -> BfsPaths {
+        // Collect nodes in pre-order, recording their path
+        fn collect_paths(
+            node: &Container,
+            path: &[usize],
+            paths: &mut Vec<Vec<usize>>,
+            levels: &mut Vec<Vec<usize>>,
+            visitor: &mut impl FnMut(&Container),
+        ) {
+            if !node.children.is_empty() {
+                // Store the path to this node
+                paths.push(path.to_owned());
+
+                // Add this node's index to the appropriate level
+                let level = path.len(); // Path length = level + 1 (root is at index 0)
+                if levels.len() <= level {
+                    levels.resize(level + 1, Vec::new());
+                }
+                levels[level].push(paths.len() - 1);
+                // Process children
+                for (i, child) in node.children.iter().enumerate() {
+                    visitor(child);
+                    let mut child_path = path.to_owned();
+                    child_path.push(i);
+                    collect_paths(child, &child_path, paths, levels, visitor);
+                }
+            }
+        }
+
+        // Collect nodes by level
+        let mut levels: Vec<Vec<usize>> = Vec::new();
+
+        // Start by collecting all paths to nodes
+        let mut paths: Vec<Vec<usize>> = Vec::new();
+
+        visitor(self);
+        collect_paths(self, &[], &mut paths, &mut levels, &mut visitor);
+
+        BfsPaths { levels, paths }
+    }
+
+    #[must_use]
+    pub fn bfs_visit_mut(&mut self, mut visitor: impl FnMut(&mut Self)) -> BfsPaths {
+        // Collect nodes in pre-order, recording their path
+        fn collect_paths(
+            node: &mut Container,
+            path: &[usize],
+            paths: &mut Vec<Vec<usize>>,
+            levels: &mut Vec<Vec<usize>>,
+            visitor: &mut impl FnMut(&mut Container),
+        ) {
+            if !node.children.is_empty() {
+                // Store the path to this node
+                paths.push(path.to_owned());
+
+                // Add this node's index to the appropriate level
+                let level = path.len(); // Path length = level + 1 (root is at index 0)
+                if levels.len() <= level {
+                    levels.resize(level + 1, Vec::new());
+                }
+                levels[level].push(paths.len() - 1);
+                // Process children
+                for (i, child) in node.children.iter_mut().enumerate() {
+                    visitor(child);
+                    let mut child_path = path.to_owned();
+                    child_path.push(i);
+                    collect_paths(child, &child_path, paths, levels, visitor);
+                }
+            }
+        }
+
+        // Collect nodes by level
+        let mut levels: Vec<Vec<usize>> = Vec::new();
+
+        // Start by collecting all paths to nodes
+        let mut paths: Vec<Vec<usize>> = Vec::new();
+
+        visitor(self);
+        collect_paths(self, &[], &mut paths, &mut levels, &mut visitor);
 
         BfsPaths { levels, paths }
     }
 }
 
-pub struct BfsPaths<'a> {
-    levels: bumpalo::collections::Vec<'a, bumpalo::collections::Vec<'a, usize>>,
-    paths: bumpalo::collections::Vec<'a, bumpalo::collections::Vec<'a, usize>>,
+impl From<&Container> for BfsPaths {
+    fn from(root: &Container) -> Self {
+        root.bfs()
+    }
 }
 
-impl BfsPaths<'_> {
+pub struct BfsPaths {
+    levels: Vec<Vec<usize>>,
+    paths: Vec<Vec<usize>>,
+}
+
+impl BfsPaths {
     pub fn traverse(&self, root: &Container, mut visitor: impl FnMut(&Container)) {
         // Follow paths to apply visitor to each node
         for level_nodes in &self.levels {

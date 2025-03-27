@@ -76,8 +76,8 @@ impl<F: FontMetrics> Calc for Calculator<F> {
 
         log::trace!("calc: container={container}");
 
+        let bfs = container.bfs();
         let arena = Bump::new();
-        let bfs = time!("bfs", container.bfs_in(&arena));
 
         time!("calc", {
             let changed = false;
