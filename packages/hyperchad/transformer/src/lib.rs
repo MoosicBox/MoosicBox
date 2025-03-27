@@ -1900,16 +1900,13 @@ impl Container {
         }
     }
 
-    pub fn replace_with(&mut self, replacement: Self) {
-        *self = replacement;
-    }
-
     /// # Panics
     ///
     /// * If the `Container` is the root node
     /// * If the `Container` is not properly attached to the tree
-    pub fn replace_with_elements(&mut self, replacement: Vec<Self>, root: &mut Self) {
-        let Some(parent) = &mut root.find_parent_by_id_mut(self.id) else {
+    #[must_use]
+    pub fn replace_with_elements(&mut self, replacement: Vec<Self>, root: &mut Self) -> Self {
+        let Some(parent) = root.find_parent_by_id_mut(self.id) else {
             panic!("Cannot replace the root node with multiple elements");
         };
 
@@ -1920,28 +1917,32 @@ impl Container {
             .find_map(|(i, x)| if x.id == self.id { Some(i) } else { None })
             .unwrap_or_else(|| panic!("Container is not attached properly to tree"));
 
-        parent.children.remove(index);
+        let original = parent.children.remove(index);
 
         for (i, element) in replacement.into_iter().enumerate() {
             parent.children.insert(index + i, element);
         }
+
+        original
     }
 
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
-    pub fn replace_id_children_with_elements(&mut self, replacement: Vec<Self>, id: usize) -> bool {
-        let Some(parent) = &mut self.find_element_by_id_mut(id) else {
-            return false;
-        };
+    pub fn replace_id_children_with_elements(
+        &mut self,
+        replacement: Vec<Self>,
+        id: usize,
+    ) -> Option<Vec<Self>> {
+        let parent = self.find_element_by_id_mut(id)?;
 
-        parent.children.clear();
+        let original = parent.children.drain(..).collect::<Vec<_>>();
 
         for element in replacement {
             parent.children.push(element);
         }
 
-        true
+        Some(original)
     }
 
     /// # Panics
@@ -1968,25 +1969,22 @@ impl Container {
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
-    pub fn replace_id_with_elements(&mut self, replacement: Vec<Self>, id: usize) -> bool {
-        let Some(parent) = self.find_parent_by_id_mut(id) else {
-            return false;
-        };
+    pub fn replace_id_with_elements(&mut self, replacement: Vec<Self>, id: usize) -> Option<Self> {
+        let parent = self.find_parent_by_id_mut(id)?;
 
         let index = parent
             .children
             .iter()
             .enumerate()
-            .find_map(|(i, x)| if x.id == id { Some(i) } else { None })
-            .unwrap_or_else(|| panic!("Container is not attached properly to tree"));
+            .find_map(|(i, x)| if x.id == id { Some(i) } else { None })?;
 
-        parent.children.remove(index);
+        let original = parent.children.remove(index);
 
         for (i, element) in replacement.into_iter().enumerate() {
             parent.children.insert(index + i, element);
         }
 
-        true
+        Some(original)
     }
 
     /// # Panics
@@ -2033,13 +2031,13 @@ impl Container {
             })
             .unwrap_or_else(|| panic!("Container is not attached properly to tree"));
 
-        let element = parent.children.remove(index);
+        let original = parent.children.remove(index);
 
         for (i, element) in replacement.into_iter().enumerate() {
             parent.children.insert(index + i, element);
         }
 
-        Some(element)
+        Some(original)
     }
 
     /// # Panics
@@ -2070,32 +2068,6 @@ impl Container {
         if calculator.calc(parent) {
             calculator.calc(self);
         }
-    }
-
-    /// # Panics
-    ///
-    /// * If the `Container` is not properly attached to the tree
-    pub fn replace_ids_with_elements(&mut self, replacement: Vec<Self>, ids: &[usize]) -> bool {
-        let Some(parent) = self.find_parent_by_id_mut(ids[0]) else {
-            return false;
-        };
-
-        let index = parent
-            .children
-            .iter()
-            .enumerate()
-            .find_map(|(i, x)| if x.id == ids[0] { Some(i) } else { None })
-            .unwrap_or_else(|| panic!("Container is not attached properly to tree"));
-
-        for _ in 0..ids.len() {
-            parent.children.remove(index);
-        }
-
-        for (i, element) in replacement.into_iter().enumerate() {
-            parent.children.insert(index + i, element);
-        }
-
-        true
     }
 }
 
