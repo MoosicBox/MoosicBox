@@ -10760,6 +10760,40 @@ mod test {
                 },
             );
         }
+
+        #[test_log::test]
+        #[ignore]
+        fn flex_child_does_take_full_width_if_flex_is_specified() {
+            let mut container: Container = html! {
+                div sx-width="100%" sx-dir=(LayoutDirection::Row) {
+                    div flex=(1) {}
+                }
+            }
+            .try_into()
+            .unwrap();
+
+            container.calculated_width = Some(400.0);
+            container.calculated_height = Some(100.0);
+
+            CALCULATOR.calc(&mut container);
+            log::trace!("container:\n{container}");
+
+            compare_containers(
+                &container,
+                &Container {
+                    children: vec![Container {
+                        children: vec![Container {
+                            calculated_width: Some(400.0),
+                            ..container.children[0].children[0].clone()
+                        }],
+                        calculated_width: Some(400.0),
+                        ..container.children[0].clone()
+                    }],
+                    calculated_width: Some(400.0),
+                    ..container.clone()
+                },
+            );
+        }
     }
 
     mod position_sticky {
