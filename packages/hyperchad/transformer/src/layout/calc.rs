@@ -76,14 +76,6 @@ macro_rules! update_changed {
 impl<F: FontMetrics> Calc for Calculator<F> {
     #[allow(clippy::let_and_return, clippy::cognitive_complexity)]
     fn calc(&self, container: &mut Container) -> bool {
-        use passes::pass_flex_height::Pass as _;
-        use passes::pass_flex_width::Pass as _;
-        use passes::pass_heights::Pass as _;
-        use passes::pass_margin_and_padding::Pass as _;
-        use passes::pass_positioning::Pass as _;
-        use passes::pass_widths::Pass as _;
-        use passes::pass_wrap_horizontal::Pass as _;
-
         log::trace!("calc: container={container}");
 
         time!("calc", {
@@ -1026,10 +1018,6 @@ mod passes {
             },
         };
 
-        pub trait Pass {
-            fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container);
-        }
-
         #[cfg_attr(feature = "profiling", profiling::all_functions)]
         impl Container {
             fn calculate_font_size(
@@ -1127,9 +1115,9 @@ mod passes {
             }
         }
 
-        #[cfg_attr(feature = "profiling", profiling::all_functions)]
-        impl<F: FontMetrics> Pass for Calculator<F> {
-            fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) {
+        impl<F: FontMetrics> Calculator<F> {
+            #[cfg_attr(feature = "profiling", profiling::function)]
+            pub fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) {
                 let each_parent = |container: &mut Container,
                                    view_width,
                                    view_height,
@@ -1173,14 +1161,13 @@ mod passes {
             layout::{calc::Calculator, font::FontMetrics, set_float},
         };
 
-        pub trait Pass {
-            fn calc_margin_and_padding(&self, bfs: &BfsPaths, container: &mut Container);
-        }
-
-        #[cfg_attr(feature = "profiling", profiling::all_functions)]
-        impl<F: FontMetrics> Pass for Calculator<F> {
+        impl<F: FontMetrics> Calculator<F> {
+            /// # Panics
+            ///
+            /// * If any of the required container properties are missing
+            #[cfg_attr(feature = "profiling", profiling::function)]
             #[allow(clippy::too_many_lines)]
-            fn calc_margin_and_padding(&self, bfs: &BfsPaths, container: &mut Container) {
+            pub fn calc_margin_and_padding(&self, bfs: &BfsPaths, container: &mut Container) {
                 log::trace!("calc_margin_and_padding:\n{container}");
 
                 let view_width = container.calculated_width.expect("Missing view_width");
@@ -1241,14 +1228,9 @@ mod passes {
             layout::{calc::Calculator, font::FontMetrics, set_float},
         };
 
-        pub trait Pass {
-            fn flex_width(&self, bfs: &BfsPaths, container: &mut Container);
-        }
-
-        #[cfg_attr(feature = "profiling", profiling::all_functions)]
-        impl<F: FontMetrics> Pass for Calculator<F> {
-            #[allow(clippy::too_many_lines)]
-            fn flex_width(&self, bfs: &BfsPaths, container: &mut Container) {
+        impl<F: FontMetrics> Calculator<F> {
+            #[cfg_attr(feature = "profiling", profiling::function)]
+            pub fn flex_width(&self, bfs: &BfsPaths, container: &mut Container) {
                 flex_on_axis!(
                     "flex_width",
                     bfs,
@@ -1271,13 +1253,12 @@ mod passes {
             layout::{calc::Calculator, font::FontMetrics, set_float, set_value},
         };
 
-        pub trait Pass {
-            fn wrap_horizontal(&self, bfs: &BfsPaths, container: &mut Container);
-        }
-
-        #[cfg_attr(feature = "profiling", profiling::all_functions)]
-        impl<F: FontMetrics> Pass for Calculator<F> {
-            fn wrap_horizontal(&self, bfs: &BfsPaths, container: &mut Container) {
+        impl<F: FontMetrics> Calculator<F> {
+            /// # Panics
+            ///
+            /// * If any of the required container properties are missing
+            #[cfg_attr(feature = "profiling", profiling::function)]
+            pub fn wrap_horizontal(&self, bfs: &BfsPaths, container: &mut Container) {
                 let each_child = |container: &mut Container,
                                   container_width,
                                   _view_width,
@@ -1318,13 +1299,9 @@ mod passes {
             layout::{calc::Calculator, font::FontMetrics, set_float},
         };
 
-        pub trait Pass {
-            fn calc_heights(&self, bfs: &BfsPaths, container: &mut Container);
-        }
-
-        #[cfg_attr(feature = "profiling", profiling::all_functions)]
-        impl<F: FontMetrics> Pass for Calculator<F> {
-            fn calc_heights(&self, bfs: &BfsPaths, container: &mut Container) {
+        impl<F: FontMetrics> Calculator<F> {
+            #[cfg_attr(feature = "profiling", profiling::function)]
+            pub fn calc_heights(&self, bfs: &BfsPaths, container: &mut Container) {
                 calc_size_on_axis!(
                     "calc_heights",
                     self,
@@ -1351,13 +1328,9 @@ mod passes {
             layout::{calc::Calculator, font::FontMetrics, set_float},
         };
 
-        pub trait Pass {
-            fn flex_height(&self, bfs: &BfsPaths, container: &mut Container);
-        }
-
-        #[cfg_attr(feature = "profiling", profiling::all_functions)]
-        impl<F: FontMetrics> Pass for Calculator<F> {
-            fn flex_height(&self, bfs: &BfsPaths, container: &mut Container) {
+        impl<F: FontMetrics> Calculator<F> {
+            #[cfg_attr(feature = "profiling", profiling::function)]
+            pub fn flex_height(&self, bfs: &BfsPaths, container: &mut Container) {
                 flex_on_axis!(
                     "flex_height",
                     bfs,
@@ -1386,19 +1359,13 @@ mod passes {
             layout::{calc::Calculator, font::FontMetrics, set_float},
         };
 
-        pub trait Pass {
-            fn position_elements(
-                &self,
-                arena: &Bump,
-                bfs: &BfsPaths,
-                container: &mut Container,
-            ) -> bool;
-        }
-
-        #[cfg_attr(feature = "profiling", profiling::all_functions)]
-        impl<F: FontMetrics> Pass for Calculator<F> {
+        impl<F: FontMetrics> Calculator<F> {
+            /// # Panics
+            ///
+            /// * If any of the required container properties are missing
             #[allow(clippy::too_many_lines)]
-            fn position_elements(
+            #[cfg_attr(feature = "profiling", profiling::function)]
+            pub fn position_elements(
                 &self,
                 arena: &Bump,
                 bfs: &BfsPaths,
