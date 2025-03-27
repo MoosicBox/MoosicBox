@@ -359,6 +359,7 @@ xml = "0.8.20"
 # tracing-opentelemetry    = { git = "https://github.com/tokio-rs/tracing-opentelemetry" }
 
 actix-web-opentelemetry = { git = "https://github.com/open-telemetry/opentelemetry-rust-contrib" }
+notify-rust             = { git = "https://github.com/An1MuS1111/notify-rust" }
 pingora                 = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
 pingora-core            = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
 pingora-http            = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
