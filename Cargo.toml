@@ -93,10 +93,15 @@ members = [
 resolver = "2"
 
 [workspace.metadata.cargo-udeps.ignore]
-normal = ["log", "moosicbox_assert", "moosicbox_env_utils"]
+normal = ["log", "moosicbox_assert", "moosicbox_env_utils", "moosicbox_logging"]
 
 [workspace.metadata.cargo-machete]
-ignored = ["log", "moosicbox_assert", "moosicbox_env_utils"]
+ignored = [
+    "log",
+    "moosicbox_assert",
+    "moosicbox_env_utils",
+    "moosicbox_logging",
+]
 
 [profile.release]
 codegen-units = 1
