@@ -161,7 +161,7 @@ chrono = { version = "0.4.40", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = { version = "4.5.32", features = ["derive"] }
+clap = { version = "4.5.34", features = ["derive"] }
 color-hex = "0.2.0"
 colored = { version = "3.0.0" }
 console-subscriber = "0.4.1"
