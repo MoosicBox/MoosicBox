@@ -1,4 +1,5 @@
 use bumpalo::Bump;
+use paste::paste;
 
 use crate::Container;
 
@@ -1924,58 +1925,34 @@ mod passes {
     }
 }
 
-#[cfg_attr(feature = "profiling", profiling::all_functions)]
+macro_rules! axis_sum_func {
+    ($prop:ident, $unit:ident, $x:ident, $y:ident $(,)?) => {
+        paste! {
+            impl Container {
+                #[must_use]
+                pub fn [<$prop _ $unit>](&self) -> Option<f32> {
+                    let mut value = None;
+                    if let Some(x) = self.[<calculated_ $prop _ $x>] {
+                        value = Some(x);
+                    }
+                    if let Some(y) = self.[<calculated_ $prop _ $y>] {
+                        value.replace(value.map_or(y, |x| x + y));
+                    }
+                    value
+                }
+            }
+        }
+    };
+}
+
+axis_sum_func!(margin, x, left, right);
+axis_sum_func!(margin, y, top, bottom);
+axis_sum_func!(padding, x, left, right);
+axis_sum_func!(padding, y, top, bottom);
+
 impl Container {
     #[must_use]
-    pub fn margin_x(&self) -> Option<f32> {
-        let mut margin = None;
-        if let Some(margin_left) = self.calculated_margin_left {
-            margin = Some(margin_left);
-        }
-        if let Some(margin_right) = self.calculated_margin_right {
-            margin.replace(margin.map_or(margin_right, |x| x + margin_right));
-        }
-        margin
-    }
-
-    #[must_use]
-    pub fn margin_y(&self) -> Option<f32> {
-        let mut margin = None;
-        if let Some(margin_top) = self.calculated_margin_top {
-            margin = Some(margin_top);
-        }
-        if let Some(margin_bottom) = self.calculated_margin_bottom {
-            margin.replace(margin.map_or(margin_bottom, |x| x + margin_bottom));
-        }
-        margin
-    }
-
-    #[must_use]
-    pub fn padding_x(&self) -> Option<f32> {
-        let mut padding = None;
-        if let Some(padding_left) = self.calculated_padding_left {
-            padding = Some(padding_left);
-        }
-        if let Some(padding_right) = self.calculated_padding_right {
-            padding.replace(padding.map_or(padding_right, |x| x + padding_right));
-        }
-        padding
-    }
-
-    #[must_use]
-    pub fn padding_y(&self) -> Option<f32> {
-        let mut padding = None;
-        if let Some(padding_top) = self.calculated_padding_top {
-            padding = Some(padding_top);
-        }
-        if let Some(padding_bottom) = self.calculated_padding_bottom {
-            padding.replace(padding.map_or(padding_bottom, |x| x + padding_bottom));
-        }
-        padding
-    }
-
-    #[must_use]
-    pub fn borders_x(&self) -> Option<f32> {
+    pub fn border_x(&self) -> Option<f32> {
         let mut borders = None;
         if let Some((_, border_left)) = self.calculated_border_left {
             borders = Some(border_left);
@@ -1987,7 +1964,7 @@ impl Container {
     }
 
     #[must_use]
-    pub fn borders_y(&self) -> Option<f32> {
+    pub fn border_y(&self) -> Option<f32> {
         let mut borders = None;
         if let Some((_, border_top)) = self.calculated_border_top {
             borders = Some(border_top);
@@ -2001,7 +1978,7 @@ impl Container {
     #[must_use]
     pub fn calculated_width_minus_borders(&self) -> Option<f32> {
         self.calculated_width.map(|x| {
-            self.borders_x().map_or(x, |borders| {
+            self.border_x().map_or(x, |borders| {
                 let x = x - borders;
                 if x < 0.0 { 0.0 } else { x }
             })
@@ -2011,7 +1988,7 @@ impl Container {
     #[must_use]
     pub fn calculated_height_minus_borders(&self) -> Option<f32> {
         self.calculated_height.map(|x| {
-            self.borders_y().map_or(x, |borders| {
+            self.border_y().map_or(x, |borders| {
                 let x = x - borders;
                 if x < 0.0 { 0.0 } else { x }
             })
