@@ -999,270 +999,264 @@ macro_rules! wrap_on_axis {
     }};
 }
 
-mod passes {
-    use crate::Container;
+/// # Pass 1: Widths
+///
+/// This pass traverses the `Container` children in reverse BFS (Breadth-First Search)
+/// and calculates the widths required for each of the `Container`s.
+mod pass_widths {
+    use paste::paste;
 
-    /// # Pass 1: Widths
-    ///
-    /// This pass traverses the `Container` children in reverse BFS (Breadth-First Search)
-    /// and calculates the widths required for each of the `Container`s.
-    pub mod pass_widths {
-        use paste::paste;
+    use crate::{
+        BfsPaths, Container, Element, HeaderSize, Number,
+        layout::{
+            calc::{Calculator, CalculatorDefaults},
+            font::FontMetrics,
+            set_float,
+        },
+    };
 
-        use crate::{
-            BfsPaths, Container, Element, HeaderSize, Number,
-            layout::{
-                calc::{Calculator, CalculatorDefaults},
-                font::FontMetrics,
-                set_float,
-            },
-        };
+    #[cfg_attr(feature = "profiling", profiling::all_functions)]
+    impl Container {
+        fn calculate_font_size(
+            &mut self,
+            view_width: f32,
+            view_height: f32,
+            context: &Self,
+            defaults: CalculatorDefaults,
+        ) {
+            if self.calculated_font_size.is_some() {
+                return;
+            }
 
-        #[cfg_attr(feature = "profiling", profiling::all_functions)]
-        impl Container {
-            fn calculate_font_size(
-                &mut self,
-                view_width: f32,
-                view_height: f32,
-                context: &Self,
-                defaults: CalculatorDefaults,
-            ) {
-                if self.calculated_font_size.is_some() {
-                    return;
-                }
-
-                macro_rules! default_heading_prop {
-                    ($size:expr, $prop:ident $(,)?) => {
-                        match $size {
-                            HeaderSize::H1 => paste!(defaults.[<h1_ $prop>]),
-                            HeaderSize::H2 => paste!(defaults.[<h2_ $prop>]),
-                            HeaderSize::H3 => paste!(defaults.[<h3_ $prop>]),
-                            HeaderSize::H4 => paste!(defaults.[<h4_ $prop>]),
-                            HeaderSize::H5 => paste!(defaults.[<h5_ $prop>]),
-                            HeaderSize::H6 => paste!(defaults.[<h6_ $prop>]),
-                        }
-                    };
-                }
-
-                self.calculated_font_size = self.font_size.as_ref().map_or_else(
-                    || {
-                        match self.element {
-                            Element::Heading { size } => {
-                                Some(default_heading_prop!(size, font_size))
-                            }
-                            _ => {
-                                context.calculated_font_size
-                            }
-                        }
-                    },
-                    |font_size| {
-                        let calculated_font_size = font_size.calc(
-                            context
-                                .calculated_font_size
-                                .expect("Missing calculated_font_size"),
-                            view_width,
-                            view_height,
-                        );
-                        log::trace!("calculate_font_size: setting font_size={font_size} to calculated_font_size={calculated_font_size}");
-
-                        Some(calculated_font_size)
-                    },
-                );
-
-                if self.margin_top.is_none() {
-                    if let Element::Heading { size } = self.element {
-                        self.calculated_margin_top =
-                            Some(default_heading_prop!(size, font_margin_top));
+            macro_rules! default_heading_prop {
+                ($size:expr, $prop:ident $(,)?) => {
+                    match $size {
+                        HeaderSize::H1 => paste!(defaults.[<h1_ $prop>]),
+                        HeaderSize::H2 => paste!(defaults.[<h2_ $prop>]),
+                        HeaderSize::H3 => paste!(defaults.[<h3_ $prop>]),
+                        HeaderSize::H4 => paste!(defaults.[<h4_ $prop>]),
+                        HeaderSize::H5 => paste!(defaults.[<h5_ $prop>]),
+                        HeaderSize::H6 => paste!(defaults.[<h6_ $prop>]),
                     }
-                }
+                };
+            }
 
-                if self.margin_bottom.is_none() {
-                    if let Element::Heading { size } = self.element {
-                        self.calculated_margin_bottom =
-                            Some(default_heading_prop!(size, font_margin_bottom));
+            self.calculated_font_size = self.font_size.as_ref().map_or_else(
+                || {
+                    match self.element {
+                        Element::Heading { size } => {
+                            Some(default_heading_prop!(size, font_size))
+                        }
+                        _ => {
+                            context.calculated_font_size
+                        }
                     }
+                },
+                |font_size| {
+                    let calculated_font_size = font_size.calc(
+                        context
+                            .calculated_font_size
+                            .expect("Missing calculated_font_size"),
+                        view_width,
+                        view_height,
+                    );
+                    log::trace!("calculate_font_size: setting font_size={font_size} to calculated_font_size={calculated_font_size}");
+
+                    Some(calculated_font_size)
+                },
+            );
+
+            if self.margin_top.is_none() {
+                if let Element::Heading { size } = self.element {
+                    self.calculated_margin_top = Some(default_heading_prop!(size, font_margin_top));
                 }
             }
 
-            fn calc_fixed_properties(&mut self, view_width: f32, view_height: f32) -> bool {
-                macro_rules! update_prop {
-                    ($value:expr, $prop:ident, $basis:expr $(,)?) => {{
-                        let value = $value;
-                        let size = value.calc($basis, view_width, view_height);
-                        if set_float(&mut paste!(self.[<calculated_ $prop>]), size).is_some() {
-                            log::trace!("calc_fixed_properties: updated from={value} to calculated_{}={size}", stringify!($prop));
-                        }
-                    }};
+            if self.margin_bottom.is_none() {
+                if let Element::Heading { size } = self.element {
+                    self.calculated_margin_bottom =
+                        Some(default_heading_prop!(size, font_margin_bottom));
                 }
-
-                macro_rules! update_fixed_prop {
-                    ($prop:ident, $basis:expr $(,)?) => {
-                        if let Some(value) = self.$prop.as_ref().and_then(crate::Number::as_fixed) {
-                            update_prop!(value, $prop, $basis);
-                        }
-                    };
-                }
-
-                if let Some(value) = &self.opacity {
-                    update_prop!(value, opacity, 1.0);
-                }
-                update_fixed_prop!(border_top_left_radius, 0.0);
-                update_fixed_prop!(border_top_right_radius, 0.0);
-                update_fixed_prop!(border_bottom_left_radius, 0.0);
-                update_fixed_prop!(border_bottom_right_radius, 0.0);
-
-                false
             }
         }
 
-        impl<F: FontMetrics> Calculator<F> {
-            #[cfg_attr(feature = "profiling", profiling::function)]
-            pub fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) {
-                let each_parent = |container: &mut Container,
-                                   view_width,
-                                   view_height,
-                                   context: &Container,
-                                   defaults| {
-                    container.calculate_font_size(view_width, view_height, context, defaults);
-                };
-                let each_child = |container: &mut Container,
-                                  view_width,
-                                  view_height,
-                                  context: &Container,
-                                  defaults| {
-                    container.calculate_font_size(view_width, view_height, context, defaults);
-
-                    container.calc_fixed_properties(view_width, view_height);
-                };
-
-                calc_size_on_axis!(
-                    "calc_widths",
-                    self,
-                    bfs,
-                    container,
-                    width,
-                    Row,
-                    Column,
-                    left,
-                    right,
-                    x,
-                    each_parent,
-                    each_child,
-                );
+        fn calc_fixed_properties(&mut self, view_width: f32, view_height: f32) -> bool {
+            macro_rules! update_prop {
+                ($value:expr, $prop:ident, $basis:expr $(,)?) => {{
+                    let value = $value;
+                    let size = value.calc($basis, view_width, view_height);
+                    if set_float(&mut paste!(self.[<calculated_ $prop>]), size).is_some() {
+                        log::trace!("calc_fixed_properties: updated from={value} to calculated_{}={size}", stringify!($prop));
+                    }
+                }};
             }
+
+            macro_rules! update_fixed_prop {
+                ($prop:ident, $basis:expr $(,)?) => {
+                    if let Some(value) = self.$prop.as_ref().and_then(crate::Number::as_fixed) {
+                        update_prop!(value, $prop, $basis);
+                    }
+                };
+            }
+
+            if let Some(value) = &self.opacity {
+                update_prop!(value, opacity, 1.0);
+            }
+            update_fixed_prop!(border_top_left_radius, 0.0);
+            update_fixed_prop!(border_top_right_radius, 0.0);
+            update_fixed_prop!(border_bottom_left_radius, 0.0);
+            update_fixed_prop!(border_bottom_right_radius, 0.0);
+
+            false
         }
     }
 
-    pub mod pass_margin_and_padding {
-        use paste::paste;
+    impl<F: FontMetrics> Calculator<F> {
+        #[cfg_attr(feature = "profiling", profiling::function)]
+        pub fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) {
+            let each_parent = |container: &mut Container,
+                               view_width,
+                               view_height,
+                               context: &Container,
+                               defaults| {
+                container.calculate_font_size(view_width, view_height, context, defaults);
+            };
+            let each_child = |container: &mut Container,
+                              view_width,
+                              view_height,
+                              context: &Container,
+                              defaults| {
+                container.calculate_font_size(view_width, view_height, context, defaults);
 
-        use crate::{
-            BfsPaths, Container,
-            layout::{calc::Calculator, font::FontMetrics, set_float},
-        };
+                container.calc_fixed_properties(view_width, view_height);
+            };
 
-        impl<F: FontMetrics> Calculator<F> {
-            /// # Panics
-            ///
-            /// * If any of the required container properties are missing
-            #[cfg_attr(feature = "profiling", profiling::function)]
-            #[allow(clippy::too_many_lines)]
-            pub fn calc_margin_and_padding(&self, bfs: &BfsPaths, container: &mut Container) {
-                log::trace!("calc_margin_and_padding:\n{container}");
+            calc_size_on_axis!(
+                "calc_widths",
+                self,
+                bfs,
+                container,
+                width,
+                Row,
+                Column,
+                left,
+                right,
+                x,
+                each_parent,
+                each_child,
+            );
+        }
+    }
+}
 
-                let view_width = container.calculated_width.expect("Missing view_width");
-                let view_height = container.calculated_height.expect("Missing view_height");
+mod pass_margin_and_padding {
+    use paste::paste;
 
-                #[allow(clippy::cognitive_complexity)]
-                bfs.traverse_mut(container, |parent| {
-                    let container_width = parent.calculated_width.expect("Missing container_width");
+    use crate::{
+        BfsPaths, Container,
+        layout::{calc::Calculator, font::FontMetrics, set_float},
+    };
 
-                    if let Some(gap) = parent
-                        .column_gap
-                        .as_ref()
-                        .and_then(crate::Number::as_dynamic)
-                    {
-                        parent.calculated_column_gap =
-                            Some(gap.calc(container_width, view_width, view_height));
-                    }
+    impl<F: FontMetrics> Calculator<F> {
+        /// # Panics
+        ///
+        /// * If any of the required container properties are missing
+        #[cfg_attr(feature = "profiling", profiling::function)]
+        #[allow(clippy::too_many_lines)]
+        pub fn calc_margin_and_padding(&self, bfs: &BfsPaths, container: &mut Container) {
+            log::trace!("calc_margin_and_padding:\n{container}");
 
-                    for child in &mut parent.children {
-                        macro_rules! update_dynamic_prop {
-                            ($prop:ident $(,)?) => {
-                                if let Some(value) =
-                                    child.$prop.as_ref().and_then(crate::Number::as_dynamic)
-                                {
-                                    let size = value.calc(container_width, view_width, view_height);
-                                    if set_float(&mut paste!(child.[<calculated_ $prop>]), size).is_some() {
-                                        log::trace!("calc_margin_and_padding: updated from={value} to calculated_{}={size}", stringify!($prop));
-                                    }
+            let view_width = container.calculated_width.expect("Missing view_width");
+            let view_height = container.calculated_height.expect("Missing view_height");
+
+            #[allow(clippy::cognitive_complexity)]
+            bfs.traverse_mut(container, |parent| {
+                let container_width = parent.calculated_width.expect("Missing container_width");
+
+                if let Some(gap) = parent
+                    .column_gap
+                    .as_ref()
+                    .and_then(crate::Number::as_dynamic)
+                {
+                    parent.calculated_column_gap =
+                        Some(gap.calc(container_width, view_width, view_height));
+                }
+
+                for child in &mut parent.children {
+                    macro_rules! update_dynamic_prop {
+                        ($prop:ident $(,)?) => {
+                            if let Some(value) =
+                                child.$prop.as_ref().and_then(crate::Number::as_dynamic)
+                            {
+                                let size = value.calc(container_width, view_width, view_height);
+                                if set_float(&mut paste!(child.[<calculated_ $prop>]), size).is_some() {
+                                    log::trace!("calc_margin_and_padding: updated from={value} to calculated_{}={size}", stringify!($prop));
                                 }
-                            };
-                        }
-
-                        update_dynamic_prop!(border_top_left_radius);
-                        update_dynamic_prop!(border_top_right_radius);
-                        update_dynamic_prop!(border_bottom_left_radius);
-                        update_dynamic_prop!(border_bottom_right_radius);
-
-                        update_dynamic_prop!(margin_left);
-                        update_dynamic_prop!(margin_right);
-                        update_dynamic_prop!(margin_top);
-                        update_dynamic_prop!(margin_bottom);
-
-                        update_dynamic_prop!(padding_left);
-                        update_dynamic_prop!(padding_right);
-                        update_dynamic_prop!(padding_top);
-                        update_dynamic_prop!(padding_bottom);
+                            }
+                        };
                     }
-                });
-            }
+
+                    update_dynamic_prop!(border_top_left_radius);
+                    update_dynamic_prop!(border_top_right_radius);
+                    update_dynamic_prop!(border_bottom_left_radius);
+                    update_dynamic_prop!(border_bottom_right_radius);
+
+                    update_dynamic_prop!(margin_left);
+                    update_dynamic_prop!(margin_right);
+                    update_dynamic_prop!(margin_top);
+                    update_dynamic_prop!(margin_bottom);
+
+                    update_dynamic_prop!(padding_left);
+                    update_dynamic_prop!(padding_right);
+                    update_dynamic_prop!(padding_top);
+                    update_dynamic_prop!(padding_bottom);
+                }
+            });
         }
     }
+}
 
-    pub mod pass_flex_width {
-        use hyperchad_transformer_models::{LayoutDirection, LayoutPosition, Position};
+mod pass_flex_width {
+    use hyperchad_transformer_models::{LayoutDirection, LayoutPosition, Position};
 
-        use crate::{
-            BfsPaths, Container,
-            layout::{calc::Calculator, font::FontMetrics, set_float},
-        };
+    use crate::{
+        BfsPaths, Container,
+        layout::{calc::Calculator, font::FontMetrics, set_float},
+    };
 
-        impl<F: FontMetrics> Calculator<F> {
-            #[cfg_attr(feature = "profiling", profiling::function)]
-            pub fn flex_width(&self, bfs: &BfsPaths, container: &mut Container) {
-                flex_on_axis!(
-                    "flex_width",
-                    bfs,
-                    container,
-                    width,
-                    Row,
-                    Column,
-                    col,
-                    left,
-                    right,
-                    x,
-                );
-            }
+    impl<F: FontMetrics> Calculator<F> {
+        #[cfg_attr(feature = "profiling", profiling::function)]
+        pub fn flex_width(&self, bfs: &BfsPaths, container: &mut Container) {
+            flex_on_axis!(
+                "flex_width",
+                bfs,
+                container,
+                width,
+                Row,
+                Column,
+                col,
+                left,
+                right,
+                x,
+            );
         }
     }
+}
 
-    pub mod pass_wrap_horizontal {
-        use crate::{
-            BfsPaths, Container, Element,
-            layout::{calc::Calculator, font::FontMetrics, set_float, set_value},
-        };
+mod pass_wrap_horizontal {
+    use crate::{
+        BfsPaths, Container, Element,
+        layout::{calc::Calculator, font::FontMetrics, set_float, set_value},
+    };
 
-        impl<F: FontMetrics> Calculator<F> {
-            /// # Panics
-            ///
-            /// * If any of the required container properties are missing
-            #[cfg_attr(feature = "profiling", profiling::function)]
-            pub fn wrap_horizontal(&self, bfs: &BfsPaths, container: &mut Container) {
-                let each_child = |container: &mut Container,
-                                  container_width,
-                                  _view_width,
-                                  _view_height| {
+    impl<F: FontMetrics> Calculator<F> {
+        /// # Panics
+        ///
+        /// * If any of the required container properties are missing
+        #[cfg_attr(feature = "profiling", profiling::function)]
+        pub fn wrap_horizontal(&self, bfs: &BfsPaths, container: &mut Container) {
+            let each_child =
+                |container: &mut Container, container_width, _view_width, _view_height| {
                     let Element::Raw { value } = &container.element else {
                         return;
                     };
@@ -1286,548 +1280,547 @@ mod passes {
                     set_float(&mut container.calculated_height, new_height);
                 };
 
-                wrap_on_axis!(
-                    "wrap", Row, bfs, container, width, overflow_x, column_gap, each_child,
-                );
-            }
+            wrap_on_axis!(
+                "wrap", Row, bfs, container, width, overflow_x, column_gap, each_child,
+            );
         }
     }
+}
 
-    pub mod pass_heights {
-        use crate::{
-            BfsPaths, Container, Number,
-            layout::{calc::Calculator, font::FontMetrics, set_float},
-        };
+mod pass_heights {
+    use crate::{
+        BfsPaths, Container, Number,
+        layout::{calc::Calculator, font::FontMetrics, set_float},
+    };
 
-        impl<F: FontMetrics> Calculator<F> {
-            #[cfg_attr(feature = "profiling", profiling::function)]
-            pub fn calc_heights(&self, bfs: &BfsPaths, container: &mut Container) {
-                calc_size_on_axis!(
-                    "calc_heights",
-                    self,
-                    bfs,
-                    container,
-                    height,
-                    Column,
-                    Row,
-                    top,
-                    bottom,
-                    y,
-                    (|_, _, _, _, _| {}),
-                    (|_, _, _, _, _| {}),
-                );
-            }
+    impl<F: FontMetrics> Calculator<F> {
+        #[cfg_attr(feature = "profiling", profiling::function)]
+        pub fn calc_heights(&self, bfs: &BfsPaths, container: &mut Container) {
+            calc_size_on_axis!(
+                "calc_heights",
+                self,
+                bfs,
+                container,
+                height,
+                Column,
+                Row,
+                top,
+                bottom,
+                y,
+                (|_, _, _, _, _| {}),
+                (|_, _, _, _, _| {}),
+            );
         }
     }
+}
 
-    pub mod pass_flex_height {
-        use hyperchad_transformer_models::{LayoutDirection, LayoutPosition, Position};
+mod pass_flex_height {
+    use hyperchad_transformer_models::{LayoutDirection, LayoutPosition, Position};
 
-        use crate::{
-            BfsPaths, Container,
-            layout::{calc::Calculator, font::FontMetrics, set_float},
-        };
+    use crate::{
+        BfsPaths, Container,
+        layout::{calc::Calculator, font::FontMetrics, set_float},
+    };
 
-        impl<F: FontMetrics> Calculator<F> {
-            #[cfg_attr(feature = "profiling", profiling::function)]
-            pub fn flex_height(&self, bfs: &BfsPaths, container: &mut Container) {
-                flex_on_axis!(
-                    "flex_height",
-                    bfs,
-                    container,
-                    height,
-                    Column,
-                    Row,
-                    row,
-                    top,
-                    bottom,
-                    y,
-                );
-            }
+    impl<F: FontMetrics> Calculator<F> {
+        #[cfg_attr(feature = "profiling", profiling::function)]
+        pub fn flex_height(&self, bfs: &BfsPaths, container: &mut Container) {
+            flex_on_axis!(
+                "flex_height",
+                bfs,
+                container,
+                height,
+                Column,
+                Row,
+                row,
+                top,
+                bottom,
+                y,
+            );
         }
     }
+}
 
-    pub mod pass_positioning {
-        use bumpalo::Bump;
-        use hyperchad_transformer_models::{
-            AlignItems, JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition, Position,
-            TextAlign, Visibility,
-        };
+mod pass_positioning {
+    use bumpalo::Bump;
+    use hyperchad_transformer_models::{
+        AlignItems, JustifyContent, LayoutDirection, LayoutOverflow, LayoutPosition, Position,
+        TextAlign, Visibility,
+    };
 
-        use crate::{
-            BfsPaths, Container, Element, float_lte,
-            layout::{calc::Calculator, font::FontMetrics, set_float},
-        };
+    use crate::{
+        BfsPaths, Container, Element, float_lte,
+        layout::{calc::Calculator, font::FontMetrics, set_float},
+    };
 
-        impl<F: FontMetrics> Calculator<F> {
-            /// # Panics
-            ///
-            /// * If any of the required container properties are missing
-            #[allow(clippy::too_many_lines)]
-            #[cfg_attr(feature = "profiling", profiling::function)]
-            pub fn position_elements(
-                &self,
-                arena: &Bump,
-                bfs: &BfsPaths,
-                container: &mut Container,
-            ) -> bool {
-                log::trace!("position_elements:\n{container}");
+    impl<F: FontMetrics> Calculator<F> {
+        /// # Panics
+        ///
+        /// * If any of the required container properties are missing
+        #[allow(clippy::too_many_lines)]
+        #[cfg_attr(feature = "profiling", profiling::function)]
+        pub fn position_elements(
+            &self,
+            arena: &Bump,
+            bfs: &BfsPaths,
+            container: &mut Container,
+        ) -> bool {
+            log::trace!("position_elements:\n{container}");
 
-                let root_id = container.id;
-                let root_text_align = container.text_align;
-                let view_width = container.calculated_width.expect("Missing view_width");
-                let view_height = container.calculated_height.expect("Missing view_height");
+            let root_id = container.id;
+            let root_text_align = container.text_align;
+            let view_width = container.calculated_width.expect("Missing view_width");
+            let view_height = container.calculated_height.expect("Missing view_height");
 
-                let mut changed = false;
+            let mut changed = false;
 
-                #[allow(clippy::cognitive_complexity)]
-                bfs.traverse_with_parents_ref_mut(
-                    true,
-                    Container::default(),
-                    container,
-                    |parent, mut relative_container| {
-                        if parent.id == root_id {
-                            relative_container.calculated_x = Some(0.0);
-                            relative_container.calculated_y = Some(0.0);
-                            relative_container.calculated_width = Some(view_width);
-                            relative_container.calculated_height = Some(view_height);
-                            relative_container.text_align = root_text_align;
-                        } else if parent.position == Some(Position::Relative) {
-                            relative_container.calculated_x =
-                                Some(parent.calculated_x.expect("Missing calculated_x"));
-                            relative_container.calculated_y =
-                                Some(parent.calculated_y.expect("Missing calculated_y"));
-                            relative_container.calculated_width =
-                                Some(parent.calculated_width.expect("Missing calculated_width"));
-                            relative_container.calculated_height =
-                                Some(parent.calculated_height.expect("Missing calculated_height"));
-                        }
+            #[allow(clippy::cognitive_complexity)]
+            bfs.traverse_with_parents_ref_mut(
+                true,
+                Container::default(),
+                container,
+                |parent, mut relative_container| {
+                    if parent.id == root_id {
+                        relative_container.calculated_x = Some(0.0);
+                        relative_container.calculated_y = Some(0.0);
+                        relative_container.calculated_width = Some(view_width);
+                        relative_container.calculated_height = Some(view_height);
+                        relative_container.text_align = root_text_align;
+                    } else if parent.position == Some(Position::Relative) {
+                        relative_container.calculated_x =
+                            Some(parent.calculated_x.expect("Missing calculated_x"));
+                        relative_container.calculated_y =
+                            Some(parent.calculated_y.expect("Missing calculated_y"));
+                        relative_container.calculated_width =
+                            Some(parent.calculated_width.expect("Missing calculated_width"));
+                        relative_container.calculated_height =
+                            Some(parent.calculated_height.expect("Missing calculated_height"));
+                    }
 
-                        if let Some(align) = parent.text_align {
-                            relative_container.text_align = Some(align);
-                        }
+                    if let Some(align) = parent.text_align {
+                        relative_container.text_align = Some(align);
+                    }
 
-                        relative_container
-                    },
-                    |parent, relative_container| {
-                        let is_top_level = parent.id == root_id;
-                        let direction = parent.direction;
-                        let justify_content = parent.justify_content.unwrap_or_default();
-                        let align_items = parent.align_items.unwrap_or_default();
-                        let container_width = parent
-                            .calculated_width
-                            .expect("Missing parent calculated_width");
-                        let container_height = parent
-                            .calculated_height
-                            .expect("Missing parent calculated_height");
+                    relative_container
+                },
+                |parent, relative_container| {
+                    let is_top_level = parent.id == root_id;
+                    let direction = parent.direction;
+                    let justify_content = parent.justify_content.unwrap_or_default();
+                    let align_items = parent.align_items.unwrap_or_default();
+                    let container_width = parent
+                        .calculated_width
+                        .expect("Missing parent calculated_width");
+                    let container_height = parent
+                        .calculated_height
+                        .expect("Missing parent calculated_height");
 
-                        if let LayoutOverflow::Wrap { grid } = parent.overflow_x {
-                            let mut last_row = 0;
-                            let mut col_count = 0;
-                            let mut max_col_count = 0;
-                            let mut row_width = 0.0;
-                            let gaps = &mut bumpalo::collections::Vec::new_in(arena);
-                            let grid_cell_size = parent
-                                .grid_cell_size
-                                .as_ref()
-                                .map(|x| x.calc(container_width, view_width, view_height));
-                            let row_gap = parent.calculated_row_gap.unwrap_or_default();
-                            let column_gap = parent.calculated_column_gap.unwrap_or_default();
+                    if let LayoutOverflow::Wrap { grid } = parent.overflow_x {
+                        let mut last_row = 0;
+                        let mut col_count = 0;
+                        let mut max_col_count = 0;
+                        let mut row_width = 0.0;
+                        let gaps = &mut bumpalo::collections::Vec::new_in(arena);
+                        let grid_cell_size = parent
+                            .grid_cell_size
+                            .as_ref()
+                            .map(|x| x.calc(container_width, view_width, view_height));
+                        let row_gap = parent.calculated_row_gap.unwrap_or_default();
+                        let column_gap = parent.calculated_column_gap.unwrap_or_default();
 
-                            #[allow(clippy::cast_precision_loss)]
-                            let mut add_gap = |row_width, col_count| {
-                                let mut col_count = col_count;
-                                let remainder = container_width - grid_cell_size.map_or(
-                                    row_width,
-                                    |cell_size| {
-                                        col_count = 1;
-                                        let mut size = cell_size + column_gap;
+                        #[allow(clippy::cast_precision_loss)]
+                        let mut add_gap = |row_width, col_count| {
+                            let mut col_count = col_count;
+                            let remainder = container_width - grid_cell_size.map_or(
+                                row_width,
+                                |cell_size| {
+                                    col_count = 1;
+                                    let mut size = cell_size + column_gap;
 
-                                        while float_lte!(size + cell_size, container_width) {
-                                            col_count += 1;
-                                            size += cell_size + column_gap;
-                                        }
-
-                                        column_gap.mul_add(-(col_count as f32), size)
-                                    }
-                                );
-
-                                let gap = match justify_content {
-                                    JustifyContent::Start
-                                    | JustifyContent::Center
-                                    | JustifyContent::End => column_gap,
-                                    JustifyContent::SpaceBetween => {
-                                        remainder / ((col_count - 1) as f32)
-                                    }
-                                    JustifyContent::SpaceEvenly => {
-                                        remainder / ((col_count + 1) as f32)
-                                    }
-                                };
-
-                                gaps.push(gap);
-
-                                gap
-                            };
-
-                            for child in parent.relative_positioned_elements_mut().filter(|x| x.visibility != Some(Visibility::Hidden)) {
-                                let Some(LayoutPosition::Wrap { row, col }) = child.calculated_position
-                                else {
-                                    continue;
-                                };
-                                log::trace!("position_elements: wrap calculating gaps (r{row}, c{col})");
-
-                                if row != last_row {
-                                    moosicbox_assert::assert!(row > last_row);
-
-                                    let gap = add_gap(row_width, col_count);
-                                    log::trace!("position_elements: (r{row}, c{col}) gap={gap}");
-
-                                    if grid && col_count > max_col_count {
-                                        max_col_count = col_count;
+                                    while float_lte!(size + cell_size, container_width) {
+                                        col_count += 1;
+                                        size += cell_size + column_gap;
                                     }
 
-                                    row_width = 0.0;
-                                    col_count = 0;
-                                    last_row = row;
+                                    column_gap.mul_add(-(col_count as f32), size)
                                 }
+                            );
 
-                                row_width += grid_cell_size.unwrap_or_else(|| {
-                                    child
-                                        .calculated_width
-                                        .expect("Child missing calculated_width")
-                                });
-                                col_count += 1;
-                            }
-
-                            add_gap(row_width, col_count);
-
-                            #[allow(unused_assignments)]
-                            if col_count > max_col_count {
-                                max_col_count = col_count;
-                            }
-
-                            let mut gap = gaps.first().copied().unwrap_or_default();
-
-                            let first_gap = |gap| match justify_content {
+                            let gap = match justify_content {
                                 JustifyContent::Start
                                 | JustifyContent::Center
-                                | JustifyContent::End
-                                | JustifyContent::SpaceBetween => 0.0,
-                                JustifyContent::SpaceEvenly => gap,
-                            };
-
-                            let mut x = first_gap(gap);
-                            let mut y = 0.0;
-
-                            let mut max_height = 0.0;
-                            last_row = 0;
-
-                            for child in parent.relative_positioned_elements_mut().filter(|x| x.visibility != Some(Visibility::Hidden)) {
-                                let Some(LayoutPosition::Wrap { row, col }) = child.calculated_position
-                                else {
-                                    continue;
-                                };
-                                log::trace!("position_elements: (r{row}, c{col}) gap={gap} row_gap={row_gap} last_row={last_row} ({x}, {y})");
-
-                                let child_width = child.bounding_calculated_width().unwrap();
-                                let child_height = child.bounding_calculated_height().unwrap();
-
-                                if row != last_row {
-                                    moosicbox_assert::assert!(row > last_row);
-
-                                    if !grid {
-                                        gap = gaps.get(row as usize).copied().unwrap_or_default();
-                                    }
-
-                                    x = first_gap(gap);
-                                    y += max_height + row_gap;
-                                    max_height = 0.0;
-                                    last_row = row;
-                                    #[cfg(feature = "layout-offset")]
-                                    set_float(&mut child.calculated_offset_x, x);
-                                }
-
-                                #[cfg(feature = "layout-offset")]
-                                {
-                                    set_float(&mut child.calculated_offset_x, if col > 0 { gap } else { x });
-                                    set_float(&mut child.calculated_offset_y, if row > 0 { row_gap } else { 0.0 });
-                                }
-
-                                if child_height > max_height {
-                                    max_height = child_height;
-                                }
-
-                                log::trace!(
-                                    "position_elements: setting wrapped position ({x}, {y}):\n{child}"
-                                );
-                                if set_float(&mut child.calculated_x, x).is_some() && is_top_level {
-                                    update_changed!(changed, "wrapped calculated_x changed to {x}");
-                                }
-                                if set_float(&mut child.calculated_y, y).is_some() && is_top_level {
-                                    update_changed!(changed, "wrapped calculated_y changed to {y}");
-                                }
-
-                                x += child_width + gap;
-                            }
-                        } else {
-                            let mut x = 0.0;
-                            let mut y = 0.0;
-                            let mut col_gap = parent.calculated_column_gap.unwrap_or_default();
-                            let row_gap = parent.calculated_row_gap.unwrap_or_default();
-                            let axis_gap = match direction {
-                                LayoutDirection::Row => col_gap,
-                                LayoutDirection::Column => row_gap,
-                            };
-
-                            macro_rules! visible_elements {
-                                () => {{
-                                    parent
-                                        .relative_positioned_elements()
-                                        .filter(|x| x.visibility != Some(Visibility::Hidden))
-                                }};
-                            }
-
-                            macro_rules! visible_elements_mut {
-                                () => {{
-                                    parent
-                                        .relative_positioned_elements_mut()
-                                        .filter(|x| x.visibility != Some(Visibility::Hidden))
-                                }};
-                            }
-
-                            macro_rules! sizes_on_axis {
-                                ($direction:expr) => {{
-                                    visible_elements!().filter_map(|x| match $direction {
-                                        LayoutDirection::Row => x.bounding_calculated_width(),
-                                        LayoutDirection::Column => x.bounding_calculated_height(),
-                                    })
-                                }};
-                            }
-
-                            match justify_content {
-                                JustifyContent::Start => {}
-                                JustifyContent::Center => {
-                                    let count = visible_elements!().count();
-                                    let size: f32 = sizes_on_axis!(direction).sum();
-                                    #[allow(clippy::cast_precision_loss)]
-                                    let gap_offset = (count - 1) as f32 * axis_gap;
-
-                                    match direction {
-                                        LayoutDirection::Row => x += (container_width - size - gap_offset) / 2.0,
-                                        LayoutDirection::Column => y += (container_height - size - gap_offset) / 2.0,
-                                    }
-                                }
-                                JustifyContent::End => {
-                                    let count = visible_elements!().count();
-                                    let size: f32 = sizes_on_axis!(direction).sum();
-                                    #[allow(clippy::cast_precision_loss)]
-                                    let gap_offset = (count - 1) as f32 * axis_gap;
-
-                                    match direction {
-                                        LayoutDirection::Row => x += container_width - size - gap_offset,
-                                        LayoutDirection::Column => y += container_height - size - gap_offset,
-                                    }
-                                }
+                                | JustifyContent::End => column_gap,
                                 JustifyContent::SpaceBetween => {
-                                    let count = visible_elements!().count();
-                                    let size: f32 = sizes_on_axis!(direction).sum();
-
-                                    #[allow(clippy::cast_precision_loss)]
-                                    match direction {
-                                        LayoutDirection::Row => {
-                                            col_gap = (container_width - size) / ((count - 1) as f32);
-                                        }
-                                        LayoutDirection::Column => {
-                                            col_gap = (container_height - size) / ((count - 1) as f32);
-                                        }
-                                    }
+                                    remainder / ((col_count - 1) as f32)
                                 }
                                 JustifyContent::SpaceEvenly => {
-                                    let count = visible_elements!().count();
-                                    let size: f32 = sizes_on_axis!(direction).sum();
-
-                                    #[allow(clippy::cast_precision_loss)]
-                                    match direction {
-                                        LayoutDirection::Row => {
-                                            col_gap = (container_width - size) / ((count + 1) as f32);
-                                        }
-                                        LayoutDirection::Column => {
-                                            col_gap = (container_height - size) / ((count + 1) as f32);
-                                        }
-                                    }
-
-                                    x += col_gap;
-                                }
-                            }
-
-                            if let Some(text_align) = relative_container.text_align {
-                                if visible_elements!().all(|x| matches!(x.element, Element::Raw { .. }))
-                                {
-                                    match text_align {
-                                        TextAlign::Start => {}
-                                        TextAlign::Center => {
-                                            let size: f32 = sizes_on_axis!(LayoutDirection::Row).sum();
-
-                                            log::trace!("position_elements: TextAlign::{text_align:?} container_width={container_width} container_height={container_height} size={size}");
-
-                                            x += (container_width - size) / 2.0;
-                                        }
-                                        TextAlign::End => {
-                                            let size: f32 = sizes_on_axis!(LayoutDirection::Row).sum();
-
-                                            log::trace!("position_elements: TextAlign::{text_align:?} container_width={container_width} container_height={container_height} size={size}");
-
-                                            x += container_width - size;
-                                        }
-                                        TextAlign::Justify => {
-                                            // TODO:
-                                            // https://github.com/emilk/egui/issues/1724
-                                            // https://docs.rs/egui/latest/egui/text/struct.LayoutJob.html
-                                            todo!();
-                                        }
-                                    }
-                                }
-                            }
-
-                            for (i, child) in visible_elements_mut!().enumerate()
-                            {
-                                let start_x = x;
-                                let start_y = y;
-
-                                match align_items {
-                                    AlignItems::Start => {}
-                                    AlignItems::Center | AlignItems::End => {
-                                        let size = match direction {
-                                            LayoutDirection::Row => child.bounding_calculated_height(),
-                                            LayoutDirection::Column => child.bounding_calculated_width(),
-                                        }.unwrap_or_default();
-
-                                        log::trace!("position_elements: AlignItems::{align_items:?} container_width={container_width} container_height={container_height} size={size}:\n{child}");
-
-                                        match align_items {
-                                            AlignItems::Start => unreachable!(),
-                                            AlignItems::Center => match direction {
-                                                LayoutDirection::Row => y += (container_height - size) / 2.0,
-                                                LayoutDirection::Column => x += (container_width - size) / 2.0,
-                                            },
-                                            AlignItems::End => match direction {
-                                                LayoutDirection::Row => y += container_height - size,
-                                                LayoutDirection::Column => x += container_width - size,
-                                            },
-                                        }
-                                    }
-                                }
-
-                                log::trace!("position_elements: setting position ({x}, {y}) i={i}:\n{child}");
-                                if set_float(&mut child.calculated_x, x).is_some() && is_top_level {
-                                    update_changed!(changed, "calculated_x changed to {x}");
-                                }
-                                if set_float(&mut child.calculated_y, y).is_some() && is_top_level {
-                                    update_changed!(changed, "calculated_y changed to {y}");
-                                }
-
-                                match direction {
-                                    LayoutDirection::Row => {
-                                        #[cfg(feature = "layout-offset")]
-                                        {
-                                            set_float(&mut child.calculated_offset_x, if i == 0 { start_x } else { col_gap });
-                                            set_float(&mut child.calculated_offset_y, y);
-                                        }
-                                        x += child.bounding_calculated_width().unwrap() + col_gap;
-                                        y = start_y;
-                                    }
-                                    LayoutDirection::Column => {
-                                        #[cfg(feature = "layout-offset")]
-                                        {
-                                            set_float(&mut child.calculated_offset_x, x);
-                                            set_float(&mut child.calculated_offset_y, if i == 0 { start_y } else { row_gap });
-                                        }
-                                        x = start_x;
-                                        y += child.bounding_calculated_height().unwrap() + row_gap;
-                                    }
-                                }
-                            }
-                        }
-
-                        // absolute positioned
-
-                        let Container {
-                            calculated_width: Some(width),
-                            calculated_height: Some(height),
-                            ..
-                        } = relative_container
-                        else {
-                            panic!("Missing relative_container size");
-                        };
-                        let width = *width;
-                        let height = *height;
-
-                        macro_rules! position_absolute {
-                            ($iter:expr) => {
-                                for child in ($iter) {
-                                    let mut x = 0.0;
-                                    let mut y = 0.0;
-
-                                    if let Some(left) = &child.left {
-                                        let left = left.calc(width, view_width, view_height);
-                                        x = left;
-                                    }
-                                    if let Some(right) = &child.right {
-                                        let right = right.calc(width, view_width, view_height);
-                                        let bounding_width = child.bounding_calculated_width().unwrap();
-                                        let right = width - right - bounding_width;
-                                        x = right;
-                                    }
-                                    if let Some(top) = &child.top {
-                                        let top = top.calc(height, view_width, view_height);
-                                        y = top;
-                                    }
-                                    if let Some(bottom) = &child.bottom {
-                                        let bottom = bottom.calc(height, view_width, view_height);
-                                        let bounding_height = child.bounding_calculated_height().unwrap();
-                                        let bottom = height - bottom - bounding_height;
-                                        y = bottom;
-                                    }
-
-                                    set_float(&mut child.calculated_x, x);
-                                    set_float(&mut child.calculated_y, y);
+                                    remainder / ((col_count + 1) as f32)
                                 }
                             };
+
+                            gaps.push(gap);
+
+                            gap
+                        };
+
+                        for child in parent.relative_positioned_elements_mut().filter(|x| x.visibility != Some(Visibility::Hidden)) {
+                            let Some(LayoutPosition::Wrap { row, col }) = child.calculated_position
+                            else {
+                                continue;
+                            };
+                            log::trace!("position_elements: wrap calculating gaps (r{row}, c{col})");
+
+                            if row != last_row {
+                                moosicbox_assert::assert!(row > last_row);
+
+                                let gap = add_gap(row_width, col_count);
+                                log::trace!("position_elements: (r{row}, c{col}) gap={gap}");
+
+                                if grid && col_count > max_col_count {
+                                    max_col_count = col_count;
+                                }
+
+                                row_width = 0.0;
+                                col_count = 0;
+                                last_row = row;
+                            }
+
+                            row_width += grid_cell_size.unwrap_or_else(|| {
+                                child
+                                    .calculated_width
+                                    .expect("Child missing calculated_width")
+                            });
+                            col_count += 1;
                         }
 
-                        position_absolute!(parent.absolute_positioned_elements_mut());
-                        position_absolute!(parent.fixed_positioned_elements_mut());
-                    },
-                );
+                        add_gap(row_width, col_count);
 
-                changed
-            }
+                        #[allow(unused_assignments)]
+                        if col_count > max_col_count {
+                            max_col_count = col_count;
+                        }
+
+                        let mut gap = gaps.first().copied().unwrap_or_default();
+
+                        let first_gap = |gap| match justify_content {
+                            JustifyContent::Start
+                            | JustifyContent::Center
+                            | JustifyContent::End
+                            | JustifyContent::SpaceBetween => 0.0,
+                            JustifyContent::SpaceEvenly => gap,
+                        };
+
+                        let mut x = first_gap(gap);
+                        let mut y = 0.0;
+
+                        let mut max_height = 0.0;
+                        last_row = 0;
+
+                        for child in parent.relative_positioned_elements_mut().filter(|x| x.visibility != Some(Visibility::Hidden)) {
+                            let Some(LayoutPosition::Wrap { row, col }) = child.calculated_position
+                            else {
+                                continue;
+                            };
+                            log::trace!("position_elements: (r{row}, c{col}) gap={gap} row_gap={row_gap} last_row={last_row} ({x}, {y})");
+
+                            let child_width = child.bounding_calculated_width().unwrap();
+                            let child_height = child.bounding_calculated_height().unwrap();
+
+                            if row != last_row {
+                                moosicbox_assert::assert!(row > last_row);
+
+                                if !grid {
+                                    gap = gaps.get(row as usize).copied().unwrap_or_default();
+                                }
+
+                                x = first_gap(gap);
+                                y += max_height + row_gap;
+                                max_height = 0.0;
+                                last_row = row;
+                                #[cfg(feature = "layout-offset")]
+                                set_float(&mut child.calculated_offset_x, x);
+                            }
+
+                            #[cfg(feature = "layout-offset")]
+                            {
+                                set_float(&mut child.calculated_offset_x, if col > 0 { gap } else { x });
+                                set_float(&mut child.calculated_offset_y, if row > 0 { row_gap } else { 0.0 });
+                            }
+
+                            if child_height > max_height {
+                                max_height = child_height;
+                            }
+
+                            log::trace!(
+                                "position_elements: setting wrapped position ({x}, {y}):\n{child}"
+                            );
+                            if set_float(&mut child.calculated_x, x).is_some() && is_top_level {
+                                update_changed!(changed, "wrapped calculated_x changed to {x}");
+                            }
+                            if set_float(&mut child.calculated_y, y).is_some() && is_top_level {
+                                update_changed!(changed, "wrapped calculated_y changed to {y}");
+                            }
+
+                            x += child_width + gap;
+                        }
+                    } else {
+                        let mut x = 0.0;
+                        let mut y = 0.0;
+                        let mut col_gap = parent.calculated_column_gap.unwrap_or_default();
+                        let row_gap = parent.calculated_row_gap.unwrap_or_default();
+                        let axis_gap = match direction {
+                            LayoutDirection::Row => col_gap,
+                            LayoutDirection::Column => row_gap,
+                        };
+
+                        macro_rules! visible_elements {
+                            () => {{
+                                parent
+                                    .relative_positioned_elements()
+                                    .filter(|x| x.visibility != Some(Visibility::Hidden))
+                            }};
+                        }
+
+                        macro_rules! visible_elements_mut {
+                            () => {{
+                                parent
+                                    .relative_positioned_elements_mut()
+                                    .filter(|x| x.visibility != Some(Visibility::Hidden))
+                            }};
+                        }
+
+                        macro_rules! sizes_on_axis {
+                            ($direction:expr) => {{
+                                visible_elements!().filter_map(|x| match $direction {
+                                    LayoutDirection::Row => x.bounding_calculated_width(),
+                                    LayoutDirection::Column => x.bounding_calculated_height(),
+                                })
+                            }};
+                        }
+
+                        match justify_content {
+                            JustifyContent::Start => {}
+                            JustifyContent::Center => {
+                                let count = visible_elements!().count();
+                                let size: f32 = sizes_on_axis!(direction).sum();
+                                #[allow(clippy::cast_precision_loss)]
+                                let gap_offset = (count - 1) as f32 * axis_gap;
+
+                                match direction {
+                                    LayoutDirection::Row => x += (container_width - size - gap_offset) / 2.0,
+                                    LayoutDirection::Column => y += (container_height - size - gap_offset) / 2.0,
+                                }
+                            }
+                            JustifyContent::End => {
+                                let count = visible_elements!().count();
+                                let size: f32 = sizes_on_axis!(direction).sum();
+                                #[allow(clippy::cast_precision_loss)]
+                                let gap_offset = (count - 1) as f32 * axis_gap;
+
+                                match direction {
+                                    LayoutDirection::Row => x += container_width - size - gap_offset,
+                                    LayoutDirection::Column => y += container_height - size - gap_offset,
+                                }
+                            }
+                            JustifyContent::SpaceBetween => {
+                                let count = visible_elements!().count();
+                                let size: f32 = sizes_on_axis!(direction).sum();
+
+                                #[allow(clippy::cast_precision_loss)]
+                                match direction {
+                                    LayoutDirection::Row => {
+                                        col_gap = (container_width - size) / ((count - 1) as f32);
+                                    }
+                                    LayoutDirection::Column => {
+                                        col_gap = (container_height - size) / ((count - 1) as f32);
+                                    }
+                                }
+                            }
+                            JustifyContent::SpaceEvenly => {
+                                let count = visible_elements!().count();
+                                let size: f32 = sizes_on_axis!(direction).sum();
+
+                                #[allow(clippy::cast_precision_loss)]
+                                match direction {
+                                    LayoutDirection::Row => {
+                                        col_gap = (container_width - size) / ((count + 1) as f32);
+                                    }
+                                    LayoutDirection::Column => {
+                                        col_gap = (container_height - size) / ((count + 1) as f32);
+                                    }
+                                }
+
+                                x += col_gap;
+                            }
+                        }
+
+                        if let Some(text_align) = relative_container.text_align {
+                            if visible_elements!().all(|x| matches!(x.element, Element::Raw { .. }))
+                            {
+                                match text_align {
+                                    TextAlign::Start => {}
+                                    TextAlign::Center => {
+                                        let size: f32 = sizes_on_axis!(LayoutDirection::Row).sum();
+
+                                        log::trace!("position_elements: TextAlign::{text_align:?} container_width={container_width} container_height={container_height} size={size}");
+
+                                        x += (container_width - size) / 2.0;
+                                    }
+                                    TextAlign::End => {
+                                        let size: f32 = sizes_on_axis!(LayoutDirection::Row).sum();
+
+                                        log::trace!("position_elements: TextAlign::{text_align:?} container_width={container_width} container_height={container_height} size={size}");
+
+                                        x += container_width - size;
+                                    }
+                                    TextAlign::Justify => {
+                                        // TODO:
+                                        // https://github.com/emilk/egui/issues/1724
+                                        // https://docs.rs/egui/latest/egui/text/struct.LayoutJob.html
+                                        todo!();
+                                    }
+                                }
+                            }
+                        }
+
+                        for (i, child) in visible_elements_mut!().enumerate()
+                        {
+                            let start_x = x;
+                            let start_y = y;
+
+                            match align_items {
+                                AlignItems::Start => {}
+                                AlignItems::Center | AlignItems::End => {
+                                    let size = match direction {
+                                        LayoutDirection::Row => child.bounding_calculated_height(),
+                                        LayoutDirection::Column => child.bounding_calculated_width(),
+                                    }.unwrap_or_default();
+
+                                    log::trace!("position_elements: AlignItems::{align_items:?} container_width={container_width} container_height={container_height} size={size}:\n{child}");
+
+                                    match align_items {
+                                        AlignItems::Start => unreachable!(),
+                                        AlignItems::Center => match direction {
+                                            LayoutDirection::Row => y += (container_height - size) / 2.0,
+                                            LayoutDirection::Column => x += (container_width - size) / 2.0,
+                                        },
+                                        AlignItems::End => match direction {
+                                            LayoutDirection::Row => y += container_height - size,
+                                            LayoutDirection::Column => x += container_width - size,
+                                        },
+                                    }
+                                }
+                            }
+
+                            log::trace!("position_elements: setting position ({x}, {y}) i={i}:\n{child}");
+                            if set_float(&mut child.calculated_x, x).is_some() && is_top_level {
+                                update_changed!(changed, "calculated_x changed to {x}");
+                            }
+                            if set_float(&mut child.calculated_y, y).is_some() && is_top_level {
+                                update_changed!(changed, "calculated_y changed to {y}");
+                            }
+
+                            match direction {
+                                LayoutDirection::Row => {
+                                    #[cfg(feature = "layout-offset")]
+                                    {
+                                        set_float(&mut child.calculated_offset_x, if i == 0 { start_x } else { col_gap });
+                                        set_float(&mut child.calculated_offset_y, y);
+                                    }
+                                    x += child.bounding_calculated_width().unwrap() + col_gap;
+                                    y = start_y;
+                                }
+                                LayoutDirection::Column => {
+                                    #[cfg(feature = "layout-offset")]
+                                    {
+                                        set_float(&mut child.calculated_offset_x, x);
+                                        set_float(&mut child.calculated_offset_y, if i == 0 { start_y } else { row_gap });
+                                    }
+                                    x = start_x;
+                                    y += child.bounding_calculated_height().unwrap() + row_gap;
+                                }
+                            }
+                        }
+                    }
+
+                    // absolute positioned
+
+                    let Container {
+                        calculated_width: Some(width),
+                        calculated_height: Some(height),
+                        ..
+                    } = relative_container
+                    else {
+                        panic!("Missing relative_container size");
+                    };
+                    let width = *width;
+                    let height = *height;
+
+                    macro_rules! position_absolute {
+                        ($iter:expr) => {
+                            for child in ($iter) {
+                                let mut x = 0.0;
+                                let mut y = 0.0;
+
+                                if let Some(left) = &child.left {
+                                    let left = left.calc(width, view_width, view_height);
+                                    x = left;
+                                }
+                                if let Some(right) = &child.right {
+                                    let right = right.calc(width, view_width, view_height);
+                                    let bounding_width = child.bounding_calculated_width().unwrap();
+                                    let right = width - right - bounding_width;
+                                    x = right;
+                                }
+                                if let Some(top) = &child.top {
+                                    let top = top.calc(height, view_width, view_height);
+                                    y = top;
+                                }
+                                if let Some(bottom) = &child.bottom {
+                                    let bottom = bottom.calc(height, view_width, view_height);
+                                    let bounding_height = child.bounding_calculated_height().unwrap();
+                                    let bottom = height - bottom - bounding_height;
+                                    y = bottom;
+                                }
+
+                                set_float(&mut child.calculated_x, x);
+                                set_float(&mut child.calculated_y, y);
+                            }
+                        };
+                    }
+
+                    position_absolute!(parent.absolute_positioned_elements_mut());
+                    position_absolute!(parent.fixed_positioned_elements_mut());
+                },
+            );
+
+            changed
         }
     }
+}
 
-    #[cfg_attr(feature = "profiling", profiling::all_functions)]
-    impl Container {
-        fn is_expandable(&self, parent: &Self) -> bool {
-            !self.is_span() && (!parent.is_flex_container() || self.flex.is_some())
-        }
+#[cfg_attr(feature = "profiling", profiling::all_functions)]
+impl Container {
+    fn is_expandable(&self, parent: &Self) -> bool {
+        !self.is_span() && (!parent.is_flex_container() || self.flex.is_some())
+    }
 
-        fn is_shrinkable(&self) -> bool {
-            self.is_span()
-        }
+    fn is_shrinkable(&self) -> bool {
+        self.is_span()
+    }
 
-        fn can_shrink_width(&self) -> bool {
-            self.is_shrinkable()
-                && self.calculated_width.unwrap_or_default()
-                    - self.calculated_min_width.unwrap_or_default()
-                    >= crate::layout::EPSILON
-        }
+    fn can_shrink_width(&self) -> bool {
+        self.is_shrinkable()
+            && self.calculated_width.unwrap_or_default()
+                - self.calculated_min_width.unwrap_or_default()
+                >= crate::layout::EPSILON
+    }
 
-        fn can_shrink_height(&self) -> bool {
-            self.is_shrinkable()
-                && self.calculated_height.unwrap_or_default()
-                    - self.calculated_min_height.unwrap_or_default()
-                    >= crate::layout::EPSILON
-        }
+    fn can_shrink_height(&self) -> bool {
+        self.is_shrinkable()
+            && self.calculated_height.unwrap_or_default()
+                - self.calculated_min_height.unwrap_or_default()
+                >= crate::layout::EPSILON
     }
 }
 
