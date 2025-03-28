@@ -1,7 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad_actions::{ActionType, logic::get_visibility_self};
-use hyperchad_transformer_models::Visibility;
+use hyperchad_transformer_models::{AlignItems, LayoutDirection, Visibility};
 use maud::{Markup, html};
 use moosicbox_music_models::api::ApiTrack;
 
@@ -18,27 +18,35 @@ fn render_play_queue_item(track: &ApiTrack, is_history: bool) -> Markup {
     );
     let artist_page_url = crate::artists::artist_page_url(&track.artist_id.to_string());
     html! {
-        div sx-dir="row" sx-opacity=[if is_history { Some(0.5) } else { None }] {
-            @let icon_size = 50;
-            a href=(album_page_url) sx-width=(icon_size) sx-height=(icon_size) {
-                (crate::albums::album_cover_img_from_track(track, icon_size))
-            }
+        div
+            sx-dir=(LayoutDirection::Row)
+            sx-gap=(10)
+            sx-opacity=[if is_history { Some(0.5) } else { None }]
+        {
             div {
+                @let icon_size = 50;
+                a href=(album_page_url) sx-width=(icon_size) sx-height=(icon_size) {
+                    (crate::albums::album_cover_img_from_track(track, icon_size))
+                }
+            }
+            div flex=(1) {
                 div {
                     a href=(album_page_url) {
-                        (format!("{} - {}", track.title, track.album))
+                        (track.title) " - " (track.album)
                     }
                 }
                 div {
                     a href=(artist_page_url) { (track.artist) }
                 }
             }
-            @let icon_size = 20;
-            button sx-width=(icon_size) sx-height=(icon_size) {
-                img
-                    sx-width=(icon_size)
-                    sx-height=(icon_size)
-                    src=(public_img!("cross-white.svg"));
+            div sx-align-items=(AlignItems::End) sx-background="#000" {
+                @let icon_size = 20;
+                button sx-width=(icon_size) sx-height=(icon_size) {
+                    img
+                        sx-width=(icon_size)
+                        sx-height=(icon_size)
+                        src=(public_img!("cross-white.svg"));
+                }
             }
         }
     }
@@ -94,8 +102,10 @@ pub fn play_queue(state: &State) -> Markup {
             div sx-overflow-y="auto" {
                 div sx-padding=(20) {
                     h1 sx-height=(30) { "Play queue" }
-                    @for track in history {
-                        (render_play_queue_item(track, true))
+                    div sx-gap=(10) {
+                        @for track in history {
+                            (render_play_queue_item(track, true))
+                        }
                     }
                     @if let Some(track) = current {
                         div sx-dir="row" {
