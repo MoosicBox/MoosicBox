@@ -554,119 +554,7 @@ macro_rules! flex_on_axis {
                         match direction {
                             LayoutDirection::$axis => {
                                 if parent.is_flex_container() {
-                                    if remaining_size <= -crate::layout::EPSILON
-                                        && parent
-                                            .relative_positioned_elements()
-                                            .any(|x| x.$size.is_none() && paste!(x.[<can_shrink_ $size>]()))
-                                    {
-                                        loop {
-                                            let mut largest = f32::INFINITY;
-                                            let mut target = f32::INFINITY;
-                                            let mut largest_count = 0_u16;
-
-                                            for size in parent
-                                                .relative_positioned_elements()
-                                                .filter(|x| x.$size.is_none() && paste!(x.[<can_shrink_ $size>]()))
-                                                .filter_map(|x| paste!(x.[<calculated_ $size>]))
-                                            {
-                                                if size > largest {
-                                                    target = largest;
-                                                    largest = size;
-                                                    largest_count = 1;
-                                                } else if float_eq!(largest, size) {
-                                                    largest_count += 1;
-                                                } else if target < size {
-                                                    target = size;
-                                                }
-                                            }
-
-                                            moosicbox_assert::assert!(largest_count > 0, "expected at least one largest item");
-                                            moosicbox_assert::assert!(largest.is_finite(), "expected largest to be finite");
-
-                                            let largest_countf = f32::from(largest_count);
-
-                                            let last_iteration = if target.is_infinite() {
-                                                log::trace!("{LABEL}: last iteration remaining_size={remaining_size}");
-                                                target = largest + if largest_count == 1 {
-                                                    remaining_size
-                                                } else {
-                                                    remaining_size / largest_countf
-                                                };
-                                                remaining_size = 0.0;
-                                                true
-                                            } else if target > remaining_size {
-                                                log::trace!("{LABEL}: target={target} > remaining_size={remaining_size}");
-                                                target = if largest_count == 1 {
-                                                    remaining_size
-                                                } else {
-                                                    remaining_size / largest_countf
-                                                };
-                                                remaining_size = 0.0;
-                                                true
-                                            } else {
-                                                remaining_size -= (target - largest) * largest_countf;
-                                                float_eq!(remaining_size, 0.0)
-                                            };
-
-                                            log::trace!("{LABEL}: target={target} largest={largest} largest_count={largest_count} remaining_size={remaining_size} container_size={container_size}");
-
-                                            moosicbox_assert::assert!(target.is_finite(), "expected target to be finite");
-
-                                            let mut dynamic_child_size = false;
-
-                                            for child in parent
-                                                .relative_positioned_elements_mut()
-                                                .filter(|x| x.$size.is_none() && paste!(x.[<can_shrink_ $size>]()))
-                                                .filter(|x| paste!(x.[<calculated_ $size>]).is_some_and(|x| float_eq!(x, largest)))
-                                            {
-                                                let mut clipped = false;
-                                                let mut target = target;
-
-                                                if let Some(max) = paste!(child.[<calculated_max_ $size>]) {
-                                                    log::trace!("{LABEL}: calculated_max={max}");
-                                                    let max = max - paste!(child.[<padding_ $unit>]()).unwrap_or_default() - paste!(child.[<margin_ $unit>]()).unwrap_or_default();
-                                                    log::trace!("{LABEL}: calculated_max={max} without padding/margins");
-                                                    if target > max {
-                                                        remaining_size -= max - target;
-                                                        target = max;
-                                                    }
-                                                }
-                                                if let Some(min) = paste!(child.[<calculated_min_ $size>]) {
-                                                    log::trace!("{LABEL}: calculated_min={min}");
-                                                    let min = min - paste!(child.[<padding_ $unit>]()).unwrap_or_default() - paste!(child.[<margin_ $unit>]()).unwrap_or_default();
-                                                    log::trace!("{LABEL}: calculated_min={min} without padding/margins");
-                                                    if target < min {
-                                                        remaining_size -= min - target;
-                                                        target = min;
-                                                    }
-                                                }
-                                                if direction == LayoutDirection::Row && child.is_raw() {
-                                                    if let Some(preferred) = paste!(child.[<calculated_preferred_ $size>]) {
-                                                        log::trace!("{LABEL}: calculated_preferred={preferred}");
-                                                        let preferred = preferred - paste!(child.[<padding_ $unit>]()).unwrap_or_default() - paste!(child.[<margin_ $unit>]()).unwrap_or_default();
-                                                        log::trace!("{LABEL}: calculated_preferred={preferred} without padding/margins");
-                                                        if target > preferred {
-                                                            remaining_size += target - preferred;
-                                                            target = preferred;
-                                                            clipped = true;
-                                                        }
-                                                    }
-                                                }
-
-                                                if !clipped {
-                                                    dynamic_child_size = true;
-                                                }
-
-                                                let prev = paste!(child.[<calculated_ $size>]).unwrap();
-                                                paste!(child.[<calculated_ $size>]) = Some(target);
-                                                log::trace!("{LABEL}: increasing child size prev={prev} to target={target}:\n{child}");
-                                            }
-
-                                            if last_iteration || !dynamic_child_size {
-                                                break;
-                                            }
-                                        }
-                                    } else if !float_eq!(remaining_size, 0.0)
+                                    if float_gt!(remaining_size, 0.0)
                                         && parent
                                             .relative_positioned_elements()
                                             .any(|x| x.$size.is_none() && x.is_expandable(parent))
@@ -1792,28 +1680,9 @@ mod pass_positioning {
     }
 }
 
-#[cfg_attr(feature = "profiling", profiling::all_functions)]
 impl Container {
     fn is_expandable(&self, parent: &Self) -> bool {
         !self.is_span() && (!parent.is_flex_container() || self.flex.is_some())
-    }
-
-    fn is_shrinkable(&self) -> bool {
-        self.is_span()
-    }
-
-    fn can_shrink_width(&self) -> bool {
-        self.is_shrinkable()
-            && self.calculated_width.unwrap_or_default()
-                - self.calculated_min_width.unwrap_or_default()
-                >= crate::layout::EPSILON
-    }
-
-    fn can_shrink_height(&self) -> bool {
-        self.is_shrinkable()
-            && self.calculated_height.unwrap_or_default()
-                - self.calculated_min_height.unwrap_or_default()
-                >= crate::layout::EPSILON
     }
 }
 
