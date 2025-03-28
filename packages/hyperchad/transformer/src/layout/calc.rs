@@ -80,6 +80,7 @@ impl<F: FontMetrics> Calc for Calculator<F> {
 
         time!("calc", {
             let arena = time!("arena", Bump::new());
+            let context = arena.alloc(Container::default());
             let bfs = time!("bfs", container.bfs());
             time!("calc_widths", self.calc_widths(&bfs, container));
             time!(
@@ -92,7 +93,7 @@ impl<F: FontMetrics> Calc for Calculator<F> {
             time!("flex_height", self.flex_height(&bfs, container));
             time!(
                 "position_elements",
-                self.position_elements(&arena, &bfs, container)
+                self.position_elements(&arena, &bfs, container, context)
             )
         })
     }
@@ -376,27 +377,25 @@ macro_rules! flex_on_axis {
         let root_id = $container.id;
         let view_width = $container.calculated_width.expect("Missing view_width");
         let view_height = $container.calculated_height.expect("Missing view_height");
+        let mut rect = crate::layout::Rect::default();
 
         #[allow(clippy::cognitive_complexity)]
         $bfs.traverse_with_parents_ref_mut(
             true,
-            crate::layout::Rect::default(),
+            &mut rect,
             $container,
             |parent, relative_container| {
                 if parent.id == root_id {
-                    crate::layout::Rect {
-                        x: 0.0,
-                        y: 0.0,
-                        width: view_width,
-                        height: view_height,
-                    }
+                    relative_container.x = 0.0;
+                    relative_container.y = 0.0;
+                    relative_container.width = view_width;
+                    relative_container.height = view_height;
                 } else if parent.position == Some(Position::Relative) {
-                    crate::layout::Rect {
-                        $size: paste!(parent.[<calculated_ $size>]).expect("Missing parent calculated size"),
-                        ..Default::default()
-                    }
-                } else {
-                    relative_container
+                    relative_container.x = 0.0;
+                    relative_container.y = 0.0;
+                    relative_container.width = view_width;
+                    relative_container.height = view_height;
+                    paste!(relative_container.[<$size>] = parent.[<calculated_ $size>].expect("Missing parent calculated size"));
                 }
             },
             |parent, relative_container| {
@@ -1371,6 +1370,7 @@ mod pass_positioning {
             arena: &Bump,
             bfs: &BfsPaths,
             container: &mut Container,
+            context: &mut Container,
         ) -> bool {
             log::trace!("position_elements:\n{container}");
 
@@ -1384,9 +1384,9 @@ mod pass_positioning {
             #[allow(clippy::cognitive_complexity)]
             bfs.traverse_with_parents_ref_mut(
                 true,
-                Container::default(),
+                context,
                 container,
-                |parent, mut relative_container| {
+                |parent, relative_container| {
                     if parent.id == root_id {
                         relative_container.calculated_x = Some(0.0);
                         relative_container.calculated_y = Some(0.0);
@@ -1407,8 +1407,6 @@ mod pass_positioning {
                     if let Some(align) = parent.text_align {
                         relative_container.text_align = Some(align);
                     }
-
-                    relative_container
                 },
                 |parent, relative_container| {
                     let is_top_level = parent.id == root_id;

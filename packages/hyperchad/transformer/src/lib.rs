@@ -1456,13 +1456,11 @@ impl BfsPaths {
     pub fn traverse_with_parents_ref<R>(
         &self,
         inclusive: bool,
-        initial: R,
+        data: &mut R,
         root: &Container,
-        mut parent: impl FnMut(&Container, R) -> R,
-        mut visitor: impl FnMut(&Container, &R),
+        mut parent: impl FnMut(&Container, &mut R),
+        mut visitor: impl FnMut(&Container, &mut R),
     ) {
-        let mut data = initial;
-
         // Follow paths to apply visitor to each node
         for level_nodes in &self.levels {
             for &node_idx in level_nodes {
@@ -1472,15 +1470,15 @@ impl BfsPaths {
                 let mut current = root;
 
                 for &child_idx in path {
-                    data = parent(current, data);
+                    parent(current, data);
                     current = &current.children[child_idx];
                 }
 
                 if inclusive {
-                    data = parent(current, data);
+                    parent(current, data);
                 }
 
-                visitor(current, &data);
+                visitor(current, data);
             }
         }
     }
@@ -1488,13 +1486,11 @@ impl BfsPaths {
     pub fn traverse_with_parents_ref_mut<R>(
         &self,
         inclusive: bool,
-        initial: R,
+        data: &mut R,
         root: &mut Container,
-        mut parent: impl FnMut(&mut Container, R) -> R,
-        mut visitor: impl FnMut(&mut Container, &R),
+        mut parent: impl FnMut(&mut Container, &mut R),
+        mut visitor: impl FnMut(&mut Container, &mut R),
     ) {
-        let mut data = initial;
-
         // Follow paths to apply visitor to each node
         for level_nodes in &self.levels {
             for &node_idx in level_nodes {
@@ -1504,15 +1500,15 @@ impl BfsPaths {
                 let mut current = &mut *root;
 
                 for &child_idx in path {
-                    data = parent(current, data);
+                    parent(current, data);
                     current = &mut current.children[child_idx];
                 }
 
                 if inclusive {
-                    data = parent(current, data);
+                    parent(current, data);
                 }
 
-                visitor(current, &data);
+                visitor(current, data);
             }
         }
     }
