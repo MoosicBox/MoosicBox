@@ -298,43 +298,27 @@ macro_rules! calc_size_on_axis {
 
                     macro_rules! handle_auto_sizing {
                         ($value:ident, $output:ident) => {{
-                            enum AutoMinSizeHandling {
-                                Add,
-                                Max,
-                            }
-
-                            let handling = match child.position.unwrap_or_default() {
+                            match child.position.unwrap_or_default() {
                                 Position::Static | Position::Relative | Position::Sticky => match overflow {
                                     LayoutOverflow::Auto
                                     | LayoutOverflow::Scroll
                                     | LayoutOverflow::Expand
                                     | LayoutOverflow::Squash => {
-                                        Some(match direction {
-                                            LayoutDirection::$axis => AutoMinSizeHandling::Add,
-                                            LayoutDirection::$cross_axis => AutoMinSizeHandling::Max,
-                                        })
+                                        match direction {
+                                            LayoutDirection::$axis => $output += $value,
+                                            LayoutDirection::$cross_axis => if $value > $output {
+                                                $output = $value;
+                                            },
+                                        }
                                     }
                                     LayoutOverflow::Wrap { .. } => {
-                                        Some(AutoMinSizeHandling::Max)
-                                    }
-                                    LayoutOverflow::Hidden => None
-                                },
-                                Position::Absolute | Position::Fixed => None
-                            };
-
-                            if let Some(handling) = handling {
-                                match handling {
-                                    AutoMinSizeHandling::Add => {
-                                        log::trace!("{LABEL}: AutoMinSizeHandling::Add output={} += value={} ({})", $output, $value, $output + $value);
-                                        $output += $value;
-                                    }
-                                    AutoMinSizeHandling::Max => {
-                                        log::trace!("{LABEL}: AutoMinSizeHandling::Max value={} > output={} ({})", $output, $value, if $value > $output { $value } else { $output });
                                         if $value > $output {
                                             $output = $value;
                                         }
                                     }
-                                }
+                                    LayoutOverflow::Hidden => {}
+                                },
+                                Position::Absolute | Position::Fixed => {}
                             }
                         }};
                     }
