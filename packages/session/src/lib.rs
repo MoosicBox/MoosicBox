@@ -1,5 +1,6 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
 
 use moosicbox_audio_zone::{
     db::audio_zone_try_from_db,

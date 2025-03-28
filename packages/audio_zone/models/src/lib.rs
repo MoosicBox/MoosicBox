@@ -1,5 +1,6 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
 
 use moosicbox_database::{AsId, DatabaseValue};
 use moosicbox_json_utils::{MissingValue, ParseError, ToValueType, database::ToValue as _};
