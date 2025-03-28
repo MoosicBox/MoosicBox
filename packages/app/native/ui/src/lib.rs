@@ -453,7 +453,7 @@ fn player_current_album(track: &ApiTrack, size: u16) -> Markup {
                     (album_cover_img_from_album(&track.into(), size))
                 }
             }
-            div sx-justify-content="center" {
+            div sx-justify-content="center" sx-gap=(3) {
                 div {
                     a href=(pre_escaped!("/albums?albumId={}&source={}", track.album_id, track.api_source)) { (track.title) }
                 }
