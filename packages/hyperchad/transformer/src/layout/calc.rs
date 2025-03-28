@@ -1737,26 +1737,6 @@ impl Container {
     }
 
     #[must_use]
-    pub fn calculated_width_minus_borders(&self) -> Option<f32> {
-        self.calculated_width.map(|x| {
-            self.border_x().map_or(x, |borders| {
-                let x = x - borders;
-                if x < 0.0 { 0.0 } else { x }
-            })
-        })
-    }
-
-    #[must_use]
-    pub fn calculated_height_minus_borders(&self) -> Option<f32> {
-        self.calculated_height.map(|x| {
-            self.border_y().map_or(x, |borders| {
-                let x = x - borders;
-                if x < 0.0 { 0.0 } else { x }
-            })
-        })
-    }
-
-    #[must_use]
     pub fn bounding_calculated_width(&self) -> Option<f32> {
         self.calculated_width.map(|width| {
             width
