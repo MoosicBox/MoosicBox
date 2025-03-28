@@ -175,18 +175,18 @@ macro_rules! calc_size_on_axis {
                     if let Some(max) = paste!(child.[<max_ $size>]).as_ref().and_then(crate::Number::as_fixed) {
                         let size = max.calc(0.0, view_width, view_height);
                         log::trace!("{LABEL}: calculated_max_size={size}");
-                        set_float(&mut paste!(child.[<calculated_max_ $size>]), size);
+                        paste!(child.[<calculated_max_ $size>]) = Some(size);
                     }
                     if let Some(min) = paste!(child.[<min_ $size>]).as_ref().and_then(crate::Number::as_fixed) {
                         let size = min.calc(0.0, view_width, view_height);
                         log::trace!("{LABEL}: calculated_min_size={size}");
-                        set_float(&mut paste!(child.[<calculated_min_ $size>]), size);
+                        paste!(child.[<calculated_min_ $size>]) = Some(size);
                     }
 
                     let (mut min, mut preferred) = if let Some(size) = child.$size.as_ref().and_then(Number::as_fixed) {
                         let new_size = size.calc(0.0, view_width, view_height);
 
-                        set_float(&mut paste!(child.[<calculated_ $size>]), new_size);
+                        paste!(child.[<calculated_ $size>]) = Some(new_size);
                         (Some(new_size), new_size)
                     } else if let (LayoutDirection::Row, crate::Element::Raw { value }) = (LayoutDirection::$axis, &child.element) {
                         log::trace!("{LABEL}: measuring text={value}");
@@ -199,19 +199,19 @@ macro_rules! calc_size_on_axis {
                         let width = bounds.width();
                         let height = bounds.height();
 
-                        set_float(&mut child.calculated_width, width);
-                        set_float(&mut child.calculated_height, height);
-                        set_float(&mut child.calculated_preferred_height, height);
+                        child.calculated_width = Some(width);
+                        child.calculated_height = Some(height);
+                        child.calculated_preferred_height = Some(height);
 
                         (None, width)
                     } else if let Some(size) = paste!(child.[<calculated_preferred_ $size>]) {
-                        set_float(&mut paste!(child.[<calculated_ $size>]), size);
+                        paste!(child.[<calculated_ $size>]) = Some(size);
                         (paste!(child.[<calculated_child_min_ $size>]), size)
                     } else if let Some(size) = paste!(child.[<calculated_child_min_ $size>]) {
-                        set_float(&mut paste!(child.[<calculated_ $size>]), size);
+                        paste!(child.[<calculated_ $size>]) = Some(size);
                         (Some(size), size)
                     } else {
-                        set_float(&mut paste!(child.[<calculated_ $size>]), 0.0);
+                        paste!(child.[<calculated_ $size>]) = Some(0.0);
                         (None, 0.0)
                     };
 
@@ -222,7 +222,7 @@ macro_rules! calc_size_on_axis {
                                 preferred = calculated_max;
                             }
                         } else {
-                            set_float(&mut paste!(child.[<calculated_ $size>]), calculated_max);
+                            paste!(child.[<calculated_ $size>]) = Some(calculated_max);
                             preferred = calculated_max;
                         }
                     }
@@ -233,32 +233,32 @@ macro_rules! calc_size_on_axis {
                                 preferred = calculated_min;
                             }
                         } else {
-                            set_float(&mut paste!(child.[<calculated_ $size>]), calculated_min);
+                            paste!(child.[<calculated_ $size>]) = Some(calculated_min);
                             preferred = calculated_min;
                         }
                     }
 
                     if let Some(margin) = paste!(child.[<margin_ $x>]).as_ref().and_then(crate::Number::as_fixed) {
                         let size = margin.calc(0.0, view_width, view_height);
-                        set_float(&mut paste!(child.[<calculated_margin_ $x>]), size);
+                        paste!(child.[<calculated_margin_ $x>]) = Some(size);
                         preferred += size;
                         crate::layout::increase_opt(&mut min, size);
                     }
                     if let Some(margin) = paste!(child.[<margin_ $y>]).as_ref().and_then(crate::Number::as_fixed) {
                         let size = margin.calc(0.0, view_width, view_height);
-                        set_float(&mut paste!(child.[<calculated_margin_ $y>]), size);
+                        paste!(child.[<calculated_margin_ $y>]) = Some(size);
                         preferred += size;
                         crate::layout::increase_opt(&mut min, size);
                     }
                     if let Some(padding) = paste!(child.[<padding_ $x>]).as_ref().and_then(crate::Number::as_fixed) {
                         let size = padding.calc(0.0, view_width, view_height);
-                        set_float(&mut paste!(child.[<calculated_padding_ $x>]), size);
+                        paste!(child.[<calculated_padding_ $x>]) = Some(size);
                         preferred += size;
                         crate::layout::increase_opt(&mut min, size);
                     }
                     if let Some(padding) = paste!(child.[<padding_ $y>]).as_ref().and_then(crate::Number::as_fixed) {
                         let size = padding.calc(0.0, view_width, view_height);
-                        set_float(&mut paste!(child.[<calculated_padding_ $y>]), size);
+                        paste!(child.[<calculated_padding_ $y>]) = Some(size);
                         preferred += size;
                         crate::layout::increase_opt(&mut min, size);
                     }
@@ -345,8 +345,8 @@ macro_rules! calc_size_on_axis {
                     }
                 }
 
-                set_float(&mut paste!(parent.[<calculated_child_min_ $size>]), min_size);
-                set_float(&mut paste!(parent.[<calculated_preferred_ $size>]), preferred_size);
+                paste!(parent.[<calculated_child_min_ $size>]) = Some(min_size);
+                paste!(parent.[<calculated_preferred_ $size>]) = Some(preferred_size);
             });
     }};
 }
@@ -414,12 +414,12 @@ macro_rules! flex_on_axis {
                     if let Some(min) = paste!(child.[<min_ $size>]).as_ref().and_then(crate::Number::as_dynamic) {
                         let size = min.calc(container_size, view_width, view_height);
                         log::trace!("{LABEL}: calculated_min_size={size}");
-                        set_float(&mut paste!(child.[<calculated_min_ $size>]), size);
+                        paste!(child.[<calculated_min_ $size>]) = Some(size);
                     }
                     if let Some(max) = paste!(child.[<max_ $size>]).as_ref().and_then(crate::Number::as_dynamic) {
                         let size = max.calc(container_size, view_width, view_height);
                         log::trace!("{LABEL}: calculated_max_size={size}");
-                        set_float(&mut paste!(child.[<calculated_max_ $size>]), size);
+                        paste!(child.[<calculated_max_ $size>]) = Some(size);
 
                         if size < *calculated_size {
                             *calculated_size = size;
@@ -519,7 +519,7 @@ macro_rules! flex_on_axis {
                             log::trace!("{LABEL}: calculating dynamic size={size:?}");
                             let size = size.calc(container_size, view_width, view_height);
                             log::trace!("{LABEL}: calculated dynamic size={size}");
-                            set_float(&mut paste!(child.[<calculated_ $size>]), size);
+                            paste!(child.[<calculated_ $size>]) = Some(size);
                         }
                     }
 
@@ -673,7 +673,7 @@ macro_rules! flex_on_axis {
                                                 }
 
                                                 let prev = paste!(child.[<calculated_ $size>]).unwrap();
-                                                set_float(&mut paste!(child.[<calculated_ $size>]), target);
+                                                paste!(child.[<calculated_ $size>]) = Some(target);
                                                 log::trace!("{LABEL}: increasing child size prev={prev} to target={target}:\n{child}");
                                             }
 
@@ -776,7 +776,7 @@ macro_rules! flex_on_axis {
                                                 }
 
                                                 let prev = paste!(child.[<calculated_ $size>]).unwrap();
-                                                set_float(&mut paste!(child.[<calculated_ $size>]), target);
+                                                paste!(child.[<calculated_ $size>]) = Some(target);
                                                 log::trace!("{LABEL}: increasing child size prev={prev} to target={target}:\n{child}");
                                             }
 
@@ -853,7 +853,7 @@ macro_rules! flex_on_axis {
                                         }
 
                                         if child.$size.is_none() {
-                                            set_float(&mut paste!(child.[<calculated_ $size>]), new_size);
+                                            paste!(child.[<calculated_ $size>]) = Some(new_size);
                                         }
                                     }
                                 }
@@ -888,9 +888,9 @@ macro_rules! flex_on_axis {
                         log::trace!("{LABEL}: calculating absolute child size={size:?}");
                         let size = size.calc(remaining_container_size, view_width, view_height);
                         log::trace!("{LABEL}: calculated absolute child size={size}");
-                        set_float(&mut paste!(child.[<calculated_ $size>]), size);
+                        paste!(child.[<calculated_ $size>]) = Some(size);
                     } else {
-                        set_float(&mut paste!(child.[<calculated_ $size>]), remaining_container_size);
+                        paste!(child.[<calculated_ $size>]) = Some(remaining_container_size);
                     }
                 }
 
@@ -916,7 +916,7 @@ macro_rules! flex_on_axis {
                         log::trace!("{LABEL}: calculating fixed child size={size:?}");
                         let size = size.calc(remaining_container_size, view_width, view_height);
                         log::trace!("{LABEL}: calculated fixed child size={size}");
-                        set_float(&mut paste!(child.[<calculated_ $size>]), size);
+                        paste!(child.[<calculated_ $size>]) = Some(size);
                     }
                 }
             });
@@ -1245,7 +1245,7 @@ mod pass_flex_width {
 mod pass_wrap_horizontal {
     use crate::{
         BfsPaths, Container, Element, float_lte,
-        layout::{calc::Calculator, font::FontMetrics, set_float, set_value},
+        layout::{calc::Calculator, font::FontMetrics, set_value},
     };
 
     impl<F: FontMetrics> Calculator<F> {
@@ -1281,10 +1281,10 @@ mod pass_wrap_horizontal {
                     let new_height = bounds.height();
                     log::trace!("wrap_horizontal: measured width={new_width} height={new_height}");
 
-                    set_float(&mut container.calculated_preferred_width, new_width);
-                    set_float(&mut container.calculated_width, new_width);
-                    set_float(&mut container.calculated_preferred_height, new_height);
-                    set_float(&mut container.calculated_height, new_height);
+                    container.calculated_preferred_width = Some(new_width);
+                    container.calculated_width = Some(new_width);
+                    container.calculated_preferred_height = Some(new_height);
+                    container.calculated_height = Some(new_height);
                 };
 
             wrap_on_axis!(
@@ -1297,7 +1297,7 @@ mod pass_wrap_horizontal {
 mod pass_heights {
     use crate::{
         BfsPaths, Container, Number,
-        layout::{calc::Calculator, font::FontMetrics, set_float},
+        layout::{calc::Calculator, font::FontMetrics},
     };
 
     impl<F: FontMetrics> Calculator<F> {
@@ -1545,13 +1545,15 @@ mod pass_positioning {
                                 max_height = 0.0;
                                 last_row = row;
                                 #[cfg(feature = "layout-offset")]
-                                set_float(&mut child.calculated_offset_x, x);
+                                {
+                                    child.calculated_offset_x = Some(x);
+                                }
                             }
 
                             #[cfg(feature = "layout-offset")]
                             {
-                                set_float(&mut child.calculated_offset_x, if col > 0 { gap } else { x });
-                                set_float(&mut child.calculated_offset_y, if row > 0 { row_gap } else { 0.0 });
+                                child.calculated_offset_x = Some(if col > 0 { gap } else { x });
+                                child.calculated_offset_y = Some(if row > 0 { row_gap } else { 0.0 });
                             }
 
                             if child_height > max_height {
@@ -1731,8 +1733,8 @@ mod pass_positioning {
                                 LayoutDirection::Row => {
                                     #[cfg(feature = "layout-offset")]
                                     {
-                                        set_float(&mut child.calculated_offset_x, if i == 0 { start_x } else { col_gap });
-                                        set_float(&mut child.calculated_offset_y, y);
+                                        child.calculated_offset_x = Some(if i == 0 { start_x } else { col_gap });
+                                        child.calculated_offset_y = Some(y);
                                     }
                                     x += child.bounding_calculated_width().unwrap() + col_gap;
                                     y = start_y;
@@ -1740,8 +1742,8 @@ mod pass_positioning {
                                 LayoutDirection::Column => {
                                     #[cfg(feature = "layout-offset")]
                                     {
-                                        set_float(&mut child.calculated_offset_x, x);
-                                        set_float(&mut child.calculated_offset_y, if i == 0 { start_y } else { row_gap });
+                                        child.calculated_offset_x = Some(x);
+                                        child.calculated_offset_y = Some(if i == 0 { start_y } else { row_gap });
                                     }
                                     x = start_x;
                                     y += child.bounding_calculated_height().unwrap() + row_gap;
@@ -1790,8 +1792,8 @@ mod pass_positioning {
                                     y = bottom;
                                 }
 
-                                set_float(&mut child.calculated_x, x);
-                                set_float(&mut child.calculated_y, y);
+                                child.calculated_x = Some(x);
+                                child.calculated_y = Some(y);
                             }
                         };
                     }
