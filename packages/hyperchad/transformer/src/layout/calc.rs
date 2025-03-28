@@ -196,15 +196,14 @@ macro_rules! calc_size_on_axis {
                             f32::INFINITY
                         );
                         log::trace!("{LABEL}: measured bounds={bounds:?}");
-                        let new_size = bounds.$size();
-                        log::trace!("{LABEL}: measured size={new_size}");
+                        let width = bounds.width();
+                        let height = bounds.height();
 
-                        set_float(&mut paste!(child.[<calculated_ $size>]), new_size);
-                        if LayoutDirection::$axis == LayoutDirection::Column {
-                            (Some(new_size), new_size)
-                        } else {
-                            (None, new_size)
-                        }
+                        set_float(&mut child.calculated_width, width);
+                        set_float(&mut child.calculated_height, height);
+                        set_float(&mut child.calculated_preferred_height, height);
+
+                        (None, width)
                     } else if let Some(size) = paste!(child.[<calculated_preferred_ $size>]) {
                         set_float(&mut paste!(child.[<calculated_ $size>]), size);
                         (paste!(child.[<calculated_child_min_ $size>]), size)
@@ -1245,7 +1244,7 @@ mod pass_flex_width {
 
 mod pass_wrap_horizontal {
     use crate::{
-        BfsPaths, Container, Element,
+        BfsPaths, Container, Element, float_lte,
         layout::{calc::Calculator, font::FontMetrics, set_float, set_value},
     };
 
@@ -1260,6 +1259,14 @@ mod pass_wrap_horizontal {
                     let Element::Raw { value } = &container.element else {
                         return;
                     };
+                    if float_lte!(
+                        container
+                            .calculated_width
+                            .expect("Missing calculated_width"),
+                        container_width
+                    ) {
+                        return;
+                    }
 
                     let font_size = container.calculated_font_size.expect("Missing font_size");
 
