@@ -296,53 +296,55 @@ macro_rules! calc_size_on_axis {
                         }
                     }
 
-                    let handle_auto_sizing = |child: &mut Container, size, output: &mut f32| {
-                        enum AutoMinSizeHandling {
-                            Add,
-                            Max,
-                        }
+                    macro_rules! handle_auto_sizing {
+                        ($value:ident, $output:ident) => {{
+                            enum AutoMinSizeHandling {
+                                Add,
+                                Max,
+                            }
 
-                        let handling = match child.position.unwrap_or_default() {
-                            Position::Static | Position::Relative | Position::Sticky => match overflow {
-                                LayoutOverflow::Auto
-                                | LayoutOverflow::Scroll
-                                | LayoutOverflow::Expand
-                                | LayoutOverflow::Squash => {
-                                    Some(match direction {
-                                        LayoutDirection::$axis => AutoMinSizeHandling::Add,
-                                        LayoutDirection::$cross_axis => AutoMinSizeHandling::Max,
-                                    })
-                                }
-                                LayoutOverflow::Wrap { .. } => {
-                                    Some(AutoMinSizeHandling::Max)
-                                }
-                                LayoutOverflow::Hidden => None
-                            },
-                            Position::Absolute | Position::Fixed => None
-                        };
+                            let handling = match child.position.unwrap_or_default() {
+                                Position::Static | Position::Relative | Position::Sticky => match overflow {
+                                    LayoutOverflow::Auto
+                                    | LayoutOverflow::Scroll
+                                    | LayoutOverflow::Expand
+                                    | LayoutOverflow::Squash => {
+                                        Some(match direction {
+                                            LayoutDirection::$axis => AutoMinSizeHandling::Add,
+                                            LayoutDirection::$cross_axis => AutoMinSizeHandling::Max,
+                                        })
+                                    }
+                                    LayoutOverflow::Wrap { .. } => {
+                                        Some(AutoMinSizeHandling::Max)
+                                    }
+                                    LayoutOverflow::Hidden => None
+                                },
+                                Position::Absolute | Position::Fixed => None
+                            };
 
-                        if let Some(handling) = handling {
-                            match handling {
-                                AutoMinSizeHandling::Add => {
-                                    log::trace!("{LABEL}: AutoMinSizeHandling::Add output={output} += size={size} ({})", *output + size);
-                                    *output += size;
-                                }
-                                AutoMinSizeHandling::Max => {
-                                    log::trace!("{LABEL}: AutoMinSizeHandling::Max size={size} > output={output} ({})", if size > *output { size } else { *output });
-                                    if size > *output {
-                                        *output = size;
+                            if let Some(handling) = handling {
+                                match handling {
+                                    AutoMinSizeHandling::Add => {
+                                        log::trace!("{LABEL}: AutoMinSizeHandling::Add output={} += value={} ({})", $output, $value, $output + $value);
+                                        $output += $value;
+                                    }
+                                    AutoMinSizeHandling::Max => {
+                                        log::trace!("{LABEL}: AutoMinSizeHandling::Max value={} > output={} ({})", $output, $value, if $value > $output { $value } else { $output });
+                                        if $value > $output {
+                                            $output = $value;
+                                        }
                                     }
                                 }
                             }
-                        }
-                    };
+                        }};
+                    }
 
                     paste!(child.[<calculated_preferred_ $size>]) = Some(preferred);
-                    handle_auto_sizing(child, preferred, &mut preferred_size);
+                    handle_auto_sizing!(preferred, preferred_size);
 
                     if let Some(size) = min {
                         paste!(child.[<calculated_child_min_ $size>]) = Some(size);
-                        handle_auto_sizing(child, size, &mut min_size);
+                        handle_auto_sizing!(size, min_size);
                     }
                 }
 
