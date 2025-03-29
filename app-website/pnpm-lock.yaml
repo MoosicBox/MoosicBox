@@ -130,8 +130,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.11.10
-        version: 3.11.10
+        specifier: ^3.11.11
+        version: 3.11.11
       typescript:
         specifier: ^5.8.2
         version: 5.8.2
@@ -455,8 +455,8 @@ packages:
   '@emmetio/stream-reader@2.2.0':
     resolution: {integrity: sha512-fXVXEyFA5Yv3M3n8sUGT7+fvecGrZP4k6FnWWMSZVQf69kAq0LLpaBQLGcPR30m3zMmKYhECP4k/ZkzvhEW5kw==}
 
-  '@emnapi/runtime@1.3.1':
-    resolution: {integrity: sha512-kEBmG8KyqtxJZv+ygbEim+KCGtIq1fC22Ms3S4ziXmYKm8uyoLX0MHONVKwp+9opg390VaKRNt4a7A9NwmpNhw==}
+  '@emnapi/runtime@1.4.0':
+    resolution: {integrity: sha512-64WYIf4UYcdLnbKn/umDlNjQDSS8AgZrI/R9+x5ilkUVFxXcA1Ebl+gQLc/6mERA4407Xof0R7wEyEuj091CVw==}
 
   '@esbuild/aix-ppc64@0.21.5':
     resolution: {integrity: sha512-1SDgH6ZSPTlggy1yI6+Dbkiz8xzpHJEVAlF/AM1tHPLsf5STom9rwtjE4hKAF20FfXXNTFqEYXyJNWh1GiZedQ==}
@@ -3243,8 +3243,8 @@ packages:
   number-allocator@1.0.14:
     resolution: {integrity: sha512-OrL44UTVAvkKdOdRQZIJpLkAdjXGTRda052sN4sO77bKEzYYqWKMBjQvrJFzqygI99gL6Z4u2xctPW1tB8ErvA==}
 
-  nwsapi@2.2.19:
-    resolution: {integrity: sha512-94bcyI3RsqiZufXjkr3ltkI86iEl+I7uiHVDtcq9wJUTwYQJ5odHDeSzkkrRzi80jJ8MaeZgqKjH1bAWAFw9bA==}
+  nwsapi@2.2.20:
+    resolution: {integrity: sha512-/ieB+mDe4MrrKMT8z+mQL8klXydZWGR5Dowt4RAGKbJ3kIGEx3X4ljUo+6V73IXtUPWgfOlU5B9MlGxFO5T+cA==}
 
   object-assign@4.1.1:
     resolution: {integrity: sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg==}
@@ -3815,33 +3815,33 @@ packages:
   split2@3.2.2:
     resolution: {integrity: sha512-9NThjpgZnifTkJpzTZ7Eue85S49QwpNhZTq6GRJwObb6jnLFNGB7Qm73V5HewTROPyxD0C29xqmaI68bQtV+hg==}
 
-  sst-darwin-arm64@3.11.10:
-    resolution: {integrity: sha512-4zboGtr8DUSNNPp7P+ohriXeLu0VZM6B6qhnqLG4+SBhgp2fmJWuPCB/5dNMlNsilnSrWY67pSbF0DgV0a5Byg==}
+  sst-darwin-arm64@3.11.11:
+    resolution: {integrity: sha512-9cLIWJTNrnzcClyHVLiWaRTWpu8hBLlYajfjfBQ5K3foslZURmu0IeIFENEftPrKj0u4mJiGvs5yk/WCp74pvQ==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.11.10:
-    resolution: {integrity: sha512-swo+I7AcHjyBJgZE24vsDV5hMgz/WVBl+hmk2eK1raFyHKufjUTyUxa6cU9a/E1u8vZJZhRpIKuTziRRS2FDKw==}
+  sst-darwin-x64@3.11.11:
+    resolution: {integrity: sha512-P71Xd164E15AS3O4ULpCBXBfGqe91L8mh+Z1aZSZLFu1fOFJ8OeXunD3LYvyg3EevHKb7E4stb+mHxA18i9BvA==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.11.10:
-    resolution: {integrity: sha512-9DH9KqqObB/PcoXUjwnoe2VBLrh4qDrpwAXqzc29kP5ivrupiKKwf64Rg5/LU0nU3XVOd2ccp8jLu4jmKxShMw==}
+  sst-linux-arm64@3.11.11:
+    resolution: {integrity: sha512-m4xTJ5G7Skog+8DH5pHHsw5rVRgKlpewePmiNu7h0PfV26pE6tm4Luj7BUy0v6AeCFTKt2cZXC8t/D2LLXgF0Q==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.11.10:
-    resolution: {integrity: sha512-bEGY72EX04lv/lXwXpNvG9hgBCPu0DkMw6kENbmh57kPHrPW4qB9pmKS6oZnWP4FZEyb4/reKrjY6iMiJtuSLA==}
+  sst-linux-x64@3.11.11:
+    resolution: {integrity: sha512-KSVeBRrM72yxE9t7Di9QVISwpnaiLFZSS819W/dy1XsQ8PNFo47efKMtnNGN4IYmrlXWiCOuRaacwF9sga7TdA==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.11.10:
-    resolution: {integrity: sha512-CiPSm4sQJMFr6jBrSkbxqrurFTou7fHKGmfhr6utoALNkoq8RQi+SpEZD3ghbC+uoYM/8A4KYgjk3qAWZaV0ag==}
+  sst-linux-x86@3.11.11:
+    resolution: {integrity: sha512-EjtgXPceQk4DglWwn+0T/GOmAsMjJobztJ7AoAWJH+sneZfVBOvH/nQDzLgZWlXNIAU6JDF0oUurugAVXQExPw==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.11.10:
-    resolution: {integrity: sha512-7vCJb0wacCChi8xOzC4MrK8U4SeAWPaBvkjilU2T5dubwydyXK30BcSV6Ha0R9T7MdxUkawzKnhN9amJ8oCiXQ==}
+  sst@3.11.11:
+    resolution: {integrity: sha512-5Pqjwr9eDTtFt5gDHABVCErYPqmryiw0IbWKCAFlvmFWxa54rs9nGZZxTp/xLJDB/bLTjOpblA1PBhWGzXHslg==}
     hasBin: true
 
   stack-utils@2.0.6:
@@ -5283,7 +5283,7 @@ snapshots:
 
   '@emmetio/stream-reader@2.2.0': {}
 
-  '@emnapi/runtime@1.3.1':
+  '@emnapi/runtime@1.4.0':
     dependencies:
       tslib: 2.8.1
     optional: true
@@ -5576,7 +5576,7 @@ snapshots:
 
   '@img/sharp-wasm32@0.33.5':
     dependencies:
-      '@emnapi/runtime': 1.3.1
+      '@emnapi/runtime': 1.4.0
     optional: true
 
   '@img/sharp-win32-ia32@0.33.5':
@@ -8097,7 +8097,7 @@ snapshots:
       http-proxy-agent: 7.0.2
       https-proxy-agent: 7.0.6
       is-potential-custom-element-name: 1.0.1
-      nwsapi: 2.2.19
+      nwsapi: 2.2.20
       parse5: 7.2.1
       rrweb-cssom: 0.7.1
       saxes: 6.0.0
@@ -8652,7 +8652,7 @@ snapshots:
       - supports-color
     optional: true
 
-  nwsapi@2.2.19: {}
+  nwsapi@2.2.20: {}
 
   object-assign@4.1.1: {}
 
@@ -9374,22 +9374,22 @@ snapshots:
       readable-stream: 3.6.2
     optional: true
 
-  sst-darwin-arm64@3.11.10:
+  sst-darwin-arm64@3.11.11:
     optional: true
 
-  sst-darwin-x64@3.11.10:
+  sst-darwin-x64@3.11.11:
     optional: true
 
-  sst-linux-arm64@3.11.10:
+  sst-linux-arm64@3.11.11:
     optional: true
 
-  sst-linux-x64@3.11.10:
+  sst-linux-x64@3.11.11:
     optional: true
 
-  sst-linux-x86@3.11.10:
+  sst-linux-x86@3.11.11:
     optional: true
 
-  sst@3.11.10:
+  sst@3.11.11:
     dependencies:
       aws-sdk: 2.1692.0
       aws4fetch: 1.0.18
@@ -9397,11 +9397,11 @@ snapshots:
       opencontrol: 0.0.6
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.11.10
-      sst-darwin-x64: 3.11.10
-      sst-linux-arm64: 3.11.10
-      sst-linux-x64: 3.11.10
-      sst-linux-x86: 3.11.10
+      sst-darwin-arm64: 3.11.11
+      sst-darwin-x64: 3.11.11
+      sst-linux-arm64: 3.11.11
+      sst-linux-x64: 3.11.11
+      sst-linux-x86: 3.11.11
     transitivePeerDependencies:
       - supports-color
 
