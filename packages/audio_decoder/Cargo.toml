@@ -35,5 +35,3 @@ default = []
 fail-on-warnings = []
 
 profiling = ["dep:profiling"]
-
-blocking = ["reqwest/blocking"]
