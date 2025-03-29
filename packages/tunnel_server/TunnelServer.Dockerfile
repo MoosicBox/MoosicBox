@@ -40,6 +40,7 @@ COPY packages/task/Cargo.toml packages/task/Cargo.toml
 COPY packages/telemetry/Cargo.toml packages/telemetry/Cargo.toml
 COPY packages/tunnel/Cargo.toml packages/tunnel/Cargo.toml
 COPY packages/tunnel_server/Cargo.toml packages/tunnel_server/Cargo.toml
+COPY packages/tunnel_server/build.rs packages/tunnel_server/build.rs
 
 RUN touch temp_lib.rs
 
