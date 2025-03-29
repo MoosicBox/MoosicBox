@@ -53,7 +53,7 @@ jobs:
                   PULUMI_K8S_DELETE_UNREACHABLE: ${{ github.event.inputs.delete_unreachable }}
               run: |
                   pnpm install
-                  pnpm sst install
+                  pnpm sst install --verbose --print-logs
 
             - name: Refresh
               if: ${{ github.event.inputs.refresh == 'true' }}
@@ -65,7 +65,7 @@ jobs:
                   DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
                   PULUMI_K8S_DELETE_UNREACHABLE: ${{ github.event.inputs.delete_unreachable }}
               run: |
-                  pnpm sst refresh --stage ${{ github.event.inputs.stage }} --verbose
+                  pnpm sst refresh --stage ${{ github.event.inputs.stage }} --verbose --print-logs
 
             - name: Deploy
               shell: bash
@@ -79,7 +79,7 @@ jobs:
                   EXTRA_CLUSTERS: ${{ github.event.inputs.extra_clusters }}
                   LOAD_BALANCER_USE_SSL: ${{ github.event.inputs.ssl }}
               run: |
-                  pnpm sst deploy --stage ${{ github.event.inputs.stage }} --verbose
+                  pnpm sst deploy --stage ${{ github.event.inputs.stage }} --verbose --print-logs
 
             - name: Upload log
               uses: actions/upload-artifact@v4
