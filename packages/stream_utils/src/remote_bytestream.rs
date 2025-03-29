@@ -4,7 +4,7 @@ use std::io::{Read, Seek};
 use bytes::Bytes;
 use flume::{Receiver, Sender, bounded, unbounded};
 use futures::StreamExt;
-use reqwest::Client;
+use moosicbox_http::{Client, IClient as _};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -86,7 +86,7 @@ impl RemoteByteStreamFetcher {
 
                 let response = Client::new()
                     .get(&url)
-                    .header("Range", bytes_range)
+                    .header("Range", &bytes_range)
                     .send()
                     .await;
 
@@ -102,7 +102,8 @@ impl RemoteByteStreamFetcher {
                 };
 
                 match response.status() {
-                    reqwest::StatusCode::OK | reqwest::StatusCode::PARTIAL_CONTENT => {}
+                    moosicbox_http::StatusCode::OK
+                    | moosicbox_http::StatusCode::PARTIAL_CONTENT => {}
                     _ => {
                         log::error!(
                             "Received error response ({}): {:?}",

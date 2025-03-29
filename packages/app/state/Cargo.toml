@@ -17,6 +17,10 @@ moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features 
 moosicbox_audio_output = { version = "0.1.0", path = "../../audio_output", default-features = false }
 moosicbox_audio_zone = { version = "0.1.0", path = "../../audio_zone", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../../env_utils", default-features = false }
+moosicbox_http = { version = "0.1.0", path = "../../http", default-features = false, features = [
+    "json",
+    "reqwest",
+] }
 moosicbox_logging = { version = "0.1.0", path = "../../logging", default-features = false }
 moosicbox_music_api = { version = "0.1.0", path = "../../music_api", default-features = false }
 moosicbox_music_models = { version = "0.1.0", path = "../../music/models", default-features = false }
@@ -33,7 +37,6 @@ moosicbox_upnp = { version = "0.1.0", path = "../../upnp", optional = true, defa
 moosicbox_ws = { version = "0.1.0", path = "../../ws", default-features = false }
 
 log        = { workspace = true }
-reqwest    = { workspace = true }
 serde      = { workspace = true }
 serde_json = { workspace = true }
 thiserror  = { workspace = true }

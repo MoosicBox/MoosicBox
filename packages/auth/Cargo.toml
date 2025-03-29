@@ -12,6 +12,10 @@ version     = "0.1.0"
 
 [dependencies]
 moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
+moosicbox_http = { path = "../http", default-features = false, features = [
+    "json",
+    "reqwest",
+] }
 moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
     "database",
     "serde_json",
@@ -26,7 +30,6 @@ utoipa = { workspace = true, optional = true }
 actix-web  = { workspace = true }
 futures    = { workspace = true }
 log        = { workspace = true }
-reqwest    = { workspace = true, features = ["json"] }
 serde      = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror  = { workspace = true }

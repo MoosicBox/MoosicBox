@@ -381,19 +381,21 @@ impl UpnpPlayer {
         let size = if std::env::var("UPNP_SEND_SIZE")
             .is_ok_and(|x| ["true", "1"].contains(&x.to_lowercase().as_str()))
         {
-            let mut client = reqwest::Client::new().head(&local_transport_uri);
+            use moosicbox_http::IClient as _;
+
+            let mut client = moosicbox_http::Client::new().head(&local_transport_uri);
 
             if let Some(headers) = headers {
                 for (key, value) in headers {
-                    client = client.header(key, value);
+                    client = client.header(&key, &value);
                 }
             }
 
-            let res = client.send().await.unwrap();
+            let mut res = client.send().await.unwrap();
             let headers = res.headers();
             headers
                 .get("content-length")
-                .map(|length| length.to_str().unwrap().parse::<u64>().unwrap())
+                .map(|length| length.parse::<u64>().unwrap())
         } else {
             None
         };

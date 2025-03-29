@@ -56,6 +56,9 @@ moosicbox_app_native_lib = { version = "0.1.0", path = "../app/native/lib", defa
 ] }
 moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../env_utils", default-features = false }
+moosicbox_http = { version = "0.1.0", path = "../http", default-features = false, features = [
+    "reqwest",
+] }
 moosicbox_logging = { version = "0.1.0", path = "../logging", default-features = false, features = [
     "free_log",
 ] }
@@ -67,7 +70,6 @@ clap               = { workspace = true }
 console-subscriber = { workspace = true, optional = true }
 log                = { workspace = true }
 regex              = { workspace = true }
-reqwest            = { workspace = true }
 serde              = { workspace = true }
 serde_json         = { workspace = true }
 tokio              = { workspace = true, features = ["macros", "rt-multi-thread"] }

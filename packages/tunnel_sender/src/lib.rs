@@ -53,7 +53,7 @@ pub enum TunnelRequestError {
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Reqwest(#[from] moosicbox_http::Error),
     #[error(transparent)]
     Regex(#[from] regex::Error),
     #[error(transparent)]

@@ -10,6 +10,7 @@ mod db;
 use actix_web::{FromRequest, HttpRequest, dev::Payload, error::ErrorUnauthorized, http};
 use futures::future::{Ready, err, ok};
 use moosicbox_database::config::ConfigDatabase;
+use moosicbox_http::IClient as _;
 use moosicbox_json_utils::{ParseError, database::DatabaseFetchError, serde_json::ToValue};
 use serde_json::Value;
 use thiserror::Error;
@@ -24,7 +25,7 @@ pub enum AuthError {
     #[error(transparent)]
     Parse(#[from] ParseError),
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Http(#[from] moosicbox_http::Error),
     #[error("Failed to register client")]
     RegisterClient,
     #[error("Unauthorized")]
@@ -54,9 +55,9 @@ async fn tunnel_magic_token(
 ) -> Result<bool, AuthError> {
     let url =
         format!("{tunnel_host}/auth/magic-token?clientId={client_id}&magicToken={magic_token}");
-    let value: Value = reqwest::Client::new()
-        .post(url)
-        .header(reqwest::header::AUTHORIZATION, access_token)
+    let value: Value = moosicbox_http::Client::new()
+        .post(&url)
+        .header(moosicbox_http::Header::Authorization.as_ref(), access_token)
         .send()
         .await?
         .json()
@@ -113,11 +114,11 @@ pub async fn get_client_id_and_access_token(
 async fn register_client(host: &str, client_id: &str) -> Result<Option<String>, AuthError> {
     let url = format!("{host}/auth/register-client?clientId={client_id}");
 
-    Ok(reqwest::Client::new()
-        .post(url)
+    Ok(moosicbox_http::Client::new()
+        .post(&url)
         .header(
-            reqwest::header::AUTHORIZATION,
-            std::env::var("TUNNEL_ACCESS_TOKEN").expect("TUNNEL_ACCESS_TOKEN not set"),
+            moosicbox_http::Header::Authorization.as_ref(),
+            &std::env::var("TUNNEL_ACCESS_TOKEN").expect("TUNNEL_ACCESS_TOKEN not set"),
         )
         .send()
         .await?
@@ -168,13 +169,13 @@ pub async fn fetch_signature_token(
     let url = format!("{host}/auth/signature-token?clientId={client_id}");
 
     log::debug!("Fetching signature token for client_id={client_id}");
-    let response = reqwest::Client::new()
-        .post(url)
-        .header(reqwest::header::AUTHORIZATION, access_token)
+    let response = moosicbox_http::Client::new()
+        .post(&url)
+        .header(moosicbox_http::Header::Authorization.as_ref(), access_token)
         .send()
         .await?;
 
-    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+    if response.status() == moosicbox_http::StatusCode::UNAUTHORIZED {
         return Err(AuthError::Unauthorized);
     }
 

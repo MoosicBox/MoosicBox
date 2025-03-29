@@ -2,9 +2,10 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use async_trait::async_trait;
+use moosicbox_http::{IClient as _, StatusCode};
 use moosicbox_menu_models::{AlbumVersion, api::ApiAlbumVersion};
 use moosicbox_music_api::{
     AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
@@ -22,20 +23,21 @@ use moosicbox_music_models::{
     id::Id,
 };
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
-use reqwest::Client;
 use thiserror::Error;
+
+static CLIENT: LazyLock<moosicbox_http::Client> =
+    LazyLock::new(|| moosicbox_http::Client::builder().build().unwrap());
 
 #[derive(Debug, Error)]
 pub enum RequestError {
     #[error(transparent)]
-    Request(#[from] reqwest::Error),
+    Request(#[from] moosicbox_http::Error),
     #[error("Unsuccessful: {0}")]
     Unsuccessful(String),
 }
 
 #[derive(Clone)]
 pub struct RemoteLibraryMusicApi {
-    client: Client,
     host: String,
     api_source: ApiSource,
     profile: String,
@@ -43,11 +45,8 @@ pub struct RemoteLibraryMusicApi {
 
 impl RemoteLibraryMusicApi {
     #[must_use]
-    pub fn new(host: String, api_source: ApiSource, profile: String) -> Self {
-        let client = Client::new();
-
+    pub const fn new(host: String, api_source: ApiSource, profile: String) -> Self {
         Self {
-            client,
             host,
             api_source,
             profile,
@@ -100,11 +99,10 @@ impl MusicApi for RemoteLibraryMusicApi {
     }
 
     async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError> {
-        let request = self
-            .client
+        let request = CLIENT
             .request(
-                reqwest::Method::GET,
-                format!(
+                moosicbox_http::Method::Get,
+                &format!(
                     "{host}/menu/album?albumId={album_id}&source={source}",
                     host = self.host,
                     source = self.api_source
@@ -118,7 +116,7 @@ impl MusicApi for RemoteLibraryMusicApi {
             .map_err(|e| AlbumError::Other(Box::new(e)))?;
 
         if !response.status().is_success() {
-            if response.status() == 404 {
+            if response.status() == StatusCode::NOT_FOUND {
                 return Ok(None);
             }
             return Err(AlbumError::Other(Box::new(RequestError::Unsuccessful(
@@ -147,11 +145,10 @@ impl MusicApi for RemoteLibraryMusicApi {
         let offset = offset.unwrap_or(0);
         let limit = limit.unwrap_or(50);
 
-        let request = self
-            .client
+        let request = CLIENT
             .request(
-                reqwest::Method::GET,
-                format!(
+                moosicbox_http::Method::Get,
+                &format!(
                     "{host}/menu/album/versions?albumId={album_id}&source={source}",
                     host = self.host,
                     source = self.api_source
@@ -165,7 +162,7 @@ impl MusicApi for RemoteLibraryMusicApi {
             .map_err(|e| TracksError::Other(Box::new(e)))?;
 
         if !response.status().is_success() {
-            if response.status() == 404 {
+            if response.status() == StatusCode::NOT_FOUND {
                 return Ok(PagingResponse::empty());
             }
             return Err(TracksError::Other(Box::new(RequestError::Unsuccessful(
@@ -256,11 +253,10 @@ impl MusicApi for RemoteLibraryMusicApi {
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join(",");
-        let request = self
-            .client
+        let request = CLIENT
             .request(
-                reqwest::Method::GET,
-                format!(
+                moosicbox_http::Method::Get,
+                &format!(
                     "{host}/menu/tracks?trackIds={track_ids_str}&source={source}",
                     host = self.host,
                     source = self.api_source
@@ -332,11 +328,10 @@ impl MusicApi for RemoteLibraryMusicApi {
     }
 
     async fn track(&self, track_id: &Id) -> Result<Option<Track>, TrackError> {
-        let request = self
-            .client
+        let request = CLIENT
             .request(
-                reqwest::Method::GET,
-                format!(
+                moosicbox_http::Method::Get,
+                &format!(
                     "{host}/menu/track?trackId={track_id}&source={source}",
                     host = self.host,
                     source = self.api_source
@@ -350,7 +345,7 @@ impl MusicApi for RemoteLibraryMusicApi {
             .map_err(|e| TrackError::Other(Box::new(e)))?;
 
         if !response.status().is_success() {
-            if response.status() == 404 {
+            if response.status() == StatusCode::NOT_FOUND {
                 return Ok(None);
             }
             return Err(TrackError::Other(Box::new(RequestError::Unsuccessful(

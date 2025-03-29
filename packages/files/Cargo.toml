@@ -20,6 +20,10 @@ moosicbox_audio_decoder = { version = "0.1.0", path = "../audio_decoder", option
 moosicbox_audio_output = { version = "0.1.0", path = "../audio_output", optional = true, default-features = false }
 moosicbox_config = { version = "0.1.0", path = "../config", default-features = false }
 moosicbox_database = { version = "0.1.0", path = "../database", optional = true, default-features = false }
+moosicbox_http = { version = "0.1.0", path = "../http", default-features = false, features = [
+    "reqwest",
+    "stream",
+] }
 moosicbox_image = { version = "0.1.0", path = "../image", optional = true, default-features = false }
 moosicbox_music_api = { version = "0.1.0", path = "../music_api", optional = true, default-features = false }
 moosicbox_music_models = { version = "0.1.0", path = "../music/models", optional = true, default-features = false, features = [
@@ -44,7 +48,6 @@ log                 = { workspace = true }
 moosicbox_audiotags = { workspace = true }
 profiling           = { workspace = true, optional = true }
 regex               = { workspace = true }
-reqwest             = { workspace = true }
 serde               = { workspace = true, features = ["derive"] }
 strum               = { workspace = true, optional = true }
 strum_macros        = { workspace = true, optional = true }

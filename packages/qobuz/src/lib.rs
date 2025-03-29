@@ -19,13 +19,13 @@ use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_json_utils::database::DatabaseFetchError;
 
 use moosicbox_files::get_content_length;
+use moosicbox_http::{IClient as _, Method, StatusCode};
 use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_models::{
     Album, AlbumType, ApiSource, Artist, AudioFormat, PlaybackQuality, Track, TrackApiSource,
     id::Id,
 };
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
-use reqwest::StatusCode;
 use std::{
     collections::HashMap,
     str::Utf8Error,
@@ -75,8 +75,8 @@ trait ToUrl {
 static QOBUZ_PLAY_API_BASE_URL: &str = "https://play.qobuz.com";
 static QOBUZ_API_BASE_URL: &str = "https://www.qobuz.com/api.json/0.2";
 
-static CLIENT: LazyLock<reqwest::Client> =
-    LazyLock::new(|| reqwest::Client::builder().build().unwrap());
+static CLIENT: LazyLock<moosicbox_http::Client> =
+    LazyLock::new(|| moosicbox_http::Client::builder().build().unwrap());
 
 #[must_use]
 pub fn format_title(title: &str, version: Option<&str>) -> String {
@@ -176,7 +176,7 @@ async fn fetch_credentials(
 #[derive(Debug, Error)]
 pub enum AuthenticatedRequestError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Http(#[from] moosicbox_http::Error),
     #[error(transparent)]
     FetchCredentials(#[from] FetchCredentialsError),
     #[error(transparent)]
@@ -261,13 +261,6 @@ async fn authenticated_delete_request(
     .await
 }
 
-#[derive(Clone, Copy)]
-enum Method {
-    Get,
-    Post,
-    Delete,
-}
-
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 async fn authenticated_request_inner(
@@ -300,13 +293,10 @@ async fn authenticated_request_inner(
         return Err(AuthenticatedRequestError::Unauthorized);
     };
 
-    let mut request = match method {
-        Method::Get => CLIENT.get(url),
-        Method::Post => CLIENT.post(url),
-        Method::Delete => CLIENT.delete(url),
-    }
-    .header(APP_ID_HEADER_NAME, app_id)
-    .header(AUTH_HEADER_NAME, &credentials.access_token);
+    let mut request = CLIENT
+        .request(method, url)
+        .header(APP_ID_HEADER_NAME, app_id)
+        .header(AUTH_HEADER_NAME, &credentials.access_token);
 
     if let Some(form) = &form {
         request = request.form(form);
@@ -359,14 +349,8 @@ async fn authenticated_request_inner(
         )),
         _ => match response.json::<Value>().await {
             Ok(value) => Ok(Some(value)),
-            Err(err) => {
-                log::debug!("JSON response error: {err:?}");
-                if err.is_decode() {
-                    Ok(None)
-                } else {
-                    Err(AuthenticatedRequestError::Reqwest(err))
-                }
-            }
+            Err(moosicbox_http::Error::Decode) => Ok(None),
+            Err(e) => Err(AuthenticatedRequestError::Http(e)),
         },
     }
 }
@@ -374,7 +358,7 @@ async fn authenticated_request_inner(
 #[derive(Debug, Error)]
 pub enum RefetchAccessTokenError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Http(#[from] moosicbox_http::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
     Database(#[from] DatabaseError),
@@ -400,7 +384,7 @@ async fn refetch_access_token(
     );
 
     let value: Value = CLIENT
-        .post(url)
+        .post(&url)
         .header(APP_ID_HEADER_NAME, app_id)
         .send()
         .await?
@@ -595,7 +579,7 @@ pub enum QobuzAlbumOrder {
 #[derive(Debug, Error)]
 pub enum QobuzUserLoginError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Http(#[from] moosicbox_http::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
     Database(#[from] DatabaseError),
@@ -697,9 +681,9 @@ pub async fn user_login(
     };
 
     let response = CLIENT
-        .post(url)
-        .header(APP_ID_HEADER_NAME, app_id)
-        .header(reqwest::header::CONTENT_LENGTH, 0)
+        .post(&url)
+        .header(APP_ID_HEADER_NAME, &app_id)
+        .header(moosicbox_http::Header::ContentLength.as_ref(), "0")
         .send()
         .await?;
 
@@ -1820,7 +1804,7 @@ pub async fn search(
 #[derive(Debug, Error)]
 pub enum QobuzFetchLoginSourceError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Http(#[from] moosicbox_http::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
     Database(#[from] DatabaseError),
@@ -1830,7 +1814,7 @@ pub enum QobuzFetchLoginSourceError {
 async fn fetch_login_source() -> Result<String, QobuzFetchLoginSourceError> {
     let url = qobuz_api_endpoint!(Login);
 
-    Ok(CLIENT.get(url).send().await?.text().await?)
+    Ok(CLIENT.get(&url).send().await?.text().await?)
 }
 
 #[allow(unused)]
@@ -1856,7 +1840,7 @@ fn search_bundle_version(login_source: &str) -> Option<String> {
 #[derive(Debug, Error)]
 pub enum QobuzFetchBundleSourceError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Http(#[from] moosicbox_http::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
     Database(#[from] DatabaseError),
@@ -1866,13 +1850,13 @@ pub enum QobuzFetchBundleSourceError {
 async fn fetch_bundle_source(bundle_version: &str) -> Result<String, QobuzFetchBundleSourceError> {
     let url = qobuz_api_endpoint!(Bundle, &[(":bundleVersion", bundle_version)]);
 
-    Ok(CLIENT.get(url).send().await?.text().await?)
+    Ok(CLIENT.get(&url).send().await?.text().await?)
 }
 
 #[derive(Debug, Error)]
 pub enum QobuzFetchAppSecretsError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Http(#[from] moosicbox_http::Error),
     #[error(transparent)]
     Base64Decode(#[from] base64::DecodeError),
     #[cfg(feature = "db")]

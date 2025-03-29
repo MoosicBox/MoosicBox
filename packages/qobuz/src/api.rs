@@ -77,7 +77,7 @@ impl From<QobuzUserLoginError> for actix_web::Error {
     fn from(err: QobuzUserLoginError) -> Self {
         match err {
             QobuzUserLoginError::Unauthorized => ErrorUnauthorized(err.to_string()),
-            QobuzUserLoginError::Reqwest(_)
+            QobuzUserLoginError::Http(_)
             | QobuzUserLoginError::NoAccessTokenAvailable
             | QobuzUserLoginError::NoAppIdAvailable
             | QobuzUserLoginError::Parse(_)

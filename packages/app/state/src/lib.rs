@@ -12,6 +12,7 @@ use std::{
 use moosicbox_app_ws::{ConnectWsError, WsHandle};
 use moosicbox_audio_output::{AudioOutputFactory, AudioOutputScannerError};
 use moosicbox_audio_zone::models::{ApiAudioZoneWithSession, ApiPlayer};
+use moosicbox_http::{IClient as _, RequestBuilder};
 use moosicbox_music_models::PlaybackQuality;
 use moosicbox_paging::Page;
 use moosicbox_player::{
@@ -23,7 +24,6 @@ use moosicbox_session::models::{
     RegisterConnection, RegisterPlayer,
 };
 use moosicbox_ws::models::{InboundPayload, OutboundPayload};
-use reqwest::RequestBuilder;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::{
@@ -36,7 +36,7 @@ pub mod ws;
 
 type ApiPlayersMap = (ApiPlayer, PlayerType, AudioOutputFactory);
 
-static PROXY_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
+static PROXY_CLIENT: LazyLock<moosicbox_http::Client> = LazyLock::new(moosicbox_http::Client::new);
 
 #[cfg(feature = "upnp")]
 pub static UPNP_LISTENER_HANDLE: std::sync::OnceLock<moosicbox_upnp::listener::Handle> =
@@ -70,7 +70,7 @@ pub enum ProxyRequestError {
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Http(#[from] moosicbox_http::Error),
     #[error("Failure response ({status}): {text}")]
     FailureResponse { status: u16, text: String },
 }
@@ -1175,13 +1175,13 @@ impl AppState {
         log::info!("Posting url from proxy: {url}");
 
         let mut builder = match method {
-            "get" => PROXY_CLIENT.get(url),
-            "post" => PROXY_CLIENT.post(url),
+            "get" => PROXY_CLIENT.get(&url),
+            "post" => PROXY_CLIENT.post(&url),
             _ => return Err(AppStateError::unknown(format!("Invalid method '{method}'"))),
         };
 
         for header in headers {
-            builder = builder.header(header.0, header.1);
+            builder = builder.header(&header.0, &header.1);
         }
 
         if let Some(body) = body {

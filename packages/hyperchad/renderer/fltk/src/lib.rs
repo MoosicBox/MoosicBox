@@ -39,12 +39,15 @@ use hyperchad_transformer::{
     },
     models::{LayoutDirection, LayoutOverflow, LayoutPosition},
 };
+use moosicbox_http::IClient as _;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
 pub use hyperchad_renderer::*;
 
 mod font_metrics;
+
+static CLIENT: LazyLock<moosicbox_http::Client> = LazyLock::new(moosicbox_http::Client::new);
 
 #[cfg(feature = "debug")]
 static DEBUG: LazyLock<RwLock<bool>> = LazyLock::new(|| {
@@ -85,7 +88,7 @@ static FLTK_CALCULATOR: Calculator<font_metrics::FltkFontMetrics> = Calculator::
 #[derive(Debug, Error)]
 pub enum LoadImageError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Reqwest(#[from] moosicbox_http::Error),
     #[error(transparent)]
     Image(#[from] image::ImageError),
     #[error(transparent)]
@@ -297,9 +300,9 @@ impl FltkRenderer {
                 } else {
                     let image = match source {
                         ImageSource::Bytes { bytes, .. } => image::load_from_memory(&bytes)?,
-                        ImageSource::Url(source) => {
-                            image::load_from_memory(&reqwest::get(source).await?.bytes().await?)?
-                        }
+                        ImageSource::Url(source) => image::load_from_memory(
+                            &CLIENT.get(&source).send().await?.bytes().await?,
+                        )?,
                     };
                     let width = image.width();
                     let height = image.height();

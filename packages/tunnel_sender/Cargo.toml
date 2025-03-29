@@ -26,6 +26,10 @@ moosicbox_files = { version = "0.1.0", path = "../files", default-features = fal
     "range",
     "track-range",
 ] }
+moosicbox_http = { version = "0.1.0", path = "../http", default-features = false, features = [
+    "json",
+    "reqwest",
+] }
 moosicbox_image = { version = "0.1.0", path = "../image", default-features = false, features = [
     "image",
 ] }
@@ -49,7 +53,6 @@ futures-util      = { workspace = true }
 log               = { workspace = true }
 rand              = { workspace = true }
 regex             = { workspace = true }
-reqwest           = { workspace = true, features = ["json"] }
 serde             = { workspace = true, features = ["derive"] }
 serde-aux         = { workspace = true }
 serde_json        = { workspace = true }

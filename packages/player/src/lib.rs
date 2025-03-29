@@ -20,6 +20,7 @@ use moosicbox_audio_decoder::media_sources::{
 };
 use moosicbox_audio_output::AudioOutputFactory;
 use moosicbox_database::profiles::LibraryDatabase;
+use moosicbox_http::IClient as _;
 use moosicbox_json_utils::{ParseError, database::DatabaseFetchError};
 use moosicbox_music_api::MusicApi;
 use moosicbox_music_models::{ApiSource, AudioFormat, PlaybackQuality, Track, id::Id};
@@ -65,14 +66,14 @@ pub const DEFAULT_PLAYBACK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOp
     retry_delay: std::time::Duration::from_millis(500),
 };
 
-pub static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
+pub static CLIENT: LazyLock<moosicbox_http::Client> = LazyLock::new(moosicbox_http::Client::new);
 
 #[derive(Debug, Error)]
 pub enum PlayerError {
     #[error(transparent)]
     Send(#[from] SendError<()>),
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Http(#[from] moosicbox_http::Error),
     #[error(transparent)]
     Parse(#[from] ParseError),
     #[error(transparent)]
@@ -331,7 +332,7 @@ pub async fn get_track_url(
             log::debug!("Fetching track file url from {url}");
 
             CLIENT
-                .get(url)
+                .get(&url)
                 .send()
                 .await?
                 .json::<serde_json::Value>()
@@ -348,7 +349,7 @@ pub async fn get_track_url(
             log::debug!("Fetching track file url from {url}");
 
             Ok(CLIENT
-                .get(url)
+                .get(&url)
                 .send()
                 .await?
                 .json::<serde_json::Value>()
@@ -362,7 +363,7 @@ pub async fn get_track_url(
             log::debug!("Fetching track file url from {url}");
 
             Ok(CLIENT
-                .get(url)
+                .get(&url)
                 .send()
                 .await?
                 .json::<serde_json::Value>()
@@ -1521,19 +1522,19 @@ async fn track_id_to_playable_stream(
 
     log::debug!("Fetching track bytes from url: {url}");
 
-    let mut client = reqwest::Client::new().head(&url);
+    let mut client = CLIENT.head(&url);
 
     if let Some(headers) = headers {
         for (key, value) in headers {
-            client = client.header(key, value);
+            client = client.header(&key, &value);
         }
     }
 
-    let res = client.send().await.unwrap();
+    let mut res = client.send().await.unwrap();
     let headers = res.headers();
     let size = headers
         .get("content-length")
-        .map(|length| length.to_str().unwrap().parse::<u64>().unwrap());
+        .map(|length| length.parse::<u64>().unwrap());
 
     let source: RemoteByteStreamMediaSource = RemoteByteStream::new(
         url,
@@ -1551,7 +1552,7 @@ async fn track_id_to_playable_stream(
 
     let mut hint = Hint::new();
 
-    if let Some(Ok(content_type)) = headers.get("content-type").map(|x| x.to_str()) {
+    if let Some(content_type) = headers.get("content-type") {
         if let Some(audio_type) = content_type.strip_prefix("audio/") {
             log::debug!("Setting hint extension to {audio_type}");
             hint.with_extension(audio_type);

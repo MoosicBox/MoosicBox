@@ -49,6 +49,10 @@ moosicbox_app_state = { version = "0.1.0", path = "../state", default-features =
 moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
 moosicbox_audio_zone_models = { version = "0.1.0", path = "../../audio_zone/models", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../../env_utils", default-features = false }
+moosicbox_http = { version = "0.1.0", path = "../../http", default-features = false, features = [
+    "json",
+    "reqwest",
+] }
 moosicbox_logging = { version = "0.1.0", path = "../../logging", default-features = false, features = [
     "free_log",
 ] }
@@ -67,7 +71,6 @@ moosicbox_app_native_bundled = { version = "0.1.0", path = "bundled", optional =
 console-subscriber = { workspace = true, optional = true }
 flume              = { workspace = true }
 log                = { workspace = true }
-reqwest            = { workspace = true, features = ["json"] }
 serde_json         = { workspace = true }
 strum              = { workspace = true }
 thiserror          = { workspace = true }

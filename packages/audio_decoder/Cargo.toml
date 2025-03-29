@@ -11,6 +11,9 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
+moosicbox_http = { version = "0.1.0", path = "../http", default-features = false, features = [
+    "reqwest",
+] }
 moosicbox_stream_utils = { version = "0.1.0", path = "../stream_utils", default-features = false, features = [
     "remote-bytestream",
     "stalled-monitor",
@@ -23,7 +26,6 @@ futures    = { workspace = true }
 log        = { workspace = true }
 profiling  = { workspace = true, optional = true }
 rangemap   = { workspace = true }
-reqwest    = { workspace = true }
 symphonia  = { workspace = true }
 thiserror  = { workspace = true }
 tokio      = { workspace = true, features = ["rt-multi-thread", "tracing"] }

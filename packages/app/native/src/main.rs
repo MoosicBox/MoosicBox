@@ -28,6 +28,7 @@ use moosicbox_app_native_ui::{
 use moosicbox_app_state::AppStateError;
 use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
 use moosicbox_env_utils::{default_env_usize, option_env_f32, option_env_i32};
+use moosicbox_http::IClient as _;
 use moosicbox_music_api::{MusicApi, SourceToMusicApi, profiles::PROFILES};
 use moosicbox_music_models::{
     AlbumSort, AlbumType, ApiSource, TrackApiSource,
@@ -45,6 +46,9 @@ use thiserror::Error;
 
 #[cfg(feature = "_canvas")]
 mod visualization;
+
+static CLIENT: LazyLock<moosicbox_http::Client> =
+    LazyLock::new(|| moosicbox_http::Client::builder().build().unwrap());
 
 static STATE: LazyLock<moosicbox_app_state::AppState> = LazyLock::new(|| {
     moosicbox_app_state::AppState::default()
@@ -511,14 +515,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let source: Option<ApiSource> =
                         req.query.get("source").map(TryFrom::try_from).transpose()?;
 
-                    let response = reqwest::get(format!(
-                        "{}/menu/artist?moosicboxProfile={PROFILE}&artistId={artist_id}{}",
-                        std::env::var("MOOSICBOX_HOST")
-                            .as_deref()
-                            .unwrap_or("http://localhost:8500"),
-                        source.map_or_else(String::new, |x| format!("&source={x}")),
-                    ))
-                    .await?;
+                    let response = CLIENT
+                        .get(&format!(
+                            "{}/menu/artist?moosicboxProfile={PROFILE}&artistId={artist_id}{}",
+                            std::env::var("MOOSICBOX_HOST")
+                                .as_deref()
+                                .unwrap_or("http://localhost:8500"),
+                            source.map_or_else(String::new, |x| format!("&source={x}")),
+                        ))
+                        .send()
+                        .await?;
 
                     if !response.status().is_success() {
                         let message =
@@ -540,13 +546,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     container
                 } else {
-                    let response = reqwest::get(format!(
-                        "{}/menu/artists?moosicboxProfile={PROFILE}&offset=0&limit=2000",
-                        std::env::var("MOOSICBOX_HOST")
-                            .as_deref()
-                            .unwrap_or("http://localhost:8500")
-                    ))
-                    .await?;
+                    let response = CLIENT
+                        .get(&format!(
+                            "{}/menu/artists?moosicboxProfile={PROFILE}&offset=0&limit=2000",
+                            std::env::var("MOOSICBOX_HOST")
+                                .as_deref()
+                                .unwrap_or("http://localhost:8500")
+                        ))
+                        .send()
+                        .await?;
 
                     if !response.status().is_success() {
                         let message =
@@ -1174,7 +1182,7 @@ pub enum RouteError {
     #[error(transparent)]
     ParseInt(#[from] ParseIntError),
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Reqwest(#[from] moosicbox_http::Error),
     #[error("Route failed: {0:?}")]
     RouteFailed(Box<dyn std::error::Error>),
 }
@@ -1210,26 +1218,28 @@ async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteError> 
         .and_then(Result::ok)
         .unwrap_or(AlbumSort::NameAsc);
 
-    let response = reqwest::get(format!(
-        "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}&sort={sort}{}",
-        std::env::var("MOOSICBOX_HOST")
-            .as_deref()
-            .unwrap_or("http://localhost:8500"),
-        if filtered_sources.is_empty() {
-            String::new()
-        } else {
-            format!(
-                "&sources={}",
-                filtered_sources
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(",")
-            )
-        },
-        search.map_or_else(String::new, |search| format!("&search={search}"))
-    ))
-    .await?;
+    let response = CLIENT
+        .get(&format!(
+            "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}&sort={sort}{}",
+            std::env::var("MOOSICBOX_HOST")
+                .as_deref()
+                .unwrap_or("http://localhost:8500"),
+            if filtered_sources.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    "&sources={}",
+                    filtered_sources
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )
+            },
+            search.map_or_else(String::new, |search| format!("&search={search}"))
+        ))
+        .send()
+        .await?;
 
     if !response.status().is_success() {
         let message = format!("Error: {} {}", response.status(), response.text().await?);
@@ -1287,26 +1297,28 @@ async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
         .and_then(Result::ok)
         .unwrap_or(AlbumSort::NameAsc);
 
-    let response = reqwest::get(format!(
-        "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}&sort={sort}{}",
-        std::env::var("MOOSICBOX_HOST")
-            .as_deref()
-            .unwrap_or("http://localhost:8500"),
-        if filtered_sources.is_empty() {
-            String::new()
-        } else {
-            format!(
-                "&sources={}",
-                filtered_sources
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(",")
-            )
-        },
-        search.map_or_else(String::new, |search| format!("&search={search}"))
-    ))
-    .await?;
+    let response = CLIENT
+        .get(&format!(
+            "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}&sort={sort}{}",
+            std::env::var("MOOSICBOX_HOST")
+                .as_deref()
+                .unwrap_or("http://localhost:8500"),
+            if filtered_sources.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    "&sources={}",
+                    filtered_sources
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )
+            },
+            search.map_or_else(String::new, |search| format!("&search={search}"))
+        ))
+        .send()
+        .await?;
 
     if !response.status().is_success() {
         let message = format!("Error: {} {}", response.status(), response.text().await?);
@@ -1356,7 +1368,7 @@ async fn artist_albums_list_route(req: RouteRequest) -> Result<View, RouteError>
             .as_deref()
             .unwrap_or("http://localhost:8500")
     );
-    let response = reqwest::get(url).await?;
+    let response = CLIENT.get(&url).send().await?;
 
     if !response.status().is_success() {
         let message = format!("Error: {} {}", response.status(), response.text().await?);
@@ -1384,7 +1396,7 @@ async fn audio_zones_route(_req: RouteRequest) -> Result<View, RouteError> {
             .as_deref()
             .unwrap_or("http://localhost:8500")
     );
-    let response = reqwest::get(url).await?;
+    let response = CLIENT.get(&url).send().await?;
 
     if !response.status().is_success() {
         let message = format!("Error: {} {}", response.status(), response.text().await?);
@@ -1410,7 +1422,7 @@ async fn playback_sessions_route(_req: RouteRequest) -> Result<View, RouteError>
             .as_deref()
             .unwrap_or("http://localhost:8500")
     );
-    let response = reqwest::get(url).await?;
+    let response = CLIENT.get(&url).send().await?;
 
     if !response.status().is_success() {
         let message = format!("Error: {} {}", response.status(), response.text().await?);

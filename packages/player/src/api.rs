@@ -73,7 +73,7 @@ impl From<PlayerError> for actix_web::Error {
             PlayerError::DatabaseFetch(err) => {
                 ErrorInternalServerError(format!("DB error: {err:?}"))
             }
-            PlayerError::Reqwest(err) => ErrorInternalServerError(format!("Reqwest: {err:?}")),
+            PlayerError::Http(err) => ErrorInternalServerError(format!("Http: {err:?}")),
             PlayerError::Parse(err) => ErrorInternalServerError(format!("Parse: {err:?}")),
             PlayerError::TrackNotLocal(track_id) => {
                 ErrorBadRequest(format!("Track not stored locally: {track_id}"))

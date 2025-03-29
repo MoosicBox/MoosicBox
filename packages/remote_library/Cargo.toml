@@ -11,6 +11,10 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
+moosicbox_http = { version = "0.1.0", path = "../http", default-features = false, features = [
+    "json",
+    "reqwest",
+] }
 moosicbox_menu_models = { version = "0.1.0", path = "../menu/models", default-features = false, features = [
     "api",
 ] }
@@ -20,7 +24,6 @@ moosicbox_paging = { version = "0.1.0", path = "../paging", default-features = f
 
 async-trait = { workspace = true }
 log         = { workspace = true }
-reqwest     = { workspace = true, features = ["json"] }
 thiserror   = { workspace = true }
 tokio       = { workspace = true }
 

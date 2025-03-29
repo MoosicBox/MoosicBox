@@ -23,6 +23,10 @@ moosicbox_files = { version = "0.1.0", path = "../files", default-features = fal
     "flac",
     "tidal",
 ] }
+moosicbox_http = { path = "../http", default-features = false, features = [
+    "json",
+    "reqwest",
+] }
 moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
     "database",
     "serde_json",
@@ -48,7 +52,6 @@ futures         = { workspace = true }
 itertools       = { workspace = true }
 log             = { workspace = true }
 open            = { workspace = true }
-reqwest         = { workspace = true, features = ["json"] }
 serde           = { workspace = true, features = ["derive"] }
 serde_json      = { workspace = true }
 strum           = { workspace = true }

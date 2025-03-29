@@ -2,13 +2,13 @@ use std::{future::Future, sync::LazyLock};
 
 use chrono::NaiveDateTime;
 use moosicbox_app_native_lib::{renderer::View, router::RouteRequest};
+use moosicbox_http::IClient as _;
 use moosicbox_marketing_site_ui::download::{FileAsset, Os, OsAsset, OsRelease};
 use regex::Regex;
-use reqwest::header::USER_AGENT;
 use serde::Deserialize;
 
-static CLIENT: LazyLock<reqwest::Client> =
-    LazyLock::new(|| reqwest::Client::builder().build().unwrap());
+static CLIENT: LazyLock<moosicbox_http::Client> =
+    LazyLock::new(|| moosicbox_http::Client::builder().build().unwrap());
 
 #[allow(clippy::too_many_lines)]
 pub async fn releases_route(req: RouteRequest) -> Result<View, Box<dyn std::error::Error>> {
@@ -149,7 +149,10 @@ pub async fn releases_route(req: RouteRequest) -> Result<View, Box<dyn std::erro
     let mut releases: Vec<GitHubRelease> = with_retry(3, || async {
         let response = CLIENT
             .get("https://api.github.com/repos/MoosicBox/MoosicBox/releases")
-            .header(USER_AGENT, "moosicbox-marketing-site")
+            .header(
+                moosicbox_http::Header::UserAgent.as_ref(),
+                "moosicbox-marketing-site",
+            )
             .send()
             .await?
             .text()

@@ -2,10 +2,11 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::{collections::HashMap, fmt::Display, task::Poll, time::SystemTime};
+use std::{collections::HashMap, task::Poll, time::SystemTime};
 
 use bytes::Bytes;
 use futures_util::{Future, Stream};
+use moosicbox_http::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::EnumString;
@@ -43,33 +44,6 @@ pub struct TunnelResponse {
     pub bytes: Bytes,
     pub status: Option<u16>,
     pub headers: Option<HashMap<String, String>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, EnumString)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
-pub enum Method {
-    Head,
-    Get,
-    Post,
-    Put,
-    Patch,
-    Delete,
-    Options,
-}
-
-impl Display for Method {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Self::Head => "HEAD",
-            Self::Get => "GET",
-            Self::Post => "POST",
-            Self::Put => "PUT",
-            Self::Patch => "PATCH",
-            Self::Delete => "DELETE",
-            Self::Options => "OPTIONS",
-        })
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

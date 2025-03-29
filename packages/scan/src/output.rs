@@ -31,10 +31,10 @@ use tokio::{sync::RwLock, task::JoinError};
 
 use crate::CACHE_DIR;
 
-static IMAGE_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
+static IMAGE_CLIENT: LazyLock<moosicbox_http::Client> = LazyLock::new(moosicbox_http::Client::new);
 
 async fn search_for_cover(
-    client: &reqwest::Client,
+    client: &moosicbox_http::Client,
     path: &Path,
     name: &str,
     url: &str,

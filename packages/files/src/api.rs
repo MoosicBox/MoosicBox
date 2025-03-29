@@ -236,10 +236,9 @@ impl From<GetTrackBytesError> for actix_web::Error {
     fn from(err: GetTrackBytesError) -> Self {
         match err {
             GetTrackBytesError::IO(_)
-            | GetTrackBytesError::Reqwest(_)
+            | GetTrackBytesError::Http(_)
             | GetTrackBytesError::Acquire(_)
             | GetTrackBytesError::Join(_)
-            | GetTrackBytesError::ToStr(_)
             | GetTrackBytesError::ParseInt(_)
             | GetTrackBytesError::Recv(_)
             | GetTrackBytesError::Commander(_)

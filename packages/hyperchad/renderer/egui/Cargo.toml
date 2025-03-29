@@ -32,6 +32,9 @@ hyperchad_transformer = { version = "0.1.0", path = "../../transformer", default
 ] }
 moosicbox_app_native_image = { version = "0.1.0", path = "../../../app/native/image", default-features = false }
 moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
+moosicbox_http = { version = "0.1.0", path = "../../../http", default-features = false, features = [
+    "reqwest",
+] }
 moosicbox_logging = { version = "0.1.0", path = "../../../logging", default-features = false, features = [
     "macros",
 ] }
@@ -50,7 +53,6 @@ log = { workspace = true }
 profiling = { workspace = true, optional = true }
 puffin = { workspace = true, optional = true }
 puffin_http = { workspace = true, optional = true }
-reqwest = { workspace = true }
 tracing-subscriber = { workspace = true, optional = true }
 tracy-client = { workspace = true, default-features = false, optional = true, features = [
     "enable",

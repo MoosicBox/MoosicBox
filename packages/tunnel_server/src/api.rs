@@ -11,15 +11,16 @@ use bytes::Bytes;
 use futures_util::StreamExt;
 use log::{debug, info};
 use moosicbox_database::profiles::api::ProfileNameUnverified;
+use moosicbox_http::Method;
 use moosicbox_tunnel::{
-    Method, TunnelEncoding, TunnelHttpRequest, TunnelRequest, TunnelResponse, TunnelStream,
+    TunnelEncoding, TunnelHttpRequest, TunnelRequest, TunnelResponse, TunnelStream,
 };
 use qstring::QString;
 use rand::{Rng as _, rng};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
-use std::str::FromStr;
+use std::str::FromStr as _;
 use thiserror::Error;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio::sync::oneshot;
@@ -62,7 +63,7 @@ pub async fn auth_get_magic_token_endpoint(
     if let Some(magic_token) = select_magic_token(token_hash).await? {
         handle_request(
             &magic_token.client_id,
-            &Method::Get,
+            Method::Get,
             "auth/magic-token",
             json!({"magicToken": token}),
             None,
@@ -241,13 +242,13 @@ async fn proxy_request(
 
     let headers = get_headers_for_request(&req);
 
-    handle_request(&client_id, &method, path, query, body, headers, profile).await
+    handle_request(&client_id, method, path, query, body, headers, profile).await
 }
 
 #[cfg_attr(feature = "telemetry", tracing::instrument)]
 async fn handle_request(
     client_id: &str,
-    method: &Method,
+    method: Method,
     path: &str,
     query: Value,
     payload: Option<Value>,
@@ -339,7 +340,7 @@ pub enum RequestError {
 fn request(
     client_id: &str,
     request_id: u64,
-    method: &Method,
+    method: Method,
     path: &str,
     query: Value,
     payload: Option<Value>,
@@ -354,7 +355,6 @@ fn request(
     let (tx, rx) = unbounded_channel();
 
     let client_id = client_id.to_string();
-    let method = method.clone();
     let path = path.to_string();
     let abort_token = abort_token.clone();
 
@@ -388,7 +388,7 @@ fn request(
             .send_command_async(crate::ws::server::Command::Message {
                 msg: serde_json::to_value(TunnelRequest::Http(TunnelHttpRequest {
                     request_id,
-                    method: method.clone(),
+                    method,
                     path: path.to_string(),
                     query,
                     payload,

@@ -14,6 +14,7 @@ use moosicbox_audio_decoder::{
     media_sources::remote_bytestream::RemoteByteStreamMediaSource,
 };
 use moosicbox_audio_output::{AudioOutputError, AudioWrite, Channels, SignalSpec};
+use moosicbox_http::IClient as _;
 use moosicbox_music_api::{
     MusicApi, MusicApis, MusicApisError, SourceToMusicApi as _, TrackError, TracksError,
     models::{TrackAudioQuality, TrackSource},
@@ -160,13 +161,11 @@ pub async fn get_track_source(
 #[derive(Debug, Error)]
 pub enum GetTrackBytesError {
     #[error(transparent)]
-    ToStr(#[from] reqwest::header::ToStrError),
-    #[error(transparent)]
     ParseInt(#[from] std::num::ParseIntError),
     #[error(transparent)]
     IO(#[from] std::io::Error),
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Http(#[from] moosicbox_http::Error),
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
     #[error(transparent)]
@@ -606,7 +605,7 @@ async fn request_track_bytes_from_url(
     format: AudioFormat,
     size: Option<u64>,
 ) -> Result<TrackBytes, GetTrackBytesError> {
-    let client = reqwest::Client::new();
+    let client = moosicbox_http::Client::new();
 
     log::debug!("request_track_bytes_from_url: Getting track source from url: {url}");
 
@@ -618,16 +617,25 @@ async fn request_track_bytes_from_url(
         let end = end.map_or_else(String::new, |end| end.to_string());
 
         log::debug!("request_track_bytes_from_url: Using byte range start={start} end={end}");
-        request = request.header("Range", format!("bytes={start}-{end}"));
-        head_request = head_request.header("Range", format!("bytes={start}-{end}"));
+        request = request.header(
+            moosicbox_http::Header::Range.as_ref(),
+            &format!("bytes={start}-{end}"),
+        );
+        head_request = head_request.header(
+            moosicbox_http::Header::Range.as_ref(),
+            &format!("bytes={start}-{end}"),
+        );
     }
 
     let size = if size.is_none() {
         log::debug!("request_track_bytes_from_url: Sending head request to url={url}");
-        let head = head_request.send().await?;
+        let mut head = head_request.send().await?;
 
-        if let Some(header) = head.headers().get("content-length") {
-            let size = header.to_str()?.parse::<u64>()?;
+        if let Some(header) = head
+            .headers()
+            .get(moosicbox_http::Header::ContentLength.as_ref())
+        {
+            let size = header.parse::<u64>()?;
             log::debug!("Got size from Content-Length header: size={size}");
             Some(size)
         } else {

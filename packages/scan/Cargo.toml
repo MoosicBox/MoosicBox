@@ -21,6 +21,9 @@ moosicbox_date_utils = { version = "0.1.0", path = "../date_utils", default-feat
     "chrono",
 ] }
 moosicbox_files = { version = "0.1.0", path = "../files", default-features = false }
+moosicbox_http = { version = "0.1.0", path = "../http", default-features = false, features = [
+    "reqwest",
+] }
 moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
     "serde_json",
 ] }
@@ -45,7 +48,6 @@ mp3-duration        = { workspace = true, optional = true }
 futures      = { workspace = true }
 log          = { workspace = true }
 regex        = { workspace = true }
-reqwest      = { workspace = true }
 serde        = { workspace = true, features = ["derive"] }
 serde_json   = { workspace = true }
 strum        = { workspace = true }

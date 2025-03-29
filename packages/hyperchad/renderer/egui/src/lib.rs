@@ -33,6 +33,7 @@ pub mod layout;
 
 pub use eframe;
 pub use hyperchad_renderer::*;
+use moosicbox_http::IClient as _;
 
 pub enum RenderView {
     View(Container),
@@ -907,8 +908,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                         }
                     } else {
                         moosicbox_task::spawn("renderer: load_image", async move {
-                            static CLIENT: LazyLock<reqwest::Client> =
-                                LazyLock::new(reqwest::Client::new);
+                            static CLIENT: LazyLock<moosicbox_http::Client> =
+                                LazyLock::new(moosicbox_http::Client::new);
 
                             log::trace!("loading image {source}");
                             match CLIENT.get(&source).send().await {

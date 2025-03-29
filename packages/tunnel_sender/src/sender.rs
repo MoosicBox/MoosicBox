@@ -32,11 +32,12 @@ use moosicbox_files::{
     },
     range::{Range, parse_ranges},
 };
+use moosicbox_http::{IClient as _, Method};
 use moosicbox_music_api::{SourceToMusicApi as _, models::TrackSource};
 use moosicbox_music_models::{ApiSource, AudioFormat, id::Id};
 use moosicbox_player::symphonia::play_media_source_async;
 use moosicbox_stream_utils::{ByteWriter, remote_bytestream::RemoteByteStream};
-use moosicbox_tunnel::{Method, TunnelEncoding, TunnelWsResponse};
+use moosicbox_tunnel::{TunnelEncoding, TunnelWsResponse};
 use moosicbox_ws::{PlayerAction, WebsocketContext, WebsocketSendError, WebsocketSender};
 use rand::{Rng as _, rng};
 use regex::Regex;
@@ -1142,14 +1143,14 @@ impl TunnelSender {
         profile: Option<String>,
         encoding: TunnelEncoding,
     ) -> Result<(), TunnelRequestError> {
-        let response = self
+        let mut response = self
             .http_request(url, method, payload, headers, profile, true)
             .await?;
 
         let headers = response
             .headers()
             .iter()
-            .map(|(key, value)| (key.to_string(), value.to_str().unwrap().to_string()))
+            .map(|(key, value)| (key.to_string(), value.to_string()))
             .collect();
 
         self.send_stream(
@@ -1171,18 +1172,10 @@ impl TunnelSender {
         headers: Option<Value>,
         profile: Option<String>,
         user_agent_header: bool,
-    ) -> Result<reqwest::Response, reqwest::Error> {
-        let client = reqwest::Client::new();
+    ) -> Result<moosicbox_http::Response, moosicbox_http::Error> {
+        let client = moosicbox_http::Client::new();
 
-        let mut builder = match method {
-            Method::Post => client.post(url),
-            Method::Get => client.get(url),
-            Method::Head => client.head(url),
-            Method::Put => client.put(url),
-            Method::Patch => client.patch(url),
-            Method::Delete => client.delete(url),
-            Method::Options => client.request(reqwest::Method::OPTIONS, url),
-        };
+        let mut builder = client.request(method, url);
 
         if let Some(headers) = headers {
             for (key, value) in headers.as_object().unwrap() {
@@ -1191,7 +1184,7 @@ impl TunnelSender {
         }
 
         if let Some(profile) = profile {
-            builder = builder.header("moosicbox-profile", profile);
+            builder = builder.header("moosicbox-profile", &profile);
         }
 
         if user_agent_header {

@@ -24,6 +24,7 @@ use moosicbox_database::profiles::LibraryDatabase;
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use moosicbox_files::get_content_length;
+use moosicbox_http::IClient as _;
 use moosicbox_json_utils::{
     MissingValue, ParseError, ToValueType, database::AsModelResult as _, serde_json::ToValue,
 };
@@ -83,8 +84,8 @@ enum YtApiEndpoint {
     Search,
 }
 
-static CLIENT: LazyLock<reqwest::Client> =
-    LazyLock::new(|| reqwest::Client::builder().build().unwrap());
+static CLIENT: LazyLock<moosicbox_http::Client> =
+    LazyLock::new(|| moosicbox_http::Client::builder().build().unwrap());
 
 static YT_API_BASE_URL: &str = "https://music.youtube.com/youtubei/v1";
 
@@ -169,7 +170,7 @@ macro_rules! yt_api_endpoint {
 #[derive(Debug, Error)]
 pub enum YtDeviceAuthorizationError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Http(#[from] moosicbox_http::Error),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
@@ -189,7 +190,7 @@ pub async fn device_authorization(
         ("scope", "r_usr w_usr w_sub".to_string()),
     ];
 
-    let value: Value = CLIENT.post(url).form(&params).send().await?.json().await?;
+    let value: Value = CLIENT.post(&url).form(&params).send().await?.json().await?;
 
     let verification_uri_complete = value.to_value::<&str>("verificationUriComplete")?;
     let device_code = value.to_value::<&str>("deviceCode")?;
@@ -216,7 +217,7 @@ pub async fn device_authorization(
 #[derive(Debug, Error)]
 pub enum RequestError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Http(#[from] moosicbox_http::Error),
     #[error("Unauthorized")]
     Unauthorized,
     #[error("Request failed (error {0})")]
@@ -305,13 +306,8 @@ async fn request_inner(
         )),
         _ => match response.json::<Value>().await {
             Ok(value) => Ok(Some(value)),
-            Err(err) => {
-                if err.is_decode() {
-                    Ok(None)
-                } else {
-                    Err(RequestError::Reqwest(err))
-                }
-            }
+            Err(moosicbox_http::Error::Decode) => Ok(None),
+            Err(e) => Err(RequestError::Http(e)),
         },
     }
 }
@@ -319,7 +315,7 @@ async fn request_inner(
 #[derive(Debug, Error)]
 pub enum YtDeviceAuthorizationTokenError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Http(#[from] moosicbox_http::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
     Database(#[from] DatabaseError),
@@ -356,7 +352,7 @@ pub async fn device_authorization_token(
         ("scope", "r_usr w_usr w_sub".to_string()),
     ];
 
-    let value: Value = CLIENT.post(url).form(&params).send().await?.json().await?;
+    let value: Value = CLIENT.post(&url).form(&params).send().await?.json().await?;
 
     log::trace!("Received value {value:?}");
 
@@ -464,7 +460,7 @@ async fn fetch_credentials(
 #[derive(Debug, Error)]
 pub enum AuthenticatedRequestError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Http(#[from] moosicbox_http::Error),
     #[error(transparent)]
     FetchCredentials(#[from] FetchCredentialsError),
     #[error(transparent)]
@@ -585,8 +581,8 @@ async fn authenticated_request_inner(
         Method::Delete => CLIENT.delete(url),
     }
     .header(
-        reqwest::header::AUTHORIZATION,
-        format!("Bearer {}", credentials.access_token),
+        moosicbox_http::Header::Authorization.as_ref(),
+        &format!("Bearer {}", credentials.access_token),
     );
 
     if let Some(form) = &form {
@@ -641,13 +637,8 @@ async fn authenticated_request_inner(
         )),
         _ => match response.json::<Value>().await {
             Ok(value) => Ok(Some(value)),
-            Err(err) => {
-                if err.is_decode() {
-                    Ok(None)
-                } else {
-                    Err(AuthenticatedRequestError::Reqwest(err))
-                }
-            }
+            Err(moosicbox_http::Error::Decode) => Ok(None),
+            Err(e) => Err(AuthenticatedRequestError::Http(e)),
         },
     }
 }
@@ -655,7 +646,7 @@ async fn authenticated_request_inner(
 #[derive(Debug, Error)]
 pub enum RefetchAccessTokenError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Http(#[from] moosicbox_http::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
     Database(#[from] DatabaseError),
@@ -679,7 +670,7 @@ async fn refetch_access_token(
         ("scope", "r_usr w_usr w_sub".to_string()),
     ];
 
-    let value: Value = CLIENT.post(url).form(&params).send().await?.json().await?;
+    let value: Value = CLIENT.post(&url).form(&params).send().await?.json().await?;
 
     let access_token = value.to_value::<&str>("access_token")?;
 

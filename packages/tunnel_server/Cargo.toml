@@ -27,6 +27,9 @@ moosicbox_database = { version = "0.1.0", path = "../database", default-features
 ] }
 moosicbox_database_connection = { version = "0.1.0", path = "../database_connection", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../env_utils" }
+moosicbox_http = { version = "0.1.0", path = "../http", default-features = false, features = [
+    "serde",
+] }
 moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
     "database",
 ] }

@@ -3,8 +3,8 @@ use std::sync::atomic::AtomicBool;
 
 use flume::{Receiver, Sender, bounded};
 use log::debug;
+use moosicbox_http::{Client, IClient as _};
 use rangemap::RangeSet;
-use reqwest::Client;
 use symphonia::core::io::MediaSource;
 
 // Used in cpal_output.rs to mute the stream when buffering.
@@ -30,9 +30,9 @@ impl StreamableFileAsync {
     #[must_use]
     pub async fn new(url: String) -> Self {
         // Get the size of the file we are streaming.
-        let res = Client::new().head(&url).send().await.unwrap();
+        let mut res = Client::new().head(&url).send().await.unwrap();
         let header = res.headers().get("Content-Length").unwrap();
-        let size: usize = header.to_str().unwrap().parse().unwrap();
+        let size: usize = header.parse().unwrap();
 
         Self {
             url,
@@ -51,8 +51,11 @@ impl StreamableFileAsync {
         let end = (start + CHUNK_SIZE).min(file_size);
 
         let chunk = Client::new()
-            .get(url)
-            .header("Range", format!("bytes={start}-{end}"))
+            .get(&url)
+            .header(
+                moosicbox_http::Header::Range.as_ref(),
+                &format!("bytes={start}-{end}"),
+            )
             .send()
             .await
             .unwrap()

@@ -15,6 +15,7 @@ use bytes::Bytes;
 use futures::{StreamExt, TryStreamExt};
 use futures_core::{Future, Stream};
 use moosicbox_audiotags::AudioTag;
+use moosicbox_http::IClient as _;
 use thiserror::Error;
 use tokio::{
     io::{AsyncSeekExt, AsyncWriteExt, BufWriter},
@@ -40,15 +41,13 @@ pub fn sanitize_filename(string: &str) -> String {
 #[derive(Debug, Error)]
 pub enum GetContentLengthError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Http(#[from] moosicbox_http::Error),
     #[error(transparent)]
     ParseInt(#[from] std::num::ParseIntError),
-    #[error(transparent)]
-    ToStr(#[from] reqwest::header::ToStrError),
 }
 
-static CLIENT: LazyLock<reqwest::Client> =
-    LazyLock::new(|| reqwest::Client::builder().build().unwrap());
+static CLIENT: LazyLock<moosicbox_http::Client> =
+    LazyLock::new(|| moosicbox_http::Client::builder().build().unwrap());
 
 /// # Errors
 ///
@@ -65,16 +64,24 @@ pub async fn get_content_length(
         let start = start.map_or_else(String::new, |x| x.to_string());
         let end = end.map_or_else(String::new, |x| x.to_string());
 
-        client = client.header("range", format!("bytes={start}-{end}"));
+        client = client.header(
+            moosicbox_http::Header::Range.as_ref(),
+            &format!("bytes={start}-{end}"),
+        );
     }
 
-    let res = client.send().await?;
+    let mut res = client.send().await?;
 
-    Ok(if let Some(header) = res.headers().get("content-length") {
-        Some(header.to_str()?.parse::<u64>()?)
-    } else {
-        None
-    })
+    Ok(
+        if let Some(header) = res
+            .headers()
+            .get(moosicbox_http::Header::ContentLength.as_ref())
+        {
+            Some(header.parse::<u64>()?)
+        } else {
+            None
+        },
+    )
 }
 
 /// # Panics
@@ -279,7 +286,7 @@ pub async fn save_bytes_stream_to_file_with_progress_listener<
 #[derive(Debug, Error)]
 pub enum FetchCoverError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Http(#[from] moosicbox_http::Error),
     #[error(transparent)]
     IO(#[from] std::io::Error),
     #[error(transparent)]
@@ -308,7 +315,8 @@ async fn get_or_fetch_cover_bytes_from_remote_url(
 ) -> Result<CoverBytes, FetchCoverError> {
     use tokio_util::codec::{BytesCodec, FramedRead};
 
-    static IMAGE_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
+    static IMAGE_CLIENT: LazyLock<moosicbox_http::Client> =
+        LazyLock::new(moosicbox_http::Client::new);
 
     if Path::exists(file_path) {
         let file = tokio::fs::File::open(file_path.to_path_buf()).await?;
@@ -346,7 +354,8 @@ async fn get_or_fetch_cover_from_remote_url(
 ) -> Result<String, FetchCoverError> {
     use std::sync::LazyLock;
 
-    static IMAGE_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
+    static IMAGE_CLIENT: LazyLock<moosicbox_http::Client> =
+        LazyLock::new(moosicbox_http::Client::new);
 
     if Path::exists(file_path) {
         Ok(file_path.to_str().unwrap().to_string())
@@ -364,7 +373,7 @@ async fn get_or_fetch_cover_from_remote_url(
 #[derive(Debug, Error)]
 pub enum FetchAndSaveBytesFromRemoteUrlError {
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    Http(#[from] moosicbox_http::Error),
     #[error(transparent)]
     IO(#[from] std::io::Error),
     #[error(transparent)]
@@ -378,7 +387,7 @@ pub enum FetchAndSaveBytesFromRemoteUrlError {
 /// * If the request fails
 /// * If there is an IO error
 pub async fn fetch_bytes_from_remote_url(
-    client: &reqwest::Client,
+    client: &moosicbox_http::Client,
     url: &str,
 ) -> Result<
     Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>,
@@ -389,7 +398,7 @@ pub async fn fetch_bytes_from_remote_url(
 
     let status = response.status();
 
-    if status != 200 {
+    if !status.is_success() {
         let message = response.text().await.unwrap_or_else(|_| String::new());
 
         log::error!("Request failed: {status} ({message})");
@@ -410,7 +419,7 @@ pub async fn fetch_bytes_from_remote_url(
 /// * If the request fails
 /// * If there is an IO error
 pub async fn fetch_and_save_bytes_from_remote_url(
-    client: &reqwest::Client,
+    client: &moosicbox_http::Client,
     file_path: &Path,
     url: &str,
 ) -> Result<PathBuf, FetchAndSaveBytesFromRemoteUrlError> {
