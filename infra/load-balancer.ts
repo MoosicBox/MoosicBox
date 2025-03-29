@@ -165,10 +165,14 @@ function createLb(image: docker.Image, dependsOn: Input<Input<Resource>[]>) {
         }
     });
 
-    return new kubernetes.apps.v1.Deployment('tunnel-server-lb', specJson, {
-        provider: clusterProvider,
-        dependsOn,
-    });
+    return new kubernetes.apps.v1.Deployment(
+        `tunnel-server-lb-${$app.stage}`,
+        specJson,
+        {
+            provider: clusterProvider,
+            dependsOn,
+        },
+    );
 }
 
 function createNodePort(dependsOn: Input<Input<Resource>[]>) {
