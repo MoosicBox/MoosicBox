@@ -32,6 +32,7 @@ members = [
     "packages/downloader",
     "packages/env_utils",
     "packages/files",
+    "packages/http",
     "packages/hyperchad",
     "packages/hyperchad/actions",
     "packages/hyperchad/color",

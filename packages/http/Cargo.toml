@@ -1,0 +1,39 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["network-programming"]
+description = "MoosicBox HTTP Networking package"
+edition     = "2024"
+keywords    = ["http", "network", "networking"]
+license     = "MPL-2.0"
+name        = "moosicbox_http"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+# reqwest
+reqwest = { workspace = true, optional = true }
+
+# stream
+futures-core = { workspace = true, optional = true }
+futures-util = { workspace = true }
+
+async-trait = { workspace = true }
+bytes       = { workspace = true }
+log         = { workspace = true }
+serde       = { workspace = true, optional = true }
+serde_json  = { workspace = true, optional = true }
+strum       = { workspace = true, features = ["derive"] }
+thiserror   = { workspace = true }
+
+[features]
+default = ["json", "reqwest", "stream"]
+
+fail-on-warnings = []
+
+reqwest = ["dep:reqwest"]
+
+json   = ["dep:serde_json", "reqwest?/json", "serde"]
+stream = ["dep:futures-core", "reqwest?/stream"]
+
+serde = ["dep:serde"]
