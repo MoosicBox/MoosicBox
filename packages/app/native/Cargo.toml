@@ -136,7 +136,8 @@ unsafe              = ["moosicbox_app_native_lib/unsafe"]
 
 benchmark = ["moosicbox_app_native_lib/benchmark"]
 
-all-formats = ["aac", "flac", "mp3", "opus"]
+all-formats    = ["all-os-formats", "mp3"]
+all-os-formats = ["aac", "flac", "opus"]
 
 aac  = ["moosicbox_app_native_ui/aac", "moosicbox_music_models/aac"]
 flac = ["moosicbox_app_native_ui/flac", "moosicbox_music_models/flac"]

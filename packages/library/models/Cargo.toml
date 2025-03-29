@@ -49,7 +49,8 @@ db = [
     "moosicbox_music_models/db",
 ]
 
-all-formats = ["aac", "flac", "mp3", "opus"]
+all-formats    = ["all-os-formats", "mp3"]
+all-os-formats = ["aac", "flac", "opus"]
 
 aac  = ["moosicbox_music_models/aac"]
 flac = ["moosicbox_music_models/flac"]

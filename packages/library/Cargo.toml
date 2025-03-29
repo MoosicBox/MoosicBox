@@ -68,7 +68,8 @@ openapi = [
     "moosicbox_search/openapi",
 ]
 
-all-formats = ["aac", "flac", "mp3", "opus"]
+all-formats    = ["all-os-formats", "mp3"]
+all-os-formats = ["aac", "flac", "opus"]
 
 aac = [
     "dep:moosicbox_audio_output",

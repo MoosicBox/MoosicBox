@@ -53,7 +53,8 @@ db = ["dep:moosicbox_database", "moosicbox_json_utils/database"]
 
 tantivy = ["dep:tantivy"]
 
-all-formats = ["aac", "flac", "mp3", "opus"]
+all-formats    = ["all-os-formats", "mp3"]
+all-os-formats = ["aac", "flac", "opus"]
 
 aac  = []
 flac = []

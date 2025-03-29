@@ -44,7 +44,8 @@ default = ["all-formats", "all-sources"]
 
 fail-on-warnings = []
 
-all-formats = ["aac", "flac", "mp3", "opus"]
+all-formats    = ["all-os-formats", "mp3"]
+all-os-formats = ["aac", "flac", "opus"]
 
 # Encoders
 aac  = ["moosicbox_music_models/aac", "moosicbox_session_models/aac"]

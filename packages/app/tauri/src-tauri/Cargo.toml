@@ -80,14 +80,16 @@ fail-on-warnings = []
 custom-protocol = ["tauri/custom-protocol"]
 
 android = []
-desktop = ["all-encoders", "moosicbox_app_tauri_bundled?/tunnel"]
+desktop = ["all-os-encoders", "moosicbox_app_tauri_bundled?/tunnel"]
 
-all-encoders = ["aac", "flac", "mp3"]
+all-encoders    = ["all-os-encoders", "mp3"]
+all-os-encoders = ["aac", "flac"]
 
 bundled = ["all-sources", "dep:moosicbox_app_tauri_bundled"]
 client  = ["dep:moosicbox_app_client"]
 
-all-supported-formats = ["aac", "flac", "mp3"]
+all-supported-formats    = ["all-supported-os-formats", "mp3"]
+all-supported-os-formats = ["aac", "flac"]
 
 # Encoders
 aac  = ["moosicbox_app_tauri_bundled?/aac", "moosicbox_music_models/aac"]
