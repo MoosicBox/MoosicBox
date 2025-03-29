@@ -47,6 +47,7 @@ jobs:
                 checks:
                     - bans
                     - sources
+                    - licenses
 
         steps:
             - uses: actions/checkout@v4
