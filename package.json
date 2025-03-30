@@ -31,6 +31,6 @@
         "prettier-plugin-astro": "^0.13.0",
         "sst": "^3.11.11",
         "typescript": "^5.8.2",
-        "yaml": "^2.7.0"
+        "yaml": "^2.7.1"
     }
 }
