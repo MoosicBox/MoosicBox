@@ -27,11 +27,12 @@ strum       = { workspace = true, features = ["derive"] }
 thiserror   = { workspace = true }
 
 [features]
-default = ["json", "reqwest", "stream"]
+default = ["json", "reqwest", "simulator", "stream"]
 
 fail-on-warnings = []
 
-reqwest = ["dep:reqwest"]
+reqwest   = ["dep:reqwest"]
+simulator = []
 
 json   = ["dep:serde_json", "reqwest?/json", "serde"]
 stream = ["dep:futures-core", "reqwest?/stream"]

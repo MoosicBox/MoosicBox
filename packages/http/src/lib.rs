@@ -15,6 +15,9 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "reqwest")]
 pub mod reqwest;
 
+#[cfg(feature = "simulator")]
+pub mod simulator;
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Decode")]
@@ -371,7 +374,16 @@ impl ClientBuilder {
     ///
     /// * If no HTTP backend features are enabled
     pub fn build(self) -> Result<Client, Error> {
-        if cfg!(feature = "reqwest") {
+        if cfg!(feature = "simulator") {
+            #[cfg(feature = "simulator")]
+            {
+                Ok(Client {
+                    client: Box::new(simulator::SimulatorClient),
+                })
+            }
+            #[cfg(not(feature = "simulator"))]
+            unreachable!()
+        } else if cfg!(feature = "reqwest") {
             #[cfg(feature = "reqwest")]
             {
                 self.build_reqwest()
@@ -387,7 +399,13 @@ impl ClientBuilder {
     ///
     /// * If a TLS backend cannot be initialized, or the resolver cannot load the system configuration.
     #[cfg(feature = "reqwest")]
+    #[allow(unreachable_code)]
     pub fn build_reqwest(self) -> Result<Client, Error> {
+        #[cfg(feature = "simulator")]
+        return Ok(Client {
+            client: Box::new(simulator::SimulatorClient),
+        });
+
         let builder = ::reqwest::Client::builder();
         let client = builder.build()?;
 
