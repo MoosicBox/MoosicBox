@@ -77,6 +77,7 @@ members = [
     "packages/schema",
     "packages/search",
     "packages/server",
+    "packages/server/simulator",
     "packages/session",
     "packages/session/models",
     "packages/simulator/harness",
