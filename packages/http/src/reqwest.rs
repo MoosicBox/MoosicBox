@@ -100,16 +100,6 @@ impl IResponse for ReqwestResponse {
         let response = self.inner.take().unwrap();
         Box::pin(response.bytes_stream().map_err(Into::into))
     }
-
-    #[cfg(feature = "json")]
-    #[must_use]
-    async fn json<T: serde::de::DeserializeOwned>(&mut self) -> Result<T, Error>
-    where
-        Self: Sized,
-    {
-        let response = self.inner.take().unwrap();
-        Ok(response.json().await?)
-    }
 }
 
 impl From<Method> for reqwest::Method {

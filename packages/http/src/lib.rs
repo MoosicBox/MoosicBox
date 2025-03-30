@@ -249,10 +249,6 @@ pub trait IResponse: Send + Sync {
     fn bytes_stream(
         &mut self,
     ) -> std::pin::Pin<Box<dyn futures_core::Stream<Item = Result<Bytes, Error>> + Send>>;
-    #[cfg(feature = "json")]
-    async fn json<T: serde::de::DeserializeOwned>(&mut self) -> Result<T, Error>
-    where
-        Self: Sized;
 }
 
 #[async_trait]
@@ -283,15 +279,6 @@ impl IResponse for Response {
         &mut self,
     ) -> std::pin::Pin<Box<dyn futures_core::Stream<Item = Result<Bytes, Error>> + Send>> {
         self.inner.bytes_stream()
-    }
-
-    #[cfg(feature = "json")]
-    #[must_use]
-    async fn json<T: serde::de::DeserializeOwned>(&mut self) -> Result<T, Error>
-    where
-        Self: Sized,
-    {
-        Ok(serde_json::from_slice(&self.bytes().await?)?)
     }
 }
 
@@ -337,7 +324,8 @@ impl Response {
     ///
     /// * If the json response fails
     pub async fn json<T: serde::de::DeserializeOwned>(mut self) -> Result<T, Error> {
-        <Self as IResponse>::json(&mut self).await
+        let bytes = <Self as IResponse>::bytes(&mut self).await?;
+        Ok(serde_json::from_slice(&bytes)?)
     }
 }
 
