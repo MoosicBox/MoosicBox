@@ -1,0 +1,27 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools::testing", "simulation"]
+description = "MoosicBox Simulator Harness package"
+edition     = "2024"
+keywords    = ["deterministic", "harness", "simulator", "test"]
+license     = "MPL-2.0"
+name        = "moosicbox_simulator_harness"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[package.metadata.cargo-udeps.ignore]
+normal = ["moosicbox_http"]
+
+[package.metadata.cargo-machete]
+ignored = ["moosicbox_http"]
+
+[dependencies]
+moosicbox_http = { version = "0.1.0", path = "../../http", default-features = false, features = [
+    "simulator",
+] }
+
+[features]
+default = []
+
+fail-on-warnings = []

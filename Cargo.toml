@@ -79,6 +79,7 @@ members = [
     "packages/server",
     "packages/session",
     "packages/session/models",
+    "packages/simulator/harness",
     "packages/stream_utils",
     "packages/task",
     "packages/telemetry",
