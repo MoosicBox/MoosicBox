@@ -7680,6 +7680,7 @@ name = "moosicbox_simulator_harness"
 version = "0.1.0"
 dependencies = [
  "moosicbox_http",
+ "turmoil",
 ]
 
 [[package]]
@@ -14226,6 +14227,21 @@ dependencies = [
  "sha1",
  "thiserror 2.0.12",
  "utf-8",
+]
+
+[[package]]
+name = "turmoil"
+version = "0.6.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f0d6c134ef37268c94d50fb74252af1c34c5c88389e2c1af85654da944ceb52"
+dependencies = [
+ "bytes",
+ "indexmap 2.8.0",
+ "rand 0.8.5",
+ "rand_distr",
+ "scoped-tls",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

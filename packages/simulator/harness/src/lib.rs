@@ -11,3 +11,8 @@ pub unsafe fn init() {
         std::env::set_var("ENABLE_SIMULATOR", "1");
     }
 }
+
+#[must_use]
+pub fn sim_buider() -> turmoil::Builder {
+    turmoil::Builder::new()
+}

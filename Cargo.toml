@@ -332,6 +332,7 @@ tracing = "0.1.41"
 tracing-opentelemetry = { version = "0.30.0" }
 tracing-subscriber = "0.3.19"
 tracy-client = { version = "0.18.0", default-features = false }
+turmoil = "0.6.6"
 uaparser = "0.6.4"
 url = "2.5.4"
 urlencoding = "2.1.3"
