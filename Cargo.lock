@@ -7628,14 +7628,13 @@ dependencies = [
 name = "moosicbox_server_simulator"
 version = "0.1.0"
 dependencies = [
- "actix-web",
  "log",
  "moosicbox_config",
  "moosicbox_env_utils",
+ "moosicbox_logging",
  "moosicbox_server",
  "moosicbox_simulator_harness",
  "moosicbox_telemetry",
- "tokio",
 ]
 
 [[package]]

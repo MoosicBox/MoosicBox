@@ -4,30 +4,25 @@
 
 use moosicbox_config::AppType;
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
+use moosicbox_simulator_harness::sim_buider;
 
-fn main() -> std::io::Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     unsafe {
         moosicbox_simulator_harness::init();
     }
 
-    let addr = default_env("BIND_ADDR", "0.0.0.0");
-    let service_port = default_env_usize("PORT", 8000)
-        .unwrap_or(8000)
-        .try_into()
-        .expect("Invalid PORT environment variable");
-    let actix_workers = option_env_usize("ACTIX_WORKERS")
-        .map_err(|e| std::io::Error::other(format!("Invalid ACTIX_WORKERS: {e:?}")))?;
+    moosicbox_logging::init(None, None)?;
 
-    actix_web::rt::System::with_tokio_rt(|| {
-        let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
-        log::debug!("Running with {threads} max blocking threads");
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .max_blocking_threads(threads)
-            .build()
-            .unwrap()
-    })
-    .block_on(async move {
+    let mut sim = sim_buider().build();
+
+    sim.host("moosicbox", || async {
+        let addr = default_env("BIND_ADDR", "0.0.0.0");
+        let service_port = default_env_usize("PORT", 8000)
+            .unwrap_or(8000)
+            .try_into()
+            .expect("Invalid PORT environment variable");
+        let actix_workers = option_env_usize("ACTIX_WORKERS")
+            .map_err(|e| std::io::Error::other(format!("Invalid ACTIX_WORKERS: {e:?}")))?;
         #[cfg(feature = "telemetry")]
         let otel =
             std::sync::Arc::new(moosicbox_telemetry::Otel::new().map_err(std::io::Error::other)?);
@@ -45,10 +40,16 @@ fn main() -> std::io::Result<()> {
             otel,
             || {},
         )
-        .await
-    })?;
+        .await?;
+
+        Ok(())
+    });
+
+    sim.client("client", async { Ok(()) });
+
+    let result = sim.run();
 
     log::info!("Server simulator finished");
 
-    Ok(())
+    result
 }

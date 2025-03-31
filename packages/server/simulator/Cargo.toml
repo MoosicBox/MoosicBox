@@ -13,13 +13,12 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_config            = { version = "0.1.0", path = "../../config", default-features = false }
 moosicbox_env_utils         = { version = "0.1.0", path = "../../env_utils", default-features = false }
+moosicbox_logging           = { version = "0.1.0", path = "../../logging", default-features = false }
 moosicbox_server            = { version = "0.1.0", path = "../", default-features = false }
 moosicbox_simulator_harness = { version = "0.1.0", path = "../../simulator/harness", default-features = false }
 moosicbox_telemetry         = { version = "0.1.0", path = "../../telemetry", default-features = false }
 
-actix-web = { workspace = true }
-log       = { workspace = true }
-tokio     = { workspace = true, features = ["macros", "rt", "time", "tracing"] }
+log = { workspace = true }
 
 [features]
 default = ["player", "telemetry", "upnp"]
