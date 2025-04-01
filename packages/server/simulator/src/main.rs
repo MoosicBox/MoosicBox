@@ -4,7 +4,7 @@
 
 use moosicbox_config::AppType;
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
-use moosicbox_simulator_harness::sim_buider;
+use moosicbox_simulator_harness::turmoil;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     unsafe {
@@ -13,7 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     moosicbox_logging::init(None, None)?;
 
-    let mut sim = sim_buider().build();
+    let mut sim = turmoil::Builder::new().build();
 
     sim.host("moosicbox", || async {
         let addr = default_env("BIND_ADDR", "0.0.0.0");
