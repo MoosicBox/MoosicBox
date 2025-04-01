@@ -13,6 +13,7 @@ RUN cat Cargo.toml | \
     \"packages\/config\",\r\
     \"packages\/database\",\r\
     \"packages\/database_connection\",\r\
+    \"packages\/http\",\r\
     \"packages\/env_utils\",\r\
     \"packages\/json_utils\",\r\
     \"packages\/logging\",\r\
@@ -33,6 +34,7 @@ COPY packages/config/Cargo.toml packages/config/Cargo.toml
 COPY packages/database/Cargo.toml packages/database/Cargo.toml
 COPY packages/database_connection/Cargo.toml packages/database_connection/Cargo.toml
 COPY packages/env_utils/Cargo.toml packages/env_utils/Cargo.toml
+COPY packages/http/Cargo.toml packages/http/Cargo.toml
 COPY packages/json_utils/Cargo.toml packages/json_utils/Cargo.toml
 COPY packages/logging/Cargo.toml packages/logging/Cargo.toml
 COPY packages/middleware/Cargo.toml packages/middleware/Cargo.toml
@@ -56,6 +58,7 @@ packages/config|\
 packages/database|\
 packages/database_connection|\
 packages/env_utils|\
+packages/http|\
 packages/json_utils|\
 packages/logging|\
 packages/middleware|\
