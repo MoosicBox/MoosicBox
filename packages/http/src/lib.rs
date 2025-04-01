@@ -374,7 +374,7 @@ impl ClientBuilder {
     ///
     /// * If no HTTP backend features are enabled
     pub fn build(self) -> Result<Client, Error> {
-        if cfg!(feature = "simulator") {
+        if cfg!(feature = "simulator") && moosicbox_simulator_utils::simulator_enabled() {
             #[cfg(feature = "simulator")]
             {
                 Ok(Client {
@@ -402,9 +402,11 @@ impl ClientBuilder {
     #[allow(unreachable_code)]
     pub fn build_reqwest(self) -> Result<Client, Error> {
         #[cfg(feature = "simulator")]
-        return Ok(Client {
-            client: Box::new(simulator::SimulatorClient),
-        });
+        if moosicbox_simulator_utils::simulator_enabled() {
+            return Ok(Client {
+                client: Box::new(simulator::SimulatorClient),
+            });
+        }
 
         let builder = ::reqwest::Client::builder();
         let client = builder.build()?;
