@@ -258,6 +258,12 @@ jobs:
               with:
                   node-version: 22
 
+            - name: Setup cmake
+              if: ${{ contains(matrix.package.toolchains, 'cmake') || contains(matrix.package.ciToolchains, 'cmake') }}
+              uses: jwlawson/actions-setup-cmake@v2
+              with:
+                  cmake-version: '3.16.x'
+
             - name: Install dependencies
               if: ${{ matrix.package.dependencies }}
               run: ${{ matrix.package.dependencies }}
