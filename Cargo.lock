@@ -7684,6 +7684,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_simulator_utils"
+version = "0.1.0"
+
+[[package]]
 name = "moosicbox_stream_utils"
 version = "0.1.0"
 dependencies = [
