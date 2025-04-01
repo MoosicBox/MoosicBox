@@ -10,6 +10,7 @@
 !/packages/logging
 !/packages/middleware
 !/packages/profiles
+!/packages/simulator/utils
 !/packages/task
 !/packages/telemetry
 !/packages/tunnel

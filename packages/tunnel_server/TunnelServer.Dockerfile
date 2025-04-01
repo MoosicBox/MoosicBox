@@ -18,6 +18,7 @@ RUN cat Cargo.toml | \
     \"packages\/logging\",\r\
     \"packages\/middleware\",\r\
     \"packages\/profiles\",\r\
+    \"packages\/simulator\/utils\",\r\
     \"packages\/task\",\r\
     \"packages\/telemetry\",\r\
     \"packages\/tunnel\",\r\
@@ -36,6 +37,7 @@ COPY packages/json_utils/Cargo.toml packages/json_utils/Cargo.toml
 COPY packages/logging/Cargo.toml packages/logging/Cargo.toml
 COPY packages/middleware/Cargo.toml packages/middleware/Cargo.toml
 COPY packages/profiles/Cargo.toml packages/profiles/Cargo.toml
+COPY packages/simulator/utils/Cargo.toml packages/simulator/utils/Cargo.toml
 COPY packages/task/Cargo.toml packages/task/Cargo.toml
 COPY packages/telemetry/Cargo.toml packages/telemetry/Cargo.toml
 COPY packages/tunnel/Cargo.toml packages/tunnel/Cargo.toml
@@ -65,6 +67,8 @@ packages/tunnel_server|\
 )/Cargo.toml$"); \
     do printf "\n\n[lib]\npath=\"../../temp_lib.rs\"" >> "$file"; \
   done
+
+RUN printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/simulator/utils/Cargo.toml"
 
 RUN mkdir packages/tunnel_server/src && \
   echo 'fn main() {}' >packages/tunnel_server/src/main.rs
