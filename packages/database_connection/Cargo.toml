@@ -11,7 +11,8 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
+moosicbox_database        = { version = "0.1.0", path = "../database", default-features = false }
+moosicbox_simulator_utils = { version = "0.1.0", path = "../simulator/utils", optional = true, default-features = false }
 
 # DB Dependencies
 rusqlite = { workspace = true, optional = true }
@@ -37,7 +38,13 @@ thiserror = { workspace = true }
 tokio     = { workspace = true, optional = true, features = ["sync"] }
 
 [features]
-default = ["mysql-sqlx", "postgres-sqlx", "sqlite-rusqlite", "sqlite-sqlx"]
+default = [
+    "mysql-sqlx",
+    "postgres-sqlx",
+    "simulator",
+    "sqlite-rusqlite",
+    "sqlite-sqlx",
+]
 
 fail-on-warnings = []
 
@@ -76,3 +83,5 @@ sqlite-sqlx = [
     "sqlx",
     "sqlx/sqlite",
 ]
+
+simulator = ["dep:moosicbox_simulator_utils", "moosicbox_database/simulator"]

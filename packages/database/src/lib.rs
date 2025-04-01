@@ -8,6 +8,8 @@ pub mod postgres;
 pub mod profiles;
 #[cfg(feature = "sqlite-rusqlite")]
 pub mod rusqlite;
+#[cfg(feature = "simulator")]
+pub mod simulator;
 #[cfg(feature = "sqlx")]
 pub mod sqlx;
 

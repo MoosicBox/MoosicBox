@@ -40,7 +40,14 @@ tokio       = { workspace = true, features = ["sync"] }
 tokio-util  = { workspace = true, optional = true }
 
 [features]
-default = ["api", "mysql", "postgres-sqlx", "sqlite-rusqlite", "sqlite-sqlx"]
+default = [
+    "api",
+    "mysql",
+    "postgres-sqlx",
+    "simulator",
+    "sqlite-rusqlite",
+    "sqlite-sqlx",
+]
 
 fail-on-warnings = []
 
@@ -70,3 +77,5 @@ sqlite = ["sqlite-sqlx"]
 sqlite-rusqlite = ["dep:rusqlite"]
 sqlite-sqlx = ["dep:futures", "dep:regex", "dep:sqlx", "sqlx", "sqlx/sqlite"]
 sqlx = []
+
+simulator = []

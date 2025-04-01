@@ -68,6 +68,13 @@ pub async fn init(
     path: &std::path::Path,
     #[allow(unused)] creds: Option<Credentials>,
 ) -> Result<Box<dyn Database>, InitDbError> {
+    #[cfg(feature = "simulator")]
+    if moosicbox_simulator_utils::simulator_enabled() {
+        return Ok(Box::new(
+            moosicbox_database::simulator::SimulationDatabase::new(),
+        ));
+    }
+
     if cfg!(all(
         feature = "postgres-native-tls",
         feature = "postgres-raw"
