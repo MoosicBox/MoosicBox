@@ -19,6 +19,7 @@ moosicbox_simulator_harness = { version = "0.1.0", path = "../../simulator/harne
     "database",
     "http",
 ] }
+moosicbox_task = { version = "0.1.0", path = "../../task", default-features = false }
 moosicbox_telemetry = { version = "0.1.0", path = "../../telemetry", default-features = false }
 
 log = { workspace = true }

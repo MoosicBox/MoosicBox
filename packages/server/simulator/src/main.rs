@@ -38,7 +38,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             true,
             #[cfg(feature = "telemetry")]
             otel,
-            || {},
+            || {
+                moosicbox_task::spawn("simulation TCP listener", async {
+                    let listener = turmoil::net::TcpListener::bind("moosicbox:1234")
+                        .await
+                        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+
+                    while let Ok((_, _addr)) = listener.accept().await {
+                        println!("[Server] Received connection!");
+                    }
+
+                    Ok::<_, Box<dyn std::error::Error + Send>>(())
+                });
+            },
         )
         .await?;
 
@@ -46,7 +58,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     sim.client("client", async {
-        turmoil::net::TcpStream::connect("moosicbox:8000").await?;
+        println!("[Client] Connecting to server...");
+        turmoil::net::TcpStream::connect("moosicbox:1234").await?;
+        println!("[Client] Connected!");
 
         Ok(())
     });
