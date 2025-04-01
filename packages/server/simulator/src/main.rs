@@ -45,7 +45,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     });
 
-    sim.client("client", async { Ok(()) });
+    sim.client("client", async {
+        turmoil::net::TcpStream::connect("moosicbox:8000").await?;
+
+        Ok(())
+    });
 
     let result = sim.run();
 
