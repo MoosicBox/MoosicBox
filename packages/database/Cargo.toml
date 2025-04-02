@@ -78,4 +78,4 @@ sqlite-rusqlite = ["dep:rusqlite"]
 sqlite-sqlx = ["dep:futures", "dep:regex", "dep:sqlx", "sqlx", "sqlx/sqlite"]
 sqlx = []
 
-simulator = []
+simulator = ["sqlite-rusqlite"]

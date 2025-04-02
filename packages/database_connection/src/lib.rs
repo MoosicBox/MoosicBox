@@ -52,6 +52,8 @@ pub enum InitDbError {
     InitSqliteSqlxDatabase(#[from] InitSqliteSqlxDatabaseError),
     #[error("Credentials are required")]
     CredentialsRequired,
+    #[error(transparent)]
+    Database(#[from] moosicbox_database::DatabaseError),
 }
 
 /// # Panics
@@ -71,7 +73,7 @@ pub async fn init(
     #[cfg(feature = "simulator")]
     if moosicbox_simulator_utils::simulator_enabled() {
         return Ok(Box::new(
-            moosicbox_database::simulator::SimulationDatabase::new(),
+            moosicbox_database::simulator::SimulationDatabase::new()?,
         ));
     }
 
