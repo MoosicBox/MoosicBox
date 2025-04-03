@@ -5,16 +5,40 @@
 use thiserror::Error;
 
 #[cfg(feature = "postgres")]
+pub const POSTGRES_CONFIG_MIGRATIONS_LOCATION: &str = concat!(
+    std::env!("CARGO_MANIFEST_DIR"),
+    "/migrations/server/config/postgres"
+);
+
+#[cfg(feature = "postgres")]
 pub const POSTGRES_CONFIG_MIGRATIONS: diesel_migrations::EmbeddedMigrations =
     diesel_migrations::embed_migrations!("migrations/server/config/postgres");
+
+#[cfg(feature = "sqlite")]
+pub const SQLITE_CONFIG_MIGRATIONS_LOCATION: &str = concat!(
+    std::env!("CARGO_MANIFEST_DIR"),
+    "/migrations/server/config/sqlite"
+);
 
 #[cfg(feature = "sqlite")]
 pub const SQLITE_CONFIG_MIGRATIONS: diesel_migrations::EmbeddedMigrations =
     diesel_migrations::embed_migrations!("migrations/server/config/sqlite");
 
 #[cfg(feature = "postgres")]
+pub const POSTGRES_LIBRARY_MIGRATIONS_LOCATION: &str = concat!(
+    std::env!("CARGO_MANIFEST_DIR"),
+    "/migrations/server/library/postgres"
+);
+
+#[cfg(feature = "postgres")]
 pub const POSTGRES_LIBRARY_MIGRATIONS: diesel_migrations::EmbeddedMigrations =
     diesel_migrations::embed_migrations!("migrations/server/library/postgres");
+
+#[cfg(feature = "sqlite")]
+pub const SQLITE_LIBRARY_MIGRATIONS_LOCATION: &str = concat!(
+    std::env!("CARGO_MANIFEST_DIR"),
+    "/migrations/server/library/sqlite"
+);
 
 #[cfg(feature = "sqlite")]
 pub const SQLITE_LIBRARY_MIGRATIONS: diesel_migrations::EmbeddedMigrations =
