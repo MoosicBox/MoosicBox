@@ -5,6 +5,7 @@
 use std::{
     borrow::Cow,
     collections::HashMap,
+    fmt::Write,
     ops::Deref,
     str::FromStr as _,
     sync::{
@@ -796,13 +797,15 @@ impl FltkRenderer {
 
             let mut current = Some(flex.as_base_widget());
             while let Some(widget) = current.take() {
-                hierarchy.push_str(&format!(
+                write!(
+                    hierarchy,
                     "\n\t({}, {}, {}, {})",
                     widget.x(),
                     widget.y(),
                     widget.w(),
                     widget.h()
-                ));
+                )
+                .unwrap();
                 current = widget.parent().map(|x| x.as_base_widget());
             }
 

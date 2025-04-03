@@ -12,7 +12,6 @@ use std::{
 use flume::{SendError, Sender, bounded};
 use futures::StreamExt;
 use futures_core::Future;
-use lazy_static::lazy_static;
 use moosicbox_music_api::models::TrackSource;
 use moosicbox_music_models::AudioFormat;
 use moosicbox_stream_utils::{ByteWriter, stalled_monitor::StalledReadMonitor};
@@ -29,14 +28,6 @@ use crate::{
 use super::track::{BytesStreamItem, GetTrackBytesError, TrackBytes};
 
 pub static HANDLE: OnceLock<service::Handle> = OnceLock::new();
-
-lazy_static! {
-    static ref RT: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .max_blocking_threads(4)
-        .build()
-        .unwrap();
-}
 
 type FetchTrackBytesFunc = Box<
     dyn Fn(

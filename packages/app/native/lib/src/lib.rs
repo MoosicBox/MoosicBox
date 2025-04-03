@@ -456,6 +456,7 @@ impl NativeAppBuilder {
     }
 
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn with_renderer(mut self, renderer: RendererType) -> Self {
         self.renderer.replace(renderer);
         self

@@ -1,9 +1,14 @@
 #![allow(clippy::module_name_repetitions)]
 
-use std::{path::PathBuf, pin::Pin, str::FromStr as _, sync::Arc, time::Duration};
+use std::{
+    path::PathBuf,
+    pin::Pin,
+    str::FromStr as _,
+    sync::{Arc, LazyLock},
+    time::Duration,
+};
 
 use futures::Future;
-use lazy_static::lazy_static;
 use moosicbox_database::{
     DatabaseError, DatabaseValue, Row, profiles::LibraryDatabase, query::FilterableQuery,
 };
@@ -21,9 +26,7 @@ use crate::{
     db::models::{DownloadItem, DownloadTask, DownloadTaskState},
 };
 
-lazy_static! {
-    static ref TIMEOUT_DURATION: Duration = Duration::from_secs(30);
-}
+static TIMEOUT_DURATION: LazyLock<Duration> = LazyLock::new(|| Duration::from_secs(30));
 
 #[derive(Debug, Error)]
 pub enum UpdateTaskError {

@@ -41,7 +41,6 @@ atomic_float        = { workspace = true }
 futures             = { workspace = true }
 hyper               = { version = "1.6.0" }
 id3                 = { workspace = true }
-lazy_static         = { workspace = true }
 log                 = { workspace = true }
 moosicbox_audiotags = { workspace = true }
 regex               = { workspace = true }

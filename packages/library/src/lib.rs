@@ -732,7 +732,6 @@ pub async fn album_versions(
                 channels: track.channels,
                 source: track.source,
             });
-            continue;
         }
     }
 

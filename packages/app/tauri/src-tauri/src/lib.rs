@@ -5,7 +5,7 @@
 use std::{
     collections::HashMap,
     env,
-    fmt::Debug,
+    fmt::{Debug, Write},
     sync::{LazyLock, OnceLock},
 };
 
@@ -68,15 +68,17 @@ static STATE: LazyLock<moosicbox_app_state::AppState> = LazyLock::new(|| {
 });
 
 #[cfg(feature = "bundled")]
-lazy_static::lazy_static! {
-    static ref THREADS: usize =
-        moosicbox_env_utils::default_env_usize("MAX_THREADS", 64).unwrap_or(64);
-    static ref RT: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
+static THREADS: LazyLock<usize> =
+    LazyLock::new(|| moosicbox_env_utils::default_env_usize("MAX_THREADS", 64).unwrap_or(64));
+
+#[cfg(feature = "bundled")]
+static RT: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
+    tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .max_blocking_threads(*THREADS)
         .build()
-        .unwrap();
-}
+        .unwrap()
+});
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[cfg(not(all(target_os = "android")))]
@@ -173,10 +175,10 @@ async fn get_url_and_query() -> Option<(String, String)> {
 
     let mut query = String::new();
     if let Some(client_id) = client_id {
-        query.push_str(&format!("&clientId={client_id}"));
+        write!(query, "&clientId={client_id}").unwrap();
     }
     if let Some(signature_token) = signature_token {
-        query.push_str(&format!("&signature={signature_token}"));
+        write!(query, "&signature={signature_token}").unwrap();
     }
 
     Some((url, query))

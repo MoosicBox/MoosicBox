@@ -45,6 +45,7 @@ pub enum DatabaseValue {
 
 impl DatabaseValue {
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn as_str(&self) -> Option<&str> {
         match self {
             Self::String(value) | Self::StringOpt(Some(value)) => Some(value),

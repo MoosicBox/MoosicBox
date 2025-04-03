@@ -138,7 +138,7 @@ impl AudioDecodeHandler {
     /// # Errors
     ///
     /// * None
-    pub fn flush(&mut self) -> Result<(), AudioDecodeError> {
+    pub const fn flush(&mut self) -> Result<(), AudioDecodeError> {
         Ok(())
     }
 

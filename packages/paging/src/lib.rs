@@ -221,6 +221,7 @@ impl<T> Page<T> {
     }
 
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn items(&self) -> &[T] {
         match self {
             Self::WithTotal { items, .. } | Self::WithHasMore { items, .. } => items,

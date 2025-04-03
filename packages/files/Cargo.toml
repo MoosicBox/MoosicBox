@@ -43,7 +43,6 @@ bytes               = { workspace = true }
 flume               = { workspace = true, optional = true }
 futures             = { workspace = true }
 futures-core        = { workspace = true }
-lazy_static         = { workspace = true, optional = true }
 log                 = { workspace = true }
 moosicbox_audiotags = { workspace = true }
 profiling           = { workspace = true, optional = true }
@@ -89,7 +88,6 @@ api = [
 ]
 files = [
     "dep:flume",
-    "dep:lazy_static",
     "dep:moosicbox_async_service",
     "dep:moosicbox_audio_decoder",
     "dep:moosicbox_audio_output",
