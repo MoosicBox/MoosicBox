@@ -2,47 +2,11 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+use diesel::{
+    backend::Backend,
+    migration::{Migration, MigrationSource},
+};
 use thiserror::Error;
-
-#[cfg(feature = "postgres")]
-pub const POSTGRES_CONFIG_MIGRATIONS_LOCATION: &str = concat!(
-    std::env!("CARGO_MANIFEST_DIR"),
-    "/migrations/server/config/postgres"
-);
-
-#[cfg(feature = "postgres")]
-pub const POSTGRES_CONFIG_MIGRATIONS: diesel_migrations::EmbeddedMigrations =
-    diesel_migrations::embed_migrations!("migrations/server/config/postgres");
-
-#[cfg(feature = "sqlite")]
-pub const SQLITE_CONFIG_MIGRATIONS_LOCATION: &str = concat!(
-    std::env!("CARGO_MANIFEST_DIR"),
-    "/migrations/server/config/sqlite"
-);
-
-#[cfg(feature = "sqlite")]
-pub const SQLITE_CONFIG_MIGRATIONS: diesel_migrations::EmbeddedMigrations =
-    diesel_migrations::embed_migrations!("migrations/server/config/sqlite");
-
-#[cfg(feature = "postgres")]
-pub const POSTGRES_LIBRARY_MIGRATIONS_LOCATION: &str = concat!(
-    std::env!("CARGO_MANIFEST_DIR"),
-    "/migrations/server/library/postgres"
-);
-
-#[cfg(feature = "postgres")]
-pub const POSTGRES_LIBRARY_MIGRATIONS: diesel_migrations::EmbeddedMigrations =
-    diesel_migrations::embed_migrations!("migrations/server/library/postgres");
-
-#[cfg(feature = "sqlite")]
-pub const SQLITE_LIBRARY_MIGRATIONS_LOCATION: &str = concat!(
-    std::env!("CARGO_MANIFEST_DIR"),
-    "/migrations/server/library/sqlite"
-);
-
-#[cfg(feature = "sqlite")]
-pub const SQLITE_LIBRARY_MIGRATIONS: diesel_migrations::EmbeddedMigrations =
-    diesel_migrations::embed_migrations!("migrations/server/library/sqlite");
 
 #[derive(Debug, Error)]
 pub enum MigrateError {
@@ -114,4 +78,89 @@ pub fn migrate_library(database_url: &str) -> Result<(), MigrateError> {
     }
 
     Ok(())
+}
+
+/// # Errors
+///
+/// * If fails to get the migrations
+pub fn migrations<DB: Backend>(
+    source: &impl MigrationSource<DB>,
+) -> Result<Vec<Box<dyn Migration<DB>>>, MigrateError> {
+    source.migrations().map_err(MigrateError::DieselMigration)
+}
+
+#[cfg(feature = "sqlite")]
+pub use sqlite::*;
+
+#[cfg(feature = "sqlite")]
+mod sqlite {
+    use diesel::{
+        migration::{Migration, MigrationSource},
+        sqlite::Sqlite,
+    };
+
+    use crate::{MigrateError, migrations};
+
+    pub const SQLITE_CONFIG_MIGRATIONS_LOCATION: &str = concat!(
+        std::env!("CARGO_MANIFEST_DIR"),
+        "/migrations/server/config/sqlite"
+    );
+
+    pub const SQLITE_CONFIG_MIGRATIONS: diesel_migrations::EmbeddedMigrations =
+        diesel_migrations::embed_migrations!("migrations/server/config/sqlite");
+
+    pub const SQLITE_LIBRARY_MIGRATIONS_LOCATION: &str = concat!(
+        std::env!("CARGO_MANIFEST_DIR"),
+        "/migrations/server/library/sqlite"
+    );
+
+    pub const SQLITE_LIBRARY_MIGRATIONS: diesel_migrations::EmbeddedMigrations =
+        diesel_migrations::embed_migrations!("migrations/server/library/sqlite");
+
+    /// # Errors
+    ///
+    /// * If fails to get the migrations
+    pub fn migrations_sqlite(
+        source: &impl MigrationSource<Sqlite>,
+    ) -> Result<Vec<Box<dyn Migration<Sqlite>>>, MigrateError> {
+        migrations::<Sqlite>(source)
+    }
+}
+
+#[cfg(feature = "postgres")]
+pub use postgres::*;
+
+#[cfg(feature = "postgres")]
+mod postgres {
+    use diesel::{
+        migration::{Migration, MigrationSource},
+        pg::Pg,
+    };
+
+    use crate::{MigrateError, migrations};
+
+    pub const POSTGRES_CONFIG_MIGRATIONS_LOCATION: &str = concat!(
+        std::env!("CARGO_MANIFEST_DIR"),
+        "/migrations/server/config/postgres"
+    );
+
+    pub const POSTGRES_CONFIG_MIGRATIONS: diesel_migrations::EmbeddedMigrations =
+        diesel_migrations::embed_migrations!("migrations/server/config/postgres");
+
+    pub const POSTGRES_LIBRARY_MIGRATIONS_LOCATION: &str = concat!(
+        std::env!("CARGO_MANIFEST_DIR"),
+        "/migrations/server/library/postgres"
+    );
+
+    pub const POSTGRES_LIBRARY_MIGRATIONS: diesel_migrations::EmbeddedMigrations =
+        diesel_migrations::embed_migrations!("migrations/server/library/postgres");
+
+    /// # Errors
+    ///
+    /// * If fails to get the migrations
+    pub fn migrations_postgres(
+        source: &impl MigrationSource<Pg>,
+    ) -> Result<Vec<Box<dyn Migration<Pg>>>, MigrateError> {
+        migrations::<Pg>(source)
+    }
 }
