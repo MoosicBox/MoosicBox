@@ -366,6 +366,11 @@ xml = "0.8.20"
 # opentelemetry-prometheus = { git = "https://github.com/open-telemetry/opentelemetry-rust" }
 # opentelemetry_sdk        = { git = "https://github.com/open-telemetry/opentelemetry-rust" }
 # tracing-opentelemetry    = { git = "https://github.com/tokio-rs/tracing-opentelemetry" }
+# utoipa                   = { git = "https://github.com/juhaku/utoipa" }
+# utoipa-rapidoc           = { git = "https://github.com/juhaku/utoipa" }
+# utoipa-redoc             = { git = "https://github.com/juhaku/utoipa" }
+# utoipa-scalar            = { git = "https://github.com/juhaku/utoipa" }
+# utoipa-swagger-ui        = { git = "https://github.com/juhaku/utoipa" }
 
 actix-web-opentelemetry = { git = "https://github.com/open-telemetry/opentelemetry-rust-contrib" }
 notify-rust             = { git = "https://github.com/An1MuS1111/notify-rust" }
@@ -374,8 +379,3 @@ pingora-core            = { git = "https://github.com/BSteffaniak/pingora", bran
 pingora-http            = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
 pingora-load-balancing  = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
 pingora-proxy           = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
-utoipa                  = { git = "https://github.com/juhaku/utoipa" }
-utoipa-rapidoc          = { git = "https://github.com/juhaku/utoipa" }
-utoipa-redoc            = { git = "https://github.com/juhaku/utoipa" }
-utoipa-scalar           = { git = "https://github.com/juhaku/utoipa" }
-utoipa-swagger-ui       = { git = "https://github.com/juhaku/utoipa" }
