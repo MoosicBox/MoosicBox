@@ -214,7 +214,6 @@ jni = "0.21.1"
 kanal = "0.1.1"
 lambda_http = "0.14.0"
 lambda_runtime = "0.13.0"
-lazy_static = "1.5.0"
 libpulse-binding = "2.29.0"
 libpulse-simple-binding = "2.29.0"
 libvips = { version = "1.7.0" }
