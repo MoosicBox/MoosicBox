@@ -94,16 +94,7 @@ pub async fn run(
     start_puffin_server();
 
     #[cfg(feature = "sqlite")]
-    let config_db_path = {
-        let path = db::make_config_db_path(app_type).expect("Failed to get DB config path");
-
-        let path_str = path.to_str().expect("Failed to get DB path_str");
-        if let Err(e) = moosicbox_schema::migrate_config(path_str) {
-            moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
-        }
-
-        path
-    };
+    let config_db_path = db::make_config_db_path(app_type).expect("Failed to get DB config path");
 
     let config_db = moosicbox_database_connection::init(
         #[cfg(feature = "sqlite")]
@@ -112,6 +103,10 @@ pub async fn run(
     )
     .await
     .expect("Failed to initialize database");
+
+    if let Err(e) = moosicbox_schema::migrate_config(&*config_db).await {
+        moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
+    }
 
     let config_database: Arc<Box<dyn Database>> = Arc::new(config_db);
     let config_database = ConfigDatabase {

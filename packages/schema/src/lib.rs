@@ -2,16 +2,16 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use diesel::{
-    backend::Backend,
-    migration::{Migration, MigrationSource},
-};
+use std::collections::BTreeMap;
+
+use include_dir::{Dir, DirEntry, File};
+use moosicbox_database::{Database, DatabaseError, query::FilterableQuery};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum MigrateError {
-    #[error("Diesel migration error: {0:?}")]
-    DieselMigration(Box<dyn std::error::Error + Send + Sync>),
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
 }
 
 /// # Panics
@@ -22,25 +22,18 @@ pub enum MigrateError {
 ///
 /// * If the migrations fail to run
 #[cfg(any(feature = "postgres", feature = "sqlite"))]
-pub fn migrate_config(database_url: &str) -> Result<(), MigrateError> {
-    use diesel::Connection as _;
-    use diesel_migrations::MigrationHarness as _;
-
+pub async fn migrate_config(db: &dyn Database) -> Result<(), MigrateError> {
     #[cfg(feature = "postgres")]
     {
         log::debug!("migrate_config: running postgres migrations");
-        let mut conn = diesel::PgConnection::establish(database_url).unwrap();
-        conn.run_pending_migrations(POSTGRES_CONFIG_MIGRATIONS)
-            .map_err(MigrateError::DieselMigration)?;
+        POSTGRES_CONFIG_MIGRATIONS.run(db).await?;
         log::debug!("migrate_config: finished running postgres migrations");
     }
 
     #[cfg(feature = "sqlite")]
     {
         log::debug!("migrate_config: running sqlite migrations");
-        let mut conn = diesel::SqliteConnection::establish(database_url).unwrap();
-        conn.run_pending_migrations(SQLITE_CONFIG_MIGRATIONS)
-            .map_err(MigrateError::DieselMigration)?;
+        SQLITE_CONFIG_MIGRATIONS.run(db).await?;
         log::debug!("migrate_config: finished running sqlite migrations");
     }
 
@@ -55,38 +48,89 @@ pub fn migrate_config(database_url: &str) -> Result<(), MigrateError> {
 ///
 /// * If the migrations fail to run
 #[cfg(any(feature = "postgres", feature = "sqlite"))]
-pub fn migrate_library(database_url: &str) -> Result<(), MigrateError> {
-    use diesel::Connection as _;
-    use diesel_migrations::MigrationHarness as _;
-
+pub async fn migrate_library(db: &dyn Database) -> Result<(), MigrateError> {
     #[cfg(feature = "postgres")]
     {
         log::debug!("migrate_library: running postgres migrations");
-        let mut conn = diesel::PgConnection::establish(database_url).unwrap();
-        conn.run_pending_migrations(POSTGRES_LIBRARY_MIGRATIONS)
-            .map_err(MigrateError::DieselMigration)?;
+        POSTGRES_LIBRARY_MIGRATIONS.run(db).await?;
         log::debug!("migrate_library: finished running postgres migrations");
     }
 
     #[cfg(feature = "sqlite")]
     {
         log::debug!("migrate_library: running sqlite migrations");
-        let mut conn = diesel::SqliteConnection::establish(database_url).unwrap();
-        conn.run_pending_migrations(SQLITE_LIBRARY_MIGRATIONS)
-            .map_err(MigrateError::DieselMigration)?;
+        SQLITE_LIBRARY_MIGRATIONS.run(db).await?;
         log::debug!("migrate_library: finished running sqlite migrations");
     }
 
     Ok(())
 }
 
-/// # Errors
-///
-/// * If fails to get the migrations
-pub fn migrations<DB: Backend>(
-    source: &impl MigrationSource<DB>,
-) -> Result<Vec<Box<dyn Migration<DB>>>, MigrateError> {
-    source.migrations().map_err(MigrateError::DieselMigration)
+const MIGRATIONS_TABLE_NAME: &str = "__moosicbox_schema_migrations";
+
+pub struct Migrations {
+    directory: Dir<'static>,
+}
+
+impl Migrations {
+    fn walk_dir(&'static self, mut on_file: impl FnMut(&'static File<'static>)) {
+        fn walk(dir: &'static Dir<'static>, on_file: &mut impl FnMut(&'static File<'static>)) {
+            for entry in dir.entries() {
+                match entry {
+                    DirEntry::Dir(dir) => walk(dir, on_file),
+                    DirEntry::File(file) => {
+                        on_file(file);
+                    }
+                }
+            }
+        }
+
+        walk(&self.directory, &mut on_file);
+    }
+
+    fn as_btree(&'static self) -> BTreeMap<String, &'static [u8]> {
+        let mut map = BTreeMap::new();
+
+        self.walk_dir(|file| {
+            let Some(name) = file.path().file_name().and_then(|x| x.to_str()) else {
+                panic!("Invalid file name: {file:?}");
+            };
+            map.insert(name.to_string(), file.contents());
+        });
+
+        map
+    }
+
+    async fn run(&'static self, db: &dyn Database) -> Result<(), DatabaseError> {
+        let migrations = self.as_btree();
+
+        for (name, migration) in migrations {
+            let results = db
+                .select(MIGRATIONS_TABLE_NAME)
+                .columns(&["name"])
+                .where_eq("name", &name)
+                .execute(db)
+                .await?;
+
+            moosicbox_assert::assert!(
+                results.len() <= 1,
+                "Migration {name} expected to have run at most 1 time, but has ran {} times",
+                results.len()
+            );
+
+            if results.is_empty() {
+                let migration = String::from_utf8_lossy(migration).to_string();
+                db.exec_raw(&migration).await?;
+
+                db.insert(MIGRATIONS_TABLE_NAME)
+                    .value("name", &name)
+                    .execute(db)
+                    .await?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(feature = "sqlite")]
@@ -94,37 +138,17 @@ pub use sqlite::*;
 
 #[cfg(feature = "sqlite")]
 mod sqlite {
-    use diesel::{
-        migration::{Migration, MigrationSource},
-        sqlite::Sqlite,
+    use include_dir::include_dir;
+
+    use crate::Migrations;
+
+    pub const SQLITE_CONFIG_MIGRATIONS: Migrations = Migrations {
+        directory: include_dir!("$CARGO_MANIFEST_DIR/migrations/server/config/sqlite"),
     };
 
-    use crate::{MigrateError, migrations};
-
-    pub const SQLITE_CONFIG_MIGRATIONS_LOCATION: &str = concat!(
-        std::env!("CARGO_MANIFEST_DIR"),
-        "/migrations/server/config/sqlite"
-    );
-
-    pub const SQLITE_CONFIG_MIGRATIONS: diesel_migrations::EmbeddedMigrations =
-        diesel_migrations::embed_migrations!("migrations/server/config/sqlite");
-
-    pub const SQLITE_LIBRARY_MIGRATIONS_LOCATION: &str = concat!(
-        std::env!("CARGO_MANIFEST_DIR"),
-        "/migrations/server/library/sqlite"
-    );
-
-    pub const SQLITE_LIBRARY_MIGRATIONS: diesel_migrations::EmbeddedMigrations =
-        diesel_migrations::embed_migrations!("migrations/server/library/sqlite");
-
-    /// # Errors
-    ///
-    /// * If fails to get the migrations
-    pub fn migrations_sqlite(
-        source: &impl MigrationSource<Sqlite>,
-    ) -> Result<Vec<Box<dyn Migration<Sqlite>>>, MigrateError> {
-        migrations::<Sqlite>(source)
-    }
+    pub const SQLITE_LIBRARY_MIGRATIONS: Migrations = Migrations {
+        directory: include_dir!("$CARGO_MANIFEST_DIR/migrations/server/library/sqlite"),
+    };
 }
 
 #[cfg(feature = "postgres")]
@@ -132,35 +156,15 @@ pub use postgres::*;
 
 #[cfg(feature = "postgres")]
 mod postgres {
-    use diesel::{
-        migration::{Migration, MigrationSource},
-        pg::Pg,
+    use include_dir::include_dir;
+
+    use crate::Migrations;
+
+    pub const POSTGRES_CONFIG_MIGRATIONS: Migrations = Migrations {
+        directory: include_dir!("$CARGO_MANIFEST_DIR/migrations/server/config/postgres"),
     };
 
-    use crate::{MigrateError, migrations};
-
-    pub const POSTGRES_CONFIG_MIGRATIONS_LOCATION: &str = concat!(
-        std::env!("CARGO_MANIFEST_DIR"),
-        "/migrations/server/config/postgres"
-    );
-
-    pub const POSTGRES_CONFIG_MIGRATIONS: diesel_migrations::EmbeddedMigrations =
-        diesel_migrations::embed_migrations!("migrations/server/config/postgres");
-
-    pub const POSTGRES_LIBRARY_MIGRATIONS_LOCATION: &str = concat!(
-        std::env!("CARGO_MANIFEST_DIR"),
-        "/migrations/server/library/postgres"
-    );
-
-    pub const POSTGRES_LIBRARY_MIGRATIONS: diesel_migrations::EmbeddedMigrations =
-        diesel_migrations::embed_migrations!("migrations/server/library/postgres");
-
-    /// # Errors
-    ///
-    /// * If fails to get the migrations
-    pub fn migrations_postgres(
-        source: &impl MigrationSource<Pg>,
-    ) -> Result<Vec<Box<dyn Migration<Pg>>>, MigrateError> {
-        migrations::<Pg>(source)
-    }
+    pub const POSTGRES_LIBRARY_MIGRATIONS: Migrations = Migrations {
+        directory: include_dir!("$CARGO_MANIFEST_DIR/migrations/server/library/postgres"),
+    };
 }

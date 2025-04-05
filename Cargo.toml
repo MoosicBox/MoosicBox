@@ -179,8 +179,6 @@ convert_case = "0.8.0"
 cpal = "0.15.3"
 debounce = "0.2.2"
 derive_more = "2.0.1"
-diesel = { version = "2.2.9", default-features = false }
-diesel_migrations = { version = "2.2.0", default-features = false }
 dotenv = "0.15"
 dyn-clone = "1.0.19"
 eframe = { version = "0.31.1", default-features = false }
@@ -208,6 +206,7 @@ hostname = "0.4.0"
 html-escape = "0.2.13"
 id3 = "1.16.2"
 image = "0.25.6"
+include_dir = "0.7.4"
 io-streams = "0.16.3"
 itertools = "0.14.0"
 jni = "0.21.1"

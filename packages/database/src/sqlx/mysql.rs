@@ -382,7 +382,10 @@ impl Database for MySqlSqlxDatabase {
             .map_err(SqlxDatabaseError::Sqlx)?;
         let query = statement.query();
 
-        connection.execute(query).await.map_err(SqlxDatabaseError::Sqlx)?;
+        connection
+            .execute(query)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
 
         drop(connection);
 

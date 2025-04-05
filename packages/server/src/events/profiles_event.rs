@@ -16,17 +16,8 @@ async fn add_profile(
     log::debug!("add_profile: app_type={app_type} profile={profile}");
 
     #[cfg(feature = "sqlite")]
-    let library_db_profile_path = {
-        let path = crate::db::make_profile_library_db_path(app_type, profile)
-            .expect("Failed to get DB profile path");
-
-        let path_str = path.to_str().expect("Failed to get DB path_str");
-        if let Err(e) = moosicbox_schema::migrate_library(path_str) {
-            moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
-        }
-
-        path
-    };
+    let library_db_profile_path = crate::db::make_profile_library_db_path(app_type, profile)
+        .expect("Failed to get DB profile path");
 
     let library_db = moosicbox_database_connection::init(
         #[cfg(feature = "sqlite")]
@@ -35,6 +26,10 @@ async fn add_profile(
     )
     .await
     .expect("Failed to initialize database");
+
+    if let Err(e) = moosicbox_schema::migrate_config(&*library_db).await {
+        moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
+    }
 
     let library_database: Arc<Box<dyn Database>> = Arc::new(library_db);
 

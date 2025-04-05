@@ -11,16 +11,18 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-diesel            = { workspace = true, default-features = false }
-diesel_migrations = { workspace = true, default-features = false }
-log               = { workspace = true }
-thiserror         = { workspace = true }
+moosicbox_assert   = { version = "0.1.0", path = "../assert" }
+moosicbox_database = { version = "0.1.0", path = "../database" }
+
+include_dir = { workspace = true }
+log         = { workspace = true }
+thiserror   = { workspace = true }
 
 [features]
 default = ["sqlite"]
 
 fail-on-warnings = []
 
-mysql    = ["diesel/mysql", "diesel_migrations/mysql"]
-postgres = ["diesel/postgres", "diesel_migrations/postgres"]
-sqlite   = ["diesel/sqlite", "diesel_migrations/sqlite"]
+mysql    = ["moosicbox_database/mysql"]
+postgres = ["moosicbox_database/postgres"]
+sqlite   = ["moosicbox_database/sqlite"]
