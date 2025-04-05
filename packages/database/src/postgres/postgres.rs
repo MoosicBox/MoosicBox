@@ -443,6 +443,14 @@ impl Database for PostgresDatabase {
         Ok(rows)
     }
 
+    async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
+        self.client
+            .execute_raw(statement, &[] as &[&str])
+            .await
+            .map_err(PostgresDatabaseError::Postgres)?;
+        Ok(())
+    }
+
     fn trigger_close(&self) -> Result<(), DatabaseError> {
         self.handle.abort();
         Ok(())

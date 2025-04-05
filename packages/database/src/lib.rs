@@ -319,6 +319,8 @@ pub trait Database: Send + Sync + std::fmt::Debug {
         statement: &DeleteStatement<'_>,
     ) -> Result<Option<Row>, DatabaseError>;
 
+    async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError>;
+
     /// # Errors
     ///
     /// Will return `Err` if the close failed to trigger.

@@ -446,6 +446,25 @@ impl Database for PostgresSqlxDatabase {
         };
         Ok(rows)
     }
+
+    async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
+        let connection = self.get_connection().await?;
+        let mut connection = connection.lock().await;
+        let statement = connection
+            .prepare(statement)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
+        let query = statement.query();
+
+        connection
+            .execute(query)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
+
+        drop(connection);
+
+        Ok(())
+    }
 }
 
 fn column_value(value: &PgValueRef<'_>) -> Result<DatabaseValue, sqlx::Error> {

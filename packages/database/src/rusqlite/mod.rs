@@ -1,7 +1,7 @@
 use std::{ops::Deref, sync::Arc};
 
 use async_trait::async_trait;
-use rusqlite::{Connection, Row, Rows, Statement, types::Value};
+use rusqlite::{Connection, Row, Rows, Statement, params, types::Value};
 use thiserror::Error;
 use tokio::sync::Mutex;
 
@@ -348,6 +348,15 @@ impl Database for RusqliteDatabase {
                 .ok_or(RusqliteDatabaseError::MissingUnique)?,
             &statement.values,
         )?)
+    }
+
+    async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
+        self.connection
+            .lock()
+            .await
+            .execute(statement, params![])
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        Ok(())
     }
 }
 

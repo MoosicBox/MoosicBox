@@ -94,4 +94,8 @@ impl Database for SimulationDatabase {
     ) -> Result<Option<Row>, DatabaseError> {
         self.inner.exec_delete_first(statement).await
     }
+
+    async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
+        self.inner.exec_raw(statement).await
+    }
 }

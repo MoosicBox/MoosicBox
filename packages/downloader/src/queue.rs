@@ -667,6 +667,10 @@ mod tests {
         ) -> Result<Vec<Row>, DatabaseError> {
             Ok(vec![Row { columns: vec![] }])
         }
+
+        async fn exec_raw(&self, _statement: &str) -> Result<(), DatabaseError> {
+            Ok(())
+        }
     }
 
     fn new_queue() -> DownloadQueue {
