@@ -22,7 +22,7 @@ pub async fn create_qobuz_app_secret(
         .value("qobuz_bundle_id", qobuz_bundle_id)
         .value("timezone", timezone)
         .value("secret", secret)
-        .execute(db)
+        .execute(&**db)
         .await?;
 
     Ok(())
@@ -41,7 +41,7 @@ pub async fn create_qobuz_app_config(
         .value("bundle_version", bundle_version)
         .value("app_id", app_id)
         .where_eq("bundle_version", bundle_version)
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .to_value_type()?)
 }
@@ -62,7 +62,7 @@ pub async fn create_qobuz_config(
         .value("user_id", user_id)
         .value("user_email", user_email)
         .value("user_public_id", user_public_id)
-        .execute(db)
+        .execute(&**db)
         .await?;
 
     Ok(())
@@ -76,7 +76,7 @@ pub async fn get_qobuz_app_secrets(
 ) -> Result<Vec<QobuzAppSecret>, DatabaseFetchError> {
     Ok(db
         .select("qobuz_bundle_secrets")
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?)
 }
@@ -89,7 +89,7 @@ pub async fn get_qobuz_app_config(
 ) -> Result<Option<QobuzAppConfig>, DatabaseFetchError> {
     let app_configs = db
         .select("qobuz_bundles")
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?;
 
@@ -104,7 +104,7 @@ pub async fn get_qobuz_config(
 ) -> Result<Option<QobuzConfig>, DatabaseFetchError> {
     let configs = db
         .select("qobuz_config")
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?;
 

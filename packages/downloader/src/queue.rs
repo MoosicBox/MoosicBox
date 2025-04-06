@@ -306,7 +306,7 @@ impl DownloadQueue {
         db.update("download_tasks")
             .where_eq("id", task_id)
             .values(values.to_vec())
-            .execute_first(&db)
+            .execute_first(&*db)
             .await?
             .ok_or(UpdateTaskError::NoRow)
     }
@@ -356,7 +356,7 @@ impl DownloadQueue {
                                             .update("download_tasks")
                                             .where_eq("id", task_id)
                                             .value("total_bytes", size)
-                                            .execute_first(&database)
+                                            .execute_first(&*database)
                                             .await
                                         {
                                             log::error!(

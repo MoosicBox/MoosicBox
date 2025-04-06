@@ -132,7 +132,7 @@ pub async fn get_all_album_version_qualities(
             where_not_eq("track_sizes.format", AudioFormat::Source.as_ref()),
             where_not_eq("tracks.source", TrackApiSource::Local.as_ref())
         ])
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?;
 

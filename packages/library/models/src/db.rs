@@ -570,7 +570,7 @@ pub async fn get_album_version_qualities(
         .left_join("tracks", "tracks.album_id=albums.id")
         .left_join("track_sizes", "track_sizes.track_id=tracks.id")
         .where_eq("albums.id", album_id)
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?;
 

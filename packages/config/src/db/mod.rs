@@ -18,7 +18,7 @@ pub(crate) async fn get_server_identity(
 ) -> Result<Option<String>, DatabaseError> {
     Ok(db
         .select("identity")
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .and_then(|x| {
             x.get("id")
@@ -36,7 +36,7 @@ pub(crate) async fn get_or_init_server_identity(
 
         db.insert("identity")
             .value("id", id)
-            .execute(db)
+            .execute(&**db)
             .await?
             .get("id")
             .and_then(|x| x.as_str().map(std::string::ToString::to_string))
@@ -53,7 +53,7 @@ pub(crate) async fn upsert_profile(
         .upsert("profiles")
         .where_eq("name", name)
         .value("name", name)
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .to_value_type()?)
 }
@@ -65,7 +65,7 @@ pub(crate) async fn delete_profile(
     Ok(db
         .delete("profiles")
         .where_eq("name", name)
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?)
 }
@@ -77,7 +77,7 @@ pub(crate) async fn create_profile(
     Ok(db
         .insert("profiles")
         .value("name", name)
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?)
 }
@@ -85,5 +85,9 @@ pub(crate) async fn create_profile(
 pub(crate) async fn get_profiles(
     db: &ConfigDatabase,
 ) -> Result<Vec<models::Profile>, DatabaseFetchError> {
-    Ok(db.select("profiles").execute(db).await?.to_value_type()?)
+    Ok(db
+        .select("profiles")
+        .execute(&**db)
+        .await?
+        .to_value_type()?)
 }

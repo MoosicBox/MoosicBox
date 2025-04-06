@@ -188,7 +188,7 @@ async fn fetch_local_artist_cover(
                 db.update("artists")
                     .where_eq("id", &artist.id)
                     .value("cover", new_cover)
-                    .execute(db)
+                    .execute(&**db)
                     .await?;
 
                 return Ok(path.to_str().unwrap().to_string());
@@ -241,7 +241,7 @@ async fn fetch_local_artist_cover_bytes(
         db.update("artists")
             .where_eq("id", &artist.id)
             .value("cover", new_cover)
-            .execute(db)
+            .execute(&**db)
             .await?;
 
         let file = tokio::fs::File::open(path).await?;
@@ -271,7 +271,7 @@ async fn copy_streaming_cover_to_local(
     db.update("artists")
         .where_eq("id", &artist.id)
         .value("cover", cover.clone())
-        .execute(db)
+        .execute(&**db)
         .await?;
 
     Ok(cover)

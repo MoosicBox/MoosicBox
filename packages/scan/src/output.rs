@@ -622,7 +622,7 @@ impl ScanOutput {
         let existing_artist_ids = db
             .select("artists")
             .columns(&["id"])
-            .execute(db)
+            .execute(&**db)
             .await?
             .iter()
             .map(|id| id.id().unwrap().try_into())
@@ -659,7 +659,7 @@ impl ScanOutput {
         let existing_album_ids = db
             .select("albums")
             .columns(&["id"])
-            .execute(db)
+            .execute(&**db)
             .await?
             .iter()
             .map(|id| id.id().unwrap().try_into())
@@ -703,7 +703,7 @@ impl ScanOutput {
         let existing_track_ids = db
             .select("tracks")
             .columns(&["id"])
-            .execute(db)
+            .execute(&**db)
             .await?
             .iter()
             .map(|id| id.id().unwrap().try_into())

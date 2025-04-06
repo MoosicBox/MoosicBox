@@ -33,7 +33,7 @@ pub async fn create_yt_config(
         .value("user", user)
         .value("user_id", user_id)
         .where_eq("refresh_token", refresh_token)
-        .execute(db)
+        .execute(&**db)
         .await?;
 
     Ok(())
@@ -48,7 +48,7 @@ pub async fn delete_yt_config(
 ) -> Result<(), DatabaseError> {
     db.delete("yt_config")
         .where_eq("refresh_token", refresh_token)
-        .execute(db)
+        .execute(&**db)
         .await?;
 
     Ok(())
@@ -68,7 +68,11 @@ pub enum YtConfigError {
 ///
 /// * If a database error occurs
 pub async fn get_yt_config(db: &LibraryDatabase) -> Result<Option<YtConfig>, YtConfigError> {
-    let mut configs = db.select("yt_config").execute(db).await?.to_value_type()?;
+    let mut configs = db
+        .select("yt_config")
+        .execute(&**db)
+        .await?
+        .to_value_type()?;
 
     if configs.is_empty() {
         return Err(YtConfigError::NoConfigsAvailable);

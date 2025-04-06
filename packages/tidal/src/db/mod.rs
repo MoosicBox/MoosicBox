@@ -33,7 +33,7 @@ pub async fn create_tidal_config(
         .value("user", user)
         .value("user_id", user_id)
         .where_eq("refresh_token", refresh_token)
-        .execute(db)
+        .execute(&**db)
         .await?;
 
     Ok(())
@@ -48,7 +48,7 @@ pub async fn delete_tidal_config(
 ) -> Result<(), DatabaseError> {
     db.delete("tidal_config")
         .where_eq("refresh_token", refresh_token)
-        .execute(db)
+        .execute(&**db)
         .await?;
 
     Ok(())
@@ -70,7 +70,7 @@ pub async fn get_tidal_config(
 ) -> Result<Option<TidalConfig>, TidalConfigError> {
     let mut configs = db
         .select("tidal_config")
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?;
 

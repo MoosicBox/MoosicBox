@@ -894,27 +894,21 @@ impl<'a> SelectQuery<'a> {
     /// # Errors
     ///
     /// Will return `Err` if the select query execution failed.
-    pub async fn execute<DB: Into<&'a dyn Database> + Send>(
-        self,
-        db: DB,
-    ) -> Result<Vec<Row>, DatabaseError> {
-        db.into().query(&self).await
+    pub async fn execute(self, db: &dyn Database) -> Result<Vec<Row>, DatabaseError> {
+        db.query(&self).await
     }
 
     /// # Errors
     ///
     /// Will return `Err` if the select query execution failed.
-    pub async fn execute_first<DB: Into<&'a dyn Database> + Send>(
-        self,
-        db: DB,
-    ) -> Result<Option<Row>, DatabaseError> {
+    pub async fn execute_first(self, db: &dyn Database) -> Result<Option<Row>, DatabaseError> {
         let this = if self.limit.is_none() {
             self.limit(1)
         } else {
             self
         };
 
-        db.into().query_first(&this).await
+        db.query_first(&this).await
     }
 }
 
@@ -955,11 +949,8 @@ impl<'a> UpsertMultiStatement<'a> {
     /// # Errors
     ///
     /// Will return `Err` if the upsert multi execution failed.
-    pub async fn execute<DB: Into<&'a dyn Database> + Send>(
-        &self,
-        db: DB,
-    ) -> Result<Vec<Row>, DatabaseError> {
-        db.into().exec_upsert_multi(self).await
+    pub async fn execute(&self, db: &dyn Database) -> Result<Vec<Row>, DatabaseError> {
+        db.exec_upsert_multi(self).await
     }
 }
 
@@ -994,11 +985,8 @@ impl<'a> InsertStatement<'a> {
     /// # Errors
     ///
     /// Will return `Err` if the insert execution failed.
-    pub async fn execute<DB: Into<&'a dyn Database> + Send>(
-        &self,
-        db: DB,
-    ) -> Result<Row, DatabaseError> {
-        db.into().exec_insert(self).await
+    pub async fn execute(&self, db: &dyn Database) -> Result<Row, DatabaseError> {
+        db.exec_insert(self).await
     }
 }
 
@@ -1062,21 +1050,15 @@ impl<'a> UpdateStatement<'a> {
     /// # Errors
     ///
     /// Will return `Err` if the update execution failed.
-    pub async fn execute<DB: Into<&'a dyn Database> + Send>(
-        &self,
-        db: DB,
-    ) -> Result<Vec<Row>, DatabaseError> {
-        db.into().exec_update(self).await
+    pub async fn execute(&self, db: &dyn Database) -> Result<Vec<Row>, DatabaseError> {
+        db.exec_update(self).await
     }
 
     /// # Errors
     ///
     /// Will return `Err` if the update execution failed.
-    pub async fn execute_first<DB: Into<&'a dyn Database> + Send>(
-        &self,
-        db: DB,
-    ) -> Result<Option<Row>, DatabaseError> {
-        db.into().exec_update_first(self).await
+    pub async fn execute_first(&self, db: &dyn Database) -> Result<Option<Row>, DatabaseError> {
+        db.exec_update_first(self).await
     }
 }
 
@@ -1152,31 +1134,24 @@ impl<'a> UpsertStatement<'a> {
     /// # Errors
     ///
     /// Will return `Err` if the upsert execution failed.
-    pub async fn execute<DB: Into<&'a dyn Database> + Send>(
-        self,
-        db: DB,
-    ) -> Result<Vec<Row>, DatabaseError> {
+    pub async fn execute(self, db: &dyn Database) -> Result<Vec<Row>, DatabaseError> {
         if self.values.is_empty() {
-            return db.into().query(&self.into()).await;
+            return db.query(&self.into()).await;
         }
-        db.into().exec_upsert(&self).await
+        db.exec_upsert(&self).await
     }
 
     /// # Errors
     ///
     /// Will return `Err` if the upsert execution failed.
-    pub async fn execute_first<DB: Into<&'a dyn Database> + Send>(
-        self,
-        db: DB,
-    ) -> Result<Row, DatabaseError> {
+    pub async fn execute_first(self, db: &dyn Database) -> Result<Row, DatabaseError> {
         if self.values.is_empty() {
             return db
-                .into()
                 .query_first(&self.into())
                 .await?
                 .ok_or(DatabaseError::NoRow);
         }
-        db.into().exec_upsert_first(&self).await
+        db.exec_upsert_first(&self).await
     }
 }
 
@@ -1220,7 +1195,7 @@ impl FilterableQuery for DeleteStatement<'_> {
     }
 }
 
-impl<'a> DeleteStatement<'a> {
+impl DeleteStatement<'_> {
     #[must_use]
     pub const fn limit(mut self, limit: usize) -> Self {
         self.limit.replace(limit);
@@ -1230,20 +1205,14 @@ impl<'a> DeleteStatement<'a> {
     /// # Errors
     ///
     /// Will return `Err` if the delete execution failed.
-    pub async fn execute<DB: Into<&'a dyn Database> + Send>(
-        &self,
-        db: DB,
-    ) -> Result<Vec<Row>, DatabaseError> {
-        db.into().exec_delete(self).await
+    pub async fn execute(&self, db: &dyn Database) -> Result<Vec<Row>, DatabaseError> {
+        db.exec_delete(self).await
     }
 
     /// # Errors
     ///
     /// Will return `Err` if the delete execution failed.
-    pub async fn execute_first<DB: Into<&'a dyn Database> + Send>(
-        &self,
-        db: DB,
-    ) -> Result<Option<Row>, DatabaseError> {
-        db.into().exec_delete_first(self).await
+    pub async fn execute_first(&self, db: &dyn Database) -> Result<Option<Row>, DatabaseError> {
+        db.exec_delete_first(self).await
     }
 }

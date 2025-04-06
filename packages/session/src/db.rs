@@ -27,7 +27,7 @@ pub async fn get_session_playlist_tracks(
     db.select("session_playlist_tracks")
         .where_eq("session_playlist_id", session_playlist_id)
         .sort("id", SortDirection::Asc)
-        .execute(db)
+        .execute(&**db)
         .await?
         .into_iter()
         .filter_map(|x| x.get("data"))
@@ -46,7 +46,7 @@ pub async fn get_session_playlist(
     if let Some(playlist) = &db
         .select("session_playlists")
         .where_eq("id", session_id)
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
     {
         Ok(Some(
@@ -69,7 +69,7 @@ pub async fn get_session_audio_zone(
             "audio_zones.id=audio_zone_sessions.audio_zone_id",
         )
         .where_eq("audio_zone_sessions.session_id", session_id)
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .map(|x| x.to_value_type())
         .transpose()?)
@@ -83,7 +83,7 @@ pub async fn get_session_playing(
         .select("sessions")
         .columns(&["playing"])
         .where_eq("id", id)
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .and_then(|row| row.get("playing"))
         .map(|x| x.to_value_type() as Result<Option<bool>, _>)
@@ -99,7 +99,7 @@ pub async fn get_session(
         if let Some(session) = &db
             .select("sessions")
             .where_eq("id", id)
-            .execute_first(db)
+            .execute_first(&**db)
             .await?
         {
             Some(session_as_model_query(session, db.into()).await?)
@@ -112,7 +112,7 @@ pub async fn get_session(
 pub async fn get_sessions(db: &LibraryDatabase) -> Result<Vec<Session>, DatabaseFetchError> {
     let mut sessions = vec![];
 
-    for session in &db.select("sessions").execute(db).await? {
+    for session in &db.select("sessions").execute(&**db).await? {
         sessions.push(session_as_model_query(session, db.into()).await?);
     }
 
@@ -137,7 +137,7 @@ pub async fn create_session(
     .await?;
     let playlist: SessionPlaylist = db
         .insert("session_playlists")
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?;
 
@@ -145,7 +145,7 @@ pub async fn create_session(
         db.insert("session_playlist_tracks")
             .value("session_playlist_id", playlist.id)
             .value("track_id", track.id)
-            .execute(db)
+            .execute(&**db)
             .await?;
     }
 
@@ -154,7 +154,7 @@ pub async fn create_session(
         .value("session_playlist_id", playlist.id)
         .value("name", session.name.clone())
         .value("audio_zone_id", session.audio_zone_id)
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?;
 
@@ -162,7 +162,7 @@ pub async fn create_session(
         db.insert("audio_zone_sessions")
             .value("session_id", new_session.id)
             .value("audio_zone_id", id)
-            .execute(db)
+            .execute(&**db)
             .await?;
     }
 
@@ -202,7 +202,7 @@ pub async fn update_session(
                     )
                     .where_eq("sessions.id", session.session_id),
             )
-            .execute(db)
+            .execute(&**db)
             .await?;
     } else {
         log::trace!("update_session: No playlist");
@@ -227,7 +227,7 @@ pub async fn update_session(
                         DatabaseFetchError::Parse(ParseError::Parse(format!("data: {e:?}")))
                     })?,
                 )
-                .execute(db)
+                .execute(&**db)
                 .await?;
         }
     } else {
@@ -282,7 +282,7 @@ pub async fn update_session(
         db.update("sessions")
             .where_eq("id", session.session_id)
             .values(values)
-            .execute_first(db)
+            .execute_first(&**db)
             .await?;
     }
 
@@ -310,25 +310,25 @@ pub async fn delete_session(
                 )
                 .where_eq("sessions.id", session_id),
         )
-        .execute(db)
+        .execute(&**db)
         .await?;
 
     log::debug!("Deleting active_players for session_id={session_id}");
     db.delete("active_players")
         .where_eq("session_id", session_id)
-        .execute(db)
+        .execute(&**db)
         .await?;
 
     log::debug!("Deleting audio_zone_sessions for session_id={session_id}");
     db.delete("audio_zone_sessions")
         .where_eq("session_id", session_id)
-        .execute(db)
+        .execute(&**db)
         .await?;
 
     log::debug!("Deleting session for session_id={session_id}");
     db.delete("sessions")
         .where_eq("id", session_id)
-        .execute(db)
+        .execute(&**db)
         .await?
         .into_iter()
         .next()
@@ -337,7 +337,7 @@ pub async fn delete_session(
     log::debug!("Deleting session_playlists for session_id={session_id}");
     db.delete("session_playlists")
         .where_eq("id", session_id)
-        .execute(db)
+        .execute(&**db)
         .await?;
 
     Ok(())
@@ -348,7 +348,7 @@ pub async fn get_connections(
 ) -> Result<Vec<models::Connection>, DatabaseFetchError> {
     let mut connections = vec![];
 
-    for connection in &db.select("connections").execute(db).await? {
+    for connection in &db.select("connections").execute(&**db).await? {
         connections.push(connection_as_model_query(connection, db.into()).await?);
     }
 
@@ -364,7 +364,7 @@ pub async fn register_connection(
         .where_eq("id", connection.connection_id.clone())
         .value("id", connection.connection_id.clone())
         .value("name", connection.name.clone())
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .to_value_type()?;
 
@@ -389,12 +389,12 @@ pub async fn delete_connection(
                 .join("connections", "connections.id=players.connection_id")
                 .where_eq("connections.id", connection_id),
         )
-        .execute(db)
+        .execute(&**db)
         .await?;
 
     db.delete("connections")
         .where_eq("id", connection_id)
-        .execute(db)
+        .execute(&**db)
         .await?;
 
     Ok(())
@@ -407,7 +407,7 @@ pub async fn get_players(
     Ok(db
         .select("players")
         .where_eq("connection_id", connection_id)
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?)
 }
@@ -425,7 +425,7 @@ pub async fn create_player(
         .value("connection_id", connection_id)
         .value("name", &player.name)
         .value("audio_output_id", &player.audio_output_id)
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .to_value_type()?)
 }
@@ -436,13 +436,13 @@ pub async fn set_session_audio_zone(
 ) -> Result<(), DatabaseFetchError> {
     db.delete("audio_zone_sessions")
         .where_eq("session_id", set_session_audio_zone.session_id)
-        .execute(db)
+        .execute(&**db)
         .await?;
 
     db.insert("audio_zone_sessions")
         .value("session_id", set_session_audio_zone.session_id)
         .value("audio_zone_id", set_session_audio_zone.audio_zone_id)
-        .execute(db)
+        .execute(&**db)
         .await?;
 
     Ok(())
@@ -451,7 +451,7 @@ pub async fn set_session_audio_zone(
 pub async fn delete_player(db: &ConfigDatabase, player_id: u64) -> Result<(), DatabaseFetchError> {
     db.delete("players")
         .where_eq("id", player_id)
-        .execute(db)
+        .execute(&**db)
         .await?;
 
     Ok(())
@@ -480,7 +480,7 @@ pub async fn delete_session_playlist_tracks_by_track_id(
     db.delete("session_playlist_tracks")
         .where_eq("type", "'LIBRARY'")
         .filter_if_some(ids.map(|ids| where_in("track_id", ids.clone())))
-        .execute(db)
+        .execute(&**db)
         .await?
         .into_iter()
         .filter_map(|x| x.get("data"))

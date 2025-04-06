@@ -48,7 +48,7 @@ pub async fn create_library_config(
         .value("user", user)
         .value("user_id", user_id)
         .where_eq("refresh_token", refresh_token)
-        .execute(db)
+        .execute(&**db)
         .await?;
 
     Ok(())
@@ -63,7 +63,7 @@ pub async fn delete_library_config(
 ) -> Result<(), DatabaseError> {
     db.delete("library_config")
         .where_eq("refresh_token", refresh_token)
-        .execute(db)
+        .execute(&**db)
         .await?;
 
     Ok(())
@@ -88,7 +88,7 @@ pub async fn get_library_config(
 ) -> Result<Option<LibraryConfig>, LibraryConfigError> {
     let mut configs = db
         .select("library_config")
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?;
 
@@ -125,7 +125,7 @@ pub async fn get_library_access_token(
 ///
 /// * If there was a database error
 pub async fn get_artists(db: &LibraryDatabase) -> Result<Vec<LibraryArtist>, DatabaseFetchError> {
-    Ok(db.select("artists").execute(db).await?.to_value_type()?)
+    Ok(db.select("artists").execute(&**db).await?.to_value_type()?)
 }
 
 /// # Errors
@@ -154,7 +154,7 @@ pub async fn get_albums(db: &LibraryDatabase) -> Result<Vec<LibraryAlbum>, Datab
             where_not_eq("track_sizes.format", AudioFormat::Source.as_ref()),
             where_not_eq("tracks.source", TrackApiSource::Local.as_ref())
         ])
-        .execute(db)
+        .execute(&**db)
         .await?
         .as_model_mapped()
 }
@@ -170,7 +170,7 @@ pub async fn get_artist(
     Ok(db
         .select("artists")
         .where_eq(column.to_string(), id)
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .as_ref()
         .to_value_type()?)
@@ -187,7 +187,7 @@ pub async fn get_artist_by_album_id(
         .select("artists")
         .where_eq("albums.id", id)
         .join("albums", "albums.artist_id = artists.id")
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .as_ref()
         .to_value_type()?)
@@ -205,7 +205,7 @@ pub async fn get_artists_by_album_ids(
         .distinct()
         .join("albums", "albums.artist_id = artists.id")
         .where_in("album.id", album_ids.to_vec())
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?)
 }
@@ -222,7 +222,7 @@ pub async fn get_album_artist(
         .columns(&["artists.*"])
         .join("albums", "albums.artist_id=artists.id")
         .where_eq("albums.id", album_id)
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .map(|x| x.to_value_type())
         .transpose()?)
@@ -240,7 +240,7 @@ pub async fn get_tidal_album_artist(
         .columns(&["artists.*"])
         .join("albums", "albums.artist_id=artists.id")
         .where_eq("albums.tidal_id", tidal_album_id)
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .map(|x| x.to_value_type())
         .transpose()?)
@@ -258,7 +258,7 @@ pub async fn get_qobuz_album_artist(
         .columns(&["artists.*"])
         .join("albums", "albums.artist_id=artists.id")
         .where_eq("albums.qobuz_id", qobuz_album_id)
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .map(|x| x.to_value_type())
         .transpose()?)
@@ -282,7 +282,7 @@ pub async fn get_album(
         ])
         .where_eq(format!("albums.{column}"), id)
         .join("artists", "artists.id = albums.artist_id")
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .as_ref()
         .to_value_type()?)
@@ -324,7 +324,7 @@ pub async fn get_album_tracks(
             "tracks.id=track_sizes.track_id AND track_sizes.format=tracks.format",
         )
         .sort("number", SortDirection::Asc)
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?)
 }
@@ -355,7 +355,7 @@ pub async fn get_artist_albums(
         .join("artists", "artists.id=albums.artist_id")
         .where_eq("albums.artist_id", artist_id)
         .sort("albums.id", SortDirection::Desc)
-        .execute(db)
+        .execute(&**db)
         .await?
         .as_model_mapped()
 }
@@ -458,7 +458,7 @@ pub async fn set_track_sizes(
             coalesce(boxed![identifier("channels"), literal("0")]),
         ])
         .values(values.clone())
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?)
 }
@@ -476,7 +476,7 @@ pub async fn get_track_size(
         .columns(&["bytes"])
         .where_eq("track_id", id.to_string())
         .where_eq("format", quality.format.as_ref())
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .and_then(|x| x.columns.first().cloned())
         .map(|(_, value)| value)
@@ -537,7 +537,7 @@ pub async fn get_tracks(
             "track_sizes",
             "tracks.id=track_sizes.track_id AND track_sizes.format=tracks.format",
         )
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?)
 }
@@ -566,7 +566,7 @@ pub async fn delete_tracks(
     Ok(db
         .delete("tracks")
         .filter_if_some(ids.map(|ids| where_in("id", ids.clone())))
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?)
 }
@@ -598,7 +598,7 @@ pub async fn delete_track_sizes_by_track_id(
     Ok(db
         .delete("track_sizes")
         .filter_if_some(ids.map(|ids| where_in("track_id", ids.clone())))
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?)
 }
@@ -663,7 +663,7 @@ pub async fn add_artist_maps_and_get_artists<S: ::std::hash::BuildHasher + Send>
             .upsert("artists")
             .where_eq("title", title.clone())
             .values(artist.into_iter().collect::<Vec<_>>())
-            .execute_first(db)
+            .execute_first(&**db)
             .await?
             .to_value_type()?;
 
@@ -693,7 +693,7 @@ pub async fn add_albums(
                 .value("directory", album.directory)
                 .value("date_released", album.date_released)
                 .value("artwork", album.artwork)
-                .execute_first(db)
+                .execute_first(&**db)
                 .await?
                 .to_value_type()?,
         );
@@ -777,7 +777,7 @@ pub async fn add_album_maps_and_get_albums<S: ::std::hash::BuildHasher + Send>(
         .upsert_multi("albums")
         .unique(boxed![identifier("artist_id"), identifier("title"),])
         .values(values)
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?)
 }
@@ -863,7 +863,7 @@ pub async fn add_tracks(
             coalesce(boxed![identifier("qobuz_id"), literal("0")]),
         ])
         .values(values)
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?)
 }

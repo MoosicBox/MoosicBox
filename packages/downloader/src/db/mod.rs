@@ -17,7 +17,7 @@ pub async fn create_download_location(
         .upsert("download_locations")
         .where_eq("path", path)
         .value("path", path)
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .to_value_type()?)
 }
@@ -29,7 +29,7 @@ pub async fn get_download_location(
     Ok(db
         .select("download_locations")
         .where_eq("id", id)
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .as_ref()
         .to_value_type()?)
@@ -41,7 +41,7 @@ pub async fn get_download_locations(
 ) -> Result<Vec<DownloadLocation>, DatabaseFetchError> {
     Ok(db
         .select("download_locations")
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?)
 }
@@ -80,7 +80,7 @@ pub async fn create_download_task(
         .value("artist", artist)
         .value("artist_id", artist_id)
         .value("contains_cover", contains_cover)
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .to_value_type()?)
 }
@@ -92,7 +92,7 @@ pub async fn get_download_tasks(
     Ok(db
         .select("download_tasks")
         .sort("id", moosicbox_database::query::SortDirection::Desc)
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?)
 }

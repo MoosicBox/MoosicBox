@@ -15,7 +15,7 @@ pub async fn get_client_access_token(
             where_gt("expires", DatabaseValue::Now),
         ])
         .sort("updated", SortDirection::Desc)
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .and_then(|row| {
             if let (Some(a), Some(b)) = (row.get("client_id"), row.get("token")) {
@@ -40,7 +40,7 @@ pub async fn create_client_access_token(
         .where_eq("client_id", client_id)
         .value("token", token)
         .value("client_id", client_id)
-        .execute_first(db)
+        .execute_first(&**db)
         .await?;
 
     Ok(())
@@ -53,7 +53,7 @@ pub async fn delete_magic_token(
 ) -> Result<(), DatabaseFetchError> {
     db.delete("magic_tokens")
         .where_eq("magic_token", magic_token)
-        .execute(db)
+        .execute(&**db)
         .await?;
 
     Ok(())
@@ -71,7 +71,7 @@ pub async fn get_credentials_from_magic_token(
             where_gt("expires", DatabaseValue::Now),
         ])
         .where_eq("magic_token", magic_token)
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .and_then(|row| {
             if let (Some(a), Some(b)) = (row.get("client_id"), row.get("access_token")) {
@@ -108,7 +108,7 @@ pub async fn save_magic_token(
         .value("access_token", access_token)
         .value("client_id", client_id)
         .value("expires", DatabaseValue::NowAdd("'+1 Day'".into()))
-        .execute_first(db)
+        .execute_first(&**db)
         .await?;
 
     Ok(())

@@ -29,7 +29,7 @@ pub async fn update_audio_zone(
         .upsert("audio_zones")
         .where_eq("id", zone.id)
         .value_opt("name", zone.name)
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .to_value_type()?;
 
@@ -37,7 +37,7 @@ pub async fn update_audio_zone(
         let mut existing: Vec<models::AudioZonePlayer> = db
             .select("audio_zone_players")
             .where_eq("audio_zone_id", inserted.id)
-            .execute(db)
+            .execute(&**db)
             .await?
             .to_value_type()?;
 
@@ -49,7 +49,7 @@ pub async fn update_audio_zone(
                 "player_id",
                 existing.iter().map(|x| x.player_id).collect::<Vec<_>>(),
             )
-            .execute(db)
+            .execute(&**db)
             .await?;
 
         let values = players
@@ -66,7 +66,7 @@ pub async fn update_audio_zone(
         db.upsert_multi("audio_zone_players")
             .unique(boxed![identifier("audio_zone_id"), identifier("player_id"),])
             .values(values.clone())
-            .execute(db)
+            .execute(&**db)
             .await?;
     }
 
@@ -81,7 +81,7 @@ pub async fn get_zones(
 ) -> Result<Vec<models::AudioZoneModel>, DatabaseFetchError> {
     Ok(db
         .select("audio_zones")
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?)
 }
@@ -96,7 +96,7 @@ pub async fn get_zone_with_sessions(
     let zones: Vec<models::AudioZoneModel> = config_db
         .select("audio_zones")
         .columns(&["audio_zones.*"])
-        .execute(config_db)
+        .execute(&**config_db)
         .await?
         .to_value_type()?;
 
@@ -107,7 +107,7 @@ pub async fn get_zone_with_sessions(
             "audio_zone_id",
             zones.iter().map(|x| x.id).collect::<Vec<_>>(),
         )
-        .execute(library_db)
+        .execute(&**library_db)
         .await?
         .to_value_type()?;
 
@@ -135,7 +135,7 @@ pub async fn create_audio_zone(
     Ok(db
         .insert("audio_zones")
         .value("name", zone.name.clone())
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?)
 }
@@ -150,7 +150,7 @@ pub async fn delete_audio_zone(
     Ok(db
         .delete("audio_zones")
         .where_eq("id", id)
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .map(|x| x.to_value_type())
         .transpose()?)
@@ -166,7 +166,7 @@ pub async fn get_zone(
     Ok(db
         .select("audio_zones")
         .where_eq("id", id)
-        .execute_first(db)
+        .execute_first(&**db)
         .await?
         .map(|x| x.to_value_type())
         .transpose()?)
@@ -187,7 +187,7 @@ pub async fn get_players(
             "audio_zone_players.player_id=players.id",
         )
         .where_eq("audio_zone_players.audio_zone_id", audio_zone_id)
-        .execute(db)
+        .execute(&**db)
         .await?
         .to_value_type()?)
 }
