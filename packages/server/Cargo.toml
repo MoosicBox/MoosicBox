@@ -256,7 +256,7 @@ postgres = [
     "moosicbox_database/postgres",
     "moosicbox_database_connection/creds",
     "moosicbox_database_connection/postgres",
-    "moosicbox_schema?/postgres",
+    "moosicbox_schema/postgres",
 ]
 postgres-native-tls = ["moosicbox_database_connection/postgres-native-tls"]
 postgres-openssl = ["moosicbox_database_connection/postgres-openssl"]
@@ -273,7 +273,7 @@ postgres-sqlx = [
 sqlite = [
     "dep:moosicbox_schema",
     "moosicbox_database_connection/sqlite",
-    "moosicbox_schema?/sqlite",
+    "moosicbox_schema/sqlite",
 ]
 sqlite-rusqlite = [
     "moosicbox_database/sqlite-rusqlite",

@@ -19,10 +19,9 @@ log         = { workspace = true }
 thiserror   = { workspace = true }
 
 [features]
-default = ["sqlite"]
+default = ["postgres", "sqlite"]
 
 fail-on-warnings = []
 
-mysql    = ["moosicbox_database/mysql"]
 postgres = ["moosicbox_database/postgres"]
 sqlite   = ["moosicbox_database/sqlite"]

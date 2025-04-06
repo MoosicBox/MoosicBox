@@ -27,6 +27,7 @@ async fn add_profile(
     .await
     .expect("Failed to initialize database");
 
+    #[cfg(any(feature = "sqlite", feature = "postgres"))]
     if let Err(e) = moosicbox_schema::migrate_config(&*library_db).await {
         moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
     }
