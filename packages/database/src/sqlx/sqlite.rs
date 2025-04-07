@@ -467,6 +467,134 @@ impl Database for SqliteSqlxDatabase {
 
         Ok(())
     }
+
+    #[cfg(feature = "schema")]
+    #[allow(clippy::too_many_lines)]
+    async fn exec_create_table(
+        &self,
+        statement: &crate::schema::CreateTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let mut query = "CREATE TABLE ".to_string();
+
+        if statement.if_not_exists {
+            query.push_str("IF NOT EXISTS ");
+        }
+
+        query.push_str(statement.table_name);
+        query.push('(');
+
+        let mut first = true;
+
+        for column in &statement.columns {
+            if first {
+                first = false;
+            } else {
+                query.push(',');
+            }
+
+            if column.auto_increment && statement.primary_key.is_none_or(|x| x != column.name) {
+                return Err(DatabaseError::InvalidSchema(format!(
+                    "Column '{}' must be the primary key to enable auto increment",
+                    &column.name
+                )));
+            }
+
+            query.push_str(&column.name);
+            query.push(' ');
+
+            match column.data_type {
+                crate::schema::DataType::VarChar(size) => {
+                    query.push_str("VARCHAR(");
+                    query.push_str(&size.to_string());
+                    query.push(')');
+                }
+                crate::schema::DataType::Text => query.push_str("TEXT"),
+                crate::schema::DataType::Bool
+                | crate::schema::DataType::SmallInt
+                | crate::schema::DataType::Int
+                | crate::schema::DataType::BigInt => {
+                    query.push_str("INTEGER");
+                }
+                crate::schema::DataType::Double
+                | crate::schema::DataType::Decimal(..)
+                | crate::schema::DataType::Real => query.push_str("REAL"),
+                crate::schema::DataType::DateTime => query.push_str("VARCHAR(23)"),
+            }
+
+            if !column.nullable {
+                query.push_str(" NOT NULL");
+            }
+
+            if let Some(default) = &column.default {
+                query.push_str(" DEFAULT ");
+
+                match default {
+                    DatabaseValue::Null
+                    | DatabaseValue::StringOpt(None)
+                    | DatabaseValue::BoolOpt(None)
+                    | DatabaseValue::NumberOpt(None)
+                    | DatabaseValue::UNumberOpt(None)
+                    | DatabaseValue::RealOpt(None) => {
+                        query.push_str("NULL");
+                    }
+                    DatabaseValue::StringOpt(Some(x)) | DatabaseValue::String(x) => {
+                        query.push('\'');
+                        query.push_str(x);
+                        query.push('\'');
+                    }
+                    DatabaseValue::BoolOpt(Some(x)) | DatabaseValue::Bool(x) => {
+                        query.push_str(if *x { "1" } else { "0" });
+                    }
+                    DatabaseValue::NumberOpt(Some(x)) | DatabaseValue::Number(x) => {
+                        query.push_str(&x.to_string());
+                    }
+                    DatabaseValue::UNumberOpt(Some(x)) | DatabaseValue::UNumber(x) => {
+                        query.push_str(&x.to_string());
+                    }
+                    DatabaseValue::RealOpt(Some(x)) | DatabaseValue::Real(x) => {
+                        query.push_str(&x.to_string());
+                    }
+                    DatabaseValue::NowAdd(x) => {
+                        query.push_str(
+                            "strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', ",
+                        );
+                        query.push_str(x);
+                        query.push_str("))");
+                    }
+                    DatabaseValue::Now => {
+                        query.push_str("strftime('%Y-%m-%dT%H:%M:%f', 'now')");
+                    }
+                    DatabaseValue::DateTime(x) => {
+                        query.push('\'');
+                        query.push_str(&x.and_utc().to_rfc3339());
+                        query.push('\'');
+                    }
+                }
+            }
+        }
+
+        moosicbox_assert::assert!(!first);
+
+        if let Some(primary_key) = &statement.primary_key {
+            query.push_str(", PRIMARY KEY (");
+            query.push_str(primary_key);
+            query.push(')');
+        }
+
+        for (source, target) in &statement.foreign_keys {
+            query.push_str(", FOREIGN KEY (");
+            query.push_str(source);
+            query.push_str(") REFERENCES (");
+            query.push_str(target);
+            query.push(')');
+        }
+
+        query.push(')');
+
+        self.exec_raw(&query).await?;
+
+        Ok(())
+    }
 }
 
 /// # Errors

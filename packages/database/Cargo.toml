@@ -11,7 +11,8 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_task = { version = "0.1.0", path = "../task", optional = true, default-features = false }
+moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
+moosicbox_task   = { version = "0.1.0", path = "../task", optional = true, default-features = false }
 
 # DB Dependencies
 rusqlite = { workspace = true, optional = true }
@@ -44,6 +45,7 @@ default = [
     "api",
     "mysql",
     "postgres-sqlx",
+    "schema",
     "simulator",
     "sqlite-rusqlite",
     "sqlite-sqlx",
@@ -79,3 +81,5 @@ sqlite-sqlx = ["dep:futures", "dep:regex", "dep:sqlx", "sqlx", "sqlx/sqlite"]
 sqlx = []
 
 simulator = ["sqlite-rusqlite"]
+
+schema = []

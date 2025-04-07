@@ -6847,6 +6847,7 @@ dependencies = [
  "chrono",
  "futures",
  "log",
+ "moosicbox_assert",
  "moosicbox_task",
  "postgres-protocol",
  "qstring",

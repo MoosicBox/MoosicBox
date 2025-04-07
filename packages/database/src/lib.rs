@@ -15,6 +15,9 @@ pub mod sqlx;
 
 pub mod query;
 
+#[cfg(feature = "schema")]
+pub mod schema;
+
 use std::{num::TryFromIntError, sync::Arc};
 
 use async_trait::async_trait;
@@ -217,6 +220,9 @@ pub enum DatabaseError {
     PostgresSqlx(sqlx::postgres::SqlxDatabaseError),
     #[error("No row")]
     NoRow,
+    #[cfg(feature = "schema")]
+    #[error("Invalid schema: {0}")]
+    InvalidSchema(String),
 }
 
 impl DatabaseError {
@@ -293,6 +299,11 @@ pub trait Database: Send + Sync + std::fmt::Debug {
         query::delete(table_name)
     }
 
+    #[cfg(feature = "schema")]
+    fn create_table<'a>(&self, table_name: &'a str) -> schema::CreateTableStatement<'a> {
+        schema::create_table(table_name)
+    }
+
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<Row>, DatabaseError>;
     async fn query_first(&self, query: &SelectQuery<'_>) -> Result<Option<Row>, DatabaseError>;
     async fn exec_update(&self, statement: &UpdateStatement<'_>)
@@ -331,6 +342,12 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     async fn close(&self) -> Result<(), DatabaseError> {
         self.trigger_close()
     }
+
+    #[cfg(feature = "schema")]
+    async fn exec_create_table(
+        &self,
+        statement: &schema::CreateTableStatement<'_>,
+    ) -> Result<(), DatabaseError>;
 }
 
 #[async_trait]

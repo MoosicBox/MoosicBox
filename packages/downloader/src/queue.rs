@@ -544,7 +544,7 @@ impl Drop for DownloadQueue {
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
-    use moosicbox_database::{Database, Row, query::*};
+    use moosicbox_database::{Database, Row, query::*, schema::CreateTableStatement};
     use moosicbox_music_api::models::TrackAudioQuality;
     use moosicbox_music_models::{Album, Artist, Track, id::Id};
     use pretty_assertions::assert_eq;
@@ -666,6 +666,13 @@ mod tests {
             _statement: &UpsertMultiStatement<'_>,
         ) -> Result<Vec<Row>, DatabaseError> {
             Ok(vec![Row { columns: vec![] }])
+        }
+
+        async fn exec_create_table(
+            &self,
+            _statement: &CreateTableStatement<'_>,
+        ) -> Result<(), DatabaseError> {
+            Ok(())
         }
 
         async fn exec_raw(&self, _statement: &str) -> Result<(), DatabaseError> {

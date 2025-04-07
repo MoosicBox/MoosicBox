@@ -98,4 +98,12 @@ impl Database for SimulationDatabase {
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
         self.inner.exec_raw(statement).await
     }
+
+    #[cfg(feature = "schema")]
+    async fn exec_create_table(
+        &self,
+        statement: &crate::schema::CreateTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        self.inner.exec_create_table(statement).await
+    }
 }

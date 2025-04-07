@@ -53,9 +53,12 @@ tokio               = { workspace = true }
 tokio-util          = { workspace = true }
 
 [dev-dependencies]
+moosicbox_database = { version = "0.1.0", path = "../database", default-features = false, features = [
+    "schema",
+] }
 pretty_assertions = { workspace = true }
-test-log          = { workspace = true }
-tokio             = { workspace = true, features = ["macros", "rt", "tracing"] }
+test-log = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "tracing"] }
 
 [features]
 default = ["aac", "all-sources", "api", "flac", "mp3", "openapi", "opus"]

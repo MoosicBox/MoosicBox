@@ -5,7 +5,11 @@
 use std::collections::BTreeMap;
 
 use include_dir::{Dir, DirEntry, File};
-use moosicbox_database::{Database, DatabaseError, query::FilterableQuery};
+use moosicbox_database::{
+    Database, DatabaseError, DatabaseValue,
+    query::FilterableQuery,
+    schema::{Column, DataType},
+};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -101,7 +105,35 @@ impl Migrations {
         map
     }
 
-    async fn run(&'static self, db: &dyn Database) -> Result<(), DatabaseError> {
+    /// # Errors
+    ///
+    /// * If the migrations table fails to be created
+    /// * If fails to select existing ran migrations
+    /// * If fails to insert new migration runs
+    ///
+    /// # Panics
+    ///
+    /// * If any asserts fail
+    pub async fn run(&'static self, db: &dyn Database) -> Result<(), DatabaseError> {
+        db.create_table(MIGRATIONS_TABLE_NAME)
+            .if_not_exists(true)
+            .column(Column {
+                name: "name".to_string(),
+                nullable: false,
+                auto_increment: false,
+                data_type: DataType::Text,
+                default: None,
+            })
+            .column(Column {
+                name: "run_on".to_string(),
+                nullable: false,
+                auto_increment: false,
+                data_type: DataType::DateTime,
+                default: Some(DatabaseValue::Now),
+            })
+            .execute(db)
+            .await?;
+
         let migrations = self.as_btree();
 
         for (name, migration) in migrations {
