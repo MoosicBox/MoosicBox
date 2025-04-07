@@ -177,10 +177,6 @@ COPY packages packages
 RUN rm target/release/deps/moosicbox*
 RUN cargo build --package moosicbox_server --release --no-default-features --features=cpal,flac,static-token-auth,all-apis
 
-RUN cargo install diesel_cli --no-default-features --features sqlite
-COPY migrations/server/sqlite migrations/server/sqlite
-RUN diesel migration run --migration-dir migrations/server/sqlite --database-url library.db
-
 # Final
 FROM debian:bookworm-slim
 
