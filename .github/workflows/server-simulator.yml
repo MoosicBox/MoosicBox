@@ -1,0 +1,153 @@
+name: Server Simulator
+
+on:
+    push:
+        branches: ['master', 'edge']
+        paths:
+            - packages/**
+            - '**/*.toml'
+            - '**/Cargo.lock'
+            - .github/workflows/server-simulator.yml
+            - free_disk_space.sh
+            - '!packages/marketing_site/**'
+            - '!packages/hyperchad/**'
+            - '!packages/app/**'
+            - '!**/*.nix'
+            - '!**/Dockerfile'
+            - '!**/*.Dockerfile'
+            - '!**/*.dockerignore'
+    pull_request:
+        branches: ['master', 'edge']
+    workflow_dispatch:
+        inputs:
+            edge:
+                description: 'Edge'
+                required: false
+                type: boolean
+                default: false
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    build-matrix:
+        name: Build matrix
+        runs-on: ubuntu-latest
+        outputs:
+            matrix: ${{ steps.build-matrix-step.outputs.matrix }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - uses: dtolnay/rust-toolchain@stable
+
+            - name: Build matrix JSON
+              id: build-matrix-step
+              run: |
+                  MATRIX=$(
+                      cargo run -p clippier \
+                          features \
+                          packages/server \
+                          -o json \
+                          --features default \
+                          | jq -rc \
+                              '[
+                                  .[]
+                                  | {
+                                      "name": (.name | sub("^moosicbox_"; "")),
+                                      "path": (.path),
+                                      "features": (.features),
+                                      "requiredFeatures": (if .requiredFeatures != null then .requiredFeatures | join(",") else null end),
+                                      "os": (.os + "-latest"),
+                                      "dependencies": (.dependencies),
+                                      "toolchains": (.toolchains),
+                                      "ciSteps": (.ciSteps),
+                                      "ciToolchains": (.ciToolchains),
+                                      "env": (.env)
+                                  }
+                                  | del(.requiredFeatures | nulls)
+                                  | del(.dependencies | nulls)
+                                  | del(.toolchains | nulls)
+                                  | del(.ciSteps | nulls)
+                                  | del(.ciToolchains | nulls)
+                                  | del(.env | nulls)
+                              ]'
+                  )
+                  echo "Using matrix (raw):"
+                  echo $MATRIX
+                  echo "Using matrix:"
+                  echo $MATRIX | jq
+                  echo 'matrix<<EOF' >> $GITHUB_OUTPUT
+                  echo $MATRIX >> $GITHUB_OUTPUT
+                  echo 'EOF' >> $GITHUB_OUTPUT
+
+    simulator:
+        name: Simulator
+
+        runs-on: ${{ matrix.package.os }}
+
+        needs: build-matrix
+
+        strategy:
+            fail-fast: false
+
+            matrix:
+                package: ${{ fromJson(needs.build-matrix.outputs.matrix) }}
+
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Enable patches
+              if: ${{ github.event_name == 'schedule' || github.event.inputs.edge == true }}
+              run: |
+                  git config user.name "MoosicBoxBot"
+                  git config user.email "MoosicBoxBot@gmail.com"
+                  git checkout edge
+                  git rebase master
+
+            - uses: dtolnay/rust-toolchain@stable
+
+            - name: Install winget
+              if: ${{ matrix.package.os == 'windows-latest' && contains(matrix.package.dependencies, 'winget') }}
+              uses: BSteffaniak/install-winget@v1
+
+            - name: Setup CI
+              if: ${{ matrix.package.ciSteps }}
+              run: ${{ matrix.package.ciSteps }}
+
+            - uses: pnpm/action-setup@v3
+              if: ${{ contains(matrix.package.toolchains, 'pnpm') || contains(matrix.package.ciToolchains, 'pnpm') }}
+              name: Install pnpm
+              with:
+                  version: 9
+                  run_install: false
+
+            - uses: actions/setup-node@v4
+              if: ${{ contains(matrix.package.toolchains, 'node') || contains(matrix.package.ciToolchains, 'node') }}
+              name: Install node
+              with:
+                  node-version: 22
+
+            - name: Setup cmake
+              uses: jwlawson/actions-setup-cmake@v2
+              with:
+                  cmake-version: '3.x'
+
+            - name: Install dependencies
+              if: ${{ matrix.package.dependencies }}
+              shell: bash
+              run: ${{ matrix.package.dependencies }}
+
+            - name: Run server simulator
+              shell: bash
+              env:
+                  ENABLE_ASSERT: 1
+              run: |
+                  while read -r feature; do \
+                      ${{ matrix.package.env }} cargo run -p moosicbox_server_simulator ${{ runner.debug && '-vv' }} \
+                          --no-default-features \
+                          --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}
+                  done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')"
