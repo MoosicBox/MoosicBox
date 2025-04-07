@@ -109,6 +109,24 @@ jobs:
                       echo "upgraded=false" >> "$GITHUB_OUTPUT"
                   fi
 
+            - name: Install winget
+              if: ${{ steps.upgrade.outputs.upgraded == 'true' && matrix.package.os == 'windows-latest' && contains(matrix.package.dependencies, 'winget') }}
+              run: |
+                  $URL = "https://api.github.com/repos/microsoft/winget-cli/releases/latest"
+                  $URL = (Invoke-WebRequest -Uri $URL).Content | ConvertFrom-Json |
+                          Select-Object -ExpandProperty "assets" |
+                          Where-Object "browser_download_url" -Match '.msixbundle' |
+                          Select-Object -ExpandProperty "browser_download_url"
+
+                  # download
+                  Invoke-WebRequest -Uri $URL -OutFile "Setup.msix" -UseBasicParsing
+
+                  # install
+                  Add-AppxPackage -Path "Setup.msix"
+
+                  # delete file
+                  Remove-Item "Setup.msix"
+
             - name: Install dependencies
               if: ${{ steps.upgrade.outputs.upgraded == 'true' && matrix.package.dependencies }}
               run: ${{ matrix.package.dependencies }}
@@ -213,6 +231,24 @@ jobs:
                       echo "No upgrades"
                       echo "upgraded=false" >> "$GITHUB_OUTPUT"
                   fi
+
+            - name: Install winget
+              if: ${{ steps.upgrade_incompatible.outputs.upgraded == 'true' && steps.upgrade.outputs.upgraded == 'false' && matrix.package.os == 'windows-latest' && contains(matrix.package.dependencies, 'winget') }}
+              run: |
+                  $URL = "https://api.github.com/repos/microsoft/winget-cli/releases/latest"
+                  $URL = (Invoke-WebRequest -Uri $URL).Content | ConvertFrom-Json |
+                          Select-Object -ExpandProperty "assets" |
+                          Where-Object "browser_download_url" -Match '.msixbundle' |
+                          Select-Object -ExpandProperty "browser_download_url"
+
+                  # download
+                  Invoke-WebRequest -Uri $URL -OutFile "Setup.msix" -UseBasicParsing
+
+                  # install
+                  Add-AppxPackage -Path "Setup.msix"
+
+                  # delete file
+                  Remove-Item "Setup.msix"
 
             - name: Install dependencies
               if: ${{ steps.upgrade_incompatible.outputs.upgraded == 'true' && steps.upgrade.outputs.upgraded == 'false' && matrix.package.dependencies }}
