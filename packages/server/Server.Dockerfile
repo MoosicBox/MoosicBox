@@ -118,7 +118,6 @@ packages/audio_decoder|\
 packages/audio_encoder|\
 packages/audio_output|\
 packages/audio_zone|\
-packages/audio_zone/models|\
 packages/auth|\
 packages/channel_utils|\
 packages/config|\
@@ -130,11 +129,9 @@ packages/files|\
 packages/image|\
 packages/json_utils|\
 packages/library|\
-packages/library/models|\
 packages/logging|\
 packages/mdns|\
 packages/menu|\
-packages/menu/models|\
 packages/middleware|\
 packages/music_api|\
 packages/openport|\
@@ -148,7 +145,6 @@ packages/schema|\
 packages/search|\
 packages/server|\
 packages/session|\
-packages/session/models|\
 packages/stream_utils|\
 packages/task|\
 packages/tidal|\
@@ -160,6 +156,12 @@ packages/yt|\
 )/Cargo.toml$"); \
     do printf "\n\n[lib]\npath=\"../../temp_lib.rs\"" >> "$file"; \
   done
+
+RUN \
+  printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/audio_zone/models/Cargo.toml" && \
+  printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/library/models/Cargo.toml" && \
+  printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/menu/models/Cargo.toml" && \
+  printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/session/models/Cargo.toml"
 
 RUN mkdir packages/server/src && \
   echo 'fn main() {}' >packages/server/src/main.rs
