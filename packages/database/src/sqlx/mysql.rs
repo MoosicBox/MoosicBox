@@ -375,6 +375,8 @@ impl Database for MySqlSqlxDatabase {
     }
 
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
+        log::trace!("exec_raw: query:\n{statement}");
+
         let connection = self.connection.lock().await;
         let statement = connection
             .prepare(statement)

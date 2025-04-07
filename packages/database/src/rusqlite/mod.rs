@@ -351,6 +351,8 @@ impl Database for RusqliteDatabase {
     }
 
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
+        log::trace!("exec_raw: query:\n{statement}");
+
         self.connection
             .lock()
             .await

@@ -444,6 +444,8 @@ impl Database for PostgresDatabase {
     }
 
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
+        log::trace!("exec_raw: query:\n{statement}");
+
         self.client
             .execute_raw(statement, &[] as &[&str])
             .await

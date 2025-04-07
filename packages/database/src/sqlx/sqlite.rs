@@ -450,6 +450,8 @@ impl Database for SqliteSqlxDatabase {
     }
 
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
+        log::trace!("exec_raw: query:\n{statement}");
+
         let connection = self.get_connection().await?;
         let mut connection = connection.lock().await;
         let statement = connection
