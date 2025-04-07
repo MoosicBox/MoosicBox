@@ -31,7 +31,7 @@ RUN cat Cargo.toml | \
     \"packages\/logging\",\r\
     \"packages\/mdns\",\r\
     \"packages\/menu\",\r\
-    \"packages\/menu/models\",\r\
+    \"packages\/menu\/models\",\r\
     \"packages\/middleware\",\r\
     \"packages\/music_api\",\r\
     \"packages\/openport\",\r\
