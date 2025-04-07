@@ -83,6 +83,14 @@ impl Migrations {
             target: &'static str,
             on_file: &mut impl FnMut(&str, &'static File<'static>),
         ) {
+            struct Migration<'a> {
+                migration_name: &'a str,
+                file: &'static File<'static>,
+            }
+
+            let mut entries = vec![];
+            let mut skip_migrations = vec![];
+
             for entry in dir.entries() {
                 match entry {
                     DirEntry::Dir(dir) => walk(dir, target, on_file),
@@ -95,22 +103,43 @@ impl Migrations {
                         else {
                             continue;
                         };
+                        let Some(name) = path.file_name().and_then(|x| x.to_str()) else {
+                            continue;
+                        };
+
+                        if name == "metadata.toml" {
+                            if let Some(contents) = file.contents_utf8() {
+                                // FIXME: Actually parse the toml and don't actually skip this
+                                if contents.trim() == "run_in_transaction = false" {
+                                    skip_migrations.push(migration_name);
+                                    continue;
+                                }
+                            }
+                        }
+
                         let Some(extension) = path.extension().and_then(|x| x.to_str()) else {
                             continue;
                         };
                         if extension.to_lowercase() == "sql" {
-                            let Some(name) = path.file_name().and_then(|x| x.to_str()) else {
-                                continue;
-                            };
-
                             let name = &name[0..(name.len() - extension.len() - 1)];
 
                             if name == target {
-                                on_file(migration_name, file);
+                                entries.push(Migration {
+                                    migration_name,
+                                    file,
+                                });
                             }
                         }
                     }
                 }
+            }
+
+            for entry in entries {
+                if skip_migrations.iter().any(|x| *x == entry.migration_name) {
+                    continue;
+                }
+
+                on_file(entry.migration_name, entry.file);
             }
         }
 
