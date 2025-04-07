@@ -177,13 +177,21 @@ impl Migrations {
             );
 
             if results.is_empty() {
-                let migration = String::from_utf8_lossy(migration).to_string();
-                db.exec_raw(&migration).await?;
+                if std::env::var("MOOSICBOX_SKIP_MIGRATION_EXECUTION").as_deref() != Ok("1") {
+                    log::info!("run: running name={name}");
+
+                    let migration = String::from_utf8_lossy(migration).to_string();
+                    db.exec_raw(&migration).await?;
+
+                    log::info!("run: successfully ran name={name}");
+                }
 
                 db.insert(MIGRATIONS_TABLE_NAME)
                     .value("name", &name)
                     .execute(db)
                     .await?;
+            } else {
+                log::debug!("run: already ran name={name}");
             }
         }
 
