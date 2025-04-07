@@ -1,0 +1,53 @@
+name: Build Server Docker Image
+
+on:
+    push:
+        branches: ['master', 'edge']
+        paths:
+            - packages/**
+            - '**/*.toml'
+            - '**/Cargo.lock'
+            - .github/workflows/build-server-docker-image.yml
+            - free_disk_space.sh
+            - '!packages/marketing_site/**'
+            - '!packages/hyperchad/**'
+            - '!packages/app/**'
+            - '!**/*.nix'
+            - '!**/Dockerfile'
+            - '!**/*.Dockerfile'
+            - '!**/*.dockerignore'
+            - 'packages/server/Server.Dockerfile'
+            - 'packages/server/Server.Dockerfile.dockerignore'
+    pull_request:
+        branches: ['master', 'edge']
+    workflow_dispatch:
+        inputs:
+            edge:
+                description: 'Edge'
+                required: false
+                type: boolean
+                default: false
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Enable patches
+              if: ${{ github.event_name == 'schedule' || github.event.inputs.edge == true }}
+              run: |
+                  git config user.name "MoosicBoxBot"
+                  git config user.email "MoosicBoxBot@gmail.com"
+                  git checkout edge
+                  git rebase master
+
+            - name: Build Dockerfile
+              shell: bash
+              run: |
+                  docker build . -f packages/server/Server.Dockerfile
