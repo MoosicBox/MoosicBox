@@ -245,7 +245,7 @@ jobs:
 
             - name: Install winget
               if: ${{ matrix.package.os == 'windows-latest' && contains(matrix.package.dependencies, 'winget') }}
-              uses: Cyberboss/install-winget@v1
+              uses: BSteffaniak/install-winget@v1
 
             - name: Setup CI
               if: ${{ matrix.package.ciSteps }}
