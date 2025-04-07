@@ -423,6 +423,13 @@ pub async fn run<T>(
     let http_server = {
         let mut http_server = actix_web::HttpServer::new(app);
 
+        #[cfg(feature = "simulator")]
+        if moosicbox_simulator_utils::simulator_enabled() {
+            log::debug!("run: starting http_server listening on {addr}:{service_port}...");
+            http_server = http_server.disable_signals();
+            log::debug!("run: started http_server listening on {addr}:{service_port}");
+        }
+
         #[cfg(feature = "tls")]
         {
             use std::io::Write as _;
@@ -494,6 +501,10 @@ pub async fn run<T>(
         }
 
         moosicbox_task::spawn("server: ctrl-c", async move {
+            #[cfg(feature = "simulator")]
+            if moosicbox_simulator_utils::simulator_enabled() {
+                return Ok(());
+            }
             tokio::signal::ctrl_c().await?;
             log::debug!("Received ctrl-c");
             Ok::<_, std::io::Error>(())
