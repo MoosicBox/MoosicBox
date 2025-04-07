@@ -19,7 +19,10 @@ use actix_web::{App, http, middleware};
 use moosicbox_config::{AppType, get_or_init_server_identity};
 use moosicbox_database::{Database, config::ConfigDatabase, profiles::PROFILES};
 use moosicbox_files::files::track_pool::service::Commander as _;
-use std::sync::{Arc, LazyLock};
+use std::{
+    net::TcpListener,
+    sync::{Arc, LazyLock},
+};
 use tokio::try_join;
 use tokio_util::sync::CancellationToken;
 
@@ -58,6 +61,7 @@ pub async fn run_basic<T>(
         addr,
         service_port,
         actix_workers,
+        None,
         #[cfg(feature = "player")]
         false,
         #[cfg(feature = "upnp")]
@@ -83,6 +87,7 @@ pub async fn run<T>(
     addr: &str,
     service_port: u16,
     actix_workers: Option<usize>,
+    listener: Option<TcpListener>,
     #[cfg(feature = "player")] local_players: bool,
     #[cfg(feature = "upnp")] upnp_players: bool,
     #[cfg(feature = "telemetry")] otel: Arc<moosicbox_telemetry::Otel>,
@@ -476,7 +481,11 @@ pub async fn run<T>(
         }
         #[cfg(not(feature = "tls"))]
         {
-            http_server = http_server.bind((addr, service_port))?;
+            if let Some(listener) = listener {
+                http_server = http_server.listen(listener)?;
+            } else {
+                http_server = http_server.bind((addr, service_port))?;
+            }
         }
 
         if let Some(workers) = actix_workers {

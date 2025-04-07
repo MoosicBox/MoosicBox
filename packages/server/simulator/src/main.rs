@@ -27,11 +27,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let otel =
             std::sync::Arc::new(moosicbox_telemetry::Otel::new().map_err(std::io::Error::other)?);
 
+        let actual_tcp_listener = std::net::TcpListener::bind(format!("{addr}:{service_port}"))?;
+
         moosicbox_server::run(
             AppType::Server,
             &addr,
             service_port,
             actix_workers,
+            Some(actual_tcp_listener),
             #[cfg(feature = "player")]
             true,
             #[cfg(feature = "upnp")]

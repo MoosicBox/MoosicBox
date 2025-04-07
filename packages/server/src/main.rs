@@ -57,6 +57,7 @@ fn main() -> std::io::Result<()> {
             &addr,
             service_port,
             actix_workers,
+            None,
             #[cfg(feature = "player")]
             true,
             #[cfg(feature = "upnp")]
