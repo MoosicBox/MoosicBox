@@ -278,6 +278,7 @@ jobs:
                   Invoke-WebRequest -Uri $URL -OutFile "Setup.msix" -UseBasicParsing
 
                   # install
+                  Import-Module Appx
                   Add-AppxPackage -Path "Setup.msix"
 
                   # delete file
