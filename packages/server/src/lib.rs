@@ -42,13 +42,13 @@ static SERVER_ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 /// * If the server fails to start
 /// * If the server fails during execution
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
-pub async fn run_basic(
+pub async fn run_basic<T>(
     #[allow(unused)] app_type: AppType,
     addr: &str,
     service_port: u16,
     actix_workers: Option<usize>,
-    on_startup: impl FnOnce() + Send,
-) -> std::io::Result<()> {
+    on_startup: impl FnOnce() -> T + Send,
+) -> std::io::Result<T> {
     #[cfg(feature = "telemetry")]
     let otel =
         std::sync::Arc::new(moosicbox_telemetry::Otel::new().map_err(std::io::Error::other)?);
@@ -78,7 +78,7 @@ pub async fn run_basic(
 ///
 /// * If cannot create config paths
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
-pub async fn run(
+pub async fn run<T>(
     #[allow(unused)] app_type: AppType,
     addr: &str,
     service_port: u16,
@@ -86,8 +86,8 @@ pub async fn run(
     #[cfg(feature = "player")] local_players: bool,
     #[cfg(feature = "upnp")] upnp_players: bool,
     #[cfg(feature = "telemetry")] otel: Arc<moosicbox_telemetry::Otel>,
-    on_startup: impl FnOnce() + Send,
-) -> std::io::Result<()> {
+    on_startup: impl FnOnce() -> T + Send,
+) -> std::io::Result<T> {
     #[cfg(feature = "profiling-tracing")]
     tracing_subscriber::fmt::init();
     #[cfg(feature = "profiling-puffin")]
@@ -507,7 +507,7 @@ pub async fn run(
         moosicbox_assert::die_or_error!("Failed to register mdns service: {e:?}");
     }
 
-    on_startup();
+    let resp = on_startup();
 
     log::info!("MoosicBox Server started on {ip}:{service_port}");
 
@@ -711,7 +711,7 @@ pub async fn run(
 
     log::debug!("Server shut down");
 
-    Ok(())
+    Ok(resp)
 }
 
 #[cfg(feature = "profiling-puffin")]
