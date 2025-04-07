@@ -26,7 +26,10 @@ moosicbox_http = { version = "0.1.0", path = "../../http", optional = true, defa
 moosicbox_upnp = { version = "0.1.0", path = "../../upnp", optional = true, default-features = false, features = [
     "simulator",
 ] }
-turmoil = { workspace = true }
+
+getrandom = { workspace = true }
+rand      = { version = "0.8.5" }
+turmoil   = { workspace = true }
 
 [features]
 default = []

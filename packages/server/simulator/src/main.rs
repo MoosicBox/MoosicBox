@@ -9,7 +9,11 @@ use std::{
 
 use moosicbox_config::AppType;
 use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
-use moosicbox_simulator_harness::turmoil::{self, net::TcpStream};
+use moosicbox_simulator_harness::{
+    getrandom,
+    rand::{SeedableRng, rngs::SmallRng},
+    turmoil::{self, net::TcpStream},
+};
 use serde_json::Value;
 use tokio::{
     io::{AsyncReadExt as _, AsyncWriteExt},
@@ -22,9 +26,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         moosicbox_simulator_harness::init();
     }
 
+    let seed = std::env::var("SIMULATOR_SEED")
+        .ok()
+        .and_then(|x| x.parse::<u64>().ok())
+        .unwrap_or_else(|| getrandom::u64().unwrap());
+    let rng = SmallRng::seed_from_u64(seed);
+
+    println!("Starting simulation with seed={seed}");
+
     moosicbox_logging::init(None, None)?;
 
-    let mut sim = turmoil::Builder::new().build();
+    let mut sim = turmoil::Builder::new().build_with_rng(Box::new(rng));
 
     let service_port = default_env_usize("PORT", 8000)
         .unwrap_or(8000)
@@ -190,7 +202,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let result = sim.run();
 
-    log::info!("Server simulator finished");
+    log::info!("Server simulator finished (seed={seed})");
 
     result
 }
