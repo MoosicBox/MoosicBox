@@ -22,6 +22,7 @@ moosicbox_http = { version = "0.1.0", path = "../http", optional = true, default
 moosicbox_logging = { version = "0.1.0", path = "../logging", optional = true, default-features = false, features = [
     "macros",
 ] }
+moosicbox_simulator_utils = { version = "0.1.0", path = "../simulator/utils", optional = true }
 moosicbox_task = { version = "0.1.0", path = "../task", default-features = false }
 
 # API Dependencies
@@ -34,7 +35,6 @@ moosicbox_async_service = { version = "0.1.0", path = "../async_service", option
 tokio-util              = { workspace = true, optional = true }
 
 # Player Dependencies
-async-trait         = { workspace = true, optional = true }
 moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false, optional = true }
 moosicbox_player    = { version = "0.1.0", path = "../player", default-features = false, optional = true }
 moosicbox_session   = { version = "0.1.0", path = "../session", default-features = false, optional = true }
@@ -42,6 +42,7 @@ rand                = { workspace = true, optional = true }
 symphonia           = { workspace = true, optional = true }
 
 async-recursion = { workspace = true }
+async-trait     = { workspace = true }
 futures         = { workspace = true }
 itertools       = { workspace = true }
 log             = { workspace = true }
@@ -57,7 +58,7 @@ tokio           = { workspace = true, features = ["macros", "tracing"] }
 xml             = { workspace = true }
 
 [features]
-default = ["api", "listener", "openapi", "player"]
+default = ["api", "listener", "openapi", "player", "simulator"]
 
 fail-on-warnings = []
 
@@ -71,7 +72,6 @@ listener = [
 ]
 openapi = ["dep:utoipa"]
 player = [
-    "dep:async-trait",
     "dep:moosicbox_async_service",
     "dep:moosicbox_audio_output",
     "dep:moosicbox_http",
@@ -85,3 +85,5 @@ player = [
     "dep:symphonia",
     "listener",
 ]
+
+simulator = ["dep:moosicbox_simulator_utils"]

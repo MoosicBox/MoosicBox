@@ -11,16 +11,19 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [package.metadata.cargo-udeps.ignore]
-normal = ["moosicbox_database_connection", "moosicbox_http"]
+normal = ["moosicbox_database_connection", "moosicbox_http", "moosicbox_upnp"]
 
 [package.metadata.cargo-machete]
-ignored = ["moosicbox_database_connection", "moosicbox_http"]
+ignored = ["moosicbox_database_connection", "moosicbox_http", "moosicbox_upnp"]
 
 [dependencies]
 moosicbox_database_connection = { version = "0.1.0", path = "../../database_connection", optional = true, default-features = false, features = [
     "simulator",
 ] }
 moosicbox_http = { version = "0.1.0", path = "../../http", optional = true, default-features = false, features = [
+    "simulator",
+] }
+moosicbox_upnp = { version = "0.1.0", path = "../../upnp", optional = true, default-features = false, features = [
     "simulator",
 ] }
 turmoil = { workspace = true }
@@ -32,3 +35,4 @@ fail-on-warnings = []
 
 database = ["dep:moosicbox_database_connection"]
 http     = ["dep:moosicbox_http"]
+upnp     = ["dep:moosicbox_upnp"]

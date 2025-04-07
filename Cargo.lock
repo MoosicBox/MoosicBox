@@ -7620,6 +7620,7 @@ version = "0.1.0"
 dependencies = [
  "moosicbox_database_connection",
  "moosicbox_http",
+ "moosicbox_upnp",
  "turmoil",
 ]
 
@@ -7818,6 +7819,7 @@ dependencies = [
  "moosicbox_music_api",
  "moosicbox_player",
  "moosicbox_session",
+ "moosicbox_simulator_utils",
  "moosicbox_task",
  "pin-utils",
  "rand 0.9.0",
