@@ -558,13 +558,13 @@ impl Database for SqliteSqlxDatabase {
                     }
                     DatabaseValue::NowAdd(x) => {
                         query.push_str(
-                            "strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', ",
+                            "(strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', ",
                         );
                         query.push_str(x);
-                        query.push_str("))");
+                        query.push_str(")))");
                     }
                     DatabaseValue::Now => {
-                        query.push_str("strftime('%Y-%m-%dT%H:%M:%f', 'now')");
+                        query.push_str("(strftime('%Y-%m-%dT%H:%M:%f', 'now'))");
                     }
                     DatabaseValue::DateTime(x) => {
                         query.push('\'');
