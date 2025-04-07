@@ -67,7 +67,7 @@ pub enum InitDbError {
 pub async fn init(
     #[cfg(feature = "sqlite")]
     #[allow(unused)]
-    path: &std::path::Path,
+    path: Option<&std::path::Path>,
     #[allow(unused)] creds: Option<Credentials>,
 ) -> Result<Box<dyn Database>, InitDbError> {
     #[cfg(feature = "simulator")]
@@ -174,9 +174,12 @@ pub enum InitSqliteRusqliteError {
 /// * If fails to initialize the Sqlite connection via rusqlite
 #[cfg(feature = "sqlite-rusqlite")]
 pub fn init_sqlite_rusqlite(
-    db_location: &std::path::Path,
+    db_location: Option<&std::path::Path>,
 ) -> Result<Box<dyn Database>, InitSqliteRusqliteError> {
-    let library = ::rusqlite::Connection::open(db_location)?;
+    let library = db_location.map_or_else(
+        ::rusqlite::Connection::open_in_memory,
+        ::rusqlite::Connection::open,
+    )?;
     library.busy_timeout(std::time::Duration::from_millis(10))?;
     let library = std::sync::Arc::new(tokio::sync::Mutex::new(library));
 
@@ -217,7 +220,7 @@ pub enum InitSqliteSqlxDatabaseError {
 #[cfg(feature = "sqlite-sqlx")]
 #[allow(unused)]
 pub async fn init_sqlite_sqlx(
-    db_location: &std::path::Path,
+    db_location: Option<&std::path::Path>,
 ) -> Result<Box<dyn Database>, InitSqliteSqlxDatabaseError> {
     use std::sync::Arc;
 
@@ -225,7 +228,11 @@ pub async fn init_sqlite_sqlx(
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 
     let connect_options = SqliteConnectOptions::new();
-    let mut connect_options = connect_options.filename(db_location);
+    let mut connect_options = if let Some(db_location) = db_location {
+        connect_options.filename(db_location)
+    } else {
+        connect_options.in_memory(true)
+    };
 
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
