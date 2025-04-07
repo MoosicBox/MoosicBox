@@ -77,28 +77,54 @@ pub struct Migrations {
 }
 
 impl Migrations {
-    fn walk_dir(&'static self, mut on_file: impl FnMut(&'static File<'static>)) {
-        fn walk(dir: &'static Dir<'static>, on_file: &mut impl FnMut(&'static File<'static>)) {
+    fn walk_dir(&'static self, up: bool, mut on_file: impl FnMut(&str, &'static File<'static>)) {
+        fn walk(
+            dir: &'static Dir<'static>,
+            target: &'static str,
+            on_file: &mut impl FnMut(&str, &'static File<'static>),
+        ) {
             for entry in dir.entries() {
                 match entry {
-                    DirEntry::Dir(dir) => walk(dir, on_file),
+                    DirEntry::Dir(dir) => walk(dir, target, on_file),
                     DirEntry::File(file) => {
-                        on_file(file);
+                        let path = file.path();
+                        let Some(parent) = path.parent() else {
+                            continue;
+                        };
+                        let Some(migration_name) = parent.file_name().and_then(|x| x.to_str())
+                        else {
+                            continue;
+                        };
+                        let Some(extension) = path.extension().and_then(|x| x.to_str()) else {
+                            continue;
+                        };
+                        if extension.to_lowercase() == "sql" {
+                            let Some(name) = path.file_name().and_then(|x| x.to_str()) else {
+                                continue;
+                            };
+
+                            let name = &name[0..(name.len() - extension.len() - 1)];
+
+                            if name == target {
+                                on_file(migration_name, file);
+                            }
+                        }
                     }
                 }
             }
         }
 
-        walk(&self.directory, &mut on_file);
+        walk(
+            &self.directory,
+            if up { "up" } else { "down" },
+            &mut on_file,
+        );
     }
 
-    fn as_btree(&'static self) -> BTreeMap<String, &'static [u8]> {
+    fn as_btree(&'static self, up: bool) -> BTreeMap<String, &'static [u8]> {
         let mut map = BTreeMap::new();
 
-        self.walk_dir(|file| {
-            let Some(name) = file.path().file_name().and_then(|x| x.to_str()) else {
-                panic!("Invalid file name: {file:?}");
-            };
+        self.walk_dir(up, |name, file| {
             map.insert(name.to_string(), file.contents());
         });
 
@@ -134,7 +160,7 @@ impl Migrations {
             .execute(db)
             .await?;
 
-        let migrations = self.as_btree();
+        let migrations = self.as_btree(true);
 
         for (name, migration) in migrations {
             let results = db
