@@ -89,7 +89,6 @@ impl Migrations {
             }
 
             let mut entries = vec![];
-            let mut skip_migrations = vec![];
 
             for entry in dir.entries() {
                 match entry {
@@ -106,17 +105,6 @@ impl Migrations {
                         let Some(name) = path.file_name().and_then(|x| x.to_str()) else {
                             continue;
                         };
-
-                        if name == "metadata.toml" {
-                            if let Some(contents) = file.contents_utf8() {
-                                // FIXME: Actually parse the toml and don't actually skip this
-                                if contents.trim() == "run_in_transaction = false" {
-                                    skip_migrations.push(migration_name);
-                                    continue;
-                                }
-                            }
-                        }
-
                         let Some(extension) = path.extension().and_then(|x| x.to_str()) else {
                             continue;
                         };
@@ -135,10 +123,6 @@ impl Migrations {
             }
 
             for entry in entries {
-                if skip_migrations.iter().any(|x| *x == entry.migration_name) {
-                    continue;
-                }
-
                 on_file(entry.migration_name, entry.file);
             }
         }
