@@ -115,6 +115,7 @@ jobs:
 
             - name: Install dependencies
               if: ${{ steps.dependencies.outputs.dependencies }}
+              shell: bash
               run: ${{ steps.dependencies.outputs.dependencies }}
 
             - name: cargo llvm-cov
@@ -266,6 +267,7 @@ jobs:
 
             - name: Install dependencies
               if: ${{ matrix.package.dependencies }}
+              shell: bash
               run: ${{ matrix.package.dependencies }}
 
             - name: Clippy ${{ matrix.package.name }}
