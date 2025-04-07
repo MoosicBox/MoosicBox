@@ -11,6 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
+moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
 moosicbox_config = { version = "0.1.0", path = "../../config", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../../env_utils", default-features = false }
 moosicbox_logging = { version = "0.1.0", path = "../../logging", default-features = false }
@@ -24,7 +25,9 @@ moosicbox_simulator_harness = { version = "0.1.0", path = "../../simulator/harne
 moosicbox_task = { version = "0.1.0", path = "../../task", default-features = false }
 moosicbox_telemetry = { version = "0.1.0", path = "../../telemetry", default-features = false }
 
-log = { workspace = true }
+log        = { workspace = true }
+serde_json = { workspace = true }
+tokio      = { workspace = true }
 
 [features]
 default = ["player", "sqlite", "telemetry", "upnp"]
@@ -33,6 +36,6 @@ fail-on-warnings = []
 
 player    = ["moosicbox_server/player"]
 telemetry = ["moosicbox_server/telemetry"]
-upnp      = ["moosicbox_server/upnp", "player"]
+upnp      = ["moosicbox_server/upnp", "moosicbox_simulator_harness/upnp", "player"]
 
 sqlite = ["moosicbox_server/sqlite"]
