@@ -122,6 +122,9 @@ utoipa-scalar     = { workspace = true, optional = true }
 utoipa-swagger-ui = { workspace = true, optional = true }
 
 # auth
+moosicbox_simulator_utils = { version = "0.1.0", path = "../simulator/utils", optional = true }
+
+# auth
 qstring = { workspace = true, optional = true }
 
 # TLS
@@ -418,3 +421,5 @@ profiling-tracy = [
     "profiling",
     "profiling/profile-with-tracy",
 ]
+
+simulator = ["dep:moosicbox_simulator_utils"]

@@ -14,7 +14,9 @@ version     = "0.1.0"
 moosicbox_config = { version = "0.1.0", path = "../../config", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../../env_utils", default-features = false }
 moosicbox_logging = { version = "0.1.0", path = "../../logging", default-features = false }
-moosicbox_server = { version = "0.1.0", path = "../", default-features = false }
+moosicbox_server = { version = "0.1.0", path = "../", default-features = false, features = [
+    "simulator",
+] }
 moosicbox_simulator_harness = { version = "0.1.0", path = "../../simulator/harness", default-features = false, features = [
     "database",
     "http",
@@ -25,10 +27,12 @@ moosicbox_telemetry = { version = "0.1.0", path = "../../telemetry", default-fea
 log = { workspace = true }
 
 [features]
-default = ["player", "telemetry", "upnp"]
+default = ["player", "sqlite", "telemetry", "upnp"]
 
 fail-on-warnings = []
 
 player    = ["moosicbox_server/player"]
 telemetry = ["moosicbox_server/telemetry"]
 upnp      = ["moosicbox_server/upnp", "player"]
+
+sqlite = ["moosicbox_server/sqlite"]

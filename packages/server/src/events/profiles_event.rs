@@ -16,12 +16,25 @@ async fn add_profile(
     log::debug!("add_profile: app_type={app_type} profile={profile}");
 
     #[cfg(feature = "sqlite")]
-    let library_db_profile_path = crate::db::make_profile_library_db_path(app_type, profile)
-        .expect("Failed to get DB profile path");
+    let library_db_profile_path = {
+        #[cfg(feature = "simulator")]
+        let use_simulator = moosicbox_simulator_utils::simulator_enabled();
+        #[cfg(not(feature = "simulator"))]
+        let use_simulator = false;
+
+        if use_simulator {
+            None
+        } else {
+            Some(
+                crate::db::make_profile_library_db_path(app_type, profile)
+                    .expect("Failed to get DB profile path"),
+            )
+        }
+    };
 
     let library_db = moosicbox_database_connection::init(
         #[cfg(feature = "sqlite")]
-        &library_db_profile_path,
+        library_db_profile_path.as_deref(),
         None,
     )
     .await

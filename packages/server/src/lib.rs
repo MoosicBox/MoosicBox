@@ -94,11 +94,22 @@ pub async fn run(
     start_puffin_server();
 
     #[cfg(feature = "sqlite")]
-    let config_db_path = db::make_config_db_path(app_type).expect("Failed to get DB config path");
+    let config_db_path = {
+        #[cfg(feature = "simulator")]
+        let use_simulator = moosicbox_simulator_utils::simulator_enabled();
+        #[cfg(not(feature = "simulator"))]
+        let use_simulator = false;
+
+        if use_simulator {
+            None
+        } else {
+            Some(crate::db::make_config_db_path(app_type).expect("Failed to get DB config path"))
+        }
+    };
 
     let config_db = moosicbox_database_connection::init(
         #[cfg(feature = "sqlite")]
-        &config_db_path,
+        config_db_path.as_deref(),
         None,
     )
     .await

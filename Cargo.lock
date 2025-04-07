@@ -7530,6 +7530,7 @@ dependencies = [
  "moosicbox_schema",
  "moosicbox_search",
  "moosicbox_session",
+ "moosicbox_simulator_utils",
  "moosicbox_task",
  "moosicbox_telemetry",
  "moosicbox_tidal",
