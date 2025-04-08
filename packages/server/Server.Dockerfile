@@ -209,7 +209,6 @@ RUN echo 'Acquire::http::Timeout "10";' >>/etc/apt/apt.conf.d/httpproxy && \
 RUN apt-get update && apt-get install -y ca-certificates curl libasound2-dev sqlite3
 
 COPY --from=builder /app/target/release/moosicbox_server /
-COPY --from=builder /app/library.db /
 EXPOSE 8010
 ARG WS_HOST
 ENV WS_HOST=${WS_HOST}
