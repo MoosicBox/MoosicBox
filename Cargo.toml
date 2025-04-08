@@ -373,7 +373,7 @@ xml = "0.8.20"
 # utoipa-swagger-ui        = { git = "https://github.com/juhaku/utoipa" }
 
 actix-web-opentelemetry = { git = "https://github.com/open-telemetry/opentelemetry-rust-contrib" }
-notify-rust             = { git = "https://github.com/An1MuS1111/notify-rust" }
+notify-rust             = { git = "https://github.com/hoodie/notify-rust" }
 pingora                 = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
 pingora-core            = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
 pingora-http            = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
