@@ -8,6 +8,8 @@ use thiserror::Error;
 #[cfg(feature = "scanner")]
 pub mod scanner;
 
+pub const SERVICE_TYPE: &str = "_moosicboxserver._tcp.local.";
+
 #[derive(Debug, Error)]
 pub enum RegisterServiceError {
     #[error(transparent)]
@@ -26,7 +28,6 @@ pub fn register_service(
     port: u16,
 ) -> Result<(), RegisterServiceError> {
     let mdns = ServiceDaemon::new()?;
-    let service_type = "_moosicboxserver._tcp.local.";
     let host_name = format!(
         "{}.local.",
         hostname::get()?
@@ -35,15 +36,15 @@ pub fn register_service(
     );
 
     log::debug!(
-        "register_service: Registering mdns service service_type={service_type} instance_name={instance_name} host_name={host_name} ip={ip} port={port}"
+        "register_service: Registering mdns service service_type={SERVICE_TYPE} instance_name={instance_name} host_name={host_name} ip={ip} port={port}"
     );
 
-    let service_info = ServiceInfo::new(service_type, instance_name, &host_name, ip, port, None)?;
+    let service_info = ServiceInfo::new(SERVICE_TYPE, instance_name, &host_name, ip, port, None)?;
 
     mdns.register(service_info)?;
 
     log::debug!(
-        "register_service: Registered mdns service service_type={service_type} instance_name={instance_name} host_name={host_name} ip={ip} port={port}"
+        "register_service: Registered mdns service service_type={SERVICE_TYPE} instance_name={instance_name} host_name={host_name} ip={ip} port={port}"
     );
 
     Ok(())
