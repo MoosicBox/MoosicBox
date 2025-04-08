@@ -25,6 +25,7 @@ RUN cat Cargo.toml | \
     \"packages\/downloader\",\r\
     \"packages\/env_utils\",\r\
     \"packages\/files\",\r\
+    \"packages\/http\",\r\
     \"packages\/image\",\r\
     \"packages\/json_utils\",\r\
     \"packages\/library\",\r\
@@ -79,6 +80,7 @@ COPY packages/date_utils/Cargo.toml packages/date_utils/Cargo.toml
 COPY packages/downloader/Cargo.toml packages/downloader/Cargo.toml
 COPY packages/env_utils/Cargo.toml packages/env_utils/Cargo.toml
 COPY packages/files/Cargo.toml packages/files/Cargo.toml
+COPY packages/http/Cargo.toml packages/http/Cargo.toml
 COPY packages/image/Cargo.toml packages/image/Cargo.toml
 COPY packages/json_utils/Cargo.toml packages/json_utils/Cargo.toml
 COPY packages/library/Cargo.toml packages/library/Cargo.toml
@@ -135,6 +137,7 @@ packages/date_utils|\
 packages/downloader|\
 packages/env_utils|\
 packages/files|\
+packages/http|\
 packages/image|\
 packages/json_utils|\
 packages/library|\
