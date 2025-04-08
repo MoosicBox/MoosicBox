@@ -361,6 +361,7 @@ xml = "0.8.20"
 # eframe                   = { git = "https://github.com/BSteffaniak/egui" }
 # egui                     = { git = "https://github.com/BSteffaniak/egui" }
 # egui_extras              = { git = "https://github.com/BSteffaniak/egui" }
+# notify-rust              = { git = "https://github.com/hoodie/notify-rust" }
 # opentelemetry            = { git = "https://github.com/open-telemetry/opentelemetry-rust" }
 # opentelemetry-otlp       = { git = "https://github.com/open-telemetry/opentelemetry-rust" }
 # opentelemetry-prometheus = { git = "https://github.com/open-telemetry/opentelemetry-rust" }
@@ -373,7 +374,6 @@ xml = "0.8.20"
 # utoipa-swagger-ui        = { git = "https://github.com/juhaku/utoipa" }
 
 actix-web-opentelemetry = { git = "https://github.com/open-telemetry/opentelemetry-rust-contrib" }
-notify-rust             = { git = "https://github.com/hoodie/notify-rust" }
 pingora                 = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
 pingora-core            = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
 pingora-http            = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
