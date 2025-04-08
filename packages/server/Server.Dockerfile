@@ -54,6 +54,7 @@ RUN cat Cargo.toml | \
     \"packages\/simulator\/utils\",\r\
     \"packages\/stream_utils\",\r\
     \"packages\/task\",\r\
+    \"packages\/telemetry\",\r\
     \"packages\/tidal\",\r\
     \"packages\/tunnel\",\r\
     \"packages\/tunnel_sender\",\r\
@@ -110,6 +111,7 @@ COPY packages/session/models/Cargo.toml packages/session/models/Cargo.toml
 COPY packages/simulator/utils/Cargo.toml packages/simulator/utils/Cargo.toml
 COPY packages/stream_utils/Cargo.toml packages/stream_utils/Cargo.toml
 COPY packages/task/Cargo.toml packages/task/Cargo.toml
+COPY packages/telemetry/Cargo.toml packages/telemetry/Cargo.toml
 COPY packages/tidal/Cargo.toml packages/tidal/Cargo.toml
 COPY packages/tunnel/Cargo.toml packages/tunnel/Cargo.toml
 COPY packages/tunnel_sender/Cargo.toml packages/tunnel_sender/Cargo.toml
@@ -162,6 +164,7 @@ packages/server|\
 packages/session|\
 packages/stream_utils|\
 packages/task|\
+packages/telemetry|\
 packages/tidal|\
 packages/tunnel|\
 packages/tunnel_sender|\

@@ -46,6 +46,7 @@
 !/packages/simulator/utils
 !/packages/stream_utils
 !/packages/task
+!/packages/telemetry
 !/packages/tidal
 !/packages/tunnel
 !/packages/tunnel_sender
