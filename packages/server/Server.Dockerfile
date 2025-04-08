@@ -106,6 +106,7 @@ COPY packages/scan/Cargo.toml packages/scan/Cargo.toml
 COPY packages/schema/Cargo.toml packages/schema/Cargo.toml
 COPY packages/search/Cargo.toml packages/search/Cargo.toml
 COPY packages/server/Cargo.toml packages/server/Cargo.toml
+COPY packages/server/build.rs packages/server/build.rs
 COPY packages/session/Cargo.toml packages/session/Cargo.toml
 COPY packages/session/models/Cargo.toml packages/session/models/Cargo.toml
 COPY packages/simulator/utils/Cargo.toml packages/simulator/utils/Cargo.toml
