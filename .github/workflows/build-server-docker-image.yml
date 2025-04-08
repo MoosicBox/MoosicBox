@@ -8,7 +8,6 @@ on:
             - '**/*.toml'
             - '**/Cargo.lock'
             - .github/workflows/build-server-docker-image.yml
-            - free_disk_space.sh
             - '!packages/marketing_site/**'
             - '!packages/hyperchad/**'
             - '!packages/app/**'
