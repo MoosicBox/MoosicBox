@@ -27,6 +27,7 @@
 !/packages/menu/models
 !/packages/middleware
 !/packages/music_api
+!/packages/music_api/models
 !/packages/music/models
 !/packages/openport
 !/packages/paging
