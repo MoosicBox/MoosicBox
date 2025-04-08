@@ -38,6 +38,7 @@ RUN cat Cargo.toml | \
     \"packages\/music\/models\",\r\
     \"packages\/openport\",\r\
     \"packages\/paging\",\r\
+    \"packages\/parsing_utils\",\r\
     \"packages\/player\",\r\
     \"packages\/profiles\",\r\
     \"packages\/qobuz\",\r\
@@ -90,6 +91,7 @@ COPY packages/music_api/Cargo.toml packages/music_api/Cargo.toml
 COPY packages/music/models/Cargo.toml packages/music/models/Cargo.toml
 COPY packages/openport/Cargo.toml packages/openport/Cargo.toml
 COPY packages/paging/Cargo.toml packages/paging/Cargo.toml
+COPY packages/parsing_utils/Cargo.toml packages/parsing_utils/Cargo.toml
 COPY packages/player/Cargo.toml packages/player/Cargo.toml
 COPY packages/profiles/Cargo.toml packages/profiles/Cargo.toml
 COPY packages/qobuz/Cargo.toml packages/qobuz/Cargo.toml
@@ -141,6 +143,7 @@ packages/middleware|\
 packages/music_api|\
 packages/openport|\
 packages/paging|\
+packages/parsing_utils|\
 packages/player|\
 packages/profiles|\
 packages/qobuz|\

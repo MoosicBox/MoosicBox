@@ -30,6 +30,7 @@
 !/packages/music/models
 !/packages/openport
 !/packages/paging
+!/packages/parsing_utils
 !/packages/player
 !/packages/profiles
 !/packages/qobuz
