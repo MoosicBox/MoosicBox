@@ -21,6 +21,7 @@ moosicbox_server = { version = "0.1.0", path = "../", default-features = false, 
 moosicbox_simulator_harness = { version = "0.1.0", path = "../../simulator/harness", default-features = false, features = [
     "database",
     "http",
+    "mdns",
 ] }
 moosicbox_task = { version = "0.1.0", path = "../../task", default-features = false }
 moosicbox_telemetry = { version = "0.1.0", path = "../../telemetry", default-features = false }

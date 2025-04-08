@@ -7146,12 +7146,14 @@ dependencies = [
 name = "moosicbox_mdns"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "hostname 0.4.0",
  "kanal",
  "log",
  "mdns-sd",
  "moosicbox_assert",
  "moosicbox_async_service",
+ "moosicbox_simulator_utils",
  "moosicbox_task",
  "strum_macros 0.27.1",
  "thiserror 2.0.12",
@@ -7603,6 +7605,7 @@ dependencies = [
  "getrandom 0.3.2",
  "moosicbox_database_connection",
  "moosicbox_http",
+ "moosicbox_mdns",
  "moosicbox_upnp",
  "rand 0.8.5",
  "turmoil",

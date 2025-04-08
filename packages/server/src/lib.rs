@@ -523,6 +523,7 @@ pub async fn run<T>(
 
     if let Err(e) =
         moosicbox_mdns::register_service(SERVER_ID.get().expect("No SERVER_ID"), &ip, service_port)
+            .await
     {
         moosicbox_assert::die_or_error!("Failed to register mdns service: {e:?}");
     }

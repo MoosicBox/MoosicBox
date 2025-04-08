@@ -11,22 +11,26 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
-moosicbox_task   = { version = "0.1.0", path = "../task", default-features = false }
+moosicbox_assert          = { version = "0.1.0", path = "../assert", default-features = false }
+moosicbox_simulator_utils = { version = "0.1.0", path = "../simulator/utils", optional = true, default-features = false }
+moosicbox_task            = { version = "0.1.0", path = "../task", default-features = false }
 
 # Scanner dependencies
 kanal                   = { workspace = true, optional = true }
 moosicbox_async_service = { version = "0.1.0", path = "../async_service", optional = true, default-features = false }
 strum_macros            = { workspace = true, optional = true }
 
-hostname  = { workspace = true }
-log       = { workspace = true }
-mdns-sd   = { workspace = true }
-thiserror = { workspace = true }
+async-trait = { workspace = true }
+hostname    = { workspace = true }
+log         = { workspace = true }
+mdns-sd     = { workspace = true }
+thiserror   = { workspace = true }
 
 [features]
-default = ["scanner"]
+default = ["scanner", "simulator"]
 
 fail-on-warnings = []
 
 scanner = ["dep:kanal", "dep:moosicbox_async_service", "dep:strum_macros"]
+
+simulator = ["dep:moosicbox_simulator_utils"]
