@@ -1,0 +1,58 @@
+name: Build Tunnel Server Docker Image
+
+on:
+    push:
+        branches: ['master', 'edge']
+        paths:
+            - '/*.toml'
+            - '/Cargo.lock'
+            - .github/workflows/build-tunnel-server-docker-image.yml
+            - 'packages/assert/**'
+            - 'packages/async_service/**'
+            - 'packages/config/**'
+            - 'packages/database/**'
+            - 'packages/database_connection/**'
+            - 'packages/http/**'
+            - 'packages/env_utils/**'
+            - 'packages/json_utils/**'
+            - 'packages/logging/**'
+            - 'packages/middleware/**'
+            - 'packages/profiles/**'
+            - 'packages/simulator/utils/**'
+            - 'packages/task/**'
+            - 'packages/telemetry/**'
+            - 'packages/tunnel/**'
+            - 'packages/tunnel_server/**'
+    pull_request:
+        branches: ['master', 'edge']
+    workflow_dispatch:
+        inputs:
+            edge:
+                description: 'Edge'
+                required: false
+                type: boolean
+                default: false
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Enable patches
+              if: ${{ github.event_name == 'schedule' || github.event.inputs.edge == true }}
+              run: |
+                  git config user.name "MoosicBoxBot"
+                  git config user.email "MoosicBoxBot@gmail.com"
+                  git checkout edge
+                  git rebase master
+
+            - name: Build Dockerfile
+              shell: bash
+              run: |
+                  docker build . -f packages/tunnel_server/TunnelServer.Dockerfile
