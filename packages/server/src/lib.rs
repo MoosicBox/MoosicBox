@@ -430,67 +430,67 @@ pub async fn run<T>(
             log::debug!("run: started http_server listening on {addr}:{service_port}");
         }
 
-        #[cfg(feature = "tls")]
-        {
-            use std::io::Write as _;
+        if let Some(listener) = listener {
+            http_server = http_server.listen(listener)?;
+        } else {
+            #[cfg(feature = "tls")]
+            {
+                use std::io::Write as _;
 
-            use openssl::ssl::{SslAcceptor, SslMethod};
+                use openssl::ssl::{SslAcceptor, SslMethod};
 
-            let config_dir =
-                moosicbox_config::get_config_dir_path().expect("Failed to get config dir");
+                let config_dir =
+                    moosicbox_config::get_config_dir_path().expect("Failed to get config dir");
 
-            let tls_dir = config_dir.join("tls");
-            let cert_path = tls_dir.join("cert.pem");
-            let key_path = tls_dir.join("key.pem");
+                let tls_dir = config_dir.join("tls");
+                let cert_path = tls_dir.join("cert.pem");
+                let key_path = tls_dir.join("key.pem");
 
-            if !tls_dir.is_dir() {
-                std::fs::create_dir_all(&tls_dir).expect("Failed to create tls dir");
-            }
+                if !tls_dir.is_dir() {
+                    std::fs::create_dir_all(&tls_dir).expect("Failed to create tls dir");
+                }
 
-            if !cert_path.is_file() || !key_path.is_file() {
-                use rcgen::{CertifiedKey, generate_simple_self_signed};
+                if !cert_path.is_file() || !key_path.is_file() {
+                    use rcgen::{CertifiedKey, generate_simple_self_signed};
 
-                let subject_alt_names = vec!["localhost".to_string()];
+                    let subject_alt_names = vec!["localhost".to_string()];
 
-                let CertifiedKey { cert, key_pair } =
-                    generate_simple_self_signed(subject_alt_names).unwrap();
+                    let CertifiedKey { cert, key_pair } =
+                        generate_simple_self_signed(subject_alt_names).unwrap();
 
-                let mut cert_file = std::fs::OpenOptions::new()
-                    .create(true) // To create a new file
-                    .truncate(true)
-                    .write(true)
-                    .open(&cert_path)
+                    let mut cert_file = std::fs::OpenOptions::new()
+                        .create(true) // To create a new file
+                        .truncate(true)
+                        .write(true)
+                        .open(&cert_path)
+                        .unwrap();
+                    cert_file
+                        .write_all(cert.pem().as_bytes())
+                        .expect("Failed to create cert file");
+
+                    let mut key_file = std::fs::OpenOptions::new()
+                        .create(true) // To create a new file
+                        .truncate(true)
+                        .write(true)
+                        .open(&key_path)
+                        .unwrap();
+                    key_file
+                        .write_all(key_pair.serialize_pem().as_bytes())
+                        .expect("Failed to create key file");
+                }
+
+                let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
+
+                builder
+                    .set_private_key_file(&key_path, openssl::ssl::SslFiletype::PEM)
                     .unwrap();
-                cert_file
-                    .write_all(cert.pem().as_bytes())
-                    .expect("Failed to create cert file");
 
-                let mut key_file = std::fs::OpenOptions::new()
-                    .create(true) // To create a new file
-                    .truncate(true)
-                    .write(true)
-                    .open(&key_path)
-                    .unwrap();
-                key_file
-                    .write_all(key_pair.serialize_pem().as_bytes())
-                    .expect("Failed to create key file");
+                builder.set_certificate_chain_file(&cert_path).unwrap();
+
+                http_server = http_server.bind_openssl((addr, service_port), builder)?;
             }
-
-            let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
-
-            builder
-                .set_private_key_file(&key_path, openssl::ssl::SslFiletype::PEM)
-                .unwrap();
-
-            builder.set_certificate_chain_file(&cert_path).unwrap();
-
-            http_server = http_server.bind_openssl((addr, service_port), builder)?;
-        }
-        #[cfg(not(feature = "tls"))]
-        {
-            if let Some(listener) = listener {
-                http_server = http_server.listen(listener)?;
-            } else {
+            #[cfg(not(feature = "tls"))]
+            {
                 http_server = http_server.bind((addr, service_port))?;
             }
         }
