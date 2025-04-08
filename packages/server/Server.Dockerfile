@@ -51,6 +51,7 @@ RUN cat Cargo.toml | \
     \"packages\/server\",\r\
     \"packages\/session\",\r\
     \"packages\/session\/models\",\r\
+    \"packages\/simulator\/utils\",\r\
     \"packages\/stream_utils\",\r\
     \"packages\/task\",\r\
     \"packages\/tidal\",\r\
@@ -106,6 +107,7 @@ COPY packages/search/Cargo.toml packages/search/Cargo.toml
 COPY packages/server/Cargo.toml packages/server/Cargo.toml
 COPY packages/session/Cargo.toml packages/session/Cargo.toml
 COPY packages/session/models/Cargo.toml packages/session/models/Cargo.toml
+COPY packages/simulator/utils/Cargo.toml packages/simulator/utils/Cargo.toml
 COPY packages/stream_utils/Cargo.toml packages/stream_utils/Cargo.toml
 COPY packages/task/Cargo.toml packages/task/Cargo.toml
 COPY packages/tidal/Cargo.toml packages/tidal/Cargo.toml
@@ -176,7 +178,8 @@ RUN \
   printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/menu/models/Cargo.toml" && \
   printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/music_api/models/Cargo.toml" && \
   printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/music/models/Cargo.toml" && \
-  printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/session/models/Cargo.toml"
+  printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/session/models/Cargo.toml" && \
+  printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/simulator/utils/Cargo.toml"
 
 RUN mkdir packages/server/src && \
   echo 'fn main() {}' >packages/server/src/main.rs
