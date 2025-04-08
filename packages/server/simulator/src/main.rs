@@ -48,8 +48,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let actix_workers = option_env_usize("ACTIX_WORKERS")
             .map_err(|e| std::io::Error::other(format!("Invalid ACTIX_WORKERS: {e:?}")))?;
         #[cfg(feature = "telemetry")]
-        let otel =
-            std::sync::Arc::new(moosicbox_telemetry::Otel::new().map_err(std::io::Error::other)?);
+        let metrics_handler = std::sync::Arc::new(
+            moosicbox_telemetry::get_http_metrics_handler().map_err(std::io::Error::other)?,
+        );
 
         let actual_tcp_listener = std::net::TcpListener::bind(format!("{addr}:{service_port}"))?;
 
@@ -64,7 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             #[cfg(feature = "upnp")]
             true,
             #[cfg(feature = "telemetry")]
-            otel,
+            metrics_handler,
             move || {
                 moosicbox_task::spawn("simulation TCP listener", async move {
                     use tokio::io::{AsyncReadExt, AsyncWriteExt};

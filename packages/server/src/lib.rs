@@ -53,8 +53,9 @@ pub async fn run_basic<T>(
     on_startup: impl FnOnce() -> T + Send,
 ) -> std::io::Result<T> {
     #[cfg(feature = "telemetry")]
-    let otel =
-        std::sync::Arc::new(moosicbox_telemetry::Otel::new().map_err(std::io::Error::other)?);
+    let request_metrics = std::sync::Arc::new(
+        moosicbox_telemetry::get_http_metrics_handler().map_err(std::io::Error::other)?,
+    );
 
     run(
         app_type,
@@ -67,7 +68,7 @@ pub async fn run_basic<T>(
         #[cfg(feature = "upnp")]
         false,
         #[cfg(feature = "telemetry")]
-        otel,
+        request_metrics,
         on_startup,
     )
     .await
@@ -90,7 +91,9 @@ pub async fn run<T>(
     listener: Option<TcpListener>,
     #[cfg(feature = "player")] local_players: bool,
     #[cfg(feature = "upnp")] upnp_players: bool,
-    #[cfg(feature = "telemetry")] otel: Arc<moosicbox_telemetry::Otel>,
+    #[cfg(feature = "telemetry")] metrics_handler: Arc<
+        Box<dyn moosicbox_telemetry::HttpMetricsHandler>,
+    >,
     on_startup: impl FnOnce() -> T + Send,
 ) -> std::io::Result<T> {
     #[cfg(feature = "profiling-tracing")]
@@ -295,9 +298,9 @@ pub async fn run<T>(
 
             #[cfg(feature = "telemetry")]
             let app = app
-                .app_data(actix_web::web::Data::new(otel.clone()))
+                .app_data(actix_web::web::Data::new(metrics_handler.clone()))
                 .service(moosicbox_telemetry::metrics)
-                .wrap(otel.request_metrics.clone())
+                .wrap(metrics_handler.request_middleware())
                 .wrap(moosicbox_telemetry::RequestTracing::new());
 
             #[cfg(feature = "static-token-auth")]

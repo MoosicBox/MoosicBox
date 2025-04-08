@@ -7606,6 +7606,7 @@ dependencies = [
  "moosicbox_database_connection",
  "moosicbox_http",
  "moosicbox_mdns",
+ "moosicbox_telemetry",
  "moosicbox_upnp",
  "rand 0.8.5",
  "turmoil",
@@ -7647,8 +7648,10 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "actix-web-opentelemetry",
+ "futures-util",
  "moosicbox_env_utils",
  "moosicbox_logging",
+ "moosicbox_simulator_utils",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry-prometheus",
@@ -7656,6 +7659,7 @@ dependencies = [
  "prometheus",
  "tracing",
  "tracing-opentelemetry",
+ "tracing-subscriber",
 ]
 
 [[package]]

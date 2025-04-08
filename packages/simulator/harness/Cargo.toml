@@ -15,6 +15,7 @@ normal = [
     "moosicbox_database_connection",
     "moosicbox_http",
     "moosicbox_mdns",
+    "moosicbox_telemetry",
     "moosicbox_upnp",
 ]
 
@@ -23,6 +24,7 @@ ignored = [
     "moosicbox_database_connection",
     "moosicbox_http",
     "moosicbox_mdns",
+    "moosicbox_telemetry",
     "moosicbox_upnp",
 ]
 
@@ -34,6 +36,9 @@ moosicbox_http = { version = "0.1.0", path = "../../http", optional = true, defa
     "simulator",
 ] }
 moosicbox_mdns = { version = "0.1.0", path = "../../mdns", optional = true, default-features = false, features = [
+    "simulator",
+] }
+moosicbox_telemetry = { version = "0.1.0", path = "../../telemetry", optional = true, default-features = false, features = [
     "simulator",
 ] }
 moosicbox_upnp = { version = "0.1.0", path = "../../upnp", optional = true, default-features = false, features = [
@@ -49,7 +54,8 @@ default = []
 
 fail-on-warnings = []
 
-database = ["dep:moosicbox_database_connection"]
-http     = ["dep:moosicbox_http"]
-mdns     = ["dep:moosicbox_mdns"]
-upnp     = ["dep:moosicbox_upnp"]
+database  = ["dep:moosicbox_database_connection"]
+http      = ["dep:moosicbox_http"]
+mdns      = ["dep:moosicbox_mdns"]
+telemetry = ["dep:moosicbox_telemetry"]
+upnp      = ["dep:moosicbox_upnp"]

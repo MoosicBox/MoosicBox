@@ -60,8 +60,9 @@ fn main() -> Result<(), std::io::Error> {
             .expect("Failed to initialize FreeLog");
 
         #[cfg(feature = "telemetry")]
-        let otel =
-            std::sync::Arc::new(moosicbox_telemetry::Otel::new().map_err(std::io::Error::other)?);
+        let metrics_handler = std::sync::Arc::new(
+            moosicbox_telemetry::get_http_metrics_handler().map_err(std::io::Error::other)?,
+        );
 
         db::init().await.expect("Failed to init postgres DB");
 
@@ -116,9 +117,9 @@ fn main() -> Result<(), std::io::Error> {
 
             #[cfg(feature = "telemetry")]
             let app = app
-                .app_data(actix_web::web::Data::new(otel.clone()))
+                .app_data(actix_web::web::Data::new(metrics_handler.clone()))
                 .service(moosicbox_telemetry::metrics)
-                .wrap(otel.request_metrics.clone())
+                .wrap(metrics_handler.request_middleware())
                 .wrap(moosicbox_telemetry::RequestTracing::new());
 
             let app = app

@@ -2,12 +2,17 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+#[cfg(feature = "simulator")]
+mod simulator;
+
 #[cfg(feature = "actix")]
 use actix_web::{Handler as _, HttpRequest, Responder, get, web};
 #[cfg(feature = "actix")]
 pub use actix_web_opentelemetry::RequestTracing;
 #[cfg(feature = "actix")]
 use actix_web_opentelemetry::{PrometheusMetricsHandler, RequestMetrics, RequestMetricsBuilder};
+#[cfg(feature = "actix")]
+use futures_util::future::LocalBoxFuture;
 use moosicbox_logging::free_log_client::DynLayer;
 use opentelemetry::{
     InstrumentationScope, KeyValue,
@@ -15,17 +20,19 @@ use opentelemetry::{
     trace::TracerProvider as _,
 };
 use opentelemetry_otlp::{ExporterBuildError, WithExportConfig};
-use opentelemetry_sdk::{
-    Resource,
-    metrics::{MeterProviderBuilder, MetricError, SdkMeterProvider},
-    propagation::TraceContextPropagator,
-    trace::SdkTracerProvider,
-};
+#[cfg(feature = "actix")]
+use opentelemetry_sdk::metrics::{MeterProviderBuilder, MetricError, SdkMeterProvider};
+use opentelemetry_sdk::{Resource, propagation::TraceContextPropagator, trace::SdkTracerProvider};
 
 /// # Errors
 ///
 /// * If the otlp fails to build
 pub fn init_tracer(name: &'static str) -> Result<DynLayer, ExporterBuildError> {
+    #[cfg(feature = "simulator")]
+    if moosicbox_simulator_utils::simulator_enabled() {
+        return Ok(Box::new(simulator::SimulatorLayer));
+    }
+
     global::set_text_map_propagator(TraceContextPropagator::new());
 
     let provider = SdkTracerProvider::builder()
@@ -64,15 +71,54 @@ pub fn get_resource_attr(name: &'static str) -> Resource {
         .build()
 }
 
+#[cfg(feature = "actix")]
+pub trait HttpMetricsHandler: Send + Sync + std::fmt::Debug {
+    fn call(
+        &self,
+        request: HttpRequest,
+    ) -> LocalBoxFuture<'static, Result<actix_web::HttpResponse<String>, actix_web::error::Error>>;
+
+    fn request_middleware(&self) -> RequestMetrics;
+}
+
+/// # Errors
+///
+/// * If the Prometheus exporter fails to build
+#[cfg(feature = "actix")]
+pub fn get_http_metrics_handler() -> Result<Box<dyn HttpMetricsHandler>, MetricError> {
+    #[cfg(feature = "simulator")]
+    if moosicbox_simulator_utils::simulator_enabled() {
+        return Ok(Box::new(simulator::SimulatorHttpMetricsHandler));
+    }
+
+    Ok(Box::new(Otel::new()?))
+}
+
 #[derive(Debug)]
-pub struct Otel {
+#[cfg(feature = "actix")]
+struct Otel {
+    #[allow(unused)]
     pub meter_provider: SdkMeterProvider,
-    #[cfg(feature = "actix")]
     pub request_metrics: RequestMetrics,
-    #[cfg(feature = "actix")]
     pub prometheus_metrics_handler: PrometheusMetricsHandler,
 }
 
+#[cfg(feature = "actix")]
+impl HttpMetricsHandler for Otel {
+    fn call(
+        &self,
+        request: HttpRequest,
+    ) -> LocalBoxFuture<'static, Result<actix_web::HttpResponse<String>, actix_web::error::Error>>
+    {
+        self.prometheus_metrics_handler.call(request)
+    }
+
+    fn request_middleware(&self) -> RequestMetrics {
+        self.request_metrics.clone()
+    }
+}
+
+#[cfg(feature = "actix")]
 impl Otel {
     /// # Errors
     ///
@@ -116,8 +162,8 @@ impl Otel {
 #[tracing::instrument]
 #[get("/metrics")]
 pub async fn metrics(
-    otel: web::Data<std::sync::Arc<Otel>>,
+    otel: web::Data<std::sync::Arc<Box<dyn HttpMetricsHandler>>>,
     request: HttpRequest,
 ) -> impl Responder {
-    otel.prometheus_metrics_handler.call(request).await
+    otel.call(request).await
 }

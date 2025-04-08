@@ -49,8 +49,9 @@ fn main() -> std::io::Result<()> {
             .expect("Failed to initialize FreeLog");
 
         #[cfg(feature = "telemetry")]
-        let otel =
-            std::sync::Arc::new(moosicbox_telemetry::Otel::new().map_err(std::io::Error::other)?);
+        let request_metrics = std::sync::Arc::new(
+            moosicbox_telemetry::get_http_metrics_handler().map_err(std::io::Error::other)?,
+        );
 
         moosicbox_server::run(
             AppType::Server,
@@ -63,7 +64,7 @@ fn main() -> std::io::Result<()> {
             #[cfg(feature = "upnp")]
             true,
             #[cfg(feature = "telemetry")]
-            otel,
+            request_metrics,
             || {},
         )
         .await?;

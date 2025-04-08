@@ -22,6 +22,7 @@ moosicbox_simulator_harness = { version = "0.1.0", path = "../../simulator/harne
     "database",
     "http",
     "mdns",
+    "telemetry",
 ] }
 moosicbox_task = { version = "0.1.0", path = "../../task", default-features = false }
 moosicbox_telemetry = { version = "0.1.0", path = "../../telemetry", default-features = false }
