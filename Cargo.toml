@@ -357,6 +357,7 @@ xml = "0.8.20"
 # actix-web                = { git = "https://github.com/actix/actix-web" }
 # actix-web-actors         = { git = "https://github.com/actix/actix-web" }
 # actix-web-codegen        = { git = "https://github.com/actix/actix-web" }
+# actix-web-opentelemetry  = { git = "https://github.com/open-telemetry/opentelemetry-rust-contrib" }
 # awc                      = { git = "https://github.com/actix/actix-web" }
 # eframe                   = { git = "https://github.com/BSteffaniak/egui" }
 # egui                     = { git = "https://github.com/BSteffaniak/egui" }
@@ -373,9 +374,8 @@ xml = "0.8.20"
 # utoipa-scalar            = { git = "https://github.com/juhaku/utoipa" }
 # utoipa-swagger-ui        = { git = "https://github.com/juhaku/utoipa" }
 
-actix-web-opentelemetry = { git = "https://github.com/open-telemetry/opentelemetry-rust-contrib" }
-pingora                 = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
-pingora-core            = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
-pingora-http            = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
-pingora-load-balancing  = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
-pingora-proxy           = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
+pingora                = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
+pingora-core           = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
+pingora-http           = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
+pingora-load-balancing = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
+pingora-proxy          = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }

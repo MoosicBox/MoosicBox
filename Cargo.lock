@@ -368,7 +368,8 @@ dependencies = [
 [[package]]
 name = "actix-web-opentelemetry"
 version = "0.22.0"
-source = "git+https://github.com/open-telemetry/opentelemetry-rust-contrib#c76b69f360d500ac92502098528dc8c6bd1521d0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cbec953223d079fef17d6df51428c92005e46cad8e3475f5fbd95d8b42310f3e"
 dependencies = [
  "actix-http",
  "actix-web",
