@@ -46,7 +46,7 @@ moosicbox_upnp = { version = "0.1.0", path = "../../upnp", optional = true, defa
 ] }
 
 getrandom = { workspace = true }
-rand      = { version = "0.8.5" }
+rand      = { version = "0.9.0" }
 turmoil   = { workspace = true }
 
 [features]
