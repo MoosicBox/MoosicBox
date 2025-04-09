@@ -39,8 +39,6 @@ static WS_SERVER_HANDLE: LazyLock<tokio::sync::RwLock<Option<ws::server::WsServe
 static CONFIG_DB: LazyLock<std::sync::RwLock<Option<ConfigDatabase>>> =
     LazyLock::new(|| std::sync::RwLock::new(None));
 
-static SERVER_ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-
 /// # Errors
 ///
 /// * If the server fails to start
@@ -136,13 +134,9 @@ pub async fn run<T>(
 
     CONFIG_DB.write().unwrap().replace(config_database.clone());
 
-    SERVER_ID
-        .set(
-            get_or_init_server_identity(&config_database)
-                .await
-                .expect("Failed to get or init server identity"),
-        )
-        .expect("Failed to set SERVER_ID");
+    let server_id = get_or_init_server_identity(&config_database)
+        .await
+        .expect("Failed to get or init server identity");
 
     moosicbox_database::config::init(config_database.clone().into());
 
@@ -523,10 +517,7 @@ pub async fn run<T>(
         |x| x.to_string(),
     );
 
-    if let Err(e) =
-        moosicbox_mdns::register_service(SERVER_ID.get().expect("No SERVER_ID"), &ip, service_port)
-            .await
-    {
+    if let Err(e) = moosicbox_mdns::register_service(&server_id, &ip, service_port).await {
         moosicbox_assert::die_or_error!("Failed to register mdns service: {e:?}");
     }
 
