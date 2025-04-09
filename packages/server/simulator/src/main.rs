@@ -27,11 +27,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     moosicbox_logging::init(None, None)?;
 
-    let resp = run_simulation(duration_secs);
+    let resp = std::panic::catch_unwind(|| run_simulation(duration_secs));
 
-    log::info!("Server simulator finished (seed={seed})");
+    log::info!(
+        "Server simulator finished (seed={seed}) successful={}",
+        resp.as_ref().is_ok_and(Result::is_ok)
+    );
 
-    resp
+    resp.unwrap()
 }
 
 fn run_simulation(duration_secs: u64) -> Result<(), Box<dyn std::error::Error>> {
