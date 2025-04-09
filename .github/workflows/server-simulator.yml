@@ -145,6 +145,7 @@ jobs:
               shell: bash
               env:
                   ENABLE_ASSERT: 1
+                  SIMULATOR_DURATION: 1500
               run: |
                   while read -r feature; do \
                       ${{ matrix.package.env }} cargo run -p moosicbox_server_simulator ${{ runner.debug && '-vv' }} \
