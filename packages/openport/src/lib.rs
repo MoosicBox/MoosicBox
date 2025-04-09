@@ -24,7 +24,7 @@
 
 use std::{
     net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6, TcpListener, ToSocketAddrs, UdpSocket},
-    ops::Range,
+    ops::{Range, RangeInclusive},
 };
 
 pub type Port = u16;
@@ -106,13 +106,31 @@ pub fn pick_random_unused_port() -> Option<Port> {
     None
 }
 
+pub trait PortRange {
+    fn into_iter(self) -> impl Iterator<Item = u16>;
+}
+
+impl PortRange for Range<u16> {
+    #[inline]
+    fn into_iter(self) -> impl Iterator<Item = u16> {
+        <Self as IntoIterator>::into_iter(self)
+    }
+}
+
+impl PortRange for RangeInclusive<u16> {
+    #[inline]
+    fn into_iter(self) -> impl Iterator<Item = u16> {
+        <Self as IntoIterator>::into_iter(self)
+    }
+}
+
 /// Picks an available port that is available on both TCP and UDP within a range
 /// ```rust
 /// use openport::pick_unused_port;
 /// let port: u16 = pick_unused_port(15000..16000).expect("No ports free");
 /// ```
 #[must_use]
-pub fn pick_unused_port(range: Range<u16>) -> Option<Port> {
+pub fn pick_unused_port(range: impl PortRange) -> Option<Port> {
     range.into_iter().find(|x| is_free(*x))
 }
 
@@ -132,9 +150,19 @@ mod tests {
     #[test]
     fn port_range_test() {
         if let Some(p) = pick_unused_port(15000..16000) {
-            assert!((15000..=16000).contains(&p));
+            assert!((15000..16000).contains(&p));
         }
         if let Some(p) = pick_unused_port(20000..21000) {
+            assert!((20000..21000).contains(&p));
+        }
+    }
+
+    #[test]
+    fn port_range_inclusize_test() {
+        if let Some(p) = pick_unused_port(15000..=16000) {
+            assert!((15000..=16000).contains(&p));
+        }
+        if let Some(p) = pick_unused_port(20000..=21000) {
             assert!((20000..=21000).contains(&p));
         }
     }
