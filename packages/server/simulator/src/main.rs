@@ -77,7 +77,13 @@ fn run_simulation(duration_secs: u64) -> Result<(), Box<dyn std::error::Error>> 
     start_fault_injector(&mut sim);
     start_healer(&mut sim);
 
+    let mut step = 1;
+
     while !SIMULATOR_CANCELLATION_TOKEN.is_cancelled() {
+        if step % 1000 == 0 {
+            log::info!("step {step}");
+        }
+
         handle_actions(&mut sim);
 
         match sim.step() {
@@ -92,6 +98,8 @@ fn run_simulation(duration_secs: u64) -> Result<(), Box<dyn std::error::Error>> 
                 return Err(e);
             }
         }
+
+        step += 1;
     }
 
     if !SIMULATOR_CANCELLATION_TOKEN.is_cancelled() {
