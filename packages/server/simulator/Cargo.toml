@@ -27,9 +27,11 @@ moosicbox_simulator_harness = { version = "0.1.0", path = "../../simulator/harne
 moosicbox_task = { version = "0.1.0", path = "../../task", default-features = false }
 moosicbox_telemetry = { version = "0.1.0", path = "../../telemetry", default-features = false }
 
+ctrlc      = { workspace = true }
 log        = { workspace = true }
 serde_json = { workspace = true }
 tokio      = { workspace = true }
+tokio-util = { workspace = true }
 
 [features]
 default = ["player", "sqlite", "telemetry", "upnp"]

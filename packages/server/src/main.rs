@@ -65,7 +65,7 @@ fn main() -> std::io::Result<()> {
             true,
             #[cfg(feature = "telemetry")]
             request_metrics,
-            || {},
+            |_| {},
         )
         .await?;
 

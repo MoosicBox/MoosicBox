@@ -2,61 +2,126 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+mod http;
+
 use std::{
-    collections::BTreeMap,
+    collections::VecDeque,
     io::{Read, Write},
+    sync::{Arc, LazyLock, Mutex},
+    time::Duration,
 };
 
+use http::{headers_contains_in_order, http_request, parse_http_response};
 use moosicbox_config::AppType;
-use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
+use moosicbox_env_utils::{default_env, default_env_usize};
 use moosicbox_simulator_harness::{
     getrandom,
-    rand::{SeedableRng, rngs::SmallRng},
-    turmoil::{self, net::TcpStream},
+    rand::{Rng, SeedableRng, rngs::SmallRng},
+    turmoil::{self, Sim, net::TcpStream},
 };
 use serde_json::Value;
-use tokio::{
-    io::{AsyncReadExt as _, AsyncWriteExt},
-    task::JoinHandle,
-};
+use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 
-#[allow(clippy::too_many_lines)]
+const SERVER_ADDR: &str = "moosicbox:1234";
+static SIMULATOR_CANCELLATION_TOKEN: LazyLock<CancellationToken> =
+    LazyLock::new(CancellationToken::new);
+static SEED: LazyLock<u64> = LazyLock::new(|| {
+    std::env::var("SIMULATOR_SEED")
+        .ok()
+        .and_then(|x| x.parse::<u64>().ok())
+        .unwrap_or_else(|| getrandom::u64().unwrap())
+});
+static RNG: LazyLock<Arc<Mutex<SmallRng>>> =
+    LazyLock::new(|| Arc::new(Mutex::new(SmallRng::seed_from_u64(*SEED))));
+static ACTIONS: LazyLock<Arc<Mutex<VecDeque<Action>>>> =
+    LazyLock::new(|| Arc::new(Mutex::new(VecDeque::new())));
+
+enum Action {
+    Crash,
+    Bounce,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     unsafe {
         moosicbox_simulator_harness::init();
     }
 
-    let seed = std::env::var("SIMULATOR_SEED")
+    ctrlc::set_handler(move || SIMULATOR_CANCELLATION_TOKEN.cancel())
+        .expect("Error setting Ctrl-C handler");
+
+    let duration_secs = std::env::var("SIMULATOR_DURATION")
         .ok()
-        .and_then(|x| x.parse::<u64>().ok())
-        .unwrap_or_else(|| getrandom::u64().unwrap());
-    let rng = SmallRng::seed_from_u64(seed);
+        .map_or(u64::MAX, |x| x.parse::<u64>().unwrap());
+
+    let seed = *SEED;
 
     println!("Starting simulation with seed={seed}");
 
     moosicbox_logging::init(None, None)?;
 
-    let mut sim = turmoil::Builder::new().build_with_rng(Box::new(rng));
+    let resp = run_simulation(duration_secs);
 
+    log::info!("Server simulator finished (seed={seed})");
+
+    resp
+}
+
+fn run_simulation(duration_secs: u64) -> Result<(), Box<dyn std::error::Error>> {
+    let mut sim = turmoil::Builder::new()
+        .simulation_duration(Duration::from_secs(duration_secs))
+        .build_with_rng(Box::new(RNG.lock().unwrap().clone()));
+
+    start_moosicbox_server(&mut sim);
+    start_health_checker(&mut sim);
+    start_fault_injector(&mut sim);
+    start_healer(&mut sim);
+
+    while !SIMULATOR_CANCELLATION_TOKEN.is_cancelled() {
+        handle_actions(&mut sim);
+
+        match sim.step() {
+            Ok(..) => {}
+            Err(e) => {
+                let message = e.to_string();
+                if message.starts_with("Ran for duration: ")
+                    && message.ends_with(" without completing")
+                {
+                    break;
+                }
+                return Err(e);
+            }
+        }
+    }
+
+    if !SIMULATOR_CANCELLATION_TOKEN.is_cancelled() {
+        SIMULATOR_CANCELLATION_TOKEN.cancel();
+    }
+
+    Ok(())
+}
+
+fn start_moosicbox_server(sim: &mut Sim<'_>) {
     let service_port = default_env_usize("PORT", 8000)
         .unwrap_or(8000)
         .try_into()
         .expect("Invalid PORT environment variable");
 
     sim.host("moosicbox", move || async move {
-        let addr = default_env("BIND_ADDR", "0.0.0.0");
-        let actix_workers = option_env_usize("ACTIX_WORKERS")
-            .map_err(|e| std::io::Error::other(format!("Invalid ACTIX_WORKERS: {e:?}")))?;
+        let host = default_env("BIND_ADDR", "0.0.0.0");
+        let actix_workers = Some(RNG.lock().unwrap().gen_range(1..=64_usize));
         #[cfg(feature = "telemetry")]
         let metrics_handler = std::sync::Arc::new(
             moosicbox_telemetry::get_http_metrics_handler().map_err(std::io::Error::other)?,
         );
 
-        let actual_tcp_listener = std::net::TcpListener::bind(format!("{addr}:{service_port}"))?;
+        log::info!("starting 'moosicbox' server");
+        let addr = format!("{host}:{service_port}");
+        let actual_tcp_listener = bind_std_tcp_addr(&addr).await?;
 
-        let handle: JoinHandle<Result<(), _>> = moosicbox_server::run(
+        let join_handle = moosicbox_server::run(
             AppType::Server,
-            &addr.clone(),
+            &host,
             service_port,
             actix_workers,
             Some(actual_tcp_listener),
@@ -66,151 +131,268 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             true,
             #[cfg(feature = "telemetry")]
             metrics_handler,
-            move || {
-                moosicbox_task::spawn("simulation TCP listener", async move {
-                    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-                    log::debug!("simulation TCP listener: starting TcpListener...");
-
-                    let listener = turmoil::net::TcpListener::bind("0.0.0.0:1234")
-                        .await
-                        .inspect_err(|e| {
-                            log::error!(
-                                "simulation TCP listener: failed to bind TcpListener: {e:?}"
-                            );
-                        })
-                        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
-
-                    log::debug!("simulation TCP listener: bound TcpListener");
-
-                    loop {
-                        match listener.accept().await {
-                            Ok((stream, _addr)) => {
-                                log::debug!("[Server] Received connection!");
-
-                                let mut actual_stream =
-                                    std::net::TcpStream::connect(format!("{addr}:{service_port}"))
-                                        .expect("Failed to connect to actual TcpStream");
-                                log::debug!("simulation TCP listener: accepted socket connection");
-
-                                let (mut read, mut write) = stream.into_split();
-
-                                let mut request_bytes = vec![];
-                                // loop {
-                                log::trace!("simulation TCP listener: reading from stream");
-
-                                let mut buf = [0_u8; 1024];
-                                let count = read
-                                    .read(&mut buf)
-                                    .await
-                                    .expect("Failed to read from socket");
-
-                                log::trace!("simulation TCP listener: read {count} bytes");
-
-                                if count == 0 {
-                                    log::trace!("simulation TCP listener: read closed");
-                                    // break;
-                                }
-
-                                request_bytes.extend_from_slice(&buf[0..count]);
-                                // }
-
-                                actual_stream
-                                    .write_all(&request_bytes)
-                                    .expect("Failed to propagate data to socket");
-
-                                log::trace!(
-                                    "simulation TCP listener: wrote {} actual bytes",
-                                    request_bytes.len()
-                                );
-
-                                log::trace!("simulation TCP listener: flushing actual stream...");
-                                actual_stream
-                                    .flush()
-                                    .expect("Failed to flush data from actual socket");
-                                log::trace!("simulation TCP listener: flushed actual stream");
-
-                                let mut response_bytes = vec![];
-                                loop {
-                                    log::trace!(
-                                        "simulation TCP writer: reading from actual stream"
-                                    );
-                                    let (buf, count) =
-                                        moosicbox_task::spawn_blocking("read actual stream", {
-                                            let mut actual_stream =
-                                                actual_stream.try_clone().unwrap();
-                                            move || {
-                                                let mut buf = [0_u8; 1024];
-                                                let read = actual_stream
-                                                    .read(&mut buf)
-                                                    .expect("Failed to read from actual_socket");
-                                                (buf, read)
-                                            }
-                                        })
-                                        .await
-                                        .unwrap();
-
-                                    log::trace!("simulation TCP writer: read {count} actual bytes");
-
-                                    if count == 0 {
-                                        log::trace!("simulation TCP writer: actual read closed");
-                                        break;
-                                    }
-
-                                    response_bytes.extend_from_slice(&buf[0..count]);
-                                }
-
-                                write
-                                    .write_all(&response_bytes)
-                                    .await
-                                    .expect("Failed to write to socket");
-                                log::trace!(
-                                    "simulation TCP writer: responding {} bytes",
-                                    response_bytes.len()
-                                );
-
-                                log::trace!("simulation TCP writer: flushing stream...");
-                                write
-                                    .flush()
-                                    .await
-                                    .expect("Failed to flush data from socket");
-                                log::trace!("simulation TCP writer: flushed stream");
-                            }
-                            Err(e) => {
-                                log::error!("Failed to accept TCP connection: {e:?}");
-                                return Err(Box::new(e) as Box<dyn std::error::Error + Send>);
-                            }
-                        }
-                    }
-                })
-            },
+            move |_handle| start_tcp_listen(&addr),
         )
         .await?;
 
-        handle.await?.unwrap();
+        log::info!("moosicbox server closed");
+
+        join_handle.await?.unwrap();
+
+        log::info!("moosicbox server read loop closed");
 
         Ok(())
     });
+}
 
-    sim.client("client", async move {
-        let addr = "moosicbox:1234";
+async fn bind_std_tcp_addr(addr: &str) -> Result<std::net::TcpListener, std::io::Error> {
+    let mut count = 0;
+    Ok(loop {
+        match std::net::TcpListener::bind(addr) {
+            Ok(x) => break x,
+            Err(e) => {
+                const MAX_ATTEMPTS: usize = 10;
 
-        for _ in 0..100 {
-            assert_health(addr).await?;
+                count += 1;
+
+                log::debug!("failed to bind tcp: {e:?} (attempt {count}/{MAX_ATTEMPTS})");
+
+                if !matches!(e.kind(), std::io::ErrorKind::AddrInUse) || count >= MAX_ATTEMPTS {
+                    return Err(e);
+                }
+
+                tokio::time::sleep(Duration::from_millis(5000)).await;
+            }
+        }
+    })
+}
+
+fn start_tcp_listen(addr: &str) -> JoinHandle<Result<(), Box<dyn std::error::Error + Send>>> {
+    let addr = addr.to_string();
+    moosicbox_task::spawn("simulation TCP listener", async move {
+        log::debug!("simulation TCP listener: starting TcpListener...");
+
+        let listener = turmoil::net::TcpListener::bind("0.0.0.0:1234")
+            .await
+            .inspect_err(|e| {
+                log::error!("simulation TCP listener: failed to bind TcpListener: {e:?}");
+            })
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+
+        log::debug!("simulation TCP listener: bound TcpListener");
+
+        loop {
+            match listener.accept().await {
+                Ok((stream, _addr)) => {
+                    handle_moosicbox_connection(stream, &addr).await.unwrap();
+                }
+                Err(e) => {
+                    log::error!("Failed to accept TCP connection: {e:?}");
+                    return Err(Box::new(e) as Box<dyn std::error::Error + Send>);
+                }
+            }
+        }
+    })
+}
+
+async fn handle_moosicbox_connection(
+    stream: TcpStream,
+    addr: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    log::debug!("handle_moosicbox_connection: Received connection!");
+
+    let mut actual_stream =
+        std::net::TcpStream::connect(addr).expect("Failed to connect to actual TcpStream");
+    log::debug!("handle_moosicbox_connection: accepted socket connection");
+
+    let (mut read, mut write) = stream.into_split();
+
+    let mut request_bytes = vec![];
+    log::trace!("handle_moosicbox_connection: reading from stream");
+
+    let mut buf = [0_u8; 1024];
+    let count = read
+        .read(&mut buf)
+        .await
+        .expect("Failed to read from socket");
+
+    log::trace!("handle_moosicbox_connection: read {count} bytes");
+
+    if count == 0 {
+        log::trace!("handle_moosicbox_connection: read closed");
+    }
+
+    request_bytes.extend_from_slice(&buf[0..count]);
+
+    actual_stream
+        .write_all(&request_bytes)
+        .expect("Failed to propagate data to socket");
+
+    log::trace!(
+        "handle_moosicbox_connection: wrote {} actual bytes",
+        request_bytes.len()
+    );
+
+    log::trace!("handle_moosicbox_connection: flushing actual stream...");
+    actual_stream
+        .flush()
+        .expect("Failed to flush data from actual socket");
+    log::trace!("handle_moosicbox_connection: flushed actual stream");
+
+    let response_bytes = moosicbox_task::spawn_blocking("read actual stream", move || {
+        let mut response_bytes = vec![];
+
+        loop {
+            log::trace!("handle_moosicbox_connection: reading from actual stream");
+            let mut buf = [0_u8; 1024];
+            let count = actual_stream
+                .read(&mut buf)
+                .expect("Failed to read from actual_socket");
+
+            log::trace!("handle_moosicbox_connection: read {count} actual bytes");
+
+            if count == 0 {
+                log::trace!("handle_moosicbox_connection: actual read closed");
+                break;
+            }
+
+            response_bytes.extend_from_slice(&buf[0..count]);
+        }
+
+        response_bytes
+    })
+    .await
+    .unwrap();
+
+    write
+        .write_all(&response_bytes)
+        .await
+        .expect("Failed to write to socket");
+    log::trace!(
+        "handle_moosicbox_connection: responding {} bytes",
+        response_bytes.len()
+    );
+
+    log::trace!("handle_moosicbox_connection: flushing stream...");
+    write
+        .flush()
+        .await
+        .expect("Failed to flush data from socket");
+    log::trace!("handle_moosicbox_connection: flushed stream");
+
+    Ok(())
+}
+
+fn start_health_checker(sim: &mut Sim<'_>) {
+    sim.client("McHealthChecker", async move {
+        loop {
+            log::info!("checking health");
+            assert_health(SERVER_ADDR).await?;
+
+            tokio::select! {
+                () = SIMULATOR_CANCELLATION_TOKEN.cancelled() => {
+                    break;
+                }
+                () = tokio::time::sleep(std::time::Duration::from_secs(1)) => {}
+            }
         }
 
         Ok(())
     });
+}
 
-    let result = sim.run();
+fn start_fault_injector(sim: &mut Sim<'_>) {
+    sim.client("McFaultInjector", {
+        let actions = ACTIONS.clone();
+        async move {
+            loop {
+                tokio::select! {
+                    () = SIMULATOR_CANCELLATION_TOKEN.cancelled() => {
+                        break;
+                    }
+                    () = tokio::time::sleep(std::time::Duration::from_secs(RNG.lock().unwrap().gen_range(0..60))) => {}
+                }
 
-    log::info!("Server simulator finished (seed={seed})");
+                actions.lock().unwrap().push_back(Action::Crash);
+            }
 
-    result
+            Ok(())
+        }
+    });
+}
+
+fn start_healer(sim: &mut Sim<'_>) {
+    sim.client("McHealer", {
+        let actions = ACTIONS.clone();
+        async move {
+            loop {
+                tokio::select! {
+                    () = SIMULATOR_CANCELLATION_TOKEN.cancelled() => {
+                        break;
+                    }
+                    () = tokio::time::sleep(std::time::Duration::from_secs(RNG.lock().unwrap().gen_range(0..60))) => {}
+                }
+
+                actions.lock().unwrap().push_back(Action::Bounce);
+            }
+
+            Ok(())
+        }
+    });
+}
+
+fn handle_actions(_sim: &mut Sim<'_>) {
+    // static BOUNCED: LazyLock<Arc<Mutex<bool>>> = LazyLock::new(|| Arc::new(Mutex::new(false)));
+
+    let mut actions = ACTIONS.lock().unwrap();
+    for action in actions.drain(..) {
+        match action {
+            Action::Crash => {
+                log::info!("crashing 'moosicbox'");
+                // sim.crash("moosicbox");
+            }
+            Action::Bounce => {
+                log::info!("bouncing 'moosicbox'");
+                // let mut bounced = BOUNCED.lock().unwrap();
+                // if !*bounced {
+                //     *bounced = true;
+                //     sim.bounce("moosicbox");
+                // }
+                // drop(bounced);
+            }
+        }
+    }
+    drop(actions);
+}
+
+async fn try_connect(addr: &str) -> Result<TcpStream, std::io::Error> {
+    let mut count = 0;
+    Ok(loop {
+        match turmoil::net::TcpStream::connect(addr).await {
+            Ok(x) => break x,
+            Err(e) => {
+                const MAX_ATTEMPTS: usize = 10;
+
+                count += 1;
+
+                log::debug!("failed to bind tcp: {e:?} (attempt {count}/{MAX_ATTEMPTS})");
+
+                if !matches!(e.kind(), std::io::ErrorKind::ConnectionRefused)
+                    || count >= MAX_ATTEMPTS
+                {
+                    return Err(e);
+                }
+
+                tokio::time::sleep(Duration::from_millis(5000)).await;
+            }
+        }
+    })
 }
 
 async fn assert_health(addr: &str) -> Result<(), Box<dyn std::error::Error>> {
     log::debug!("[Client] Connecting to server...");
-    let mut stream = turmoil::net::TcpStream::connect(addr).await?;
+    let mut stream = try_connect(addr).await?;
     log::debug!("[Client] Connected!");
 
     let resp = http_request("GET", &mut stream, "/health").await?;
@@ -255,122 +437,4 @@ async fn assert_health(addr: &str) -> Result<(), Box<dyn std::error::Error>> {
     );
 
     Ok(())
-}
-
-fn headers_contains_in_order(
-    expected: &[(String, String)],
-    actual: &BTreeMap<String, String>,
-) -> bool {
-    let mut iter = actual.iter();
-    for expected in expected {
-        loop {
-            if let Some(actual) = iter.next() {
-                if &expected.0 == actual.0 && &expected.1 == actual.1 {
-                    break;
-                }
-            } else {
-                return false;
-            }
-        }
-    }
-
-    true
-}
-
-async fn http_request(method: &str, stream: &mut TcpStream, path: &str) -> turmoil::Result<String> {
-    let host = "127.0.0.1";
-
-    let request = format!(
-        "{method} {path} HTTP/1.1\r\n\
-         Host: {host}\r\n\
-         Connection: close\r\n\
-         \r\n"
-    );
-
-    let bytes = request.as_bytes();
-    log::trace!(
-        "http_request: method={method} path={path} sending {} bytes",
-        bytes.len()
-    );
-    stream.write_all(bytes).await?;
-    stream.write_all(&[]).await?;
-    stream.flush().await?;
-
-    let mut response = String::new();
-    stream.read_to_string(&mut response).await?;
-
-    Ok(response)
-}
-
-struct HttpResponse {
-    status_code: u16,
-    headers: BTreeMap<String, String>,
-    body: String,
-}
-
-fn parse_http_response(raw_response: &str) -> Result<HttpResponse, &'static str> {
-    // Split the response into headers and body sections
-    let parts: Vec<&str> = raw_response.split("\r\n\r\n").collect();
-    if parts.len() < 2 {
-        return Err("Invalid HTTP response format");
-    }
-
-    let headers_section = parts[0];
-    let body = parts[1..].join("\r\n\r\n"); // Join in case there are \r\n\r\n sequences in the body
-
-    // Parse the headers section
-    let header_lines: Vec<&str> = headers_section.split("\r\n").collect();
-    if header_lines.is_empty() {
-        return Err("No headers found");
-    }
-
-    // Parse the status line
-    let status_line = header_lines[0];
-    let status_parts: Vec<&str> = status_line.split_whitespace().collect();
-    if status_parts.len() < 3 {
-        return Err("Invalid status line");
-    }
-
-    // Extract the status code
-    let Ok(status_code) = status_parts[1].parse::<u16>() else {
-        return Err("Invalid status code");
-    };
-
-    // Parse the headers
-    let mut headers = BTreeMap::new();
-    for line in header_lines.into_iter().skip(1) {
-        if let Some(colon_pos) = line.find(':') {
-            let key = line[..colon_pos].trim();
-            let value = line[colon_pos + 1..].trim();
-            headers.insert(key.to_string(), value.to_string());
-        }
-    }
-
-    // If Content-Length is specified, we might want to truncate the body accordingly
-    if let Some(content_length_str) = headers.iter().find_map(|(key, value)| {
-        if key == "Content-Length" {
-            Some(value)
-        } else {
-            None
-        }
-    }) {
-        if let Ok(content_length) = content_length_str.parse::<usize>() {
-            // Ensure we don't read beyond the specified content length
-            // This is a simplification; actual HTTP might have complex encoding
-            if body.len() >= content_length {
-                let truncated_body = &body[..content_length];
-                return Ok(HttpResponse {
-                    status_code,
-                    headers,
-                    body: truncated_body.to_string(),
-                });
-            }
-        }
-    }
-
-    Ok(HttpResponse {
-        status_code,
-        headers,
-        body,
-    })
 }

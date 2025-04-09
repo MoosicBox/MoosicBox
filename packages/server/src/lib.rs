@@ -15,7 +15,7 @@ mod tunnel;
 mod ws;
 
 use actix_cors::Cors;
-use actix_web::{App, http, middleware};
+use actix_web::{App, dev::ServerHandle, http, middleware};
 use moosicbox_config::{AppType, get_or_init_server_identity};
 use moosicbox_database::{Database, config::ConfigDatabase, profiles::PROFILES};
 use moosicbox_files::files::track_pool::service::Commander as _;
@@ -50,7 +50,7 @@ pub async fn run_basic<T>(
     addr: &str,
     service_port: u16,
     actix_workers: Option<usize>,
-    on_startup: impl FnOnce() -> T + Send,
+    on_startup: impl FnOnce(ServerHandle) -> T + Send,
 ) -> std::io::Result<T> {
     #[cfg(feature = "telemetry")]
     let request_metrics = std::sync::Arc::new(
@@ -94,7 +94,7 @@ pub async fn run<T>(
     #[cfg(feature = "telemetry")] metrics_handler: Arc<
         Box<dyn moosicbox_telemetry::HttpMetricsHandler>,
     >,
-    on_startup: impl FnOnce() -> T + Send,
+    on_startup: impl FnOnce(ServerHandle) -> T + Send,
 ) -> std::io::Result<T> {
     #[cfg(feature = "profiling-tracing")]
     tracing_subscriber::fmt::init();
@@ -531,7 +531,7 @@ pub async fn run<T>(
         moosicbox_assert::die_or_error!("Failed to register mdns service: {e:?}");
     }
 
-    let resp = on_startup();
+    let resp = on_startup(http_server.handle());
 
     log::info!("MoosicBox Server started on {ip}:{service_port}");
 

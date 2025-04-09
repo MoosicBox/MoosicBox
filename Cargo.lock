@@ -2662,6 +2662,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctrlc"
+version = "3.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "697b5419f348fd5ae2478e8018cb016c00a5881c7f46c717de98ffd135a5651c"
+dependencies = [
+ "nix 0.29.0",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "cursor-icon"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7548,6 +7558,7 @@ dependencies = [
 name = "moosicbox_server_simulator"
 version = "0.1.0"
 dependencies = [
+ "ctrlc",
  "log",
  "moosicbox_assert",
  "moosicbox_config",
@@ -7559,6 +7570,7 @@ dependencies = [
  "moosicbox_telemetry",
  "serde_json",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]
