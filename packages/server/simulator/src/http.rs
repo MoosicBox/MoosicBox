@@ -9,6 +9,7 @@ pub struct HttpResponse {
     pub body: String,
 }
 
+#[must_use]
 pub fn headers_contains_in_order(
     expected: &[(String, String)],
     actual: &BTreeMap<String, String>,
@@ -29,6 +30,9 @@ pub fn headers_contains_in_order(
     true
 }
 
+/// # Errors
+///
+/// * If fails to read/write any bytes from/to the `TcpStream`
 pub async fn http_request(
     method: &str,
     stream: &mut TcpStream,
@@ -58,6 +62,12 @@ pub async fn http_request(
     Ok(response)
 }
 
+/// # Errors
+///
+/// * If invalid HTTP response format
+/// * If no headers on HTTP response
+/// * If invalid status line
+/// * If invalid status code
 pub fn parse_http_response(raw_response: &str) -> Result<HttpResponse, &'static str> {
     // Split the response into headers and body sections
     let parts: Vec<&str> = raw_response.split("\r\n\r\n").collect();

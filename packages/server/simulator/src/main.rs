@@ -2,44 +2,19 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-mod client;
-mod http;
-
 use std::{
-    collections::VecDeque,
     io::{Read, Write},
-    sync::{Arc, LazyLock, Mutex},
     time::Duration,
 };
 
 use moosicbox_config::AppType;
 use moosicbox_env_utils::{default_env, default_env_usize};
+use moosicbox_server_simulator::{client, handle_actions, RNG, SEED, SIMULATOR_CANCELLATION_TOKEN};
 use moosicbox_simulator_harness::{
-    getrandom,
-    rand::{Rng, SeedableRng, rngs::SmallRng},
+    rand::Rng,
     turmoil::{self, Sim, net::TcpStream},
 };
 use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
-
-const SERVER_ADDR: &str = "moosicbox:1234";
-static SIMULATOR_CANCELLATION_TOKEN: LazyLock<CancellationToken> =
-    LazyLock::new(CancellationToken::new);
-static SEED: LazyLock<u64> = LazyLock::new(|| {
-    std::env::var("SIMULATOR_SEED")
-        .ok()
-        .and_then(|x| x.parse::<u64>().ok())
-        .unwrap_or_else(|| getrandom::u64().unwrap())
-});
-static RNG: LazyLock<Arc<Mutex<SmallRng>>> =
-    LazyLock::new(|| Arc::new(Mutex::new(SmallRng::seed_from_u64(*SEED))));
-static ACTIONS: LazyLock<Arc<Mutex<VecDeque<Action>>>> =
-    LazyLock::new(|| Arc::new(Mutex::new(VecDeque::new())));
-
-enum Action {
-    Crash,
-    Bounce,
-}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     unsafe {
@@ -297,52 +272,4 @@ async fn handle_moosicbox_connection(
     log::trace!("handle_moosicbox_connection: flushed stream");
 
     Ok(())
-}
-
-fn handle_actions(_sim: &mut Sim<'_>) {
-    // static BOUNCED: LazyLock<Arc<Mutex<bool>>> = LazyLock::new(|| Arc::new(Mutex::new(false)));
-
-    let mut actions = ACTIONS.lock().unwrap();
-    for action in actions.drain(..) {
-        match action {
-            Action::Crash => {
-                log::info!("crashing 'moosicbox'");
-                // sim.crash("moosicbox");
-            }
-            Action::Bounce => {
-                log::info!("bouncing 'moosicbox'");
-                // let mut bounced = BOUNCED.lock().unwrap();
-                // if !*bounced {
-                //     *bounced = true;
-                //     sim.bounce("moosicbox");
-                // }
-                // drop(bounced);
-            }
-        }
-    }
-    drop(actions);
-}
-
-async fn try_connect(addr: &str) -> Result<TcpStream, std::io::Error> {
-    let mut count = 0;
-    Ok(loop {
-        match turmoil::net::TcpStream::connect(addr).await {
-            Ok(x) => break x,
-            Err(e) => {
-                const MAX_ATTEMPTS: usize = 10;
-
-                count += 1;
-
-                log::debug!("failed to bind tcp: {e:?} (attempt {count}/{MAX_ATTEMPTS})");
-
-                if !matches!(e.kind(), std::io::ErrorKind::ConnectionRefused)
-                    || count >= MAX_ATTEMPTS
-                {
-                    return Err(e);
-                }
-
-                tokio::time::sleep(Duration::from_millis(5000)).await;
-            }
-        }
-    })
 }
