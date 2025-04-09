@@ -71,22 +71,29 @@ pub fn handle_actions(_sim: &mut Sim<'_>) {
 pub async fn try_connect(addr: &str) -> Result<TcpStream, std::io::Error> {
     let mut count = 0;
     Ok(loop {
-        match turmoil::net::TcpStream::connect(addr).await {
-            Ok(x) => break x,
-            Err(e) => {
-                const MAX_ATTEMPTS: usize = 10;
+        tokio::select! {
+            resp = turmoil::net::TcpStream::connect(addr) => {
+                match resp {
+                    Ok(x) => break x,
+                    Err(e) => {
+                        const MAX_ATTEMPTS: usize = 10;
 
-                count += 1;
+                        count += 1;
 
-                log::debug!("failed to bind tcp: {e:?} (attempt {count}/{MAX_ATTEMPTS})");
+                        log::debug!("failed to bind tcp: {e:?} (attempt {count}/{MAX_ATTEMPTS})");
 
-                if !matches!(e.kind(), std::io::ErrorKind::ConnectionRefused)
-                    || count >= MAX_ATTEMPTS
-                {
-                    return Err(e);
+                        if !matches!(e.kind(), std::io::ErrorKind::ConnectionRefused)
+                            || count >= MAX_ATTEMPTS
+                        {
+                            return Err(e);
+                        }
+
+                        tokio::time::sleep(Duration::from_millis(5000)).await;
+                    }
                 }
-
-                tokio::time::sleep(Duration::from_millis(5000)).await;
+            }
+            () = tokio::time::sleep(Duration::from_millis(5000)) => {
+                return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "Timed out after 5000ms"));
             }
         }
     })
