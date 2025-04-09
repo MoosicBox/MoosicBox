@@ -34,35 +34,22 @@ pub static ACTIONS: LazyLock<Arc<Mutex<VecDeque<Action>>>> =
     LazyLock::new(|| Arc::new(Mutex::new(VecDeque::new())));
 
 pub enum Action {
-    Crash,
     Bounce,
 }
 
 /// # Panics
 ///
 /// * If `ACTIONS` `Mutex` fails to lock
-pub fn handle_actions(_sim: &mut Sim<'_>) {
-    // static BOUNCED: LazyLock<Arc<Mutex<bool>>> = LazyLock::new(|| Arc::new(Mutex::new(false)));
-
-    let mut actions = ACTIONS.lock().unwrap();
-    for action in actions.drain(..) {
+pub fn handle_actions(sim: &mut Sim<'_>) {
+    let actions = ACTIONS.lock().unwrap().drain(..).collect::<Vec<_>>();
+    for action in actions {
         match action {
-            Action::Crash => {
-                log::info!("crashing '{HOST}'");
-                // sim.crash(HOST);
-            }
             Action::Bounce => {
                 log::info!("bouncing '{HOST}'");
-                // let mut bounced = BOUNCED.lock().unwrap();
-                // if !*bounced {
-                //     *bounced = true;
-                //     sim.bounce(HOST);
-                // }
-                // drop(bounced);
+                sim.bounce(HOST);
             }
         }
     }
-    drop(actions);
 }
 
 /// # Errors

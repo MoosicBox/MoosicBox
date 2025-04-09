@@ -28,6 +28,7 @@ moosicbox_task = { version = "0.1.0", path = "../../task", default-features = fa
 moosicbox_telemetry = { version = "0.1.0", path = "../../telemetry", default-features = false }
 openport = { version = "0.1.1", path = "../../openport", default-features = false }
 
+actix-web  = { workspace = true }
 ctrlc      = { workspace = true }
 log        = { workspace = true }
 serde_json = { workspace = true }

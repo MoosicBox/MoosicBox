@@ -1,8 +1,10 @@
 use std::{
     io::{Read as _, Write as _},
+    sync::{Arc, LazyLock, Mutex},
     time::Duration,
 };
 
+use actix_web::dev::ServerHandle;
 use moosicbox_config::AppType;
 use moosicbox_env_utils::default_env;
 use moosicbox_simulator_harness::{
@@ -15,6 +17,8 @@ use crate::RNG;
 
 pub const HOST: &str = "moosicbox_server";
 pub const PORT: u16 = 1234;
+pub static HANDLE: LazyLock<Arc<Mutex<Option<ServerHandle>>>> =
+    LazyLock::new(|| Arc::new(Mutex::new(None)));
 
 /// # Panics
 ///
@@ -23,42 +27,49 @@ pub fn start(sim: &mut Sim<'_>, service_port: Option<u16>) {
     let service_port = service_port.unwrap_or_else(|| {
         openport::pick_unused_port(3000..=u16::MAX).expect("No open ports within acceptable range")
     });
+    let host = default_env("BIND_ADDR", "0.0.0.0");
+    let actix_workers = Some(RNG.lock().unwrap().gen_range(1..=64_usize));
+    #[cfg(feature = "telemetry")]
+    let metrics_handler = std::sync::Arc::new(
+        moosicbox_telemetry::get_http_metrics_handler().expect("Failed to init telemetry"),
+    );
+    let addr = format!("{host}:{service_port}");
 
-    sim.host(HOST, move || async move {
-        let host = default_env("BIND_ADDR", "0.0.0.0");
-        let actix_workers = Some(RNG.lock().unwrap().gen_range(1..=64_usize));
-        #[cfg(feature = "telemetry")]
-        let metrics_handler = std::sync::Arc::new(
-            moosicbox_telemetry::get_http_metrics_handler().map_err(std::io::Error::other)?,
-        );
+    sim.host(HOST, move || {
+        let metrics_handler = metrics_handler.clone();
+        let host = host.clone();
+        let addr = addr.clone();
+        async move {
+            log::info!("starting 'moosicbox' server");
+            let actual_tcp_listener = bind_std_tcp_addr(&addr).await?;
 
-        log::info!("starting 'moosicbox' server");
-        let addr = format!("{host}:{service_port}");
-        let actual_tcp_listener = bind_std_tcp_addr(&addr).await?;
+            let join_handle = moosicbox_server::run(
+                AppType::Server,
+                &host,
+                service_port,
+                actix_workers,
+                Some(actual_tcp_listener),
+                #[cfg(feature = "player")]
+                true,
+                #[cfg(feature = "upnp")]
+                true,
+                #[cfg(feature = "telemetry")]
+                metrics_handler,
+                move |handle| {
+                    *HANDLE.lock().unwrap() = Some(handle);
+                    start_tcp_listen(&addr)
+                },
+            )
+            .await?;
 
-        let join_handle = moosicbox_server::run(
-            AppType::Server,
-            &host,
-            service_port,
-            actix_workers,
-            Some(actual_tcp_listener),
-            #[cfg(feature = "player")]
-            true,
-            #[cfg(feature = "upnp")]
-            true,
-            #[cfg(feature = "telemetry")]
-            metrics_handler,
-            move |_handle| start_tcp_listen(&addr),
-        )
-        .await?;
+            log::info!("moosicbox server closed");
 
-        log::info!("moosicbox server closed");
+            join_handle.await?.unwrap();
 
-        join_handle.await?.unwrap();
+            log::info!("moosicbox server read loop closed");
 
-        log::info!("moosicbox server read loop closed");
-
-        Ok(())
+            Ok(())
+        }
     });
 }
 

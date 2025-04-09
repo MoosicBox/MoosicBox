@@ -17,6 +17,10 @@ pub fn start(sim: &mut Sim<'_>) {
                     () = tokio::time::sleep(std::time::Duration::from_secs(RNG.lock().unwrap().gen_range(0..60))) => {}
                 }
 
+                let binding = crate::host::moosicbox_server::HANDLE.lock().unwrap().clone();
+                if let Some(handle) = binding.as_ref() {
+                     handle.stop(false).await;
+                }
                 actions.lock().unwrap().push_back(Action::Bounce);
             }
 
