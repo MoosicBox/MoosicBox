@@ -203,7 +203,7 @@ futures-util = { version = "0.3.31", default-features = false, features = [
 getrandom = "0.3.2"
 hex = "0.4.3"
 home = "0.5.11"
-hostname = "0.4.0"
+hostname = "0.4.1"
 html-escape = "0.2.13"
 id3 = "1.16.2"
 image = "0.25.6"
