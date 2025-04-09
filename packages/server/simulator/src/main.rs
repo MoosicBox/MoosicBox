@@ -81,7 +81,15 @@ fn run_simulation(duration_secs: u64) -> Result<(), Box<dyn std::error::Error>> 
 
     while !SIMULATOR_CANCELLATION_TOKEN.is_cancelled() {
         if step % 1000 == 0 {
-            log::info!("step {step}");
+            #[allow(clippy::cast_precision_loss)]
+            if duration_secs < u64::MAX {
+                log::info!(
+                    "step {step} ({:.1}%)",
+                    (f64::from(step) / duration_secs as f64 / 10.0)
+                );
+            } else {
+                log::info!("step {step}");
+            }
         }
 
         handle_actions(&mut sim);
