@@ -43,6 +43,11 @@ enum Action {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    moosicbox_assert::assert_or_panic!(
+        std::env::var("ENABLE_ASSERT").as_deref() == Ok("1"),
+        "ENABLE_ASSERT=1 is required"
+    );
+
     unsafe {
         moosicbox_simulator_harness::init();
     }
