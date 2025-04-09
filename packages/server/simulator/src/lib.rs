@@ -16,6 +16,7 @@ use moosicbox_simulator_harness::{
 use tokio_util::sync::CancellationToken;
 
 pub mod client;
+pub mod host;
 pub mod http;
 
 pub const SERVER_ADDR: &str = "moosicbox:1234";
@@ -38,6 +39,9 @@ pub enum Action {
     Bounce,
 }
 
+/// # Panics
+///
+/// * If `ACTIONS` `Mutex` fails to lock
 pub fn handle_actions(_sim: &mut Sim<'_>) {
     // static BOUNCED: LazyLock<Arc<Mutex<bool>>> = LazyLock::new(|| Arc::new(Mutex::new(false)));
 
