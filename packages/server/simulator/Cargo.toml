@@ -26,6 +26,7 @@ moosicbox_simulator_harness = { version = "0.1.0", path = "../../simulator/harne
 ] }
 moosicbox_task = { version = "0.1.0", path = "../../task", default-features = false }
 moosicbox_telemetry = { version = "0.1.0", path = "../../telemetry", default-features = false }
+openport = { version = "0.1.1", path = "../../openport", default-features = false }
 
 ctrlc      = { workspace = true }
 log        = { workspace = true }

@@ -7568,6 +7568,7 @@ dependencies = [
  "moosicbox_simulator_harness",
  "moosicbox_task",
  "moosicbox_telemetry",
+ "openport",
  "serde_json",
  "tokio",
  "tokio-util",

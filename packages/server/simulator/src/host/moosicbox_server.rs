@@ -16,7 +16,11 @@ use crate::RNG;
 /// # Panics
 ///
 /// * If `RNG` `Mutex` fails to lock
-pub fn start(sim: &mut Sim<'_>, service_port: u16) {
+pub fn start(sim: &mut Sim<'_>, service_port: Option<u16>) {
+    let service_port = service_port.unwrap_or_else(|| {
+        openport::pick_unused_port(3000..=u16::MAX).expect("No open ports within acceptable range")
+    });
+
     sim.host("moosicbox", move || async move {
         let host = default_env("BIND_ADDR", "0.0.0.0");
         let actix_workers = Some(RNG.lock().unwrap().gen_range(1..=64_usize));

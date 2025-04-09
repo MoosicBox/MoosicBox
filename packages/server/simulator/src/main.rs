@@ -4,7 +4,6 @@
 
 use std::time::Duration;
 
-use moosicbox_env_utils::default_env_usize;
 use moosicbox_server_simulator::{
     RNG, SEED, SIMULATOR_CANCELLATION_TOKEN, client, handle_actions, host,
 };
@@ -40,10 +39,11 @@ fn run_simulation(duration_secs: u64) -> Result<(), Box<dyn std::error::Error>> 
         .simulation_duration(Duration::from_secs(duration_secs))
         .build_with_rng(Box::new(RNG.lock().unwrap().clone()));
 
-    let service_port = default_env_usize("PORT", 8000)
-        .unwrap_or(8000)
-        .try_into()
-        .expect("Invalid PORT environment variable");
+    let service_port = std::env::var("PORT")
+        .ok()
+        .map(|x| x.parse::<u16>().expect("Invalid PORT env var"))
+        .map(TryInto::try_into)
+        .transpose()?;
 
     host::moosicbox_server::start(&mut sim, service_port);
 
