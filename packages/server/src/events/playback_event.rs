@@ -1,4 +1,4 @@
-use std::{fmt::Display, sync::OnceLock};
+use std::{fmt::Display, sync::LazyLock};
 
 use moosicbox_async_service::Arc;
 use moosicbox_database::profiles::PROFILES;
@@ -11,17 +11,18 @@ use tokio::sync::RwLock;
 
 use crate::{CONFIG_DB, ws::server::WsServerHandle};
 
-pub static PLAYBACK_EVENT_HANDLE: OnceLock<service::Handle> = OnceLock::new();
+pub static PLAYBACK_EVENT_HANDLE: LazyLock<Arc<std::sync::RwLock<Option<service::Handle>>>> =
+    LazyLock::new(|| Arc::new(std::sync::RwLock::new(None)));
 
 #[cfg_attr(feature = "profiling", profiling::function)]
 pub fn on_event(update: &UpdateSession, _current: &Playback) {
     let update = update.clone();
 
-    if let Err(err) = PLAYBACK_EVENT_HANDLE
-        .get()
-        .unwrap()
-        .send_command(Command::UpdateSession { update })
-    {
+    let Some(handle) = PLAYBACK_EVENT_HANDLE.read().unwrap().clone() else {
+        return;
+    };
+
+    if let Err(err) = handle.send_command(Command::UpdateSession { update }) {
         moosicbox_assert::die_or_error!("Failed to broadcast update_session: {err:?}");
     }
 }

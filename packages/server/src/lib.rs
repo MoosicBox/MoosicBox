@@ -227,9 +227,9 @@ pub async fn run<T>(
         let playback_join_handle = playback_event_service
             .with_name("PlaybackEventService")
             .start();
-        events::playback_event::PLAYBACK_EVENT_HANDLE
-            .set(playback_event_handle.clone())
-            .unwrap_or_else(|_| panic!("Failed to set PLAYBACK_EVENT_HANDLE"));
+        *events::playback_event::PLAYBACK_EVENT_HANDLE
+            .write()
+            .unwrap() = Some(playback_event_handle.clone());
 
         let config_database = config_database.clone();
         #[cfg(feature = "tunnel")]
