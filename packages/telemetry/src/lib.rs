@@ -124,6 +124,9 @@ impl Otel {
     ///
     /// * If the Prometheus exporter fails to build
     pub fn new() -> Result<Self, MetricError> {
+        #[cfg(feature = "simulator")]
+        moosicbox_assert::assert!(!moosicbox_simulator_utils::simulator_enabled());
+
         let registry = prometheus::Registry::default();
 
         #[cfg(feature = "actix")]

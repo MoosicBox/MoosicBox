@@ -7663,6 +7663,8 @@ dependencies = [
  "actix-web",
  "actix-web-opentelemetry",
  "futures-util",
+ "log",
+ "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_logging",
  "moosicbox_simulator_utils",
