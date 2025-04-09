@@ -28,8 +28,9 @@ use tokio_util::sync::CancellationToken;
 
 static CANCELLATION_TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
 #[cfg(feature = "upnp")]
-static UPNP_LISTENER_HANDLE: std::sync::OnceLock<moosicbox_upnp::listener::Handle> =
-    std::sync::OnceLock::new();
+static UPNP_LISTENER_HANDLE: LazyLock<
+    Arc<std::sync::RwLock<Option<moosicbox_upnp::listener::Handle>>>,
+> = LazyLock::new(|| Arc::new(std::sync::RwLock::new(None)));
 
 static WS_SERVER_HANDLE: LazyLock<tokio::sync::RwLock<Option<ws::server::WsServerHandle>>> =
     LazyLock::new(|| tokio::sync::RwLock::new(None));
@@ -206,9 +207,7 @@ pub async fn run<T>(
         let upnp_service_handle = upnp_service.handle();
         let join_upnp_service = upnp_service.start();
 
-        UPNP_LISTENER_HANDLE
-            .set(upnp_service_handle.clone())
-            .unwrap_or_else(|_| panic!("Failed to set UPNP_LISTENER_HANDLE"));
+        *UPNP_LISTENER_HANDLE.write().unwrap() = Some(upnp_service_handle.clone());
 
         #[cfg(feature = "upnp")]
         moosicbox_task::spawn(

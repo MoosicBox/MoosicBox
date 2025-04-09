@@ -99,7 +99,7 @@ pub async fn load_upnp_players() -> Result<(), moosicbox_upnp::UpnpDeviceScanner
                 device.clone(),
                 service.clone(),
                 PlayerSource::Local,
-                UPNP_LISTENER_HANDLE.get().unwrap().clone(),
+                UPNP_LISTENER_HANDLE.read().unwrap().clone().unwrap(),
             );
 
             let playback = player.playback.clone();
