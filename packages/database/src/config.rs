@@ -1,17 +1,19 @@
 use std::{
     ops::Deref,
-    sync::{Arc, OnceLock},
+    sync::{Arc, LazyLock, RwLock},
 };
 
 use crate::Database;
 
-static DATABASE: OnceLock<Arc<Box<dyn Database>>> = OnceLock::new();
+#[allow(clippy::type_complexity)]
+static DATABASE: LazyLock<Arc<RwLock<Option<Arc<Box<dyn Database>>>>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(None)));
 
-/// # Errors
+/// # Panics
 ///
-/// Will error if database has already been initialized
-pub fn init(database: Arc<Box<dyn Database>>) -> Result<(), Arc<Box<dyn Database>>> {
-    DATABASE.set(database)
+/// * If fails to get a writer to the `DATABASE` `RwLock`
+pub fn init(database: Arc<Box<dyn Database>>) {
+    *DATABASE.write().unwrap() = Some(database);
 }
 
 #[allow(clippy::module_name_repetitions)]
@@ -64,7 +66,7 @@ mod api {
         type Future = Ready<Result<Self, actix_web::Error>>;
 
         fn from_request(_req: &HttpRequest, _: &mut Payload) -> Self::Future {
-            let Some(database) = DATABASE.get().cloned() else {
+            let Some(database) = DATABASE.read().unwrap().clone() else {
                 return err(ErrorInternalServerError("Config database not initialized"));
             };
 

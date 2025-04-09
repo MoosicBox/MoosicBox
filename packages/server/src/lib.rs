@@ -143,7 +143,7 @@ pub async fn run<T>(
         )
         .expect("Failed to set SERVER_ID");
 
-    moosicbox_database::config::init(config_database.clone().into()).unwrap();
+    moosicbox_database::config::init(config_database.clone().into());
 
     events::profiles_event::init(app_type, config_database.clone())
         .await
