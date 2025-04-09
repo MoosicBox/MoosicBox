@@ -13,6 +13,9 @@ use tokio::task::JoinHandle;
 
 use crate::RNG;
 
+pub const HOST: &str = "moosicbox_server";
+pub const PORT: u16 = 1234;
+
 /// # Panics
 ///
 /// * If `RNG` `Mutex` fails to lock
@@ -21,7 +24,7 @@ pub fn start(sim: &mut Sim<'_>, service_port: Option<u16>) {
         openport::pick_unused_port(3000..=u16::MAX).expect("No open ports within acceptable range")
     });
 
-    sim.host("moosicbox", move || async move {
+    sim.host(HOST, move || async move {
         let host = default_env("BIND_ADDR", "0.0.0.0");
         let actix_workers = Some(RNG.lock().unwrap().gen_range(1..=64_usize));
         #[cfg(feature = "telemetry")]
@@ -86,7 +89,7 @@ fn start_tcp_listen(addr: &str) -> JoinHandle<Result<(), Box<dyn std::error::Err
     moosicbox_task::spawn("simulation TCP listener", async move {
         log::debug!("simulation TCP listener: starting TcpListener...");
 
-        let listener = turmoil::net::TcpListener::bind("0.0.0.0:1234")
+        let listener = turmoil::net::TcpListener::bind(format!("0.0.0.0:{PORT}"))
             .await
             .inspect_err(|e| {
                 log::error!("simulation TCP listener: failed to bind TcpListener: {e:?}");

@@ -8,6 +8,7 @@ use std::{
     time::Duration,
 };
 
+use host::moosicbox_server::HOST;
 use moosicbox_simulator_harness::{
     getrandom,
     rand::{SeedableRng as _, rngs::SmallRng},
@@ -18,8 +19,6 @@ use tokio_util::sync::CancellationToken;
 pub mod client;
 pub mod host;
 pub mod http;
-
-pub const SERVER_ADDR: &str = "moosicbox:1234";
 
 pub static SIMULATOR_CANCELLATION_TOKEN: LazyLock<CancellationToken> =
     LazyLock::new(CancellationToken::new);
@@ -49,15 +48,15 @@ pub fn handle_actions(_sim: &mut Sim<'_>) {
     for action in actions.drain(..) {
         match action {
             Action::Crash => {
-                log::info!("crashing 'moosicbox'");
-                // sim.crash("moosicbox");
+                log::info!("crashing '{HOST}'");
+                // sim.crash(HOST);
             }
             Action::Bounce => {
-                log::info!("bouncing 'moosicbox'");
+                log::info!("bouncing '{HOST}'");
                 // let mut bounced = BOUNCED.lock().unwrap();
                 // if !*bounced {
                 //     *bounced = true;
-                //     sim.bounce("moosicbox");
+                //     sim.bounce(HOST);
                 // }
                 // drop(bounced);
             }

@@ -2,7 +2,8 @@ use moosicbox_simulator_harness::turmoil::Sim;
 use serde_json::Value;
 
 use crate::{
-    SERVER_ADDR, SIMULATOR_CANCELLATION_TOKEN,
+    SIMULATOR_CANCELLATION_TOKEN,
+    host::moosicbox_server::{HOST, PORT},
     http::{headers_contains_in_order, http_request, parse_http_response},
     try_connect,
 };
@@ -11,7 +12,7 @@ pub fn start(sim: &mut Sim<'_>) {
     sim.client("McHealthChecker", async move {
         loop {
             log::info!("checking health");
-            assert_health(SERVER_ADDR).await?;
+            assert_health(&format!("{HOST}:{PORT}")).await?;
 
             tokio::select! {
                 () = SIMULATOR_CANCELLATION_TOKEN.cancelled() => {
