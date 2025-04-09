@@ -5,7 +5,7 @@ use std::{
     fmt::Display,
     io::Write,
     pin::Pin,
-    sync::{Arc, OnceLock, atomic::AtomicBool},
+    sync::{Arc, LazyLock, atomic::AtomicBool},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -27,7 +27,8 @@ use crate::{
 
 use super::track::{BytesStreamItem, GetTrackBytesError, TrackBytes};
 
-pub static HANDLE: OnceLock<service::Handle> = OnceLock::new();
+pub static HANDLE: LazyLock<Arc<RwLock<Option<service::Handle>>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(None)));
 
 type FetchTrackBytesFunc = Box<
     dyn Fn(
@@ -459,7 +460,7 @@ pub async fn get_or_fetch_track(
         return fetch(start, end, size).await;
     }
 
-    let Some(handle) = HANDLE.get() else {
+    let Some(handle) = HANDLE.read().await.clone() else {
         log::debug!("get_or_fetch_track: No service handle, eagerly fetching bytes");
         return fetch(start, end, size).await;
     };

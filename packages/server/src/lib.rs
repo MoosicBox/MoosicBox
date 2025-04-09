@@ -180,19 +180,19 @@ pub async fn run<T>(
 
     let ws_server_handle = moosicbox_task::spawn("server: WsServer", ws_server.run());
 
-    let (track_pool_handle, track_pool_join_handle) = {
-        use moosicbox_files::files::track_pool::{Context, HANDLE, service::Service};
+    let (track_pool_handle, track_pool_join_handle) =
+        moosicbox_task::spawn("server: init TrackPool", async move {
+            use moosicbox_files::files::track_pool::{Context, HANDLE, service::Service};
 
-        let service = Service::new(Context::new());
-        let handle = service.handle();
-        let join_handle = service.start();
+            let service = Service::new(Context::new());
+            let handle = service.handle();
+            let join_handle = service.start();
 
-        HANDLE
-            .set(handle.clone())
-            .unwrap_or_else(|_| panic!("Failed to set TrackPool HANDLE"));
+            *HANDLE.write().await = Some(handle.clone());
 
-        (handle, join_handle)
-    };
+            (handle, join_handle)
+        })
+        .await?;
 
     #[cfg(feature = "upnp")]
     let (upnp_service_handle, join_upnp_service) = if upnp_players {
