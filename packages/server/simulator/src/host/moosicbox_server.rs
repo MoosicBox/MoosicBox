@@ -245,10 +245,6 @@ async fn handle_moosicbox_connection(
 
             if count == 0 {
                 log::trace!("handle_moosicbox_connection: actual read closed");
-                actual_stream
-                    .shutdown(std::net::Shutdown::Both)
-                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
-                log::trace!("handle_moosicbox_connection: shutdown actual read");
                 break;
             }
 
