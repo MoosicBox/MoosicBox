@@ -54,8 +54,8 @@ pub fn handle_actions(sim: &mut Sim<'_>) {
 
 /// # Errors
 ///
-/// * If fails to connect to the TCP stream after 10 tries
-pub async fn try_connect(addr: &str) -> Result<TcpStream, std::io::Error> {
+/// * If fails to connect to the TCP stream after `max_attempts` tries
+pub async fn try_connect(addr: &str, max_attempts: usize) -> Result<TcpStream, std::io::Error> {
     let mut count = 0;
     Ok(loop {
         tokio::select! {
@@ -63,14 +63,12 @@ pub async fn try_connect(addr: &str) -> Result<TcpStream, std::io::Error> {
                 match resp {
                     Ok(x) => break x,
                     Err(e) => {
-                        const MAX_ATTEMPTS: usize = 10;
-
                         count += 1;
 
-                        log::debug!("failed to bind tcp: {e:?} (attempt {count}/{MAX_ATTEMPTS})");
+                        log::debug!("failed to bind tcp: {e:?} (attempt {count}/{max_attempts})");
 
-                        if !matches!(e.kind(), std::io::ErrorKind::ConnectionRefused)
-                            || count >= MAX_ATTEMPTS
+                        if !matches!(e.kind(), std::io::ErrorKind::ConnectionRefused | std::io::ErrorKind::ConnectionReset)
+                            || count >= max_attempts
                         {
                             return Err(e);
                         }

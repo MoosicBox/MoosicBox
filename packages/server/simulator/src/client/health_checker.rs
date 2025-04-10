@@ -9,16 +9,28 @@ use crate::{
 };
 
 pub fn start(sim: &mut Sim<'_>) {
+    let addr = format!("{HOST}:{PORT}");
+
     sim.client("McHealthChecker", async move {
         loop {
+            static TIMEOUT: u64 = 1000;
+
             log::info!("checking health");
-            assert_health(&format!("{HOST}:{PORT}")).await?;
 
             tokio::select! {
+                resp = assert_health(&addr) => {
+                    resp?;
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                }
                 () = SIMULATOR_CANCELLATION_TOKEN.cancelled() => {
                     break;
                 }
-                () = tokio::time::sleep(std::time::Duration::from_secs(1)) => {}
+                () = tokio::time::sleep(std::time::Duration::from_secs(TIMEOUT)) => {
+                    return Err(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        format!("Failed to get healthy response within {TIMEOUT} seconds")
+                    )) as Box<dyn std::error::Error>);
+                }
             }
         }
 
@@ -27,13 +39,35 @@ pub fn start(sim: &mut Sim<'_>) {
 }
 
 async fn assert_health(addr: &str) -> Result<(), Box<dyn std::error::Error>> {
-    log::debug!("[Client] Connecting to server...");
-    let mut stream = try_connect(addr).await?;
-    log::debug!("[Client] Connected!");
+    let response = loop {
+        log::debug!("[Client] Connecting to server...");
+        let mut stream = match try_connect(addr, 1).await {
+            Ok(stream) => stream,
+            Err(e) => {
+                log::error!("[Client] Failed to connect to server: {e:?}");
+                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                continue;
+            }
+        };
+        log::debug!("[Client] Connected!");
 
-    let resp = http_request("GET", &mut stream, "/health").await?;
-    log::debug!("Received response={resp}");
-    let response = parse_http_response(&resp).unwrap();
+        let resp = match http_request("GET", &mut stream, "/health").await {
+            Ok(resp) => resp,
+            Err(e) => {
+                log::error!("failed to make http_request: {e:?}");
+                continue;
+            }
+        };
+        log::debug!("Received response={resp}");
+
+        match parse_http_response(&resp) {
+            Ok(resp) => break resp,
+            Err(e) => {
+                log::debug!("Received error response={e}");
+            }
+        }
+    };
+
     moosicbox_assert::assert_or_panic!(
         response.status_code == 200,
         "expected successful 200 response, get {}",
