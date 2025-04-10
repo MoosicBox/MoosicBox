@@ -53,24 +53,30 @@ where
     Fut: futures::Future + 'static,
     Fut::Output: 'static,
 {
-    log::trace!("spawn_local start: {name}");
-    #[cfg(debug_assertions)]
-    let future = {
-        let name = name.to_owned();
-        async move {
-            #[cfg(feature = "profiling")]
-            profiling::function_scope!(&name);
+    if log::log_enabled!(log::Level::Trace) {
+        log::trace!("spawn_local start: {name}");
+        let future = {
+            let name = name.to_owned();
+            async move {
+                #[cfg(feature = "profiling")]
+                profiling::function_scope!(&name);
 
-            let response = future.await;
-            log::trace!("spawn_local finished: {name}");
+                let response = future.await;
+                log::trace!("spawn_local finished: {name}");
 
-            response
-        }
-    };
-    tokio::task::Builder::new()
-        .name(name)
-        .spawn_local(future)
-        .unwrap()
+                response
+            }
+        };
+        tokio::task::Builder::new()
+            .name(name)
+            .spawn_local(future)
+            .unwrap()
+    } else {
+        tokio::task::Builder::new()
+            .name(name)
+            .spawn_local(future)
+            .unwrap()
+    }
 }
 
 #[cfg(not(tokio_unstable))]
@@ -79,11 +85,10 @@ where
     Fut: futures::Future + 'static,
     Fut::Output: 'static,
 {
-    log::trace!("spawn_local start: {name}");
-    #[cfg(debug_assertions)]
-    let future = {
+    if log::log_enabled!(log::Level::Trace) {
+        log::trace!("spawn_local start: {name}");
         let name = name.to_owned();
-        async move {
+        let future = async move {
             #[cfg(feature = "profiling")]
             profiling::function_scope!(&name);
 
@@ -91,9 +96,11 @@ where
             log::trace!("spawn_local finished: {name}");
 
             response
-        }
-    };
-    tokio::task::spawn_local(future)
+        };
+        tokio::task::spawn_local(future)
+    } else {
+        tokio::task::spawn_local(future)
+    }
 }
 
 /// # Panics
@@ -109,21 +116,27 @@ where
     Fut: futures::Future + Send + 'static,
     Fut::Output: Send + 'static,
 {
-    log::trace!("spawn start: {name}");
-    #[cfg(debug_assertions)]
-    let future = {
-        let name = name.to_owned();
-        async move {
-            let response = future.await;
-            log::trace!("spawn finished: {name}");
+    if log::log_enabled!(log::Level::Trace) {
+        log::trace!("spawn start: {name}");
+        let future = {
+            let name = name.to_owned();
+            async move {
+                let response = future.await;
+                log::trace!("spawn finished: {name}");
 
-            response
-        }
-    };
-    tokio::task::Builder::new()
-        .name(name)
-        .spawn_on(future, handle)
-        .unwrap()
+                response
+            }
+        };
+        tokio::task::Builder::new()
+            .name(name)
+            .spawn_on(future, handle)
+            .unwrap()
+    } else {
+        tokio::task::Builder::new()
+            .name(name)
+            .spawn_on(future, handle)
+            .unwrap()
+    }
 }
 
 #[cfg(not(tokio_unstable))]
@@ -136,18 +149,21 @@ where
     Fut: futures::Future + Send + 'static,
     Fut::Output: Send + 'static,
 {
-    log::trace!("spawn start: {name}");
-    #[cfg(debug_assertions)]
-    let future = {
-        let name = name.to_owned();
-        async move {
-            let response = future.await;
-            log::trace!("spawn finished: {name}");
+    if log::log_enabled!(log::Level::Trace) {
+        log::trace!("spawn start: {name}");
+        let future = {
+            let name = name.to_owned();
+            async move {
+                let response = future.await;
+                log::trace!("spawn finished: {name}");
 
-            response
-        }
-    };
-    handle.spawn(future)
+                response
+            }
+        };
+        handle.spawn(future)
+    } else {
+        handle.spawn(future)
+    }
 }
 
 /// # Panics
@@ -200,24 +216,30 @@ where
     Function: FnOnce() -> Output + Send + 'static,
     Output: Send + 'static,
 {
-    log::trace!("spawn_blocking start: {name}");
-    #[cfg(debug_assertions)]
-    let function = {
-        let name = name.to_owned();
-        move || {
-            #[cfg(feature = "profiling")]
-            profiling::function_scope!(&name);
+    if log::log_enabled!(log::Level::Trace) {
+        log::trace!("spawn_blocking start: {name}");
+        let function = {
+            let name = name.to_owned();
+            move || {
+                #[cfg(feature = "profiling")]
+                profiling::function_scope!(&name);
 
-            let response = function();
-            log::trace!("spawn_blocking finished: {name}");
+                let response = function();
+                log::trace!("spawn_blocking finished: {name}");
 
-            response
-        }
-    };
-    tokio::task::Builder::new()
-        .name(name)
-        .spawn_blocking_on(function, handle)
-        .unwrap()
+                response
+            }
+        };
+        tokio::task::Builder::new()
+            .name(name)
+            .spawn_blocking_on(function, handle)
+            .unwrap()
+    } else {
+        tokio::task::Builder::new()
+            .name(name)
+            .spawn_blocking_on(function, handle)
+            .unwrap()
+    }
 }
 
 #[cfg(not(tokio_unstable))]
@@ -230,11 +252,10 @@ where
     Function: FnOnce() -> Output + Send + 'static,
     Output: Send + 'static,
 {
-    log::trace!("spawn_blocking start: {name}");
-    #[cfg(debug_assertions)]
-    let function = {
+    if log::log_enabled!(log::Level::Trace) {
+        log::trace!("spawn_blocking start: {name}");
         let name = name.to_owned();
-        move || {
+        let function = move || {
             #[cfg(feature = "profiling")]
             profiling::function_scope!(&name);
 
@@ -242,9 +263,11 @@ where
             log::trace!("spawn_blocking finished: {name}");
 
             response
-        }
-    };
-    handle.spawn_blocking(function)
+        };
+        handle.spawn_blocking(function)
+    } else {
+        handle.spawn_blocking(function)
+    }
 }
 
 /// # Panics
@@ -260,24 +283,30 @@ where
     Fut: futures::Future + 'static,
     Fut::Output: 'static,
 {
-    log::trace!("spawn_local start: {name}");
-    #[cfg(debug_assertions)]
-    let future = {
-        let name = name.to_owned();
-        async move {
-            #[cfg(feature = "profiling")]
-            profiling::function_scope!(&name);
+    if log::log_enabled!(log::Level::Trace) {
+        log::trace!("spawn_local start: {name}");
+        let future = {
+            let name = name.to_owned();
+            async move {
+                #[cfg(feature = "profiling")]
+                profiling::function_scope!(&name);
 
-            let response = future.await;
-            log::trace!("spawn_local finished: {name}");
+                let response = future.await;
+                log::trace!("spawn_local finished: {name}");
 
-            response
-        }
-    };
-    tokio::task::Builder::new()
-        .name(name)
-        .spawn_local_on(future, local_set)
-        .unwrap()
+                response
+            }
+        };
+        tokio::task::Builder::new()
+            .name(name)
+            .spawn_local_on(future, local_set)
+            .unwrap()
+    } else {
+        tokio::task::Builder::new()
+            .name(name)
+            .spawn_local_on(future, local_set)
+            .unwrap()
+    }
 }
 
 #[cfg(not(tokio_unstable))]
@@ -290,11 +319,10 @@ where
     Fut: futures::Future + 'static,
     Fut::Output: 'static,
 {
-    log::trace!("spawn_local start: {name}");
-    #[cfg(debug_assertions)]
-    let future = {
+    if log::log_enabled!(log::Level::Trace) {
+        log::trace!("spawn_local start: {name}");
         let name = name.to_owned();
-        async move {
+        let future = async move {
             #[cfg(feature = "profiling")]
             profiling::function_scope!(&name);
 
@@ -302,9 +330,11 @@ where
             log::trace!("spawn_local finished: {name}");
 
             response
-        }
-    };
-    local_set.spawn_local(future)
+        };
+        local_set.spawn_local(future)
+    } else {
+        local_set.spawn_local(future)
+    }
 }
 
 #[cfg(tokio_unstable)]
@@ -335,11 +365,10 @@ where
     Fut: futures::Future + 'static,
     Fut::Output: 'static,
 {
-    log::trace!("block_on start: {name}");
-    #[cfg(debug_assertions)]
-    let future = {
+    if log::log_enabled!(log::Level::Trace) {
+        log::trace!("block_on start: {name}");
         let name = name.to_owned();
-        async move {
+        let future = async move {
             #[cfg(feature = "profiling")]
             profiling::function_scope!(&name);
 
@@ -347,9 +376,11 @@ where
             log::trace!("block_on finished: {name}");
 
             response
-        }
-    };
-    handle.block_on(future)
+        };
+        handle.block_on(future)
+    } else {
+        handle.block_on(future)
+    }
 }
 
 #[cfg(not(tokio_unstable))]
@@ -362,11 +393,10 @@ where
     Fut: futures::Future + 'static,
     Fut::Output: 'static,
 {
-    log::trace!("block_on start: {name}");
-    #[cfg(debug_assertions)]
-    let future = {
+    if log::log_enabled!(log::Level::Trace) {
+        log::trace!("block_on start: {name}");
         let name = name.to_owned();
-        async move {
+        let future = async move {
             #[cfg(feature = "profiling")]
             profiling::function_scope!(&name);
 
@@ -374,7 +404,9 @@ where
             log::trace!("block_on finished: {name}");
 
             response
-        }
-    };
-    handle.block_on(future)
+        };
+        handle.block_on(future)
+    } else {
+        handle.block_on(future)
+    }
 }
