@@ -32,7 +32,7 @@ use moosicbox_files::{
     },
     range::{Range, parse_ranges},
 };
-use moosicbox_http::{IClient as _, Method};
+use moosicbox_http::{IClient as _, models::Method};
 use moosicbox_music_api::{SourceToMusicApi as _, models::TrackSource};
 use moosicbox_music_models::{ApiSource, AudioFormat, id::Id};
 use moosicbox_player::symphonia::play_media_source_async;

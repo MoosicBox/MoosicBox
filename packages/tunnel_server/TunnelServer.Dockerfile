@@ -14,6 +14,7 @@ RUN cat Cargo.toml | \
     \"packages\/database\",\r\
     \"packages\/database_connection\",\r\
     \"packages\/http\",\r\
+    \"packages\/http\/models\",\r\
     \"packages\/env_utils\",\r\
     \"packages\/json_utils\",\r\
     \"packages\/logging\",\r\
@@ -35,6 +36,7 @@ COPY packages/database/Cargo.toml packages/database/Cargo.toml
 COPY packages/database_connection/Cargo.toml packages/database_connection/Cargo.toml
 COPY packages/env_utils/Cargo.toml packages/env_utils/Cargo.toml
 COPY packages/http/Cargo.toml packages/http/Cargo.toml
+COPY packages/http/models/Cargo.toml packages/http/models/Cargo.toml
 COPY packages/json_utils/Cargo.toml packages/json_utils/Cargo.toml
 COPY packages/logging/Cargo.toml packages/logging/Cargo.toml
 COPY packages/middleware/Cargo.toml packages/middleware/Cargo.toml
@@ -71,7 +73,9 @@ packages/tunnel_server|\
     do printf "\n\n[lib]\npath=\"../../temp_lib.rs\"" >> "$file"; \
   done
 
-RUN printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/simulator/utils/Cargo.toml"
+RUN \
+  printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/simulator/utils/Cargo.toml" && \
+  printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/http/models/Cargo.toml"
 
 RUN mkdir packages/tunnel_server/src && \
   echo 'fn main() {}' >packages/tunnel_server/src/main.rs

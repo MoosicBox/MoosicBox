@@ -11,6 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
+moosicbox_http_models     = { version = "0.1.0", path = "models", default-features = false }
 moosicbox_simulator_utils = { version = "0.1.0", path = "../simulator/utils", optional = true, default-features = false }
 
 # reqwest
@@ -33,10 +34,10 @@ default = ["json", "reqwest", "simulator", "stream"]
 
 fail-on-warnings = []
 
-reqwest   = ["dep:reqwest"]
+reqwest   = ["dep:reqwest", "moosicbox_http_models/reqwest"]
 simulator = ["dep:moosicbox_simulator_utils"]
 
 json   = ["dep:serde_json", "reqwest?/json", "serde"]
 stream = ["dep:futures-core", "reqwest?/stream"]
 
-serde = ["dep:serde"]
+serde = ["dep:serde", "moosicbox_http_models/serde"]

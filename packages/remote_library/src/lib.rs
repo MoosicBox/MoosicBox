@@ -101,7 +101,7 @@ impl MusicApi for RemoteLibraryMusicApi {
     async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError> {
         let request = CLIENT
             .request(
-                moosicbox_http::Method::Get,
+                moosicbox_http::models::Method::Get,
                 &format!(
                     "{host}/menu/album?albumId={album_id}&source={source}",
                     host = self.host,
@@ -147,7 +147,7 @@ impl MusicApi for RemoteLibraryMusicApi {
 
         let request = CLIENT
             .request(
-                moosicbox_http::Method::Get,
+                moosicbox_http::models::Method::Get,
                 &format!(
                     "{host}/menu/album/versions?albumId={album_id}&source={source}",
                     host = self.host,
@@ -255,7 +255,7 @@ impl MusicApi for RemoteLibraryMusicApi {
             .join(",");
         let request = CLIENT
             .request(
-                moosicbox_http::Method::Get,
+                moosicbox_http::models::Method::Get,
                 &format!(
                     "{host}/menu/tracks?trackIds={track_ids_str}&source={source}",
                     host = self.host,
@@ -330,7 +330,7 @@ impl MusicApi for RemoteLibraryMusicApi {
     async fn track(&self, track_id: &Id) -> Result<Option<Track>, TrackError> {
         let request = CLIENT
             .request(
-                moosicbox_http::Method::Get,
+                moosicbox_http::models::Method::Get,
                 &format!(
                     "{host}/menu/track?trackId={track_id}&source={source}",
                     host = self.host,

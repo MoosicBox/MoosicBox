@@ -6,7 +6,7 @@ use std::{collections::HashMap, task::Poll, time::SystemTime};
 
 use bytes::Bytes;
 use futures_util::{Future, Stream};
-use moosicbox_http::Method;
+use moosicbox_http::models::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::EnumString;

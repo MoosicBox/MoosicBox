@@ -6,11 +6,11 @@ use std::{collections::BTreeMap, num::NonZeroU16};
 
 use async_trait::async_trait;
 use bytes::Bytes;
+use moosicbox_http_models::Method;
 use strum::{AsRefStr, EnumString};
 use thiserror::Error;
 
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+pub use moosicbox_http_models as models;
 
 #[cfg(feature = "reqwest")]
 pub mod reqwest;
@@ -39,22 +39,6 @@ pub enum Header {
     UserAgent,
     Range,
     ContentLength,
-}
-
-#[derive(Debug, Clone, Copy, EnumString, AsRefStr)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "SCREAMING_SNAKE_CASE"))]
-#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
-pub enum Method {
-    Get,
-    Post,
-    Put,
-    Patch,
-    Delete,
-    Head,
-    Options,
-    Connect,
-    Trace,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -123,12 +107,6 @@ impl std::fmt::Display for StatusCode {
             401 => f.write_str("401 Unauthorized"),
             code => f.write_str(&code.to_string()),
         }
-    }
-}
-
-impl std::fmt::Display for Method {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_ref())
     }
 }
 

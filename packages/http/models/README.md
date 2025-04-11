@@ -1,0 +1,1 @@
+# MoosicBox HTTP models crate

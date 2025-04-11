@@ -6972,12 +6972,23 @@ dependencies = [
  "futures-core",
  "futures-util",
  "log",
+ "moosicbox_http_models",
  "moosicbox_simulator_utils",
  "reqwest",
  "serde",
  "serde_json",
  "strum 0.27.1",
  "thiserror 2.0.12",
+]
+
+[[package]]
+name = "moosicbox_http_models"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_assert",
+ "reqwest",
+ "serde",
+ "strum 0.27.1",
 ]
 
 [[package]]

@@ -18,6 +18,7 @@
 !/packages/env_utils
 !/packages/files
 !/packages/http
+!/packages/http/models
 !/packages/image
 !/packages/json_utils
 !/packages/library

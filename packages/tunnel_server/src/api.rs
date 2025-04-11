@@ -11,7 +11,7 @@ use bytes::Bytes;
 use futures_util::StreamExt;
 use log::{debug, info};
 use moosicbox_database::profiles::api::ProfileNameUnverified;
-use moosicbox_http::Method;
+use moosicbox_http::models::Method;
 use moosicbox_tunnel::{
     TunnelEncoding, TunnelHttpRequest, TunnelRequest, TunnelResponse, TunnelStream,
 };
