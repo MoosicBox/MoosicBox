@@ -48,8 +48,8 @@ importers:
         specifier: ^3.5.3
         version: 3.5.3
       sst:
-        specifier: ^3.13.7
-        version: 3.13.7
+        specifier: ^3.13.9
+        version: 3.13.9
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
@@ -98,8 +98,8 @@ packages:
     resolution: {integrity: sha512-ZAoA40rNMPwSm+AeHpCq8STiNAwzWLJuP8Xv4CHIc9wv/PSuExjMrmjfYNj682vW0OOiZ1HKxzvjQr9XZIisQA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@grpc/grpc-js@1.13.2':
-    resolution: {integrity: sha512-nnR5nmL6lxF8YBqb6gWvEgLdLh/Fn+kvAdX5hUOnt48sNSb0riz/93ASd2E5gvanPA41X6Yp25bIfGRp1SMb2g==}
+  '@grpc/grpc-js@1.13.3':
+    resolution: {integrity: sha512-FTXHdOoPbZrBjlVLHuKbDZnsTxXv2BlHF57xw6LuThXacXvtkahEPED0CKMk6obZDf65Hv4k3z62eyPNpvinIg==}
     engines: {node: '>=12.10.0'}
 
   '@grpc/proto-loader@0.7.13':
@@ -2036,33 +2036,33 @@ packages:
     resolution: {integrity: sha512-MGrFH9Z4NP9Iyhqn16sDtBpRRNJ0Y2hNa6D65h736fVSaPCHr4DM4sWUNvVaSuC+0OBGhwsrydQwmgfg5LncqQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
-  sst-darwin-arm64@3.13.7:
-    resolution: {integrity: sha512-h8rfs/QIH+g5LKOv6OOTa27RR7cw7YpoXCh/MGOdBKwDjRbZGl9kBaR4spgN5+G/9+XV1G03QDkVpGRP5/l00g==}
+  sst-darwin-arm64@3.13.9:
+    resolution: {integrity: sha512-rVSFitbF919G4ofl1ZKtaw4Vekkxy1L7K9a0mB64YfIF7nWTIk0PGLfzdG2YNREObK7h9DRey0UFV5PYD6V/cA==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.13.7:
-    resolution: {integrity: sha512-6hpEC76F7O76cd88kdm4ZsfTZR/2WzlrDXSnnUt3PbzsvbvYid/qpJow3wfQVLh5Ll2V63TiBP1mffPjyJO10Q==}
+  sst-darwin-x64@3.13.9:
+    resolution: {integrity: sha512-gxHdy2bZnhHJwK2XSKL1ABGc69rb3JHUAsaJztn79k1/ogpU1vEbkjWBPbanYRZ21ZDGr+LwzxBIzDpjGvK+Ag==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.13.7:
-    resolution: {integrity: sha512-FSDgzjEA5btJPiheMSeVzEKbZfsj5dinYB3zIcuLt2ChIIdXAu/k+hA/raZLQR5dDEpjhNSB6yqk2Co81qiSDw==}
+  sst-linux-arm64@3.13.9:
+    resolution: {integrity: sha512-vxe3hpX6JMLBqzlp3OfiIu5YXf6GNZBt1TmGh0ZeJyThM0Flo/GA8cuwi3fkrGL2ema9vDFGjG9p3WrYx/nSOA==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.13.7:
-    resolution: {integrity: sha512-/jcC/AcSl6CCXStHfr/YfMiubN9deV0I1QlG6xvShXQvdSJkVMAak8SC2piab5sIMQ38xWjzu8NKvfXB6TRvxQ==}
+  sst-linux-x64@3.13.9:
+    resolution: {integrity: sha512-vP87bxySNemA2D/+ExJn9Vt7Hfoplgckx6nVQ1B2kACgXMPvL96srE2gspf4TumOz4c/1EPiijpfZbwAYnSEXQ==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.13.7:
-    resolution: {integrity: sha512-Gg3ISuNKGJPQWPMCr8zE/Fu00uOdDkoyxpCFyCoTxVla6E5RpSnvotdLd5VcET/M+c0JvhndHQAKAlkxbfiuqQ==}
+  sst-linux-x86@3.13.9:
+    resolution: {integrity: sha512-Ix2+twHnFTrDLW4flpPzz8n9wvrFxe/rCg1yEam+5xbaolakF+x0mfF9JFHUXiwOvu2MtyJmy5zUXaDtxKOqkQ==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.13.7:
-    resolution: {integrity: sha512-gNHm+baRuixemmAdlWSZGc/CExPhD3CaKBVdQmNvNQW5ZMosexmcukNFLeshgaVxDT6HIDWGdsn0RXvgIqS+oA==}
+  sst@3.13.9:
+    resolution: {integrity: sha512-mGX/GOlcf64v2rTUHzwZRv/yxbip7W8q7apfuO8cONewYGWkeEDH9Bw+mqC2CQJLU8PQc7q4/Oic6N98xZPDKA==}
     hasBin: true
 
   statuses@2.0.1:
@@ -2366,7 +2366,7 @@ snapshots:
       '@eslint/core': 0.13.0
       levn: 0.4.1
 
-  '@grpc/grpc-js@1.13.2':
+  '@grpc/grpc-js@1.13.3':
     dependencies:
       '@grpc/proto-loader': 0.7.13
       '@js-sdsl/ordered-map': 4.4.2
@@ -2680,7 +2680,7 @@ snapshots:
 
   '@pulumi/pulumi@3.162.0(typescript@5.8.3)':
     dependencies:
-      '@grpc/grpc-js': 1.13.2
+      '@grpc/grpc-js': 1.13.3
       '@logdna/tail-file': 2.2.0
       '@npmcli/arborist': 7.5.4
       '@opentelemetry/api': 1.9.0
@@ -4653,22 +4653,22 @@ snapshots:
     dependencies:
       minipass: 7.1.2
 
-  sst-darwin-arm64@3.13.7:
+  sst-darwin-arm64@3.13.9:
     optional: true
 
-  sst-darwin-x64@3.13.7:
+  sst-darwin-x64@3.13.9:
     optional: true
 
-  sst-linux-arm64@3.13.7:
+  sst-linux-arm64@3.13.9:
     optional: true
 
-  sst-linux-x64@3.13.7:
+  sst-linux-x64@3.13.9:
     optional: true
 
-  sst-linux-x86@3.13.7:
+  sst-linux-x86@3.13.9:
     optional: true
 
-  sst@3.13.7:
+  sst@3.13.9:
     dependencies:
       aws-sdk: 2.1692.0
       aws4fetch: 1.0.18
@@ -4676,11 +4676,11 @@ snapshots:
       opencontrol: 0.0.6
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.13.7
-      sst-darwin-x64: 3.13.7
-      sst-linux-arm64: 3.13.7
-      sst-linux-x64: 3.13.7
-      sst-linux-x86: 3.13.7
+      sst-darwin-arm64: 3.13.9
+      sst-darwin-x64: 3.13.9
+      sst-linux-arm64: 3.13.9
+      sst-linux-x64: 3.13.9
+      sst-linux-x86: 3.13.9
     transitivePeerDependencies:
       - supports-color
 
