@@ -5764,6 +5764,79 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c2cdeb66e45e9f36bfad5bbdb4d2384e70936afbee843c6f6543f0c551ebb25"
 
 [[package]]
+name = "lexical"
+version = "7.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70ed980ff02623721dc334b9105150b66d0e1f246a92ab5a2eca0335d54c48f6"
+dependencies = [
+ "lexical-core",
+]
+
+[[package]]
+name = "lexical-core"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b765c31809609075565a70b4b71402281283aeda7ecaf4818ac14a7b2ade8958"
+dependencies = [
+ "lexical-parse-float",
+ "lexical-parse-integer",
+ "lexical-util",
+ "lexical-write-float",
+ "lexical-write-integer",
+]
+
+[[package]]
+name = "lexical-parse-float"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de6f9cb01fb0b08060209a057c048fcbab8717b4c1ecd2eac66ebfe39a65b0f2"
+dependencies = [
+ "lexical-parse-integer",
+ "lexical-util",
+ "static_assertions",
+]
+
+[[package]]
+name = "lexical-parse-integer"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72207aae22fc0a121ba7b6d479e42cbfea549af1479c3f3a4f12c70dd66df12e"
+dependencies = [
+ "lexical-util",
+ "static_assertions",
+]
+
+[[package]]
+name = "lexical-util"
+version = "1.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a82e24bf537fd24c177ffbbdc6ebcc8d54732c35b50a3f28cc3f4e4c949a0b3"
+dependencies = [
+ "static_assertions",
+]
+
+[[package]]
+name = "lexical-write-float"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5afc668a27f460fb45a81a757b6bf2f43c2d7e30cb5a2dcd3abf294c78d62bd"
+dependencies = [
+ "lexical-util",
+ "lexical-write-integer",
+ "static_assertions",
+]
+
+[[package]]
+name = "lexical-write-integer"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "629ddff1a914a836fb245616a7888b62903aae58fa771e1d83943035efa0f978"
+dependencies = [
+ "lexical-util",
+ "static_assertions",
+]
+
+[[package]]
 name = "libappindicator"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6791,6 +6864,7 @@ dependencies = [
  "moosicbox_http",
  "moosicbox_json_utils",
  "moosicbox_middleware",
+ "moosicbox_web_server",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -6838,6 +6912,7 @@ dependencies = [
  "log",
  "moosicbox_assert",
  "moosicbox_task",
+ "moosicbox_web_server",
  "postgres-protocol",
  "qstring",
  "regex",
@@ -7238,6 +7313,7 @@ dependencies = [
  "futures-util",
  "log",
  "moosicbox_assert",
+ "moosicbox_web_server",
  "tracing",
 ]
 
@@ -7496,10 +7572,6 @@ dependencies = [
 name = "moosicbox_server"
 version = "0.1.0"
 dependencies = [
- "actix-cors",
- "actix-htmx",
- "actix-web",
- "actix-ws",
  "console-subscriber",
  "flume",
  "futures-util",
@@ -7539,6 +7611,7 @@ dependencies = [
  "moosicbox_tunnel",
  "moosicbox_tunnel_sender",
  "moosicbox_upnp",
+ "moosicbox_web_server",
  "moosicbox_ws",
  "moosicbox_yt",
  "openssl",
@@ -7681,6 +7754,7 @@ dependencies = [
  "moosicbox_env_utils",
  "moosicbox_logging",
  "moosicbox_simulator_utils",
+ "moosicbox_web_server",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry-prometheus",
@@ -7855,6 +7929,44 @@ dependencies = [
  "tokio-util",
  "utoipa",
  "xml",
+]
+
+[[package]]
+name = "moosicbox_web_server"
+version = "0.1.0"
+dependencies = [
+ "actix-cors",
+ "actix-htmx",
+ "actix-http",
+ "actix-service",
+ "actix-web",
+ "bytes",
+ "futures-util",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_http_models",
+ "moosicbox_web_server_core",
+ "moosicbox_web_server_cors",
+ "paste",
+ "serde",
+ "serde-querystring",
+ "serde_json",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "moosicbox_web_server_core"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_assert",
+]
+
+[[package]]
+name = "moosicbox_web_server_cors"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_assert",
+ "moosicbox_http_models",
 ]
 
 [[package]]
@@ -11213,6 +11325,16 @@ dependencies = [
  "serde",
  "serde-value",
  "serde_json",
+]
+
+[[package]]
+name = "serde-querystring"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ae1940bc2612f641456fc715125e4002cbd235d040188a1994e64b734054c2e"
+dependencies = [
+ "lexical",
+ "serde",
 ]
 
 [[package]]
@@ -14842,6 +14964,14 @@ checksum = "5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "web_server_simple_get"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_web_server",
+ "tokio",
 ]
 
 [[package]]

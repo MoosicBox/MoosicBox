@@ -1,0 +1,51 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools", "network-programming"]
+description = "MoosicBox Web Server package"
+edition     = "2024"
+keywords    = ["async", "http", "network", "web"]
+license     = "MPL-2.0"
+name        = "moosicbox_web_server"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_assert          = { version = "0.1.0", path = "../assert", default-features = false }
+moosicbox_http_models     = { version = "0.1.0", path = "../http/models", default-features = false }
+moosicbox_web_server_core = { version = "0.1.0", path = "core", default-features = false }
+moosicbox_web_server_cors = { version = "0.1.0", path = "cors", optional = true, default-features = false }
+
+actix-cors    = { workspace = true, optional = true }
+actix-htmx    = { workspace = true, optional = true }
+actix-http    = { workspace = true, optional = true }
+actix-service = { workspace = true, optional = true }
+actix-web     = { workspace = true, optional = true }
+
+bytes             = { workspace = true }
+futures-util      = { workspace = true, optional = true }
+log               = { workspace = true }
+paste             = { workspace = true }
+serde             = { workspace = true }
+serde-querystring = { workspace = true }
+serde_json        = { workspace = true, optional = true }
+thiserror         = { workspace = true }
+
+[features]
+default = ["actix", "compress", "cors", "htmx", "serde", "tls"]
+
+fail-on-warnings = []
+
+actix = [
+    "dep:actix-http",
+    "dep:actix-service",
+    "dep:actix-web",
+    "dep:futures-util",
+]
+
+serde = ["dep:serde_json"]
+
+compress = []
+cors     = ["dep:actix-cors", "dep:moosicbox_web_server_cors"]
+htmx     = ["dep:actix-htmx"]
+tls      = ["actix-web?/openssl"]

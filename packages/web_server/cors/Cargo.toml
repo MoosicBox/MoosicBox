@@ -1,0 +1,21 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools", "network-programming"]
+description = "MoosicBox Web Server CORS package"
+edition     = "2024"
+keywords    = ["async", "http", "network", "security", "web"]
+license     = "MPL-2.0"
+name        = "moosicbox_web_server_cors"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
+
+moosicbox_http_models = { version = "0.1.0", path = "../../http/models", default-features = false }
+
+[features]
+default = []
+
+fail-on-warnings = []

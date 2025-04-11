@@ -1,0 +1,19 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools", "network-programming"]
+description = "MoosicBox Web Server Core package"
+edition     = "2024"
+keywords    = ["async", "http", "network", "web"]
+license     = "MPL-2.0"
+name        = "moosicbox_web_server_core"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
+
+[features]
+default = []
+
+fail-on-warnings = []
