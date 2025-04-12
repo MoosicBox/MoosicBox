@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::pin::Pin;
+use std::{borrow::Cow, pin::Pin};
 
 use bytes::Bytes;
 use thiserror::Error;
@@ -211,6 +211,30 @@ impl HttpResponseBody {
 impl From<&str> for HttpResponseBody {
     fn from(value: &str) -> Self {
         value.to_string().into()
+    }
+}
+
+impl From<Bytes> for HttpResponseBody {
+    fn from(value: Bytes) -> Self {
+        Self::Bytes(value)
+    }
+}
+
+impl From<Vec<u8>> for HttpResponseBody {
+    fn from(value: Vec<u8>) -> Self {
+        Self::Bytes(value.into())
+    }
+}
+
+impl From<&[u8]> for HttpResponseBody {
+    fn from(value: &[u8]) -> Self {
+        value.to_vec().into()
+    }
+}
+
+impl<'a> From<Cow<'a, [u8]>> for HttpResponseBody {
+    fn from(value: Cow<'a, [u8]>) -> Self {
+        value.to_vec().into()
     }
 }
 
