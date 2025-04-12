@@ -263,8 +263,65 @@ impl From<String> for HttpResponseBody {
 }
 
 #[derive(Debug)]
+pub struct StatusCode(u16);
+
+impl StatusCode {
+    #[must_use]
+    pub const fn new(code: u16) -> Self {
+        Self(code)
+    }
+}
+
+impl StatusCode {
+    pub const OK: Self = Self(200);
+    pub const TEMPORARY_REDIRECT: Self = Self(307);
+    pub const PERMANENT_REDIRECT: Self = Self(308);
+    pub const NOT_FOUND: Self = Self(404);
+}
+
+impl From<StatusCode> for u16 {
+    fn from(value: StatusCode) -> Self {
+        value.0
+    }
+}
+
+#[derive(Debug)]
 pub struct HttpResponse {
     pub body: HttpResponseBody,
+    pub status_code: StatusCode,
+}
+
+impl HttpResponse {
+    #[must_use]
+    pub fn ok() -> Self {
+        Self::new(StatusCode::OK)
+    }
+
+    #[must_use]
+    pub fn temporary_redirect() -> Self {
+        Self::new(StatusCode::TEMPORARY_REDIRECT)
+    }
+
+    #[must_use]
+    pub fn permanent_redirect() -> Self {
+        Self::new(StatusCode::PERMANENT_REDIRECT)
+    }
+
+    #[must_use]
+    pub fn not_found() -> Self {
+        Self::new(StatusCode::NOT_FOUND)
+    }
+}
+
+impl HttpResponse {
+    #[must_use]
+    pub fn new(status_code: impl Into<StatusCode>) -> Self {
+        Self {
+            status_code: status_code.into(),
+            location: None,
+            body: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
