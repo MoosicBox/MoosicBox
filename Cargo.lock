@@ -14967,6 +14967,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "web_server_nested_get"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_web_server",
+ "tokio",
+]
+
+[[package]]
 name = "web_server_simple_get"
 version = "0.1.0"
 dependencies = [

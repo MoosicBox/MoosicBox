@@ -94,6 +94,7 @@ members = [
     "packages/web_server",
     "packages/web_server/core",
     "packages/web_server/cors",
+    "packages/web_server/examples/nested_get",
     "packages/web_server/examples/simple_get",
     "packages/ws",
     "packages/yt",
