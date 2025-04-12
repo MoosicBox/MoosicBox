@@ -14975,6 +14975,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "web_server_openapi"
+version = "0.1.0"
+dependencies = [
+ "const_format",
+ "log",
+ "moosicbox_logging",
+ "moosicbox_web_server",
+ "tokio",
+ "utoipa",
+ "utoipa-rapidoc",
+ "utoipa-redoc",
+ "utoipa-scalar",
+ "utoipa-swagger-ui",
+]
+
+[[package]]
 name = "web_server_simple_get"
 version = "0.1.0"
 dependencies = [

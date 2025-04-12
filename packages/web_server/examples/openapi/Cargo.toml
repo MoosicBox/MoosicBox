@@ -1,0 +1,32 @@
+[package]
+authors     = ["Braden Steffaniak"]
+description = "MoosicBox Web Server OpenAPI example"
+edition     = "2024"
+license     = "MPL-2.0"
+name        = "web_server_openapi"
+publish     = false
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_logging = { version = "0.1.0", path = "../../../logging", default-features = false, features = [
+    "free_log",
+] }
+moosicbox_web_server = { version = "0.1.0", path = "../..", default-features = false, features = [
+    "actix",
+    "cors",
+] }
+
+const_format      = { workspace = true }
+log               = { workspace = true }
+tokio             = { workspace = true, features = ["macros", "rt-multi-thread"] }
+utoipa            = { workspace = true }
+utoipa-rapidoc    = { workspace = true }
+utoipa-redoc      = { workspace = true }
+utoipa-scalar     = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = []
