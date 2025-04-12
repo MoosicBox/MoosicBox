@@ -115,3 +115,17 @@ pub fn bind_services(scope: Scope) -> Scope {
     let scope = scope.with_route(openapi_spec::GET_RAPIDOC);
     scope
 }
+
+#[macro_export]
+macro_rules! path {
+    ($method:ident, $name:ident, $impl:expr $(,)?) => {
+        $crate::paste::paste! {
+            pub static [< $method:upper _ $name:upper _PATH >]: std::sync::LazyLock<utoipa::openapi::PathItem> =
+                std::sync::LazyLock::new(|| {
+                    use utoipa::openapi::{*, path::*};
+
+                    $impl
+                });
+        }
+    };
+}
