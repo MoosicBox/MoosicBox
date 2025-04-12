@@ -7941,6 +7941,7 @@ dependencies = [
  "actix-service",
  "actix-web",
  "bytes",
+ "const_format",
  "futures-util",
  "log",
  "moosicbox_assert",
@@ -7952,6 +7953,11 @@ dependencies = [
  "serde-querystring",
  "serde_json",
  "thiserror 2.0.12",
+ "utoipa",
+ "utoipa-rapidoc",
+ "utoipa-redoc",
+ "utoipa-scalar",
+ "utoipa-swagger-ui",
 ]
 
 [[package]]
@@ -14978,16 +14984,10 @@ dependencies = [
 name = "web_server_openapi"
 version = "0.1.0"
 dependencies = [
- "const_format",
  "log",
  "moosicbox_logging",
  "moosicbox_web_server",
  "tokio",
- "utoipa",
- "utoipa-rapidoc",
- "utoipa-redoc",
- "utoipa-scalar",
- "utoipa-swagger-ui",
 ]
 
 [[package]]

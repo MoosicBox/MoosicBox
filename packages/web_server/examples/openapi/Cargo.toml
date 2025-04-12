@@ -15,16 +15,11 @@ moosicbox_logging = { version = "0.1.0", path = "../../../logging", default-feat
 moosicbox_web_server = { version = "0.1.0", path = "../..", default-features = false, features = [
     "actix",
     "cors",
+    "openapi-all",
 ] }
 
-const_format      = { workspace = true }
-log               = { workspace = true }
-tokio             = { workspace = true, features = ["macros", "rt-multi-thread"] }
-utoipa            = { workspace = true }
-utoipa-rapidoc    = { workspace = true }
-utoipa-redoc      = { workspace = true }
-utoipa-scalar     = { workspace = true }
-utoipa-swagger-ui = { workspace = true }
+log   = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]
 default = []

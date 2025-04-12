@@ -19,6 +19,9 @@ pub use utoipa;
 #[cfg(feature = "actix")]
 mod actix;
 
+#[cfg(feature = "openapi")]
+pub mod openapi;
+
 #[derive(Debug)]
 pub struct WebServerBuilder {
     addr: String,
