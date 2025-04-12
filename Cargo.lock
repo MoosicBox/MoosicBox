@@ -378,7 +378,7 @@ dependencies = [
  "opentelemetry-prometheus",
  "opentelemetry-semantic-conventions",
  "opentelemetry_sdk",
- "prometheus",
+ "prometheus 0.13.4",
  "serde",
  "tracing",
 ]
@@ -1328,7 +1328,7 @@ dependencies = [
  "hyper-util",
  "pin-project-lite",
  "rustls 0.21.12",
- "rustls 0.23.25",
+ "rustls 0.23.26",
  "rustls-native-certs 0.8.1",
  "rustls-pki-types",
  "tokio",
@@ -1981,9 +1981,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.18"
+version = "1.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "525046617d8376e3db1deffb079e91cef90a89fc3ca5c185bbf8c9ecdd15cd5c"
+checksum = "8e3a13707ac958681c13b39b458c073d0d9bc8a22cb1b2f4c8e55eb72c13f362"
 dependencies = [
  "jobserver",
  "libc",
@@ -2130,9 +2130,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.35"
+version = "4.5.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8aa86934b44c19c50f87cc2790e19f54f7a67aedb64101c2e1a2e5ecfb73944"
+checksum = "2df961d8c8a0d08aa9945718ccf584145eee3f3aa06cddbeac12933781102e04"
 dependencies = [
  "clap_builder",
  "clap_derive 4.5.32",
@@ -2140,9 +2140,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.35"
+version = "4.5.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2414dbb2dd0695280da6ea9261e327479e9d37b0630f6b53ba2a11c60c679fd9"
+checksum = "132dbda40fb6753878316a489d5a1242a8ef2f0d9e47ba01c951ea8aa7d013a5"
 dependencies = [
  "anstream",
  "anstyle",
@@ -2203,7 +2203,7 @@ dependencies = [
 name = "clippier"
 version = "0.1.0"
 dependencies = [
- "clap 4.5.35",
+ "clap 4.5.36",
  "itertools 0.14.0",
  "log",
  "moosicbox_logging",
@@ -4725,7 +4725,7 @@ dependencies = [
  "http 1.3.1",
  "hyper 1.6.0",
  "hyper-util",
- "rustls 0.23.25",
+ "rustls 0.23.26",
  "rustls-native-certs 0.8.1",
  "rustls-pki-types",
  "tokio",
@@ -6460,7 +6460,7 @@ dependencies = [
 name = "moosicbox_aconverter"
 version = "0.1.0"
 dependencies = [
- "clap 4.5.35",
+ "clap 4.5.36",
  "futures",
  "log",
  "moosicbox_assert",
@@ -6541,7 +6541,7 @@ dependencies = [
 name = "moosicbox_app_create_config"
 version = "0.1.0"
 dependencies = [
- "clap 4.5.35",
+ "clap 4.5.36",
  "log",
  "moosicbox_assert",
  "moosicbox_logging",
@@ -6864,7 +6864,6 @@ dependencies = [
  "moosicbox_http",
  "moosicbox_json_utils",
  "moosicbox_middleware",
- "moosicbox_web_server",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -6912,7 +6911,6 @@ dependencies = [
  "log",
  "moosicbox_assert",
  "moosicbox_task",
- "moosicbox_web_server",
  "postgres-protocol",
  "qstring",
  "regex",
@@ -7071,7 +7069,7 @@ name = "moosicbox_image"
 version = "0.1.0"
 dependencies = [
  "bytes",
- "clap 4.5.35",
+ "clap 4.5.36",
  "image",
  "libvips",
  "log",
@@ -7207,7 +7205,7 @@ version = "0.1.0"
 dependencies = [
  "async-recursion",
  "chrono",
- "clap 4.5.35",
+ "clap 4.5.36",
  "console-subscriber",
  "hyperchad_renderer",
  "hyperchad_renderer_html",
@@ -7313,7 +7311,6 @@ dependencies = [
  "futures-util",
  "log",
  "moosicbox_assert",
- "moosicbox_web_server",
  "tracing",
 ]
 
@@ -7572,6 +7569,10 @@ dependencies = [
 name = "moosicbox_server"
 version = "0.1.0"
 dependencies = [
+ "actix-cors",
+ "actix-htmx",
+ "actix-web",
+ "actix-ws",
  "console-subscriber",
  "flume",
  "futures-util",
@@ -7611,7 +7612,6 @@ dependencies = [
  "moosicbox_tunnel",
  "moosicbox_tunnel_sender",
  "moosicbox_upnp",
- "moosicbox_web_server",
  "moosicbox_ws",
  "moosicbox_yt",
  "openssl",
@@ -7754,12 +7754,11 @@ dependencies = [
  "moosicbox_env_utils",
  "moosicbox_logging",
  "moosicbox_simulator_utils",
- "moosicbox_web_server",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry-prometheus",
  "opentelemetry_sdk",
- "prometheus",
+ "prometheus 0.13.4",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -9017,15 +9016,14 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry-prometheus"
-version = "0.29.0"
+version = "0.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ac8c4fc7bd450bcb5b1cbc7325755e86d9f82f1fd80ad8b3441887b715f6a2d"
+checksum = "098a71a4430bb712be6130ed777335d2e5b19bc8566de5f2edddfce906def6ab"
 dependencies = [
  "once_cell",
  "opentelemetry",
  "opentelemetry_sdk",
- "prometheus",
- "protobuf",
+ "prometheus 0.14.0",
  "tracing",
 ]
 
@@ -9564,7 +9562,7 @@ dependencies = [
  "pingora-pool",
  "pingora-runtime",
  "pingora-timeout",
- "prometheus",
+ "prometheus 0.13.4",
  "rand 0.8.5",
  "regex",
  "serde",
@@ -10021,8 +10019,23 @@ dependencies = [
  "lazy_static",
  "memchr",
  "parking_lot 0.12.3",
- "protobuf",
+ "protobuf 2.28.0",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "prometheus"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ca5326d8d0b950a9acd87e6a3f94745394f62e4dae1b1ee22b2bc0c394af43a"
+dependencies = [
+ "cfg-if",
+ "fnv",
+ "lazy_static",
+ "memchr",
+ "parking_lot 0.12.3",
+ "protobuf 3.7.2",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -10062,6 +10075,26 @@ name = "protobuf"
 version = "2.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
+
+[[package]]
+name = "protobuf"
+version = "3.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d65a1d4ddae7d8b5de68153b48f6aa3bba8cb002b243dbdbc55a5afbc98f99f4"
+dependencies = [
+ "once_cell",
+ "protobuf-support",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "protobuf-support"
+version = "3.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e36c2f31e0a47f9280fb347ef5e461ffcd2c52dd520d8e216b52f93b0b0d7d6"
+dependencies = [
+ "thiserror 1.0.69",
+]
 
 [[package]]
 name = "psm"
@@ -10219,7 +10252,7 @@ dependencies = [
  "quinn-proto",
  "quinn-udp",
  "rustc-hash 2.1.1",
- "rustls 0.23.25",
+ "rustls 0.23.26",
  "socket2",
  "thiserror 2.0.12",
  "tokio",
@@ -10238,7 +10271,7 @@ dependencies = [
  "rand 0.9.0",
  "ring",
  "rustc-hash 2.1.1",
- "rustls 0.23.25",
+ "rustls 0.23.26",
  "rustls-pki-types",
  "slab",
  "thiserror 2.0.12",
@@ -10676,7 +10709,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "quinn",
- "rustls 0.23.25",
+ "rustls 0.23.26",
  "rustls-pemfile 2.2.0",
  "rustls-pki-types",
  "serde",
@@ -10868,9 +10901,9 @@ dependencies = [
 
 [[package]]
 name = "rust-embed"
-version = "8.6.0"
+version = "8.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b3aba5104622db5c9fc61098de54708feb732e7763d7faa2fa625899f00bf6f"
+checksum = "e5fbc0ee50fcb99af7cebb442e5df7b5b45e9460ffa3f8f549cd26b862bec49d"
 dependencies = [
  "rust-embed-impl",
  "rust-embed-utils",
@@ -10879,9 +10912,9 @@ dependencies = [
 
 [[package]]
 name = "rust-embed-impl"
-version = "8.6.0"
+version = "8.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f198c73be048d2c5aa8e12f7960ad08443e56fd39cc26336719fdb4ea0ebaae"
+checksum = "6bf418c9a2e3f6663ca38b8a7134cc2c2167c9d69688860e8961e3faa731702e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -10892,9 +10925,9 @@ dependencies = [
 
 [[package]]
 name = "rust-embed-utils"
-version = "8.6.0"
+version = "8.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a2fcdc9f40c8dc2922842ca9add611ad19f332227fc651d015881ad1552bd9a"
+checksum = "08d55b95147fe01265d06b3955db798bdaed52e60e2211c41137701b3aba8e21"
 dependencies = [
  "sha2",
  "walkdir",
@@ -11021,9 +11054,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.25"
+version = "0.23.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "822ee9188ac4ec04a2f0531e55d035fb2de73f18b41a63c70c2712503b6fb13c"
+checksum = "df51b5869f3a441595eac5e8ff14d486ff285f7b8c0df8770e49c3b56351f0f0"
 dependencies = [
  "aws-lc-rs",
  "once_cell",
@@ -11891,7 +11924,7 @@ dependencies = [
  "memchr",
  "once_cell",
  "percent-encoding",
- "rustls 0.23.25",
+ "rustls 0.23.26",
  "rustls-pemfile 2.2.0",
  "serde",
  "serde_json",
@@ -12322,10 +12355,11 @@ dependencies = [
 
 [[package]]
 name = "swc_common"
-version = "8.0.1"
+version = "8.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e4a932c152e7142de2d5dba1c393e5523c47cd8fe656e5b0d411954bbaf1810"
+checksum = "7d96ac5d021c7c20acb3073940b4ee59b62989a705f855783c4a452e0737a2e6"
 dependencies = [
+ "anyhow",
  "ast_node",
  "better_scoped_tls",
  "cfg-if",
@@ -12376,14 +12410,16 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_ast"
-version = "8.1.0"
+version = "8.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01f80679b1afc52ae0663eed0a2539cc3c108d48c287b5601712f9850d9fa9c2"
+checksum = "5ec3fa609b69d32a8430fb4061ea1106fb8e45f78bdeb472951ebdfa1d2e690a"
 dependencies = [
  "bitflags 2.9.0",
  "is-macro",
  "num-bigint",
+ "once_cell",
  "phf 0.11.3",
+ "rustc-hash 2.1.1",
  "scoped-tls",
  "serde",
  "string_enum",
@@ -13852,7 +13888,7 @@ version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e727b36a1a0e8b74c376ac2211e40c2c8af09fb4013c60d910495810f008e9b"
 dependencies = [
- "rustls 0.23.25",
+ "rustls 0.23.26",
  "tokio",
 ]
 
@@ -13888,7 +13924,7 @@ checksum = "7a9daff607c6d2bf6c16fd681ccb7eecc83e4e2cdc1ca067ffaadfca5de7f084"
 dependencies = [
  "futures-util",
  "log",
- "rustls 0.23.25",
+ "rustls 0.23.26",
  "rustls-pki-types",
  "tokio",
  "tokio-rustls 0.26.2",
@@ -14252,7 +14288,7 @@ dependencies = [
  "httparse",
  "log",
  "rand 0.9.0",
- "rustls 0.23.25",
+ "rustls 0.23.26",
  "rustls-pki-types",
  "sha1",
  "thiserror 2.0.12",
