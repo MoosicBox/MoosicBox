@@ -340,6 +340,7 @@ impl std::fmt::Debug for Route {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Service")
             .field("path", &self.path)
+            .field("method", &self.method)
             .finish_non_exhaustive()
     }
 }
