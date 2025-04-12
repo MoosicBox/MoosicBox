@@ -5,10 +5,10 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use actix_http::{Request, Response, StatusCode};
+use actix_http::{Request, Response, StatusCode, header::LOCATION};
 use actix_service::{IntoServiceFactory, Service, ServiceFactory, fn_factory};
 use actix_web::{
-    Error, HttpServer, Resource,
+    Error, HttpServer, Resource, Responder,
     body::MessageBody,
     dev::{self, AppConfig, ServerHandle, ServiceRequest, ServiceResponse},
     error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
@@ -92,11 +92,16 @@ impl Service<ServiceRequest> for crate::Route {
             handler(req.clone().into())
                 .map(|x| {
                     x.map(|x| {
-                        let res = actix_web::HttpResponseBuilder::new(StatusCode::OK).body(match x
-                            .body
-                        {
-                            crate::HttpResponseBody::Bytes(bytes) => bytes,
-                        });
+                        let mut res = actix_web::HttpResponseBuilder::new(x.status_code.into());
+                        if let Some(location) = x.location {
+                            res.insert_header((LOCATION, location));
+                        }
+                        let res = match x.body {
+                            Some(crate::HttpResponseBody::Bytes(bytes)) => {
+                                res.body(Box::new(bytes))
+                            }
+                            None => res.respond_to(&req),
+                        };
                         ServiceResponse::new(req, res)
                     })
                 })

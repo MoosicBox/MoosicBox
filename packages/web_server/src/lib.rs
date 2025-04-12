@@ -13,6 +13,8 @@ pub use moosicbox_web_server_core as core;
 pub use moosicbox_web_server_cors as cors;
 pub use paste;
 pub use serde_querystring as qs;
+#[cfg(feature = "openapi")]
+pub use utoipa;
 
 #[cfg(feature = "actix")]
 mod actix;
@@ -287,8 +289,9 @@ impl From<StatusCode> for u16 {
 
 #[derive(Debug)]
 pub struct HttpResponse {
-    pub body: HttpResponseBody,
     pub status_code: StatusCode,
+    pub location: Option<String>,
+    pub body: Option<HttpResponseBody>,
 }
 
 impl HttpResponse {
@@ -321,6 +324,18 @@ impl HttpResponse {
             location: None,
             body: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_location<T: Into<String>, O: Into<Option<T>>>(mut self, location: O) -> Self {
+        self.location = location.into().map(Into::into);
+        self
+    }
+
+    #[must_use]
+    pub fn with_body<T: Into<HttpResponseBody>, B: Into<Option<T>>>(mut self, body: B) -> Self {
+        self.body = body.into().map(Into::into);
+        self
     }
 }
 

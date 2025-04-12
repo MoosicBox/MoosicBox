@@ -18,13 +18,10 @@ async fn main() {
 
 moosicbox_web_server::route!(GET, example, "/example", |req| {
     Box::pin(async move {
-        Ok(HttpResponse {
-            body: format!(
-                "hello, world! path={} query={}",
-                req.path(),
-                req.query_string()
-            )
-            .into(),
-        })
+        Ok(HttpResponse::ok().with_body(format!(
+            "hello, world! path={} query={}",
+            req.path(),
+            req.query_string()
+        )))
     })
 });
