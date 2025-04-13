@@ -43,7 +43,7 @@ mod openapi_spec {
 
     use const_format::concatcp;
 
-    use crate::{HttpResponse, WebServerError, route};
+    use crate::{Error, HttpResponse, route};
 
     use super::get_openapi;
 
@@ -55,7 +55,7 @@ mod openapi_spec {
             Ok(HttpResponse::ok().with_body(
                 get_openapi()
                     .to_json()
-                    .map_err(|_e| WebServerError::InternalServerError)?,
+                    .map_err(Error::internal_server_error)?,
             ))
         })
     });
@@ -81,10 +81,10 @@ mod openapi_spec {
                     if let Some(file) = file {
                         Ok(HttpResponse::ok().with_body(file.bytes))
                     } else {
-                        Err(WebServerError::NotFound)
+                        Err(Error::not_found("Swagger path not found"))
                     }
                 }
-                Err(_error) => Err(WebServerError::InternalServerError),
+                Err(e) => Err(Error::InternalServerError(e)),
             }
         })
     });

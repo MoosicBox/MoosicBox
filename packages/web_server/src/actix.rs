@@ -11,7 +11,7 @@ use actix_web::{
     Error, HttpServer, Resource, Responder,
     body::MessageBody,
     dev::{self, AppConfig, ServerHandle, ServiceRequest, ServiceResponse},
-    error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
+    error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound, ErrorUnauthorized},
 };
 use futures_util::{FutureExt, future::LocalBoxFuture};
 use moosicbox_web_server_core::WebServer;
@@ -52,19 +52,20 @@ impl<'a> From<&'a actix_web::HttpRequest> for HttpRequestRef<'a> {
     }
 }
 
-impl From<WebServerError> for Error {
-    fn from(value: WebServerError) -> Self {
+impl From<crate::Error> for Error {
+    fn from(value: crate::Error) -> Self {
         match value {
-            WebServerError::BadRequest => ErrorBadRequest(value),
-            WebServerError::NotFound => ErrorNotFound(value),
-            WebServerError::InternalServerError => ErrorInternalServerError(value),
+            crate::Error::BadRequest(e) => ErrorBadRequest(e),
+            crate::Error::Unauthorized(e) => ErrorUnauthorized(e),
+            crate::Error::NotFound(e) => ErrorNotFound(e),
+            crate::Error::InternalServerError(e) => ErrorInternalServerError(e),
         }
     }
 }
 
-impl From<Error> for WebServerError {
-    fn from(_value: Error) -> Self {
-        Self::InternalServerError
+impl From<Error> for crate::Error {
+    fn from(value: Error) -> Self {
+        Self::InternalServerError(Box::new(value))
     }
 }
 
@@ -77,7 +78,7 @@ impl From<crate::StatusCode> for StatusCode {
 
 impl Service<ServiceRequest> for crate::Route {
     type Response = ServiceResponse;
-    type Error = WebServerError;
+    type Error = crate::Error;
     type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     dev::always_ready!();
@@ -159,7 +160,7 @@ where
     }
 }
 
-use crate::{HttpRequest, HttpRequestRef, WebServerBuilder, WebServerError};
+use crate::{HttpRequest, HttpRequestRef, WebServerBuilder};
 
 impl WebServerBuilder {
     #[must_use]
