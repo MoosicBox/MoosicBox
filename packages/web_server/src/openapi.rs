@@ -117,6 +117,19 @@ pub fn bind_services(scope: Scope) -> Scope {
 }
 
 #[macro_export]
+macro_rules! api {
+    ($name:ident, $impl:expr $(,)?) => {
+        $crate::paste::paste! {
+            pub static [< $name:upper _API >]: std::sync::LazyLock<utoipa::openapi::OpenApi> = std::sync::LazyLock::new(|| {
+                use utoipa::openapi::{*, path::*};
+
+                $impl
+            });
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! path {
     ($method:ident, $name:ident, $impl:expr $(,)?) => {
         $crate::paste::paste! {
