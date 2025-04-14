@@ -127,5 +127,4 @@ jobs:
               with:
                   name: log
                   path: .sst/log
-                  if-no-files-found: error
                   retention-days: 90
