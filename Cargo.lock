@@ -7744,7 +7744,7 @@ dependencies = [
  "moosicbox_mdns",
  "moosicbox_telemetry",
  "moosicbox_upnp",
- "rand 0.9.0",
+ "rand 0.8.5",
  "turmoil",
 ]
 
