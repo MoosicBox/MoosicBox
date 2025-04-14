@@ -36,6 +36,11 @@ default = ["actix", "simulator"]
 
 fail-on-warnings = []
 
-actix = ["dep:actix-web", "dep:actix-web-opentelemetry", "dep:futures-util"]
+actix = [
+    "dep:actix-web",
+    "dep:actix-web-opentelemetry",
+    "dep:futures-util",
+    "simulator",
+]
 
 simulator = ["dep:moosicbox_simulator_utils", "dep:tracing-subscriber"]

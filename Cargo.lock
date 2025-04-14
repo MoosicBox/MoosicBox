@@ -7758,7 +7758,7 @@ dependencies = [
  "opentelemetry-otlp",
  "opentelemetry-prometheus",
  "opentelemetry_sdk",
- "prometheus 0.13.4",
+ "prometheus 0.14.0",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",

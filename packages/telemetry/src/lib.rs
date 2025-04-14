@@ -6,11 +6,11 @@
 mod simulator;
 
 #[cfg(feature = "actix")]
-use actix_web::{Handler as _, HttpRequest, Responder, get, web};
+use actix_web::{HttpRequest, Responder, get, web};
 #[cfg(feature = "actix")]
 pub use actix_web_opentelemetry::RequestTracing;
 #[cfg(feature = "actix")]
-use actix_web_opentelemetry::{PrometheusMetricsHandler, RequestMetrics, RequestMetricsBuilder};
+use actix_web_opentelemetry::{RequestMetrics, RequestMetricsBuilder};
 #[cfg(feature = "actix")]
 use futures_util::future::LocalBoxFuture;
 use moosicbox_logging::free_log_client::DynLayer;
@@ -91,7 +91,7 @@ pub fn get_http_metrics_handler() -> Result<Box<dyn HttpMetricsHandler>, MetricE
         return Ok(Box::new(simulator::SimulatorHttpMetricsHandler));
     }
 
-    Ok(Box::new(Otel::new()?))
+    Ok(Box::new(simulator::SimulatorHttpMetricsHandler))
 }
 
 #[derive(Debug)]
@@ -99,26 +99,12 @@ pub fn get_http_metrics_handler() -> Result<Box<dyn HttpMetricsHandler>, MetricE
 struct Otel {
     #[allow(unused)]
     pub meter_provider: SdkMeterProvider,
+    #[allow(unused)]
     pub request_metrics: RequestMetrics,
-    pub prometheus_metrics_handler: PrometheusMetricsHandler,
 }
 
 #[cfg(feature = "actix")]
-impl HttpMetricsHandler for Otel {
-    fn call(
-        &self,
-        request: HttpRequest,
-    ) -> LocalBoxFuture<'static, Result<actix_web::HttpResponse<String>, actix_web::error::Error>>
-    {
-        self.prometheus_metrics_handler.call(request)
-    }
-
-    fn request_middleware(&self) -> RequestMetrics {
-        self.request_metrics.clone()
-    }
-}
-
-#[cfg(feature = "actix")]
+#[allow(dead_code)]
 impl Otel {
     /// # Errors
     ///
@@ -130,7 +116,7 @@ impl Otel {
         let registry = prometheus::Registry::default();
 
         #[cfg(feature = "actix")]
-        let prometheus_registry = registry.clone();
+        let prometheus_registry = registry;
         #[cfg(not(feature = "actix"))]
         let prometheus_registry = registry;
 
@@ -147,15 +133,10 @@ impl Otel {
             .with_meter_provider(meter_provider.clone())
             .build();
 
-        #[cfg(feature = "actix")]
-        let prometheus_metrics_handler = PrometheusMetricsHandler::new(registry);
-
         Ok(Self {
             meter_provider,
             #[cfg(feature = "actix")]
             request_metrics,
-            #[cfg(feature = "actix")]
-            prometheus_metrics_handler,
         })
     }
 }
