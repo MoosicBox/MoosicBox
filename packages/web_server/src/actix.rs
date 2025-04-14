@@ -128,7 +128,6 @@ where
     addr: String,
 }
 
-// #[async_trait]
 impl<F, I, S, B> WebServer for ActixWebServer<F, I, S, B>
 where
     F: Fn() -> I + Send + Clone + 'static,
