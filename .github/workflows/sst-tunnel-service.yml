@@ -1,4 +1,4 @@
-name: Deploy Tunnel Service
+name: SST Tunnel Service
 
 on:
     workflow_dispatch:
@@ -7,6 +7,14 @@ on:
                 description: 'Stage'
                 required: false
                 default: 'prod'
+            remove:
+                description: 'SST Remove'
+                required: false
+                default: 'false'
+            deploy:
+                description: 'SST Deploy'
+                required: false
+                default: 'true'
             extra_clusters:
                 description: 'Extra Clusters'
                 required: false
@@ -36,7 +44,7 @@ env:
     CARGO_TERM_COLOR: always
 
 jobs:
-    deploy:
+    run-sst:
         runs-on: ubuntu-latest
 
         steps:
@@ -83,7 +91,23 @@ jobs:
               run: |
                   pnpm sst refresh --stage ${{ github.event.inputs.stage }} --verbose --print-logs
 
+            - name: Remove
+              if: ${{ github.event.inputs.remove == 'true' }}
+              shell: bash
+              env:
+                  DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  AWS_REGION: us-east-1
+                  PULUMI_K8S_ENABLE_PATCH_FORCE: ${{ github.event.inputs.force }}
+                  PULUMI_K8S_DELETE_UNREACHABLE: ${{ github.event.inputs.delete_unreachable }}
+                  EXTRA_CLUSTERS: ${{ github.event.inputs.extra_clusters }}
+                  LOAD_BALANCER_USE_SSL: ${{ github.event.inputs.ssl }}
+              run: |
+                  pnpm sst remove --stage ${{ github.event.inputs.stage }} --verbose --print-logs
+
             - name: Deploy
+              if: ${{ github.event.inputs.deploy == 'true' }}
               shell: bash
               env:
                   DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
