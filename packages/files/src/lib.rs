@@ -15,7 +15,6 @@ use bytes::Bytes;
 use futures::{StreamExt, TryStreamExt};
 use futures_core::{Future, Stream};
 use moosicbox_audiotags::AudioTag;
-use moosicbox_http::IClient as _;
 use thiserror::Error;
 use tokio::{
     io::{AsyncSeekExt, AsyncWriteExt, BufWriter},

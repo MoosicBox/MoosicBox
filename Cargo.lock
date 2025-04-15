@@ -7082,7 +7082,7 @@ dependencies = [
  "futures-util",
  "log",
  "moosicbox_http_models",
- "moosicbox_simulator_utils",
+ "paste",
  "reqwest",
  "serde",
  "serde_json",

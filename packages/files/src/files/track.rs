@@ -14,7 +14,6 @@ use moosicbox_audio_decoder::{
     media_sources::remote_bytestream::RemoteByteStreamMediaSource,
 };
 use moosicbox_audio_output::{AudioOutputError, AudioWrite, Channels, SignalSpec};
-use moosicbox_http::IClient as _;
 use moosicbox_music_api::{
     MusicApi, MusicApis, MusicApisError, SourceToMusicApi as _, TrackError, TracksError,
     models::{TrackAudioQuality, TrackSource},

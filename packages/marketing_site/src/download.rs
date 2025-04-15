@@ -2,7 +2,6 @@ use std::{future::Future, sync::LazyLock};
 
 use chrono::NaiveDateTime;
 use moosicbox_app_native_lib::{renderer::View, router::RouteRequest};
-use moosicbox_http::IClient as _;
 use moosicbox_marketing_site_ui::download::{FileAsset, Os, OsAsset, OsRelease};
 use regex::Regex;
 use serde::Deserialize;

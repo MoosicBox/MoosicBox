@@ -5,7 +5,7 @@
 use std::sync::{Arc, LazyLock};
 
 use async_trait::async_trait;
-use moosicbox_http::{IClient as _, StatusCode};
+use moosicbox_http::StatusCode;
 use moosicbox_menu_models::{AlbumVersion, api::ApiAlbumVersion};
 use moosicbox_music_api::{
     AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,

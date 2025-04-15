@@ -1,35 +1,53 @@
-use std::{collections::BTreeMap, num::NonZeroU16};
+use std::{collections::BTreeMap, marker::PhantomData, num::NonZeroU16};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 
 use crate::{
-    Error, IClient, IRequestBuilder, IResponse, Method, RequestBuilder, Response, StatusCode,
+    Error, GenericClient, GenericClientBuilder, GenericRequestBuilder, GenericResponse, Method,
+    StatusCode,
 };
 
-pub struct ReqwestClient(reqwest::Client);
+pub struct Client(reqwest::Client);
 
-impl ReqwestClient {
+impl Client {
     #[must_use]
     pub const fn new(client: reqwest::Client) -> Self {
         Self(client)
     }
 }
 
-impl IClient for ReqwestClient {
-    fn request(&self, method: Method, url: &str) -> RequestBuilder {
-        RequestBuilder {
-            builder: Box::new(ReqwestRequestBuilder(Some(
-                self.0.request(method.into(), url),
-            ))),
-        }
+impl GenericClient<crate::ReqwestRequestBuilder> for Client {
+    fn request(&self, method: Method, url: &str) -> crate::ReqwestRequestBuilder {
+        crate::RequestBuilderWrapper(
+            RequestBuilder(Some(self.0.request(method.into(), url))),
+            PhantomData,
+        )
     }
 }
 
-pub struct ReqwestRequestBuilder(Option<reqwest::RequestBuilder>);
+pub struct ClientBuilder;
+
+impl crate::ReqwestClientBuilder {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self(ClientBuilder, PhantomData, PhantomData)
+    }
+}
+
+impl GenericClientBuilder<crate::ReqwestRequestBuilder, crate::ReqwestClient> for ClientBuilder {
+    fn build(self) -> Result<crate::ReqwestClient, Error> {
+        Ok(crate::ClientWrapper(
+            Client(reqwest::Client::new()),
+            PhantomData,
+        ))
+    }
+}
+
+pub struct RequestBuilder(Option<reqwest::RequestBuilder>);
 
 #[async_trait]
-impl IRequestBuilder for ReqwestRequestBuilder {
+impl GenericRequestBuilder<crate::ReqwestResponse> for RequestBuilder {
     fn header(&mut self, name: &str, value: &str) {
         let builder = self.0.take().unwrap();
         self.0 = Some(builder.header(name, value));
@@ -46,24 +64,22 @@ impl IRequestBuilder for ReqwestRequestBuilder {
         self.0 = Some(builder.form(form));
     }
 
-    async fn send(&mut self) -> Result<Response, Error> {
+    async fn send(&mut self) -> Result<crate::ReqwestResponse, Error> {
         let builder = self.0.take().unwrap();
-        Ok(Response {
-            inner: Box::new(ReqwestResponse {
-                headers: None,
-                inner: Some(builder.send().await?),
-            }),
-        })
+        Ok(crate::ResponseWrapper(Response {
+            headers: None,
+            inner: Some(builder.send().await?),
+        }))
     }
 }
 
-pub struct ReqwestResponse {
+pub struct Response {
     headers: Option<BTreeMap<String, String>>,
     inner: Option<reqwest::Response>,
 }
 
 #[async_trait]
-impl IResponse for ReqwestResponse {
+impl GenericResponse for Response {
     #[must_use]
     fn status(&self) -> StatusCode {
         self.inner.as_ref().unwrap().status().into()
@@ -90,8 +106,8 @@ impl IResponse for ReqwestResponse {
         Ok(response.bytes().await?)
     }
 
-    #[cfg(feature = "stream")]
     #[must_use]
+    #[cfg(feature = "stream")]
     fn bytes_stream(
         &mut self,
     ) -> std::pin::Pin<Box<dyn futures_core::Stream<Item = Result<Bytes, Error>> + Send>> {

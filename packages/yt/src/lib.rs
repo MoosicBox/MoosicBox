@@ -24,7 +24,6 @@ use moosicbox_database::profiles::LibraryDatabase;
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use moosicbox_files::get_content_length;
-use moosicbox_http::IClient as _;
 use moosicbox_json_utils::{
     MissingValue, ParseError, ToValueType, database::AsModelResult as _, serde_json::ToValue,
 };

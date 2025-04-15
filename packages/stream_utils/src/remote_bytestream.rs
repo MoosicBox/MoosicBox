@@ -4,7 +4,7 @@ use std::io::{Read, Seek};
 use bytes::Bytes;
 use flume::{Receiver, Sender, bounded, unbounded};
 use futures::StreamExt;
-use moosicbox_http::{Client, IClient as _};
+use moosicbox_http::Client;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 

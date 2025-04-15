@@ -11,8 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_http_models     = { version = "0.1.0", path = "models", default-features = false }
-moosicbox_simulator_utils = { version = "0.1.0", path = "../simulator/utils", optional = true, default-features = false }
+moosicbox_http_models = { version = "0.1.0", path = "models", default-features = false }
 
 # reqwest
 reqwest = { workspace = true, optional = true }
@@ -24,6 +23,7 @@ futures-util = { workspace = true }
 async-trait = { workspace = true }
 bytes       = { workspace = true }
 log         = { workspace = true }
+paste       = { workspace = true }
 serde       = { workspace = true, optional = true }
 serde_json  = { workspace = true, optional = true }
 strum       = { workspace = true, features = ["derive"] }
@@ -35,7 +35,7 @@ default = ["json", "reqwest", "simulator", "stream"]
 fail-on-warnings = []
 
 reqwest   = ["dep:reqwest", "moosicbox_http_models/reqwest"]
-simulator = ["dep:moosicbox_simulator_utils"]
+simulator = []
 
 json   = ["dep:serde_json", "reqwest?/json", "serde"]
 stream = ["dep:futures-core", "reqwest?/stream"]

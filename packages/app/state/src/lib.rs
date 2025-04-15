@@ -12,7 +12,7 @@ use std::{
 use moosicbox_app_ws::{ConnectWsError, WsHandle};
 use moosicbox_audio_output::{AudioOutputFactory, AudioOutputScannerError};
 use moosicbox_audio_zone::models::{ApiAudioZoneWithSession, ApiPlayer};
-use moosicbox_http::{IClient as _, RequestBuilder};
+use moosicbox_http::RequestBuilder;
 use moosicbox_music_models::PlaybackQuality;
 use moosicbox_paging::Page;
 use moosicbox_player::{

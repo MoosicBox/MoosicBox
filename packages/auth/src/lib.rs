@@ -10,7 +10,6 @@ mod db;
 use actix_web::{FromRequest, HttpRequest, dev::Payload, error::ErrorUnauthorized, http};
 use futures::future::{Ready, err, ok};
 use moosicbox_database::config::ConfigDatabase;
-use moosicbox_http::IClient as _;
 use moosicbox_json_utils::{ParseError, database::DatabaseFetchError, serde_json::ToValue};
 use serde_json::Value;
 use thiserror::Error;

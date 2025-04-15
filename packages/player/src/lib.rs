@@ -20,7 +20,6 @@ use moosicbox_audio_decoder::media_sources::{
 };
 use moosicbox_audio_output::AudioOutputFactory;
 use moosicbox_database::profiles::LibraryDatabase;
-use moosicbox_http::IClient as _;
 use moosicbox_json_utils::{ParseError, database::DatabaseFetchError};
 use moosicbox_music_api::MusicApi;
 use moosicbox_music_models::{ApiSource, AudioFormat, PlaybackQuality, Track, id::Id};

@@ -28,7 +28,6 @@ use moosicbox_app_native_ui::{
 use moosicbox_app_state::AppStateError;
 use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
 use moosicbox_env_utils::{default_env_usize, option_env_f32, option_env_i32};
-use moosicbox_http::IClient as _;
 use moosicbox_music_api::{MusicApi, SourceToMusicApi, profiles::PROFILES};
 use moosicbox_music_models::{
     AlbumSort, AlbumType, ApiSource, TrackApiSource,

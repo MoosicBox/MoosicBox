@@ -33,7 +33,6 @@ pub mod layout;
 
 pub use eframe;
 pub use hyperchad_renderer::*;
-use moosicbox_http::IClient as _;
 
 pub enum RenderView {
     View(Container),

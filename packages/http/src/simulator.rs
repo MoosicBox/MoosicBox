@@ -1,34 +1,50 @@
-use std::{collections::BTreeMap, num::NonZeroU16};
+use std::{collections::BTreeMap, marker::PhantomData, num::NonZeroU16};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 
 use crate::{
-    Error, IClient, IRequestBuilder, IResponse, Method, RequestBuilder, Response, StatusCode,
+    Error, GenericClient, GenericClientBuilder, GenericRequestBuilder, GenericResponse, Method,
+    StatusCode,
 };
 
 #[derive(Default)]
-pub struct SimulatorClient;
+pub struct Client;
 
-impl SimulatorClient {
+impl Client {
     #[must_use]
     pub const fn new() -> Self {
         Self
     }
 }
 
-impl IClient for SimulatorClient {
-    fn request(&self, _method: Method, _url: &str) -> RequestBuilder {
-        RequestBuilder {
-            builder: Box::new(SimulatorRequestBuilder),
-        }
+impl GenericClient<crate::SimulatorRequestBuilder> for Client {
+    fn request(&self, _method: Method, _url: &str) -> crate::SimulatorRequestBuilder {
+        crate::RequestBuilderWrapper(RequestBuilder, PhantomData)
     }
 }
 
-pub struct SimulatorRequestBuilder;
+pub struct ClientBuilder;
+
+impl crate::SimulatorClientBuilder {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self(ClientBuilder, PhantomData, PhantomData)
+    }
+}
+
+impl GenericClientBuilder<crate::SimulatorRequestBuilder, crate::SimulatorClient>
+    for ClientBuilder
+{
+    fn build(self) -> Result<crate::SimulatorClient, Error> {
+        Ok(crate::ClientWrapper(Client, PhantomData))
+    }
+}
+
+pub struct RequestBuilder;
 
 #[async_trait]
-impl IRequestBuilder for SimulatorRequestBuilder {
+impl GenericRequestBuilder<crate::SimulatorResponse> for RequestBuilder {
     fn header(&mut self, _name: &str, _value: &str) {}
 
     fn body(&mut self, _body: Bytes) {}
@@ -36,20 +52,18 @@ impl IRequestBuilder for SimulatorRequestBuilder {
     #[cfg(feature = "json")]
     fn form(&mut self, _form: &serde_json::Value) {}
 
-    async fn send(&mut self) -> Result<Response, Error> {
-        Ok(Response {
-            inner: Box::new(SimulatorResponse::default()),
-        })
+    async fn send(&mut self) -> Result<crate::SimulatorResponse, Error> {
+        Ok(crate::ResponseWrapper(Response::default()))
     }
 }
 
 #[derive(Default)]
-pub struct SimulatorResponse {
+pub struct Response {
     headers: BTreeMap<String, String>,
 }
 
 #[async_trait]
-impl IResponse for SimulatorResponse {
+impl GenericResponse for Response {
     #[must_use]
     fn status(&self) -> StatusCode {
         StatusCode(NonZeroU16::new(200).unwrap())
@@ -70,8 +84,8 @@ impl IResponse for SimulatorResponse {
         Ok(Bytes::new())
     }
 
-    #[cfg(feature = "stream")]
     #[must_use]
+    #[cfg(feature = "stream")]
     fn bytes_stream(
         &mut self,
     ) -> std::pin::Pin<Box<dyn futures_core::Stream<Item = Result<Bytes, Error>> + Send>> {

@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicBool;
 
 use flume::{Receiver, Sender, bounded};
 use log::debug;
-use moosicbox_http::{Client, IClient as _};
+use moosicbox_http::Client;
 use rangemap::RangeSet;
 use symphonia::core::io::MediaSource;
 
