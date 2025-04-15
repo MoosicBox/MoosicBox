@@ -1,0 +1,24 @@
+[package]
+authors     = ["Braden Steffaniak"]
+description = "Moosicbox HTTP Simple GET example"
+edition     = "2024"
+license     = "MPL-2.0"
+name        = "http_simple_get"
+publish     = false
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_http = { version = "0.1.0", path = "../..", default-features = false, features = [
+    "reqwest",
+] }
+
+log               = { workspace = true }
+pretty_env_logger = { workspace = true }
+thiserror         = { workspace = true }
+tokio             = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default = []
+
+fail-on-warnings = []

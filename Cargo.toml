@@ -33,6 +33,7 @@ members = [
     "packages/env_utils",
     "packages/files",
     "packages/http",
+    "packages/http/examples/simple_get",
     "packages/http/models",
     "packages/hyperchad",
     "packages/hyperchad/actions",
