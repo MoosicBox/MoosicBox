@@ -1,0 +1,25 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-utils"]
+description = "MoosicBox RNG package"
+edition     = "2024"
+keywords    = ["generator", "number", "random"]
+license     = "MPL-2.0"
+name        = "moosicbox_random"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_simulator_utils = { version = "0.1.0", path = "../simulator/utils", optional = true, default-features = false }
+
+log  = { workspace = true }
+rand = { version = "=0.8.5", features = ["small_rng"] }
+
+[features]
+default = ["rand", "simulator"]
+
+fail-on-warnings = []
+
+rand      = []
+simulator = ["dep:moosicbox_simulator_utils"]

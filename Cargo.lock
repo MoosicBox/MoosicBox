@@ -7545,6 +7545,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_random"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "moosicbox_simulator_utils",
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "moosicbox_remote_library"
 version = "0.1.0"
 dependencies = [

@@ -1,1 +1,1 @@
-# MoosicBox HTTP crate
+# MoosicBox TCP crate
