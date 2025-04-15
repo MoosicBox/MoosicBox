@@ -7734,6 +7734,7 @@ dependencies = [
  "moosicbox_logging",
  "moosicbox_server",
  "moosicbox_simulator_harness",
+ "moosicbox_simulator_utils",
  "moosicbox_task",
  "moosicbox_telemetry",
  "openport",

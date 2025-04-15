@@ -4,10 +4,9 @@
 
 use std::time::Duration;
 
-use moosicbox_server_simulator::{
-    RNG, SEED, SIMULATOR_CANCELLATION_TOKEN, client, handle_actions, host,
-};
+use moosicbox_server_simulator::{RNG, SIMULATOR_CANCELLATION_TOKEN, client, handle_actions, host};
 use moosicbox_simulator_harness::turmoil::{self};
+use moosicbox_simulator_utils::SEED;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     unsafe {

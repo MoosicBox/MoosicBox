@@ -10,10 +10,10 @@ use std::{
 
 use host::moosicbox_server::HOST;
 use moosicbox_simulator_harness::{
-    getrandom,
     rand::{SeedableRng as _, rngs::SmallRng},
     turmoil::{self, Sim, net::TcpStream},
 };
+use moosicbox_simulator_utils::SEED;
 use tokio_util::sync::CancellationToken;
 
 pub mod client;
@@ -22,12 +22,6 @@ pub mod http;
 
 pub static SIMULATOR_CANCELLATION_TOKEN: LazyLock<CancellationToken> =
     LazyLock::new(CancellationToken::new);
-pub static SEED: LazyLock<u64> = LazyLock::new(|| {
-    std::env::var("SIMULATOR_SEED")
-        .ok()
-        .and_then(|x| x.parse::<u64>().ok())
-        .unwrap_or_else(|| getrandom::u64().unwrap())
-});
 pub static RNG: LazyLock<Arc<Mutex<SmallRng>>> =
     LazyLock::new(|| Arc::new(Mutex::new(SmallRng::seed_from_u64(*SEED))));
 pub static ACTIONS: LazyLock<Arc<Mutex<VecDeque<Action>>>> =
