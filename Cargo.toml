@@ -86,6 +86,7 @@ members = [
     "packages/simulator/utils",
     "packages/stream_utils",
     "packages/task",
+    "packages/tcp",
     "packages/telemetry",
     "packages/tidal",
     "packages/tunnel",
