@@ -314,7 +314,7 @@ swc_ecma_ast = "8.1.2"
 swc_ecma_codegen = "10.0.0"
 swc_ecma_loader = { version = "8.0.0", features = ["cache", "node"] }
 swc_ecma_minifier = "16.0.1"
-swc_ecma_parser = "11.1.1"
+swc_ecma_parser = "11.1.2"
 swc_ecma_transforms_base = "12.2.0"
 swc_ecma_transforms_typescript = "13.0.0"
 swc_ecma_visit = "8.0.0"
