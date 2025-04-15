@@ -102,12 +102,7 @@ pub async fn run<T>(
 
     #[cfg(feature = "sqlite")]
     let config_db_path = {
-        #[cfg(feature = "simulator")]
-        let use_simulator = moosicbox_simulator_utils::simulator_enabled();
-        #[cfg(not(feature = "simulator"))]
-        let use_simulator = false;
-
-        if use_simulator {
+        if cfg!(feature = "simulator") {
             None
         } else {
             Some(crate::db::make_config_db_path(app_type).expect("Failed to get DB config path"))
@@ -420,7 +415,7 @@ pub async fn run<T>(
         let mut http_server = actix_web::HttpServer::new(app);
 
         #[cfg(feature = "simulator")]
-        if moosicbox_simulator_utils::simulator_enabled() {
+        {
             log::debug!("run: starting http_server listening on {addr}:{service_port}...");
             http_server = http_server.disable_signals();
             log::debug!("run: started http_server listening on {addr}:{service_port}");
@@ -498,12 +493,15 @@ pub async fn run<T>(
 
         moosicbox_task::spawn("server: ctrl-c", async move {
             #[cfg(feature = "simulator")]
-            if moosicbox_simulator_utils::simulator_enabled() {
-                return Ok(());
+            {
+                Ok::<_, std::io::Error>(())
             }
-            tokio::signal::ctrl_c().await?;
-            log::debug!("Received ctrl-c");
-            Ok::<_, std::io::Error>(())
+            #[cfg(not(feature = "simulator"))]
+            {
+                tokio::signal::ctrl_c().await?;
+                log::debug!("Received ctrl-c");
+                Ok::<_, std::io::Error>(())
+            }
         });
 
         http_server.run()

@@ -71,51 +71,61 @@ pub async fn init(
     #[allow(unused)] creds: Option<Credentials>,
 ) -> Result<Box<dyn Database>, InitDbError> {
     #[cfg(feature = "simulator")]
-    if moosicbox_simulator_utils::simulator_enabled() {
-        return Ok(Box::new(
+    {
+        Ok(Box::new(
             moosicbox_database::simulator::SimulationDatabase::new()?,
-        ));
+        ))
     }
 
-    if cfg!(all(
-        feature = "postgres-native-tls",
-        feature = "postgres-raw"
-    )) {
-        #[cfg(all(feature = "postgres-native-tls", feature = "postgres-raw"))]
-        return Ok(
-            init_postgres_raw_native_tls(creds.ok_or(InitDbError::CredentialsRequired)?).await?,
-        );
-        #[cfg(not(all(feature = "postgres-native-tls", feature = "postgres-raw")))]
-        panic!("Invalid database features")
-    } else if cfg!(all(feature = "postgres-openssl", feature = "postgres-raw")) {
-        #[cfg(all(feature = "postgres-openssl", feature = "postgres-raw"))]
-        return Ok(
-            init_postgres_raw_openssl(creds.ok_or(InitDbError::CredentialsRequired)?).await?,
-        );
-        #[cfg(not(all(feature = "postgres-openssl", feature = "postgres-raw")))]
-        panic!("Invalid database features")
-    } else if cfg!(feature = "postgres-raw") {
-        #[cfg(feature = "postgres-raw")]
-        return Ok(init_postgres_raw_no_tls(creds.ok_or(InitDbError::CredentialsRequired)?).await?);
-        #[cfg(not(feature = "postgres-raw"))]
-        panic!("Invalid database features")
-    } else if cfg!(feature = "postgres-sqlx") {
-        #[cfg(feature = "postgres-sqlx")]
-        return Ok(init_postgres_sqlx(creds.ok_or(InitDbError::CredentialsRequired)?).await?);
-        #[cfg(not(feature = "postgres-sqlx"))]
-        panic!("Invalid database features")
-    } else if cfg!(feature = "sqlite-rusqlite") {
-        #[cfg(feature = "sqlite-rusqlite")]
-        return Ok(init_sqlite_rusqlite(path)?);
-        #[cfg(not(feature = "sqlite-rusqlite"))]
-        panic!("Invalid database features")
-    } else if cfg!(feature = "sqlite-sqlx") {
-        #[cfg(all(not(feature = "postgres"), feature = "sqlite", feature = "sqlite-sqlx"))]
-        return Ok(init_sqlite_sqlx(path).await?);
-        #[cfg(not(all(not(feature = "postgres"), feature = "sqlite", feature = "sqlite-sqlx")))]
-        panic!("Invalid database features")
-    } else {
-        panic!("Invalid database features")
+    #[cfg(not(feature = "simulator"))]
+    {
+        if cfg!(all(
+            feature = "postgres-native-tls",
+            feature = "postgres-raw"
+        )) {
+            #[cfg(all(feature = "postgres-native-tls", feature = "postgres-raw"))]
+            return Ok(init_postgres_raw_native_tls(
+                creds.ok_or(InitDbError::CredentialsRequired)?,
+            )
+            .await?);
+            #[cfg(not(all(feature = "postgres-native-tls", feature = "postgres-raw")))]
+            panic!("Invalid database features")
+        } else if cfg!(all(feature = "postgres-openssl", feature = "postgres-raw")) {
+            #[cfg(all(feature = "postgres-openssl", feature = "postgres-raw"))]
+            return Ok(
+                init_postgres_raw_openssl(creds.ok_or(InitDbError::CredentialsRequired)?).await?,
+            );
+            #[cfg(not(all(feature = "postgres-openssl", feature = "postgres-raw")))]
+            panic!("Invalid database features")
+        } else if cfg!(feature = "postgres-raw") {
+            #[cfg(feature = "postgres-raw")]
+            return Ok(
+                init_postgres_raw_no_tls(creds.ok_or(InitDbError::CredentialsRequired)?).await?,
+            );
+            #[cfg(not(feature = "postgres-raw"))]
+            panic!("Invalid database features")
+        } else if cfg!(feature = "postgres-sqlx") {
+            #[cfg(feature = "postgres-sqlx")]
+            return Ok(init_postgres_sqlx(creds.ok_or(InitDbError::CredentialsRequired)?).await?);
+            #[cfg(not(feature = "postgres-sqlx"))]
+            panic!("Invalid database features")
+        } else if cfg!(feature = "sqlite-rusqlite") {
+            #[cfg(feature = "sqlite-rusqlite")]
+            return Ok(init_sqlite_rusqlite(path)?);
+            #[cfg(not(feature = "sqlite-rusqlite"))]
+            panic!("Invalid database features")
+        } else if cfg!(feature = "sqlite-sqlx") {
+            #[cfg(all(not(feature = "postgres"), feature = "sqlite", feature = "sqlite-sqlx"))]
+            return Ok(init_sqlite_sqlx(path).await?);
+            #[cfg(not(all(
+                not(feature = "postgres"),
+                feature = "sqlite",
+                feature = "sqlite-sqlx"
+            )))]
+            panic!("Invalid database features")
+        } else {
+            panic!("Invalid database features")
+        }
     }
 }
 

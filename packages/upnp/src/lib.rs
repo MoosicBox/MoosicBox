@@ -18,7 +18,7 @@ use futures::prelude::*;
 use itertools::Itertools;
 use models::{UpnpDevice, UpnpService};
 pub use rupnp::{Device, DeviceSpec, Service, http::Uri, ssdp::SearchTarget};
-use scanner::{RupnpScanner, UpnpScanner};
+use scanner::UpnpScanner;
 use serde::Serialize;
 use std::{
     collections::HashMap,
@@ -903,10 +903,14 @@ static UPNP_DEVICE_SCANNER: LazyLock<Arc<Mutex<UpnpDeviceScanner>>> =
 
 static SCANNER: LazyLock<Box<dyn UpnpScanner>> = LazyLock::new(|| {
     #[cfg(feature = "simulator")]
-    if moosicbox_simulator_utils::simulator_enabled() {
-        return Box::new(scanner::simulator::SimulatorScanner);
+    {
+        Box::new(scanner::simulator::SimulatorScanner)
     }
-    Box::new(RupnpScanner)
+
+    #[cfg(not(feature = "simulator"))]
+    {
+        Box::new(scanner::RupnpScanner)
+    }
 });
 
 /// # Errors

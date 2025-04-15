@@ -22,7 +22,6 @@ moosicbox_http = { version = "0.1.0", path = "../http", optional = true, default
 moosicbox_logging = { version = "0.1.0", path = "../logging", optional = true, default-features = false, features = [
     "macros",
 ] }
-moosicbox_simulator_utils = { version = "0.1.0", path = "../simulator/utils", optional = true }
 moosicbox_task = { version = "0.1.0", path = "../task", default-features = false }
 
 # API Dependencies
@@ -86,4 +85,4 @@ player = [
     "listener",
 ]
 
-simulator = ["dep:moosicbox_simulator_utils"]
+simulator = []

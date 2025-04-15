@@ -17,12 +17,7 @@ async fn add_profile(
 
     #[cfg(feature = "sqlite")]
     let library_db_profile_path = {
-        #[cfg(feature = "simulator")]
-        let use_simulator = moosicbox_simulator_utils::simulator_enabled();
-        #[cfg(not(feature = "simulator"))]
-        let use_simulator = false;
-
-        if use_simulator {
+        if cfg!(feature = "simulator") {
             None
         } else {
             Some(

@@ -11,8 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_database        = { version = "0.1.0", path = "../database", default-features = false }
-moosicbox_simulator_utils = { version = "0.1.0", path = "../simulator/utils", optional = true, default-features = false }
+moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
 
 # DB Dependencies
 rusqlite = { workspace = true, optional = true }
@@ -84,4 +83,4 @@ sqlite-sqlx = [
     "sqlx/sqlite",
 ]
 
-simulator = ["dep:moosicbox_simulator_utils", "moosicbox_database/simulator"]
+simulator = ["moosicbox_database/simulator"]

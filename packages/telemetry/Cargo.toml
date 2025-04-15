@@ -16,7 +16,6 @@ moosicbox_env_utils = { version = "0.1.0", path = "../env_utils", default-featur
 moosicbox_logging = { version = "0.1.0", path = "../logging", features = [
     "free_log",
 ], default-features = false }
-moosicbox_simulator_utils = { version = "0.1.0", path = "../simulator/utils", optional = true, default-features = false }
 
 actix-web                = { workspace = true, optional = true }
 actix-web-opentelemetry  = { workspace = true, optional = true }
@@ -43,4 +42,4 @@ actix = [
     "simulator",
 ]
 
-simulator = ["dep:moosicbox_simulator_utils", "dep:tracing-subscriber"]
+simulator = ["dep:tracing-subscriber"]

@@ -14,53 +14,57 @@ use actix_web_opentelemetry::{RequestMetrics, RequestMetricsBuilder};
 #[cfg(feature = "actix")]
 use futures_util::future::LocalBoxFuture;
 use moosicbox_logging::free_log_client::DynLayer;
-use opentelemetry::{
-    InstrumentationScope, KeyValue,
-    global::{self},
-    trace::TracerProvider as _,
-};
-use opentelemetry_otlp::{ExporterBuildError, WithExportConfig};
+use opentelemetry::KeyValue;
+use opentelemetry_otlp::ExporterBuildError;
+use opentelemetry_sdk::Resource;
 #[cfg(feature = "actix")]
 use opentelemetry_sdk::metrics::{MeterProviderBuilder, MetricError, SdkMeterProvider};
-use opentelemetry_sdk::{Resource, propagation::TraceContextPropagator, trace::SdkTracerProvider};
 
 /// # Errors
 ///
 /// * If the otlp fails to build
-pub fn init_tracer(name: &'static str) -> Result<DynLayer, ExporterBuildError> {
+pub fn init_tracer(#[allow(unused)] name: &'static str) -> Result<DynLayer, ExporterBuildError> {
     #[cfg(feature = "simulator")]
-    if moosicbox_simulator_utils::simulator_enabled() {
-        return Ok(Box::new(simulator::SimulatorLayer));
+    {
+        Ok(Box::new(simulator::SimulatorLayer))
     }
 
-    global::set_text_map_propagator(TraceContextPropagator::new());
+    #[cfg(not(feature = "simulator"))]
+    {
+        use opentelemetry::trace::TracerProvider as _;
+        use opentelemetry_otlp::WithExportConfig as _;
 
-    let provider = SdkTracerProvider::builder()
-        .with_batch_exporter(
-            opentelemetry_otlp::SpanExporter::builder()
-                .with_tonic()
-                .with_endpoint(
-                    std::env::var("OTEL_ENDPOINT")
-                        .as_deref()
-                        .unwrap_or("http://127.0.0.1:4317"),
-                )
-                .build()?,
-        )
-        .with_resource(get_resource_attr(name))
-        .build();
+        opentelemetry::global::set_text_map_propagator(
+            opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+        );
 
-    let scope = InstrumentationScope::builder(name)
-        .with_version(env!("CARGO_PKG_VERSION"))
-        .with_schema_url("https://opentelemetry.io/schema/1.2.0")
-        .build();
+        let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+            .with_batch_exporter(
+                opentelemetry_otlp::SpanExporter::builder()
+                    .with_tonic()
+                    .with_endpoint(
+                        std::env::var("OTEL_ENDPOINT")
+                            .as_deref()
+                            .unwrap_or("http://127.0.0.1:4317"),
+                    )
+                    .build()?,
+            )
+            .with_resource(get_resource_attr(name))
+            .build();
 
-    let tracer = provider.tracer_with_scope(scope);
-    let layer = tracing_opentelemetry::layer().with_tracer(tracer);
-    let layer: DynLayer = Box::new(layer);
+        let scope = opentelemetry::InstrumentationScope::builder(name)
+            .with_version(env!("CARGO_PKG_VERSION"))
+            .with_schema_url("https://opentelemetry.io/schema/1.2.0")
+            .build();
 
-    global::set_tracer_provider(provider);
+        let tracer = provider.tracer_with_scope(scope);
+        let layer = tracing_opentelemetry::layer().with_tracer(tracer);
+        let layer: DynLayer = Box::new(layer);
 
-    Ok(layer)
+        opentelemetry::global::set_tracer_provider(provider);
+
+        Ok(layer)
+    }
 }
 
 #[must_use]
@@ -87,11 +91,14 @@ pub trait HttpMetricsHandler: Send + Sync + std::fmt::Debug {
 #[cfg(feature = "actix")]
 pub fn get_http_metrics_handler() -> Result<Box<dyn HttpMetricsHandler>, MetricError> {
     #[cfg(feature = "simulator")]
-    if moosicbox_simulator_utils::simulator_enabled() {
-        return Ok(Box::new(simulator::SimulatorHttpMetricsHandler));
+    {
+        Ok(Box::new(simulator::SimulatorHttpMetricsHandler))
     }
 
-    Ok(Box::new(simulator::SimulatorHttpMetricsHandler))
+    #[cfg(not(feature = "simulator"))]
+    {
+        Ok(Box::new(simulator::SimulatorHttpMetricsHandler))
+    }
 }
 
 #[derive(Debug)]
@@ -110,9 +117,6 @@ impl Otel {
     ///
     /// * If the Prometheus exporter fails to build
     pub fn new() -> Result<Self, MetricError> {
-        #[cfg(feature = "simulator")]
-        moosicbox_assert::assert!(!moosicbox_simulator_utils::simulator_enabled());
-
         let registry = prometheus::Registry::default();
 
         #[cfg(feature = "actix")]

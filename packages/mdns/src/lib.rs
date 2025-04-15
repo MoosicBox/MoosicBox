@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use mdns_sd::{ServiceDaemon, ServiceInfo};
+use mdns_sd::ServiceInfo;
 use service::MdnsServiceDaemon;
 use thiserror::Error;
 
@@ -21,14 +21,19 @@ pub enum RegisterServiceError {
     IO(#[from] std::io::Error),
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn get_service_daemon() -> Result<Box<dyn MdnsServiceDaemon>, mdns_sd::Error> {
     #[cfg(feature = "simulator")]
-    if moosicbox_simulator_utils::simulator_enabled() {
-        return Ok(Box::new(service::simulator::SimulatorServiceDaemon));
+    {
+        Ok(Box::new(service::simulator::SimulatorServiceDaemon))
     }
-    Ok(Box::new(service::MdnsSdServiceDaemon::new(
-        ServiceDaemon::new()?,
-    )))
+
+    #[cfg(not(feature = "simulator"))]
+    {
+        Ok(Box::new(service::MdnsSdServiceDaemon::new(
+            mdns_sd::ServiceDaemon::new()?,
+        )))
+    }
 }
 
 /// # Errors

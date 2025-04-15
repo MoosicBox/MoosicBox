@@ -7008,7 +7008,6 @@ dependencies = [
  "aws-sdk-ssm",
  "log",
  "moosicbox_database",
- "moosicbox_simulator_utils",
  "native-tls",
  "openssl",
  "postgres-native-tls",
@@ -7324,7 +7323,6 @@ dependencies = [
  "mdns-sd",
  "moosicbox_assert",
  "moosicbox_async_service",
- "moosicbox_simulator_utils",
  "moosicbox_task",
  "strum_macros 0.27.1",
  "thiserror 2.0.12",
@@ -7682,7 +7680,6 @@ dependencies = [
  "moosicbox_schema",
  "moosicbox_search",
  "moosicbox_session",
- "moosicbox_simulator_utils",
  "moosicbox_task",
  "moosicbox_telemetry",
  "moosicbox_tidal",
@@ -7792,6 +7789,9 @@ dependencies = [
 [[package]]
 name = "moosicbox_simulator_utils"
 version = "0.1.0"
+dependencies = [
+ "getrandom 0.3.2",
+]
 
 [[package]]
 name = "moosicbox_stream_utils"
@@ -7830,7 +7830,6 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_logging",
- "moosicbox_simulator_utils",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry-prometheus",
@@ -7989,7 +7988,6 @@ dependencies = [
  "moosicbox_music_api",
  "moosicbox_player",
  "moosicbox_session",
- "moosicbox_simulator_utils",
  "moosicbox_task",
  "pin-utils",
  "rand 0.9.0",
