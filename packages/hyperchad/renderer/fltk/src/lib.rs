@@ -328,7 +328,7 @@ impl FltkRenderer {
             )?
         };
 
-        let image = SharedImage::from_image(rgb_image)?;
+        let image = SharedImage::from_image(&rgb_image)?;
 
         if width.is_some() || height.is_some() {
             #[allow(clippy::cast_possible_truncation)]
