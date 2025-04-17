@@ -39,7 +39,6 @@ jobs:
               working-directory: app-website
               run: |
                   pnpm install
-                  pnpm sst install
 
             - name: SST install
               working-directory: app-website
