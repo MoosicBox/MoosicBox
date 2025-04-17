@@ -1,4 +1,3 @@
-import { isServer } from 'solid-js/web';
 import { Api, api, connection, refreshConnectionProfiles } from './api';
 import { createSignal } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
@@ -21,46 +20,28 @@ export const showScanStatusBanner = clientAtom(false);
 
 type StartupCallback = () => void | Promise<void>;
 
-declare global {
-    interface Window {
-        startupCallbacks: StartupCallback[];
-        startedUp: boolean;
-    }
+// eslint-disable-next-line no-var
+var startedUp: boolean | undefined;
 
-    // eslint-disable-next-line no-var
-    var startupCallbacks: StartupCallback[];
-    // eslint-disable-next-line no-var
-    var startedUp: boolean;
-}
-
-if (isServer) globalThis.startupCallbacks = globalThis.startupCallbacks ?? [];
-else window.startupCallbacks = window.startupCallbacks ?? [];
+// eslint-disable-next-line no-var
+var startupCallbacks: StartupCallback[] | undefined;
 
 function getStartupCallbacks(): StartupCallback[] {
-    if (isServer) {
-        const x = globalThis.startupCallbacks;
-        if (!x) globalThis.startupCallbacks = [];
-        return globalThis.startupCallbacks;
-    } else {
-        const x = window.startupCallbacks;
-        if (!x) window.startupCallbacks = [];
-        return window.startupCallbacks;
+    if (!startupCallbacks) {
+        startupCallbacks = [];
     }
+    return startupCallbacks;
 }
 
-if (isServer) globalThis.startedUp = globalThis.startedUp ?? false;
-else window.startedUp = window.startedUp ?? false;
-
 function isStartedUp(): boolean {
-    return (isServer ? globalThis.startedUp : window.startedUp) === true;
+    if (typeof startedUp === 'undefined') {
+        startedUp = false;
+    }
+    return startedUp === true;
 }
 
 function setStartedUp(value: boolean) {
-    if (isServer) {
-        globalThis.startedUp = value;
-    } else {
-        window.startedUp = value;
-    }
+    startedUp = value;
 }
 
 export function onStartupFirst(func: StartupCallback) {
