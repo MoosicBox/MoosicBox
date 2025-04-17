@@ -255,7 +255,7 @@ jobs:
               if: ${{ contains(matrix.package.toolchains, 'pnpm') || contains(matrix.package.ciToolchains, 'pnpm') }}
               name: Install pnpm
               with:
-                  version: 9
+                  version: latest
                   run_install: false
 
             - uses: actions/setup-node@v4

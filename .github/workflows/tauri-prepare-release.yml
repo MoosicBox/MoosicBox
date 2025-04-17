@@ -316,7 +316,7 @@ jobs:
               if: ${{ matrix.release.runner != 'self-hosted' }}
               name: Install pnpm
               with:
-                  version: 9
+                  version: latest
                   run_install: false
 
             - name: Get pnpm store directory
