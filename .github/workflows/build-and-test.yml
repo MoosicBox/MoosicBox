@@ -262,7 +262,7 @@ jobs:
               if: ${{ contains(matrix.package.toolchains, 'node') || contains(matrix.package.ciToolchains, 'node') }}
               name: Install node
               with:
-                  node-version: 22
+                  node-version: latest
 
             - name: Setup cmake
               uses: jwlawson/actions-setup-cmake@v2
