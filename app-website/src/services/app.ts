@@ -33,7 +33,7 @@ declare global {
     var startedUp: boolean;
 }
 
-if (isServer) global.startupCallbacks = global.startupCallbacks ?? [];
+if (isServer) globalThis.startupCallbacks = globalThis.startupCallbacks ?? [];
 else window.startupCallbacks = window.startupCallbacks ?? [];
 
 function getStartupCallbacks(): StartupCallback[] {
@@ -48,7 +48,7 @@ function getStartupCallbacks(): StartupCallback[] {
     }
 }
 
-if (isServer) global.startedUp = global.startedUp ?? false;
+if (isServer) globalThis.startedUp = globalThis.startedUp ?? false;
 else window.startedUp = window.startedUp ?? false;
 
 function isStartedUp(): boolean {
