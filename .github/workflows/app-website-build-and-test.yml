@@ -41,6 +41,11 @@ jobs:
                   pnpm install
                   pnpm sst install
 
+            - name: SST install
+              working-directory: app-website
+              run: |
+                  pnpm sst install
+
             - name: pretty
               working-directory: app-website
               run: pnpm pretty
