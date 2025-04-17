@@ -8,7 +8,6 @@ import {
     setCurrentPlaybackTarget,
     setPlayerState,
 } from './player';
-import { StartupCallback } from '../global';
 
 export const navigationBarExpanded = clientAtom<boolean>(
     true,
@@ -19,6 +18,20 @@ export const showPlaybackSessions = clientAtom(false);
 export const showPlaybackQuality = clientAtom(false);
 export const showChangePlaybackTargetModal = clientAtom(false);
 export const showScanStatusBanner = clientAtom(false);
+
+type StartupCallback = () => void | Promise<void>;
+
+declare global {
+    interface Window {
+        startupCallbacks: StartupCallback[];
+        startedUp: boolean;
+    }
+
+    // eslint-disable-next-line no-var
+    var startupCallbacks: StartupCallback[];
+    // eslint-disable-next-line no-var
+    var startedUp: boolean;
+}
 
 if (isServer) global.startupCallbacks = global.startupCallbacks ?? [];
 else window.startupCallbacks = window.startupCallbacks ?? [];
