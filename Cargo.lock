@@ -209,7 +209,7 @@ dependencies = [
  "mime",
  "percent-encoding",
  "pin-project-lite",
- "rand 0.9.0",
+ "rand 0.9.1",
  "sha1",
  "smallvec",
  "tokio",
@@ -679,7 +679,7 @@ dependencies = [
  "enumflags2",
  "futures-channel",
  "futures-util",
- "rand 0.9.0",
+ "rand 0.9.1",
  "raw-window-handle",
  "serde",
  "serde_repr",
@@ -1792,7 +1792,7 @@ checksum = "cc97b8f16f944bba54f0433f07e30be199b6dc2bd25937444bbad560bcea29bd"
 dependencies = [
  "alloc-no-stdlib",
  "alloc-stdlib",
- "brotli-decompressor 4.0.2",
+ "brotli-decompressor 4.0.3",
 ]
 
 [[package]]
@@ -1807,9 +1807,9 @@ dependencies = [
 
 [[package]]
 name = "brotli-decompressor"
-version = "4.0.2"
+version = "4.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74fa05ad7d803d413eb8380983b092cbbaf9a85f151b871360e7b00cd7060b37"
+checksum = "a334ef7c9e23abf0ce748e8cd309037da93e606ad52eb372e4ce327a0dcfbdfd"
 dependencies = [
  "alloc-no-stdlib",
  "alloc-stdlib",
@@ -6971,7 +6971,7 @@ dependencies = [
  "moosicbox_json_utils",
  "moosicbox_profiles",
  "nanoid",
- "rand 0.9.0",
+ "rand 0.9.1",
  "serde",
  "thiserror 2.0.12",
  "utoipa",
@@ -7489,7 +7489,7 @@ dependencies = [
  "moosicbox_stream_utils",
  "moosicbox_task",
  "profiling",
- "rand 0.9.0",
+ "rand 0.9.1",
  "regex",
  "serde",
  "serde_json",
@@ -7702,7 +7702,7 @@ dependencies = [
  "puffin",
  "puffin_http",
  "qstring",
- "rand 0.9.0",
+ "rand 0.9.1",
  "rcgen",
  "serde_json",
  "strum 0.27.1",
@@ -7940,7 +7940,7 @@ dependencies = [
  "moosicbox_task",
  "moosicbox_tunnel",
  "moosicbox_ws",
- "rand 0.9.0",
+ "rand 0.9.1",
  "regex",
  "serde",
  "serde-aux",
@@ -7978,7 +7978,7 @@ dependencies = [
  "moosicbox_telemetry",
  "moosicbox_tunnel",
  "qstring",
- "rand 0.9.0",
+ "rand 0.9.1",
  "serde",
  "serde_json",
  "sha2",
@@ -8012,7 +8012,7 @@ dependencies = [
  "moosicbox_session",
  "moosicbox_task",
  "pin-utils",
- "rand 0.9.0",
+ "rand 0.9.1",
  "regex",
  "roxmltree 0.20.0",
  "rupnp",
@@ -9012,7 +9012,7 @@ dependencies = [
 name = "openport"
 version = "0.1.1"
 dependencies = [
- "rand 0.9.0",
+ "rand 0.9.1",
 ]
 
 [[package]]
@@ -9160,7 +9160,7 @@ dependencies = [
  "glob",
  "opentelemetry",
  "percent-encoding",
- "rand 0.9.0",
+ "rand 0.9.1",
  "serde_json",
  "thiserror 2.0.12",
  "tokio",
@@ -9962,7 +9962,7 @@ dependencies = [
  "hmac",
  "md-5",
  "memchr",
- "rand 0.9.0",
+ "rand 0.9.1",
  "sha2",
  "stringprep",
 ]
@@ -10400,7 +10400,7 @@ checksum = "b820744eb4dc9b57a3398183639c511b5a26d2ed702cedd3febaa1393caa22cc"
 dependencies = [
  "bytes",
  "getrandom 0.3.2",
- "rand 0.9.0",
+ "rand 0.9.1",
  "ring",
  "rustc-hash 2.1.1",
  "rustls 0.23.26",
@@ -10480,13 +10480,12 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3779b94aeb87e8bd4e834cee3650289ee9e0d5677f976ecdb6d219e5f4f6cd94"
+checksum = "9fbfd9d094a40bf3ae768db9361049ace4c0e04a4fd6b359518bd7b73a73dd97"
 dependencies = [
  "rand_chacha 0.9.0",
  "rand_core 0.9.3",
- "zerocopy 0.8.24",
 ]
 
 [[package]]
@@ -11133,9 +11132,9 @@ dependencies = [
 
 [[package]]
 name = "rustfft"
-version = "6.2.0"
+version = "6.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43806561bc506d0c5d160643ad742e3161049ac01027b5e6d7524091fd401d86"
+checksum = "f266ff9b0cfc79de11fd5af76a2bc672fe3ace10c96fa06456740fa70cb1ed49"
 dependencies = [
  "num-complex",
  "num-integer",
@@ -13986,7 +13985,7 @@ dependencies = [
  "pin-project-lite",
  "postgres-protocol",
  "postgres-types",
- "rand 0.9.0",
+ "rand 0.9.1",
  "socket2",
  "tokio",
  "tokio-util",
@@ -14355,9 +14354,9 @@ dependencies = [
 
 [[package]]
 name = "tray-icon"
-version = "0.20.0"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d433764348e7084bad2c5ea22c96c71b61b17afe3a11645710f533bd72b6a2b5"
+checksum = "9f7eee98ec5c90daf179d55c20a49d8c0d043054ce7c26336c09a24d31f14fa0"
 dependencies = [
  "crossbeam-channel",
  "dirs",
@@ -14408,7 +14407,7 @@ dependencies = [
  "http 1.3.1",
  "httparse",
  "log",
- "rand 0.9.0",
+ "rand 0.9.1",
  "rustls 0.23.26",
  "rustls-pki-types",
  "sha1",
