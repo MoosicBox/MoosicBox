@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, marker::PhantomData, num::NonZeroU16};
+use std::{collections::BTreeMap, marker::PhantomData};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -115,13 +115,6 @@ impl GenericResponse for Response {
 
         let response = self.inner.take().unwrap();
         Box::pin(response.bytes_stream().map_err(Into::into))
-    }
-}
-
-#[allow(clippy::fallible_impl_from)]
-impl From<reqwest::StatusCode> for StatusCode {
-    fn from(value: reqwest::StatusCode) -> Self {
-        Self(NonZeroU16::new(value.as_u16()).unwrap())
     }
 }
 

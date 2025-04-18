@@ -1,4 +1,6 @@
-use crate::Method;
+use std::num::NonZeroU16;
+
+use crate::{Method, StatusCode};
 
 impl From<Method> for reqwest::Method {
     fn from(value: Method) -> Self {
@@ -13,5 +15,12 @@ impl From<Method> for reqwest::Method {
             Method::Connect => Self::CONNECT,
             Method::Trace => Self::TRACE,
         }
+    }
+}
+
+#[allow(clippy::fallible_impl_from)]
+impl From<reqwest::StatusCode> for StatusCode {
+    fn from(value: reqwest::StatusCode) -> Self {
+        Self(NonZeroU16::new(value.as_u16()).unwrap())
     }
 }

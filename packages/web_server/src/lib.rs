@@ -7,6 +7,7 @@ use std::{borrow::Cow, pin::Pin};
 use bytes::Bytes;
 
 pub use moosicbox_http_models::Method;
+use moosicbox_http_models::StatusCode;
 pub use moosicbox_web_server_core as core;
 #[cfg(feature = "cors")]
 pub use moosicbox_web_server_cors as cors;
@@ -263,29 +264,6 @@ impl From<&serde_json::Value> for HttpResponseBody {
 impl From<String> for HttpResponseBody {
     fn from(value: String) -> Self {
         Self::Bytes(Bytes::from(value.into_bytes()))
-    }
-}
-
-#[derive(Debug)]
-pub struct StatusCode(u16);
-
-impl StatusCode {
-    #[must_use]
-    pub const fn new(code: u16) -> Self {
-        Self(code)
-    }
-}
-
-impl StatusCode {
-    pub const OK: Self = Self(200);
-    pub const TEMPORARY_REDIRECT: Self = Self(307);
-    pub const PERMANENT_REDIRECT: Self = Self(308);
-    pub const NOT_FOUND: Self = Self(404);
-}
-
-impl From<StatusCode> for u16 {
-    fn from(value: StatusCode) -> Self {
-        value.0
     }
 }
 

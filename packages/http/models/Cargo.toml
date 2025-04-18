@@ -13,15 +13,18 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
 
-reqwest = { workspace = true, optional = true }
-serde   = { workspace = true, optional = true }
-strum   = { workspace = true, features = ["derive"] }
+actix-web = { workspace = true, optional = true }
+reqwest   = { workspace = true, optional = true }
+serde     = { workspace = true, optional = true }
+strum     = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
 
 [features]
-default = ["reqwest", "serde"]
+default = ["actix", "reqwest", "serde"]
 
 fail-on-warnings = []
 
 serde = ["dep:serde"]
 
+actix   = ["dep:actix-web"]
 reqwest = ["dep:reqwest"]

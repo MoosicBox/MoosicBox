@@ -19,7 +19,7 @@ use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_json_utils::database::DatabaseFetchError;
 
 use moosicbox_files::get_content_length;
-use moosicbox_http::{StatusCode, models::Method};
+use moosicbox_http::models::{Method, StatusCode};
 use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_models::{
     Album, AlbumType, ApiSource, Artist, AudioFormat, PlaybackQuality, Track, TrackApiSource,

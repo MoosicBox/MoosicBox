@@ -174,7 +174,7 @@ pub async fn fetch_signature_token(
         .send()
         .await?;
 
-    if response.status() == moosicbox_http::StatusCode::UNAUTHORIZED {
+    if response.status() == moosicbox_http::models::StatusCode::UNAUTHORIZED {
         return Err(AuthError::Unauthorized);
     }
 

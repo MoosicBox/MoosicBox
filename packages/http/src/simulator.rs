@@ -66,7 +66,7 @@ pub struct Response {
 impl GenericResponse for Response {
     #[must_use]
     fn status(&self) -> StatusCode {
-        StatusCode(NonZeroU16::new(200).unwrap())
+        NonZeroU16::new(200).unwrap().into()
     }
 
     #[must_use]

@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use actix_http::{Request, Response, StatusCode, header::LOCATION};
+use actix_http::{Request, Response, header::LOCATION};
 use actix_service::{IntoServiceFactory, Service, ServiceFactory, fn_factory};
 use actix_web::{
     Error, HttpServer, Resource, Responder,
@@ -66,13 +66,6 @@ impl From<crate::Error> for Error {
 impl From<Error> for crate::Error {
     fn from(value: Error) -> Self {
         Self::InternalServerError(Box::new(value))
-    }
-}
-
-#[allow(clippy::fallible_impl_from)]
-impl From<crate::StatusCode> for StatusCode {
-    fn from(value: crate::StatusCode) -> Self {
-        Self::from_u16(value.into()).unwrap()
     }
 }
 

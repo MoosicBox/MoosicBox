@@ -47,6 +47,7 @@ actix = [
     "dep:actix-service",
     "dep:actix-web",
     "dep:futures-util",
+    "moosicbox_http_models/actix",
 ]
 
 serde = ["dep:serde_json"]
