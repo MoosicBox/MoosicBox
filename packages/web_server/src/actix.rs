@@ -55,17 +55,28 @@ impl<'a> From<&'a actix_web::HttpRequest> for HttpRequestRef<'a> {
 impl From<crate::Error> for Error {
     fn from(value: crate::Error) -> Self {
         match value {
-            crate::Error::BadRequest(e) => ErrorBadRequest(e),
-            crate::Error::Unauthorized(e) => ErrorUnauthorized(e),
-            crate::Error::NotFound(e) => ErrorNotFound(e),
-            crate::Error::InternalServerError(e) => ErrorInternalServerError(e),
+            crate::Error::Http {
+                status_code,
+                source,
+            } => match status_code.as_u16() {
+                400 => ErrorBadRequest(source),
+                401 => ErrorUnauthorized(source),
+                404 => ErrorNotFound(source),
+                500 => ErrorInternalServerError(source),
+                _ => {
+                    moosicbox_assert::die!(
+                        "Missing error code for status_code={status_code} source={source:?}"
+                    );
+                    ErrorInternalServerError(source)
+                }
+            },
         }
     }
 }
 
 impl From<Error> for crate::Error {
     fn from(value: Error) -> Self {
-        Self::InternalServerError(Box::new(value))
+        Self::internal_server_error(value)
     }
 }
 

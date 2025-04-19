@@ -363,37 +363,46 @@ impl Scope {
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("400 Bad Request: {0:?}")]
-    BadRequest(#[source] Box<dyn std::error::Error>),
-    #[error("401 Unauthorized: {0:?}")]
-    Unauthorized(#[source] Box<dyn std::error::Error>),
-    #[error("404 Not Found: {0:?}")]
-    NotFound(#[source] Box<dyn std::error::Error>),
-    #[error("500 Internal Server Error: {0:?}")]
-    InternalServerError(#[source] Box<dyn std::error::Error>),
+    #[error("HTTP Error {status_code}: {source:?}")]
+    Http {
+        status_code: StatusCode,
+        source: Box<dyn std::error::Error>,
+    },
 }
 
 impl Error {
     pub fn bad_request(error: impl Into<Box<dyn std::error::Error>>) -> Self {
-        Self::BadRequest(error.into())
+        Self::Http {
+            status_code: StatusCode::BAD_REQUEST,
+            source: error.into(),
+        }
     }
 
     pub fn unauthorized(error: impl Into<Box<dyn std::error::Error>>) -> Self {
-        Self::Unauthorized(error.into())
+        Self::Http {
+            status_code: StatusCode::UNAUTHORIZED,
+            source: error.into(),
+        }
     }
 
     pub fn not_found(error: impl Into<Box<dyn std::error::Error>>) -> Self {
-        Self::NotFound(error.into())
+        Self::Http {
+            status_code: StatusCode::NOT_FOUND,
+            source: error.into(),
+        }
     }
 
     pub fn internal_server_error(error: impl Into<Box<dyn std::error::Error>>) -> Self {
-        Self::InternalServerError(error.into())
+        Self::Http {
+            status_code: StatusCode::INTERNAL_SERVER_ERROR,
+            source: error.into(),
+        }
     }
 }
 
 impl From<qs::Error> for Error {
     fn from(value: qs::Error) -> Self {
-        Self::BadRequest(Box::new(value))
+        Self::bad_request(value)
     }
 }
 

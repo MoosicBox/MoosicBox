@@ -75,8 +75,10 @@ impl StatusCode {
     pub const PARTIAL_CONTENT: Self = Self(NonZeroU16::new(206).unwrap());
     pub const TEMPORARY_REDIRECT: Self = Self(NonZeroU16::new(307).unwrap());
     pub const PERMANENT_REDIRECT: Self = Self(NonZeroU16::new(308).unwrap());
+    pub const BAD_REQUEST: Self = Self(NonZeroU16::new(400).unwrap());
     pub const UNAUTHORIZED: Self = Self(NonZeroU16::new(401).unwrap());
     pub const NOT_FOUND: Self = Self(NonZeroU16::new(404).unwrap());
+    pub const INTERNAL_SERVER_ERROR: Self = Self(NonZeroU16::new(500).unwrap());
 }
 
 impl StatusCode {
