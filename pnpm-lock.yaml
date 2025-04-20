@@ -1055,8 +1055,8 @@ packages:
   fastq@1.19.1:
     resolution: {integrity: sha512-GwLTyxkCXjXbxqIhTsMI2Nui8huMPtnxg7krajPJAjnEG/iiOS7i+zCtWGZR9G0NBKbXKh6X9m9UIsYX/N6vvQ==}
 
-  fdir@6.4.3:
-    resolution: {integrity: sha512-PMXmW2y1hDDfTSRc9gaXIuCCRpuoz3Kaz8cUelp3smouvfT632ozg2vrT6lJsHKKOF59YLbOGfAWGUcKEfRMQw==}
+  fdir@6.4.4:
+    resolution: {integrity: sha512-1NZP+GK4GfuAv3PqKvxQRDMjdSRZjnkq7KfhlNrCNNlZ0ygQFpebfrnfnq/W7fpUnAv9aGWmY1zKx7FYL3gwhg==}
     peerDependencies:
       picomatch: ^3 || ^4
     peerDependenciesMeta:
@@ -2838,7 +2838,7 @@ snapshots:
       '@types/semver': 7.7.0
       '@types/tmp': 0.2.6
       execa: 5.1.1
-      fdir: 6.4.3(picomatch@3.0.1)
+      fdir: 6.4.4(picomatch@3.0.1)
       google-protobuf: 3.21.4
       got: 11.8.6
       ini: 2.0.0
@@ -3787,7 +3787,7 @@ snapshots:
     dependencies:
       reusify: 1.1.0
 
-  fdir@6.4.3(picomatch@3.0.1):
+  fdir@6.4.4(picomatch@3.0.1):
     optionalDependencies:
       picomatch: 3.0.1
 
