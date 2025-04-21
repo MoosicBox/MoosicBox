@@ -371,6 +371,23 @@ pub enum Error {
 }
 
 impl Error {
+    pub fn from_http_status_code(
+        status_code: StatusCode,
+        source: impl std::error::Error + 'static,
+    ) -> Self {
+        Self::Http {
+            status_code,
+            source: Box::new(source),
+        }
+    }
+
+    pub fn from_http_status_code_u16(
+        status_code: u16,
+        source: impl std::error::Error + 'static,
+    ) -> Self {
+        Self::from_http_status_code(StatusCode::from_u16(status_code), source)
+    }
+
     pub fn bad_request(error: impl Into<Box<dyn std::error::Error>>) -> Self {
         Self::Http {
             status_code: StatusCode::BadRequest,
