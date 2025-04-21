@@ -39,7 +39,6 @@ use moosicbox_player::symphonia::play_media_source_async;
 use moosicbox_stream_utils::{ByteWriter, remote_bytestream::RemoteByteStream};
 use moosicbox_tunnel::{TunnelEncoding, TunnelWsResponse};
 use moosicbox_ws::{PlayerAction, WebsocketContext, WebsocketSendError, WebsocketSender};
-use rand::{Rng as _, rng};
 use regex::Regex;
 use serde_json::Value;
 use symphonia::core::{
@@ -211,7 +210,7 @@ impl TunnelSender {
     ) -> (Self, TunnelSenderHandle) {
         let sender = Arc::new(RwLock::new(None));
         let cancellation_token = CancellationToken::new();
-        let id = rng().random::<u64>();
+        let id = moosicbox_random::RNG.next_u64();
         let player_actions = Arc::new(RwLock::new(vec![]));
         let handle = TunnelSenderHandle {
             sender: sender.clone(),

@@ -35,10 +35,12 @@ tokio-util              = { workspace = true, optional = true }
 
 # Player Dependencies
 moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false, optional = true }
-moosicbox_player    = { version = "0.1.0", path = "../player", default-features = false, optional = true }
-moosicbox_session   = { version = "0.1.0", path = "../session", default-features = false, optional = true }
-rand                = { workspace = true, optional = true }
-symphonia           = { workspace = true, optional = true }
+moosicbox_player = { version = "0.1.0", path = "../player", default-features = false, optional = true }
+moosicbox_random = { version = "0.1.0", path = "../random", default-features = false, optional = true, features = [
+    "rand",
+] }
+moosicbox_session = { version = "0.1.0", path = "../session", default-features = false, optional = true }
+symphonia = { workspace = true, optional = true }
 
 async-recursion = { workspace = true }
 async-trait     = { workspace = true }
@@ -77,8 +79,8 @@ player = [
     "dep:moosicbox_logging",
     "dep:moosicbox_music_api",
     "dep:moosicbox_player",
+    "dep:moosicbox_random",
     "dep:moosicbox_session",
-    "dep:rand",
     "dep:strum",
     "dep:strum_macros",
     "dep:symphonia",

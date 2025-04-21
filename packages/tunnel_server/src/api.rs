@@ -16,7 +16,6 @@ use moosicbox_tunnel::{
     TunnelEncoding, TunnelHttpRequest, TunnelRequest, TunnelResponse, TunnelStream,
 };
 use qstring::QString;
-use rand::{Rng as _, rng};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -255,7 +254,7 @@ async fn handle_request(
     headers: Option<Value>,
     profile: Option<String>,
 ) -> Result<HttpResponse> {
-    let request_id = rng().random::<u64>();
+    let request_id = moosicbox_random::RNG.next_u64();
     let abort_token = CancellationToken::new();
 
     debug!(

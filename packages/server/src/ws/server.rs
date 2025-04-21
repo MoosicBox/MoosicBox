@@ -13,7 +13,6 @@ use moosicbox_ws::{
     PlayerAction, WebsocketContext, WebsocketDisconnectError, WebsocketMessageError,
     WebsocketSendError, WebsocketSender,
 };
-use rand::{Rng as _, rng};
 use serde_json::Value;
 use strum_macros::AsRefStr;
 use tokio::sync::{RwLock, mpsc};
@@ -262,7 +261,7 @@ impl WsServer {
         log::debug!("Someone joined");
 
         // register session with random connection ID
-        let id = rng().random::<ConnId>();
+        let id = moosicbox_random::RNG.next_u64();
         self.connections.insert(
             id,
             Connection {

@@ -16,7 +16,6 @@ use moosicbox_audio_output::{
 };
 use moosicbox_music_api::SourceToMusicApi;
 use moosicbox_session::models::UpdateSession;
-use rand::{Rng as _, rng};
 use rupnp::{Device, Service};
 
 use moosicbox_player::{
@@ -322,7 +321,7 @@ impl UpnpPlayer {
         handle: Handle,
     ) -> Self {
         Self {
-            id: rng().random::<u64>(),
+            id: moosicbox_random::RNG.next_u64(),
             source_to_music_api,
             source,
             transport_uri: Arc::new(tokio::sync::RwLock::new(None)),

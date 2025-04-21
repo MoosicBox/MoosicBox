@@ -29,7 +29,9 @@ serde     = { workspace = true, optional = true }
 utoipa    = { workspace = true, optional = true }
 
 # Test dependencies
-rand = { workspace = true, optional = true }
+moosicbox_random = { version = "0.1.0", path = "../random", optional = true, default-features = false, features = [
+    "rand",
+] }
 
 home      = { workspace = true }
 log       = { workspace = true }
@@ -40,7 +42,7 @@ default = ["api", "db", "openapi"]
 
 fail-on-warnings = []
 
-test = ["dep:rand"]
+test = ["dep:moosicbox_random"]
 
 db = [
     "dep:moosicbox_database",

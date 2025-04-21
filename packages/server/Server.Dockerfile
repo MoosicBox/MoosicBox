@@ -45,6 +45,7 @@ RUN cat Cargo.toml | \
     \"packages\/player\",\r\
     \"packages\/profiles\",\r\
     \"packages\/qobuz\",\r\
+    \"packages\/random\",\r\
     \"packages\/resampler\",\r\
     \"packages\/scan\",\r\
     \"packages\/schema\",\r\
@@ -103,6 +104,7 @@ COPY packages/parsing_utils/Cargo.toml packages/parsing_utils/Cargo.toml
 COPY packages/player/Cargo.toml packages/player/Cargo.toml
 COPY packages/profiles/Cargo.toml packages/profiles/Cargo.toml
 COPY packages/qobuz/Cargo.toml packages/qobuz/Cargo.toml
+COPY packages/random/Cargo.toml packages/random/Cargo.toml
 COPY packages/resampler/Cargo.toml packages/resampler/Cargo.toml
 COPY packages/scan/Cargo.toml packages/scan/Cargo.toml
 COPY packages/schema/Cargo.toml packages/schema/Cargo.toml
@@ -159,6 +161,7 @@ packages/parsing_utils|\
 packages/player|\
 packages/profiles|\
 packages/qobuz|\
+packages/random|\
 packages/resampler|\
 packages/scan|\
 packages/schema|\

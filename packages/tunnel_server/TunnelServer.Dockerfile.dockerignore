@@ -12,6 +12,7 @@
 !/packages/logging
 !/packages/middleware
 !/packages/profiles
+!/packages/random
 !/packages/simulator/utils
 !/packages/task
 !/packages/telemetry

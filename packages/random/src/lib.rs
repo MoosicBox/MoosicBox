@@ -8,6 +8,9 @@ pub mod rand;
 #[cfg(feature = "simulator")]
 pub mod simulator;
 
+#[cfg(any(feature = "simulator", feature = "rand"))]
+pub static RNG: std::sync::LazyLock<Rng> = std::sync::LazyLock::new(Rng::new);
+
 pub trait GenericRng: Send + Sync {
     fn next_u64(&self) -> u64;
 }

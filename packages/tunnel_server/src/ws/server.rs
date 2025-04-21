@@ -13,7 +13,6 @@ use moosicbox_tunnel::{
     TunnelAbortRequest, TunnelRequest, TunnelResponse, TunnelWsRequest, TunnelWsResponse,
 };
 use moosicbox_tunnel_server::CANCELLATION_TOKEN;
-use rand::{Rng as _, rng};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
@@ -453,7 +452,7 @@ impl WsServer {
         tx: mpsc::UnboundedSender<Msg>,
     ) -> Result<ConnId, DatabaseError> {
         // register session with random connection ID
-        let id = rng().random::<u64>();
+        let id = moosicbox_random::RNG.next_u64();
 
         log::debug!("connect: Someone joined {id} sender={sender}");
 
@@ -559,7 +558,7 @@ impl service::Handle {
         profile: Option<String>,
         msg: impl Into<String> + Send,
     ) -> Result<(), WsRequestError> {
-        let request_id = rng().random::<u64>();
+        let request_id = moosicbox_random::RNG.next_u64();
 
         self.send_command_async(Command::WsRequest {
             request_id,

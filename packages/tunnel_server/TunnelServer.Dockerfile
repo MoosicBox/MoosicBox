@@ -20,6 +20,7 @@ RUN cat Cargo.toml | \
     \"packages\/logging\",\r\
     \"packages\/middleware\",\r\
     \"packages\/profiles\",\r\
+    \"packages\/random\",\r\
     \"packages\/simulator\/utils\",\r\
     \"packages\/task\",\r\
     \"packages\/telemetry\",\r\
@@ -41,6 +42,7 @@ COPY packages/json_utils/Cargo.toml packages/json_utils/Cargo.toml
 COPY packages/logging/Cargo.toml packages/logging/Cargo.toml
 COPY packages/middleware/Cargo.toml packages/middleware/Cargo.toml
 COPY packages/profiles/Cargo.toml packages/profiles/Cargo.toml
+COPY packages/random/Cargo.toml packages/random/Cargo.toml
 COPY packages/simulator/utils/Cargo.toml packages/simulator/utils/Cargo.toml
 COPY packages/task/Cargo.toml packages/task/Cargo.toml
 COPY packages/telemetry/Cargo.toml packages/telemetry/Cargo.toml
@@ -65,6 +67,7 @@ packages/json_utils|\
 packages/logging|\
 packages/middleware|\
 packages/profiles|\
+packages/random|\
 packages/task|\
 packages/telemetry|\
 packages/tunnel|\

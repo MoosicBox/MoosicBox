@@ -60,6 +60,9 @@ moosicbox_music_models = { version = "0.1.0", path = "../music/models", default-
 moosicbox_profiles = { version = "0.1.0", path = "../profiles", default-features = false, features = [
     "events",
 ] }
+moosicbox_random = { version = "0.1.0", path = "../random", default-features = false, features = [
+    "rand",
+] }
 moosicbox_schema = { version = "0.1.0", path = "../schema", optional = true, default-features = false }
 moosicbox_session = { version = "0.1.0", path = "../session", default-features = false, features = [
     "events",
@@ -137,7 +140,6 @@ futures-util       = { workspace = true }
 local-ip-address   = { workspace = true }
 log                = { workspace = true }
 openssl            = { workspace = true, optional = true }
-rand               = { workspace = true }
 serde_json         = { workspace = true }
 strum              = { workspace = true }
 strum_macros       = { workspace = true }

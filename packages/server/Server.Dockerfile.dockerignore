@@ -37,6 +37,7 @@
 !/packages/player
 !/packages/profiles
 !/packages/qobuz
+!/packages/random
 !/packages/resampler
 !/packages/scan
 !/packages/schema

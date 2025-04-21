@@ -30,7 +30,6 @@ use moosicbox_session::{
 use moosicbox_stream_utils::{
     remote_bytestream::RemoteByteStream, stalled_monitor::StalledReadMonitor,
 };
-use rand::{Rng as _, rng};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -160,7 +159,7 @@ impl Playback {
         playback_target: Option<PlaybackTarget>,
     ) -> Self {
         Self {
-            id: rng().random::<u64>(),
+            id: moosicbox_random::RNG.next_u64(),
             session_id,
             profile,
             tracks,
@@ -449,7 +448,7 @@ impl PlaybackHandler {
         let receiver = Arc::new(tokio::sync::RwLock::new(None));
 
         Self {
-            id: rng().random::<u64>(),
+            id: moosicbox_random::RNG.next_u64(),
             playback,
             output,
             player: Arc::new(player),

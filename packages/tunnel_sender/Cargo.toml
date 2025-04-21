@@ -36,6 +36,9 @@ moosicbox_image = { version = "0.1.0", path = "../image", default-features = fal
 moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false }
 moosicbox_music_models = { version = "0.1.0", path = "../music/models", default-features = false }
 moosicbox_player = { version = "0.1.0", path = "../player", default-features = false }
+moosicbox_random = { version = "0.1.0", path = "../random", default-features = false, features = [
+    "rand",
+] }
 moosicbox_stream_utils = { version = "0.1.0", path = "../stream_utils", default-features = false }
 moosicbox_task = { version = "0.1.0", path = "../task", default-features = false }
 moosicbox_tunnel = { version = "0.1.0", path = "../tunnel", default-features = false }
@@ -51,7 +54,6 @@ bytes             = { workspace = true }
 futures-channel   = { workspace = true }
 futures-util      = { workspace = true }
 log               = { workspace = true }
-rand              = { workspace = true }
 regex             = { workspace = true }
 serde             = { workspace = true, features = ["derive"] }
 serde-aux         = { workspace = true }

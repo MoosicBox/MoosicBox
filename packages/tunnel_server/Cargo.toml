@@ -37,6 +37,9 @@ moosicbox_logging = { version = "0.1.0", path = "../logging", features = [
     "free_log",
 ] }
 moosicbox_middleware = { version = "0.1.0", path = "../middleware", default-features = false }
+moosicbox_random = { version = "0.1.0", path = "../random", default-features = false, features = [
+    "rand",
+] }
 moosicbox_task = { version = "0.1.0", path = "../task", default-features = false }
 moosicbox_telemetry = { version = "0.1.0", path = "../telemetry", default-features = false, features = [
     "actix",
@@ -53,7 +56,6 @@ futures-util = { workspace = true }
 hex = { workspace = true }
 log = { workspace = true }
 qstring = { workspace = true }
-rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

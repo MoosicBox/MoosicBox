@@ -27,6 +27,9 @@ moosicbox_logging = { version = "0.1.0", path = "../logging", default-features =
 ] }
 moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false }
 moosicbox_music_models = { version = "0.1.0", path = "../music/models", default-features = false }
+moosicbox_random = { version = "0.1.0", path = "../random", default-features = false, features = [
+    "rand",
+] }
 moosicbox_resampler = { version = "0.1.0", path = "../resampler", default-features = false }
 moosicbox_session = { version = "0.1.0", path = "../session", default-features = false }
 moosicbox_stream_utils = { version = "0.1.0", path = "../stream_utils", default-features = false }
@@ -44,7 +47,6 @@ futures          = { workspace = true }
 local-ip-address = { workspace = true }
 log              = { workspace = true }
 profiling        = { workspace = true, optional = true }
-rand             = { workspace = true }
 regex            = { workspace = true }
 serde            = { workspace = true, features = ["derive"] }
 serde_json       = { workspace = true }
