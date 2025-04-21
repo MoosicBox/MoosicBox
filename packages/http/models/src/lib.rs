@@ -265,6 +265,14 @@ impl StatusCode {
     pub fn as_u16(&self) -> u16 {
         (*self).into_u16()
     }
+
+    /// # Panics
+    ///
+    /// * If the `u16` is not a valid HTTP status code
+    #[must_use]
+    pub fn from_u16(code: u16) -> Self {
+        code.try_into().unwrap()
+    }
 }
 
 impl StatusCode {
