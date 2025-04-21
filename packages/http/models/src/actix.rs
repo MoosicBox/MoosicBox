@@ -6,3 +6,9 @@ impl From<crate::StatusCode> for StatusCode {
         Self::from_u16(value.into()).unwrap()
     }
 }
+
+impl From<StatusCode> for crate::StatusCode {
+    fn from(value: StatusCode) -> Self {
+        Self::from_u16(value.into())
+    }
+}
