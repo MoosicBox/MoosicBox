@@ -1,5 +1,3 @@
-use std::num::NonZeroU16;
-
 use crate::{Method, StatusCode};
 
 impl From<Method> for reqwest::Method {
@@ -21,6 +19,6 @@ impl From<Method> for reqwest::Method {
 #[allow(clippy::fallible_impl_from)]
 impl From<reqwest::StatusCode> for StatusCode {
     fn from(value: reqwest::StatusCode) -> Self {
-        Self(NonZeroU16::new(value.as_u16()).unwrap())
+        Self::try_from(value.as_u16()).unwrap()
     }
 }

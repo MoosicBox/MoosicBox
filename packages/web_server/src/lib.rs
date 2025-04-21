@@ -277,22 +277,22 @@ pub struct HttpResponse {
 impl HttpResponse {
     #[must_use]
     pub fn ok() -> Self {
-        Self::new(StatusCode::OK)
+        Self::new(StatusCode::Ok)
     }
 
     #[must_use]
     pub fn temporary_redirect() -> Self {
-        Self::new(StatusCode::TEMPORARY_REDIRECT)
+        Self::new(StatusCode::TemporaryRedirect)
     }
 
     #[must_use]
     pub fn permanent_redirect() -> Self {
-        Self::new(StatusCode::PERMANENT_REDIRECT)
+        Self::new(StatusCode::PermanentRedirect)
     }
 
     #[must_use]
     pub fn not_found() -> Self {
-        Self::new(StatusCode::NOT_FOUND)
+        Self::new(StatusCode::NotFound)
     }
 }
 
@@ -373,28 +373,28 @@ pub enum Error {
 impl Error {
     pub fn bad_request(error: impl Into<Box<dyn std::error::Error>>) -> Self {
         Self::Http {
-            status_code: StatusCode::BAD_REQUEST,
+            status_code: StatusCode::BadRequest,
             source: error.into(),
         }
     }
 
     pub fn unauthorized(error: impl Into<Box<dyn std::error::Error>>) -> Self {
         Self::Http {
-            status_code: StatusCode::UNAUTHORIZED,
+            status_code: StatusCode::Unauthorized,
             source: error.into(),
         }
     }
 
     pub fn not_found(error: impl Into<Box<dyn std::error::Error>>) -> Self {
         Self::Http {
-            status_code: StatusCode::NOT_FOUND,
+            status_code: StatusCode::NotFound,
             source: error.into(),
         }
     }
 
     pub fn internal_server_error(error: impl Into<Box<dyn std::error::Error>>) -> Self {
         Self::Http {
-            status_code: StatusCode::INTERNAL_SERVER_ERROR,
+            status_code: StatusCode::InternalServerError,
             source: error.into(),
         }
     }

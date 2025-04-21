@@ -116,7 +116,7 @@ impl MusicApi for RemoteLibraryMusicApi {
             .map_err(|e| AlbumError::Other(Box::new(e)))?;
 
         if !response.status().is_success() {
-            if response.status() == StatusCode::NOT_FOUND {
+            if response.status() == StatusCode::NotFound {
                 return Ok(None);
             }
             return Err(AlbumError::Other(Box::new(RequestError::Unsuccessful(
@@ -162,7 +162,7 @@ impl MusicApi for RemoteLibraryMusicApi {
             .map_err(|e| TracksError::Other(Box::new(e)))?;
 
         if !response.status().is_success() {
-            if response.status() == StatusCode::NOT_FOUND {
+            if response.status() == StatusCode::NotFound {
                 return Ok(PagingResponse::empty());
             }
             return Err(TracksError::Other(Box::new(RequestError::Unsuccessful(
@@ -345,7 +345,7 @@ impl MusicApi for RemoteLibraryMusicApi {
             .map_err(|e| TrackError::Other(Box::new(e)))?;
 
         if !response.status().is_success() {
-            if response.status() == StatusCode::NOT_FOUND {
+            if response.status() == StatusCode::NotFound {
                 return Ok(None);
             }
             return Err(TrackError::Other(Box::new(RequestError::Unsuccessful(

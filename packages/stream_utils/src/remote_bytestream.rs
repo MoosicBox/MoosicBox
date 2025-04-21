@@ -102,8 +102,8 @@ impl RemoteByteStreamFetcher {
                 };
 
                 match response.status() {
-                    moosicbox_http::models::StatusCode::OK
-                    | moosicbox_http::models::StatusCode::PARTIAL_CONTENT => {}
+                    moosicbox_http::models::StatusCode::Ok
+                    | moosicbox_http::models::StatusCode::PartialContent => {}
                     _ => {
                         log::error!(
                             "Received error response ({}): {:?}",

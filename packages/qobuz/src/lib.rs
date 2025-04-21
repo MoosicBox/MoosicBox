@@ -687,7 +687,7 @@ pub async fn user_login(
         .send()
         .await?;
 
-    if response.status() == StatusCode::UNAUTHORIZED {
+    if response.status() == StatusCode::Unauthorized {
         return Err(QobuzUserLoginError::Unauthorized);
     } else if !response.status().is_success() {
         log::error!(

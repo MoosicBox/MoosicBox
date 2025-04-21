@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, marker::PhantomData, num::NonZeroU16};
+use std::{collections::BTreeMap, marker::PhantomData};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -66,7 +66,7 @@ pub struct Response {
 impl GenericResponse for Response {
     #[must_use]
     fn status(&self) -> StatusCode {
-        NonZeroU16::new(200).unwrap().into()
+        StatusCode::Ok
     }
 
     #[must_use]
