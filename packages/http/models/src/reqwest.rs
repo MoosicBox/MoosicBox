@@ -19,6 +19,6 @@ impl From<Method> for reqwest::Method {
 #[allow(clippy::fallible_impl_from)]
 impl From<reqwest::StatusCode> for StatusCode {
     fn from(value: reqwest::StatusCode) -> Self {
-        Self::try_from(value.as_u16()).unwrap()
+        Self::from_u16(value.as_u16())
     }
 }
