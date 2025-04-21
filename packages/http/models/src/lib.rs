@@ -33,7 +33,10 @@ impl std::fmt::Display for Method {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, EnumString, AsRefStr)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "SCREAMING_SNAKE_CASE"))]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum StatusCode {
     Ok,
     PartialContent,
@@ -135,15 +138,6 @@ impl StatusCode {
 
 impl std::fmt::Display for StatusCode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Self::Ok => "Ok",
-            Self::PartialContent => "PartialContent",
-            Self::TemporaryRedirect => "TemporaryRedirect",
-            Self::PermanentRedirect => "PermanentRedirect",
-            Self::BadRequest => "BadRequest",
-            Self::Unauthorized => "Unauthorized",
-            Self::NotFound => "NotFound",
-            Self::InternalServerError => "InternalServerError",
-        })
+        f.write_str(self.as_ref())
     }
 }
