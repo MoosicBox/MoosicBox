@@ -324,7 +324,7 @@ swc_ecma_visit = "8.0.0"
 symphonia = { version = "0.5.4", features = ["all"] }
 syntect = "5.2.0"
 tantivy = "0.24.0"
-tauri = { version = "2.5.0", features = ["protocol-asset"] }
+tauri = { version = "2.5.1", features = ["protocol-asset"] }
 tauri-build = { version = "2.2.0", features = [] }
 tauri-plugin = { version = "2.2.0", features = ["build"] }
 tauri-plugin-dialog = "2.2.1"
