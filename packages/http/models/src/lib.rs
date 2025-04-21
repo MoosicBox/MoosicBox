@@ -257,8 +257,13 @@ impl TryFrom<u16> for StatusCode {
 
 impl StatusCode {
     #[must_use]
+    pub fn into_u16(self) -> u16 {
+        self.into()
+    }
+
+    #[must_use]
     pub fn as_u16(&self) -> u16 {
-        (*self).into()
+        (*self).into_u16()
     }
 }
 
