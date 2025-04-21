@@ -387,8 +387,8 @@ xml = "0.8.20"
 # utoipa-scalar            = { git = "https://github.com/juhaku/utoipa" }
 # utoipa-swagger-ui        = { git = "https://github.com/juhaku/utoipa" }
 
-pingora                = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
-pingora-core           = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
-pingora-http           = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
-pingora-load-balancing = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
-pingora-proxy          = { git = "https://github.com/BSteffaniak/pingora", branch = "fix-sfv-breaking-changes" }
+pingora                = { git = "https://github.com/cloudflare/pingora" }
+pingora-core           = { git = "https://github.com/cloudflare/pingora" }
+pingora-http           = { git = "https://github.com/cloudflare/pingora" }
+pingora-load-balancing = { git = "https://github.com/cloudflare/pingora" }
+pingora-proxy          = { git = "https://github.com/cloudflare/pingora" }
