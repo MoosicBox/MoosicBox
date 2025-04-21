@@ -281,6 +281,11 @@ impl HttpResponse {
     }
 
     #[must_use]
+    pub fn from_status_code(status_code: StatusCode) -> Self {
+        Self::new(status_code)
+    }
+
+    #[must_use]
     pub fn temporary_redirect() -> Self {
         Self::new(StatusCode::TemporaryRedirect)
     }
