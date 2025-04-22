@@ -17,6 +17,7 @@ RUN cat Cargo.toml | \
     \"packages\/logging\",\r\
     \"packages\/profiles\",\r\
     \"packages\/random\",\r\
+    \"packages\/simulator\/utils\",\r\
     \"packages\/task\",\r\
     \"packages\/time\",\r\
 ]/" | tr '\r' '\n' \
@@ -32,6 +33,7 @@ COPY packages/load_balancer/Cargo.toml packages/load_balancer/Cargo.toml
 COPY packages/logging/Cargo.toml packages/logging/Cargo.toml
 COPY packages/profiles/Cargo.toml packages/profiles/Cargo.toml
 COPY packages/random/Cargo.toml packages/random/Cargo.toml
+COPY packages/simulator/utils/Cargo.toml packages/simulator/utils/Cargo.toml
 COPY packages/task/Cargo.toml packages/task/Cargo.toml
 COPY packages/time/Cargo.toml packages/time/Cargo.toml
 
@@ -55,6 +57,9 @@ packages/time|\
 )/Cargo.toml$"); \
     do printf "\n\n[lib]\npath=\"../../temp_lib.rs\"" >> "$file"; \
   done
+
+RUN \
+  printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/simulator/utils/Cargo.toml"
 
 RUN apt-get update && apt-get install -y cmake
 RUN mkdir packages/load_balancer/src && \

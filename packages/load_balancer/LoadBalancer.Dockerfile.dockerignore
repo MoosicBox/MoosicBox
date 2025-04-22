@@ -9,5 +9,6 @@
 !/packages/logging
 !/packages/profiles
 !/packages/random
+!/packages/simulator/utils
 !/packages/task
 !/packages/time
