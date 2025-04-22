@@ -43,6 +43,9 @@ moosicbox_mdns = { version = "0.1.0", path = "../../mdns", optional = true, defa
 moosicbox_telemetry = { version = "0.1.0", path = "../../telemetry", optional = true, default-features = false, features = [
     "simulator",
 ] }
+moosicbox_time = { version = "0.1.0", path = "../../time", optional = true, default-features = false, features = [
+    "simulator",
+] }
 moosicbox_upnp = { version = "0.1.0", path = "../../upnp", optional = true, default-features = false, features = [
     "simulator",
 ] }
@@ -61,4 +64,5 @@ database  = ["dep:moosicbox_database_connection"]
 http      = ["dep:moosicbox_http"]
 mdns      = ["dep:moosicbox_mdns"]
 telemetry = ["dep:moosicbox_telemetry"]
+time      = ["dep:moosicbox_time"]
 upnp      = ["dep:moosicbox_upnp"]

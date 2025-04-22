@@ -90,6 +90,7 @@ members = [
     "packages/tcp",
     "packages/telemetry",
     "packages/tidal",
+    "packages/time",
     "packages/tunnel",
     "packages/tunnel_sender",
     "packages/tunnel_server",

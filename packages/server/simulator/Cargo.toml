@@ -23,6 +23,7 @@ moosicbox_simulator_harness = { version = "0.1.0", path = "../../simulator/harne
     "http",
     "mdns",
     "telemetry",
+    "time",
 ] }
 moosicbox_simulator_utils = { version = "0.1.0", path = "../../simulator/utils", default-features = false }
 moosicbox_task = { version = "0.1.0", path = "../../task", default-features = false }
