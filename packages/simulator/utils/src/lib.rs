@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::sync::LazyLock;
+use std::sync::{LazyLock, atomic::AtomicU32};
 
 pub static SEED: LazyLock<u64> = LazyLock::new(|| {
     std::env::var("SIMULATOR_SEED")
@@ -10,3 +10,9 @@ pub static SEED: LazyLock<u64> = LazyLock::new(|| {
         .and_then(|x| x.parse::<u64>().ok())
         .unwrap_or_else(|| getrandom::u64().unwrap())
 });
+
+pub static STEP: LazyLock<AtomicU32> = LazyLock::new(|| AtomicU32::new(0));
+
+pub fn step() -> u32 {
+    STEP.load(std::sync::atomic::Ordering::SeqCst)
+}
