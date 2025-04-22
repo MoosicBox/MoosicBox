@@ -19,6 +19,9 @@ moosicbox_stream_utils = { version = "0.1.0", path = "../stream_utils", default-
     "stalled-monitor",
 ] }
 moosicbox_task = { version = "0.1.0", path = "../task", default-features = false }
+moosicbox_time = { version = "0.1.0", path = "../time", default-features = false, features = [
+    "std",
+] }
 
 bytes      = { workspace = true }
 flume      = { workspace = true }

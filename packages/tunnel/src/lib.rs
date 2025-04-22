@@ -241,7 +241,7 @@ impl<'a, F: Future<Output = Result<(), Box<dyn std::error::Error>>>> TunnelStrea
         on_end: &'a impl Fn(u64) -> F,
     ) -> Self {
         Self {
-            start: SystemTime::now(),
+            start: moosicbox_time::now(),
             request_id,
             time_to_first_byte: None,
             packet_count: 0,
@@ -281,7 +281,7 @@ fn return_polled_bytes<F: Future<Output = Result<(), Box<dyn std::error::Error>>
     response: TunnelResponse,
 ) -> std::task::Poll<Option<Result<Bytes, TunnelStreamError>>> {
     if stream.time_to_first_byte.is_none() {
-        stream.time_to_first_byte = Some(SystemTime::now());
+        stream.time_to_first_byte = Some(moosicbox_time::now());
     }
 
     stream.packet_count += 1;
@@ -336,7 +336,7 @@ impl<F: Future<Output = Result<(), Box<dyn std::error::Error>>>> Stream for Tunn
             }
 
             if stream.done {
-                let end = SystemTime::now();
+                let end = moosicbox_time::now();
 
                 log::debug!(
                     "poll_next: Byte count: {} for request_id={request_id} (received {} packet{}, took {}ms total, {}ms to first byte)",

@@ -165,7 +165,7 @@ impl Read for StreamableFileAsync {
             let file_size = self.buffer.len();
             let (tx, rx) = bounded(1);
 
-            let id = std::time::SystemTime::now()
+            let id = moosicbox_time::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_millis();

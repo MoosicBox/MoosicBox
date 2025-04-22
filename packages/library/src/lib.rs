@@ -1535,7 +1535,7 @@ pub enum ReindexError {
 /// * If failed to recreate the index
 /// * If failed to populate the index
 pub async fn reindex_global_search_index(db: &LibraryDatabase) -> Result<(), ReindexError> {
-    let reindex_start = std::time::SystemTime::now();
+    let reindex_start = moosicbox_time::now();
 
     moosicbox_search::data::recreate_global_search_index().await?;
 
@@ -1567,7 +1567,7 @@ pub async fn reindex_global_search_index(db: &LibraryDatabase) -> Result<(), Rei
 
     populate_global_search_index(&tracks, false).await?;
 
-    let reindex_end = std::time::SystemTime::now();
+    let reindex_end = moosicbox_time::now();
     log::info!(
         "Finished search reindex update for scan in {}ms",
         reindex_end

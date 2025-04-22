@@ -58,6 +58,7 @@ RUN cat Cargo.toml | \
     \"packages\/task\",\r\
     \"packages\/telemetry\",\r\
     \"packages\/tidal\",\r\
+    \"packages\/time\",\r\
     \"packages\/tunnel\",\r\
     \"packages\/tunnel_sender\",\r\
     \"packages\/upnp\",\r\
@@ -118,6 +119,7 @@ COPY packages/stream_utils/Cargo.toml packages/stream_utils/Cargo.toml
 COPY packages/task/Cargo.toml packages/task/Cargo.toml
 COPY packages/telemetry/Cargo.toml packages/telemetry/Cargo.toml
 COPY packages/tidal/Cargo.toml packages/tidal/Cargo.toml
+COPY packages/time/Cargo.toml packages/time/Cargo.toml
 COPY packages/tunnel/Cargo.toml packages/tunnel/Cargo.toml
 COPY packages/tunnel_sender/Cargo.toml packages/tunnel_sender/Cargo.toml
 COPY packages/upnp/Cargo.toml packages/upnp/Cargo.toml
@@ -172,6 +174,7 @@ packages/stream_utils|\
 packages/task|\
 packages/telemetry|\
 packages/tidal|\
+packages/time|\
 packages/tunnel|\
 packages/tunnel_sender|\
 packages/upnp|\

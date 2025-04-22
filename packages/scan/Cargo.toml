@@ -33,6 +33,9 @@ moosicbox_music_models = { version = "0.1.0", path = "../music/models", default-
 moosicbox_paging = { version = "0.1.0", path = "../paging" }
 moosicbox_search = { version = "0.1.0", path = "../search" }
 moosicbox_task = { version = "0.1.0", path = "../task", default-features = false }
+moosicbox_time = { version = "0.1.0", path = "../time", default-features = false, features = [
+    "std",
+] }
 
 # API Dependencies
 actix-web      = { workspace = true, optional = true }

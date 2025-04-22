@@ -1,5 +1,5 @@
 use std::sync::atomic::AtomicUsize;
-use std::{cell::RefCell, rc::Rc, time::SystemTime};
+use std::{cell::RefCell, rc::Rc};
 
 use libpulse_binding as pulse;
 use moosicbox_env_utils::option_env_u32;
@@ -369,7 +369,7 @@ impl AudioWrite for PulseAudioOutput {
         log::debug!("{bytes_available} bytes available");
         log::debug!("Latency {latency:?}");
 
-        let start = SystemTime::now();
+        let start = moosicbox_time::now();
         log::trace!("Writing bytes");
 
         while bytes_available < bytes.len() {
@@ -389,7 +389,7 @@ impl AudioWrite for PulseAudioOutput {
 
         bytes_written += write_bytes(&mut self.stream.borrow_mut(), bytes)?;
 
-        let end = SystemTime::now();
+        let end = moosicbox_time::now();
         let took_ms = end.duration_since(start).unwrap().as_millis();
 
         let total_bytes = self

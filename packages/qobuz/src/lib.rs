@@ -1703,7 +1703,7 @@ pub async fn track_file_url(
 
     let intent = "stream";
     let format_id = quality.as_format_id();
-    let request_ts = std::time::SystemTime::now()
+    let request_ts = moosicbox_time::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs();

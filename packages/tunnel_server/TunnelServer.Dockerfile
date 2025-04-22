@@ -24,6 +24,7 @@ RUN cat Cargo.toml | \
     \"packages\/simulator\/utils\",\r\
     \"packages\/task\",\r\
     \"packages\/telemetry\",\r\
+    \"packages\/time\",\r\
     \"packages\/tunnel\",\r\
     \"packages\/tunnel_server\",\r\
 ]/" | tr '\r' '\n' \
@@ -46,6 +47,7 @@ COPY packages/random/Cargo.toml packages/random/Cargo.toml
 COPY packages/simulator/utils/Cargo.toml packages/simulator/utils/Cargo.toml
 COPY packages/task/Cargo.toml packages/task/Cargo.toml
 COPY packages/telemetry/Cargo.toml packages/telemetry/Cargo.toml
+COPY packages/time/Cargo.toml packages/time/Cargo.toml
 COPY packages/tunnel/Cargo.toml packages/tunnel/Cargo.toml
 COPY packages/tunnel_server/Cargo.toml packages/tunnel_server/Cargo.toml
 COPY packages/tunnel_server/build.rs packages/tunnel_server/build.rs
@@ -70,6 +72,7 @@ packages/profiles|\
 packages/random|\
 packages/task|\
 packages/telemetry|\
+packages/time|\
 packages/tunnel|\
 packages/tunnel_server|\
 )/Cargo.toml$"); \

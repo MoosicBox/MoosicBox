@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::{Arc, LazyLock, RwLock};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, UNIX_EPOCH};
 
 use crate::models::{LibraryAlbum, LibraryArtist, LibraryTrack};
 
@@ -31,7 +31,7 @@ pub enum CacheItemType {
 /// * If time went backwards
 #[must_use]
 pub fn current_time_nanos() -> u128 {
-    let start = SystemTime::now();
+    let start = moosicbox_time::now();
     let since_the_epoch = start
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards");

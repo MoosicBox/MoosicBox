@@ -47,9 +47,9 @@ impl<F: FontMetrics> Calculator<F> {
 #[cfg(feature = "benchmark")]
 macro_rules! time {
     ($label:tt, $expr:expr $(,)?) => {{
-        let before = std::time::SystemTime::now();
+        let before = moosicbox_time::now();
         let ret = $expr;
-        let duration = std::time::SystemTime::now().duration_since(before).unwrap();
+        let duration = moosicbox_time::now().duration_since(before).unwrap();
         log::info!("{}: took {}µs", $label, duration.as_micros());
         ret
     }};

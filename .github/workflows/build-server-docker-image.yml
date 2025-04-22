@@ -55,6 +55,7 @@ on:
             - 'packages/task/**'
             - 'packages/telemetry/**'
             - 'packages/tidal/**'
+            - 'packages/time/**'
             - 'packages/tunnel/**'
             - 'packages/tunnel_sender/**'
             - 'packages/upnp/**'

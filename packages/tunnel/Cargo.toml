@@ -18,6 +18,9 @@ moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = f
 moosicbox_http = { version = "0.1.0", path = "../http", default-features = false, features = [
     "serde",
 ] }
+moosicbox_time = { version = "0.1.0", path = "../time", default-features = false, features = [
+    "std",
+] }
 
 # Base64 dependencies
 base64 = { workspace = true, optional = true }

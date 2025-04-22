@@ -366,14 +366,14 @@ impl AudioOutputScanner {
                 moosicbox_task::spawn(
                     "server: scan cpal outputs",
                     moosicbox_task::spawn_blocking("server: scan cpal outputs (blocking)", || {
-                        let start = std::time::SystemTime::now();
+                        let start = moosicbox_time::now();
                         let outputs = crate::cpal::scan_available_outputs().collect::<Vec<_>>();
 
                         for output in &outputs {
                             log::debug!("cpal output: {}", output.name);
                         }
 
-                        let end = std::time::SystemTime::now();
+                        let end = moosicbox_time::now();
                         log::debug!(
                             "took {}ms to scan outputs",
                             end.duration_since(start).unwrap().as_millis()
@@ -390,14 +390,14 @@ impl AudioOutputScanner {
                     moosicbox_task::spawn_blocking(
                         "server: scan cpal default output (blocking)",
                         || {
-                            let start = std::time::SystemTime::now();
+                            let start = moosicbox_time::now();
                             let output = crate::cpal::scan_default_output();
 
                             if let Some(output) = &output {
                                 log::debug!("cpal output: {}", output.name);
                             }
 
-                            let end = std::time::SystemTime::now();
+                            let end = moosicbox_time::now();
                             log::debug!(
                                 "took {}ms to scan default output",
                                 end.duration_since(start).unwrap().as_millis()
@@ -429,7 +429,7 @@ impl AudioOutputScanner {
                     moosicbox_task::spawn_blocking(
                         "server: scan pulseaudio-standard outputs (blocking)",
                         || {
-                            let start = std::time::SystemTime::now();
+                            let start = moosicbox_time::now();
                             let outputs = crate::pulseaudio::standard::scan_available_outputs()
                                 .collect::<Vec<_>>();
 
@@ -437,7 +437,7 @@ impl AudioOutputScanner {
                                 log::debug!("pulseaudio-standard output: {}", output.name);
                             }
 
-                            let end = std::time::SystemTime::now();
+                            let end = moosicbox_time::now();
                             log::debug!(
                                 "took {}ms to scan outputs",
                                 end.duration_since(start).unwrap().as_millis()
@@ -455,14 +455,14 @@ impl AudioOutputScanner {
                     moosicbox_task::spawn_blocking(
                         "server: scan pulseaudio-standard default output (blocking)",
                         || {
-                            let start = std::time::SystemTime::now();
+                            let start = moosicbox_time::now();
                             let output = crate::pulseaudio::standard::scan_default_output();
 
                             if let Some(output) = &output {
                                 log::debug!("pulseaudio-standard output: {}", output.name);
                             }
 
-                            let end = std::time::SystemTime::now();
+                            let end = moosicbox_time::now();
                             log::debug!(
                                 "took {}ms to scan default output",
                                 end.duration_since(start).unwrap().as_millis()
@@ -494,7 +494,7 @@ impl AudioOutputScanner {
                     moosicbox_task::spawn_blocking(
                         "server: scan pulseaudio-simple outputs (blocking)",
                         || {
-                            let start = std::time::SystemTime::now();
+                            let start = moosicbox_time::now();
                             let outputs = crate::pulseaudio::simple::scan_available_outputs()
                                 .collect::<Vec<_>>();
 
@@ -502,7 +502,7 @@ impl AudioOutputScanner {
                                 log::debug!("pulseaudio-simple output: {}", output.name);
                             }
 
-                            let end = std::time::SystemTime::now();
+                            let end = moosicbox_time::now();
                             log::debug!(
                                 "took {}ms to scan outputs",
                                 end.duration_since(start).unwrap().as_millis()
@@ -520,14 +520,14 @@ impl AudioOutputScanner {
                     moosicbox_task::spawn_blocking(
                         "server: scan pulseaudio-simple default output (blocking)",
                         || {
-                            let start = std::time::SystemTime::now();
+                            let start = moosicbox_time::now();
                             let output = crate::pulseaudio::simple::scan_default_output();
 
                             if let Some(output) = &output {
                                 log::debug!("pulseaudio-simple output: {}", output.name);
                             }
 
-                            let end = std::time::SystemTime::now();
+                            let end = moosicbox_time::now();
                             log::debug!(
                                 "took {}ms to scan default output",
                                 end.duration_since(start).unwrap().as_millis()

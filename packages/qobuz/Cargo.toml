@@ -41,6 +41,9 @@ moosicbox_paging = { version = "0.1.0", path = "../paging", default-features = f
 moosicbox_search = { version = "0.1.0", path = "../search", default-features = false, features = [
     "api",
 ] }
+moosicbox_time = { version = "0.1.0", path = "../time", default-features = false, features = [
+    "std",
+] }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }

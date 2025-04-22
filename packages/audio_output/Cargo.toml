@@ -11,12 +11,15 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert        = { version = "0.1.0", path = "../assert", default-features = false }
+moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
 moosicbox_audio_decoder = { version = "0.1.0", path = "../audio_decoder", default-features = false }
-moosicbox_env_utils     = { version = "0.1.0", path = "../env_utils", default-features = false }
-moosicbox_resampler     = { version = "0.1.0", path = "../resampler", default-features = false }
-moosicbox_stream_utils  = { version = "0.1.0", path = "../stream_utils", default-features = false }
-moosicbox_task          = { version = "0.1.0", path = "../task", default-features = false }
+moosicbox_env_utils = { version = "0.1.0", path = "../env_utils", default-features = false }
+moosicbox_resampler = { version = "0.1.0", path = "../resampler", default-features = false }
+moosicbox_stream_utils = { version = "0.1.0", path = "../stream_utils", default-features = false }
+moosicbox_task = { version = "0.1.0", path = "../task", default-features = false }
+moosicbox_time = { version = "0.1.0", path = "../time", default-features = false, features = [
+    "std",
+] }
 
 # API Dependencies
 actix-web        = { workspace = true, optional = true }

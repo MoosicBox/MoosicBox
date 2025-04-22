@@ -34,6 +34,9 @@ moosicbox_search = { version = "0.1.0", path = "../search", default-features = f
     "db",
 ] }
 moosicbox_stream_utils = { version = "0.1.0", path = "../stream_utils", optional = true, default-features = false }
+moosicbox_time = { version = "0.1.0", path = "../time", default-features = false, features = [
+    "std",
+] }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }

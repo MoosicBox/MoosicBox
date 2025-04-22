@@ -147,7 +147,7 @@ impl Context {
             bytes: bytes.clone(),
             size: track_bytes.size,
             format: track_bytes.format,
-            created: std::time::SystemTime::now(),
+            created: moosicbox_time::now(),
             finished: finished.clone(),
             filename,
         };

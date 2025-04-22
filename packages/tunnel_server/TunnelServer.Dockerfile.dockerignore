@@ -16,5 +16,6 @@
 !/packages/simulator/utils
 !/packages/task
 !/packages/telemetry
+!/packages/time
 !/packages/tunnel
 !/packages/tunnel_server

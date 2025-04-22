@@ -106,7 +106,7 @@ async fn visualization_updated(
 
     let cursor_half_width = cursor_width / 2.0;
     let step_1_second = visualization_width / duration;
-    let delta = SystemTime::now()
+    let delta = moosicbox_time::now()
         .duration_since(last_update)
         .unwrap()
         .as_secs_f32()
@@ -333,7 +333,7 @@ pub async fn check_visualization_update() {
                     api_source,
                     seek,
                     duration,
-                    time: SystemTime::now(),
+                    time: moosicbox_time::now(),
                 });
 
                 if let Some(interval_period) = { *INTERVAL_PERIOD.read().unwrap() } {

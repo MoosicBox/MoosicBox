@@ -22,6 +22,9 @@ moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features 
 moosicbox_logging = { version = "0.1.0", path = "../../logging", default-features = false, features = [
     "macros",
 ] }
+moosicbox_time = { version = "0.1.0", path = "../../time", default-features = false, features = [
+    "std",
+] }
 
 bumpalo     = { workspace = true, features = ["collections"], optional = true }
 html-escape = { workspace = true }

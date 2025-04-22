@@ -41,8 +41,8 @@ pub async fn scan(
     token: CancellationToken,
     scanner: Option<Scanner>,
 ) -> Result<(), ScanError> {
-    let total_start = std::time::SystemTime::now();
-    let start = std::time::SystemTime::now();
+    let total_start = moosicbox_time::now();
+    let start = moosicbox_time::now();
     let output = Arc::new(RwLock::new(ScanOutput::new()));
 
     let limit = 100;
@@ -88,7 +88,7 @@ pub async fn scan(
         };
     }
 
-    let end = std::time::SystemTime::now();
+    let end = moosicbox_time::now();
     log::info!(
         "Finished initial scan in {}ms",
         end.duration_since(start).unwrap().as_millis()
@@ -99,7 +99,7 @@ pub async fn scan(
     output.reindex_global_search_index(db).await?;
     drop(output);
 
-    let end = std::time::SystemTime::now();
+    let end = moosicbox_time::now();
     log::info!(
         "Finished total scan in {}ms",
         end.duration_since(total_start).unwrap().as_millis(),

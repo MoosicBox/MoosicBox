@@ -32,6 +32,9 @@ moosicbox_music_models = { version = "0.1.0", path = "../music/models", optional
 moosicbox_parsing_utils = { version = "0.1.0", path = "../parsing_utils", optional = true, default-features = false }
 moosicbox_stream_utils = { version = "0.1.0", path = "../stream_utils", default-features = false }
 moosicbox_task = { version = "0.1.0", path = "../task", optional = true, default-features = false }
+moosicbox_time = { version = "0.1.0", path = "../time", default-features = false, features = [
+    "std",
+] }
 
 # API Dependencies
 utoipa = { workspace = true, optional = true }
