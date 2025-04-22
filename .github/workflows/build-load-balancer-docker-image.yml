@@ -1,0 +1,52 @@
+name: Build Load Balancer Docker Image
+
+on:
+    push:
+        branches: ['master', 'edge']
+        paths:
+            - '/*.toml'
+            - '/Cargo.lock'
+            - .github/workflows/build-load-balancer-docker-image.yml
+            - 'packages/assert/**'
+            - 'packages/config/**'
+            - 'packages/database/**'
+            - 'packages/env_utils/**'
+            - 'packages/json_utils/**'
+            - 'packages/load_balancer/**'
+            - 'packages/logging/**'
+            - 'packages/profiles/**'
+            - 'packages/task/**'
+            - 'packages/time/**'
+    pull_request:
+        branches: ['master', 'edge']
+    workflow_dispatch:
+        inputs:
+            edge:
+                description: 'Edge'
+                required: false
+                type: boolean
+                default: false
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Enable patches
+              if: ${{ github.event_name == 'schedule' || github.event.inputs.edge == true }}
+              run: |
+                  git config user.name "MoosicBoxBot"
+                  git config user.email "MoosicBoxBot@gmail.com"
+                  git checkout edge
+                  git rebase master
+
+            - name: Build Dockerfile
+              shell: bash
+              run: |
+                  docker build . -f packages/load_balancer/LoadBalancer.Dockerfile
