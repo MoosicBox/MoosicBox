@@ -10,24 +10,6 @@ readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
-[package.metadata.cargo-udeps.ignore]
-normal = [
-    "moosicbox_database_connection",
-    "moosicbox_http",
-    "moosicbox_mdns",
-    "moosicbox_telemetry",
-    "moosicbox_upnp",
-]
-
-[package.metadata.cargo-machete]
-ignored = [
-    "moosicbox_database_connection",
-    "moosicbox_http",
-    "moosicbox_mdns",
-    "moosicbox_telemetry",
-    "moosicbox_upnp",
-]
-
 [dependencies]
 moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
 
@@ -62,7 +44,16 @@ rand      = { version = "=0.8.5" }
 turmoil   = { workspace = true }
 
 [features]
-default = []
+default = [
+    "database",
+    "http",
+    "mdns",
+    "random",
+    "tcp",
+    "telemetry",
+    "time",
+    "upnp",
+]
 
 fail-on-warnings = []
 

@@ -6,6 +6,23 @@ pub use getrandom;
 pub use rand;
 pub use turmoil;
 
+#[cfg(feature = "database")]
+pub use moosicbox_database_connection as database_connection;
+#[cfg(feature = "http")]
+pub use moosicbox_http as http;
+#[cfg(feature = "mdns")]
+pub use moosicbox_mdns as mdns;
+#[cfg(feature = "random")]
+pub use moosicbox_random as random;
+#[cfg(feature = "tcp")]
+pub use moosicbox_tcp as tcp;
+#[cfg(feature = "telemetry")]
+pub use moosicbox_telemetry as telemetry;
+#[cfg(feature = "time")]
+pub use moosicbox_time as time;
+#[cfg(feature = "upnp")]
+pub use moosicbox_upnp as upnp;
+
 /// # Safety
 ///
 /// This must be called before any multi-threading occurs. Setting environment
