@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use moosicbox_simulator_utils::SEED;
-use rand::{RngCore, SeedableRng, rngs::SmallRng};
+use rand::{Rng, RngCore, SeedableRng, rngs::SmallRng};
 
 use crate::GenericRng;
 
@@ -18,8 +18,24 @@ impl SimulatorRng {
 }
 
 impl GenericRng for SimulatorRng {
+    fn next_u32(&self) -> u32 {
+        self.0.lock().unwrap().next_u32()
+    }
+
+    fn next_i32(&self) -> i32 {
+        self.0.lock().unwrap().gen_range(i32::MIN..=i32::MAX)
+    }
+
     fn next_u64(&self) -> u64 {
         self.0.lock().unwrap().next_u64()
+    }
+
+    fn fill_bytes(&self, dest: &mut [u8]) {
+        self.0.lock().unwrap().fill_bytes(dest);
+    }
+
+    fn try_fill_bytes(&self, dest: &mut [u8]) -> Result<(), rand::Error> {
+        self.0.lock().unwrap().try_fill_bytes(dest)
     }
 }
 
