@@ -54,6 +54,24 @@ macro_rules! impl_rng {
     };
 }
 
+#[macro_export]
+macro_rules! non_uniform_distribute_f64 {
+    ($value:expr, $pow:expr $(,)?) => {{
+        let value = $value;
+        let mult = $crate::RNG.gen_range(0.0001..1.0f64).powf($pow);
+        (value as f64 * mult).round()
+    }};
+}
+
+#[macro_export]
+macro_rules! non_uniform_distribute_i32 {
+    ($value:expr, $pow:expr $(,)?) => {{
+        let value = $value;
+        let mult = $crate::RNG.gen_range(0.0001..1.0f64).powi($pow);
+        (value as f64 * mult).round()
+    }};
+}
+
 #[cfg(feature = "simulator")]
 impl_rng!(simulator::SimulatorRng);
 
