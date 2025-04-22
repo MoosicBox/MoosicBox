@@ -7797,6 +7797,7 @@ dependencies = [
  "moosicbox_http",
  "moosicbox_mdns",
  "moosicbox_random",
+ "moosicbox_tcp",
  "moosicbox_telemetry",
  "moosicbox_time",
  "moosicbox_upnp",
