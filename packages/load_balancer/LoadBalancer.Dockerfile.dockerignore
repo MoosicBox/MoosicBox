@@ -8,5 +8,6 @@
 !/packages/load_balancer
 !/packages/logging
 !/packages/profiles
+!/packages/random
 !/packages/task
 !/packages/time

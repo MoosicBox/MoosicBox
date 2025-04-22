@@ -16,6 +16,7 @@ RUN cat Cargo.toml | \
     \"packages\/load_balancer\",\r\
     \"packages\/logging\",\r\
     \"packages\/profiles\",\r\
+    \"packages\/random\",\r\
     \"packages\/task\",\r\
     \"packages\/time\",\r\
 ]/" | tr '\r' '\n' \
@@ -30,6 +31,7 @@ COPY packages/json_utils/Cargo.toml packages/json_utils/Cargo.toml
 COPY packages/load_balancer/Cargo.toml packages/load_balancer/Cargo.toml
 COPY packages/logging/Cargo.toml packages/logging/Cargo.toml
 COPY packages/profiles/Cargo.toml packages/profiles/Cargo.toml
+COPY packages/random/Cargo.toml packages/random/Cargo.toml
 COPY packages/task/Cargo.toml packages/task/Cargo.toml
 COPY packages/time/Cargo.toml packages/time/Cargo.toml
 
@@ -47,6 +49,7 @@ packages/json_utils|\
 packages/load_balancer|\
 packages/logging|\
 packages/profiles|\
+packages/random|\
 packages/task|\
 packages/time|\
 )/Cargo.toml$"); \
