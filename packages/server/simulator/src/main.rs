@@ -2,16 +2,20 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::{
-    sync::{LazyLock, atomic::AtomicU32},
-    time::Duration,
-};
+use std::{sync::LazyLock, time::Duration};
 
 use moosicbox_server_simulator::{RNG, SIMULATOR_CANCELLATION_TOKEN, client, handle_actions, host};
-use moosicbox_simulator_harness::turmoil::{self};
-use moosicbox_simulator_utils::SEED;
+use moosicbox_simulator_harness::{
+    time::simulator::{EPOCH_OFFSET, STEP_MULTIPLIER},
+    turmoil::{self},
+};
+use moosicbox_simulator_utils::{SEED, STEP};
 
-static STEP: LazyLock<AtomicU32> = LazyLock::new(|| AtomicU32::new(1));
+static SIMULATION_DURATION: LazyLock<u64> = LazyLock::new(|| {
+    std::env::var("SIMULATOR_DURATION")
+        .ok()
+        .map_or(u64::MAX, |x| x.parse::<u64>().unwrap())
+});
 
 pub trait TimeFormat {
     fn into_formatted(self) -> String;
@@ -74,6 +78,41 @@ impl TimeFormat for u128 {
     }
 }
 
+fn run_info() -> String {
+    format!(
+        "\
+        seed={seed}\n\
+        epoch_offset={epoch_offset}\n\
+        step_multiplier={step_multiplier}",
+        seed = *SEED,
+        epoch_offset = *EPOCH_OFFSET,
+        step_multiplier = *STEP_MULTIPLIER,
+    )
+}
+
+#[allow(clippy::cast_precision_loss)]
+fn run_info_end(
+    successful: bool,
+    real_time_millis: u128,
+    system_time_millis: u128,
+    step: u32,
+) -> String {
+    format!(
+        "\
+        {run_info}\n\
+        successful={successful}\n\
+        real_time_elapsed={real_time}\n\
+        simulated_system_time_elapsed={simulated_system_time} ({simulated_system_time_x:.2}x)\n\
+        simulated_time_elapsed={simulated_time} ({simulated_time_x:.2}x)",
+        run_info = run_info(),
+        real_time = real_time_millis.into_formatted(),
+        simulated_system_time = system_time_millis.into_formatted(),
+        simulated_system_time_x = system_time_millis as f64 / real_time_millis as f64,
+        simulated_time = step.into_formatted(),
+        simulated_time_x = f64::from(step) / real_time_millis as f64,
+    )
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     unsafe {
         moosicbox_simulator_harness::init();
@@ -82,33 +121,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ctrlc::set_handler(move || SIMULATOR_CANCELLATION_TOKEN.cancel())
         .expect("Error setting Ctrl-C handler");
 
-    let duration_secs = std::env::var("SIMULATOR_DURATION")
-        .ok()
-        .map_or(u64::MAX, |x| x.parse::<u64>().unwrap());
-
-    let seed = *SEED;
-
-    println!("Starting simulation with seed={seed}");
+    let duration_secs = *SIMULATION_DURATION;
 
     moosicbox_logging::init(None, None)?;
 
+    log::info!("Server simulator starting\n{}", run_info());
+
+    let start_system = moosicbox_simulator_harness::time::now();
     let start = std::time::SystemTime::now();
+    STEP.store(1, std::sync::atomic::Ordering::SeqCst);
 
     let resp = std::panic::catch_unwind(|| run_simulation(duration_secs));
     let step = STEP.load(std::sync::atomic::Ordering::SeqCst);
 
+    let end_system = moosicbox_simulator_harness::time::now();
+    let system_time_millis = end_system.duration_since(start_system).unwrap().as_millis();
     let end = std::time::SystemTime::now();
     let real_time_millis = end.duration_since(start).unwrap().as_millis();
 
     log::info!(
-        "Server simulator finished\n\
-        seed={seed}\n\
-        successful={successful}\n\
-        real_time_elapsed={real_time}\n\
-        simulated_time_elapsed={simulated_time}",
-        successful = resp.as_ref().is_ok_and(Result::is_ok),
-        real_time = real_time_millis.into_formatted(),
-        simulated_time = step.into_formatted(),
+        "Server simulator finished\n{}",
+        run_info_end(
+            resp.as_ref().is_ok_and(Result::is_ok),
+            real_time_millis,
+            system_time_millis,
+            step,
+        )
     );
 
     resp.unwrap()
