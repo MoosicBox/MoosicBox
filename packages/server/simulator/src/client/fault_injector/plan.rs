@@ -71,8 +71,7 @@ impl InteractionPlan<Interaction> for FaultInjectionInteractionPlan {
     fn gen_interactions(&mut self, count: u64) {
         let len = self.plan.len() as u64;
 
-        let rng: &moosicbox_simulator_harness::random::Rng = &RNG;
-        let mut rng: moosicbox_simulator_harness::random::Rng = rng.clone();
+        let mut rng = RNG.clone();
 
         for i in 1..=count {
             loop {
