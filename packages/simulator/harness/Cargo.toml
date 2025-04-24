@@ -17,6 +17,9 @@ moosicbox_simulator_utils = { version = "0.1.0", path = "../utils", default-feat
 moosicbox_database_connection = { version = "0.1.0", path = "../../database_connection", optional = true, default-features = false, features = [
     "simulator",
 ] }
+moosicbox_fs = { version = "0.1.0", path = "../../fs", optional = true, default-features = false, features = [
+    "simulator",
+] }
 moosicbox_http = { version = "0.1.0", path = "../../http", optional = true, default-features = false, features = [
     "simulator",
 ] }
@@ -47,6 +50,7 @@ turmoil     = { workspace = true }
 [features]
 default = [
     "database",
+    "fs",
     "http",
     "mdns",
     "random",
@@ -59,6 +63,7 @@ default = [
 fail-on-warnings = []
 
 database  = ["dep:moosicbox_database_connection"]
+fs        = ["dep:moosicbox_fs"]
 http      = ["dep:moosicbox_http"]
 mdns      = ["dep:moosicbox_mdns"]
 random    = ["dep:moosicbox_random"]

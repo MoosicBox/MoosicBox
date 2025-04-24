@@ -24,6 +24,7 @@ on:
             - 'packages/downloader/**'
             - 'packages/env_utils/**'
             - 'packages/files/**'
+            - 'packages/fs/**'
             - 'packages/http/**'
             - 'packages/image/**'
             - 'packages/json_utils/**'

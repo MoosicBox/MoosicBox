@@ -19,6 +19,8 @@ pub use turmoil;
 
 #[cfg(feature = "database")]
 pub use moosicbox_database_connection as database_connection;
+#[cfg(feature = "fs")]
+pub use moosicbox_fs as fs;
 #[cfg(feature = "http")]
 pub use moosicbox_http as http;
 #[cfg(feature = "mdns")]

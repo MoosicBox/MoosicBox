@@ -14,6 +14,7 @@ on:
             - 'packages/database_connection/**'
             - 'packages/http/**'
             - 'packages/env_utils/**'
+            - 'packages/fs/**'
             - 'packages/json_utils/**'
             - 'packages/logging/**'
             - 'packages/middleware/**'

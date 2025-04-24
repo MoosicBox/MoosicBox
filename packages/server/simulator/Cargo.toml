@@ -20,6 +20,7 @@ moosicbox_server = { version = "0.1.0", path = "../", default-features = false, 
 ] }
 moosicbox_simulator_harness = { version = "0.1.0", path = "../../simulator/harness", default-features = false, features = [
     "database",
+    "fs",
     "http",
     "mdns",
     "random",

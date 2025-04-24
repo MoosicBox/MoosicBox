@@ -1,6 +1,6 @@
 [package]
 authors     = ["Braden Steffaniak"]
-categories  = ["development-utils"]
+categories  = ["date-and-time", "development-utils"]
 description = "MoosicBox Time package"
 edition     = "2024"
 keywords    = ["time"]

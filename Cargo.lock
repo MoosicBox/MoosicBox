@@ -7119,6 +7119,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_fs"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "log",
+ "pretty_assertions",
+ "tokio",
+]
+
+[[package]]
 name = "moosicbox_http"
 version = "0.1.0"
 dependencies = [
@@ -7799,6 +7809,7 @@ dependencies = [
  "log",
  "moosicbox_assert",
  "moosicbox_database_connection",
+ "moosicbox_fs",
  "moosicbox_http",
  "moosicbox_mdns",
  "moosicbox_random",

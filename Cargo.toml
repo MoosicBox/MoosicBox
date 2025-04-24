@@ -32,6 +32,7 @@ members = [
     "packages/downloader",
     "packages/env_utils",
     "packages/files",
+    "packages/fs",
     "packages/http",
     "packages/http/examples/simple_get",
     "packages/http/models",

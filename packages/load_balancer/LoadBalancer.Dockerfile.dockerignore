@@ -4,6 +4,7 @@
 !/packages/config
 !/packages/database
 !/packages/env_utils
+!/packages/fs
 !/packages/json_utils
 !/packages/load_balancer
 !/packages/logging

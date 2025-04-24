@@ -1,0 +1,32 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-utils", "filesystem"]
+description = "Time package"
+edition     = "2024"
+keywords    = ["time"]
+license     = "MPL-2.0"
+name        = "moosicbox_fs"
+readme      = "README.md"
+repository  = "https://github.com/BSteffaniak/dst-demo"
+version     = "0.1.0"
+
+[dependencies]
+bytes = { workspace = true, optional = true }
+log   = { workspace = true }
+tokio = { workspace = true, optional = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+tokio             = { workspace = true, features = ["macros", "rt"] }
+
+[features]
+default = ["async", "simulator", "std", "sync", "tokio"]
+
+fail-on-warnings = []
+
+simulator = ["dep:bytes", "sync"]
+std       = ["sync"]
+tokio     = ["async", "dep:tokio", "tokio/fs"]
+
+async = ["dep:tokio", "tokio/io-util"]
+sync  = []
