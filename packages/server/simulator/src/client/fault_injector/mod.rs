@@ -1,5 +1,5 @@
 use moosicbox_simulator_harness::{
-    plan::InteractionPlan as _, random::RNG, turmoil::Sim, utils::SIMULATOR_CANCELLATION_TOKEN,
+    CancellableSim, plan::InteractionPlan as _, random::RNG, turmoil::Sim,
 };
 use plan::{FaultInjectionInteractionPlan, Interaction};
 
@@ -12,20 +12,14 @@ pub fn start(sim: &mut Sim<'_>) {
 
     let mut plan = FaultInjectionInteractionPlan::new().with_gen_interactions(1000);
 
-    sim.client("FaultInjector", async move {
-        SIMULATOR_CANCELLATION_TOKEN
-            .run_until_cancelled(async move {
-                loop {
-                    while let Some(interaction) = plan.step() {
-                        perform_interaction(interaction).await?;
-                    }
+    sim.client_until_cancelled("FaultInjector", async move {
+        loop {
+            while let Some(interaction) = plan.step() {
+                perform_interaction(interaction).await?;
+            }
 
-                    plan.gen_interactions(1000);
-                }
-            })
-            .await
-            .transpose()
-            .map(|x| x.unwrap_or(()))
+            plan.gen_interactions(1000);
+        }
     });
 }
 

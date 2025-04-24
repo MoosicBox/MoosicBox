@@ -1,8 +1,7 @@
 use std::sync::LazyLock;
 
 use moosicbox_simulator_harness::{
-    plan::InteractionPlan as _, time::simulator::STEP_MULTIPLIER, turmoil::Sim,
-    utils::SIMULATOR_CANCELLATION_TOKEN,
+    CancellableSim, plan::InteractionPlan as _, time::simulator::STEP_MULTIPLIER, turmoil::Sim,
 };
 use plan::{HealthCheckInteractionPlan, Interaction};
 use serde_json::Value;
@@ -17,22 +16,15 @@ use crate::{
 pub fn start(sim: &mut Sim<'_>) {
     let mut plan = HealthCheckInteractionPlan::new().with_gen_interactions(1000);
 
-    sim.client("HealthCheck", async move {
-        SIMULATOR_CANCELLATION_TOKEN
-            .run_until_cancelled(async move {
-                loop {
-                    while let Some(interaction) = plan.step() {
-                        perform_interaction(interaction).await?;
-                        tokio::time::sleep(std::time::Duration::from_secs(*STEP_MULTIPLIER * 60))
-                            .await;
-                    }
+    sim.client_until_cancelled("HealthCheck", async move {
+        loop {
+            while let Some(interaction) = plan.step() {
+                perform_interaction(interaction).await?;
+                tokio::time::sleep(std::time::Duration::from_secs(*STEP_MULTIPLIER * 60)).await;
+            }
 
-                    plan.gen_interactions(1000);
-                }
-            })
-            .await
-            .transpose()
-            .map(|x| x.unwrap_or(()))
+            plan.gen_interactions(1000);
+        }
     });
 }
 

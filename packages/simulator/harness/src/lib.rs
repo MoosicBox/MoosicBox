@@ -177,6 +177,7 @@ pub fn run_simulation(
 
     resp
 }
+
 fn sim_builder() -> turmoil::Builder {
     let mut builder = turmoil::Builder::new();
 
@@ -203,4 +204,37 @@ pub trait SimBootstrap {
     fn on_step(&self, #[allow(unused)] sim: &mut Sim<'_>) {}
 
     fn on_end(&self, #[allow(unused)] sim: &mut Sim<'_>) {}
+}
+
+pub trait CancellableSim {
+    fn client_until_cancelled(
+        &mut self,
+        name: &str,
+        action: impl Future<Output = Result<(), Box<dyn std::error::Error>>> + 'static,
+    );
+}
+
+impl CancellableSim for Sim<'_> {
+    fn client_until_cancelled(
+        &mut self,
+        name: &str,
+        action: impl Future<Output = Result<(), Box<dyn std::error::Error>>> + 'static,
+    ) {
+        client_until_cancelled(self, name, action);
+    }
+}
+
+pub fn client_until_cancelled(
+    sim: &mut Sim<'_>,
+    name: &str,
+    action: impl Future<Output = Result<(), Box<dyn std::error::Error>>> + 'static,
+) {
+    sim.client(name, async move {
+        SIMULATOR_CANCELLATION_TOKEN
+            .run_until_cancelled(action)
+            .await
+            .transpose()?;
+
+        Ok(())
+    });
 }
