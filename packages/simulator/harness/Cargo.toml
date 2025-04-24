@@ -39,11 +39,9 @@ moosicbox_upnp = { version = "0.1.0", path = "../../upnp", optional = true, defa
     "simulator",
 ] }
 
-ctrlc     = { workspace = true }
-getrandom = { workspace = true }
-log       = { workspace = true }
-rand      = { version = "=0.8.5" }
-turmoil   = { workspace = true }
+ctrlc   = { workspace = true }
+log     = { workspace = true }
+turmoil = { workspace = true }
 
 [features]
 default = [

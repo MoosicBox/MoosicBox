@@ -14,7 +14,9 @@ use moosicbox_simulator_utils::{
 };
 use turmoil::Sim;
 
-pub use getrandom;
+pub use moosicbox_simulator_utils as utils;
+pub use turmoil;
+
 #[cfg(feature = "database")]
 pub use moosicbox_database_connection as database_connection;
 #[cfg(feature = "http")]
@@ -23,7 +25,6 @@ pub use moosicbox_http as http;
 pub use moosicbox_mdns as mdns;
 #[cfg(feature = "random")]
 pub use moosicbox_random as random;
-pub use moosicbox_simulator_utils as utils;
 #[cfg(feature = "tcp")]
 pub use moosicbox_tcp as tcp;
 #[cfg(feature = "telemetry")]
@@ -32,8 +33,6 @@ pub use moosicbox_telemetry as telemetry;
 pub use moosicbox_time as time;
 #[cfg(feature = "upnp")]
 pub use moosicbox_upnp as upnp;
-pub use rand;
-pub use turmoil;
 
 mod formatting;
 pub mod plan;

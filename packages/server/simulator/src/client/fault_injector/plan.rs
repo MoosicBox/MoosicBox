@@ -2,8 +2,7 @@ use std::time::Duration;
 
 use moosicbox_simulator_harness::{
     plan::InteractionPlan,
-    rand::seq::IteratorRandom,
-    random::{RNG, non_uniform_distribute_f64},
+    random::{RNG, non_uniform_distribute_f64, rand::rand::seq::IteratorRandom as _},
     time::simulator::STEP_MULTIPLIER,
 };
 use strum::{EnumDiscriminants, EnumIter, IntoEnumIterator as _};
