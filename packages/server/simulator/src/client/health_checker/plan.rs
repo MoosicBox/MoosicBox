@@ -64,9 +64,6 @@ impl InteractionPlan<Interaction> for HealthCheckInteractionPlan {
         }
     }
 
-    /// # Panics
-    ///
-    /// * If the `RNG` `Mutex` fails to lock
     fn gen_interactions(&mut self, count: u64) {
         self.plan.clear();
         self.step = 0;

@@ -7,9 +7,6 @@ pub mod plan;
 
 use crate::{host::moosicbox_server::HOST, queue_bounce};
 
-/// # Panics
-///
-/// * If `ACTIONS` `Mutex` fails to lock
 pub fn start(sim: &mut Sim<'_>) {
     log::debug!("Generating initial test plan");
 
