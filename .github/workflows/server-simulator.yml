@@ -148,7 +148,7 @@ jobs:
                   SIMULATOR_DURATION: 100
               run: |
                   while read -r feature; do \
-                      ${{ matrix.package.env }} cargo run -p moosicbox_server_simulator ${{ runner.debug && '-vv' }} \
+                      ${{ matrix.package.env }} cargo run --release -p moosicbox_server_simulator ${{ runner.debug && '-vv' }} \
                           --no-default-features \
                           --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}
                   done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')"
