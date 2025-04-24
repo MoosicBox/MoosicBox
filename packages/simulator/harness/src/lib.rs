@@ -56,10 +56,45 @@ fn run_info() -> String {
     format!("seed={seed}{extra}", seed = *SEED)
 }
 
-fn get_run_command() -> String {
-    use std::env::{args, vars};
+fn get_cargoified_args() -> Vec<String> {
+    let mut args = std::env::args().collect::<Vec<_>>();
 
-    let args = args().collect::<Vec<_>>();
+    let Some(cmd) = args.first() else {
+        return args;
+    };
+
+    let mut components = cmd.split('/');
+
+    if matches!(components.next(), Some("target")) {
+        let Some(profile) = components.next() else {
+            return args;
+        };
+        let profile = profile.to_string();
+
+        let Some(binary_name) = components.next() else {
+            return args;
+        };
+        let binary_name = binary_name.to_string();
+
+        args.remove(0);
+        args.insert(0, binary_name);
+        args.insert(0, "-p".to_string());
+
+        if profile == "release" {
+            args.insert(0, "--release".to_string());
+        } else if profile != "debug" {
+            args.insert(0, profile);
+            args.insert(0, "--profile".to_string());
+        }
+        args.insert(0, "run".to_string());
+        args.insert(0, "cargo".to_string());
+    }
+
+    args
+}
+
+fn get_run_command() -> String {
+    let args = get_cargoified_args();
     let quoted_args = args
         .iter()
         .map(|x| shell_words::quote(x.as_str()))
@@ -68,7 +103,7 @@ fn get_run_command() -> String {
 
     let mut env_vars = String::new();
 
-    for (name, value) in vars() {
+    for (name, value) in std::env::vars() {
         use std::fmt::Write as _;
 
         if !name.starts_with("SIMULATOR_") {
