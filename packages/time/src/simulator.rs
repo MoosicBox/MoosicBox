@@ -31,10 +31,12 @@ pub fn now() -> SystemTime {
     let epoch_offset = *EPOCH_OFFSET;
     let step_multiplier = *STEP_MULTIPLIER;
     let step = u64::from(moosicbox_simulator_utils::step());
-    let mult_step = step * step_multiplier;
+    let mult_step = step.checked_mul(step_multiplier).unwrap();
     let millis = epoch_offset.checked_add(mult_step).unwrap();
     log::debug!(
         "now: epoch_offset={epoch_offset} step={step} step_multiplier={step_multiplier} millis={millis}"
     );
-    UNIX_EPOCH + Duration::from_millis(millis)
+    UNIX_EPOCH
+        .checked_add(Duration::from_millis(millis))
+        .unwrap()
 }
