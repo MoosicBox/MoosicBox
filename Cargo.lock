@@ -7738,7 +7738,6 @@ name = "moosicbox_server_simulator"
 version = "0.1.0"
 dependencies = [
  "actix-web",
- "ctrlc",
  "log",
  "moosicbox_assert",
  "moosicbox_config",
@@ -7796,6 +7795,7 @@ dependencies = [
 name = "moosicbox_simulator_harness"
 version = "0.1.0"
 dependencies = [
+ "ctrlc",
  "getrandom 0.3.2",
  "log",
  "moosicbox_assert",
@@ -7803,6 +7803,7 @@ dependencies = [
  "moosicbox_http",
  "moosicbox_mdns",
  "moosicbox_random",
+ "moosicbox_simulator_utils",
  "moosicbox_tcp",
  "moosicbox_telemetry",
  "moosicbox_time",
@@ -7816,6 +7817,7 @@ name = "moosicbox_simulator_utils"
 version = "0.1.0"
 dependencies = [
  "getrandom 0.3.2",
+ "tokio-util",
 ]
 
 [[package]]

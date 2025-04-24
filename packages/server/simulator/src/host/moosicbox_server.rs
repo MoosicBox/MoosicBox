@@ -8,13 +8,11 @@ use actix_web::dev::ServerHandle;
 use moosicbox_config::AppType;
 use moosicbox_env_utils::default_env;
 use moosicbox_simulator_harness::{
-    rand::Rng as _,
+    random::RNG,
     turmoil::{self, Sim, net::TcpStream},
 };
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-
-use crate::RNG;
 
 pub const HOST: &str = "moosicbox_server";
 pub const PORT: u16 = 1234;
@@ -25,13 +23,13 @@ pub static HANDLE: LazyLock<Arc<Mutex<Option<ServerHandle>>>> =
 
 /// # Panics
 ///
-/// * If `RNG` `Mutex` fails to lock
+/// * If fails to find and open port within the specified range
 pub fn start(sim: &mut Sim<'_>, service_port: Option<u16>) {
     let service_port = service_port.unwrap_or_else(|| {
         openport::pick_unused_port(3000..=u16::MAX).expect("No open ports within acceptable range")
     });
     let host = default_env("BIND_ADDR", "0.0.0.0");
-    let actix_workers = Some(RNG.lock().unwrap().gen_range(1..=64_usize));
+    let actix_workers = Some(RNG.gen_range(1..=64_usize));
     #[cfg(feature = "telemetry")]
     let metrics_handler = std::sync::Arc::new(
         moosicbox_telemetry::get_http_metrics_handler().expect("Failed to init telemetry"),

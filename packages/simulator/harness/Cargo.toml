@@ -11,7 +11,8 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
+moosicbox_assert          = { version = "0.1.0", path = "../../assert", default-features = false }
+moosicbox_simulator_utils = { version = "0.1.0", path = "../utils", default-features = false }
 
 moosicbox_database_connection = { version = "0.1.0", path = "../../database_connection", optional = true, default-features = false, features = [
     "simulator",
@@ -38,6 +39,7 @@ moosicbox_upnp = { version = "0.1.0", path = "../../upnp", optional = true, defa
     "simulator",
 ] }
 
+ctrlc     = { workspace = true }
 getrandom = { workspace = true }
 log       = { workspace = true }
 rand      = { version = "=0.8.5" }

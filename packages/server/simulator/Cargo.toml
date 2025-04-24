@@ -32,7 +32,6 @@ moosicbox_telemetry = { version = "0.1.0", path = "../../telemetry", default-fea
 openport = { version = "0.1.1", path = "../../openport", default-features = false }
 
 actix-web  = { workspace = true }
-ctrlc      = { workspace = true }
 log        = { workspace = true }
 serde_json = { workspace = true }
 tokio      = { workspace = true }

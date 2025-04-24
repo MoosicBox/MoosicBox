@@ -1,8 +1,8 @@
 use moosicbox_simulator_harness::turmoil::Sim;
+use moosicbox_simulator_utils::SIMULATOR_CANCELLATION_TOKEN;
 use serde_json::Value;
 
 use crate::{
-    SIMULATOR_CANCELLATION_TOKEN,
     host::moosicbox_server::{HOST, PORT},
     http::{headers_contains_in_order, http_request, parse_http_response},
     try_connect,
@@ -12,29 +12,30 @@ pub fn start(sim: &mut Sim<'_>) {
     let addr = format!("{HOST}:{PORT}");
 
     sim.client("McHealthChecker", async move {
-        loop {
-            static TIMEOUT: u64 = 1000;
+        SIMULATOR_CANCELLATION_TOKEN
+            .run_until_cancelled(async move {
+                loop {
+                    static TIMEOUT: u64 = 1000;
 
-            log::info!("checking health");
+                    log::info!("checking health");
 
-            tokio::select! {
-                resp = assert_health(&addr) => {
-                    resp?;
-                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    tokio::select! {
+                        resp = assert_health(&addr) => {
+                            resp?;
+                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                        }
+                        () = tokio::time::sleep(std::time::Duration::from_secs(TIMEOUT)) => {
+                            return Err(Box::new(std::io::Error::new(
+                                std::io::ErrorKind::TimedOut,
+                                format!("Failed to get healthy response within {TIMEOUT} seconds")
+                            )) as Box<dyn std::error::Error>);
+                        }
+                    }
                 }
-                () = SIMULATOR_CANCELLATION_TOKEN.cancelled() => {
-                    break;
-                }
-                () = tokio::time::sleep(std::time::Duration::from_secs(TIMEOUT)) => {
-                    return Err(Box::new(std::io::Error::new(
-                        std::io::ErrorKind::TimedOut,
-                        format!("Failed to get healthy response within {TIMEOUT} seconds")
-                    )) as Box<dyn std::error::Error>);
-                }
-            }
-        }
-
-        Ok(())
+            })
+            .await
+            .transpose()
+            .map(|x| x.unwrap_or(()))
     });
 }
 
