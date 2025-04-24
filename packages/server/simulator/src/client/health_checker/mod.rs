@@ -1,36 +1,33 @@
-use moosicbox_simulator_harness::turmoil::Sim;
-use moosicbox_simulator_utils::SIMULATOR_CANCELLATION_TOKEN;
+use std::sync::LazyLock;
+
+use moosicbox_simulator_harness::{
+    plan::InteractionPlan as _, time::simulator::STEP_MULTIPLIER, turmoil::Sim,
+    utils::SIMULATOR_CANCELLATION_TOKEN,
+};
+use plan::{HealthCheckInteractionPlan, Interaction};
 use serde_json::Value;
 
+pub mod plan;
+
 use crate::{
-    host::moosicbox_server::{HOST, PORT},
     http::{headers_contains_in_order, http_request, parse_http_response},
     try_connect,
 };
 
 pub fn start(sim: &mut Sim<'_>) {
-    let addr = format!("{HOST}:{PORT}");
+    let mut plan = HealthCheckInteractionPlan::new().with_gen_interactions(1000);
 
-    sim.client("McHealthChecker", async move {
+    sim.client("HealthCheck", async move {
         SIMULATOR_CANCELLATION_TOKEN
             .run_until_cancelled(async move {
                 loop {
-                    static TIMEOUT: u64 = 1000;
-
-                    log::info!("checking health");
-
-                    tokio::select! {
-                        resp = assert_health(&addr) => {
-                            resp?;
-                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                        }
-                        () = tokio::time::sleep(std::time::Duration::from_secs(TIMEOUT)) => {
-                            return Err(Box::new(std::io::Error::new(
-                                std::io::ErrorKind::TimedOut,
-                                format!("Failed to get healthy response within {TIMEOUT} seconds")
-                            )) as Box<dyn std::error::Error>);
-                        }
+                    while let Some(interaction) = plan.step() {
+                        perform_interaction(interaction).await?;
+                        tokio::time::sleep(std::time::Duration::from_secs(*STEP_MULTIPLIER * 60))
+                            .await;
                     }
+
+                    plan.gen_interactions(1000);
                 }
             })
             .await
@@ -39,14 +36,49 @@ pub fn start(sim: &mut Sim<'_>) {
     });
 }
 
-async fn assert_health(addr: &str) -> Result<(), Box<dyn std::error::Error>> {
+async fn perform_interaction(interaction: &Interaction) -> Result<(), Box<dyn std::error::Error>> {
+    log::debug!("perform_interaction: interaction={interaction:?}");
+
+    match interaction {
+        Interaction::Sleep(duration) => {
+            log::debug!("perform_interaction: sleeping for duration={duration:?}");
+            tokio::time::sleep(*duration).await;
+        }
+        Interaction::HealthCheck(host) => {
+            log::debug!("perform_interaction: checking health for host={host}");
+            health_check(host).await?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn health_check(host: &str) -> Result<(), Box<dyn std::error::Error>> {
+    static TIMEOUT: LazyLock<u64> = LazyLock::new(|| 10 * *STEP_MULTIPLIER);
+
+    tokio::select! {
+        resp = assert_health(host) => {
+            resp?;
+        }
+        () = tokio::time::sleep(std::time::Duration::from_secs(*TIMEOUT)) => {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                format!("Failed to get healthy response within {} seconds", *TIMEOUT)
+            )) as Box<dyn std::error::Error>);
+        }
+    }
+
+    Ok(())
+}
+
+async fn assert_health(host: &str) -> Result<(), Box<dyn std::error::Error>> {
     let response = loop {
         log::debug!("[Client] Connecting to server...");
-        let mut stream = match try_connect(addr, 1).await {
+        let mut stream = match try_connect(host, 1).await {
             Ok(stream) => stream,
             Err(e) => {
                 log::error!("[Client] Failed to connect to server: {e:?}");
-                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                tokio::time::sleep(std::time::Duration::from_millis(*STEP_MULTIPLIER)).await;
                 continue;
             }
         };

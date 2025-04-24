@@ -8,18 +8,27 @@ use std::{
     time::Duration,
 };
 
-use host::moosicbox_server::HOST;
 use moosicbox_simulator_harness::turmoil::{self, Sim, net::TcpStream};
 
 pub mod client;
 pub mod host;
 pub mod http;
 
-pub static ACTIONS: LazyLock<Arc<Mutex<VecDeque<Action>>>> =
+static ACTIONS: LazyLock<Arc<Mutex<VecDeque<Action>>>> =
     LazyLock::new(|| Arc::new(Mutex::new(VecDeque::new())));
 
-pub enum Action {
-    Bounce,
+enum Action {
+    Bounce(String),
+}
+
+/// # Panics
+///
+/// * If the `ACTIONS` `Mutex` fails to lock
+pub fn queue_bounce(host: impl Into<String>) {
+    ACTIONS
+        .lock()
+        .unwrap()
+        .push_back(Action::Bounce(host.into()));
 }
 
 /// # Panics
@@ -29,9 +38,9 @@ pub fn handle_actions(sim: &mut Sim<'_>) {
     let actions = ACTIONS.lock().unwrap().drain(..).collect::<Vec<_>>();
     for action in actions {
         match action {
-            Action::Bounce => {
-                log::info!("bouncing '{HOST}'");
-                sim.bounce(HOST);
+            Action::Bounce(host) => {
+                log::debug!("bouncing '{host}'");
+                sim.bounce(host);
             }
         }
     }

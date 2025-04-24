@@ -1,7 +1,7 @@
 use moosicbox_simulator_harness::{random::RNG, turmoil::Sim};
 use moosicbox_simulator_utils::SIMULATOR_CANCELLATION_TOKEN;
 
-use crate::{ACTIONS, Action, host::moosicbox_server::HOST};
+use crate::{host::moosicbox_server::HOST, queue_bounce};
 
 /// # Panics
 ///
@@ -29,7 +29,7 @@ pub fn start(sim: &mut Sim<'_>) {
                         log::info!("stopping '{HOST}' gracefully={gracefully}");
                         handle.stop(gracefully).await;
                         log::info!("stopped '{HOST}' gracefully={gracefully}");
-                        ACTIONS.lock().unwrap().push_back(Action::Bounce);
+                        queue_bounce(HOST.to_string());
                     }
                 }
             })

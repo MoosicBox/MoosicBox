@@ -34,6 +34,7 @@ openport = { version = "0.1.1", path = "../../openport", default-features = fals
 actix-web  = { workspace = true }
 log        = { workspace = true }
 serde_json = { workspace = true }
+strum      = { workspace = true, features = ["derive"] }
 tokio      = { workspace = true }
 tokio-util = { workspace = true }
 
