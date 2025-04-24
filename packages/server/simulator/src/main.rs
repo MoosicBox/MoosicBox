@@ -24,7 +24,6 @@ impl SimBootstrap for Simulator {
 
         client::health_checker::start(sim);
         client::fault_injector::start(sim);
-        client::healer::start(sim);
     }
 
     fn on_step(&self, sim: &mut Sim<'_>) {
