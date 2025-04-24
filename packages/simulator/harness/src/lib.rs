@@ -56,6 +56,34 @@ fn run_info() -> String {
     format!("seed={seed}{extra}", seed = *SEED)
 }
 
+fn get_run_command() -> String {
+    use std::env::{args, vars};
+
+    let args = args().collect::<Vec<_>>();
+    let quoted_args = args
+        .iter()
+        .map(|x| shell_words::quote(x.as_str()))
+        .collect::<Vec<_>>();
+    let cmd = quoted_args.join(" ");
+
+    let mut env_vars = String::new();
+
+    for (name, value) in vars() {
+        use std::fmt::Write as _;
+
+        if !name.starts_with("SIMULATOR_") {
+            continue;
+        }
+        if name == "SIMULATOR_SEED" {
+            continue;
+        }
+
+        write!(env_vars, "{name}={} ", shell_words::quote(value.as_str())).unwrap();
+    }
+
+    format!("SIMULATOR_SEED={seed} {env_vars}{cmd}", seed = *SEED)
+}
+
 #[allow(clippy::cast_precision_loss)]
 fn run_info_end(successful: bool, real_time_millis: u128, sim_time_millis: u128) -> String {
     format!(
@@ -63,11 +91,14 @@ fn run_info_end(successful: bool, real_time_millis: u128, sim_time_millis: u128)
         {run_info}\n\
         successful={successful}\n\
         real_time_elapsed={real_time}\n\
-        simulated_time_elapsed={simulated_time} ({simulated_time_x:.2}x)",
+        simulated_time_elapsed={simulated_time} ({simulated_time_x:.2}x)\n\
+        \n\
+        To run again with this seed: `{cmd}`",
         run_info = run_info(),
         real_time = real_time_millis.into_formatted(),
         simulated_time = sim_time_millis.into_formatted(),
         simulated_time_x = sim_time_millis as f64 / real_time_millis as f64,
+        cmd = get_run_command(),
     )
 }
 

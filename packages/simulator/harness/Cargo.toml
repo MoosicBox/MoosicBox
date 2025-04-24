@@ -39,9 +39,10 @@ moosicbox_upnp = { version = "0.1.0", path = "../../upnp", optional = true, defa
     "simulator",
 ] }
 
-ctrlc   = { workspace = true }
-log     = { workspace = true }
-turmoil = { workspace = true }
+ctrlc       = { workspace = true }
+log         = { workspace = true }
+shell-words = { workspace = true }
+turmoil     = { workspace = true }
 
 [features]
 default = [
