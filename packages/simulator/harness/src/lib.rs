@@ -89,7 +89,13 @@ pub fn run_simulation(
 
     STEP.store(1, std::sync::atomic::Ordering::SeqCst);
 
-    log::info!("Server simulator starting\n{}", run_info());
+    println!(
+        "\n\
+        =========================== START ============================\n\
+        Server simulator starting\n{}\n\
+        ==============================================================\n",
+        run_info()
+    );
 
     bootstrap.init();
 
@@ -165,8 +171,11 @@ pub fn run_simulation(
     let real_time_millis = end.duration_since(start).unwrap().as_millis();
     let sim_time_millis = sim.elapsed().as_millis();
 
-    log::info!(
-        "Server simulator finished\n{}",
+    println!(
+        "\n\
+        =========================== FINISH ===========================\n\
+        Server simulator finished\n{}\n\
+        ==============================================================",
         run_info_end(
             resp.as_ref().is_ok_and(Result::is_ok),
             real_time_millis,
