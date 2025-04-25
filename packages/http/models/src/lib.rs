@@ -173,13 +173,8 @@ impl From<StatusCode> for u16 {
 }
 
 #[derive(Debug, thiserror::Error)]
+#[error("TryFromU16StatusCodeError")]
 pub struct TryFromU16StatusCodeError;
-
-impl std::fmt::Display for TryFromU16StatusCodeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("TryFromU16StatusCodeError")
-    }
-}
 
 impl TryFrom<u16> for StatusCode {
     type Error = TryFromU16StatusCodeError;
