@@ -39,7 +39,7 @@ pub use moosicbox_upnp as upnp;
 mod formatting;
 pub mod plan;
 
-fn run_info() -> String {
+fn run_info(props: &[(String, String)]) -> String {
     #[cfg(feature = "time")]
     let extra = {
         use moosicbox_time::simulator::{EPOCH_OFFSET, STEP_MULTIPLIER};
@@ -55,7 +55,14 @@ fn run_info() -> String {
     #[cfg(not(feature = "time"))]
     let extra = String::new();
 
-    format!("seed={seed}{extra}", seed = *SEED)
+    let mut props_str = String::new();
+    for (k, v) in props {
+        use std::fmt::Write as _;
+
+        write!(props_str, "\n{k}={v}").unwrap();
+    }
+
+    format!("seed={seed}{extra}{props_str}", seed = *SEED)
 }
 
 fn get_cargoified_args() -> Vec<String> {
@@ -88,6 +95,7 @@ fn get_cargoified_args() -> Vec<String> {
             args.insert(0, profile);
             args.insert(0, "--profile".to_string());
         }
+
         args.insert(0, "run".to_string());
         args.insert(0, "cargo".to_string());
     }
@@ -122,7 +130,12 @@ fn get_run_command() -> String {
 }
 
 #[allow(clippy::cast_precision_loss)]
-fn run_info_end(successful: bool, real_time_millis: u128, sim_time_millis: u128) -> String {
+fn run_info_end(
+    props: &[(String, String)],
+    successful: bool,
+    real_time_millis: u128,
+    sim_time_millis: u128,
+) -> String {
     format!(
         "\
         {run_info}\n\
@@ -131,7 +144,7 @@ fn run_info_end(successful: bool, real_time_millis: u128, sim_time_millis: u128)
         simulated_time_elapsed={simulated_time} ({simulated_time_x:.2}x)\n\
         \n\
         To run again with this seed: `{cmd}`",
-        run_info = run_info(),
+        run_info = run_info(props),
         real_time = real_time_millis.into_formatted(),
         simulated_time = sim_time_millis.into_formatted(),
         simulated_time_x = sim_time_millis as f64 / real_time_millis as f64,
@@ -157,12 +170,14 @@ pub fn run_simulation(
 
     STEP.store(1, std::sync::atomic::Ordering::SeqCst);
 
+    let props = bootstrap.props();
+
     println!(
         "\n\
         =========================== START ============================\n\
         Server simulator starting\n{}\n\
         ==============================================================\n",
-        run_info()
+        run_info(&props)
     );
 
     bootstrap.init();
@@ -245,6 +260,7 @@ pub fn run_simulation(
         Server simulator finished\n{}\n\
         ==============================================================",
         run_info_end(
+            &props,
             resp.as_ref().is_ok_and(Result::is_ok),
             real_time_millis,
             sim_time_millis,
@@ -268,6 +284,11 @@ fn sim_builder() -> turmoil::Builder {
 }
 
 pub trait SimBootstrap {
+    #[must_use]
+    fn props(&self) -> Vec<(String, String)> {
+        vec![]
+    }
+
     #[must_use]
     fn build_sim(&self, builder: turmoil::Builder) -> turmoil::Builder {
         builder
