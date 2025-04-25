@@ -29,7 +29,7 @@
     "devDependencies": {
         "@eslint/eslintrc": "^3.3.1",
         "@eslint/js": "^9.25.1",
-        "@pulumi/aws": "^6.77.1",
+        "@pulumi/aws": "^6.78.0",
         "@pulumi/pulumi": "^3.163.0",
         "@tsconfig/node18": "18.2.2",
         "@typescript-eslint/eslint-plugin": "^8.31.0",
@@ -40,7 +40,7 @@
         "eslint-plugin-node": "^11.1.0",
         "globals": "^15.15.0",
         "prettier": "^3.5.3",
-        "sst": "^3.13.17",
+        "sst": "^3.13.18",
         "typescript": "^5.8.3"
     }
 }
