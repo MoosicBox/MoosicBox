@@ -291,7 +291,10 @@ pub fn run_simulation(
 fn sim_builder() -> turmoil::Builder {
     let mut builder = turmoil::Builder::new();
 
-    builder.simulation_duration(Duration::MAX);
+    builder
+        .fail_rate(0.0)
+        .repair_rate(1.0)
+        .simulation_duration(Duration::MAX);
 
     #[cfg(feature = "time")]
     builder.tick_duration(Duration::from_millis(
