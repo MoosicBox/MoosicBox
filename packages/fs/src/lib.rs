@@ -10,10 +10,16 @@ pub mod std;
 pub mod tokio;
 
 #[cfg(all(feature = "sync", feature = "std"))]
-pub trait GenericSyncFile: Send + Sync + ::std::io::Read + ::std::io::Write {}
+pub trait GenericSyncFile:
+    Send + Sync + ::std::io::Read + ::std::io::Write + ::std::io::Seek
+{
+}
 
 #[cfg(all(feature = "async", feature = "tokio"))]
-pub trait GenericAsyncFile: Send + Sync + ::tokio::io::AsyncRead + ::tokio::io::AsyncWrite {}
+pub trait GenericAsyncFile:
+    Send + Sync + ::tokio::io::AsyncRead + ::tokio::io::AsyncWrite + ::tokio::io::AsyncSeek
+{
+}
 
 #[allow(unused)]
 macro_rules! impl_open_options {

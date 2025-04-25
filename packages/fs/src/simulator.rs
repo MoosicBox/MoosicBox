@@ -87,6 +87,23 @@ pub mod sync {
         }
     }
 
+    impl std::io::Seek for File {
+        fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+            self.position = match pos {
+                std::io::SeekFrom::Start(x) => x,
+                std::io::SeekFrom::End(x) => {
+                    u64::try_from(i64::try_from(self.data.lock().unwrap().len()).unwrap() - x)
+                        .unwrap()
+                }
+                std::io::SeekFrom::Current(x) => {
+                    u64::try_from(i64::try_from(self.position).unwrap() + x).unwrap()
+                }
+            };
+
+            Ok(self.position)
+        }
+    }
+
     impl OpenOptions {
         /// # Errors
         ///
@@ -226,6 +243,27 @@ pub mod unsync {
             }
 
             Poll::Ready(Ok(()))
+        }
+    }
+
+    impl tokio::io::AsyncSeek for File {
+        fn start_seek(
+            self: std::pin::Pin<&mut Self>,
+            position: std::io::SeekFrom,
+        ) -> std::io::Result<()> {
+            use std::io::Seek as _;
+
+            self.get_mut().seek(position)?;
+            Ok(())
+        }
+
+        fn poll_complete(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> Poll<std::io::Result<u64>> {
+            use std::io::Seek as _;
+
+            Poll::Ready(self.get_mut().stream_position())
         }
     }
 
