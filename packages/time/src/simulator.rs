@@ -6,8 +6,13 @@ use std::{
 use moosicbox_random::non_uniform_distribute_i32;
 
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-pub static EPOCH_OFFSET: LazyLock<u64> =
-    LazyLock::new(|| moosicbox_random::RNG.gen_range(1..100_000_000_000_000u64));
+pub static EPOCH_OFFSET: LazyLock<u64> = LazyLock::new(|| {
+    let value = moosicbox_random::RNG.gen_range(1..100_000_000_000_000u64);
+
+    std::env::var("SIMULATOR_EPOCH_OFFSET")
+        .ok()
+        .map_or(value, |x| x.parse::<u64>().unwrap())
+});
 
 pub static STEP_MULTIPLIER: LazyLock<u64> = LazyLock::new(|| {
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
