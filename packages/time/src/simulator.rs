@@ -16,15 +16,15 @@ pub static EPOCH_OFFSET: LazyLock<u64> = LazyLock::new(|| {
 
 pub static STEP_MULTIPLIER: LazyLock<u64> = LazyLock::new(|| {
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    std::env::var("SIMULATOR_STEP_MULTIPLIER").ok().map_or_else(
-        || {
-            let rng = &moosicbox_random::RNG;
-            let value = rng.gen_range(1..1_000_000);
-            let value = non_uniform_distribute_i32!(value, 10) as u64;
-            if value == 0 { 1 } else { value }
-        },
-        |x| x.parse::<u64>().unwrap(),
-    )
+    let value = {
+        let rng = &moosicbox_random::RNG;
+        let value = rng.gen_range(1..1_000_000);
+        let value = non_uniform_distribute_i32!(value, 10) as u64;
+        if value == 0 { 1 } else { value }
+    };
+    std::env::var("SIMULATOR_STEP_MULTIPLIER")
+        .ok()
+        .map_or(value, |x| x.parse::<u64>().unwrap())
 });
 
 /// # Panics
