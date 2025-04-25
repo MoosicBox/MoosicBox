@@ -17,6 +17,9 @@ required-features = []
 
 [dependencies]
 moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
+moosicbox_fs = { version = "0.1.0", path = "../../../fs", default-features = false, features = [
+    "std",
+] }
 moosicbox_logging = { version = "0.1.0", path = "../../../logging", default-features = false, features = [
     "free_log",
 ] }

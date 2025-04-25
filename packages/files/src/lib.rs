@@ -97,7 +97,7 @@ pub fn save_bytes_to_file(
 ) -> Result<(), std::io::Error> {
     std::fs::create_dir_all(path.parent().expect("No parent directory"))?;
 
-    let file = std::fs::OpenOptions::new()
+    let file = moosicbox_fs::sync::OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(start.is_none_or(|start| start == 0))
@@ -230,7 +230,7 @@ pub async fn save_bytes_stream_to_file_with_progress_listener<
 ) -> Result<(), SaveBytesStreamToFileError> {
     std::fs::create_dir_all(path.parent().expect("No parent directory"))?;
 
-    let file = tokio::fs::OpenOptions::new()
+    let file = moosicbox_fs::unsync::OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(start.is_none_or(|start| start == 0))

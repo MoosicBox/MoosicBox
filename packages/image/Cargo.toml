@@ -25,6 +25,9 @@ bytes = { workspace = true }
 clap = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
 log = { workspace = true }
+moosicbox_fs = { version = "0.1.0", path = "../fs", default-features = false, features = [
+    "std",
+] }
 profiling = { workspace = true, optional = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }

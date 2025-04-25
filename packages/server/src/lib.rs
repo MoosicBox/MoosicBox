@@ -449,7 +449,7 @@ pub async fn run<T>(
                     let CertifiedKey { cert, key_pair } =
                         generate_simple_self_signed(subject_alt_names).unwrap();
 
-                    let mut cert_file = std::fs::OpenOptions::new()
+                    let mut cert_file = moosicbox_fs::sync::OpenOptions::new()
                         .create(true) // To create a new file
                         .truncate(true)
                         .write(true)
@@ -459,7 +459,7 @@ pub async fn run<T>(
                         .write_all(cert.pem().as_bytes())
                         .expect("Failed to create cert file");
 
-                    let mut key_file = std::fs::OpenOptions::new()
+                    let mut key_file = moosicbox_fs::sync::OpenOptions::new()
                         .create(true) // To create a new file
                         .truncate(true)
                         .write(true)

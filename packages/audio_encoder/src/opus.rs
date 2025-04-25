@@ -1,7 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use std::fs::File;
-
+use moosicbox_fs::sync::File;
 use ogg::{PacketReader, PacketWriteEndInfo, PacketWriter};
 use thiserror::Error;
 
@@ -223,7 +222,7 @@ impl OpusWrite<'_> {
     #[must_use]
     pub fn new(path: &str) -> Self {
         let _ = std::fs::remove_file(path);
-        let file = std::fs::OpenOptions::new()
+        let file = moosicbox_fs::sync::OpenOptions::new()
             .create(true) // To create a new file
             .truncate(true)
             .write(true)

@@ -20,6 +20,10 @@ moosicbox_audio_decoder = { version = "0.1.0", path = "../audio_decoder", option
 moosicbox_audio_output = { version = "0.1.0", path = "../audio_output", optional = true, default-features = false }
 moosicbox_config = { version = "0.1.0", path = "../config", default-features = false }
 moosicbox_database = { version = "0.1.0", path = "../database", optional = true, default-features = false }
+moosicbox_fs = { version = "0.1.0", path = "../fs", default-features = false, features = [
+    "std",
+    "tokio",
+] }
 moosicbox_http = { version = "0.1.0", path = "../http", default-features = false, features = [
     "reqwest",
     "stream",

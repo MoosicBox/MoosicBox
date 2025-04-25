@@ -19,8 +19,11 @@ flacenc = { workspace = true, optional = true }
 
 # Opus dependencies
 audiopus = { workspace = true, optional = true }
-ogg      = { workspace = true, optional = true }
-opus     = { workspace = true, optional = true }
+moosicbox_fs = { version = "0.1.0", path = "../fs", optional = true, default-features = false, features = [
+    "std",
+] }
+ogg = { workspace = true, optional = true }
+opus = { workspace = true, optional = true }
 
 # Mp3 dependencies
 mp3lame-encoder = { workspace = true, optional = true }
@@ -36,4 +39,4 @@ fail-on-warnings = []
 aac  = ["dep:fdk-aac"]
 flac = ["dep:flacenc"]
 mp3  = ["dep:mp3lame-encoder"]
-opus = ["dep:audiopus", "dep:ogg", "dep:opus"]
+opus = ["dep:audiopus", "dep:moosicbox_fs", "dep:ogg", "dep:opus"]

@@ -47,6 +47,9 @@ moosicbox_files = { version = "0.1.0", path = "../files", default-features = fal
     "range",
     "track-range",
 ] }
+moosicbox_fs = { version = "0.1.0", path = "../fs", default-features = false, features = [
+    "std",
+] }
 moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
     "database",
 ] }

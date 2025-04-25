@@ -35,7 +35,7 @@ pub fn generate<P: AsRef<Path>>(bundled: bool, output: P) {
         bundled,
     };
 
-    let mut file = std::fs::OpenOptions::new()
+    let mut file = moosicbox_fs::sync::OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
