@@ -5,6 +5,7 @@
 use std::{
     any::Any,
     panic::AssertUnwindSafe,
+    sync::{Arc, Mutex},
     time::{Duration, SystemTime},
 };
 
@@ -164,6 +165,19 @@ fn run_info_end(
 pub fn run_simulation(
     bootstrap: &impl SimBootstrap,
 ) -> Result<Result<(), Box<dyn std::error::Error>>, Box<dyn Any + Send>> {
+    let panic = Arc::new(Mutex::new(None));
+    std::panic::set_hook(Box::new({
+        let prev_hook = std::panic::take_hook();
+        let panic = panic.clone();
+        move |x| {
+            *panic.lock().unwrap() = Some(x.to_string());
+            if !SIMULATOR_CANCELLATION_TOKEN.is_cancelled() {
+                cancel_simulation();
+            }
+            prev_hook(x);
+        }
+    }));
+
     ctrlc::set_handler(cancel_simulation).expect("Error setting Ctrl-C handler");
 
     let duration_secs = duration();
@@ -266,6 +280,10 @@ pub fn run_simulation(
             sim_time_millis,
         )
     );
+
+    if let Some(panic) = &*panic.lock().unwrap() {
+        eprintln!("{panic}");
+    }
 
     resp
 }
