@@ -1,11 +1,16 @@
-use std::{marker::PhantomData, net::SocketAddr, pin::pin};
+use std::{marker::PhantomData, net::SocketAddr};
 
 use async_trait::async_trait;
-use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::{Error, GenericTcpListener, GenericTcpStream};
+use crate::{
+    Error, GenericTcpListener, GenericTcpStream, GenericTcpStreamReadHalf,
+    GenericTcpStreamWriteHalf, impl_read_inner, impl_write_inner,
+};
 
 pub struct TcpListener(turmoil::net::TcpListener);
+pub struct TcpStream(turmoil::net::TcpStream);
+pub struct TcpStreamReadHalf(turmoil::net::tcp::OwnedReadHalf);
+pub struct TcpStreamWriteHalf(turmoil::net::tcp::OwnedWriteHalf);
 
 impl TcpListener {
     /// # Errors
@@ -24,6 +29,8 @@ impl crate::SimulatorTcpListener {
         Ok(Self(
             TcpListener(turmoil::net::TcpListener::bind(addr.into()).await?),
             PhantomData,
+            PhantomData,
+            PhantomData,
         ))
     }
 }
@@ -32,57 +39,25 @@ impl crate::SimulatorTcpListener {
 impl GenericTcpListener<crate::SimulatorTcpStream> for TcpListener {
     async fn accept(&self) -> Result<(crate::SimulatorTcpStream, SocketAddr), crate::Error> {
         let (stream, addr) = self.0.accept().await?;
-        Ok((crate::TcpStreamWrapper(TcpStream(stream)), addr))
+        Ok((
+            crate::TcpStreamWrapper(TcpStream(stream), PhantomData, PhantomData),
+            addr,
+        ))
     }
 }
 
-pub struct TcpStream(turmoil::net::TcpStream);
+impl GenericTcpStream<TcpStreamReadHalf, TcpStreamWriteHalf> for TcpStream {
+    fn into_split(self) -> (TcpStreamReadHalf, TcpStreamWriteHalf) {
+        let (r, w) = self.0.into_split();
 
-#[async_trait]
-impl GenericTcpStream for TcpStream {}
-
-impl AsyncRead for TcpStream {
-    fn poll_read(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-        buf: &mut tokio::io::ReadBuf<'_>,
-    ) -> std::task::Poll<std::io::Result<()>> {
-        let this = self.get_mut();
-        let inner = &mut this.0;
-        let inner = pin!(inner);
-        AsyncRead::poll_read(inner, cx, buf)
+        (TcpStreamReadHalf(r), TcpStreamWriteHalf(w))
     }
 }
 
-impl AsyncWrite for TcpStream {
-    fn poll_write(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-        buf: &[u8],
-    ) -> std::task::Poll<Result<usize, std::io::Error>> {
-        let this = self.get_mut();
-        let inner = &mut this.0;
-        let inner = pin!(inner);
-        AsyncWrite::poll_write(inner, cx, buf)
-    }
+impl GenericTcpStreamReadHalf for TcpStreamReadHalf {}
+impl GenericTcpStreamWriteHalf for TcpStreamWriteHalf {}
 
-    fn poll_flush(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), std::io::Error>> {
-        let this = self.get_mut();
-        let inner = &mut this.0;
-        let inner = pin!(inner);
-        AsyncWrite::poll_flush(inner, cx)
-    }
-
-    fn poll_shutdown(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), std::io::Error>> {
-        let this = self.get_mut();
-        let inner = &mut this.0;
-        let inner = pin!(inner);
-        AsyncWrite::poll_shutdown(inner, cx)
-    }
-}
+impl_read_inner!(TcpStream);
+impl_read_inner!(TcpStreamReadHalf);
+impl_write_inner!(TcpStream);
+impl_write_inner!(TcpStreamWriteHalf);
