@@ -343,7 +343,7 @@ tokio-tungstenite = { version = "0.26.2", features = [
     "rustls-tls-webpki-roots",
 ] }
 tokio-util = "0.7.15"
-toml = "0.8.20"
+toml = "0.8.21"
 tracing = "0.1.41"
 tracing-opentelemetry = { version = "0.30.0" }
 tracing-subscriber = "0.3.19"
