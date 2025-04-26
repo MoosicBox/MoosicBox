@@ -289,7 +289,7 @@ reqwest = { version = "0.12.15", default-features = false, features = [
 ] }
 roxmltree = "0.20"
 rubato = "=0.12.0"
-rupnp = { version = "2.0.0", features = ["full_device_spec"] }
+rupnp = { version = "3.0.0", features = ["full_device_spec"] }
 rusqlite = { version = "=0.32.1", features = ["bundled"] }
 rust_decimal = { version = "1.37.1", default-features = false }
 rust_decimal_macros = { version = "1.37.1", default-features = false }
