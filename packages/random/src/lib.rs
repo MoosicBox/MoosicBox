@@ -196,6 +196,21 @@ macro_rules! non_uniform_distribute_i32 {
     }};
 }
 
+#[must_use]
+#[cfg(any(feature = "simulator", feature = "rand"))]
+pub fn non_uniform_distribute_f64(value: f64, pow: f64, rng: &Rng) -> f64 {
+    let mult = rng.gen_range(0.0001..1.0f64).powf(pow);
+    value * mult
+}
+
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[must_use]
+#[cfg(any(feature = "simulator", feature = "rand"))]
+pub fn non_uniform_distribute_i32(value: i32, pow: i32, rng: &Rng) -> u64 {
+    let mult = rng.gen_range(0.0001..1.0f64).powi(pow);
+    (f64::from(value) * mult).round() as u64
+}
+
 #[cfg(feature = "simulator")]
 impl_rng!(simulator::SimulatorRng);
 
