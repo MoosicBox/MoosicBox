@@ -23,9 +23,11 @@ impl UpnpScanner for RupnpScanner {
         timeout: Duration,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<Device, rupnp::Error>> + Send>>, rupnp::Error>
     {
-        rupnp::discover(search_target, timeout).await.map(|x| {
-            Box::pin(x) as Pin<Box<dyn Stream<Item = Result<Device, rupnp::Error>> + Send>>
-        })
+        rupnp::discover(search_target, timeout, None)
+            .await
+            .map(|x| {
+                Box::pin(x) as Pin<Box<dyn Stream<Item = Result<Device, rupnp::Error>> + Send>>
+            })
     }
 }
 
