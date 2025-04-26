@@ -41,18 +41,18 @@ impl GenericRng for SimulatorRng {
 
 impl ::rand::RngCore for SimulatorRng {
     fn next_u32(&mut self) -> u32 {
-        self.0.lock().unwrap().next_u32()
+        <Self as GenericRng>::next_u32(self)
     }
 
     fn next_u64(&mut self) -> u64 {
-        self.0.lock().unwrap().next_u64()
+        <Self as GenericRng>::next_u64(self)
     }
 
     fn fill_bytes(&mut self, dest: &mut [u8]) {
-        self.0.lock().unwrap().fill_bytes(dest);
+        <Self as GenericRng>::fill_bytes(self, dest);
     }
 
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), ::rand::Error> {
-        self.0.lock().unwrap().try_fill_bytes(dest)
+        <Self as GenericRng>::try_fill_bytes(self, dest)
     }
 }
