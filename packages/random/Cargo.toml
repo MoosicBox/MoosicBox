@@ -11,8 +11,6 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_simulator_utils = { version = "0.1.0", path = "../simulator/utils", optional = true, default-features = false }
-
 log  = { workspace = true }
 rand = { version = "=0.8.5", features = ["small_rng"] }
 
@@ -22,4 +20,4 @@ default = ["rand", "simulator"]
 fail-on-warnings = []
 
 rand      = []
-simulator = ["dep:moosicbox_simulator_utils"]
+simulator = []

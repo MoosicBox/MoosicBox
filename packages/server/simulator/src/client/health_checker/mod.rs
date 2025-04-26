@@ -1,7 +1,7 @@
 use std::sync::LazyLock;
 
 use moosicbox_simulator_harness::{
-    CancellableSim, plan::InteractionPlan as _, time::simulator::STEP_MULTIPLIER, turmoil::Sim,
+    CancellableSim, plan::InteractionPlan as _, time::simulator::step_multiplier, turmoil::Sim,
 };
 use plan::{HealthCheckInteractionPlan, Interaction};
 use serde_json::Value;
@@ -20,7 +20,7 @@ pub fn start(sim: &mut Sim<'_>) {
         loop {
             while let Some(interaction) = plan.step() {
                 perform_interaction(interaction).await?;
-                tokio::time::sleep(std::time::Duration::from_secs(*STEP_MULTIPLIER * 60)).await;
+                tokio::time::sleep(std::time::Duration::from_secs(step_multiplier() * 60)).await;
             }
 
             plan.gen_interactions(1000);
@@ -46,7 +46,7 @@ async fn perform_interaction(interaction: &Interaction) -> Result<(), Box<dyn st
 }
 
 async fn health_check(host: &str) -> Result<(), Box<dyn std::error::Error>> {
-    static TIMEOUT: LazyLock<u64> = LazyLock::new(|| 10 * *STEP_MULTIPLIER);
+    static TIMEOUT: LazyLock<u64> = LazyLock::new(|| 10 * step_multiplier());
 
     tokio::select! {
         resp = assert_health(host) => {
@@ -70,7 +70,7 @@ async fn assert_health(host: &str) -> Result<(), Box<dyn std::error::Error>> {
             Ok(stream) => stream,
             Err(e) => {
                 log::error!("[Client] Failed to connect to server: {e:?}");
-                tokio::time::sleep(std::time::Duration::from_millis(*STEP_MULTIPLIER)).await;
+                tokio::time::sleep(std::time::Duration::from_millis(step_multiplier())).await;
                 continue;
             }
         };

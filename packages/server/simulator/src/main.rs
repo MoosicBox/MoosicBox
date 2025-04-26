@@ -34,5 +34,5 @@ impl SimBootstrap for Simulator {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     moosicbox_logging::init(None, None)?;
 
-    run_simulation(&Simulator).unwrap()
+    run_simulation(&Simulator)
 }

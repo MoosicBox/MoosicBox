@@ -7538,7 +7538,6 @@ name = "moosicbox_random"
 version = "0.1.0"
 dependencies = [
  "log",
- "moosicbox_simulator_utils",
  "rand 0.8.5",
 ]
 
@@ -7795,7 +7794,6 @@ dependencies = [
 name = "moosicbox_simulator_utils"
 version = "0.1.0"
 dependencies = [
- "getrandom 0.3.2",
  "tokio-util",
 ]
 

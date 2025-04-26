@@ -1,19 +1,70 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex, RwLock};
 
-use moosicbox_simulator_utils::SEED;
 use rand::{Rng, RngCore, SeedableRng, rngs::SmallRng};
 
-use crate::GenericRng;
+use crate::{GenericRng, RNG};
 
 pub struct SimulatorRng(Arc<Mutex<SmallRng>>);
 
+static INITIAL_SEED: LazyLock<u64> = LazyLock::new(|| {
+    std::env::var("SIMULATOR_SEED").ok().map_or_else(
+        || SmallRng::from_entropy().next_u64(),
+        |x| x.parse::<u64>().unwrap(),
+    )
+});
+
+#[must_use]
+pub fn initial_seed() -> u64 {
+    *INITIAL_SEED
+}
+
+static INITIAL_RNG: LazyLock<Mutex<SmallRng>> =
+    LazyLock::new(|| Mutex::new(SmallRng::seed_from_u64(*INITIAL_SEED)));
+static SEED: LazyLock<RwLock<u64>> = LazyLock::new(|| RwLock::new(*INITIAL_SEED));
+
+/// # Panics
+///
+/// * If fails to get a random `u64`
+#[must_use]
+pub fn gen_seed() -> u64 {
+    INITIAL_RNG.lock().unwrap().next_u64()
+}
+
+#[must_use]
+pub fn contains_fixed_seed() -> bool {
+    std::env::var("SIMULATOR_SEED").is_ok()
+}
+
+/// # Panics
+///
+/// * If the `SEED` `RwLock` fails to write to
+pub fn reset_seed() {
+    let seed = gen_seed();
+    *SEED.write().unwrap() = seed;
+    *RNG.0.lock().unwrap().0.lock().unwrap() = SmallRng::seed_from_u64(seed);
+}
+
+/// # Panics
+///
+/// * If the `SEED` `RwLock` fails to read from
+#[must_use]
+pub fn seed() -> u64 {
+    *SEED.read().unwrap()
+}
+
+/// # Panics
+///
+/// * If the `SEED` `RwLock` fails to write to
+pub fn reset_rng() {
+    *RNG.0.lock().unwrap().0.lock().unwrap() = SmallRng::seed_from_u64(seed());
+}
+
 impl SimulatorRng {
     pub fn new<T: Into<u64>, S: Into<Option<T>>>(seed: S) -> Self {
-        Self(Arc::new(Mutex::new(
-            seed.into()
-                .map(Into::into)
-                .map_or_else(|| SmallRng::seed_from_u64(*SEED), SmallRng::seed_from_u64),
-        )))
+        let seed = seed.into().map(Into::into);
+        Self(Arc::new(Mutex::new(SmallRng::seed_from_u64(
+            seed.unwrap_or_else(crate::simulator::seed),
+        ))))
     }
 }
 

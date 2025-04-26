@@ -11,7 +11,10 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert          = { version = "0.1.0", path = "../../assert", default-features = false }
+moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
+moosicbox_random = { version = "0.1.0", path = "../../random", default-features = false, features = [
+    "rand",
+] }
 moosicbox_simulator_utils = { version = "0.1.0", path = "../utils", default-features = false }
 
 moosicbox_database_connection = { version = "0.1.0", path = "../../database_connection", optional = true, default-features = false, features = [
@@ -24,9 +27,6 @@ moosicbox_http = { version = "0.1.0", path = "../../http", optional = true, defa
     "simulator",
 ] }
 moosicbox_mdns = { version = "0.1.0", path = "../../mdns", optional = true, default-features = false, features = [
-    "simulator",
-] }
-moosicbox_random = { version = "0.1.0", path = "../../random", optional = true, default-features = false, features = [
     "simulator",
 ] }
 moosicbox_tcp = { version = "0.1.0", path = "../../tcp", optional = true, default-features = false, features = [
@@ -66,7 +66,7 @@ database  = ["dep:moosicbox_database_connection"]
 fs        = ["dep:moosicbox_fs"]
 http      = ["dep:moosicbox_http"]
 mdns      = ["dep:moosicbox_mdns"]
-random    = ["dep:moosicbox_random"]
+random    = ["moosicbox_random/simulator"]
 tcp       = ["dep:moosicbox_tcp"]
 telemetry = ["dep:moosicbox_telemetry"]
 time      = ["dep:moosicbox_time"]
