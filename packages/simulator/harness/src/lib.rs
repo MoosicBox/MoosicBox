@@ -322,6 +322,8 @@ pub fn run_simulation(bootstrap: &impl SimBootstrap) -> Result<(), Box<dyn std::
         let real_time_millis = end.duration_since(start).unwrap().as_millis();
         let sim_time_millis = sim.elapsed().as_millis();
 
+        let panic = panic.lock().unwrap().clone();
+
         println!(
             "\n\
             =========================== FINISH ===========================\n\
@@ -330,14 +332,14 @@ pub fn run_simulation(bootstrap: &impl SimBootstrap) -> Result<(), Box<dyn std::
             run_info_end(
                 run_index,
                 &props,
-                resp.as_ref().is_ok_and(Result::is_ok),
+                resp.as_ref().is_ok_and(Result::is_ok) && panic.is_none(),
                 real_time_millis,
                 sim_time_millis,
             )
         );
 
-        if let Some(panic) = &*panic.lock().unwrap() {
-            return Err(panic.to_string().into());
+        if let Some(panic) = panic {
+            return Err(panic.into());
         }
 
         resp.unwrap()?;
