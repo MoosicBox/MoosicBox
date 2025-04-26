@@ -41,16 +41,9 @@ mod formatting;
 pub mod plan;
 
 static RUNS: LazyLock<u64> = LazyLock::new(|| {
-    let runs = moosicbox_random::RNG.gen_range(1..1000u64);
-    let runs = if duration() < u64::MAX && !moosicbox_random::simulator::contains_fixed_seed() {
-        runs
-    } else {
-        1
-    };
-
     std::env::var("SIMULATOR_RUNS")
         .ok()
-        .map_or(runs, |x| x.parse::<u64>().unwrap())
+        .map_or(1, |x| x.parse::<u64>().unwrap())
 });
 
 fn run_info(run_index: u64, props: &[(String, String)]) -> String {
