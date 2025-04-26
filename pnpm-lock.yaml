@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@pulumi/pulumi':
-        specifier: ^3.163.0
-        version: 3.163.0(typescript@5.8.3)
+        specifier: ^3.165.0
+        version: 3.165.0(typescript@5.8.3)
       '@tsconfig/node18':
         specifier: 18.2.2
         version: 18.2.2
@@ -48,8 +48,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.13.18
-        version: 3.13.18
+        specifier: ^3.13.19
+        version: 3.13.19
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
@@ -310,8 +310,8 @@ packages:
   '@protobufjs/utf8@1.1.0':
     resolution: {integrity: sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==}
 
-  '@pulumi/pulumi@3.163.0':
-    resolution: {integrity: sha512-GWiF52tzNKWxL1MyulRxfXbD+OaFs9Wmt2yATxCxz5JhJTW1JKQIAfi6sj0Hax0jSBM794T9FdAresb/myFFHA==}
+  '@pulumi/pulumi@3.165.0':
+    resolution: {integrity: sha512-9W7/vqOxzcUf00j3wblolkeLjC6+rbvb/hTqyVmrd86ByzLsZ0e6WZ2Bo/IPElqzw+r0SEDi+Sk451QEaO1ESg==}
     engines: {node: '>=18'}
     peerDependencies:
       ts-node: '>= 7.0.1 < 12'
@@ -386,8 +386,8 @@ packages:
   '@types/keyv@3.1.4':
     resolution: {integrity: sha512-BQ5aZNSCpj7D6K2ksrRCTmKRLEpnPvWDiLPfoGyhZ++8YtiK9d/3DBKPJgry359X/P1PfruyYwvnvwFjuEiEIg==}
 
-  '@types/node@22.15.1':
-    resolution: {integrity: sha512-gSZyd0Qmv7qvbd2fJ9HGdYmv1yhNdelIA4YOtN6vkcmSwFhthxSEsBgU/JYZcXjWT6DFzoATcHrc52Ckh8SeRA==}
+  '@types/node@22.15.2':
+    resolution: {integrity: sha512-uKXqKN9beGoMdBfcaTY1ecwz6ctxuJAcUlwE55938g0ZJ8lRxwAZqRz2AJ4pzpt5dHdTPMB863UZ0ESiFUcP7A==}
 
   '@types/responselike@1.0.3':
     resolution: {integrity: sha512-H/+L+UkTV33uf49PH5pCAUBVPNj2nDBXTN+qS1dOwyyg24l3CcicicCA7ca+HMvJBZcFgl5r8e+RR6elsb4Lyw==}
@@ -2182,33 +2182,33 @@ packages:
     resolution: {integrity: sha512-MGrFH9Z4NP9Iyhqn16sDtBpRRNJ0Y2hNa6D65h736fVSaPCHr4DM4sWUNvVaSuC+0OBGhwsrydQwmgfg5LncqQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
-  sst-darwin-arm64@3.13.18:
-    resolution: {integrity: sha512-0UF2ZFTehst85q2A1EjQ0l8lC51UykS+c1Eu6ltl24D4yjO99OpxIb3KFO4rGj276jyNnrXhHuJJJDKoPMs/tg==}
+  sst-darwin-arm64@3.13.19:
+    resolution: {integrity: sha512-rhkgcO1lGwcFaptxcThEZNbXYAdO7bu9Bcr3r9PtzY4YyE877SEjcyM0tnkeqKV8ApYXxx3/Xp3gbVWPLw0NUw==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.13.18:
-    resolution: {integrity: sha512-np317B2oVc8dy6STjTlZLKCfqb0/GBEzbsG8zhL0Dyol+XKzVMWKQPVQx7WfECdFlolH5w/L0T8xwasMvVOPtA==}
+  sst-darwin-x64@3.13.19:
+    resolution: {integrity: sha512-XN+mxQN/smLhes9irX2xVPPNlNj2p0SLmobKOQRPl8UtGtlvcVNPkX/C9WOz8xo5oVswP5D/D6JFzAm4wNSxOA==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.13.18:
-    resolution: {integrity: sha512-M+1F0lZI2xV3hogFcqOGcH/8jTB1MrQqORrU7twGN7e/8P+BiasVt5oXmm9e/nkmaz/77QZcYmxPWrmcgdH93A==}
+  sst-linux-arm64@3.13.19:
+    resolution: {integrity: sha512-pspJMX8dz9F0c6ifK19mBXACEhPeVbIZvgLmyJ0A0udq5NYXCo06CxgjHLmbonU9M8Y2kYHcFnM8nnz5cKZFdQ==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.13.18:
-    resolution: {integrity: sha512-HJgdkS3oPGWdCESLUNGMlu/D+QwK0dhD7hOfqb+j4PW7M91Wy05Fv5IKmr8dAeYxNwLTzMjbeiyzqei1L45Huw==}
+  sst-linux-x64@3.13.19:
+    resolution: {integrity: sha512-JjlRI50L+L2/xsSLhmqx5WFkfvWXiIzx4kK3zvvQ3YbZZp9/qAxndaj6jrC4rPZlT97iCOt7NBRu5HZfb4eEkQ==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.13.18:
-    resolution: {integrity: sha512-u3XoXI8z5D1PNF3h9pTVDYFzkoWMRF028Dat8043SSXxsc30YjI2Nw5NMG9eODI9pxWK8Y95UbTW/01HIStohA==}
+  sst-linux-x86@3.13.19:
+    resolution: {integrity: sha512-fr5x8owkrpy4mf1cbpwfG2N6yiOSzWyH3ncPPUAvjn0CcQWZpioxJfsR1FSw+qU7sEk1Z5ERNs7bhiVZ3rFwoQ==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.13.18:
-    resolution: {integrity: sha512-eh8FW9v4c+JZkaTlrjg/6pkMuR9++4zwqeoKcS75FAX6mzrJqbxbfVpUY3Ck1I2S/xggwVETwSzdvVez4bf32A==}
+  sst@3.13.19:
+    resolution: {integrity: sha512-m30XLFJLBA2GUPBk4wENzvj9rxlfa3UzbATsuz1NDWET/vzPcE/FFfgoKTQbRS6DuM1yWONG1bDebathlKsStQ==}
     hasBin: true
 
   statuses@2.0.1:
@@ -2822,7 +2822,7 @@ snapshots:
 
   '@protobufjs/utf8@1.1.0': {}
 
-  '@pulumi/pulumi@3.163.0(typescript@5.8.3)':
+  '@pulumi/pulumi@3.165.0(typescript@5.8.3)':
     dependencies:
       '@grpc/grpc-js': 1.13.3
       '@logdna/tail-file': 2.2.0
@@ -2913,7 +2913,7 @@ snapshots:
     dependencies:
       '@types/http-cache-semantics': 4.0.4
       '@types/keyv': 3.1.4
-      '@types/node': 22.15.1
+      '@types/node': 22.15.2
       '@types/responselike': 1.0.3
 
   '@types/google-protobuf@3.15.12': {}
@@ -2924,15 +2924,15 @@ snapshots:
 
   '@types/keyv@3.1.4':
     dependencies:
-      '@types/node': 22.15.1
+      '@types/node': 22.15.2
 
-  '@types/node@22.15.1':
+  '@types/node@22.15.2':
     dependencies:
       undici-types: 6.21.0
 
   '@types/responselike@1.0.3':
     dependencies:
-      '@types/node': 22.15.1
+      '@types/node': 22.15.2
 
   '@types/semver@7.7.0': {}
 
@@ -4695,7 +4695,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
-      '@types/node': 22.15.1
+      '@types/node': 22.15.2
       long: 5.3.2
 
   proxy-addr@2.0.7:
@@ -4991,22 +4991,22 @@ snapshots:
     dependencies:
       minipass: 7.1.2
 
-  sst-darwin-arm64@3.13.18:
+  sst-darwin-arm64@3.13.19:
     optional: true
 
-  sst-darwin-x64@3.13.18:
+  sst-darwin-x64@3.13.19:
     optional: true
 
-  sst-linux-arm64@3.13.18:
+  sst-linux-arm64@3.13.19:
     optional: true
 
-  sst-linux-x64@3.13.18:
+  sst-linux-x64@3.13.19:
     optional: true
 
-  sst-linux-x86@3.13.18:
+  sst-linux-x86@3.13.19:
     optional: true
 
-  sst@3.13.18:
+  sst@3.13.19:
     dependencies:
       aws-sdk: 2.1692.0
       aws4fetch: 1.0.18
@@ -5014,11 +5014,11 @@ snapshots:
       opencontrol: 0.0.6
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.13.18
-      sst-darwin-x64: 3.13.18
-      sst-linux-arm64: 3.13.18
-      sst-linux-x64: 3.13.18
-      sst-linux-x86: 3.13.18
+      sst-darwin-arm64: 3.13.19
+      sst-darwin-x64: 3.13.19
+      sst-linux-arm64: 3.13.19
+      sst-linux-x64: 3.13.19
+      sst-linux-x86: 3.13.19
     transitivePeerDependencies:
       - supports-color
 
