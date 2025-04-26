@@ -337,7 +337,7 @@ pub fn run_simulation(bootstrap: &impl SimBootstrap) -> Result<(), Box<dyn std::
         );
 
         if let Some(panic) = &*panic.lock().unwrap() {
-            eprintln!("{panic}");
+            return Err(panic.to_string().into());
         }
 
         resp.unwrap()?;
