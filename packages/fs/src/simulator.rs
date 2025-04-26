@@ -6,8 +6,15 @@ use std::{
 use bytes::BytesMut;
 
 #[allow(clippy::type_complexity)]
-static FILES: LazyLock<Arc<RwLock<BTreeMap<String, Arc<Mutex<BytesMut>>>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(BTreeMap::new())));
+static FILES: LazyLock<RwLock<BTreeMap<String, Arc<Mutex<BytesMut>>>>> =
+    LazyLock::new(|| RwLock::new(BTreeMap::new()));
+
+/// # Panics
+///
+/// * If the `FILES` `RwLock` fails to write to
+pub fn reset_fs() {
+    FILES.write().unwrap().clear();
+}
 
 macro_rules! path_to_str {
     ($path:expr) => {{
