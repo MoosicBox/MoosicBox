@@ -61,6 +61,8 @@ pub fn start(sim: &mut impl CancellableSim, service_port: Option<u16>) {
                     async move {
                         let actual_tcp_listener = bind_std_tcp_addr(&addr).await?;
 
+                        log::info!("'moosicbox' server TCP listener bound to addr={addr}");
+
                         let join_handle = moosicbox_server::run(
                             AppType::Server,
                             &host,
