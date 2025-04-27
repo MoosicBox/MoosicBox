@@ -15,3 +15,23 @@ features = ["default", "sqlite", "sqlite-rusqlite", "sqlite-sqlx"]
 
 [env]
 STATIC_TOKEN = { value = "123", features = ["default", "static-token-auth"] }
+
+[[config]]
+os = "windows"
+
+[[config]]
+os = "macos"
+
+[[config.dependencies]]
+command  = "brew install jack"
+features = ["jack"]
+
+[[config.dependencies]]
+command = "brew install automake autoconf libtool pulseaudio"
+features = [
+    "default",
+    "opus",
+    "pulseaudio",
+    "pulseaudio-simple",
+    "pulseaudio-standard",
+]
