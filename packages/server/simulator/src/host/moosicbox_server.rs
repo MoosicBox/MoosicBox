@@ -113,10 +113,16 @@ pub fn start(sim: &mut impl CancellableSim, service_port: Option<u16>) {
 async fn bind_std_tcp_addr(addr: &str) -> Result<std::net::TcpListener, std::io::Error> {
     let mut count = 0;
     Ok(loop {
-        let listener = TcpBuilder::new_v4()?
-            .reuse_address(true)?
-            .bind(addr)?
-            .listen(50);
+        let listener = TcpBuilder::new_v4()?;
+
+        #[cfg(not(windows))]
+        let listener = {
+            use net2::unix::UnixTcpBuilderExt as _;
+
+            listener.reuse_port(true)?
+        };
+
+        let listener = listener.reuse_address(true)?.bind(addr)?.listen(50);
 
         match listener {
             Ok(x) => break x,
