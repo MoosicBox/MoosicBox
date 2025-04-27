@@ -73,6 +73,9 @@ enum Commands {
         file: String,
 
         #[arg(long)]
+        os: Option<String>,
+
+        #[arg(long)]
         offset: Option<u16>,
 
         #[arg(long)]
@@ -200,6 +203,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Features {
             file,
+            os,
             offset,
             max,
             max_parallel,
@@ -264,6 +268,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 spread,
                                 specific_features.as_deref(),
                             )?
+                        };
+
+                        let packages = if let Some(os) = os.as_deref() {
+                            packages
+                                .into_iter()
+                                .filter(|x| {
+                                    x.get("os")
+                                        .is_some_and(|x| x.as_str().is_some_and(|x| x == os))
+                                })
+                                .collect()
+                        } else {
+                            packages
                         };
 
                         if let (Some(max_parallel), Some(chunked)) = (max_parallel, &mut chunked) {

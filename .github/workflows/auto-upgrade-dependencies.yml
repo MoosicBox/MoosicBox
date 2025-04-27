@@ -30,6 +30,7 @@ jobs:
                       cargo run -p clippier \
                           features \
                           packages/server \
+                          --os ubuntu \
                           -o json \
                           --features default \
                           | jq -rc \
