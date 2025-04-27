@@ -1,13 +1,11 @@
-use moosicbox_simulator_harness::{
-    CancellableSim, plan::InteractionPlan as _, random::RNG, turmoil::Sim,
-};
+use moosicbox_simulator_harness::{CancellableSim, plan::InteractionPlan as _, random::RNG};
 use plan::{FaultInjectionInteractionPlan, Interaction};
 
 pub mod plan;
 
 use crate::{host::moosicbox_server::HOST, queue_bounce};
 
-pub fn start(sim: &mut Sim<'_>) {
+pub fn start(sim: &mut impl CancellableSim) {
     log::debug!("Generating initial test plan");
 
     let mut plan = FaultInjectionInteractionPlan::new().with_gen_interactions(1000);

@@ -1,7 +1,7 @@
 use std::sync::LazyLock;
 
 use moosicbox_simulator_harness::{
-    CancellableSim, plan::InteractionPlan as _, time::simulator::step_multiplier, turmoil::Sim,
+    CancellableSim, plan::InteractionPlan as _, time::simulator::step_multiplier,
 };
 use plan::{HealthCheckInteractionPlan, Interaction};
 use serde_json::Value;
@@ -13,7 +13,7 @@ use crate::{
     try_connect,
 };
 
-pub fn start(sim: &mut Sim<'_>) {
+pub fn start(sim: &mut impl CancellableSim) {
     let mut plan = HealthCheckInteractionPlan::new().with_gen_interactions(1000);
 
     sim.client_until_cancelled("HealthCheck", async move {

@@ -8,7 +8,10 @@ use std::{
     time::Duration,
 };
 
-use moosicbox_simulator_harness::turmoil::{self, Sim, net::TcpStream};
+use moosicbox_simulator_harness::{
+    CancellableSim,
+    turmoil::{self, net::TcpStream},
+};
 
 pub mod client;
 pub mod host;
@@ -34,7 +37,7 @@ pub fn queue_bounce(host: impl Into<String>) {
 /// # Panics
 ///
 /// * If `ACTIONS` `Mutex` fails to lock
-pub fn handle_actions(sim: &mut Sim<'_>) {
+pub fn handle_actions(sim: &mut impl CancellableSim) {
     let actions = ACTIONS.lock().unwrap().drain(..).collect::<Vec<_>>();
     for action in actions {
         match action {

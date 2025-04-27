@@ -8,9 +8,13 @@ use actix_web::dev::ServerHandle;
 use moosicbox_config::AppType;
 use moosicbox_env_utils::default_env;
 use moosicbox_simulator_harness::{
+    CancellableSim,
     random::RNG,
-    turmoil::{self, Sim, net::TcpStream},
+    time::simulator::step_multiplier,
+    turmoil::{self, net::TcpStream},
+    utils::simulator_cancellation_token,
 };
+use net2::{TcpBuilder, unix::UnixTcpBuilderExt};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -24,7 +28,7 @@ pub static HANDLE: LazyLock<Arc<Mutex<Option<ServerHandle>>>> =
 /// # Panics
 ///
 /// * If fails to find and open port within the specified range
-pub fn start(sim: &mut Sim<'_>, service_port: Option<u16>) {
+pub fn start(sim: &mut impl CancellableSim, service_port: Option<u16>) {
     let service_port = service_port.unwrap_or_else(|| {
         openport::pick_unused_port(3000..=u16::MAX).expect("No open ports within acceptable range")
     });
@@ -50,35 +54,53 @@ pub fn start(sim: &mut Sim<'_>, service_port: Option<u16>) {
         let addr = addr.clone();
         async move {
             log::info!("starting 'moosicbox' server");
-            let actual_tcp_listener = bind_std_tcp_addr(&addr).await?;
 
-            let join_handle = moosicbox_server::run(
-                AppType::Server,
-                &host,
-                service_port,
-                actix_workers,
-                Some(actual_tcp_listener),
-                #[cfg(feature = "player")]
-                true,
-                #[cfg(feature = "upnp")]
-                true,
-                #[cfg(feature = "telemetry")]
-                metrics_handler,
-                move |handle| {
-                    *HANDLE.lock().unwrap() = Some(handle);
-                    if token.is_cancelled() {
-                        moosicbox_assert::die!("already cancelled");
+            let join_handle: Option<_> = simulator_cancellation_token()
+                .run_until_cancelled({
+                    let addr = addr.clone();
+                    async move {
+                        let actual_tcp_listener = bind_std_tcp_addr(&addr).await?;
+
+                        let join_handle = moosicbox_server::run(
+                            AppType::Server,
+                            &host,
+                            service_port,
+                            actix_workers,
+                            Some(actual_tcp_listener),
+                            #[cfg(feature = "player")]
+                            true,
+                            #[cfg(feature = "upnp")]
+                            true,
+                            #[cfg(feature = "telemetry")]
+                            metrics_handler,
+                            move |handle| {
+                                *HANDLE.lock().unwrap() = Some(handle);
+                                if token.is_cancelled() {
+                                    moosicbox_assert::die!("already cancelled");
+                                }
+                                log::info!("moosicbox server started");
+                                start_tcp_listen(&addr, token)
+                            },
+                        )
+                        .await?;
+
+                        Ok::<_, Box<dyn std::error::Error>>(join_handle)
                     }
-                    log::info!("moosicbox server started");
-                    start_tcp_listen(&addr, token)
-                },
-            )
-            .await?;
+                })
+                .await;
+
+            let binding = HANDLE.lock().unwrap().take().clone();
+            if let Some(existing) = binding {
+                log::info!("stopping existing 'moosicbox' server");
+                existing.stop(true).await;
+            }
 
             log::info!("moosicbox server closed");
 
-            if let Err(e) = join_handle.await? {
-                log::error!("moosicbox_server error: {e:?}");
+            if let Some(join_handle) = join_handle {
+                if let Err(e) = join_handle?.await? {
+                    log::error!("moosicbox_server error: {e:?}");
+                }
             }
 
             log::info!("moosicbox server read loop closed");
@@ -91,7 +113,13 @@ pub fn start(sim: &mut Sim<'_>, service_port: Option<u16>) {
 async fn bind_std_tcp_addr(addr: &str) -> Result<std::net::TcpListener, std::io::Error> {
     let mut count = 0;
     Ok(loop {
-        match std::net::TcpListener::bind(addr) {
+        let listener = TcpBuilder::new_v4()?
+            .reuse_address(true)?
+            .reuse_port(true)?
+            .bind(addr)?
+            .listen(50);
+
+        match listener {
             Ok(x) => break x,
             Err(e) => {
                 const MAX_ATTEMPTS: usize = 100;
@@ -104,7 +132,7 @@ async fn bind_std_tcp_addr(addr: &str) -> Result<std::net::TcpListener, std::io:
                     return Err(e);
                 }
 
-                tokio::time::sleep(Duration::from_millis(20000)).await;
+                tokio::time::sleep(Duration::from_millis(step_multiplier() * 10)).await;
             }
         }
     })

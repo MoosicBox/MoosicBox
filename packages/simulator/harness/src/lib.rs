@@ -242,9 +242,11 @@ pub fn run_simulation(bootstrap: &impl SimBootstrap) -> Result<(), Box<dyn std::
 
         let builder = bootstrap.build_sim(sim_builder());
         #[cfg(feature = "random")]
-        let mut sim = builder.build_with_rng(Box::new(moosicbox_random::RNG.clone()));
+        let sim = builder.build_with_rng(Box::new(moosicbox_random::RNG.clone()));
         #[cfg(not(feature = "random"))]
-        let mut sim = builder.build();
+        let sim = builder.build();
+
+        let mut managed_sim = ManagedSim::new(sim);
 
         let props = bootstrap.props();
 
@@ -258,7 +260,7 @@ pub fn run_simulation(bootstrap: &impl SimBootstrap) -> Result<(), Box<dyn std::
 
         let start = SystemTime::now();
 
-        bootstrap.on_start(&mut sim);
+        bootstrap.on_start(&mut managed_sim);
 
         let resp = std::panic::catch_unwind(AssertUnwindSafe(|| {
             let print_step = |sim: &Sim<'_>, step| {
@@ -279,24 +281,32 @@ pub fn run_simulation(bootstrap: &impl SimBootstrap) -> Result<(), Box<dyn std::
                 }
             };
 
-            while !simulator_cancellation_token().is_cancelled() {
-                let step = step_next();
+            loop {
+                if !simulator_cancellation_token().is_cancelled() {
+                    let step = step_next();
 
-                if duration_secs < u64::MAX
-                    && SystemTime::now().duration_since(start).unwrap().as_secs() >= duration_secs
-                {
-                    print_step(&sim, step);
-                    break;
+                    if duration_secs < u64::MAX
+                        && SystemTime::now().duration_since(start).unwrap().as_secs()
+                            >= duration_secs
+                    {
+                        print_step(&managed_sim.sim, step);
+                        cancel_simulation();
+                    }
+
+                    if step % 1000 == 0 {
+                        print_step(&managed_sim.sim, step);
+                    }
+
+                    bootstrap.on_step(&mut managed_sim);
                 }
 
-                if step % 1000 == 0 {
-                    print_step(&sim, step);
-                }
-
-                bootstrap.on_step(&mut sim);
-
-                match sim.step() {
-                    Ok(..) => {}
+                match managed_sim.sim.step() {
+                    Ok(completed) => {
+                        if completed {
+                            log::debug!("sim completed");
+                            break;
+                        }
+                    }
                     Err(e) => {
                         let message = e.to_string();
                         if message.starts_with("Ran for duration: ")
@@ -309,18 +319,16 @@ pub fn run_simulation(bootstrap: &impl SimBootstrap) -> Result<(), Box<dyn std::
                 }
             }
 
-            if !simulator_cancellation_token().is_cancelled() {
-                cancel_simulation();
-            }
-
             Ok(())
         }));
 
-        bootstrap.on_end(&mut sim);
+        bootstrap.on_end(&mut managed_sim);
 
         let end = SystemTime::now();
         let real_time_millis = end.duration_since(start).unwrap().as_millis();
-        let sim_time_millis = sim.elapsed().as_millis();
+        let sim_time_millis = managed_sim.sim.elapsed().as_millis();
+
+        managed_sim.shutdown();
 
         let panic = panic.lock().unwrap().clone();
 
@@ -383,14 +391,25 @@ pub trait SimBootstrap {
 
     fn init(&self) {}
 
-    fn on_start(&self, #[allow(unused)] sim: &mut Sim<'_>) {}
+    fn on_start(&self, #[allow(unused)] sim: &mut impl CancellableSim) {}
 
-    fn on_step(&self, #[allow(unused)] sim: &mut Sim<'_>) {}
+    fn on_step(&self, #[allow(unused)] sim: &mut impl CancellableSim) {}
 
-    fn on_end(&self, #[allow(unused)] sim: &mut Sim<'_>) {}
+    fn on_end(&self, #[allow(unused)] sim: &mut impl CancellableSim) {}
 }
 
 pub trait CancellableSim {
+    fn bounce(&mut self, host: impl Into<String>);
+
+    fn host<
+        F: Fn() -> Fut + 'static,
+        Fut: Future<Output = Result<(), Box<dyn std::error::Error>>> + 'static,
+    >(
+        &mut self,
+        name: &str,
+        action: F,
+    );
+
     fn client_until_cancelled(
         &mut self,
         name: &str,
@@ -398,13 +417,43 @@ pub trait CancellableSim {
     );
 }
 
-impl CancellableSim for Sim<'_> {
+struct ManagedSim<'a> {
+    sim: Sim<'a>,
+}
+
+impl<'a> ManagedSim<'a> {
+    const fn new(sim: Sim<'a>) -> Self {
+        Self { sim }
+    }
+
+    #[allow(clippy::unused_self)]
+    fn shutdown(self) {
+        cancel_simulation();
+    }
+}
+
+impl CancellableSim for ManagedSim<'_> {
+    fn bounce(&mut self, host: impl Into<String>) {
+        Sim::bounce(&mut self.sim, host.into());
+    }
+
+    fn host<
+        F: Fn() -> Fut + 'static,
+        Fut: Future<Output = Result<(), Box<dyn std::error::Error>>> + 'static,
+    >(
+        &mut self,
+        name: &str,
+        action: F,
+    ) {
+        Sim::host(&mut self.sim, name, action);
+    }
+
     fn client_until_cancelled(
         &mut self,
         name: &str,
         action: impl Future<Output = Result<(), Box<dyn std::error::Error>>> + 'static,
     ) {
-        client_until_cancelled(self, name, action);
+        client_until_cancelled(&mut self.sim, name, action);
     }
 }
 

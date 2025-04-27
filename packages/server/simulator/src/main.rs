@@ -5,7 +5,7 @@
 use std::sync::LazyLock;
 
 use moosicbox_server_simulator::{client, handle_actions, host};
-use moosicbox_simulator_harness::{SimBootstrap, run_simulation, turmoil::Sim};
+use moosicbox_simulator_harness::{CancellableSim, SimBootstrap, run_simulation};
 
 static PORT: LazyLock<Option<u16>> = LazyLock::new(|| {
     std::env::var("PORT")
@@ -19,14 +19,14 @@ static PORT: LazyLock<Option<u16>> = LazyLock::new(|| {
 pub struct Simulator;
 
 impl SimBootstrap for Simulator {
-    fn on_start(&self, sim: &mut Sim<'_>) {
+    fn on_start(&self, sim: &mut impl CancellableSim) {
         host::moosicbox_server::start(sim, *PORT);
 
         client::health_checker::start(sim);
         client::fault_injector::start(sim);
     }
 
-    fn on_step(&self, sim: &mut Sim<'_>) {
+    fn on_step(&self, sim: &mut impl CancellableSim) {
         handle_actions(sim);
     }
 }
