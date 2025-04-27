@@ -14,7 +14,7 @@ use moosicbox_simulator_harness::{
     turmoil::{self, net::TcpStream},
     utils::simulator_cancellation_token,
 };
-use net2::{TcpBuilder, unix::UnixTcpBuilderExt};
+use net2::TcpBuilder;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -115,7 +115,6 @@ async fn bind_std_tcp_addr(addr: &str) -> Result<std::net::TcpListener, std::io:
     Ok(loop {
         let listener = TcpBuilder::new_v4()?
             .reuse_address(true)?
-            .reuse_port(true)?
             .bind(addr)?
             .listen(50);
 
