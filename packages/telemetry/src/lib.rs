@@ -85,6 +85,27 @@ pub trait HttpMetricsHandler: Send + Sync + std::fmt::Debug {
     fn request_middleware(&self) -> RequestMetrics;
 }
 
+#[derive(Debug)]
+#[cfg(all(feature = "actix", not(feature = "simulator")))]
+pub struct StubHttpMetricsHandler;
+
+#[cfg(all(feature = "actix", not(feature = "simulator")))]
+impl crate::HttpMetricsHandler for StubHttpMetricsHandler {
+    fn call(
+        &self,
+        _request: HttpRequest,
+    ) -> LocalBoxFuture<'static, Result<actix_web::HttpResponse<String>, actix_web::error::Error>>
+    {
+        Box::pin(futures_util::future::ok(
+            actix_web::HttpResponse::with_body(actix_web::http::StatusCode::OK, String::new()),
+        ))
+    }
+
+    fn request_middleware(&self) -> RequestMetrics {
+        RequestMetrics::builder().build()
+    }
+}
+
 /// # Errors
 ///
 /// * If the Prometheus exporter fails to build
@@ -97,7 +118,7 @@ pub fn get_http_metrics_handler() -> Result<Box<dyn HttpMetricsHandler>, MetricE
 
     #[cfg(not(feature = "simulator"))]
     {
-        Ok(Box::new(simulator::SimulatorHttpMetricsHandler))
+        Ok(Box::new(StubHttpMetricsHandler))
     }
 }
 

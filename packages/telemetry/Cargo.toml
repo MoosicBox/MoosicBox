@@ -13,9 +13,9 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
 moosicbox_env_utils = { version = "0.1.0", path = "../env_utils", default-features = false }
-moosicbox_logging = { version = "0.1.0", path = "../logging", features = [
+moosicbox_logging = { version = "0.1.0", path = "../logging", default-features = false, features = [
     "free_log",
-], default-features = false }
+] }
 
 actix-web                = { workspace = true, optional = true }
 actix-web-opentelemetry  = { workspace = true, optional = true }
@@ -35,11 +35,6 @@ default = ["actix", "simulator"]
 
 fail-on-warnings = []
 
-actix = [
-    "dep:actix-web",
-    "dep:actix-web-opentelemetry",
-    "dep:futures-util",
-    "simulator",
-]
+actix = ["dep:actix-web", "dep:actix-web-opentelemetry", "dep:futures-util"]
 
 simulator = ["dep:tracing-subscriber"]
