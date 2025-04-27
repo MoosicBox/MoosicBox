@@ -28,7 +28,12 @@ pub fn reset_epoch_offset() {
 /// * If the `EPOCH_OFFSET` `RwLock` fails to read from
 #[must_use]
 pub fn epoch_offset() -> u64 {
-    EPOCH_OFFSET.read().unwrap().unwrap()
+    let value = { *EPOCH_OFFSET.read().unwrap() };
+    value.unwrap_or_else(|| {
+        let value = gen_epoch_offset();
+        *EPOCH_OFFSET.write().unwrap() = Some(value);
+        value
+    })
 }
 
 static STEP_MULTIPLIER: LazyLock<RwLock<Option<u64>>> = LazyLock::new(|| RwLock::new(None));
@@ -58,7 +63,12 @@ pub fn reset_step_multiplier() {
 /// * If the `STEP_MULTIPLIER` `RwLock` fails to read from
 #[must_use]
 pub fn step_multiplier() -> u64 {
-    STEP_MULTIPLIER.read().unwrap().unwrap()
+    let value = { *STEP_MULTIPLIER.read().unwrap() };
+    value.unwrap_or_else(|| {
+        let value = gen_epoch_offset();
+        *STEP_MULTIPLIER.write().unwrap() = Some(value);
+        value
+    })
 }
 
 /// # Panics
