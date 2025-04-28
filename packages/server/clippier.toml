@@ -1,3 +1,6 @@
+[env]
+STATIC_TOKEN = { value = "123", features = ["default", "static-token-auth"] }
+
 [[config]]
 os = "ubuntu"
 
@@ -13,15 +16,11 @@ features = ["default", "pulseaudio", "pulseaudio-simple", "pulseaudio-standard"]
 command  = "sudo apt-get update && sudo apt-get install libsqlite3-dev"
 features = ["default", "sqlite", "sqlite-rusqlite", "sqlite-sqlx"]
 
-[env]
-STATIC_TOKEN = { value = "123", features = ["default", "static-token-auth"] }
-
 [[config]]
 os = "windows"
 
 [config.env]
-BIND_ADDR    = "127.0.0.1"
-STATIC_TOKEN = { value = "123", features = ["default", "static-token-auth"] }
+BIND_ADDR = "127.0.0.1"
 
 [[config.dependencies]]
 command  = 'vcpkg integrate install'
@@ -33,9 +32,6 @@ features = ["default", "postgres-openssl", "tls"]
 
 [[config]]
 os = "macos"
-
-[config.env]
-STATIC_TOKEN = { value = "123", features = ["default", "static-token-auth"] }
 
 [[config.dependencies]]
 command  = "brew install jack"
