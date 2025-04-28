@@ -177,12 +177,7 @@ jobs:
                                       "ciToolchains": (.ciToolchains),
                                       "env": (.env)
                                   }
-                                  | del(.requiredFeatures | nulls)
-                                  | del(.dependencies | nulls)
-                                  | del(.toolchains | nulls)
-                                  | del(.ciSteps | nulls)
-                                  | del(.ciToolchains | nulls)
-                                  | del(.env | nulls)
+                                  | del(.. | nulls)
                               ]'
                   )
                   echo "Using matrix (raw):"
