@@ -46,7 +46,7 @@ jobs:
                                       "toolchains": (.toolchains),
                                       "ciSteps": (.ciSteps),
                                       "ciToolchains": (.ciToolchains),
-                                      "env": (.env)
+                                      "env": (if .env != null then .env | gsub("\n";" ") else null end)
                                   }
                                   | del(.. | nulls)
                               ]'
