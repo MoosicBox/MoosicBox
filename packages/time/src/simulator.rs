@@ -3,8 +3,6 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use moosicbox_random::non_uniform_distribute_i32;
-
 static EPOCH_OFFSET: LazyLock<RwLock<Option<u64>>> = LazyLock::new(|| RwLock::new(None));
 
 fn gen_epoch_offset() -> u64 {
@@ -41,8 +39,7 @@ static STEP_MULTIPLIER: LazyLock<RwLock<Option<u64>>> = LazyLock::new(|| RwLock:
 fn gen_step_multiplier() -> u64 {
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let value = {
-        let value = moosicbox_random::RNG.gen_range(1..1_000_000);
-        let value = non_uniform_distribute_i32!(value, 10) as u64;
+        let value = moosicbox_random::RNG.gen_range_disti(1..1_000_000, 10);
         if value == 0 { 1 } else { value }
     };
     std::env::var("SIMULATOR_STEP_MULTIPLIER")

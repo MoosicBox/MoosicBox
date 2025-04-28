@@ -143,6 +143,30 @@ macro_rules! impl_rng {
                 range.sample_single(&mut *self.0.lock().unwrap())
             }
 
+            pub fn gen_range_dist<T, R>(&self, range: R, dist: f64) -> T
+            where
+                T: ::rand::distributions::uniform::SampleUniform,
+                R: ::rand::distributions::uniform::SampleRange<T>,
+                T: F64Convertible,
+            {
+                assert!(!range.is_empty(), "cannot sample empty range");
+                let value = range.sample_single(&mut *self.0.lock().unwrap());
+                let value = non_uniform_distribute_f64(value.into_f64(), dist, self);
+                T::from_f64(value)
+            }
+
+            pub fn gen_range_disti<T, R>(&self, range: R, dist: i32) -> T
+            where
+                T: ::rand::distributions::uniform::SampleUniform,
+                R: ::rand::distributions::uniform::SampleRange<T>,
+                T: F64Convertible,
+            {
+                assert!(!range.is_empty(), "cannot sample empty range");
+                let value = range.sample_single(&mut *self.0.lock().unwrap());
+                let value = non_uniform_distribute_i32(value.into_f64(), dist, self);
+                T::from_f64(value)
+            }
+
             pub fn sample<T, D: ::rand::prelude::Distribution<T>>(&self, distr: D) -> T {
                 distr.sample(&mut *self.0.lock().unwrap())
             }
@@ -178,37 +202,68 @@ macro_rules! impl_rng {
     };
 }
 
-#[macro_export]
-macro_rules! non_uniform_distribute_f64 {
-    ($value:expr, $pow:expr $(,)?) => {{
-        let value = $value;
-        let mult = $crate::RNG.gen_range(0.0001..1.0f64).powf($pow);
-        (value as f64 * mult).round()
-    }};
+pub trait F64Convertible: Sized {
+    fn from_f64(f: f64) -> Self;
+    fn into_f64(self) -> f64;
 }
 
-#[macro_export]
-macro_rules! non_uniform_distribute_i32 {
-    ($value:expr, $pow:expr $(,)?) => {{
-        let value = $value;
-        let mult = $crate::RNG.gen_range(0.0001..1.0f64).powi($pow);
-        (value as f64 * mult).round()
-    }};
+macro_rules! impl_f64_convertible {
+    ($type:ty $(,)?) => {
+        impl F64Convertible for $type {
+            #[allow(clippy::cast_possible_truncation)]
+            fn from_f64(f: f64) -> Self {
+                f as Self
+            }
+
+            #[allow(clippy::cast_lossless)]
+            fn into_f64(self) -> f64 {
+                self as f64
+            }
+        }
+    };
 }
+
+macro_rules! impl_f64_round_convertible {
+    ($type:ty $(,)?) => {
+        impl F64Convertible for $type {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            fn from_f64(f: f64) -> Self {
+                f.round() as Self
+            }
+
+            #[allow(clippy::cast_precision_loss, clippy::cast_lossless)]
+            fn into_f64(self) -> f64 {
+                self as f64
+            }
+        }
+    };
+}
+
+impl_f64_convertible!(f32);
+impl_f64_convertible!(f64);
+
+impl_f64_round_convertible!(u8);
+impl_f64_round_convertible!(u16);
+impl_f64_round_convertible!(u32);
+impl_f64_round_convertible!(u64);
+impl_f64_round_convertible!(u128);
+
+impl_f64_round_convertible!(i8);
+impl_f64_round_convertible!(i16);
+impl_f64_round_convertible!(i32);
+impl_f64_round_convertible!(i64);
+impl_f64_round_convertible!(i128);
 
 #[must_use]
 #[cfg(any(feature = "simulator", feature = "rand"))]
 pub fn non_uniform_distribute_f64(value: f64, pow: f64, rng: &Rng) -> f64 {
-    let mult = rng.gen_range(0.0001..1.0f64).powf(pow);
-    value * mult
+    value * rng.gen_range(0.0001..1.0f64).powf(pow)
 }
 
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 #[must_use]
 #[cfg(any(feature = "simulator", feature = "rand"))]
-pub fn non_uniform_distribute_i32(value: i32, pow: i32, rng: &Rng) -> u64 {
-    let mult = rng.gen_range(0.0001..1.0f64).powi(pow);
-    (f64::from(value) * mult).round() as u64
+pub fn non_uniform_distribute_i32(value: f64, pow: i32, rng: &Rng) -> f64 {
+    value * rng.gen_range(0.0001..1.0f64).powi(pow)
 }
 
 #[cfg(feature = "simulator")]
