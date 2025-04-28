@@ -2229,6 +2229,7 @@ dependencies = [
  "moosicbox_logging",
  "serde",
  "serde_json",
+ "strum 0.27.1",
  "toml",
 ]
 

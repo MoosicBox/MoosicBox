@@ -11,6 +11,7 @@ use std::{
 use clap::{Parser, Subcommand, ValueEnum};
 use itertools::Itertools;
 use serde::Deserialize;
+use strum::{EnumDiscriminants, EnumIter, IntoDiscriminant};
 use toml::Value;
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -27,7 +28,9 @@ struct Args {
     cmd: Commands,
 }
 
-#[derive(Subcommand, Debug, Clone)]
+#[derive(Subcommand, Debug, Clone, EnumDiscriminants)]
+#[strum_discriminants(derive(EnumIter))]
+#[strum_discriminants(name(CommandType))]
 enum Commands {
     Dependencies {
         #[arg(index = 1)]
@@ -110,9 +113,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let args = Args::parse();
 
-    let cmd_dependencies = matches!(args.cmd, Commands::Dependencies { .. });
-    let cmd_environment = matches!(args.cmd, Commands::Environment { .. });
-    let cmd_ci_steps = matches!(args.cmd, Commands::CiSteps { .. });
+    let cmd_type = args.cmd.discriminant();
 
     match args.cmd {
         Commands::Dependencies {
@@ -177,14 +178,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     })
                 })
                 .filter_map(|x| {
-                    x.get(if cmd_dependencies {
-                        "dependencies"
-                    } else if cmd_environment {
-                        "env"
-                    } else if cmd_ci_steps {
-                        "ciSteps"
-                    } else {
-                        unimplemented!()
+                    x.get(match cmd_type {
+                        CommandType::Dependencies => "dependencies",
+                        CommandType::Environment => "env",
+                        CommandType::CiSteps => "ciSteps",
+                        CommandType::Features => unimplemented!(),
                     })
                     .and_then(|x| x.as_str())
                     .map(ToString::to_string)
