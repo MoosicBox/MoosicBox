@@ -13,11 +13,9 @@ version     = "0.1.0"
 [dependencies]
 hyperchad_actions = { version = "0.1.0", path = "../../../hyperchad/actions", default-features = false }
 hyperchad_renderer = { version = "0.1.0", path = "../../../hyperchad/renderer", default-features = false }
-hyperchad_renderer_datastar = { version = "0.1.0", path = "../../../hyperchad/renderer/datastar", optional = true, default-features = false }
 hyperchad_renderer_egui = { version = "0.1.0", path = "../../../hyperchad/renderer/egui", optional = true, default-features = false }
 hyperchad_renderer_fltk = { version = "0.1.0", path = "../../../hyperchad/renderer/fltk", optional = true, default-features = false }
 hyperchad_renderer_html = { version = "0.1.0", path = "../../../hyperchad/renderer/html", optional = true, default-features = false }
-hyperchad_renderer_htmx = { version = "0.1.0", path = "../../../hyperchad/renderer/htmx", optional = true, default-features = false }
 hyperchad_renderer_vanilla_js = { version = "0.1.0", path = "../../../hyperchad/renderer/vanilla_js", optional = true, default-features = false, features = [
     "hash",
     "script",
@@ -36,12 +34,10 @@ tokio     = { workspace = true, features = ["rt-multi-thread", "sync"] }
 [features]
 default = [
     "actix",
-    "datastar",
     "egui-wgpu",
     "fltk",
     "format",
     "html",
-    "htmx",
     "json",
     "lambda",
     "logic",
@@ -54,13 +50,11 @@ fail-on-warnings = []
 
 maud = ["hyperchad_renderer/maud"]
 
-datastar = ["dep:hyperchad_renderer_datastar", "html"]
 egui = ["dep:hyperchad_renderer_egui", "logic"]
 egui-glow = ["egui", "hyperchad_renderer_egui/glow"]
 egui-wgpu = ["egui", "hyperchad_renderer_egui/wgpu"]
 fltk = ["dep:hyperchad_renderer_fltk", "logic"]
 html = ["dep:hyperchad_renderer_html"]
-htmx = ["dep:hyperchad_renderer_htmx", "html"]
 vanilla-js = [
     "dep:hyperchad_renderer_vanilla_js",
     "html",

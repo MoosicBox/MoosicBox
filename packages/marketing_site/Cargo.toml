@@ -17,11 +17,6 @@ path              = "src/main.rs"
 required-features = []
 
 [[bin]]
-name              = "moosicbox_marketing_site_lambda_htmx"
-path              = "src/lambda_htmx.rs"
-required-features = ["htmx", "lambda"]
-
-[[bin]]
 name              = "moosicbox_marketing_site_lambda_vanilla_js"
 path              = "src/lambda_vanilla_js.rs"
 required-features = ["lambda", "vanilla-js"]
@@ -78,12 +73,10 @@ tokio              = { workspace = true, features = ["macros", "rt-multi-thread"
 default = [
     "actix",
     "console-subscriber",
-    "datastar",
     "dev",
     "egui-wgpu",
     "fltk",
     "html",
-    "htmx",
     "lambda",
     "static-routes",
     "unsafe",
@@ -94,7 +87,6 @@ fail-on-warnings = []
 
 console-subscriber = ["dep:console-subscriber"]
 
-datastar = ["html", "moosicbox_app_native_lib/datastar"]
 egui = ["moosicbox_app_native_lib/egui"]
 egui-glow = ["egui", "moosicbox_app_native_lib/egui-glow"]
 egui-wgpu = ["egui", "moosicbox_app_native_lib/egui-wgpu"]
@@ -104,7 +96,6 @@ html = [
     "hyperchad_renderer/html",
     "moosicbox_app_native_lib/html",
 ]
-htmx = ["html", "moosicbox_app_native_lib/htmx"]
 vanilla-js = [
     "html",
     "moosicbox_app_native_lib/plugin-nav",
