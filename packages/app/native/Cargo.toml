@@ -85,12 +85,10 @@ default = [
     "all-formats",
     "all-sources",
     "console-subscriber",
-    "datastar",
     "dev",
     "egui-wgpu",
     "fltk",
     "html",
-    "htmx",
     "unsafe",
     "vanilla-js",
 ]
@@ -102,13 +100,11 @@ console-subscriber = ["dep:console-subscriber"]
 _calculated_canvas = ["_canvas"]
 _canvas            = []
 
-datastar = ["_canvas", "moosicbox_app_native_lib/datastar"]
 egui = ["_calculated_canvas", "moosicbox_app_native_lib/egui"]
 egui-glow = ["egui", "moosicbox_app_native_lib/egui-glow"]
 egui-wgpu = ["egui", "moosicbox_app_native_lib/egui-wgpu"]
 fltk = ["_calculated_canvas", "moosicbox_app_native_lib/fltk"]
 html = ["_canvas", "moosicbox_app_native_lib/html"]
-htmx = ["_canvas", "moosicbox_app_native_lib/htmx"]
 vanilla-js = [
     "_canvas",
     "html",

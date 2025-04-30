@@ -25,12 +25,6 @@ pub use hyperchad_renderer_vanilla_js as renderer_vanilla_js;
 #[cfg(feature = "html")]
 pub use hyperchad_renderer_html as renderer_html;
 
-#[cfg(feature = "datastar")]
-pub use hyperchad_renderer_datastar as renderer_datastar;
-
-#[cfg(feature = "htmx")]
-pub use hyperchad_renderer_htmx as renderer_htmx;
-
 #[cfg(any(feature = "egui", feature = "fltk"))]
 pub static CLIENT_INFO: std::sync::LazyLock<Arc<hyperchad_router::ClientInfo>> =
     std::sync::LazyLock::new(|| {
@@ -174,73 +168,11 @@ pub enum RendererType {
             hyperchad_renderer_html::stub::StubApp<hyperchad_renderer_html::DefaultHtmlTagRenderer>,
         >,
     ),
-    #[cfg(feature = "datastar")]
-    DatastarStub(
-        hyperchad_renderer_html::HtmlRenderer<
-            hyperchad_renderer_html::stub::StubApp<
-                hyperchad_renderer_datastar::DatastarTagRenderer,
-            >,
-        >,
-    ),
-    #[cfg(feature = "htmx")]
-    HtmxStub(
-        hyperchad_renderer_html::HtmlRenderer<
-            hyperchad_renderer_html::stub::StubApp<hyperchad_renderer_htmx::HtmxTagRenderer>,
-        >,
-    ),
     #[cfg(feature = "vanilla-js")]
     VanillaJsStub(
         hyperchad_renderer_html::HtmlRenderer<
             hyperchad_renderer_html::stub::StubApp<
                 hyperchad_renderer_vanilla_js::VanillaJsTagRenderer,
-            >,
-        >,
-    ),
-    #[cfg(feature = "htmx")]
-    #[cfg(feature = "actix")]
-    Htmx(
-        hyperchad_renderer_html::HtmlRenderer<
-            hyperchad_renderer_html::actix::ActixApp<
-                hyperchad_renderer_html::actix::PreparedRequest,
-                hyperchad_renderer_html::actix::HtmlActixResponseProcessor<
-                    hyperchad_renderer_htmx::HtmxTagRenderer,
-                >,
-            >,
-        >,
-    ),
-    #[cfg(feature = "htmx")]
-    #[cfg(feature = "lambda")]
-    HtmxLambda(
-        hyperchad_renderer_html::HtmlRenderer<
-            hyperchad_renderer_html::lambda::LambdaApp<
-                hyperchad_renderer_html::lambda::PreparedRequest,
-                hyperchad_renderer_html::lambda::HtmlLambdaResponseProcessor<
-                    hyperchad_renderer_htmx::HtmxTagRenderer,
-                >,
-            >,
-        >,
-    ),
-    #[cfg(feature = "datastar")]
-    #[cfg(feature = "actix")]
-    Datastar(
-        hyperchad_renderer_html::HtmlRenderer<
-            hyperchad_renderer_html::actix::ActixApp<
-                hyperchad_renderer_html::actix::PreparedRequest,
-                hyperchad_renderer_html::actix::HtmlActixResponseProcessor<
-                    hyperchad_renderer_datastar::DatastarTagRenderer,
-                >,
-            >,
-        >,
-    ),
-    #[cfg(feature = "datastar")]
-    #[cfg(feature = "lambda")]
-    DatastarLambda(
-        hyperchad_renderer_html::HtmlRenderer<
-            hyperchad_renderer_html::lambda::LambdaApp<
-                hyperchad_renderer_html::lambda::PreparedRequest,
-                hyperchad_renderer_html::lambda::HtmlLambdaResponseProcessor<
-                    hyperchad_renderer_datastar::DatastarTagRenderer,
-                >,
             >,
         >,
     ),
@@ -286,24 +218,8 @@ macro_rules! renderer {
             RendererType::HtmlLambda($name) => $action,
             #[cfg(feature = "html")]
             RendererType::HtmlStub($name) => $action,
-            #[cfg(feature = "datastar")]
-            RendererType::DatastarStub($name) => $action,
-            #[cfg(feature = "htmx")]
-            RendererType::HtmxStub($name) => $action,
             #[cfg(feature = "vanilla-js")]
             RendererType::VanillaJsStub($name) => $action,
-            #[cfg(feature = "htmx")]
-            #[cfg(feature = "actix")]
-            RendererType::Htmx($name) => $action,
-            #[cfg(feature = "htmx")]
-            #[cfg(feature = "lambda")]
-            RendererType::HtmxLambda($name) => $action,
-            #[cfg(feature = "datastar")]
-            #[cfg(feature = "actix")]
-            RendererType::Datastar($name) => $action,
-            #[cfg(feature = "datastar")]
-            #[cfg(feature = "lambda")]
-            RendererType::DatastarLambda($name) => $action,
             #[cfg(feature = "vanilla-js")]
             #[cfg(feature = "actix")]
             RendererType::VanillaJs($name) => $action,
@@ -394,24 +310,8 @@ impl From<RendererType> for Option<Box<dyn hyperchad_renderer::HtmlTagRenderer +
             RendererType::HtmlLambda(renderer) => Box::new(renderer.app.processor.tag_renderer),
             #[cfg(feature = "html")]
             RendererType::HtmlStub(renderer) => Box::new(renderer.app.tag_renderer),
-            #[cfg(feature = "datastar")]
-            RendererType::DatastarStub(renderer) => Box::new(renderer.app.tag_renderer),
-            #[cfg(feature = "htmx")]
-            RendererType::HtmxStub(renderer) => Box::new(renderer.app.tag_renderer),
             #[cfg(feature = "vanilla-js")]
             RendererType::VanillaJsStub(renderer) => Box::new(renderer.app.tag_renderer),
-            #[cfg(feature = "htmx")]
-            #[cfg(feature = "actix")]
-            RendererType::Htmx(renderer) => Box::new(renderer.app.processor.tag_renderer),
-            #[cfg(feature = "htmx")]
-            #[cfg(feature = "lambda")]
-            RendererType::HtmxLambda(renderer) => Box::new(renderer.app.processor.tag_renderer),
-            #[cfg(feature = "datastar")]
-            #[cfg(feature = "actix")]
-            RendererType::Datastar(renderer) => Box::new(renderer.app.processor.tag_renderer),
-            #[cfg(feature = "datastar")]
-            #[cfg(feature = "lambda")]
-            RendererType::DatastarLambda(renderer) => Box::new(renderer.app.processor.tag_renderer),
             #[cfg(feature = "vanilla-js")]
             #[cfg(feature = "actix")]
             RendererType::VanillaJs(renderer) => Box::new(renderer.app.processor.tag_renderer),
@@ -765,70 +665,6 @@ impl NativeAppBuilder {
             }
             #[cfg(not(feature = "fltk"))]
             unreachable!()
-        } else if cfg!(all(feature = "actix", feature = "datastar")) {
-            #[cfg(all(feature = "actix", feature = "datastar"))]
-            {
-                let router = self.router.unwrap();
-                let renderer = hyperchad_renderer_html::router_to_actix(
-                    hyperchad_renderer_datastar::DatastarTagRenderer::default(),
-                    router,
-                );
-
-                #[cfg(feature = "assets")]
-                let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
-
-                RendererType::Datastar(renderer)
-            }
-            #[cfg(not(all(feature = "actix", feature = "datastar")))]
-            unreachable!()
-        } else if cfg!(all(feature = "lambda", feature = "datastar")) {
-            #[cfg(all(feature = "lambda", feature = "datastar"))]
-            {
-                let router = self.router.unwrap();
-                let renderer = hyperchad_renderer_html::router_to_lambda(
-                    hyperchad_renderer_datastar::DatastarTagRenderer::default(),
-                    router,
-                );
-
-                #[cfg(feature = "assets")]
-                let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
-
-                RendererType::DatastarLambda(renderer)
-            }
-            #[cfg(not(all(feature = "lambda", feature = "datastar")))]
-            unreachable!()
-        } else if cfg!(all(feature = "actix", feature = "htmx")) {
-            #[cfg(all(feature = "actix", feature = "htmx"))]
-            {
-                let router = self.router.unwrap();
-                let renderer = hyperchad_renderer_html::router_to_actix(
-                    hyperchad_renderer_htmx::HtmxTagRenderer::default(),
-                    router,
-                );
-
-                #[cfg(feature = "assets")]
-                let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
-
-                RendererType::Htmx(renderer)
-            }
-            #[cfg(not(all(feature = "actix", feature = "htmx")))]
-            unreachable!()
-        } else if cfg!(all(feature = "lambda", feature = "htmx")) {
-            #[cfg(all(feature = "lambda", feature = "htmx"))]
-            {
-                let router = self.router.unwrap();
-                let renderer = hyperchad_renderer_html::router_to_lambda(
-                    hyperchad_renderer_htmx::HtmxTagRenderer::default(),
-                    router,
-                );
-
-                #[cfg(feature = "assets")]
-                let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
-
-                RendererType::HtmxLambda(renderer)
-            }
-            #[cfg(not(all(feature = "lambda", feature = "htmx")))]
-            unreachable!()
         } else if cfg!(all(feature = "actix", feature = "vanilla-js")) {
             #[cfg(all(feature = "actix", feature = "vanilla-js"))]
             {
@@ -905,29 +741,7 @@ impl NativeAppBuilder {
         } else if cfg!(feature = "html") {
             #[cfg(feature = "html")]
             {
-                if cfg!(feature = "datastar") {
-                    #[cfg(feature = "datastar")]
-                    {
-                        RendererType::DatastarStub(hyperchad_renderer_html::HtmlRenderer::new(
-                            hyperchad_renderer_html::stub::StubApp::new(
-                                hyperchad_renderer_datastar::DatastarTagRenderer::default(),
-                            ),
-                        ))
-                    }
-                    #[cfg(not(feature = "datastar"))]
-                    unreachable!()
-                } else if cfg!(feature = "htmx") {
-                    #[cfg(feature = "htmx")]
-                    {
-                        RendererType::HtmxStub(hyperchad_renderer_html::HtmlRenderer::new(
-                            hyperchad_renderer_html::stub::StubApp::new(
-                                hyperchad_renderer_htmx::HtmxTagRenderer::default(),
-                            ),
-                        ))
-                    }
-                    #[cfg(not(feature = "htmx"))]
-                    unreachable!()
-                } else if cfg!(feature = "vanilla-js") {
+                if cfg!(feature = "vanilla-js") {
                     #[cfg(feature = "vanilla-js")]
                     {
                         RendererType::VanillaJsStub(hyperchad_renderer_html::HtmlRenderer::new(

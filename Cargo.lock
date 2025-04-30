@@ -4867,18 +4867,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyperchad_renderer_datastar"
-version = "0.1.0"
-dependencies = [
- "hyperchad_renderer",
- "hyperchad_renderer_html",
- "hyperchad_router",
- "hyperchad_transformer",
- "log",
- "maud",
-]
-
-[[package]]
 name = "hyperchad_renderer_egui"
 version = "0.1.0"
 dependencies = [
@@ -4989,17 +4977,6 @@ dependencies = [
  "moosicbox_task",
  "serde_json",
  "tokio",
-]
-
-[[package]]
-name = "hyperchad_renderer_htmx"
-version = "0.1.0"
-dependencies = [
- "hyperchad_renderer",
- "hyperchad_renderer_html",
- "hyperchad_transformer",
- "log",
- "maud",
 ]
 
 [[package]]
@@ -6656,11 +6633,9 @@ dependencies = [
  "flume",
  "hyperchad_actions",
  "hyperchad_renderer",
- "hyperchad_renderer_datastar",
  "hyperchad_renderer_egui",
  "hyperchad_renderer_fltk",
  "hyperchad_renderer_html",
- "hyperchad_renderer_htmx",
  "hyperchad_renderer_vanilla_js",
  "hyperchad_router",
  "log",
