@@ -174,12 +174,12 @@ audiopus = "0.2.0"
 awc = "3.6.0"
 aws-config = "1.6.2"
 aws-sdk-apigatewaymanagement = "1.65.0"
-aws-sdk-ssm = "1.72.0"
+aws-sdk-ssm = "1.73.0"
 base64 = "0.22.1"
 bumpalo = "3.17.0"
 bytes = "1.10.1"
 bytesize = "2.0.1"
-chrono = { version = "0.4.40", default-features = false, features = [
+chrono = { version = "0.4.41", default-features = false, features = [
     "clock",
     "serde",
 ] }
