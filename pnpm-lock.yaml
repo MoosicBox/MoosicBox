@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@pulumi/pulumi':
-        specifier: ^3.165.0
-        version: 3.165.0(typescript@5.8.3)
+        specifier: ^3.166.0
+        version: 3.166.0(typescript@5.8.3)
       '@tsconfig/node18':
         specifier: 18.2.2
         version: 18.2.2
@@ -48,8 +48,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.13.20
-        version: 3.13.20
+        specifier: ^3.14.11
+        version: 3.14.11
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
@@ -310,8 +310,8 @@ packages:
   '@protobufjs/utf8@1.1.0':
     resolution: {integrity: sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==}
 
-  '@pulumi/pulumi@3.165.0':
-    resolution: {integrity: sha512-9W7/vqOxzcUf00j3wblolkeLjC6+rbvb/hTqyVmrd86ByzLsZ0e6WZ2Bo/IPElqzw+r0SEDi+Sk451QEaO1ESg==}
+  '@pulumi/pulumi@3.166.0':
+    resolution: {integrity: sha512-2RycSFy2q60/Lkhkwp3WEIndWUOWUq4nvLLeftcyzXzs5Lv54tM1J/Y4MbwbHm4ww82IE9yNZ9yxS3oIkIoCsA==}
     engines: {node: '>=18'}
     peerDependencies:
       ts-node: '>= 7.0.1 < 12'
@@ -2182,33 +2182,48 @@ packages:
     resolution: {integrity: sha512-MGrFH9Z4NP9Iyhqn16sDtBpRRNJ0Y2hNa6D65h736fVSaPCHr4DM4sWUNvVaSuC+0OBGhwsrydQwmgfg5LncqQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
-  sst-darwin-arm64@3.13.20:
-    resolution: {integrity: sha512-vjKpQeVG0abQ/sqhx97VM55L8ERztbHyAXQieNU2T6TerOo4tnAFiMofp3f2fVy59csC9CYg0DrTiM2DhQc3SA==}
+  sst-darwin-arm64@3.14.11:
+    resolution: {integrity: sha512-ZaItC22QX+r/ZbewJvYuZtZ3K4/y9k89xkqSX+T5IrXTOLWO53cHaWvgS/VoKpb5dIoS87cwmD3Qh1YvvNiZ+Q==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.13.20:
-    resolution: {integrity: sha512-W4SnuAyGTb95o+tqPof2fR6w3XIcKv6K9raQg9QZ+E65zbgYsfT9BdnkPxnj9wCwNUfWpMa1gQe+rMzCtv9ElQ==}
+  sst-darwin-x64@3.14.11:
+    resolution: {integrity: sha512-P2kPLeCc84spjsH90NFrou8yfkonl5USAvRX+Z3esPQV+bOG3ZQSG2NyL+qBj3wq80CfPo3UvYRua3KSt1zIXQ==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.13.20:
-    resolution: {integrity: sha512-xDSM9Nra64IiWf6PRwb6EJ/2+QHeg4OohhC1gHY06vUqTi8QVklYaFDZWjMpSUfmKHf+QZp3jMS/mg4JVToj+A==}
+  sst-linux-arm64@3.14.11:
+    resolution: {integrity: sha512-8wWqJWc2th/jceseKuAiLASS/8OaDqhEdE+rvtXEGruk7TB4e/2vJYvMu+JKDxH8alFd6idxktZfu62gXyfedQ==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.13.20:
-    resolution: {integrity: sha512-nZVOrnRsQn3oCyCCHFucdUjxyFurOvxTFDTqiiXcIqUHaKrydWeTU8fgRz5Vc31vbFgVqtoRwT8VSyfEJTAJAQ==}
+  sst-linux-x64@3.14.11:
+    resolution: {integrity: sha512-k27KpDMphNq3AjuQ5hbr8lB6VPWJDONbvojszgP+MJtr0g82MMx6+igAzMQ1HtvpkYT9ck7vdXELqrRx7ohonQ==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.13.20:
-    resolution: {integrity: sha512-coJ1lnn5NJmYuXZtBrulXivLXTXBxS1r7eRj0WDrFaJ4copZuC/USmclxueDdqAfAWsh3nqQWqPxhoT8lE0Ouw==}
+  sst-linux-x86@3.14.11:
+    resolution: {integrity: sha512-AhZOpmcpE8N7bG7zFUN1RUKf/MIZsMBgjfhBB6xcdorf9fnTOxQqqgzPt4x++BqtAXGHk9q5gfCYtMRrDME6PA==}
     cpu: [x86]
     os: [linux]
 
-  sst@3.13.20:
-    resolution: {integrity: sha512-z2BWYfbeF5cdpuzzsdfL2Gd4VB4TMoL19ALthj1tfJK+XIMpjP1EIaMzFwCODcxhYQs1wH6lAeTgG6DYxJwBZg==}
+  sst-win32-arm64@3.14.11:
+    resolution: {integrity: sha512-aLOqjFLNJ2CD9nZMbrOuYOH43sTl/PT4EmST+f4+TfnM6rrqzsreQJVZ+zeyKfv3t88ilgB+KWsdvGblKu2+bg==}
+    cpu: [arm64]
+    os: [win32]
+
+  sst-win32-x64@3.14.11:
+    resolution: {integrity: sha512-TXBzZRkcZqmuwLOdgU2MDEiYUDw/iKMamw0gfSUKfNDb28mCBEv/hvpV6qBO4gKZjq7dbMEbjmU2Ra9XeHoO9Q==}
+    cpu: [x64]
+    os: [win32]
+
+  sst-win32-x86@3.14.11:
+    resolution: {integrity: sha512-CKXutjc+yID9FGbRQRzCbCIofB9WZ2XTya6l6x/KYhddAGSHWMasKlZbijkHF759zGUsTp4b3gb231xubmBrQA==}
+    cpu: [x86]
+    os: [win32]
+
+  sst@3.14.11:
+    resolution: {integrity: sha512-XF7SdXK1g8mLDW2onDsNzyHmmYvMotXtAWGzyT0bUWf1ZsLUsinVBvts4+85b9t9wXPD5fZKFmZdKzPG5g4a0w==}
     hasBin: true
 
   statuses@2.0.1:
@@ -2822,7 +2837,7 @@ snapshots:
 
   '@protobufjs/utf8@1.1.0': {}
 
-  '@pulumi/pulumi@3.165.0(typescript@5.8.3)':
+  '@pulumi/pulumi@3.166.0(typescript@5.8.3)':
     dependencies:
       '@grpc/grpc-js': 1.13.3
       '@logdna/tail-file': 2.2.0
@@ -4991,22 +5006,31 @@ snapshots:
     dependencies:
       minipass: 7.1.2
 
-  sst-darwin-arm64@3.13.20:
+  sst-darwin-arm64@3.14.11:
     optional: true
 
-  sst-darwin-x64@3.13.20:
+  sst-darwin-x64@3.14.11:
     optional: true
 
-  sst-linux-arm64@3.13.20:
+  sst-linux-arm64@3.14.11:
     optional: true
 
-  sst-linux-x64@3.13.20:
+  sst-linux-x64@3.14.11:
     optional: true
 
-  sst-linux-x86@3.13.20:
+  sst-linux-x86@3.14.11:
     optional: true
 
-  sst@3.13.20:
+  sst-win32-arm64@3.14.11:
+    optional: true
+
+  sst-win32-x64@3.14.11:
+    optional: true
+
+  sst-win32-x86@3.14.11:
+    optional: true
+
+  sst@3.14.11:
     dependencies:
       aws-sdk: 2.1692.0
       aws4fetch: 1.0.18
@@ -5014,11 +5038,14 @@ snapshots:
       opencontrol: 0.0.6
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.13.20
-      sst-darwin-x64: 3.13.20
-      sst-linux-arm64: 3.13.20
-      sst-linux-x64: 3.13.20
-      sst-linux-x86: 3.13.20
+      sst-darwin-arm64: 3.14.11
+      sst-darwin-x64: 3.14.11
+      sst-linux-arm64: 3.14.11
+      sst-linux-x64: 3.14.11
+      sst-linux-x86: 3.14.11
+      sst-win32-arm64: 3.14.11
+      sst-win32-x64: 3.14.11
+      sst-win32-x86: 3.14.11
     transitivePeerDependencies:
       - supports-color
 
