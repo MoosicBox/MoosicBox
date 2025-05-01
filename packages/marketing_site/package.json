@@ -30,7 +30,7 @@
         "@eslint/eslintrc": "^3.3.1",
         "@eslint/js": "^9.25.1",
         "@pulumi/aws": "^6.78.0",
-        "@pulumi/pulumi": "^3.165.0",
+        "@pulumi/pulumi": "^3.166.0",
         "@tsconfig/node18": "18.2.2",
         "@typescript-eslint/eslint-plugin": "^8.31.1",
         "@typescript-eslint/parser": "^8.31.1",
@@ -40,7 +40,7 @@
         "eslint-plugin-node": "^11.1.0",
         "globals": "^15.15.0",
         "prettier": "^3.5.3",
-        "sst": "^3.13.20",
+        "sst": "^3.14.11",
         "typescript": "^5.8.3"
     }
 }
