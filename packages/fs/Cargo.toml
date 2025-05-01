@@ -7,7 +7,7 @@ keywords    = ["time"]
 license     = "MPL-2.0"
 name        = "moosicbox_fs"
 readme      = "README.md"
-repository  = "https://github.com/BSteffaniak/dst-demo"
+repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
