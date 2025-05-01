@@ -1,0 +1,24 @@
+[package]
+authors     = ["Braden Steffaniak"]
+description = "Simulated async runtime usage example"
+edition     = "2024"
+license     = "MPL-2.0"
+name        = "async_simulated"
+publish     = false
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_async = { version = "0.1.0", path = "../..", default-features = false, features = [
+    "simulator",
+] }
+moosicbox_random = { version = "0.1.0", path = "../../../random", default-features = false, features = [
+    "simulator",
+] }
+
+pretty_env_logger = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = []

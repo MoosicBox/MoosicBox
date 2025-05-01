@@ -13,6 +13,7 @@ pub use moosicbox_app_native_lib as app_native_lib;
 pub use moosicbox_app_native_ui as app_native_ui;
 pub use moosicbox_arb as arb;
 pub use moosicbox_assert as assert;
+pub use moosicbox_async as unsync;
 pub use moosicbox_async_service as async_service;
 pub use moosicbox_audio_decoder as audio_decoder;
 pub use moosicbox_audio_encoder as audio_encoder;

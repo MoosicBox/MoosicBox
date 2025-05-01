@@ -1,0 +1,40 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["asynchronous"]
+description = "MoosicBox Async runtime package"
+edition     = "2024"
+keywords    = ["async"]
+license     = "MPL-2.0"
+name        = "moosicbox_async"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_random = { version = "0.1.0", path = "../random", optional = true, default-features = false, features = [
+    "rand",
+] }
+
+log       = { workspace = true }
+thiserror = { workspace = true }
+
+# Simulator
+futures = { workspace = true, optional = true }
+
+# Tokio
+tokio = { workspace = true, optional = true, features = ["rt"] }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+
+[features]
+default = ["simulator", "tokio"]
+
+fail-on-warnings = []
+
+simulator = ["dep:futures", "dep:moosicbox_random", "dep:tokio"]
+tokio     = ["dep:tokio"]
+
+io              = ["tokio?/io-util"]
+rt-multi-thread = ["tokio?/rt-multi-thread"]
+sync            = ["tokio?/sync"]

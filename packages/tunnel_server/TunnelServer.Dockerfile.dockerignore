@@ -1,6 +1,7 @@
 /packages/*
 
 !/packages/assert
+!/packages/async
 !/packages/async_service
 !/packages/config
 !/packages/database

@@ -9,6 +9,7 @@ on:
             - '/Cargo.lock'
             - 'packages/admin_htmx/**'
             - 'packages/assert/**'
+            - 'packages/async/**'
             - 'packages/async_service/**'
             - 'packages/audio_decoder/**'
             - 'packages/audio_encoder/**'

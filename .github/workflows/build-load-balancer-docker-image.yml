@@ -8,6 +8,7 @@ on:
             - '/Cargo.lock'
             - .github/workflows/build-load-balancer-docker-image.yml
             - 'packages/assert/**'
+            - 'packages/async/**'
             - 'packages/config/**'
             - 'packages/database/**'
             - 'packages/env_utils/**'

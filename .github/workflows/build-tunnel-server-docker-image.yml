@@ -8,6 +8,7 @@ on:
             - '/Cargo.lock'
             - .github/workflows/build-tunnel-server-docker-image.yml
             - 'packages/assert/**'
+            - 'packages/async/**'
             - 'packages/async_service/**'
             - 'packages/config/**'
             - 'packages/database/**'
