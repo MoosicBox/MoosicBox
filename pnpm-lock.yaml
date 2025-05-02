@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@pulumi/pulumi':
-        specifier: ^3.166.0
-        version: 3.166.0(typescript@5.8.3)
+        specifier: ^3.167.0
+        version: 3.167.0(typescript@5.8.3)
       '@tsconfig/node18':
         specifier: 18.2.2
         version: 18.2.2
@@ -62,8 +62,8 @@ packages:
   '@astrojs/compiler@1.8.2':
     resolution: {integrity: sha512-o/ObKgtMzl8SlpIdzaxFnt7SATKPxu4oIP/1NL+HDJRzxfJcAkOTAb/ZKMRyULbz4q+1t2/DAebs2Z1QairkZw==}
 
-  '@astrojs/compiler@2.11.0':
-    resolution: {integrity: sha512-zZOO7i+JhojO8qmlyR/URui6LyfHJY6m+L9nwyX5GiKD78YoRaZ5tzz6X0fkl+5bD3uwlDHayf6Oe8Fu36RKNg==}
+  '@astrojs/compiler@2.12.0':
+    resolution: {integrity: sha512-7bCjW6tVDpUurQLeKBUN9tZ5kSv5qYrGmcn0sG0IwacL7isR2ZbyyA3AdZ4uxsuUFOS2SlgReTH7wkxO6zpqWA==}
 
   '@eslint-community/eslint-utils@4.6.1':
     resolution: {integrity: sha512-KTsJMmobmbrFLe3LDh0PC2FXpcSYJt/MLjlkh/9LEnmKYLSYmT/0EW9JWANjeoemiuZrmogti0tW5Ch+qNUYDw==}
@@ -310,8 +310,8 @@ packages:
   '@protobufjs/utf8@1.1.0':
     resolution: {integrity: sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==}
 
-  '@pulumi/pulumi@3.166.0':
-    resolution: {integrity: sha512-2RycSFy2q60/Lkhkwp3WEIndWUOWUq4nvLLeftcyzXzs5Lv54tM1J/Y4MbwbHm4ww82IE9yNZ9yxS3oIkIoCsA==}
+  '@pulumi/pulumi@3.167.0':
+    resolution: {integrity: sha512-nqqG9ya86CO8eRpPSL34K0NWhQbH2hXAlVo+lCvi7I51nKFqaJITvfgfVEqwKU0g3KJspK8ZG0/1OZBRe0Dogg==}
     engines: {node: '>=18'}
     peerDependencies:
       ts-node: '>= 7.0.1 < 12'
@@ -2507,7 +2507,7 @@ snapshots:
 
   '@astrojs/compiler@1.8.2': {}
 
-  '@astrojs/compiler@2.11.0': {}
+  '@astrojs/compiler@2.12.0': {}
 
   '@eslint-community/eslint-utils@4.6.1(eslint@8.57.1)':
     dependencies:
@@ -2837,7 +2837,7 @@ snapshots:
 
   '@protobufjs/utf8@1.1.0': {}
 
-  '@pulumi/pulumi@3.166.0(typescript@5.8.3)':
+  '@pulumi/pulumi@3.167.0(typescript@5.8.3)':
     dependencies:
       '@grpc/grpc-js': 1.13.3
       '@logdna/tail-file': 2.2.0
@@ -3153,10 +3153,10 @@ snapshots:
 
   astro-eslint-parser@1.2.2:
     dependencies:
-      '@astrojs/compiler': 2.11.0
+      '@astrojs/compiler': 2.12.0
       '@typescript-eslint/scope-manager': 8.31.1
       '@typescript-eslint/types': 8.31.1
-      astrojs-compiler-sync: 1.1.1(@astrojs/compiler@2.11.0)
+      astrojs-compiler-sync: 1.1.1(@astrojs/compiler@2.12.0)
       debug: 4.4.0
       entities: 6.0.0
       eslint-scope: 8.3.0
@@ -3168,9 +3168,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  astrojs-compiler-sync@1.1.1(@astrojs/compiler@2.11.0):
+  astrojs-compiler-sync@1.1.1(@astrojs/compiler@2.12.0):
     dependencies:
-      '@astrojs/compiler': 2.11.0
+      '@astrojs/compiler': 2.12.0
       synckit: 0.11.4
 
   async-function@1.0.0: {}
