@@ -18,8 +18,8 @@ importers:
         specifier: ^6.78.0
         version: 6.78.0(typescript@5.8.3)
       '@pulumi/pulumi':
-        specifier: ^3.166.0
-        version: 3.166.0(typescript@5.8.3)
+        specifier: ^3.167.0
+        version: 3.167.0(typescript@5.8.3)
       '@tsconfig/node18':
         specifier: 18.2.2
         version: 18.2.2
@@ -70,8 +70,8 @@ packages:
     resolution: {integrity: sha512-fxlS1kkIjx8+vy2SjuCB94q3htSNrufYTXubwiBFeaQHbH6Ipi43gFJq2zCMt6PHhImH3Xmr0NksKDvchWlpQQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@eslint/config-helpers@0.2.1':
-    resolution: {integrity: sha512-RI17tsD2frtDu/3dmI7QRrD4bedNKPM08ziRYaC5AhkGrzIAJelm9kJU1TznK+apx6V+cqRz8tfpEeG3oIyjxw==}
+  '@eslint/config-helpers@0.2.2':
+    resolution: {integrity: sha512-+GPzk8PlG0sPpzdU5ZvIRMPidzAnZDl/s9L+y13iodqvb8leL53bTannOrQ/Im7UkpsmFU5Ily5U60LWixnmLg==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
   '@eslint/core@0.13.0':
@@ -324,8 +324,8 @@ packages:
   '@pulumi/aws@6.78.0':
     resolution: {integrity: sha512-RDkXIT8XqzE1OAcZcIiwd5Tfb8q4o3CoLa4VM45I9YAoUIbNoT+7pe+iVly7QoRRDKqrEVpANQ8WUlKBq6DDXg==}
 
-  '@pulumi/pulumi@3.166.0':
-    resolution: {integrity: sha512-2RycSFy2q60/Lkhkwp3WEIndWUOWUq4nvLLeftcyzXzs5Lv54tM1J/Y4MbwbHm4ww82IE9yNZ9yxS3oIkIoCsA==}
+  '@pulumi/pulumi@3.167.0':
+    resolution: {integrity: sha512-nqqG9ya86CO8eRpPSL34K0NWhQbH2hXAlVo+lCvi7I51nKFqaJITvfgfVEqwKU0g3KJspK8ZG0/1OZBRe0Dogg==}
     engines: {node: '>=18'}
     peerDependencies:
       ts-node: '>= 7.0.1 < 12'
@@ -2344,7 +2344,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@eslint/config-helpers@0.2.1': {}
+  '@eslint/config-helpers@0.2.2': {}
 
   '@eslint/core@0.13.0':
     dependencies:
@@ -2677,7 +2677,7 @@ snapshots:
 
   '@pulumi/aws@6.78.0(typescript@5.8.3)':
     dependencies:
-      '@pulumi/pulumi': 3.166.0(typescript@5.8.3)
+      '@pulumi/pulumi': 3.167.0(typescript@5.8.3)
       mime: 2.6.0
     transitivePeerDependencies:
       - bluebird
@@ -2685,7 +2685,7 @@ snapshots:
       - ts-node
       - typescript
 
-  '@pulumi/pulumi@3.166.0(typescript@5.8.3)':
+  '@pulumi/pulumi@3.167.0(typescript@5.8.3)':
     dependencies:
       '@grpc/grpc-js': 1.13.3
       '@logdna/tail-file': 2.2.0
@@ -3403,7 +3403,7 @@ snapshots:
       '@eslint-community/eslint-utils': 4.6.1(eslint@9.25.1)
       '@eslint-community/regexpp': 4.12.1
       '@eslint/config-array': 0.20.0
-      '@eslint/config-helpers': 0.2.1
+      '@eslint/config-helpers': 0.2.2
       '@eslint/core': 0.13.0
       '@eslint/eslintrc': 3.3.1
       '@eslint/js': 9.25.1
