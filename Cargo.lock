@@ -3000,9 +3000,9 @@ checksum = "ea8a8b81cacc08888170eef4d13b775126db426d0b348bee9d18c2c1eaf123cf"
 
 [[package]]
 name = "dpi"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f25c0e292a7ca6d6498557ff1df68f32c99850012b6ea401cf8daf771f22ff53"
+checksum = "d8b14ccef22fc6f5a8f4d7d768562a182c04ce9a3b3157b91390b52ddfdf1a76"
 dependencies = [
  "serde",
 ]
@@ -6092,9 +6092,9 @@ dependencies = [
 
 [[package]]
 name = "local-ip-address"
-version = "0.6.4"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c986b1747bbd3666abe4d57c64e60e6a82c2216140d8b12d5ceb33feb9de44b3"
+checksum = "656b3b27f8893f7bbf9485148ff9a65f019e3f33bd5cdc87c83cab16b3fd9ec8"
 dependencies = [
  "libc",
  "neli",
@@ -7457,7 +7457,7 @@ dependencies = [
  "bytes",
  "flume",
  "futures",
- "local-ip-address 0.6.4",
+ "local-ip-address 0.6.5",
  "log",
  "moosicbox_assert",
  "moosicbox_audio_decoder",
@@ -7645,7 +7645,7 @@ dependencies = [
  "console-subscriber",
  "flume",
  "futures-util",
- "local-ip-address 0.6.4",
+ "local-ip-address 0.6.5",
  "log",
  "moosicbox_admin_htmx",
  "moosicbox_assert",
@@ -9616,7 +9616,7 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 [[package]]
 name = "pingora"
 version = "0.4.0"
-source = "git+https://github.com/cloudflare/pingora#46e3742e1f86be9a7a0f8183bbca184ed3a97c83"
+source = "git+https://github.com/cloudflare/pingora#128aafe4ce8d84a1d768277a5f4aaf635aa25fae"
 dependencies = [
  "pingora-cache",
  "pingora-core",
@@ -9629,7 +9629,7 @@ dependencies = [
 [[package]]
 name = "pingora-cache"
 version = "0.4.0"
-source = "git+https://github.com/cloudflare/pingora#46e3742e1f86be9a7a0f8183bbca184ed3a97c83"
+source = "git+https://github.com/cloudflare/pingora#128aafe4ce8d84a1d768277a5f4aaf635aa25fae"
 dependencies = [
  "ahash",
  "async-trait",
@@ -9663,7 +9663,7 @@ dependencies = [
 [[package]]
 name = "pingora-core"
 version = "0.4.0"
-source = "git+https://github.com/cloudflare/pingora#46e3742e1f86be9a7a0f8183bbca184ed3a97c83"
+source = "git+https://github.com/cloudflare/pingora#128aafe4ce8d84a1d768277a5f4aaf635aa25fae"
 dependencies = [
  "ahash",
  "async-trait",
@@ -9711,12 +9711,12 @@ dependencies = [
 [[package]]
 name = "pingora-error"
 version = "0.4.0"
-source = "git+https://github.com/cloudflare/pingora#46e3742e1f86be9a7a0f8183bbca184ed3a97c83"
+source = "git+https://github.com/cloudflare/pingora#128aafe4ce8d84a1d768277a5f4aaf635aa25fae"
 
 [[package]]
 name = "pingora-header-serde"
 version = "0.4.0"
-source = "git+https://github.com/cloudflare/pingora#46e3742e1f86be9a7a0f8183bbca184ed3a97c83"
+source = "git+https://github.com/cloudflare/pingora#128aafe4ce8d84a1d768277a5f4aaf635aa25fae"
 dependencies = [
  "bytes",
  "http 1.3.1",
@@ -9731,7 +9731,7 @@ dependencies = [
 [[package]]
 name = "pingora-http"
 version = "0.4.0"
-source = "git+https://github.com/cloudflare/pingora#46e3742e1f86be9a7a0f8183bbca184ed3a97c83"
+source = "git+https://github.com/cloudflare/pingora#128aafe4ce8d84a1d768277a5f4aaf635aa25fae"
 dependencies = [
  "bytes",
  "http 1.3.1",
@@ -9741,7 +9741,7 @@ dependencies = [
 [[package]]
 name = "pingora-ketama"
 version = "0.4.0"
-source = "git+https://github.com/cloudflare/pingora#46e3742e1f86be9a7a0f8183bbca184ed3a97c83"
+source = "git+https://github.com/cloudflare/pingora#128aafe4ce8d84a1d768277a5f4aaf635aa25fae"
 dependencies = [
  "crc32fast",
 ]
@@ -9749,7 +9749,7 @@ dependencies = [
 [[package]]
 name = "pingora-load-balancing"
 version = "0.4.0"
-source = "git+https://github.com/cloudflare/pingora#46e3742e1f86be9a7a0f8183bbca184ed3a97c83"
+source = "git+https://github.com/cloudflare/pingora#128aafe4ce8d84a1d768277a5f4aaf635aa25fae"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -9770,7 +9770,7 @@ dependencies = [
 [[package]]
 name = "pingora-lru"
 version = "0.4.0"
-source = "git+https://github.com/cloudflare/pingora#46e3742e1f86be9a7a0f8183bbca184ed3a97c83"
+source = "git+https://github.com/cloudflare/pingora#128aafe4ce8d84a1d768277a5f4aaf635aa25fae"
 dependencies = [
  "arrayvec",
  "hashbrown 0.15.3",
@@ -9781,7 +9781,7 @@ dependencies = [
 [[package]]
 name = "pingora-openssl"
 version = "0.4.0"
-source = "git+https://github.com/cloudflare/pingora#46e3742e1f86be9a7a0f8183bbca184ed3a97c83"
+source = "git+https://github.com/cloudflare/pingora#128aafe4ce8d84a1d768277a5f4aaf635aa25fae"
 dependencies = [
  "foreign-types 0.3.2",
  "libc",
@@ -9793,7 +9793,7 @@ dependencies = [
 [[package]]
 name = "pingora-pool"
 version = "0.4.0"
-source = "git+https://github.com/cloudflare/pingora#46e3742e1f86be9a7a0f8183bbca184ed3a97c83"
+source = "git+https://github.com/cloudflare/pingora#128aafe4ce8d84a1d768277a5f4aaf635aa25fae"
 dependencies = [
  "crossbeam-queue",
  "log",
@@ -9807,7 +9807,7 @@ dependencies = [
 [[package]]
 name = "pingora-proxy"
 version = "0.4.0"
-source = "git+https://github.com/cloudflare/pingora#46e3742e1f86be9a7a0f8183bbca184ed3a97c83"
+source = "git+https://github.com/cloudflare/pingora#128aafe4ce8d84a1d768277a5f4aaf635aa25fae"
 dependencies = [
  "async-trait",
  "bytes",
@@ -9828,7 +9828,7 @@ dependencies = [
 [[package]]
 name = "pingora-runtime"
 version = "0.4.0"
-source = "git+https://github.com/cloudflare/pingora#46e3742e1f86be9a7a0f8183bbca184ed3a97c83"
+source = "git+https://github.com/cloudflare/pingora#128aafe4ce8d84a1d768277a5f4aaf635aa25fae"
 dependencies = [
  "once_cell",
  "rand 0.8.5",
@@ -9839,7 +9839,7 @@ dependencies = [
 [[package]]
 name = "pingora-timeout"
 version = "0.4.0"
-source = "git+https://github.com/cloudflare/pingora#46e3742e1f86be9a7a0f8183bbca184ed3a97c83"
+source = "git+https://github.com/cloudflare/pingora#128aafe4ce8d84a1d768277a5f4aaf635aa25fae"
 dependencies = [
  "once_cell",
  "parking_lot 0.12.3",
@@ -14101,7 +14101,7 @@ dependencies = [
  "serde_spanned",
  "toml_datetime",
  "toml_write",
- "winnow 0.7.8",
+ "winnow 0.7.9",
 ]
 
 [[package]]
@@ -15997,9 +15997,9 @@ dependencies = [
 
 [[package]]
 name = "winnow"
-version = "0.7.8"
+version = "0.7.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e27d6ad3dac991091e4d35de9ba2d2d00647c5d0fc26c5496dee55984ae111b"
+checksum = "d9fb597c990f03753e08d3c29efbfcf2019a003b4bf4ba19225c158e1549f0f3"
 dependencies = [
  "memchr",
 ]
@@ -16308,7 +16308,7 @@ dependencies = [
  "tracing",
  "uds_windows",
  "windows-sys 0.59.0",
- "winnow 0.7.8",
+ "winnow 0.7.9",
  "xdg-home",
  "zbus_macros 5.5.0",
  "zbus_names 4.2.0",
@@ -16386,7 +16386,7 @@ checksum = "7be68e64bf6ce8db94f63e72f0c7eb9a60d733f7e0499e628dfab0f84d6bcb97"
 dependencies = [
  "serde",
  "static_assertions",
- "winnow 0.7.8",
+ "winnow 0.7.9",
  "zvariant 5.4.0",
 ]
 
@@ -16595,7 +16595,7 @@ dependencies = [
  "serde",
  "static_assertions",
  "url",
- "winnow 0.7.8",
+ "winnow 0.7.9",
  "zvariant_derive 5.4.0",
  "zvariant_utils 3.2.0",
 ]
@@ -16648,5 +16648,5 @@ dependencies = [
  "serde",
  "static_assertions",
  "syn 2.0.101",
- "winnow 0.7.8",
+ "winnow 0.7.9",
 ]
