@@ -685,7 +685,7 @@ dependencies = [
  "serde_repr",
  "tokio",
  "url",
- "zbus 5.5.0",
+ "zbus 5.6.0",
 ]
 
 [[package]]
@@ -5993,7 +5993,7 @@ checksum = "c0ff37bd590ca25063e35af745c343cb7a0271906fb7b37e4813e8f79f00268d"
 dependencies = [
  "bitflags 2.9.0",
  "libc",
- "redox_syscall 0.5.11",
+ "redox_syscall 0.5.12",
 ]
 
 [[package]]
@@ -8421,7 +8421,7 @@ dependencies = [
  "mac-notification-sys",
  "serde",
  "tauri-winrt-notification",
- "zbus 5.5.0",
+ "zbus 5.6.0",
 ]
 
 [[package]]
@@ -9374,7 +9374,7 @@ checksum = "1e401f977ab385c9e4e3ab30627d6f26d00e2c73eef317493c4ec6d468726cf8"
 dependencies = [
  "cfg-if 1.0.0",
  "libc",
- "redox_syscall 0.5.11",
+ "redox_syscall 0.5.12",
  "smallvec",
  "windows-targets 0.52.6",
 ]
@@ -10723,9 +10723,9 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
-version = "0.5.11"
+version = "0.5.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2f103c6d277498fbceb16e84d317e2a400f160f46904d5f5410848c829511a3"
+checksum = "928fca9cf2aa042393a8325b9ead81d2f0df4cb12e1e24cef072922ccd99c5af"
 dependencies = [
  "bitflags 2.9.0",
 ]
@@ -11894,7 +11894,7 @@ dependencies = [
  "objc2-foundation 0.2.2",
  "objc2-quartz-core 0.2.2",
  "raw-window-handle",
- "redox_syscall 0.5.11",
+ "redox_syscall 0.5.12",
  "wasm-bindgen",
  "web-sys",
  "windows-sys 0.59.0",
@@ -15382,7 +15382,7 @@ version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6994d13118ab492c3c80c1f81928718159254c53c472bf9ce36f8dae4add02a7"
 dependencies = [
- "redox_syscall 0.5.11",
+ "redox_syscall 0.5.12",
  "wasite",
  "web-sys",
 ]
@@ -16280,13 +16280,12 @@ dependencies = [
 
 [[package]]
 name = "zbus"
-version = "5.5.0"
+version = "5.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59c333f648ea1b647bc95dc1d34807c8e25ed7a6feff3394034dc4776054b236"
+checksum = "2522b82023923eecb0b366da727ec883ace092e7887b61d3da5139f26b44da58"
 dependencies = [
  "async-broadcast",
  "async-executor",
- "async-fs",
  "async-io",
  "async-lock",
  "async-process",
@@ -16303,16 +16302,14 @@ dependencies = [
  "ordered-stream",
  "serde",
  "serde_repr",
- "static_assertions",
  "tokio",
  "tracing",
  "uds_windows",
  "windows-sys 0.59.0",
  "winnow 0.7.9",
- "xdg-home",
- "zbus_macros 5.5.0",
+ "zbus_macros 5.6.0",
  "zbus_names 4.2.0",
- "zvariant 5.4.0",
+ "zvariant 5.5.1",
 ]
 
 [[package]]
@@ -16354,16 +16351,16 @@ dependencies = [
 
 [[package]]
 name = "zbus_macros"
-version = "5.5.0"
+version = "5.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f325ad10eb0d0a3eb060203494c3b7ec3162a01a59db75d2deee100339709fc0"
+checksum = "05d2e12843c75108c00c618c2e8ef9675b50b6ec095b36dc965f2e5aed463c15"
 dependencies = [
  "proc-macro-crate 3.3.0",
  "proc-macro2",
  "quote",
  "syn 2.0.101",
  "zbus_names 4.2.0",
- "zvariant 5.4.0",
+ "zvariant 5.5.1",
  "zvariant_utils 3.2.0",
 ]
 
@@ -16387,7 +16384,7 @@ dependencies = [
  "serde",
  "static_assertions",
  "winnow 0.7.9",
- "zvariant 5.4.0",
+ "zvariant 5.5.1",
 ]
 
 [[package]]
@@ -16586,17 +16583,16 @@ dependencies = [
 
 [[package]]
 name = "zvariant"
-version = "5.4.0"
+version = "5.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2df9ee044893fcffbdc25de30546edef3e32341466811ca18421e3cd6c5a3ac"
+checksum = "557e89d54880377a507c94cd5452f20e35d14325faf9d2958ebeadce0966c1b2"
 dependencies = [
  "endi",
  "enumflags2",
  "serde",
- "static_assertions",
  "url",
  "winnow 0.7.9",
- "zvariant_derive 5.4.0",
+ "zvariant_derive 5.5.1",
  "zvariant_utils 3.2.0",
 ]
 
@@ -16615,9 +16611,9 @@ dependencies = [
 
 [[package]]
 name = "zvariant_derive"
-version = "5.4.0"
+version = "5.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74170caa85b8b84cc4935f2d56a57c7a15ea6185ccdd7eadb57e6edd90f94b2f"
+checksum = "757779842a0d242061d24c28be589ce392e45350dfb9186dfd7a042a2e19870c"
 dependencies = [
  "proc-macro-crate 3.3.0",
  "proc-macro2",
