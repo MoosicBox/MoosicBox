@@ -153,6 +153,7 @@ edition = "2024"
 
 [workspace.dependencies]
 # Internal MoosicBox
+moosicbox                    = { version = "0.1.0", default-features = false, path = "packages/moosicbox" }
 moosicbox_admin_htmx         = { version = "0.1.0", default-features = false, path = "packages/admin_htmx" }
 moosicbox_app_client         = { version = "0.1.0", default-features = false, path = "packages/app/tauri/client" }
 moosicbox_app_native_bundled = { version = "0.1.0", default-features = false, path = "packages/app/native/bundled" }
