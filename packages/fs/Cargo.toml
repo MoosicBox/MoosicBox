@@ -11,6 +11,12 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
+moosicbox_async = { version = "0.1.0", path = "../async", optional = true, default-features = false, features = [
+    "io",
+    "rt-multi-thread",
+    "sync",
+] }
+
 bytes = { workspace = true, optional = true }
 log   = { workspace = true }
 tokio = { workspace = true, optional = true }
@@ -26,7 +32,7 @@ fail-on-warnings = []
 
 simulator = ["dep:bytes", "sync"]
 std       = ["sync"]
-tokio     = ["async", "dep:tokio", "tokio/fs"]
+tokio     = ["async", "dep:tokio", "moosicbox_async/fs", "moosicbox_async/tokio"]
 
-async = ["dep:tokio", "tokio/io-util"]
+async = ["dep:moosicbox_async", "moosicbox_async/io"]
 sync  = []
