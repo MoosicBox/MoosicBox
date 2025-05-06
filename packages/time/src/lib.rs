@@ -3,7 +3,7 @@
 #![allow(clippy::multiple_crate_versions)]
 
 #[cfg(feature = "std")]
-pub mod std;
+pub mod standard;
 
 #[cfg(feature = "simulator")]
 pub mod simulator;
@@ -19,4 +19,4 @@ macro_rules! impl_time {
 impl_time!(simulator);
 
 #[cfg(all(not(feature = "simulator"), feature = "std"))]
-impl_time!(std);
+impl_time!(standard);

@@ -12,9 +12,6 @@ pub mod rand;
 #[cfg(feature = "simulator")]
 pub mod simulator;
 
-#[cfg(any(feature = "simulator", feature = "rand"))]
-pub static RNG: std::sync::LazyLock<Rng> = std::sync::LazyLock::new(Rng::new);
-
 pub trait GenericRng: Send + Sync + RngCore {
     fn next_u32(&self) -> u32;
 
@@ -85,8 +82,10 @@ impl<R: GenericRng> GenericRng for RngWrapper<R> {
 
 #[allow(unused)]
 macro_rules! impl_rng {
-    ($type:ty $(,)?) => {
+    ($module:ident, $type:ty $(,)?) => {
         use ::rand::distributions::Distribution as _;
+
+        pub use $module::rng;
 
         pub type Rng = RngWrapper<$type>;
 
@@ -267,7 +266,7 @@ pub fn non_uniform_distribute_i32(value: f64, pow: i32, rng: &Rng) -> f64 {
 }
 
 #[cfg(feature = "simulator")]
-impl_rng!(simulator::SimulatorRng);
+impl_rng!(simulator, simulator::SimulatorRng);
 
 #[cfg(all(not(feature = "simulator"), feature = "rand"))]
-impl_rng!(rand::RandRng);
+impl_rng!(rand, rand::RandRng);

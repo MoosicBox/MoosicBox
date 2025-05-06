@@ -1,0 +1,23 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["asynchronous", "development-utils"]
+description = "Cargo async linter package"
+edition     = "2024"
+keywords    = ["async"]
+license     = "MPL-2.0"
+name        = "moosicbox_async_cargo"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+clap              = { workspace = true }
+log               = { workspace = true }
+pretty_env_logger = { workspace = true }
+syn               = { workspace = true, features = ["full", "visit"] }
+walkdir           = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = []

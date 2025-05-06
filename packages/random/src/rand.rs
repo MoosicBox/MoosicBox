@@ -4,7 +4,14 @@ use rand::{Rng as _, RngCore, SeedableRng, rngs::SmallRng};
 
 pub use rand;
 
-use crate::GenericRng;
+use crate::{GenericRng, Rng};
+
+pub static RNG: std::sync::LazyLock<Rng> = std::sync::LazyLock::new(Rng::new);
+
+#[must_use]
+pub fn rng() -> crate::Rng {
+    RNG.clone()
+}
 
 pub struct RandRng(Arc<Mutex<SmallRng>>);
 

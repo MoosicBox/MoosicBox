@@ -11,30 +11,65 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
+moosicbox_async_macros = { version = "0.1.0", path = "macros", optional = true, default-features = false }
 moosicbox_random = { version = "0.1.0", path = "../random", optional = true, default-features = false, features = [
     "rand",
 ] }
+moosicbox_time = { version = "0.1.0", path = "../time", optional = true, default-features = false, features = [
+    "std",
+] }
 
-log       = { workspace = true }
-thiserror = { workspace = true }
+log              = { workspace = true }
+pin-project-lite = { workspace = true }
+scoped-tls       = { workspace = true }
+thiserror        = { workspace = true }
 
 # Simulator
 futures = { workspace = true, optional = true }
 
 # Tokio
-tokio = { workspace = true, optional = true, features = ["rt"] }
+tokio      = { workspace = true, optional = true, features = ["rt"] }
+tokio-util = { workspace = true, optional = true }
 
 [dev-dependencies]
+moosicbox_time = { version = "0.1.0", path = "../time", default-features = false, features = [
+    "simulator",
+] }
 pretty_assertions = { workspace = true }
+test-log = { workspace = true }
 
 [features]
-default = ["simulator", "tokio"]
+default = [
+    "fs",
+    "io",
+    "macros",
+    "net",
+    "rt-multi-thread",
+    "simulator",
+    "sync",
+    "time",
+    "tokio",
+    "util",
+]
 
 fail-on-warnings = []
 
-simulator = ["dep:futures", "dep:moosicbox_random", "dep:tokio"]
-tokio     = ["dep:tokio"]
+_any_backend = []
+simulator = [
+    "_any_backend",
+    "dep:futures",
+    "dep:moosicbox_random",
+    "dep:moosicbox_time",
+    "dep:tokio",
+    "moosicbox_async_macros/simulator",
+]
+tokio = ["_any_backend", "dep:futures", "dep:tokio", "dep:tokio-util"]
 
+fs              = ["tokio?/fs"]
 io              = ["tokio?/io-util"]
+macros          = ["dep:moosicbox_async_macros", "tokio", "tokio?/macros"]
+net             = ["tokio?/net"]
 rt-multi-thread = ["tokio?/rt-multi-thread"]
 sync            = ["tokio?/sync"]
+time            = ["tokio?/time"]
+util            = ["dep:tokio-util"]

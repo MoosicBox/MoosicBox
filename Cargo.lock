@@ -6766,10 +6766,36 @@ version = "0.1.0"
 dependencies = [
  "futures",
  "log",
+ "moosicbox_async_macros",
  "moosicbox_random",
+ "moosicbox_time",
+ "pin-project-lite",
  "pretty_assertions",
+ "scoped-tls",
+ "test-log",
  "thiserror 2.0.12",
  "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "moosicbox_async_cargo"
+version = "0.1.0"
+dependencies = [
+ "clap 4.5.37",
+ "log",
+ "pretty_env_logger",
+ "syn 2.0.101",
+ "walkdir",
+]
+
+[[package]]
+name = "moosicbox_async_macros"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "quote",
+ "syn 2.0.101",
 ]
 
 [[package]]
@@ -7891,7 +7917,7 @@ version = "0.1.0"
 dependencies = [
  "log",
  "moosicbox_random",
- "moosicbox_simulator_utils",
+ "scoped-tls",
 ]
 
 [[package]]

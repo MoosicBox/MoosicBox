@@ -3,6 +3,7 @@
 !/packages/admin_htmx
 !/packages/assert
 !/packages/async
+!/packages/async/macros
 !/packages/async_service
 !/packages/audio_decoder
 !/packages/audio_encoder

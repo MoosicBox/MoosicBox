@@ -254,7 +254,7 @@ async fn handle_request(
     headers: Option<Value>,
     profile: Option<String>,
 ) -> Result<HttpResponse> {
-    let request_id = moosicbox_random::RNG.next_u64();
+    let request_id = moosicbox_random::rng().next_u64();
     let abort_token = CancellationToken::new();
 
     debug!(

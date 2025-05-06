@@ -2,6 +2,7 @@
 
 !/packages/assert
 !/packages/async
+!/packages/async/macros
 !/packages/async_service
 !/packages/config
 !/packages/database

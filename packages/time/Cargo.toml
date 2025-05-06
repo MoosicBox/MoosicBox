@@ -14,14 +14,14 @@ version     = "0.1.0"
 moosicbox_random = { version = "0.1.0", path = "../random", optional = true, default-features = false, features = [
     "rand",
 ] }
-moosicbox_simulator_utils = { version = "0.1.0", path = "../simulator/utils", optional = true, default-features = false }
 
-log = { workspace = true }
+log        = { workspace = true }
+scoped-tls = { workspace = true, optional = true }
 
 [features]
 default = ["simulator", "std"]
 
 fail-on-warnings = []
 
-simulator = ["dep:moosicbox_random", "dep:moosicbox_simulator_utils"]
+simulator = ["dep:moosicbox_random", "dep:scoped-tls"]
 std       = []

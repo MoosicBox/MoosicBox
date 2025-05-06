@@ -1,1 +1,3 @@
-pub use super::runtime::spawn;
+pub use super::runtime::{JoinHandle, spawn};
+
+pub use tokio::task::yield_now;

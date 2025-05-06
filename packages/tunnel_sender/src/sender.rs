@@ -210,7 +210,7 @@ impl TunnelSender {
     ) -> (Self, TunnelSenderHandle) {
         let sender = Arc::new(RwLock::new(None));
         let cancellation_token = CancellationToken::new();
-        let id = moosicbox_random::RNG.next_u64();
+        let id = moosicbox_random::rng().next_u64();
         let player_actions = Arc::new(RwLock::new(vec![]));
         let handle = TunnelSenderHandle {
             sender: sender.clone(),

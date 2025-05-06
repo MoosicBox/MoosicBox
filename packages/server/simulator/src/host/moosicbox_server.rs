@@ -9,7 +9,7 @@ use moosicbox_config::AppType;
 use moosicbox_env_utils::default_env;
 use moosicbox_simulator_harness::{
     CancellableSim,
-    random::RNG,
+    random::rng,
     time::simulator::step_multiplier,
     turmoil::{self, net::TcpStream},
     utils::simulator_cancellation_token,
@@ -33,7 +33,7 @@ pub fn start(sim: &mut impl CancellableSim, service_port: Option<u16>) {
         openport::pick_unused_port(3000..=u16::MAX).expect("No open ports within acceptable range")
     });
     let host = default_env("BIND_ADDR", "0.0.0.0");
-    let actix_workers = Some(RNG.gen_range(1..=64_usize));
+    let actix_workers = Some(rng().gen_range(1..=64_usize));
     #[cfg(feature = "telemetry")]
     let metrics_handler = std::sync::Arc::new(
         moosicbox_telemetry::get_http_metrics_handler().expect("Failed to init telemetry"),

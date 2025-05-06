@@ -321,7 +321,7 @@ impl UpnpPlayer {
         handle: Handle,
     ) -> Self {
         Self {
-            id: moosicbox_random::RNG.next_u64(),
+            id: moosicbox_random::rng().next_u64(),
             source_to_music_api,
             source,
             transport_uri: Arc::new(tokio::sync::RwLock::new(None)),

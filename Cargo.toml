@@ -17,7 +17,9 @@ members = [
     "packages/arb",
     "packages/assert",
     "packages/async",
+    "packages/async/cargo",
     "packages/async/examples/simulated",
+    "packages/async/macros",
     "packages/async_service",
     "packages/audio_decoder",
     "packages/audio_encoder",
@@ -261,6 +263,7 @@ opus = "0.3.0"
 os_info = { version = "3.10.0", default-features = false }
 paste = "1.0.15"
 pin-project = "1.1.10"
+pin-project-lite = "0.2.16"
 pin-utils = "0.1.0"
 pingora = "0.4.0"
 pingora-core = "0.4.0"
@@ -280,6 +283,7 @@ puffin_http = "0.16.1"
 qstring = "0.7.2"
 quickcheck = "1.0.3"
 quickcheck_macros = "1.0.0"
+quote = "1.0.40"
 rand = "0.9"
 rangemap = "1.5.1"
 rb = "0.4.1"
@@ -296,6 +300,7 @@ rusqlite = { version = "=0.32.1", features = ["bundled"] }
 rust_decimal = { version = "1.37.1", default-features = false }
 rust_decimal_macros = { version = "1.37.1", default-features = false }
 rustls = "0.23"
+scoped-tls = "1.0.1"
 serde = { version = "1", features = ["derive"] }
 serde-aux = "4.7.0"
 serde-querystring = "0.3.0"
@@ -327,6 +332,7 @@ swc_ecma_transforms_base = "13.0.0"
 swc_ecma_transforms_typescript = "14.0.0"
 swc_ecma_visit = "9.0.0"
 symphonia = { version = "0.5.4", features = ["all"] }
+syn = "2.0.101"
 syntect = "5.2.0"
 tantivy = "0.24.1"
 tauri = { version = "2.5.1", features = ["protocol-asset"] }
@@ -360,6 +366,7 @@ utoipa-redoc = { version = "6.0.0", features = ["actix-web"] }
 utoipa-scalar = { version = "0.3.0", features = ["actix-web"] }
 utoipa-swagger-ui = { version = "9.0.1", features = ["actix-web"] }
 uuid = { version = "1.16.0", features = ["v4"] }
+walkdir = "2.5.0"
 webp = "0.3.0"
 whoami = "1.6.0"
 xml = "0.8.20"

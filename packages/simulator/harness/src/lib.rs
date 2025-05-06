@@ -242,7 +242,7 @@ pub fn run_simulation(bootstrap: &impl SimBootstrap) -> Result<(), Box<dyn std::
 
         let builder = bootstrap.build_sim(sim_builder());
         #[cfg(feature = "random")]
-        let sim = builder.build_with_rng(Box::new(moosicbox_random::RNG.clone()));
+        let sim = builder.build_with_rng(Box::new(moosicbox_random::rng().clone()));
         #[cfg(not(feature = "random"))]
         let sim = builder.build();
 

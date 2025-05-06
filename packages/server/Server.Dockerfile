@@ -11,6 +11,7 @@ RUN cat Cargo.toml | \
     \"packages\/admin_htmx\",\r\
     \"packages\/assert\",\r\
     \"packages\/async\",\r\
+    \"packages\/async\/macros\",\r\
     \"packages\/async_service\",\r\
     \"packages\/audio_decoder\",\r\
     \"packages\/audio_encoder\",\r\
@@ -73,6 +74,7 @@ RUN cat Cargo.toml | \
 COPY packages/admin_htmx/Cargo.toml packages/admin_htmx/Cargo.toml
 COPY packages/assert/Cargo.toml packages/assert/Cargo.toml
 COPY packages/async/Cargo.toml packages/async/Cargo.toml
+COPY packages/async/macros/Cargo.toml packages/async/macros/Cargo.toml
 COPY packages/async_service/Cargo.toml packages/async_service/Cargo.toml
 COPY packages/audio_decoder/Cargo.toml packages/audio_decoder/Cargo.toml
 COPY packages/audio_encoder/Cargo.toml packages/audio_encoder/Cargo.toml
@@ -191,14 +193,21 @@ packages/yt|\
   done
 
 RUN \
-  printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/audio_zone/models/Cargo.toml" && \
-  printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/http/models/Cargo.toml" && \
-  printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/library/models/Cargo.toml" && \
-  printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/menu/models/Cargo.toml" && \
-  printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/music_api/models/Cargo.toml" && \
-  printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/music/models/Cargo.toml" && \
-  printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/session/models/Cargo.toml" && \
-  printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/simulator/utils/Cargo.toml"
+    cat "packages/async/macros/Cargo.toml" | \
+    tr '\n' '\r' | \
+    sed -E "s/\[lib\]/[lib]\r\
+path=\"..\/..\/temp_lib.rs\"/" | \
+    tr '\r' '\n' \
+    > "packages/async/macros/Cargo2.toml" && \
+    mv "packages/async/macros/Cargo2.toml" "packages/async/macros/Cargo.toml" && \
+    printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/audio_zone/models/Cargo.toml" && \
+    printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/http/models/Cargo.toml" && \
+    printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/library/models/Cargo.toml" && \
+    printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/menu/models/Cargo.toml" && \
+    printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/music_api/models/Cargo.toml" && \
+    printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/music/models/Cargo.toml" && \
+    printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/session/models/Cargo.toml" && \
+    printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/simulator/utils/Cargo.toml"
 
 RUN mkdir packages/server/src && \
   echo 'fn main() {}' >packages/server/src/main.rs

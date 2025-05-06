@@ -159,7 +159,7 @@ impl Playback {
         playback_target: Option<PlaybackTarget>,
     ) -> Self {
         Self {
-            id: moosicbox_random::RNG.next_u64(),
+            id: moosicbox_random::rng().next_u64(),
             session_id,
             profile,
             tracks,
@@ -448,7 +448,7 @@ impl PlaybackHandler {
         let receiver = Arc::new(tokio::sync::RwLock::new(None));
 
         Self {
-            id: moosicbox_random::RNG.next_u64(),
+            id: moosicbox_random::rng().next_u64(),
             playback,
             output,
             player: Arc::new(player),

@@ -1,4 +1,4 @@
-use moosicbox_simulator_harness::{CancellableSim, plan::InteractionPlan as _, random::RNG};
+use moosicbox_simulator_harness::{CancellableSim, plan::InteractionPlan as _, random::rng};
 use plan::{FaultInjectionInteractionPlan, Interaction};
 
 pub mod plan;
@@ -43,7 +43,7 @@ async fn perform_interaction(interaction: &Interaction) -> Result<(), Box<dyn st
                 if let Some(token) = token {
                     token.cancel();
                 }
-                let gracefully = RNG.gen_bool(0.8);
+                let gracefully = rng().gen_bool(0.8);
                 log::info!("stopping '{HOST}' gracefully={gracefully}");
                 handle.stop(gracefully).await;
                 log::info!("stopped '{HOST}' gracefully={gracefully}");

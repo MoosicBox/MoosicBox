@@ -10,6 +10,7 @@ RUN cat Cargo.toml | \
     sed -E "s/members = \[[^]]+\]/members = [\r\
     \"packages\/assert\",\r\
     \"packages\/async\",\r\
+    \"packages\/async\/macros\",\r\
     \"packages\/config\",\r\
     \"packages\/database\",\r\
     \"packages\/env_utils\",\r\
@@ -28,6 +29,7 @@ RUN cat Cargo.toml | \
 
 COPY packages/assert/Cargo.toml packages/assert/Cargo.toml
 COPY packages/async/Cargo.toml packages/async/Cargo.toml
+COPY packages/async/macros/Cargo.toml packages/async/macros/Cargo.toml
 COPY packages/config/Cargo.toml packages/config/Cargo.toml
 COPY packages/database/Cargo.toml packages/database/Cargo.toml
 COPY packages/env_utils/Cargo.toml packages/env_utils/Cargo.toml
@@ -65,7 +67,14 @@ packages/time|\
   done
 
 RUN \
-  printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/simulator/utils/Cargo.toml"
+    cat "packages/async/macros/Cargo.toml" | \
+    tr '\n' '\r' | \
+    sed -E "s/\[lib\]/[lib]\r\
+path=\"..\/..\/temp_lib.rs\"/" | \
+    tr '\r' '\n' \
+    > "packages/async/macros/Cargo2.toml" && \
+    mv "packages/async/macros/Cargo2.toml" "packages/async/macros/Cargo.toml" && \
+    printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/simulator/utils/Cargo.toml"
 
 RUN apt-get update && apt-get install -y cmake
 RUN mkdir packages/load_balancer/src && \

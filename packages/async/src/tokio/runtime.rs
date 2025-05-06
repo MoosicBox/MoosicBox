@@ -1,11 +1,37 @@
 use std::time::Duration;
 
+use tokio::task::JoinHandle;
+
 use crate::{
     Error,
     runtime::{Builder, GenericRuntime},
 };
 
+#[derive(Debug)]
 pub struct Runtime(tokio::runtime::Runtime);
+
+impl Default for Runtime {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Runtime {
+    /// # Panics
+    ///
+    /// * If `build_runtime` fails
+    #[must_use]
+    pub fn new() -> Self {
+        build_runtime(&Builder::new()).unwrap()
+    }
+
+    pub fn spawn<T: Send + 'static>(
+        &self,
+        future: impl Future<Output = T> + Send + 'static,
+    ) -> JoinHandle<T> {
+        self.0.spawn(future)
+    }
+}
 
 impl GenericRuntime for Runtime {
     fn block_on<F: Future + Send + 'static>(&self, f: F) -> F::Output
@@ -15,6 +41,8 @@ impl GenericRuntime for Runtime {
         self.0.block_on(f)
     }
 
+    /// FIXME: This doesn't await all tasks. We probably need to add all
+    /// the task handles to a collection manually to handle this properly.
     fn wait(self) -> Result<(), Error> {
         self.0.shutdown_timeout(Duration::from_secs(10_000_000));
         Ok(())
@@ -37,7 +65,10 @@ pub(crate) fn build_runtime(#[allow(unused)] builder: &Builder) -> Result<Runtim
     #[cfg(not(feature = "rt-multi-thread"))]
     let mut builder = tokio::runtime::Builder::new_current_thread();
 
-    #[cfg(feature = "io")]
+    #[cfg(feature = "time")]
+    builder.enable_time();
+
+    #[cfg(feature = "net")]
     builder.enable_io();
 
     Ok(Runtime(builder.build()?))

@@ -10,6 +10,7 @@ RUN cat Cargo.toml | \
     sed -E "s/members = \[[^]]+\]/members = [\r\
     \"packages\/assert\",\r\
     \"packages\/async\",\r\
+    \"packages\/async\/macros\",\r\
     \"packages\/async_service\",\r\
     \"packages\/config\",\r\
     \"packages\/database\",\r\
@@ -35,6 +36,7 @@ RUN cat Cargo.toml | \
 
 COPY packages/assert/Cargo.toml packages/assert/Cargo.toml
 COPY packages/async/Cargo.toml packages/async/Cargo.toml
+COPY packages/async/macros/Cargo.toml packages/async/macros/Cargo.toml
 COPY packages/async_service/Cargo.toml packages/async_service/Cargo.toml
 COPY packages/config/Cargo.toml packages/config/Cargo.toml
 COPY packages/database/Cargo.toml packages/database/Cargo.toml
@@ -86,8 +88,15 @@ packages/tunnel_server|\
   done
 
 RUN \
-  printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/simulator/utils/Cargo.toml" && \
-  printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/http/models/Cargo.toml"
+    cat "packages/async/macros/Cargo.toml" | \
+    tr '\n' '\r' | \
+    sed -E "s/\[lib\]/[lib]\r\
+path=\"..\/..\/temp_lib.rs\"/" | \ 
+    tr '\r' '\n' \
+    > "packages/async/macros/Cargo2.toml" && \
+    mv "packages/async/macros/Cargo2.toml" "packages/async/macros/Cargo.toml" && \
+    printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/http/models/Cargo.toml" && \
+    printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/simulator/utils/Cargo.toml"
 
 RUN mkdir packages/tunnel_server/src && \
   echo 'fn main() {}' >packages/tunnel_server/src/main.rs

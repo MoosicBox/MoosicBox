@@ -261,7 +261,7 @@ impl WsServer {
         log::debug!("Someone joined");
 
         // register session with random connection ID
-        let id = moosicbox_random::RNG.next_u64();
+        let id = moosicbox_random::rng().next_u64();
         self.connections.insert(
             id,
             Connection {

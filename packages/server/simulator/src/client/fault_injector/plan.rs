@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use moosicbox_simulator_harness::{
     plan::InteractionPlan,
-    random::{RNG, rand::rand::seq::IteratorRandom as _},
+    random::{rand::rand::seq::IteratorRandom as _, rng},
     time::simulator::step_multiplier,
 };
 use strum::{EnumDiscriminants, EnumIter, IntoEnumIterator as _};
@@ -71,7 +71,7 @@ impl InteractionPlan<Interaction> for FaultInjectionInteractionPlan {
     fn gen_interactions(&mut self, count: u64) {
         let len = self.plan.len() as u64;
 
-        let mut rng = RNG.clone();
+        let mut rng = rng();
 
         for i in 1..=count {
             loop {
