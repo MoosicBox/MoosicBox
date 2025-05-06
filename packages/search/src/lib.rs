@@ -114,7 +114,7 @@ fn create_global_search_index(
     path: &Path,
     recreate_if_exists: bool,
 ) -> Result<Index, CreateIndexError> {
-    std::fs::create_dir_all(path)
+    moosicbox_fs::sync::create_dir_all(path)
         .unwrap_or_else(|_| panic!("Failed to create global search index directory at {path:?}"));
 
     // # Defining the schema
@@ -201,22 +201,26 @@ fn create_global_search_index(
     // This will actually just save a meta.json
     // with our schema in the directory.
 
-    let mmap_directory = MmapDirectory::open(path)?;
-
-    Ok(if recreate_if_exists {
-        if Index::exists(&mmap_directory)? {
-            log::debug!("Deleting existing index in dir {path:?}");
-            std::fs::remove_dir_all(path)?;
-            std::fs::create_dir_all(path)?;
-        } else {
-            log::trace!("No existing index in dir {path:?}");
-        }
-        log::debug!("Creating Index in dir {path:?}");
-        Index::create_in_dir(path, schema)?
+    Ok(if cfg!(any(test, feature = "simulator")) {
+        Index::create_in_ram(schema)
     } else {
-        let directory: Box<dyn Directory> = Box::new(mmap_directory);
-        log::debug!("Opening or creating index in dir {path:?}");
-        Index::open_or_create(directory, schema)?
+        let mmap_directory = MmapDirectory::open(path)?;
+
+        if recreate_if_exists {
+            if Index::exists(&mmap_directory)? {
+                log::debug!("Deleting existing index in dir {path:?}");
+                moosicbox_fs::sync::remove_dir_all(path)?;
+                moosicbox_fs::sync::create_dir_all(path)?;
+            } else {
+                log::trace!("No existing index in dir {path:?}");
+            }
+            log::debug!("Creating Index in dir {path:?}");
+            Index::create_in_dir(path, schema)?
+        } else {
+            let directory: Box<dyn Directory> = Box::new(mmap_directory);
+            log::debug!("Opening or creating index in dir {path:?}");
+            Index::open_or_create(directory, schema)?
+        }
     })
 }
 
@@ -990,11 +994,12 @@ mod tests {
         fn drop(&mut self) {
             for path in TEMP_DIRS.read().unwrap().iter() {
                 log::debug!("Cleaning up temp directory {:?}", path.as_path());
-                std::fs::remove_dir_all(path.as_path()).expect("Failed to clean up temp directory");
+                moosicbox_fs::sync::remove_dir_all(path.as_path())
+                    .expect("Failed to clean up temp directory");
             }
             log::debug!("Cleaning up temp directory {:?}", TESTS_DIR_PATH.as_path());
             if TESTS_DIR_PATH.exists() {
-                std::fs::remove_dir_all(TESTS_DIR_PATH.as_path())
+                moosicbox_fs::sync::remove_dir_all(TESTS_DIR_PATH.as_path())
                     .expect("Failed to clean up temp directory");
             }
         }

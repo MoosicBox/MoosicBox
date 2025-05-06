@@ -7113,6 +7113,7 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "log",
+ "moosicbox_async",
  "pretty_assertions",
  "tokio",
 ]
@@ -7645,6 +7646,7 @@ dependencies = [
  "itertools 0.14.0",
  "log",
  "moosicbox_config",
+ "moosicbox_fs",
  "moosicbox_json_utils",
  "moosicbox_music_models",
  "moosicbox_task",
