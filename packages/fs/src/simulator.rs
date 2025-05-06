@@ -176,6 +176,20 @@ pub mod sync {
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
 
+    /// # Errors
+    ///
+    /// * Never
+    pub fn create_dir_all<P: AsRef<Path>>(_path: P) -> std::io::Result<()> {
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// * Never
+    pub fn remove_dir_all<P: AsRef<Path>>(_path: P) -> std::io::Result<()> {
+        Ok(())
+    }
+
     #[cfg(test)]
     mod test {
         use std::{
@@ -330,6 +344,20 @@ pub mod unsync {
     /// * If the file `Path` cannot be converted to a `str`
     pub async fn read_to_string<P: AsRef<Path>>(path: P) -> std::io::Result<String> {
         super::sync::read_to_string(path)
+    }
+
+    /// # Errors
+    ///
+    /// * Never
+    pub async fn create_dir_all<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+        super::sync::create_dir_all(path)
+    }
+
+    /// # Errors
+    ///
+    /// * Never
+    pub async fn remove_dir_all<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+        super::sync::remove_dir_all(path)
     }
 
     #[cfg(test)]

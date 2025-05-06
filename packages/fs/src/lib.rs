@@ -93,7 +93,7 @@ macro_rules! impl_sync_fs {
         #[cfg(feature = "sync")]
         pub mod sync {
             pub use $crate::$module::File;
-            pub use $crate::$module::sync::read_to_string;
+            pub use $crate::$module::sync::{create_dir_all, read_to_string, remove_dir_all};
 
             impl_open_options!();
         }
@@ -106,7 +106,7 @@ macro_rules! impl_async_fs {
         #[cfg(feature = "async")]
         pub mod unsync {
             pub use $crate::$module::File;
-            pub use $crate::$module::unsync::read_to_string;
+            pub use $crate::$module::unsync::{create_dir_all, read_to_string, remove_dir_all};
 
             impl_open_options!();
 

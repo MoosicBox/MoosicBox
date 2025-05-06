@@ -13,6 +13,20 @@ pub mod unsync {
         ::tokio::fs::read_to_string(path).await
     }
 
+    /// # Errors
+    ///
+    /// * If underlying `tokio::fs::create_dir_all` fails
+    pub async fn create_dir_all<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+        tokio::fs::create_dir_all(path).await
+    }
+
+    /// # Errors
+    ///
+    /// * If underlying `tokio::fs::remove_dir_all` fails
+    pub async fn remove_dir_all<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+        tokio::fs::remove_dir_all(path).await
+    }
+
     impl From<OpenOptions> for tokio::fs::OpenOptions {
         fn from(value: OpenOptions) -> Self {
             let mut options = Self::new();

@@ -13,6 +13,20 @@ pub mod sync {
         ::std::fs::read_to_string(path)
     }
 
+    /// # Errors
+    ///
+    /// * If underlying `std::fs::create_dir_all` fails
+    pub fn create_dir_all<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+        ::std::fs::create_dir_all(path)
+    }
+
+    /// # Errors
+    ///
+    /// * If underlying `std::fs::remove_dir_all` fails
+    pub fn remove_dir_all<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+        ::std::fs::remove_dir_all(path)
+    }
+
     impl From<OpenOptions> for std::fs::OpenOptions {
         fn from(value: OpenOptions) -> Self {
             let mut options = Self::new();
