@@ -14,14 +14,11 @@ version     = "0.1.0"
 ignored = ["strum", "thiserror"]
 
 [dependencies]
-moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
-moosicbox_async_service = { version = "0.1.0", path = "../../../async_service", default-features = false }
-moosicbox_config = { version = "0.1.0", path = "../../../config", default-features = false }
-moosicbox_server = { version = "0.1.0", path = "../../../server", default-features = false, features = [
-    "app-apis",
-    "sqlite-sqlx",
-] }
-moosicbox_task = { version = "0.1.0", path = "../../../task", default-features = false }
+moosicbox_assert        = { workspace = true }
+moosicbox_async_service = { workspace = true }
+moosicbox_config        = { workspace = true }
+moosicbox_server        = { workspace = true, features = ["app-apis", "sqlite-sqlx"] }
+moosicbox_task          = { workspace = true }
 
 log          = { workspace = true }
 strum        = { workspace = true }

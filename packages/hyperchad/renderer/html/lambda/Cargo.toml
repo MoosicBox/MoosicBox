@@ -11,12 +11,10 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-hyperchad_renderer = { version = "0.1.0", path = "../../", default-features = false, features = [
-    "canvas",
-] }
-moosicbox_assert = { version = "0.1.0", path = "../../../../assert", default-features = false }
-moosicbox_env_utils = { version = "0.1.0", path = "../../../../env_utils", default-features = false }
-moosicbox_task = { version = "0.1.0", path = "../../../../task", default-features = false }
+hyperchad_renderer  = { workspace = true, features = ["canvas"] }
+moosicbox_assert    = { workspace = true }
+moosicbox_env_utils = { workspace = true }
+moosicbox_task      = { workspace = true }
 
 async-trait    = { workspace = true }
 flate2         = { workspace = true }

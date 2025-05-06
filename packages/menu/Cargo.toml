@@ -11,31 +11,23 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
-moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
-moosicbox_date_utils = { version = "0.1.0", path = "../date_utils", default-features = false, features = [
-    "chrono",
-] }
-moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
-    "database",
-] }
-moosicbox_library = { version = "0.1.0", path = "../library", default-features = false }
-moosicbox_menu_models = { version = "0.1.0", path = "models", default-features = false }
-moosicbox_music_api = { version = "0.1.0", path = "../music_api", features = [
-    "db",
-] }
-moosicbox_music_models = { version = "0.1.0", path = "../music/models", default-features = false }
-moosicbox_paging = { version = "0.1.0", path = "../paging", default-features = false }
-moosicbox_scan = { version = "0.1.0", path = "../scan", default-features = false }
-moosicbox_search = { version = "0.1.0", path = "../search", default-features = false }
-moosicbox_session = { version = "0.1.0", path = "../session", default-features = false }
-moosicbox_time = { version = "0.1.0", path = "../time", default-features = false, features = [
-    "std",
-] }
+moosicbox_assert       = { workspace = true }
+moosicbox_database     = { workspace = true }
+moosicbox_date_utils   = { workspace = true, features = ["chrono"] }
+moosicbox_json_utils   = { workspace = true, features = ["database"] }
+moosicbox_library      = { workspace = true }
+moosicbox_menu_models  = { workspace = true }
+moosicbox_music_api    = { workspace = true, features = ["db"] }
+moosicbox_music_models = { workspace = true }
+moosicbox_paging       = { workspace = true }
+moosicbox_scan         = { workspace = true }
+moosicbox_search       = { workspace = true }
+moosicbox_session      = { workspace = true }
+moosicbox_time         = { workspace = true, features = ["std"] }
 
-moosicbox_qobuz = { version = "0.1.0", path = "../qobuz", optional = true, default-features = false }
-moosicbox_tidal = { version = "0.1.0", path = "../tidal", optional = true, default-features = false }
-moosicbox_yt    = { version = "0.1.0", path = "../yt", optional = true, default-features = false }
+moosicbox_qobuz = { workspace = true, optional = true }
+moosicbox_tidal = { workspace = true, optional = true }
+moosicbox_yt    = { workspace = true, optional = true }
 
 # API Dependencies
 utoipa = { workspace = true, optional = true }

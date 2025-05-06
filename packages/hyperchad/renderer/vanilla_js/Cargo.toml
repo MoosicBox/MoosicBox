@@ -15,23 +15,12 @@ version     = "0.1.0"
 ignored = ["hyperchad_js_bundler"]
 
 [build-dependencies]
-hyperchad_js_bundler = { version = "0.1.0", path = "../../js_bundler", default-features = false, features = [
-    "swc",
-] }
+hyperchad_js_bundler = { workspace = true, features = ["swc"] }
 
 [dependencies]
-hyperchad_renderer = { version = "0.1.0", path = "..", default-features = false, features = [
-    "canvas",
-    "html",
-] }
-hyperchad_renderer_html = { version = "0.1.0", path = "../html", default-features = false, features = [
-    "assets",
-    "extend",
-] }
-hyperchad_transformer = { version = "0.1.0", path = "../../transformer", default-features = false, features = [
-    "html",
-    "logic",
-] }
+hyperchad_renderer      = { workspace = true, features = ["canvas", "html"] }
+hyperchad_renderer_html = { workspace = true, features = ["assets", "extend"] }
+hyperchad_transformer   = { workspace = true, features = ["html", "logic"] }
 
 async-trait  = { workspace = true }
 const_format = { workspace = true }

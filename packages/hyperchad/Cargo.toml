@@ -11,7 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-hyperchad_transformer = { version = "0.1.0", path = "transformer", default-features = false }
+hyperchad_transformer = { workspace = true }
 
 [features]
 fail-on-warnings = []

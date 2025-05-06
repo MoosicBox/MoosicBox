@@ -16,15 +16,11 @@ path              = "src/main.rs"
 required-features = []
 
 [dependencies]
-moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
-moosicbox_files = { version = "0.1.0", path = "../files", default-features = false, features = [
-    "files",
-] }
-moosicbox_logging = { version = "0.1.0", path = "../logging", default-features = false, features = [
-    "free_log",
-] }
-moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false }
-moosicbox_music_models = { version = "0.1.0", path = "../music/models", default-features = false }
+moosicbox_assert       = { workspace = true }
+moosicbox_files        = { workspace = true, features = ["files"] }
+moosicbox_logging      = { workspace = true, features = ["free_log"] }
+moosicbox_music_api    = { workspace = true }
+moosicbox_music_models = { workspace = true }
 
 clap = { workspace = true }
 futures = { workspace = true }

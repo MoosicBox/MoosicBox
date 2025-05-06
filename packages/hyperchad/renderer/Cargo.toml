@@ -11,10 +11,8 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-hyperchad_color = { version = "0.1.0", path = "../color", default-features = false }
-hyperchad_transformer = { version = "0.1.0", path = "../transformer", default-features = false, features = [
-    "html",
-] }
+hyperchad_color       = { workspace = true }
+hyperchad_transformer = { workspace = true, features = ["html"] }
 
 async-trait = { workspace = true }
 bytes       = { workspace = true, optional = true }

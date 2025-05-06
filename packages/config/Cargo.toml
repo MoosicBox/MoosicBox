@@ -11,14 +11,14 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
-moosicbox_profiles = { version = "0.1.0", path = "../profiles", optional = true, default-features = false, features = [
+moosicbox_assert = { workspace = true }
+moosicbox_profiles = { workspace = true, optional = true, features = [
     "events",
 ] }
 
 # DB dependencies
-moosicbox_database = { version = "0.1.0", path = "../database", optional = true, default-features = false }
-moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", optional = true, default-features = false, features = [
+moosicbox_database = { workspace = true, optional = true }
+moosicbox_json_utils = { workspace = true, optional = true, features = [
     "database",
 ] }
 nanoid = { workspace = true, optional = true }
@@ -29,9 +29,7 @@ serde     = { workspace = true, optional = true }
 utoipa    = { workspace = true, optional = true }
 
 # Test dependencies
-moosicbox_random = { version = "0.1.0", path = "../random", optional = true, default-features = false, features = [
-    "rand",
-] }
+moosicbox_random = { workspace = true, optional = true, features = ["rand"] }
 
 home      = { workspace = true }
 log       = { workspace = true }

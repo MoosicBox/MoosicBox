@@ -11,12 +11,10 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-hyperchad_renderer = { version = "0.1.0", path = "../renderer", default-features = false }
-hyperchad_transformer = { version = "0.1.0", path = "../transformer", default-features = false, features = [
-    "html",
-] }
-moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
-moosicbox_task = { version = "0.1.0", path = "../../task", default-features = false }
+hyperchad_renderer    = { workspace = true }
+hyperchad_transformer = { workspace = true, features = ["html"] }
+moosicbox_assert      = { workspace = true }
+moosicbox_task        = { workspace = true }
 
 flume     = { workspace = true }
 futures   = { workspace = true }

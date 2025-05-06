@@ -20,31 +20,21 @@ name = "moosicbox_tunnel_server"
 path = "src/main.rs"
 
 [dependencies]
-moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
-moosicbox_async_service = { version = "0.1.0", path = "../async_service", default-features = false }
-moosicbox_database = { version = "0.1.0", path = "../database", default-features = false, features = [
-    "api",
-] }
-moosicbox_database_connection = { version = "0.1.0", path = "../database_connection", default-features = false }
-moosicbox_env_utils = { version = "0.1.0", path = "../env_utils" }
-moosicbox_http = { version = "0.1.0", path = "../http", default-features = false, features = [
-    "serde",
-] }
-moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
-    "database",
-] }
-moosicbox_logging = { version = "0.1.0", path = "../logging", features = [
-    "free_log",
-] }
-moosicbox_middleware = { version = "0.1.0", path = "../middleware", default-features = false }
-moosicbox_random = { version = "0.1.0", path = "../random", default-features = false, features = [
-    "rand",
-] }
-moosicbox_task = { version = "0.1.0", path = "../task", default-features = false }
-moosicbox_telemetry = { version = "0.1.0", path = "../telemetry", default-features = false, features = [
+moosicbox_assert = { workspace = true }
+moosicbox_async_service = { workspace = true }
+moosicbox_database = { workspace = true, features = ["api"] }
+moosicbox_database_connection = { workspace = true }
+moosicbox_env_utils = { workspace = true }
+moosicbox_http = { workspace = true, features = ["serde"] }
+moosicbox_json_utils = { workspace = true, features = ["database"] }
+moosicbox_logging = { workspace = true, features = ["free_log"] }
+moosicbox_middleware = { workspace = true }
+moosicbox_random = { workspace = true, features = ["rand"] }
+moosicbox_task = { workspace = true }
+moosicbox_telemetry = { workspace = true, features = [
     "actix",
 ], optional = true }
-moosicbox_tunnel = { version = "0.1.0", path = "../tunnel", default-features = false }
+moosicbox_tunnel = { workspace = true }
 
 actix-cors = { workspace = true }
 actix-web = { workspace = true }

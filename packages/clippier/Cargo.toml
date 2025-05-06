@@ -19,9 +19,7 @@ path              = "src/main.rs"
 required-features = []
 
 [dependencies]
-moosicbox_logging = { version = "0.1.0", path = "../logging", default-features = false, features = [
-    "free_log",
-] }
+moosicbox_logging = { workspace = true, features = ["free_log"] }
 
 clap       = { workspace = true }
 itertools  = { workspace = true }

@@ -11,21 +11,18 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_arb = { path = "../../../arb", default-features = false, optional = true, features = [
+moosicbox_arb = { workspace = true, optional = true, features = [
     "serde",
     "xml",
 ] }
-moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
+moosicbox_assert = { workspace = true }
 
 log        = { workspace = true }
 quickcheck = { workspace = true, optional = true }
 serde      = { workspace = true, optional = true }
 
 [dev-dependencies]
-moosicbox_arb = { path = "../../../arb", default-features = false, features = [
-    "serde",
-    "xml",
-] }
+moosicbox_arb = { workspace = true, features = ["serde", "xml"] }
 
 [features]
 default = ["arb", "layout", "serde"]

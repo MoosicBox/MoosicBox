@@ -14,12 +14,10 @@ version     = "0.1.0"
 ignored = ["strum"]
 
 [dependencies]
-moosicbox_audio_zone_models = { version = "0.1.0", path = "../../audio_zone/models", default-features = false }
-moosicbox_database = { version = "0.1.0", path = "../../database", default-features = false }
-moosicbox_json_utils = { version = "0.1.0", path = "../../json_utils", default-features = false }
-moosicbox_music_models = { version = "0.1.0", path = "../../music/models", default-features = false, features = [
-    "api",
-] }
+moosicbox_audio_zone_models = { workspace = true }
+moosicbox_database          = { workspace = true }
+moosicbox_json_utils        = { workspace = true }
+moosicbox_music_models      = { workspace = true, features = ["api"] }
 
 # API Dependencies
 utoipa = { workspace = true, optional = true }

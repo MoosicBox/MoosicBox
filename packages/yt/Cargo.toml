@@ -14,33 +14,20 @@ version     = "0.1.0"
 ignored = ["strum"]
 
 [dependencies]
-moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
-moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
-moosicbox_date_utils = { version = "0.1.0", path = "../date_utils", default-features = false, features = [
-    "chrono",
-] }
-moosicbox_files = { version = "0.1.0", path = "../files", default-features = false, features = [
-    "flac",
-    "yt",
-] }
-moosicbox_http = { version = "0.1.0", path = "../http", default-features = false, features = [
-    "json",
-    "reqwest",
-] }
-moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
+moosicbox_assert = { workspace = true }
+moosicbox_database = { workspace = true }
+moosicbox_date_utils = { workspace = true, features = ["chrono"] }
+moosicbox_files = { workspace = true, features = ["flac", "yt"] }
+moosicbox_http = { workspace = true, features = ["json", "reqwest"] }
+moosicbox_json_utils = { workspace = true, features = [
     "database",
     "serde_json",
 ] }
-moosicbox_menu_models = { version = "0.1.0", path = "../menu/models", default-features = false }
-moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false }
-moosicbox_music_models = { version = "0.1.0", path = "../music/models", default-features = false, features = [
-    "flac",
-    "yt",
-] }
-moosicbox_paging = { version = "0.1.0", path = "../paging", default-features = false }
-moosicbox_search = { version = "0.1.0", path = "../search", default-features = false, features = [
-    "api",
-] }
+moosicbox_menu_models = { workspace = true }
+moosicbox_music_api = { workspace = true }
+moosicbox_music_models = { workspace = true, features = ["flac", "yt"] }
+moosicbox_paging = { workspace = true }
+moosicbox_search = { workspace = true, features = ["api"] }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }

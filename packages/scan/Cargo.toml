@@ -14,32 +14,24 @@ version     = "0.1.0"
 ignored = ["strum"]
 
 [dependencies]
-moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
-moosicbox_config = { version = "0.1.0", path = "../config", default-features = false }
-moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
-moosicbox_date_utils = { version = "0.1.0", path = "../date_utils", default-features = false, features = [
-    "chrono",
-] }
-moosicbox_files = { version = "0.1.0", path = "../files", default-features = false }
-moosicbox_http = { version = "0.1.0", path = "../http", default-features = false, features = [
-    "reqwest",
-] }
-moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
-    "serde_json",
-] }
-moosicbox_library = { version = "0.1.0", path = "../library", default-features = false }
-moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false }
-moosicbox_music_models = { version = "0.1.0", path = "../music/models", default-features = false }
-moosicbox_paging = { version = "0.1.0", path = "../paging" }
-moosicbox_search = { version = "0.1.0", path = "../search" }
-moosicbox_task = { version = "0.1.0", path = "../task", default-features = false }
-moosicbox_time = { version = "0.1.0", path = "../time", default-features = false, features = [
-    "std",
-] }
+moosicbox_assert       = { workspace = true }
+moosicbox_config       = { workspace = true }
+moosicbox_database     = { workspace = true }
+moosicbox_date_utils   = { workspace = true, features = ["chrono"] }
+moosicbox_files        = { workspace = true }
+moosicbox_http         = { workspace = true, features = ["reqwest"] }
+moosicbox_json_utils   = { workspace = true, features = ["serde_json"] }
+moosicbox_library      = { workspace = true }
+moosicbox_music_api    = { workspace = true }
+moosicbox_music_models = { workspace = true }
+moosicbox_paging       = { workspace = true }
+moosicbox_search       = { workspace = true }
+moosicbox_task         = { workspace = true }
+moosicbox_time         = { workspace = true, features = ["std"] }
 
 # API Dependencies
 actix-web      = { workspace = true, optional = true }
-moosicbox_auth = { version = "0.1.0", path = "../auth", default-features = false, optional = true }
+moosicbox_auth = { workspace = true, optional = true }
 utoipa         = { workspace = true, optional = true }
 
 # Local Dependencies

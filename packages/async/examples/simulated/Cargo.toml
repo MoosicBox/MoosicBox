@@ -9,13 +9,8 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_async = { version = "0.1.0", path = "../..", default-features = false, features = [
-    "time",
-    "tokio",
-] }
-moosicbox_random = { version = "0.1.0", path = "../../../random", default-features = false, features = [
-    "simulator",
-] }
+moosicbox_async  = { workspace = true, features = ["time", "tokio"] }
+moosicbox_random = { workspace = true, features = ["simulator"] }
 
 pretty_env_logger = { workspace = true }
 

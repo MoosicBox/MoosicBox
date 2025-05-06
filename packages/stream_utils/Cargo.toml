@@ -11,11 +11,11 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_http = { version = "0.1.0", path = "../http", optional = true, default-features = false, features = [
+moosicbox_http = { workspace = true, optional = true, features = [
     "reqwest",
     "stream",
 ] }
-moosicbox_task = { version = "0.1.0", path = "../task", optional = true, default-features = false }
+moosicbox_task = { workspace = true, optional = true }
 
 bytes       = { workspace = true }
 flume       = { workspace = true, optional = true }

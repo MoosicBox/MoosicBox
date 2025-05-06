@@ -23,103 +23,67 @@ ignored = ["strum", "tracy-client"]
 normal = ["moosicbox_schema", "tracy-client"]
 
 [dependencies]
-moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
-moosicbox_async_service = { version = "0.1.0", path = "../async_service", default-features = false }
-moosicbox_audio_output = { version = "0.1.0", path = "../audio_output", default-features = false }
-moosicbox_audio_zone = { version = "0.1.0", path = "../audio_zone", default-features = false, features = [
-    "api",
-    "events",
-] }
-moosicbox_auth = { version = "0.1.0", path = "../auth", optional = true, default-features = false }
-moosicbox_config = { version = "0.1.0", path = "../config", default-features = false, features = [
-    "api",
-    "db",
-] }
-moosicbox_database = { version = "0.1.0", path = "../database", default-features = false, features = [
-    "api",
-] }
-moosicbox_database_connection = { version = "0.1.0", path = "../database_connection", default-features = false, features = [
-] }
-moosicbox_env_utils = { version = "0.1.0", path = "../env_utils", default-features = false }
-moosicbox_files = { version = "0.1.0", path = "../files", default-features = false, features = [
+moosicbox_assert = { workspace = true }
+moosicbox_async_service = { workspace = true }
+moosicbox_audio_output = { workspace = true }
+moosicbox_audio_zone = { workspace = true, features = ["api", "events"] }
+moosicbox_auth = { workspace = true, optional = true }
+moosicbox_config = { workspace = true, features = ["api", "db"] }
+moosicbox_database = { workspace = true, features = ["api"] }
+moosicbox_database_connection = { workspace = true, features = [] }
+moosicbox_env_utils = { workspace = true }
+moosicbox_files = { workspace = true, features = [
     "files",
     "image",
     "range",
     "track-range",
 ] }
-moosicbox_fs = { version = "0.1.0", path = "../fs", default-features = false, features = [
-    "std",
-] }
-moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
-    "database",
-] }
-moosicbox_logging = { version = "0.1.0", path = "../logging", default-features = false, features = [
-    "free_log",
-] }
-moosicbox_mdns = { version = "0.1.0", path = "../mdns", default-features = false }
-moosicbox_middleware = { version = "0.1.0", path = "../middleware", default-features = false }
-moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false }
-moosicbox_music_models = { version = "0.1.0", path = "../music/models", default-features = false }
-moosicbox_profiles = { version = "0.1.0", path = "../profiles", default-features = false, features = [
-    "events",
-] }
-moosicbox_random = { version = "0.1.0", path = "../random", default-features = false, features = [
-    "rand",
-] }
-moosicbox_schema = { version = "0.1.0", path = "../schema", optional = true, default-features = false }
-moosicbox_session = { version = "0.1.0", path = "../session", default-features = false, features = [
-    "events",
-] }
-moosicbox_task = { version = "0.1.0", path = "../task", default-features = false }
-moosicbox_telemetry = { version = "0.1.0", path = "../telemetry", default-features = false, features = [
+moosicbox_fs = { workspace = true, features = ["std"] }
+moosicbox_json_utils = { workspace = true, features = ["database"] }
+moosicbox_logging = { workspace = true, features = ["free_log"] }
+moosicbox_mdns = { workspace = true }
+moosicbox_middleware = { workspace = true }
+moosicbox_music_api = { workspace = true }
+moosicbox_music_models = { workspace = true }
+moosicbox_profiles = { workspace = true, features = ["events"] }
+moosicbox_random = { workspace = true, features = ["rand"] }
+moosicbox_schema = { workspace = true, optional = true }
+moosicbox_session = { workspace = true, features = ["events"] }
+moosicbox_task = { workspace = true }
+moosicbox_telemetry = { workspace = true, features = [
     "actix",
 ], optional = true }
-moosicbox_ws = { version = "0.1.0", path = "../ws", default-features = false, features = [
-    "ws",
-] }
+moosicbox_ws = { workspace = true, features = ["ws"] }
 
 # APIs
-moosicbox_admin_htmx = { version = "0.1.0", path = "../admin_htmx", default-features = false, optional = true }
-moosicbox_downloader = { version = "0.1.0", path = "../downloader", default-features = false, features = [
-    "api",
-], optional = true }
-moosicbox_library = { version = "0.1.0", path = "../library", default-features = false, features = [
-    "api",
-], optional = true }
-moosicbox_menu = { version = "0.1.0", path = "../menu", default-features = false, features = [
-    "api",
-], optional = true }
-moosicbox_player = { version = "0.1.0", path = "../player", default-features = false, features = [
-    "local",
-], optional = true }
-moosicbox_qobuz = { version = "0.1.0", path = "../qobuz", default-features = false, features = [
+moosicbox_admin_htmx = { workspace = true, optional = true }
+moosicbox_downloader = { workspace = true, features = ["api"], optional = true }
+moosicbox_library = { workspace = true, features = ["api"], optional = true }
+moosicbox_menu = { workspace = true, features = ["api"], optional = true }
+moosicbox_player = { workspace = true, features = ["local"], optional = true }
+moosicbox_qobuz = { workspace = true, features = [
     "api",
     "db",
 ], optional = true }
-moosicbox_scan = { version = "0.1.0", path = "../scan", default-features = false, features = [
+moosicbox_scan = { workspace = true, features = [
     "api",
     "local",
 ], optional = true }
-moosicbox_search = { version = "0.1.0", path = "../search", default-features = false, features = [
-    "api",
-], optional = true }
-moosicbox_tidal = { version = "0.1.0", path = "../tidal", default-features = false, features = [
+moosicbox_search = { workspace = true, features = ["api"], optional = true }
+moosicbox_tidal = { workspace = true, features = [
     "api",
     "db",
 ], optional = true }
-moosicbox_upnp = { version = "0.1.0", path = "../upnp", optional = true, default-features = false, features = [
+moosicbox_upnp = { workspace = true, optional = true, features = [
     "api",
     "listener",
     "player",
 ] }
-moosicbox_yt = { version = "0.1.0", path = "../yt", default-features = false, features = [
-    "api",
-    "db",
-], optional = true }
+moosicbox_yt = { workspace = true, features = ["api", "db"], optional = true }
 
 # Tunnel dependencies
-moosicbox_tunnel        = { version = "0.1.0", path = "../tunnel", optional = true, default-features = false }
-moosicbox_tunnel_sender = { version = "0.1.0", path = "../tunnel_sender", optional = true, default-features = false }
+moosicbox_tunnel        = { workspace = true, optional = true }
+moosicbox_tunnel_sender = { workspace = true, optional = true }
 
 utoipa            = { workspace = true, optional = true }
 utoipa-rapidoc    = { workspace = true, optional = true }

@@ -11,10 +11,8 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
-moosicbox_database = { version = "0.1.0", path = "../database", default-features = false, features = [
-    "schema",
-] }
+moosicbox_assert   = { workspace = true }
+moosicbox_database = { workspace = true, features = ["schema"] }
 
 include_dir = { workspace = true }
 log         = { workspace = true }

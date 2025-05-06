@@ -11,29 +11,20 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
-moosicbox_audio_decoder = { version = "0.1.0", path = "../audio_decoder", default-features = false }
-moosicbox_audio_output = { version = "0.1.0", path = "../audio_output", default-features = false }
-moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
-moosicbox_http = { version = "0.1.0", path = "../http", default-features = false, features = [
-    "json",
-    "reqwest",
-] }
-moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
-    "serde_json",
-] }
-moosicbox_logging = { version = "0.1.0", path = "../logging", default-features = false, features = [
-    "macros",
-] }
-moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false }
-moosicbox_music_models = { version = "0.1.0", path = "../music/models", default-features = false }
-moosicbox_random = { version = "0.1.0", path = "../random", default-features = false, features = [
-    "rand",
-] }
-moosicbox_resampler = { version = "0.1.0", path = "../resampler", default-features = false }
-moosicbox_session = { version = "0.1.0", path = "../session", default-features = false }
-moosicbox_stream_utils = { version = "0.1.0", path = "../stream_utils", default-features = false }
-moosicbox_task = { version = "0.1.0", path = "../task", default-features = false }
+moosicbox_assert        = { workspace = true }
+moosicbox_audio_decoder = { workspace = true }
+moosicbox_audio_output  = { workspace = true }
+moosicbox_database      = { workspace = true }
+moosicbox_http          = { workspace = true, features = ["json", "reqwest"] }
+moosicbox_json_utils    = { workspace = true, features = ["serde_json"] }
+moosicbox_logging       = { workspace = true, features = ["macros"] }
+moosicbox_music_api     = { workspace = true }
+moosicbox_music_models  = { workspace = true }
+moosicbox_random        = { workspace = true, features = ["rand"] }
+moosicbox_resampler     = { workspace = true }
+moosicbox_session       = { workspace = true }
+moosicbox_stream_utils  = { workspace = true }
+moosicbox_task          = { workspace = true }
 
 #API Dependencies
 utoipa = { workspace = true, optional = true }

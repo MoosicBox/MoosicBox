@@ -11,14 +11,9 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-hyperchad_actions = { version = "0.1.0", path = "../../hyperchad/actions", default-features = false, features = [
-    "logic",
-    "serde",
-] }
-hyperchad_transformer_models = { version = "0.1.0", path = "../../hyperchad/transformer/models", default-features = false, features = [
-    "serde",
-] }
-moosicbox_app_native_image = { version = "0.1.0", path = "../../app/native/image", default-features = false }
+hyperchad_actions            = { workspace = true, features = ["logic", "serde"] }
+hyperchad_transformer_models = { workspace = true, features = ["serde"] }
+moosicbox_app_native_image   = { workspace = true }
 
 bytesize = { workspace = true }
 chrono   = { workspace = true }

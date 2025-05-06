@@ -11,20 +11,12 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-hyperchad_actions = { path = "../actions", default-features = false, features = [
-    "serde",
-] }
-hyperchad_color = { path = "../color", default-features = false, features = [
-    "serde",
-] }
-hyperchad_transformer_models = { path = "models", default-features = false }
-moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
-moosicbox_logging = { version = "0.1.0", path = "../../logging", default-features = false, features = [
-    "macros",
-] }
-moosicbox_time = { version = "0.1.0", path = "../../time", default-features = false, features = [
-    "std",
-] }
+hyperchad_actions            = { workspace = true, features = ["serde"] }
+hyperchad_color              = { workspace = true, features = ["serde"] }
+hyperchad_transformer_models = { workspace = true, default-features = false }
+moosicbox_assert             = { workspace = true }
+moosicbox_logging            = { workspace = true, features = ["macros"] }
+moosicbox_time               = { workspace = true, features = ["std"] }
 
 bumpalo     = { workspace = true, features = ["collections"], optional = true }
 html-escape = { workspace = true }
@@ -41,27 +33,16 @@ tl          = { workspace = true, optional = true }
 xml         = { workspace = true, optional = true }
 
 [dev-dependencies]
-hyperchad_actions = { path = "../actions", default-features = false, features = [
-    "arb",
-    "serde",
-] }
-hyperchad_color = { path = "../color", default-features = false, features = [
-    "arb",
-] }
-hyperchad_transformer_models = { path = "models", default-features = false, features = [
-    "arb",
-] }
-maud = { workspace = true }
-moosicbox_arb = { path = "../../arb", default-features = false, features = [
-    "css",
-    "serde",
-    "xml",
-] }
-pretty_assertions = { workspace = true }
-quickcheck = { workspace = true }
-quickcheck_macros = { workspace = true }
-test-log = { workspace = true }
-tl = { workspace = true }
+hyperchad_actions            = { workspace = true, features = ["arb", "serde"] }
+hyperchad_color              = { workspace = true, features = ["arb"] }
+hyperchad_transformer_models = { workspace = true, features = ["arb"] }
+maud                         = { workspace = true }
+moosicbox_arb                = { workspace = true, features = ["css", "serde", "xml"] }
+pretty_assertions            = { workspace = true }
+quickcheck                   = { workspace = true }
+quickcheck_macros            = { workspace = true }
+test-log                     = { workspace = true }
+tl                           = { workspace = true }
 
 [features]
 default = [

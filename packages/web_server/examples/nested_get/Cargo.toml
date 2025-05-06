@@ -9,10 +9,7 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_web_server = { version = "0.1.0", path = "../..", default-features = false, features = [
-    "actix",
-    "cors",
-] }
+moosicbox_web_server = { workspace = true, features = ["actix", "cors"] }
 
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 

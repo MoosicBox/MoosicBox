@@ -11,16 +11,11 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_http = { version = "0.1.0", path = "../http", default-features = false, features = [
-    "json",
-    "reqwest",
-] }
-moosicbox_menu_models = { version = "0.1.0", path = "../menu/models", default-features = false, features = [
-    "api",
-] }
-moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false }
-moosicbox_music_models = { version = "0.1.0", path = "../music/models", default-features = false }
-moosicbox_paging = { version = "0.1.0", path = "../paging", default-features = false }
+moosicbox_http         = { workspace = true, features = ["json", "reqwest"] }
+moosicbox_menu_models  = { workspace = true, features = ["api"] }
+moosicbox_music_api    = { workspace = true }
+moosicbox_music_models = { workspace = true }
+moosicbox_paging       = { workspace = true }
 
 async-trait = { workspace = true }
 log         = { workspace = true }

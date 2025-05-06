@@ -11,14 +11,12 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
-moosicbox_config = { version = "0.1.0", path = "../../config", default-features = false }
-moosicbox_env_utils = { version = "0.1.0", path = "../../env_utils", default-features = false }
-moosicbox_logging = { version = "0.1.0", path = "../../logging", default-features = false }
-moosicbox_server = { version = "0.1.0", path = "../", default-features = false, features = [
-    "simulator",
-] }
-moosicbox_simulator_harness = { version = "0.1.0", path = "../../simulator/harness", default-features = false, features = [
+moosicbox_assert = { workspace = true }
+moosicbox_config = { workspace = true }
+moosicbox_env_utils = { workspace = true }
+moosicbox_logging = { workspace = true }
+moosicbox_server = { workspace = true, features = ["simulator"] }
+moosicbox_simulator_harness = { workspace = true, features = [
     "database",
     "fs",
     "http",
@@ -27,9 +25,9 @@ moosicbox_simulator_harness = { version = "0.1.0", path = "../../simulator/harne
     "telemetry",
     "time",
 ] }
-moosicbox_task = { version = "0.1.0", path = "../../task", default-features = false }
-moosicbox_telemetry = { version = "0.1.0", path = "../../telemetry", default-features = false }
-openport = { version = "0.1.1", path = "../../openport", default-features = false }
+moosicbox_task = { workspace = true }
+moosicbox_telemetry = { workspace = true }
+openport = { workspace = true }
 
 actix-web  = { workspace = true }
 log        = { workspace = true }

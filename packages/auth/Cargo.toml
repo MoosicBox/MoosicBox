@@ -11,18 +11,13 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
-moosicbox_http = { path = "../http", default-features = false, features = [
-    "json",
-    "reqwest",
-] }
-moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
+moosicbox_database = { workspace = true }
+moosicbox_http = { workspace = true, features = ["json", "reqwest"] }
+moosicbox_json_utils = { workspace = true, features = [
     "database",
     "serde_json",
 ] }
-moosicbox_middleware = { version = "0.1.0", path = "../middleware", default-features = false, features = [
-    "tunnel",
-] }
+moosicbox_middleware = { workspace = true, features = ["tunnel"] }
 
 # API Dependencies
 utoipa = { workspace = true, optional = true }

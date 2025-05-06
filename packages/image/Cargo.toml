@@ -19,15 +19,13 @@ path              = "src/main.rs"
 required-features = ["build-binary"]
 
 [dependencies]
-moosicbox_task = { version = "0.1.0", path = "../task", default-features = false }
+moosicbox_task = { workspace = true }
 
 bytes = { workspace = true }
 clap = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
 log = { workspace = true }
-moosicbox_fs = { version = "0.1.0", path = "../fs", default-features = false, features = [
-    "std",
-] }
+moosicbox_fs = { workspace = true, features = ["std"] }
 profiling = { workspace = true, optional = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }

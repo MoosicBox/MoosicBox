@@ -11,8 +11,8 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
-moosicbox_task   = { version = "0.1.0", path = "../task", optional = true, default-features = false }
+moosicbox_assert = { workspace = true }
+moosicbox_task   = { workspace = true, optional = true }
 
 # DB Dependencies
 rusqlite = { workspace = true, optional = true }

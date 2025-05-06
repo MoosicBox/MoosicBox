@@ -11,13 +11,9 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_async_macros = { version = "0.1.0", path = "macros", optional = true, default-features = false }
-moosicbox_random = { version = "0.1.0", path = "../random", optional = true, default-features = false, features = [
-    "rand",
-] }
-moosicbox_time = { version = "0.1.0", path = "../time", optional = true, default-features = false, features = [
-    "std",
-] }
+moosicbox_async_macros = { workspace = true, optional = true }
+moosicbox_random       = { workspace = true, optional = true, features = ["rand"] }
+moosicbox_time         = { workspace = true, optional = true, features = ["std"] }
 
 log              = { workspace = true }
 pin-project-lite = { workspace = true }
@@ -32,11 +28,9 @@ tokio      = { workspace = true, optional = true, features = ["rt"] }
 tokio-util = { workspace = true, optional = true }
 
 [dev-dependencies]
-moosicbox_time = { version = "0.1.0", path = "../time", default-features = false, features = [
-    "simulator",
-] }
+moosicbox_time    = { workspace = true, features = ["simulator"] }
 pretty_assertions = { workspace = true }
-test-log = { workspace = true }
+test-log          = { workspace = true }
 
 [features]
 default = [

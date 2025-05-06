@@ -37,39 +37,32 @@ no-build      = false
 product-name  = "MoosicBox"
 
 [dependencies]
-hyperchad_actions = { version = "0.1.0", path = "../../hyperchad/actions", default-features = false }
-moosicbox_app_native_lib = { version = "0.1.0", path = "lib", default-features = false, features = [
+hyperchad_actions = { workspace = true }
+moosicbox_app_native_lib = { workspace = true, features = [
     "actions",
     "logic",
     "maud",
     "sse",
 ] }
-moosicbox_app_native_ui = { version = "0.1.0", path = "ui", default-features = false }
-moosicbox_app_state = { version = "0.1.0", path = "../state", default-features = false }
-moosicbox_assert = { version = "0.1.0", path = "../../assert", default-features = false }
-moosicbox_audio_zone_models = { version = "0.1.0", path = "../../audio_zone/models", default-features = false }
-moosicbox_env_utils = { version = "0.1.0", path = "../../env_utils", default-features = false }
-moosicbox_http = { version = "0.1.0", path = "../../http", default-features = false, features = [
-    "json",
-    "reqwest",
-] }
-moosicbox_logging = { version = "0.1.0", path = "../../logging", default-features = false, features = [
-    "free_log",
-] }
-moosicbox_music_api = { version = "0.1.0", path = "../../music_api", default-features = false }
-moosicbox_music_models = { version = "0.1.0", path = "../../music/models", default-features = false }
-moosicbox_paging = { version = "0.1.0", path = "../../paging", default-features = false }
-moosicbox_player = { version = "0.1.0", path = "../../player", default-features = false }
-moosicbox_remote_library = { version = "0.1.0", path = "../../remote_library", default-features = false }
-moosicbox_session_models = { version = "0.1.0", path = "../../session/models", default-features = false }
-moosicbox_task = { version = "0.1.0", path = "../../task", default-features = false }
-moosicbox_time = { version = "0.1.0", path = "../../time", default-features = false, features = [
-    "std",
-] }
-moosicbox_ws = { version = "0.1.0", path = "../../ws", default-features = false }
+moosicbox_app_native_ui = { workspace = true }
+moosicbox_app_state = { workspace = true }
+moosicbox_assert = { workspace = true }
+moosicbox_audio_zone_models = { workspace = true }
+moosicbox_env_utils = { workspace = true }
+moosicbox_http = { workspace = true, features = ["json", "reqwest"] }
+moosicbox_logging = { workspace = true, features = ["free_log"] }
+moosicbox_music_api = { workspace = true }
+moosicbox_music_models = { workspace = true }
+moosicbox_paging = { workspace = true }
+moosicbox_player = { workspace = true }
+moosicbox_remote_library = { workspace = true }
+moosicbox_session_models = { workspace = true }
+moosicbox_task = { workspace = true }
+moosicbox_time = { workspace = true, features = ["std"] }
+moosicbox_ws = { workspace = true }
 
 # Bundled dependencies
-moosicbox_app_native_bundled = { version = "0.1.0", path = "bundled", optional = true, default-features = false }
+moosicbox_app_native_bundled = { workspace = true, optional = true }
 
 console-subscriber = { workspace = true, optional = true }
 flume              = { workspace = true }

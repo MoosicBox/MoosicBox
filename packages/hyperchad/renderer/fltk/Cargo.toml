@@ -11,24 +11,17 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-hyperchad_actions = { version = "0.1.0", path = "../../actions", default-features = false, features = [
-    "logic",
-] }
-hyperchad_renderer = { version = "0.1.0", path = "../", default-features = false, features = [
+hyperchad_actions = { workspace = true, features = ["logic"] }
+hyperchad_renderer = { workspace = true, features = [
     "canvas",
     "viewport-retained",
 ] }
-hyperchad_transformer = { version = "0.1.0", path = "../../transformer", default-features = false, features = [
-    "html",
-    "layout",
-] }
-moosicbox_app_native_image = { version = "0.1.0", path = "../../../app/native/image", default-features = false }
-moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
-moosicbox_http = { version = "0.1.0", path = "../../../http", default-features = false, features = [
-    "reqwest",
-] }
-moosicbox_logging = { version = "0.1.0", path = "../../../logging", default-features = false }
-moosicbox_task = { version = "0.1.0", path = "../../../task", default-features = false }
+hyperchad_transformer = { workspace = true, features = ["html", "layout"] }
+moosicbox_app_native_image = { workspace = true }
+moosicbox_assert = { workspace = true }
+moosicbox_http = { workspace = true, features = ["reqwest"] }
+moosicbox_logging = { workspace = true }
+moosicbox_task = { workspace = true }
 
 async-trait = { workspace = true }
 bytes       = { workspace = true }

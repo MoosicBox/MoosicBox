@@ -11,17 +11,11 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_config = { version = "0.1.0", path = "../config", default-features = false }
-moosicbox_fs = { version = "0.1.0", path = "../fs", default-features = false, features = [
-    "std",
-] }
-moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false, features = [
-    "tantivy",
-] }
-moosicbox_music_models = { version = "0.1.0", path = "../music/models", default-features = false, features = [
-    "tantivy",
-] }
-moosicbox_task = { version = "0.1.0", path = "../task" }
+moosicbox_config       = { workspace = true }
+moosicbox_fs           = { workspace = true, features = ["std"] }
+moosicbox_json_utils   = { workspace = true, features = ["tantivy"] }
+moosicbox_music_models = { workspace = true, features = ["tantivy"] }
+moosicbox_task         = { workspace = true }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
@@ -36,9 +30,7 @@ thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["sync"] }
 
 [dev-dependencies]
-moosicbox_config = { version = "0.1.0", path = "../config", default-features = false, features = [
-    "test",
-] }
+moosicbox_config = { workspace = true, features = ["test"] }
 
 pretty_assertions = { workspace = true }
 serial_test       = { workspace = true }

@@ -9,9 +9,7 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_http = { version = "0.1.0", path = "../..", default-features = false, features = [
-    "reqwest",
-] }
+moosicbox_http = { workspace = true, features = ["reqwest"] }
 
 log               = { workspace = true }
 pretty_env_logger = { workspace = true }

@@ -11,7 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_async = { version = "0.1.0", path = "../async", optional = true, default-features = false, features = [
+moosicbox_async = { workspace = true, optional = true, features = [
     "io",
     "rt-multi-thread",
     "sync",

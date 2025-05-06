@@ -14,31 +14,23 @@ version     = "0.1.0"
 ignored = ["hyperchad_color", "image", "tracy-client"]
 
 [dependencies]
-hyperchad_actions = { version = "0.1.0", path = "../../actions", default-features = false, features = [
-    "logic",
-] }
-hyperchad_color = { version = "0.1.0", path = "../../color", default-features = false, features = [
-    "egui",
-] }
-hyperchad_renderer = { version = "0.1.0", path = "../", default-features = false, features = [
+hyperchad_actions = { workspace = true, features = ["logic"] }
+hyperchad_color = { workspace = true, features = ["egui"] }
+hyperchad_renderer = { workspace = true, features = [
     "canvas",
     "viewport-immediate",
 ] }
-hyperchad_router = { version = "0.1.0", path = "../../router", default-features = false }
-hyperchad_transformer = { version = "0.1.0", path = "../../transformer", default-features = false, features = [
+hyperchad_router = { workspace = true }
+hyperchad_transformer = { workspace = true, features = [
     "html",
     "layout-offset",
     "logic",
 ] }
-moosicbox_app_native_image = { version = "0.1.0", path = "../../../app/native/image", default-features = false }
-moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
-moosicbox_http = { version = "0.1.0", path = "../../../http", default-features = false, features = [
-    "reqwest",
-] }
-moosicbox_logging = { version = "0.1.0", path = "../../../logging", default-features = false, features = [
-    "macros",
-] }
-moosicbox_task = { version = "0.1.0", path = "../../../task", default-features = false }
+moosicbox_app_native_image = { workspace = true }
+moosicbox_assert = { workspace = true }
+moosicbox_http = { workspace = true, features = ["reqwest"] }
+moosicbox_logging = { workspace = true, features = ["macros"] }
+moosicbox_task = { workspace = true }
 
 async-trait = { workspace = true }
 eframe = { workspace = true, default-features = false, features = [

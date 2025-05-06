@@ -11,7 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_http_models = { version = "0.1.0", path = "models", default-features = false }
+moosicbox_http_models = { workspace = true }
 
 # reqwest
 reqwest = { workspace = true, optional = true }

@@ -11,21 +11,14 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-hyperchad_renderer = { version = "0.1.0", path = "../", default-features = false, features = [
-    "canvas",
-    "html",
-] }
-hyperchad_renderer_html_actix = { version = "0.1.0", path = "actix", default-features = false, optional = true }
-hyperchad_renderer_html_lambda = { version = "0.1.0", path = "lambda", default-features = false, optional = true }
-hyperchad_router = { version = "0.1.0", path = "../../../hyperchad/router", default-features = false }
-hyperchad_transformer = { version = "0.1.0", path = "../../transformer", default-features = false, features = [
-    "html",
-] }
-moosicbox_assert = { version = "0.1.0", path = "../../../assert", default-features = false }
-moosicbox_env_utils = { version = "0.1.0", path = "../../../env_utils", default-features = false }
-moosicbox_logging = { version = "0.1.0", path = "../../../logging", default-features = false, features = [
-    "macros",
-] }
+hyperchad_renderer             = { workspace = true, features = ["canvas", "html"] }
+hyperchad_renderer_html_actix  = { workspace = true, optional = true }
+hyperchad_renderer_html_lambda = { workspace = true, optional = true }
+hyperchad_router               = { workspace = true }
+hyperchad_transformer          = { workspace = true, features = ["html"] }
+moosicbox_assert               = { workspace = true }
+moosicbox_env_utils            = { workspace = true }
+moosicbox_logging              = { workspace = true, features = ["macros"] }
 
 async-trait = { workspace = true }
 flume       = { workspace = true }

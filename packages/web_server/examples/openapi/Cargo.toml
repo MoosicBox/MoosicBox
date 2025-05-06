@@ -9,10 +9,8 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_logging = { version = "0.1.0", path = "../../../logging", default-features = false, features = [
-    "free_log",
-] }
-moosicbox_web_server = { version = "0.1.0", path = "../..", default-features = false, features = [
+moosicbox_logging = { workspace = true, features = ["free_log"] }
+moosicbox_web_server = { workspace = true, features = [
     "actix",
     "cors",
     "openapi-all",

@@ -18,12 +18,10 @@ fdk-aac = { workspace = true, optional = true }
 flacenc = { workspace = true, optional = true }
 
 # Opus dependencies
-audiopus = { workspace = true, optional = true }
-moosicbox_fs = { version = "0.1.0", path = "../fs", optional = true, default-features = false, features = [
-    "std",
-] }
-ogg = { workspace = true, optional = true }
-opus = { workspace = true, optional = true }
+audiopus     = { workspace = true, optional = true }
+moosicbox_fs = { workspace = true, optional = true, features = ["std"] }
+ogg          = { workspace = true, optional = true }
+opus         = { workspace = true, optional = true }
 
 # Mp3 dependencies
 mp3lame-encoder = { workspace = true, optional = true }

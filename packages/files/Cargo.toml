@@ -14,31 +14,23 @@ version     = "0.1.0"
 ignored = ["profiling", "strum"]
 
 [dependencies]
-moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
-moosicbox_async_service = { version = "0.1.0", path = "../async_service", optional = true, default-features = false }
-moosicbox_audio_decoder = { version = "0.1.0", path = "../audio_decoder", optional = true, default-features = false }
-moosicbox_audio_output = { version = "0.1.0", path = "../audio_output", optional = true, default-features = false }
-moosicbox_config = { version = "0.1.0", path = "../config", default-features = false }
-moosicbox_database = { version = "0.1.0", path = "../database", optional = true, default-features = false }
-moosicbox_fs = { version = "0.1.0", path = "../fs", default-features = false, features = [
-    "std",
-    "tokio",
-] }
-moosicbox_http = { version = "0.1.0", path = "../http", default-features = false, features = [
-    "reqwest",
-    "stream",
-] }
-moosicbox_image = { version = "0.1.0", path = "../image", optional = true, default-features = false }
-moosicbox_music_api = { version = "0.1.0", path = "../music_api", optional = true, default-features = false }
-moosicbox_music_models = { version = "0.1.0", path = "../music/models", optional = true, default-features = false, features = [
+moosicbox_assert = { workspace = true }
+moosicbox_async_service = { workspace = true, optional = true }
+moosicbox_audio_decoder = { workspace = true, optional = true }
+moosicbox_audio_output = { workspace = true, optional = true }
+moosicbox_config = { workspace = true }
+moosicbox_database = { workspace = true, optional = true }
+moosicbox_fs = { workspace = true, features = ["std", "tokio"] }
+moosicbox_http = { workspace = true, features = ["reqwest", "stream"] }
+moosicbox_image = { workspace = true, optional = true }
+moosicbox_music_api = { workspace = true, optional = true }
+moosicbox_music_models = { workspace = true, optional = true, features = [
     "db",
 ] }
-moosicbox_parsing_utils = { version = "0.1.0", path = "../parsing_utils", optional = true, default-features = false }
-moosicbox_stream_utils = { version = "0.1.0", path = "../stream_utils", default-features = false }
-moosicbox_task = { version = "0.1.0", path = "../task", optional = true, default-features = false }
-moosicbox_time = { version = "0.1.0", path = "../time", default-features = false, features = [
-    "std",
-] }
+moosicbox_parsing_utils = { workspace = true, optional = true }
+moosicbox_stream_utils = { workspace = true }
+moosicbox_task = { workspace = true, optional = true }
+moosicbox_time = { workspace = true, features = ["std"] }
 
 # API Dependencies
 utoipa = { workspace = true, optional = true }

@@ -11,23 +11,21 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
-moosicbox_audio_zone = { version = "0.1.0", path = "../audio_zone", default-features = false }
-moosicbox_database = { version = "0.1.0", path = "../database", default-features = false }
-moosicbox_json_utils = { version = "0.1.0", path = "../json_utils", default-features = false }
-moosicbox_library = { version = "0.1.0", path = "../library", default-features = false }
-moosicbox_music_models = { version = "0.1.0", path = "../music/models", default-features = false, features = [
-    "api",
-] }
-moosicbox_session_models = { version = "0.1.0", path = "models", default-features = false }
+moosicbox_assert         = { workspace = true }
+moosicbox_audio_zone     = { workspace = true }
+moosicbox_database       = { workspace = true }
+moosicbox_json_utils     = { workspace = true }
+moosicbox_library        = { workspace = true }
+moosicbox_music_models   = { workspace = true, features = ["api"] }
+moosicbox_session_models = { workspace = true }
 
 # API Dependencies
 actix-web        = { workspace = true, optional = true }
-moosicbox_paging = { version = "0.1.0", path = "../paging", optional = true }
+moosicbox_paging = { workspace = true, optional = true }
 utoipa           = { workspace = true, optional = true }
 
 # Events Dependencies
-moosicbox_task = { version = "0.1.0", path = "../task", default-features = false, optional = true }
+moosicbox_task = { workspace = true, optional = true }
 tokio          = { workspace = true, optional = true }
 
 log        = { workspace = true }

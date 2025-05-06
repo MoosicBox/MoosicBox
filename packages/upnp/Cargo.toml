@@ -14,15 +14,11 @@ version     = "0.1.0"
 ignored = ["strum"]
 
 [dependencies]
-moosicbox_assert = { version = "0.1.0", path = "../assert", default-features = false }
-moosicbox_audio_output = { version = "0.1.0", path = "../audio_output", optional = true, default-features = false }
-moosicbox_http = { version = "0.1.0", path = "../http", optional = true, default-features = false, features = [
-    "reqwest",
-] }
-moosicbox_logging = { version = "0.1.0", path = "../logging", optional = true, default-features = false, features = [
-    "macros",
-] }
-moosicbox_task = { version = "0.1.0", path = "../task", default-features = false }
+moosicbox_assert       = { workspace = true }
+moosicbox_audio_output = { workspace = true, optional = true }
+moosicbox_http         = { workspace = true, optional = true, features = ["reqwest"] }
+moosicbox_logging      = { workspace = true, optional = true, features = ["macros"] }
+moosicbox_task         = { workspace = true }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
@@ -30,17 +26,15 @@ utoipa    = { workspace = true, optional = true }
 
 # Listener Dependencies
 flume                   = { workspace = true, optional = true }
-moosicbox_async_service = { version = "0.1.0", path = "../async_service", optional = true }
+moosicbox_async_service = { workspace = true, optional = true }
 tokio-util              = { workspace = true, optional = true }
 
 # Player Dependencies
-moosicbox_music_api = { version = "0.1.0", path = "../music_api", default-features = false, optional = true }
-moosicbox_player = { version = "0.1.0", path = "../player", default-features = false, optional = true }
-moosicbox_random = { version = "0.1.0", path = "../random", default-features = false, optional = true, features = [
-    "rand",
-] }
-moosicbox_session = { version = "0.1.0", path = "../session", default-features = false, optional = true }
-symphonia = { workspace = true, optional = true }
+moosicbox_music_api = { workspace = true, optional = true }
+moosicbox_player    = { workspace = true, optional = true }
+moosicbox_random    = { workspace = true, optional = true, features = ["rand"] }
+moosicbox_session   = { workspace = true, optional = true }
+symphonia           = { workspace = true, optional = true }
 
 async-recursion = { workspace = true }
 async-trait     = { workspace = true }
