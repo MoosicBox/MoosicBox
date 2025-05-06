@@ -5,7 +5,7 @@
 #[cfg(feature = "simulator")]
 pub mod simulator;
 #[cfg(feature = "std")]
-pub mod std;
+pub mod standard;
 #[cfg(feature = "tokio")]
 pub mod tokio;
 
@@ -136,7 +136,7 @@ impl_sync_fs!(simulator);
 impl_async_fs!(simulator);
 
 #[cfg(all(not(feature = "simulator"), feature = "std"))]
-impl_sync_fs!(std);
+impl_sync_fs!(standard);
 
 #[cfg(all(not(feature = "simulator"), feature = "tokio"))]
 impl_async_fs!(tokio);
