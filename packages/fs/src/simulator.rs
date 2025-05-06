@@ -1,19 +1,21 @@
 use std::{
+    cell::RefCell,
     collections::BTreeMap,
-    sync::{Arc, LazyLock, Mutex, RwLock},
+    sync::{Arc, Mutex, RwLock},
 };
 
 use bytes::BytesMut;
 
-#[allow(clippy::type_complexity)]
-static FILES: LazyLock<RwLock<BTreeMap<String, Arc<Mutex<BytesMut>>>>> =
-    LazyLock::new(|| RwLock::new(BTreeMap::new()));
+thread_local! {
+    static FILES: RefCell<RwLock<BTreeMap<String, Arc<Mutex<BytesMut>>>>> =
+        const { RefCell::new(RwLock::new(BTreeMap::new())) };
+}
 
 /// # Panics
 ///
 /// * If the `FILES` `RwLock` fails to write to
 pub fn reset_fs() {
-    FILES.write().unwrap().clear();
+    FILES.with_borrow_mut(|x| x.write().unwrap().clear());
 }
 
 macro_rules! path_to_str {
@@ -121,14 +123,17 @@ pub mod sync {
         /// * If the `FILES` `RwLock` fails to read.
         pub fn open(self, path: impl AsRef<::std::path::Path>) -> ::std::io::Result<File> {
             let location = path_to_str!(path)?;
-            let data = if let Some(data) = { FILES.read().unwrap().get(location).cloned() } {
+            let data = if let Some(data) =
+                FILES.with_borrow(|x| x.read().unwrap().get(location).cloned())
+            {
                 data
             } else if self.create {
                 let data = Arc::new(Mutex::new(BytesMut::new()));
-                FILES
-                    .write()
-                    .unwrap()
-                    .insert(location.to_string(), data.clone());
+                FILES.with_borrow_mut(|x| {
+                    x.write()
+                        .unwrap()
+                        .insert(location.to_string(), data.clone())
+                });
                 data
             } else {
                 return Err(std::io::Error::new(
@@ -160,7 +165,7 @@ pub mod sync {
     /// * If the `FILES` `RwLock` fails to read.
     pub fn read_to_string<P: AsRef<Path>>(path: P) -> std::io::Result<String> {
         let location = path_to_str!(path)?;
-        let Some(existing) = FILES.read().unwrap().get(location).cloned() else {
+        let Some(existing) = FILES.with_borrow(|x| x.read().unwrap().get(location).cloned()) else {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
                 format!("File not found at path={location}"),
@@ -189,9 +194,11 @@ pub mod sync {
         async fn can_read_empty_file() {
             const FILENAME: &str = "sync::test1";
 
-            let mut binding = FILES.write().unwrap();
-            binding.insert(FILENAME.to_string(), Arc::new(Mutex::new(BytesMut::new())));
-            drop(binding);
+            FILES.with_borrow_mut(|x| {
+                x.write()
+                    .unwrap()
+                    .insert(FILENAME.to_string(), Arc::new(Mutex::new(BytesMut::new())))
+            });
 
             let mut file = OpenOptions::new().create(true).open(FILENAME).unwrap();
 
@@ -206,12 +213,12 @@ pub mod sync {
         async fn can_read_small_bytes_file() {
             const FILENAME: &str = "sync::test2";
 
-            let mut binding = FILES.write().unwrap();
-            binding.insert(
-                FILENAME.to_string(),
-                Arc::new(Mutex::new(BytesMut::from(b"hey" as &[u8]))),
-            );
-            drop(binding);
+            FILES.with_borrow_mut(|x| {
+                x.write().unwrap().insert(
+                    FILENAME.to_string(),
+                    Arc::new(Mutex::new(BytesMut::from(b"hey" as &[u8]))),
+                )
+            });
 
             let mut file = OpenOptions::new().create(true).open(FILENAME).unwrap();
 
@@ -342,9 +349,11 @@ pub mod unsync {
         async fn can_read_empty_file() {
             const FILENAME: &str = "unsync::test1";
 
-            let mut binding = FILES.write().unwrap();
-            binding.insert(FILENAME.to_string(), Arc::new(Mutex::new(BytesMut::new())));
-            drop(binding);
+            FILES.with_borrow_mut(|x| {
+                x.write()
+                    .unwrap()
+                    .insert(FILENAME.to_string(), Arc::new(Mutex::new(BytesMut::new())))
+            });
 
             let mut file = OpenOptions::new()
                 .create(true)
@@ -363,12 +372,12 @@ pub mod unsync {
         async fn can_read_small_bytes_file() {
             const FILENAME: &str = "unsync::test2";
 
-            let mut binding = FILES.write().unwrap();
-            binding.insert(
-                FILENAME.to_string(),
-                Arc::new(Mutex::new(BytesMut::from(b"hey" as &[u8]))),
-            );
-            drop(binding);
+            FILES.with_borrow_mut(|x| {
+                x.write().unwrap().insert(
+                    FILENAME.to_string(),
+                    Arc::new(Mutex::new(BytesMut::from(b"hey" as &[u8]))),
+                )
+            });
 
             let mut file = OpenOptions::new()
                 .create(true)
