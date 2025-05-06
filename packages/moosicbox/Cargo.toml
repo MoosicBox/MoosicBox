@@ -11,13 +11,6 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-gimbal_async                = { workspace = true }
-gimbal_database             = { workspace = true }
-gimbal_database_connection  = { workspace = true }
-gimbal_http                 = { workspace = true }
-gimbal_mdns                 = { workspace = true }
-gimbal_telemetry            = { workspace = true }
-gimbal_upnp                 = { workspace = true }
 hyperchad_actions           = { workspace = true }
 hyperchad_color             = { workspace = true }
 hyperchad_renderer          = { workspace = true }
