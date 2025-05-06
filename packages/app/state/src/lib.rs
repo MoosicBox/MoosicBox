@@ -9,10 +9,10 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
+use gimbal_http::RequestBuilder;
 use moosicbox_app_ws::{ConnectWsError, WsHandle};
 use moosicbox_audio_output::{AudioOutputFactory, AudioOutputScannerError};
 use moosicbox_audio_zone::models::{ApiAudioZoneWithSession, ApiPlayer};
-use moosicbox_http::RequestBuilder;
 use moosicbox_music_models::PlaybackQuality;
 use moosicbox_paging::Page;
 use moosicbox_player::{
@@ -36,10 +36,10 @@ pub mod ws;
 
 type ApiPlayersMap = (ApiPlayer, PlayerType, AudioOutputFactory);
 
-static PROXY_CLIENT: LazyLock<moosicbox_http::Client> = LazyLock::new(moosicbox_http::Client::new);
+static PROXY_CLIENT: LazyLock<gimbal_http::Client> = LazyLock::new(gimbal_http::Client::new);
 
 #[cfg(feature = "upnp")]
-pub static UPNP_LISTENER_HANDLE: std::sync::OnceLock<moosicbox_upnp::listener::Handle> =
+pub static UPNP_LISTENER_HANDLE: std::sync::OnceLock<gimbal_upnp::listener::Handle> =
     std::sync::OnceLock::new();
 
 #[cfg(feature = "upnp")]
@@ -70,7 +70,7 @@ pub enum ProxyRequestError {
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
     #[error(transparent)]
-    Http(#[from] moosicbox_http::Error),
+    Http(#[from] gimbal_http::Error),
     #[error("Failure response ({status}): {text}")]
     FailureResponse { status: u16, text: String },
 }
@@ -95,7 +95,7 @@ pub enum ScanOutputsError {
 #[derive(Debug, Error)]
 pub enum InitUpnpError {
     #[error(transparent)]
-    UpnpDeviceScanner(#[from] moosicbox_upnp::UpnpDeviceScannerError),
+    UpnpDeviceScanner(#[from] gimbal_upnp::UpnpDeviceScannerError),
     #[error(transparent)]
     AudioOutput(#[from] moosicbox_audio_output::AudioOutputError),
     #[error(transparent)]
@@ -175,9 +175,9 @@ pub enum PlayerType {
     #[cfg(feature = "upnp")]
     Upnp {
         source_to_music_api: Arc<Box<dyn moosicbox_music_api::SourceToMusicApi + Send + Sync>>,
-        device: moosicbox_upnp::Device,
-        service: moosicbox_upnp::Service,
-        handle: moosicbox_upnp::listener::Handle,
+        device: gimbal_upnp::Device,
+        service: gimbal_upnp::Service,
+        handle: gimbal_upnp::listener::Handle,
     },
 }
 
@@ -253,8 +253,7 @@ pub struct AppState {
     #[allow(clippy::type_complexity)]
     pub current_players: Arc<RwLock<Vec<ApiPlayersMap>>>,
     #[cfg(feature = "upnp")]
-    pub upnp_av_transport_services:
-        Arc<RwLock<Vec<moosicbox_upnp::player::UpnpAvTransportService>>>,
+    pub upnp_av_transport_services: Arc<RwLock<Vec<gimbal_upnp::player::UpnpAvTransportService>>>,
     #[allow(clippy::type_complexity)]
     pub on_before_handle_playback_update_listeners: Vec<
         Arc<
@@ -589,7 +588,7 @@ impl AppState {
                 service,
                 handle,
             } => {
-                let upnp_player = moosicbox_upnp::player::UpnpPlayer::new(
+                let upnp_player = gimbal_upnp::player::UpnpPlayer::new(
                     source_to_music_api,
                     device,
                     service,
@@ -934,7 +933,7 @@ impl AppState {
     pub async fn init_upnp_players(&self) -> Result<(), AppStateError> {
         use moosicbox_session::models::RegisterPlayer;
 
-        moosicbox_upnp::scan_devices()
+        gimbal_upnp::scan_devices()
             .await
             .map_err(InitUpnpError::UpnpDeviceScanner)?;
 
@@ -942,13 +941,13 @@ impl AppState {
             let mut av_transport_services = self.upnp_av_transport_services.write().await;
             av_transport_services.clear();
 
-            for device in moosicbox_upnp::devices().await {
+            for device in gimbal_upnp::devices().await {
                 let service_id = "urn:upnp-org:serviceId:AVTransport";
                 if let Ok((device, service)) =
-                    moosicbox_upnp::get_device_and_service(&device.udn, service_id)
+                    gimbal_upnp::get_device_and_service(&device.udn, service_id)
                 {
                     av_transport_services
-                        .push(moosicbox_upnp::player::UpnpAvTransportService { device, service });
+                        .push(gimbal_upnp::player::UpnpAvTransportService { device, service });
                 }
             }
 

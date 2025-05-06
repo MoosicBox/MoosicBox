@@ -36,7 +36,7 @@ pub fn start(sim: &mut impl CancellableSim, service_port: Option<u16>) {
     let actix_workers = Some(rng().gen_range(1..=64_usize));
     #[cfg(feature = "telemetry")]
     let metrics_handler = std::sync::Arc::new(
-        moosicbox_telemetry::get_http_metrics_handler().expect("Failed to init telemetry"),
+        gimbal_telemetry::get_http_metrics_handler().expect("Failed to init telemetry"),
     );
     let addr = format!("{host}:{service_port}");
 

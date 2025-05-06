@@ -7,7 +7,7 @@ use moosicbox_music_models::{
 };
 use std::str::FromStr as _;
 
-use moosicbox_database::DatabaseValue;
+use gimbal_database::DatabaseValue;
 use moosicbox_json_utils::{MissingValue, ParseError, ToValueType};
 use moosicbox_paging::PagingRequest;
 use serde::{Deserialize, Serialize};
@@ -127,7 +127,7 @@ pub enum TrackAudioQuality {
     FlacHighestRes, // FLAC 24 bit > 96kHz <= 192kHz
 }
 
-impl MissingValue<TrackAudioQuality> for &moosicbox_database::Row {}
+impl MissingValue<TrackAudioQuality> for &gimbal_database::Row {}
 impl ToValueType<TrackAudioQuality> for DatabaseValue {
     fn to_value_type(self) -> Result<TrackAudioQuality, ParseError> {
         TrackAudioQuality::from_str(

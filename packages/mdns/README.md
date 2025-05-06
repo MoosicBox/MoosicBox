@@ -1,1 +1,1 @@
-# MoosicBox mdns crate
+# Gimbal mdns crate

@@ -1,11 +1,11 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["network-programming"]
-description = "MoosicBox UPnP package"
+description = "Gimbal UPnP package"
 edition     = "2024"
 keywords    = ["dlna", "network", "upnp"]
 license     = "MPL-2.0"
-name        = "moosicbox_upnp"
+name        = "gimbal_upnp"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
@@ -14,9 +14,9 @@ version     = "0.1.0"
 ignored = ["strum"]
 
 [dependencies]
+gimbal_http            = { workspace = true, optional = true, features = ["reqwest"] }
 moosicbox_assert       = { workspace = true }
 moosicbox_audio_output = { workspace = true, optional = true }
-moosicbox_http         = { workspace = true, optional = true, features = ["reqwest"] }
 moosicbox_logging      = { workspace = true, optional = true, features = ["macros"] }
 moosicbox_task         = { workspace = true }
 
@@ -30,9 +30,9 @@ moosicbox_async_service = { workspace = true, optional = true }
 tokio-util              = { workspace = true, optional = true }
 
 # Player Dependencies
+gimbal_random       = { workspace = true, optional = true, features = ["rand"] }
 moosicbox_music_api = { workspace = true, optional = true }
 moosicbox_player    = { workspace = true, optional = true }
-moosicbox_random    = { workspace = true, optional = true, features = ["rand"] }
 moosicbox_session   = { workspace = true, optional = true }
 symphonia           = { workspace = true, optional = true }
 
@@ -67,13 +67,13 @@ listener = [
 ]
 openapi = ["dep:utoipa"]
 player = [
+    "dep:gimbal_http",
+    "dep:gimbal_random",
     "dep:moosicbox_async_service",
     "dep:moosicbox_audio_output",
-    "dep:moosicbox_http",
     "dep:moosicbox_logging",
     "dep:moosicbox_music_api",
     "dep:moosicbox_player",
-    "dep:moosicbox_random",
     "dep:moosicbox_session",
     "dep:strum",
     "dep:strum_macros",

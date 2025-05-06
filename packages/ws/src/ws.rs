@@ -8,11 +8,11 @@ use std::{
 };
 
 use async_trait::async_trait;
-use moosicbox_audio_zone::models::CreateAudioZone;
-use moosicbox_database::{
+use gimbal_database::{
     config::ConfigDatabase,
     profiles::{LibraryDatabase, PROFILES},
 };
+use moosicbox_audio_zone::models::CreateAudioZone;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_session::{
     get_session_playlist,

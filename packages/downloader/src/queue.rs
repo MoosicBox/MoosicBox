@@ -9,7 +9,7 @@ use std::{
 };
 
 use futures::Future;
-use moosicbox_database::{
+use gimbal_database::{
     DatabaseError, DatabaseValue, Row, profiles::LibraryDatabase, query::FilterableQuery,
 };
 use moosicbox_json_utils::database::DatabaseFetchError;
@@ -544,7 +544,7 @@ impl Drop for DownloadQueue {
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
-    use moosicbox_database::{Database, Row, query::*, schema::CreateTableStatement};
+    use gimbal_database::{Database, Row, query::*, schema::CreateTableStatement};
     use moosicbox_music_api::models::TrackAudioQuality;
     use moosicbox_music_models::{Album, Artist, Track, id::Id};
     use pretty_assertions::assert_eq;

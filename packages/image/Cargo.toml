@@ -23,9 +23,9 @@ moosicbox_task = { workspace = true }
 
 bytes = { workspace = true }
 clap = { workspace = true, optional = true }
+gimbal_fs = { workspace = true, features = ["std"] }
 image = { workspace = true, optional = true }
 log = { workspace = true }
-moosicbox_fs = { workspace = true, features = ["std"] }
 profiling = { workspace = true, optional = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }

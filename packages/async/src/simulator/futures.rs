@@ -26,7 +26,7 @@ impl Sleep {
     #[must_use]
     pub fn new(duration: Duration) -> Self {
         Self {
-            now: moosicbox_time::now(),
+            now: gimbal_time::now(),
             duration,
             polled: false,
             completed: false,
@@ -50,7 +50,7 @@ impl Future for Sleep {
         let polled = *this.polled;
 
         if polled {
-            let duration = moosicbox_time::now().duration_since(*this.now).unwrap();
+            let duration = gimbal_time::now().duration_since(*this.now).unwrap();
             log::trace!(
                 "Sleep polled: {}ms/{}ms",
                 duration.as_millis(),

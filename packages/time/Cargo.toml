@@ -1,17 +1,17 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["date-and-time", "development-utils"]
-description = "MoosicBox Time package"
+description = "Gimbal Time package"
 edition     = "2024"
 keywords    = ["time"]
 license     = "MPL-2.0"
-name        = "moosicbox_time"
+name        = "gimbal_time"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_random = { workspace = true, optional = true, features = ["rand"] }
+gimbal_random = { workspace = true, optional = true, features = ["rand"] }
 
 log        = { workspace = true }
 scoped-tls = { workspace = true, optional = true }
@@ -21,5 +21,5 @@ default = ["simulator", "std"]
 
 fail-on-warnings = []
 
-simulator = ["dep:moosicbox_random", "dep:scoped-tls"]
+simulator = ["dep:gimbal_random", "dep:scoped-tls"]
 std       = []

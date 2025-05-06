@@ -1,1 +1,1 @@
-# MoosicBox database_connection crate
+# Gimbal database_connection crate

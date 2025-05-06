@@ -884,8 +884,8 @@ dependencies = [
 name = "async_simulated"
 version = "0.1.0"
 dependencies = [
- "moosicbox_async",
- "moosicbox_random",
+ "gimbal_async",
+ "gimbal_random",
  "pretty_env_logger",
 ]
 
@@ -4034,6 +4034,229 @@ dependencies = [
 ]
 
 [[package]]
+name = "gimbal_async"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "gimbal_async_macros",
+ "gimbal_random",
+ "gimbal_time",
+ "log",
+ "pin-project-lite",
+ "pretty_assertions",
+ "scoped-tls",
+ "test-log",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "gimbal_async_cargo"
+version = "0.1.0"
+dependencies = [
+ "clap 4.5.37",
+ "log",
+ "pretty_env_logger",
+ "syn 2.0.101",
+ "walkdir",
+]
+
+[[package]]
+name = "gimbal_async_macros"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
+name = "gimbal_database"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "async-trait",
+ "chrono",
+ "futures",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_task",
+ "postgres-protocol",
+ "qstring",
+ "regex",
+ "rusqlite",
+ "sqlx",
+ "sqlx-postgres",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-postgres",
+ "tokio-util",
+]
+
+[[package]]
+name = "gimbal_database_connection"
+version = "0.1.0"
+dependencies = [
+ "aws-config",
+ "aws-sdk-ssm",
+ "gimbal_database",
+ "log",
+ "native-tls",
+ "openssl",
+ "postgres-native-tls",
+ "postgres-openssl",
+ "rusqlite",
+ "sqlx",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-postgres",
+]
+
+[[package]]
+name = "gimbal_fs"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "gimbal_async",
+ "log",
+ "pretty_assertions",
+ "tokio",
+]
+
+[[package]]
+name = "gimbal_http"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "futures-core",
+ "futures-util",
+ "gimbal_http_models",
+ "log",
+ "paste",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "strum 0.27.1",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "gimbal_http_models"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "moosicbox_assert",
+ "reqwest",
+ "serde",
+ "strum 0.27.1",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "gimbal_mdns"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "hostname 0.4.1",
+ "kanal",
+ "log",
+ "mdns-sd",
+ "moosicbox_assert",
+ "moosicbox_async_service",
+ "moosicbox_task",
+ "strum_macros 0.27.1",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "gimbal_random"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "rand 0.8.5",
+]
+
+[[package]]
+name = "gimbal_tcp"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "log",
+ "paste",
+ "thiserror 2.0.12",
+ "tokio",
+ "turmoil",
+]
+
+[[package]]
+name = "gimbal_telemetry"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "actix-web-opentelemetry",
+ "futures-util",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_env_utils",
+ "moosicbox_logging",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry-prometheus",
+ "opentelemetry_sdk",
+ "prometheus 0.14.0",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "gimbal_time"
+version = "0.1.0"
+dependencies = [
+ "gimbal_random",
+ "log",
+ "scoped-tls",
+]
+
+[[package]]
+name = "gimbal_upnp"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "async-recursion",
+ "async-trait",
+ "flume",
+ "futures",
+ "gimbal_http",
+ "gimbal_random",
+ "itertools 0.14.0",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_async_service",
+ "moosicbox_audio_output",
+ "moosicbox_logging",
+ "moosicbox_music_api",
+ "moosicbox_player",
+ "moosicbox_session",
+ "moosicbox_task",
+ "pin-utils",
+ "regex",
+ "roxmltree 0.20.0",
+ "rupnp",
+ "serde",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
+ "symphonia",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-util",
+ "utoipa",
+ "xml",
+]
+
+[[package]]
 name = "gimli"
 version = "0.31.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4669,8 +4892,8 @@ dependencies = [
 name = "http_simple_get"
 version = "0.1.0"
 dependencies = [
+ "gimbal_http",
  "log",
- "moosicbox_http",
  "pretty_env_logger",
  "thiserror 2.0.12",
  "tokio",
@@ -4883,6 +5106,7 @@ dependencies = [
  "eframe",
  "egui_extras",
  "flume",
+ "gimbal_http",
  "hyperchad_actions",
  "hyperchad_color",
  "hyperchad_renderer",
@@ -4893,7 +5117,6 @@ dependencies = [
  "log",
  "moosicbox_app_native_image",
  "moosicbox_assert",
- "moosicbox_http",
  "moosicbox_logging",
  "moosicbox_task",
  "profiling",
@@ -4911,6 +5134,7 @@ dependencies = [
  "bytes",
  "fltk",
  "flume",
+ "gimbal_http",
  "hyperchad_actions",
  "hyperchad_renderer",
  "hyperchad_transformer",
@@ -4918,7 +5142,6 @@ dependencies = [
  "log",
  "moosicbox_app_native_image",
  "moosicbox_assert",
- "moosicbox_http",
  "moosicbox_logging",
  "moosicbox_task",
  "thiserror 2.0.12",
@@ -5026,6 +5249,7 @@ name = "hyperchad_transformer"
 version = "0.1.0"
 dependencies = [
  "bumpalo",
+ "gimbal_time",
  "html-escape",
  "hyperchad_actions",
  "hyperchad_color",
@@ -5035,7 +5259,6 @@ dependencies = [
  "moosicbox_arb",
  "moosicbox_assert",
  "moosicbox_logging",
- "moosicbox_time",
  "paste",
  "pretty_assertions",
  "profiling",
@@ -6425,6 +6648,13 @@ dependencies = [
 name = "moosicbox"
 version = "0.1.0"
 dependencies = [
+ "gimbal_async",
+ "gimbal_database",
+ "gimbal_database_connection",
+ "gimbal_http",
+ "gimbal_mdns",
+ "gimbal_telemetry",
+ "gimbal_upnp",
  "hyperchad_actions",
  "hyperchad_color",
  "hyperchad_renderer",
@@ -6436,7 +6666,6 @@ dependencies = [
  "moosicbox_app_native_ui",
  "moosicbox_arb",
  "moosicbox_assert",
- "moosicbox_async",
  "moosicbox_async_service",
  "moosicbox_audio_decoder",
  "moosicbox_audio_encoder",
@@ -6446,19 +6675,15 @@ dependencies = [
  "moosicbox_auth",
  "moosicbox_channel_utils",
  "moosicbox_config",
- "moosicbox_database",
- "moosicbox_database_connection",
  "moosicbox_downloader",
  "moosicbox_env_utils",
  "moosicbox_files",
- "moosicbox_http",
  "moosicbox_image",
  "moosicbox_json_utils",
  "moosicbox_library",
  "moosicbox_library_models",
  "moosicbox_load_balancer",
  "moosicbox_logging",
- "moosicbox_mdns",
  "moosicbox_menu",
  "moosicbox_middleware",
  "moosicbox_music_api",
@@ -6475,11 +6700,9 @@ dependencies = [
  "moosicbox_session_models",
  "moosicbox_stream_utils",
  "moosicbox_task",
- "moosicbox_telemetry",
  "moosicbox_tidal",
  "moosicbox_tunnel",
  "moosicbox_tunnel_sender",
- "moosicbox_upnp",
  "moosicbox_ws",
  "moosicbox_yt",
  "openport",
@@ -6509,11 +6732,11 @@ dependencies = [
  "actix-htmx",
  "actix-web",
  "base64 0.22.1",
+ "gimbal_database",
  "log",
  "maud",
  "moosicbox_assert",
  "moosicbox_config",
- "moosicbox_database",
  "moosicbox_json_utils",
  "moosicbox_music_api",
  "moosicbox_qobuz",
@@ -6531,6 +6754,8 @@ version = "0.15.2"
 dependencies = [
  "app-tauri-plugin-player",
  "console-subscriber",
+ "gimbal_mdns",
+ "gimbal_upnp",
  "kanal",
  "log",
  "moosicbox_app_client",
@@ -6539,12 +6764,10 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_logging",
- "moosicbox_mdns",
  "moosicbox_music_models",
  "moosicbox_player",
  "moosicbox_session",
  "moosicbox_task",
- "moosicbox_upnp",
  "moosicbox_ws",
  "serde",
  "serde_json",
@@ -6571,9 +6794,9 @@ name = "moosicbox_app_create_config"
 version = "0.1.0"
 dependencies = [
  "clap 4.5.37",
+ "gimbal_fs",
  "log",
  "moosicbox_assert",
- "moosicbox_fs",
  "moosicbox_logging",
  "serde",
  "serde_json",
@@ -6585,6 +6808,8 @@ version = "0.1.0"
 dependencies = [
  "console-subscriber",
  "flume",
+ "gimbal_http",
+ "gimbal_time",
  "hyperchad_actions",
  "log",
  "moosicbox_app_native_bundled",
@@ -6594,7 +6819,6 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_audio_zone_models",
  "moosicbox_env_utils",
- "moosicbox_http",
  "moosicbox_logging",
  "moosicbox_music_api",
  "moosicbox_music_models",
@@ -6603,7 +6827,6 @@ dependencies = [
  "moosicbox_remote_library",
  "moosicbox_session_models",
  "moosicbox_task",
- "moosicbox_time",
  "moosicbox_ws",
  "serde_json",
  "strum 0.27.1",
@@ -6682,13 +6905,14 @@ dependencies = [
 name = "moosicbox_app_state"
 version = "0.1.0"
 dependencies = [
+ "gimbal_http",
+ "gimbal_upnp",
  "log",
  "moosicbox_app_ws",
  "moosicbox_assert",
  "moosicbox_audio_output",
  "moosicbox_audio_zone",
  "moosicbox_env_utils",
- "moosicbox_http",
  "moosicbox_logging",
  "moosicbox_music_api",
  "moosicbox_music_models",
@@ -6697,7 +6921,6 @@ dependencies = [
  "moosicbox_remote_library",
  "moosicbox_session",
  "moosicbox_task",
- "moosicbox_upnp",
  "moosicbox_ws",
  "serde",
  "serde_json",
@@ -6761,44 +6984,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "moosicbox_async"
-version = "0.1.0"
-dependencies = [
- "futures",
- "log",
- "moosicbox_async_macros",
- "moosicbox_random",
- "moosicbox_time",
- "pin-project-lite",
- "pretty_assertions",
- "scoped-tls",
- "test-log",
- "thiserror 2.0.12",
- "tokio",
- "tokio-util",
-]
-
-[[package]]
-name = "moosicbox_async_cargo"
-version = "0.1.0"
-dependencies = [
- "clap 4.5.37",
- "log",
- "pretty_env_logger",
- "syn 2.0.101",
- "walkdir",
-]
-
-[[package]]
-name = "moosicbox_async_macros"
-version = "0.1.0"
-dependencies = [
- "log",
- "quote",
- "syn 2.0.101",
-]
-
-[[package]]
 name = "moosicbox_async_service"
 version = "0.1.0"
 dependencies = [
@@ -6821,11 +7006,11 @@ dependencies = [
  "bytes",
  "flume",
  "futures",
+ "gimbal_http",
+ "gimbal_time",
  "log",
- "moosicbox_http",
  "moosicbox_stream_utils",
  "moosicbox_task",
- "moosicbox_time",
  "profiling",
  "rangemap",
  "symphonia",
@@ -6841,8 +7026,8 @@ dependencies = [
  "audiopus",
  "fdk-aac",
  "flacenc",
+ "gimbal_fs",
  "log",
- "moosicbox_fs",
  "mp3lame-encoder",
  "ogg",
  "opus",
@@ -6857,6 +7042,7 @@ dependencies = [
  "bytes",
  "cpal",
  "fdk-aac",
+ "gimbal_time",
  "libpulse-binding",
  "libpulse-simple-binding",
  "log",
@@ -6868,7 +7054,6 @@ dependencies = [
  "moosicbox_resampler",
  "moosicbox_stream_utils",
  "moosicbox_task",
- "moosicbox_time",
  "mp3lame-encoder",
  "ogg",
  "opus",
@@ -6885,10 +7070,10 @@ name = "moosicbox_audio_zone"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "gimbal_database",
  "log",
  "moosicbox_assert",
  "moosicbox_audio_zone_models",
- "moosicbox_database",
  "moosicbox_json_utils",
  "moosicbox_paging",
  "moosicbox_task",
@@ -6901,9 +7086,9 @@ dependencies = [
 name = "moosicbox_audio_zone_models"
 version = "0.1.0"
 dependencies = [
+ "gimbal_database",
  "log",
  "moosicbox_assert",
- "moosicbox_database",
  "moosicbox_json_utils",
  "serde",
  "utoipa",
@@ -6929,9 +7114,9 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "futures",
+ "gimbal_database",
+ "gimbal_http",
  "log",
- "moosicbox_database",
- "moosicbox_http",
  "moosicbox_json_utils",
  "moosicbox_middleware",
  "serde",
@@ -6957,59 +7142,17 @@ name = "moosicbox_config"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "gimbal_database",
+ "gimbal_random",
  "home",
  "log",
  "moosicbox_assert",
- "moosicbox_database",
  "moosicbox_json_utils",
  "moosicbox_profiles",
- "moosicbox_random",
  "nanoid",
  "serde",
  "thiserror 2.0.12",
  "utoipa",
-]
-
-[[package]]
-name = "moosicbox_database"
-version = "0.1.0"
-dependencies = [
- "actix-web",
- "async-trait",
- "chrono",
- "futures",
- "log",
- "moosicbox_assert",
- "moosicbox_task",
- "postgres-protocol",
- "qstring",
- "regex",
- "rusqlite",
- "sqlx",
- "sqlx-postgres",
- "thiserror 2.0.12",
- "tokio",
- "tokio-postgres",
- "tokio-util",
-]
-
-[[package]]
-name = "moosicbox_database_connection"
-version = "0.1.0"
-dependencies = [
- "aws-config",
- "aws-sdk-ssm",
- "log",
- "moosicbox_database",
- "native-tls",
- "openssl",
- "postgres-native-tls",
- "postgres-openssl",
- "rusqlite",
- "sqlx",
- "thiserror 2.0.12",
- "tokio",
- "tokio-postgres",
 ]
 
 [[package]]
@@ -7029,13 +7172,13 @@ dependencies = [
  "async-trait",
  "atomic_float",
  "futures",
+ "gimbal_database",
  "hyper 1.6.0",
  "id3",
  "log",
  "moosicbox_assert",
  "moosicbox_audiotags",
  "moosicbox_config",
- "moosicbox_database",
  "moosicbox_files",
  "moosicbox_json_utils",
  "moosicbox_music_api",
@@ -7077,6 +7220,10 @@ dependencies = [
  "flume",
  "futures",
  "futures-core",
+ "gimbal_database",
+ "gimbal_fs",
+ "gimbal_http",
+ "gimbal_time",
  "log",
  "moosicbox_assert",
  "moosicbox_async_service",
@@ -7084,16 +7231,12 @@ dependencies = [
  "moosicbox_audio_output",
  "moosicbox_audiotags",
  "moosicbox_config",
- "moosicbox_database",
- "moosicbox_fs",
- "moosicbox_http",
  "moosicbox_image",
  "moosicbox_music_api",
  "moosicbox_music_models",
  "moosicbox_parsing_utils",
  "moosicbox_stream_utils",
  "moosicbox_task",
- "moosicbox_time",
  "profiling",
  "regex",
  "serde",
@@ -7108,56 +7251,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "moosicbox_fs"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "log",
- "moosicbox_async",
- "pretty_assertions",
- "tokio",
-]
-
-[[package]]
-name = "moosicbox_http"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bytes",
- "futures-core",
- "futures-util",
- "log",
- "moosicbox_http_models",
- "paste",
- "reqwest",
- "serde",
- "serde_json",
- "strum 0.27.1",
- "thiserror 2.0.12",
-]
-
-[[package]]
-name = "moosicbox_http_models"
-version = "0.1.0"
-dependencies = [
- "actix-web",
- "moosicbox_assert",
- "reqwest",
- "serde",
- "strum 0.27.1",
- "thiserror 2.0.12",
-]
-
-[[package]]
 name = "moosicbox_image"
 version = "0.1.0"
 dependencies = [
  "bytes",
  "clap 4.5.37",
+ "gimbal_fs",
  "image",
  "libvips",
  "log",
- "moosicbox_fs",
  "moosicbox_task",
  "profiling",
  "strum 0.27.1",
@@ -7173,8 +7275,8 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "gimbal_database",
  "log",
- "moosicbox_database",
  "rusqlite",
  "serde_json",
  "tantivy",
@@ -7190,10 +7292,11 @@ dependencies = [
  "async-trait",
  "enum-as-inner",
  "futures",
+ "gimbal_database",
+ "gimbal_time",
  "log",
  "moosicbox_assert",
  "moosicbox_audio_output",
- "moosicbox_database",
  "moosicbox_files",
  "moosicbox_json_utils",
  "moosicbox_library_models",
@@ -7203,7 +7306,6 @@ dependencies = [
  "moosicbox_paging",
  "moosicbox_search",
  "moosicbox_stream_utils",
- "moosicbox_time",
  "regex",
  "serde",
  "serde_json",
@@ -7219,9 +7321,9 @@ name = "moosicbox_library_models"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "gimbal_database",
  "log",
  "moosicbox_assert",
- "moosicbox_database",
  "moosicbox_date_utils",
  "moosicbox_json_utils",
  "moosicbox_music_models",
@@ -7293,13 +7395,13 @@ dependencies = [
  "chrono",
  "clap 4.5.37",
  "console-subscriber",
+ "gimbal_http",
  "hyperchad_renderer",
  "hyperchad_renderer_html",
  "log",
  "moosicbox_app_native_lib",
  "moosicbox_assert",
  "moosicbox_env_utils",
- "moosicbox_http",
  "moosicbox_logging",
  "moosicbox_marketing_site_ui",
  "regex",
@@ -7323,29 +7425,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "moosicbox_mdns"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "hostname 0.4.1",
- "kanal",
- "log",
- "mdns-sd",
- "moosicbox_assert",
- "moosicbox_async_service",
- "moosicbox_task",
- "strum_macros 0.27.1",
- "thiserror 2.0.12",
-]
-
-[[package]]
 name = "moosicbox_menu"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "gimbal_database",
+ "gimbal_time",
  "log",
  "moosicbox_assert",
- "moosicbox_database",
  "moosicbox_date_utils",
  "moosicbox_json_utils",
  "moosicbox_library",
@@ -7358,7 +7445,6 @@ dependencies = [
  "moosicbox_search",
  "moosicbox_session",
  "moosicbox_tidal",
- "moosicbox_time",
  "moosicbox_yt",
  "serde",
  "thiserror 2.0.12",
@@ -7407,8 +7493,8 @@ dependencies = [
  "actix-web",
  "async-trait",
  "futures",
+ "gimbal_database",
  "log",
- "moosicbox_database",
  "moosicbox_menu_models",
  "moosicbox_music_api_models",
  "moosicbox_music_models",
@@ -7423,8 +7509,8 @@ dependencies = [
 name = "moosicbox_music_api_models"
 version = "0.1.0"
 dependencies = [
+ "gimbal_database",
  "log",
- "moosicbox_database",
  "moosicbox_json_utils",
  "moosicbox_music_models",
  "moosicbox_paging",
@@ -7439,9 +7525,9 @@ dependencies = [
 name = "moosicbox_music_models"
 version = "0.1.0"
 dependencies = [
+ "gimbal_database",
  "log",
  "moosicbox_assert",
- "moosicbox_database",
  "moosicbox_date_utils",
  "moosicbox_json_utils",
  "moosicbox_parsing_utils",
@@ -7484,18 +7570,18 @@ dependencies = [
  "bytes",
  "flume",
  "futures",
+ "gimbal_database",
+ "gimbal_http",
+ "gimbal_random",
  "local-ip-address 0.6.5",
  "log",
  "moosicbox_assert",
  "moosicbox_audio_decoder",
  "moosicbox_audio_output",
- "moosicbox_database",
- "moosicbox_http",
  "moosicbox_json_utils",
  "moosicbox_logging",
  "moosicbox_music_api",
  "moosicbox_music_models",
- "moosicbox_random",
  "moosicbox_resampler",
  "moosicbox_session",
  "moosicbox_stream_utils",
@@ -7530,21 +7616,21 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "futures",
+ "gimbal_database",
+ "gimbal_http",
+ "gimbal_time",
  "itertools 0.14.0",
  "log",
  "md5",
  "moosicbox_assert",
- "moosicbox_database",
  "moosicbox_date_utils",
  "moosicbox_files",
- "moosicbox_http",
  "moosicbox_json_utils",
  "moosicbox_menu_models",
  "moosicbox_music_api",
  "moosicbox_music_models",
  "moosicbox_paging",
  "moosicbox_search",
- "moosicbox_time",
  "regex",
  "serde",
  "serde_json",
@@ -7557,20 +7643,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "moosicbox_random"
-version = "0.1.0"
-dependencies = [
- "log",
- "rand 0.8.5",
-]
-
-[[package]]
 name = "moosicbox_remote_library"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "gimbal_http",
  "log",
- "moosicbox_http",
  "moosicbox_menu_models",
  "moosicbox_music_api",
  "moosicbox_music_models",
@@ -7597,15 +7675,16 @@ dependencies = [
  "actix-web",
  "async-recursion",
  "futures",
+ "gimbal_database",
+ "gimbal_http",
+ "gimbal_time",
  "log",
  "moosicbox_assert",
  "moosicbox_audiotags",
  "moosicbox_auth",
  "moosicbox_config",
- "moosicbox_database",
  "moosicbox_date_utils",
  "moosicbox_files",
- "moosicbox_http",
  "moosicbox_json_utils",
  "moosicbox_library",
  "moosicbox_lofty",
@@ -7614,7 +7693,6 @@ dependencies = [
  "moosicbox_paging",
  "moosicbox_search",
  "moosicbox_task",
- "moosicbox_time",
  "mp3-duration",
  "regex",
  "serde",
@@ -7631,10 +7709,10 @@ dependencies = [
 name = "moosicbox_schema"
 version = "0.1.0"
 dependencies = [
+ "gimbal_database",
  "include_dir",
  "log",
  "moosicbox_assert",
- "moosicbox_database",
  "thiserror 2.0.12",
 ]
 
@@ -7643,10 +7721,10 @@ name = "moosicbox_search"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "gimbal_fs",
  "itertools 0.14.0",
  "log",
  "moosicbox_config",
- "moosicbox_fs",
  "moosicbox_json_utils",
  "moosicbox_music_models",
  "moosicbox_task",
@@ -7673,6 +7751,13 @@ dependencies = [
  "console-subscriber",
  "flume",
  "futures-util",
+ "gimbal_database",
+ "gimbal_database_connection",
+ "gimbal_fs",
+ "gimbal_mdns",
+ "gimbal_random",
+ "gimbal_telemetry",
+ "gimbal_upnp",
  "local-ip-address 0.6.5",
  "log",
  "moosicbox_admin_htmx",
@@ -7682,16 +7767,12 @@ dependencies = [
  "moosicbox_audio_zone",
  "moosicbox_auth",
  "moosicbox_config",
- "moosicbox_database",
- "moosicbox_database_connection",
  "moosicbox_downloader",
  "moosicbox_env_utils",
  "moosicbox_files",
- "moosicbox_fs",
  "moosicbox_json_utils",
  "moosicbox_library",
  "moosicbox_logging",
- "moosicbox_mdns",
  "moosicbox_menu",
  "moosicbox_middleware",
  "moosicbox_music_api",
@@ -7699,17 +7780,14 @@ dependencies = [
  "moosicbox_player",
  "moosicbox_profiles",
  "moosicbox_qobuz",
- "moosicbox_random",
  "moosicbox_scan",
  "moosicbox_schema",
  "moosicbox_search",
  "moosicbox_session",
  "moosicbox_task",
- "moosicbox_telemetry",
  "moosicbox_tidal",
  "moosicbox_tunnel",
  "moosicbox_tunnel_sender",
- "moosicbox_upnp",
  "moosicbox_ws",
  "moosicbox_yt",
  "openssl",
@@ -7740,6 +7818,7 @@ name = "moosicbox_server_simulator"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "gimbal_telemetry",
  "log",
  "moosicbox_assert",
  "moosicbox_config",
@@ -7748,7 +7827,6 @@ dependencies = [
  "moosicbox_server",
  "moosicbox_simulator_harness",
  "moosicbox_task",
- "moosicbox_telemetry",
  "net2",
  "openport",
  "serde_json",
@@ -7762,10 +7840,10 @@ name = "moosicbox_session"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "gimbal_database",
  "log",
  "moosicbox_assert",
  "moosicbox_audio_zone",
- "moosicbox_database",
  "moosicbox_json_utils",
  "moosicbox_library",
  "moosicbox_music_models",
@@ -7783,9 +7861,9 @@ dependencies = [
 name = "moosicbox_session_models"
 version = "0.1.0"
 dependencies = [
+ "gimbal_database",
  "log",
  "moosicbox_audio_zone_models",
- "moosicbox_database",
  "moosicbox_json_utils",
  "moosicbox_music_models",
  "serde",
@@ -7799,18 +7877,18 @@ name = "moosicbox_simulator_harness"
 version = "0.1.0"
 dependencies = [
  "ctrlc",
+ "gimbal_database_connection",
+ "gimbal_fs",
+ "gimbal_http",
+ "gimbal_mdns",
+ "gimbal_random",
+ "gimbal_tcp",
+ "gimbal_telemetry",
+ "gimbal_time",
+ "gimbal_upnp",
  "log",
  "moosicbox_assert",
- "moosicbox_database_connection",
- "moosicbox_fs",
- "moosicbox_http",
- "moosicbox_mdns",
- "moosicbox_random",
  "moosicbox_simulator_utils",
- "moosicbox_tcp",
- "moosicbox_telemetry",
- "moosicbox_time",
- "moosicbox_upnp",
  "shell-words",
  "turmoil",
 ]
@@ -7829,8 +7907,8 @@ dependencies = [
  "bytes",
  "flume",
  "futures",
+ "gimbal_http",
  "log",
- "moosicbox_http",
  "moosicbox_task",
  "pin-project",
  "thiserror 2.0.12",
@@ -7849,39 +7927,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "moosicbox_tcp"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "log",
- "paste",
- "thiserror 2.0.12",
- "tokio",
- "turmoil",
-]
-
-[[package]]
-name = "moosicbox_telemetry"
-version = "0.1.0"
-dependencies = [
- "actix-web",
- "actix-web-opentelemetry",
- "futures-util",
- "log",
- "moosicbox_assert",
- "moosicbox_env_utils",
- "moosicbox_logging",
- "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry-prometheus",
- "opentelemetry_sdk",
- "prometheus 0.14.0",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "moosicbox_tidal"
 version = "0.1.0"
 dependencies = [
@@ -7889,13 +7934,13 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "futures",
+ "gimbal_database",
+ "gimbal_http",
  "itertools 0.14.0",
  "log",
  "moosicbox_assert",
- "moosicbox_database",
  "moosicbox_date_utils",
  "moosicbox_files",
- "moosicbox_http",
  "moosicbox_json_utils",
  "moosicbox_menu_models",
  "moosicbox_music_api",
@@ -7914,25 +7959,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "moosicbox_time"
-version = "0.1.0"
-dependencies = [
- "log",
- "moosicbox_random",
- "scoped-tls",
-]
-
-[[package]]
 name = "moosicbox_tunnel"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "bytes",
  "futures-util",
+ "gimbal_http",
+ "gimbal_time",
  "log",
  "moosicbox_assert",
- "moosicbox_http",
- "moosicbox_time",
  "serde",
  "serde_json",
  "strum 0.27.1",
@@ -7951,21 +7987,21 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-util",
+ "gimbal_database",
+ "gimbal_http",
+ "gimbal_random",
  "log",
  "moosicbox_assert",
  "moosicbox_audio_decoder",
  "moosicbox_audio_output",
  "moosicbox_auth",
  "moosicbox_channel_utils",
- "moosicbox_database",
  "moosicbox_env_utils",
  "moosicbox_files",
- "moosicbox_http",
  "moosicbox_image",
  "moosicbox_music_api",
  "moosicbox_music_models",
  "moosicbox_player",
- "moosicbox_random",
  "moosicbox_stream_utils",
  "moosicbox_task",
  "moosicbox_tunnel",
@@ -7992,20 +8028,20 @@ dependencies = [
  "chrono",
  "console-subscriber",
  "futures-util",
+ "gimbal_database",
+ "gimbal_database_connection",
+ "gimbal_http",
+ "gimbal_random",
+ "gimbal_telemetry",
  "hex",
  "log",
  "moosicbox_assert",
  "moosicbox_async_service",
- "moosicbox_database",
- "moosicbox_database_connection",
  "moosicbox_env_utils",
- "moosicbox_http",
  "moosicbox_json_utils",
  "moosicbox_logging",
  "moosicbox_middleware",
- "moosicbox_random",
  "moosicbox_task",
- "moosicbox_telemetry",
  "moosicbox_tunnel",
  "qstring",
  "serde",
@@ -8021,42 +8057,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "moosicbox_upnp"
-version = "0.1.0"
-dependencies = [
- "actix-web",
- "async-recursion",
- "async-trait",
- "flume",
- "futures",
- "itertools 0.14.0",
- "log",
- "moosicbox_assert",
- "moosicbox_async_service",
- "moosicbox_audio_output",
- "moosicbox_http",
- "moosicbox_logging",
- "moosicbox_music_api",
- "moosicbox_player",
- "moosicbox_random",
- "moosicbox_session",
- "moosicbox_task",
- "pin-utils",
- "regex",
- "roxmltree 0.20.0",
- "rupnp",
- "serde",
- "strum 0.27.1",
- "strum_macros 0.27.1",
- "symphonia",
- "thiserror 2.0.12",
- "tokio",
- "tokio-util",
- "utoipa",
- "xml",
-]
-
-[[package]]
 name = "moosicbox_web_server"
 version = "0.1.0"
 dependencies = [
@@ -8068,9 +8068,9 @@ dependencies = [
  "bytes",
  "const_format",
  "futures-util",
+ "gimbal_http_models",
  "log",
  "moosicbox_assert",
- "moosicbox_http_models",
  "moosicbox_web_server_core",
  "moosicbox_web_server_cors",
  "paste",
@@ -8096,8 +8096,8 @@ dependencies = [
 name = "moosicbox_web_server_cors"
 version = "0.1.0"
 dependencies = [
+ "gimbal_http_models",
  "moosicbox_assert",
- "moosicbox_http_models",
 ]
 
 [[package]]
@@ -8105,10 +8105,10 @@ name = "moosicbox_ws"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "gimbal_database",
  "log",
  "moosicbox_assert",
  "moosicbox_audio_zone",
- "moosicbox_database",
  "moosicbox_json_utils",
  "moosicbox_logging",
  "moosicbox_session",
@@ -8128,12 +8128,12 @@ dependencies = [
  "async-trait",
  "chrono",
  "futures",
+ "gimbal_database",
+ "gimbal_http",
  "log",
  "moosicbox_assert",
- "moosicbox_database",
  "moosicbox_date_utils",
  "moosicbox_files",
- "moosicbox_http",
  "moosicbox_json_utils",
  "moosicbox_menu_models",
  "moosicbox_music_api",

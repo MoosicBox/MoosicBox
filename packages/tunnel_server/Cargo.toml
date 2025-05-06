@@ -20,21 +20,19 @@ name = "moosicbox_tunnel_server"
 path = "src/main.rs"
 
 [dependencies]
-moosicbox_assert = { workspace = true }
-moosicbox_async_service = { workspace = true }
-moosicbox_database = { workspace = true, features = ["api"] }
-moosicbox_database_connection = { workspace = true }
-moosicbox_env_utils = { workspace = true }
-moosicbox_http = { workspace = true, features = ["serde"] }
-moosicbox_json_utils = { workspace = true, features = ["database"] }
-moosicbox_logging = { workspace = true, features = ["free_log"] }
-moosicbox_middleware = { workspace = true }
-moosicbox_random = { workspace = true, features = ["rand"] }
-moosicbox_task = { workspace = true }
-moosicbox_telemetry = { workspace = true, features = [
-    "actix",
-], optional = true }
-moosicbox_tunnel = { workspace = true }
+gimbal_database            = { workspace = true, features = ["api"] }
+gimbal_database_connection = { workspace = true }
+gimbal_http                = { workspace = true, features = ["serde"] }
+gimbal_random              = { workspace = true, features = ["rand"] }
+gimbal_telemetry           = { workspace = true, features = ["actix"], optional = true }
+moosicbox_assert           = { workspace = true }
+moosicbox_async_service    = { workspace = true }
+moosicbox_env_utils        = { workspace = true }
+moosicbox_json_utils       = { workspace = true, features = ["database"] }
+moosicbox_logging          = { workspace = true, features = ["free_log"] }
+moosicbox_middleware       = { workspace = true }
+moosicbox_task             = { workspace = true }
+moosicbox_tunnel           = { workspace = true }
 
 actix-cors = { workspace = true }
 actix-web = { workspace = true }
@@ -76,23 +74,20 @@ fail-on-warnings = []
 base64 = ["moosicbox_tunnel/base64"]
 
 sqlite = [
-    "moosicbox_database_connection/sqlite",
-    "moosicbox_database_connection/sqlite-sqlx",
+    "gimbal_database_connection/sqlite",
+    "gimbal_database_connection/sqlite-sqlx",
 ]
 
 postgres = [
-    "moosicbox_database_connection/postgres",
-    "moosicbox_database_connection/tls",
+    "gimbal_database_connection/postgres",
+    "gimbal_database_connection/tls",
 ]
 postgres-native-tls = [
-    "moosicbox_database_connection/postgres-native-tls",
+    "gimbal_database_connection/postgres-native-tls",
     "postgres",
 ]
-postgres-openssl = [
-    "moosicbox_database_connection/postgres-openssl",
-    "postgres",
-]
-postgres-raw = ["moosicbox_database_connection/postgres-raw", "postgres"]
-postgres-sqlx = ["moosicbox_database_connection/postgres-sqlx", "postgres"]
+postgres-openssl = ["gimbal_database_connection/postgres-openssl", "postgres"]
+postgres-raw = ["gimbal_database_connection/postgres-raw", "postgres"]
+postgres-sqlx = ["gimbal_database_connection/postgres-sqlx", "postgres"]
 
-telemetry = ["dep:moosicbox_telemetry", "dep:tracing"]
+telemetry = ["dep:gimbal_telemetry", "dep:tracing"]

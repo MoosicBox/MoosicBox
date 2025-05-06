@@ -6,8 +6,8 @@ use std::{borrow::Cow, pin::Pin};
 
 use bytes::Bytes;
 
-pub use moosicbox_http_models::Method;
-use moosicbox_http_models::StatusCode;
+pub use gimbal_http_models::Method;
+use gimbal_http_models::StatusCode;
 pub use moosicbox_web_server_core as core;
 #[cfg(feature = "cors")]
 pub use moosicbox_web_server_cors as cors;

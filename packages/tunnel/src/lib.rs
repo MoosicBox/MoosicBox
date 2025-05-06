@@ -6,7 +6,7 @@ use std::{collections::HashMap, task::Poll, time::SystemTime};
 
 use bytes::Bytes;
 use futures_util::{Future, Stream};
-use moosicbox_http::models::Method;
+use gimbal_http::models::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::EnumString;
@@ -241,7 +241,7 @@ impl<'a, F: Future<Output = Result<(), Box<dyn std::error::Error>>>> TunnelStrea
         on_end: &'a impl Fn(u64) -> F,
     ) -> Self {
         Self {
-            start: moosicbox_time::now(),
+            start: gimbal_time::now(),
             request_id,
             time_to_first_byte: None,
             packet_count: 0,
@@ -281,7 +281,7 @@ fn return_polled_bytes<F: Future<Output = Result<(), Box<dyn std::error::Error>>
     response: TunnelResponse,
 ) -> std::task::Poll<Option<Result<Bytes, TunnelStreamError>>> {
     if stream.time_to_first_byte.is_none() {
-        stream.time_to_first_byte = Some(moosicbox_time::now());
+        stream.time_to_first_byte = Some(gimbal_time::now());
     }
 
     stream.packet_count += 1;
@@ -336,7 +336,7 @@ impl<F: Future<Output = Result<(), Box<dyn std::error::Error>>>> Stream for Tunn
             }
 
             if stream.done {
-                let end = moosicbox_time::now();
+                let end = gimbal_time::now();
 
                 log::debug!(
                     "poll_next: Byte count: {} for request_id={request_id} (received {} packet{}, took {}ms total, {}ms to first byte)",

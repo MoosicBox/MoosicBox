@@ -5,8 +5,8 @@ use actix_web::{
     route,
     web::{self, Json},
 };
+use gimbal_database::{config::ConfigDatabase, profiles::LibraryDatabase};
 use moosicbox_audio_zone::models::{ApiAudioZone, ApiPlayer};
-use moosicbox_database::{config::ConfigDatabase, profiles::LibraryDatabase};
 use moosicbox_music_models::api::ApiTrack;
 use moosicbox_paging::Page;
 use moosicbox_session_models::{ApiConnection, RegisterConnection};

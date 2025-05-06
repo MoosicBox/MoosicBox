@@ -1,11 +1,11 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["development-utils"]
-description = "MoosicBox RNG package"
+description = "Gimbal RNG package"
 edition     = "2024"
 keywords    = ["generator", "number", "random"]
 license     = "MPL-2.0"
-name        = "moosicbox_random"
+name        = "gimbal_random"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"

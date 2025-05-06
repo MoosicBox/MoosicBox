@@ -1,6 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use moosicbox_database::profiles::LibraryDatabase;
+use gimbal_database::profiles::LibraryDatabase;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_library::{db::get_artists, models::LibraryArtist};
 use moosicbox_music_models::{AlbumSource, ArtistSort};

@@ -2,9 +2,9 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-pub use moosicbox_http_models;
+pub use gimbal_http_models;
 
-use moosicbox_http_models::Method;
+use gimbal_http_models::Method;
 
 /// An enum signifying that some of type `T` is allowed, or `All` (anything is allowed).
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -7,11 +7,11 @@ use actix_web::{
     error::ErrorInternalServerError,
     route, web,
 };
-use maud::{DOCTYPE, Markup, PreEscaped, html};
-use moosicbox_database::{
+use gimbal_database::{
     config::ConfigDatabase,
     profiles::{LibraryDatabase, PROFILES, api::ProfileName},
 };
+use maud::{DOCTYPE, Markup, PreEscaped, html};
 use serde::Deserialize;
 
 pub mod info;

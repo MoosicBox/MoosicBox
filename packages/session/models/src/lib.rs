@@ -4,8 +4,8 @@
 
 use std::sync::LazyLock;
 
+use gimbal_database::{AsId, DatabaseValue};
 use moosicbox_audio_zone_models::{ApiPlayer, Player};
-use moosicbox_database::{AsId, DatabaseValue};
 use moosicbox_json_utils::{ParseError, ToValueType, database::ToValue as _};
 use moosicbox_music_models::{PlaybackQuality, api::ApiTrack};
 use serde::{Deserialize, Serialize};
@@ -284,7 +284,7 @@ pub struct Session {
     pub playlist: SessionPlaylist,
 }
 
-impl ToValueType<Session> for &moosicbox_database::Row {
+impl ToValueType<Session> for &gimbal_database::Row {
     fn to_value_type(self) -> Result<Session, ParseError> {
         let playback_target_type: Option<String> = self.to_value("playback_target")?;
         let playback_target_type =
@@ -361,7 +361,7 @@ pub struct SessionPlaylist {
     pub tracks: Vec<ApiTrack>,
 }
 
-impl ToValueType<SessionPlaylist> for &moosicbox_database::Row {
+impl ToValueType<SessionPlaylist> for &gimbal_database::Row {
     fn to_value_type(self) -> Result<SessionPlaylist, ParseError> {
         Ok(SessionPlaylist {
             id: self.to_value("id")?,
@@ -415,7 +415,7 @@ pub struct Connection {
     pub players: Vec<Player>,
 }
 
-impl ToValueType<Connection> for &moosicbox_database::Row {
+impl ToValueType<Connection> for &gimbal_database::Row {
     fn to_value_type(self) -> Result<Connection, ParseError> {
         Ok(Connection {
             id: self.to_value("id")?,

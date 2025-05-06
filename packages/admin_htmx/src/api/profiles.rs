@@ -5,11 +5,11 @@ use actix_web::{
     error::ErrorInternalServerError,
     route, web,
 };
-use maud::{Markup, html};
-use moosicbox_database::{
+use gimbal_database::{
     config::ConfigDatabase,
     profiles::{PROFILES, api::ProfileName},
 };
+use maud::{Markup, html};
 use moosicbox_json_utils::database::DatabaseFetchError;
 use serde::Deserialize;
 

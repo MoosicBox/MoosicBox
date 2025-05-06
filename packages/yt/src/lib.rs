@@ -15,11 +15,11 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
+#[cfg(feature = "db")]
+use gimbal_database::DatabaseError;
+#[cfg(feature = "db")]
+use gimbal_database::profiles::LibraryDatabase;
 use models::{YtAlbum, YtArtist, YtSearchResults, YtTrack};
-#[cfg(feature = "db")]
-use moosicbox_database::DatabaseError;
-#[cfg(feature = "db")]
-use moosicbox_database::profiles::LibraryDatabase;
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
@@ -83,8 +83,8 @@ enum YtApiEndpoint {
     Search,
 }
 
-static CLIENT: LazyLock<moosicbox_http::Client> =
-    LazyLock::new(|| moosicbox_http::Client::builder().build().unwrap());
+static CLIENT: LazyLock<gimbal_http::Client> =
+    LazyLock::new(|| gimbal_http::Client::builder().build().unwrap());
 
 static YT_API_BASE_URL: &str = "https://music.youtube.com/youtubei/v1";
 
@@ -169,7 +169,7 @@ macro_rules! yt_api_endpoint {
 #[derive(Debug, Error)]
 pub enum YtDeviceAuthorizationError {
     #[error(transparent)]
-    Http(#[from] moosicbox_http::Error),
+    Http(#[from] gimbal_http::Error),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
@@ -216,7 +216,7 @@ pub async fn device_authorization(
 #[derive(Debug, Error)]
 pub enum RequestError {
     #[error(transparent)]
-    Http(#[from] moosicbox_http::Error),
+    Http(#[from] gimbal_http::Error),
     #[error("Unauthorized")]
     Unauthorized,
     #[error("Request failed (error {0})")]
@@ -305,7 +305,7 @@ async fn request_inner(
         )),
         _ => match response.json::<Value>().await {
             Ok(value) => Ok(Some(value)),
-            Err(moosicbox_http::Error::Decode) => Ok(None),
+            Err(gimbal_http::Error::Decode) => Ok(None),
             Err(e) => Err(RequestError::Http(e)),
         },
     }
@@ -314,7 +314,7 @@ async fn request_inner(
 #[derive(Debug, Error)]
 pub enum YtDeviceAuthorizationTokenError {
     #[error(transparent)]
-    Http(#[from] moosicbox_http::Error),
+    Http(#[from] gimbal_http::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
     Database(#[from] DatabaseError),
@@ -459,7 +459,7 @@ async fn fetch_credentials(
 #[derive(Debug, Error)]
 pub enum AuthenticatedRequestError {
     #[error(transparent)]
-    Http(#[from] moosicbox_http::Error),
+    Http(#[from] gimbal_http::Error),
     #[error(transparent)]
     FetchCredentials(#[from] FetchCredentialsError),
     #[error(transparent)]
@@ -580,7 +580,7 @@ async fn authenticated_request_inner(
         Method::Delete => CLIENT.delete(url),
     }
     .header(
-        moosicbox_http::Header::Authorization.as_ref(),
+        gimbal_http::Header::Authorization.as_ref(),
         &format!("Bearer {}", credentials.access_token),
     );
 
@@ -636,7 +636,7 @@ async fn authenticated_request_inner(
         )),
         _ => match response.json::<Value>().await {
             Ok(value) => Ok(Some(value)),
-            Err(moosicbox_http::Error::Decode) => Ok(None),
+            Err(gimbal_http::Error::Decode) => Ok(None),
             Err(e) => Err(AuthenticatedRequestError::Http(e)),
         },
     }
@@ -645,7 +645,7 @@ async fn authenticated_request_inner(
 #[derive(Debug, Error)]
 pub enum RefetchAccessTokenError {
     #[error(transparent)]
-    Http(#[from] moosicbox_http::Error),
+    Http(#[from] gimbal_http::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
     Database(#[from] DatabaseError),

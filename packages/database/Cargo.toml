@@ -1,11 +1,11 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["database"]
-description = "MoosicBox database package"
+description = "Gimbal database package"
 edition     = "2024"
 keywords    = ["database", "mysql", "postgres", "sqlite"]
 license     = "MPL-2.0"
-name        = "moosicbox_database"
+name        = "gimbal_database"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"

@@ -40,13 +40,13 @@ pub fn sanitize_filename(string: &str) -> String {
 #[derive(Debug, Error)]
 pub enum GetContentLengthError {
     #[error(transparent)]
-    Http(#[from] moosicbox_http::Error),
+    Http(#[from] gimbal_http::Error),
     #[error(transparent)]
     ParseInt(#[from] std::num::ParseIntError),
 }
 
-static CLIENT: LazyLock<moosicbox_http::Client> =
-    LazyLock::new(|| moosicbox_http::Client::builder().build().unwrap());
+static CLIENT: LazyLock<gimbal_http::Client> =
+    LazyLock::new(|| gimbal_http::Client::builder().build().unwrap());
 
 /// # Errors
 ///
@@ -64,7 +64,7 @@ pub async fn get_content_length(
         let end = end.map_or_else(String::new, |x| x.to_string());
 
         client = client.header(
-            moosicbox_http::Header::Range.as_ref(),
+            gimbal_http::Header::Range.as_ref(),
             &format!("bytes={start}-{end}"),
         );
     }
@@ -74,7 +74,7 @@ pub async fn get_content_length(
     Ok(
         if let Some(header) = res
             .headers()
-            .get(moosicbox_http::Header::ContentLength.as_ref())
+            .get(gimbal_http::Header::ContentLength.as_ref())
         {
             Some(header.parse::<u64>()?)
         } else {
@@ -97,7 +97,7 @@ pub fn save_bytes_to_file(
 ) -> Result<(), std::io::Error> {
     std::fs::create_dir_all(path.parent().expect("No parent directory"))?;
 
-    let file = moosicbox_fs::sync::OpenOptions::new()
+    let file = gimbal_fs::sync::OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(start.is_none_or(|start| start == 0))
@@ -230,7 +230,7 @@ pub async fn save_bytes_stream_to_file_with_progress_listener<
 ) -> Result<(), SaveBytesStreamToFileError> {
     std::fs::create_dir_all(path.parent().expect("No parent directory"))?;
 
-    let file = moosicbox_fs::unsync::OpenOptions::new()
+    let file = gimbal_fs::unsync::OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(start.is_none_or(|start| start == 0))
@@ -285,7 +285,7 @@ pub async fn save_bytes_stream_to_file_with_progress_listener<
 #[derive(Debug, Error)]
 pub enum FetchCoverError {
     #[error(transparent)]
-    Http(#[from] moosicbox_http::Error),
+    Http(#[from] gimbal_http::Error),
     #[error(transparent)]
     IO(#[from] std::io::Error),
     #[error(transparent)]
@@ -314,8 +314,7 @@ async fn get_or_fetch_cover_bytes_from_remote_url(
 ) -> Result<CoverBytes, FetchCoverError> {
     use tokio_util::codec::{BytesCodec, FramedRead};
 
-    static IMAGE_CLIENT: LazyLock<moosicbox_http::Client> =
-        LazyLock::new(moosicbox_http::Client::new);
+    static IMAGE_CLIENT: LazyLock<gimbal_http::Client> = LazyLock::new(gimbal_http::Client::new);
 
     if Path::exists(file_path) {
         let file = tokio::fs::File::open(file_path.to_path_buf()).await?;
@@ -353,8 +352,7 @@ async fn get_or_fetch_cover_from_remote_url(
 ) -> Result<String, FetchCoverError> {
     use std::sync::LazyLock;
 
-    static IMAGE_CLIENT: LazyLock<moosicbox_http::Client> =
-        LazyLock::new(moosicbox_http::Client::new);
+    static IMAGE_CLIENT: LazyLock<gimbal_http::Client> = LazyLock::new(gimbal_http::Client::new);
 
     if Path::exists(file_path) {
         Ok(file_path.to_str().unwrap().to_string())
@@ -372,7 +370,7 @@ async fn get_or_fetch_cover_from_remote_url(
 #[derive(Debug, Error)]
 pub enum FetchAndSaveBytesFromRemoteUrlError {
     #[error(transparent)]
-    Http(#[from] moosicbox_http::Error),
+    Http(#[from] gimbal_http::Error),
     #[error(transparent)]
     IO(#[from] std::io::Error),
     #[error(transparent)]
@@ -386,7 +384,7 @@ pub enum FetchAndSaveBytesFromRemoteUrlError {
 /// * If the request fails
 /// * If there is an IO error
 pub async fn fetch_bytes_from_remote_url(
-    client: &moosicbox_http::Client,
+    client: &gimbal_http::Client,
     url: &str,
 ) -> Result<
     Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>,
@@ -418,7 +416,7 @@ pub async fn fetch_bytes_from_remote_url(
 /// * If the request fails
 /// * If there is an IO error
 pub async fn fetch_and_save_bytes_from_remote_url(
-    client: &moosicbox_http::Client,
+    client: &gimbal_http::Client,
     file_path: &Path,
     url: &str,
 ) -> Result<PathBuf, FetchAndSaveBytesFromRemoteUrlError> {

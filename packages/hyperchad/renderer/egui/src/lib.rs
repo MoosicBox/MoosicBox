@@ -907,8 +907,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                         }
                     } else {
                         moosicbox_task::spawn("renderer: load_image", async move {
-                            static CLIENT: LazyLock<moosicbox_http::Client> =
-                                LazyLock::new(moosicbox_http::Client::new);
+                            static CLIENT: LazyLock<gimbal_http::Client> =
+                                LazyLock::new(gimbal_http::Client::new);
 
                             log::trace!("loading image {source}");
                             match CLIENT.get(&source).send().await {

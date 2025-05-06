@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use moosicbox_database::{
+use gimbal_database::{
     DatabaseError, DatabaseValue, boxed,
     profiles::LibraryDatabase,
     query::{

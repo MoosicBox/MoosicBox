@@ -7,7 +7,7 @@ use actix_web::{
     route,
     web::{self, Json},
 };
-use moosicbox_database::profiles::LibraryDatabase;
+use gimbal_database::profiles::LibraryDatabase;
 use moosicbox_music_api::models::AlbumsRequest;
 use moosicbox_music_models::{AlbumSort, api::ApiAlbum, id::parse_integer_ranges_to_ids};
 use moosicbox_paging::{Page, PagingRequest};

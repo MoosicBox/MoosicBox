@@ -1,6 +1,6 @@
 use std::str::FromStr as _;
 
-use moosicbox_database::{
+use gimbal_database::{
     AsId, DatabaseValue, boxed,
     profiles::LibraryDatabase,
     query::{FilterableQuery as _, SortDirection, where_not_eq},
@@ -12,7 +12,7 @@ use moosicbox_json_utils::{
 
 use crate::{AlbumVersionQuality, ApiSource, AudioFormat, TrackApiSource, TrackSize};
 
-impl moosicbox_json_utils::MissingValue<ApiSource> for &moosicbox_database::Row {}
+impl moosicbox_json_utils::MissingValue<ApiSource> for &gimbal_database::Row {}
 impl ToValueType<ApiSource> for DatabaseValue {
     fn to_value_type(self) -> Result<ApiSource, ParseError> {
         ApiSource::from_str(
@@ -23,19 +23,19 @@ impl ToValueType<ApiSource> for DatabaseValue {
     }
 }
 
-impl AsModel<AlbumVersionQuality> for &moosicbox_database::Row {
+impl AsModel<AlbumVersionQuality> for &gimbal_database::Row {
     fn as_model(&self) -> AlbumVersionQuality {
         AsModelResult::as_model(self).unwrap()
     }
 }
 
-impl AsModel<TrackSize> for &moosicbox_database::Row {
+impl AsModel<TrackSize> for &gimbal_database::Row {
     fn as_model(&self) -> TrackSize {
         AsModelResult::as_model(self).unwrap()
     }
 }
 
-impl ToValueType<TrackSize> for &moosicbox_database::Row {
+impl ToValueType<TrackSize> for &gimbal_database::Row {
     fn to_value_type(self) -> Result<TrackSize, ParseError> {
         Ok(TrackSize {
             id: self.to_value("id")?,
@@ -46,7 +46,7 @@ impl ToValueType<TrackSize> for &moosicbox_database::Row {
     }
 }
 
-impl AsModelResult<TrackSize, ParseError> for &moosicbox_database::Row {
+impl AsModelResult<TrackSize, ParseError> for &gimbal_database::Row {
     fn as_model(&self) -> Result<TrackSize, ParseError> {
         Ok(TrackSize {
             id: self.to_value("id")?,
@@ -64,8 +64,8 @@ impl AsId for TrackSize {
     }
 }
 
-impl moosicbox_json_utils::MissingValue<AlbumVersionQuality> for &moosicbox_database::Row {}
-impl ToValueType<AlbumVersionQuality> for &moosicbox_database::Row {
+impl moosicbox_json_utils::MissingValue<AlbumVersionQuality> for &gimbal_database::Row {}
+impl ToValueType<AlbumVersionQuality> for &gimbal_database::Row {
     fn to_value_type(self) -> Result<AlbumVersionQuality, ParseError> {
         Ok(AlbumVersionQuality {
             format: self
@@ -85,7 +85,7 @@ impl ToValueType<AlbumVersionQuality> for &moosicbox_database::Row {
     }
 }
 
-impl AsModelResult<AlbumVersionQuality, ParseError> for &moosicbox_database::Row {
+impl AsModelResult<AlbumVersionQuality, ParseError> for &gimbal_database::Row {
     fn as_model(&self) -> Result<AlbumVersionQuality, ParseError> {
         Ok(AlbumVersionQuality {
             format: self

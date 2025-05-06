@@ -1,7 +1,7 @@
 use std::{fmt::Display, sync::LazyLock};
 
+use gimbal_database::profiles::PROFILES;
 use moosicbox_async_service::Arc;
-use moosicbox_database::profiles::PROFILES;
 use moosicbox_player::Playback;
 use moosicbox_session::models::UpdateSession;
 use moosicbox_ws::{WebsocketSender, update_session};

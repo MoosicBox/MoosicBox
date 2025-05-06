@@ -5,7 +5,7 @@ use actix_web::{
     route,
     web::{self, Json},
 };
-use moosicbox_database::config::ConfigDatabase;
+use gimbal_database::config::ConfigDatabase;
 use serde::Deserialize;
 
 use crate::api::models::ApiProfile;

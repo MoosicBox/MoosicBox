@@ -1,4 +1,4 @@
-use moosicbox_database::{AsId, DatabaseValue, Row};
+use gimbal_database::{AsId, DatabaseValue, Row};
 use moosicbox_json_utils::{
     MissingValue, ParseError, ToValueType,
     database::{AsModel, AsModelResult, ToValue},
@@ -23,7 +23,7 @@ pub struct YtConfig {
     pub updated: String,
 }
 
-impl MissingValue<YtConfig> for &moosicbox_database::Row {}
+impl MissingValue<YtConfig> for &gimbal_database::Row {}
 impl ToValueType<YtConfig> for &Row {
     fn to_value_type(self) -> Result<YtConfig, ParseError> {
         Ok(YtConfig {

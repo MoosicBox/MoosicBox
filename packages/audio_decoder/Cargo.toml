@@ -11,13 +11,13 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_http = { workspace = true, features = ["reqwest"] }
+gimbal_http = { workspace = true, features = ["reqwest"] }
+gimbal_time = { workspace = true, features = ["std"] }
 moosicbox_stream_utils = { workspace = true, features = [
     "remote-bytestream",
     "stalled-monitor",
 ] }
 moosicbox_task = { workspace = true }
-moosicbox_time = { workspace = true, features = ["std"] }
 
 bytes      = { workspace = true }
 flume      = { workspace = true }

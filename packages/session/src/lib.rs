@@ -2,11 +2,11 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+use gimbal_database::{config::ConfigDatabase, profiles::LibraryDatabase};
 use moosicbox_audio_zone::{
     db::audio_zone_try_from_db,
     models::{AudioZone, Player},
 };
-use moosicbox_database::{config::ConfigDatabase, profiles::LibraryDatabase};
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_music_models::api::ApiTrack;
 use moosicbox_session_models::{

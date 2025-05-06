@@ -164,7 +164,7 @@ pub enum GetTrackBytesError {
     #[error(transparent)]
     IO(#[from] std::io::Error),
     #[error(transparent)]
-    Http(#[from] moosicbox_http::Error),
+    Http(#[from] gimbal_http::Error),
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
     #[error(transparent)]
@@ -604,7 +604,7 @@ async fn request_track_bytes_from_url(
     format: AudioFormat,
     size: Option<u64>,
 ) -> Result<TrackBytes, GetTrackBytesError> {
-    let client = moosicbox_http::Client::new();
+    let client = gimbal_http::Client::new();
 
     log::debug!("request_track_bytes_from_url: Getting track source from url: {url}");
 
@@ -617,11 +617,11 @@ async fn request_track_bytes_from_url(
 
         log::debug!("request_track_bytes_from_url: Using byte range start={start} end={end}");
         request = request.header(
-            moosicbox_http::Header::Range.as_ref(),
+            gimbal_http::Header::Range.as_ref(),
             &format!("bytes={start}-{end}"),
         );
         head_request = head_request.header(
-            moosicbox_http::Header::Range.as_ref(),
+            gimbal_http::Header::Range.as_ref(),
             &format!("bytes={start}-{end}"),
         );
     }
@@ -632,7 +632,7 @@ async fn request_track_bytes_from_url(
 
         if let Some(header) = head
             .headers()
-            .get(moosicbox_http::Header::ContentLength.as_ref())
+            .get(gimbal_http::Header::ContentLength.as_ref())
         {
             let size = header.parse::<u64>()?;
             log::debug!("Got size from Content-Length header: size={size}");

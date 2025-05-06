@@ -7,7 +7,7 @@ use actix_web::{
     get, post,
     web::{self, Json},
 };
-use moosicbox_database::profiles::LibraryDatabase;
+use gimbal_database::profiles::LibraryDatabase;
 use moosicbox_library::{
     LibraryMusicApi,
     db::{get_album_tracks, get_tracks},

@@ -16,8 +16,8 @@ mod ws;
 
 use actix_cors::Cors;
 use actix_web::{App, dev::ServerHandle, http, middleware};
+use gimbal_database::{Database, config::ConfigDatabase, profiles::PROFILES};
 use moosicbox_config::{AppType, get_or_init_server_identity};
-use moosicbox_database::{Database, config::ConfigDatabase, profiles::PROFILES};
 use moosicbox_files::files::track_pool::service::Commander as _;
 use std::{
     net::TcpListener,
@@ -29,7 +29,7 @@ use tokio_util::sync::CancellationToken;
 static CANCELLATION_TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
 #[cfg(feature = "upnp")]
 static UPNP_LISTENER_HANDLE: LazyLock<
-    Arc<std::sync::RwLock<Option<moosicbox_upnp::listener::Handle>>>,
+    Arc<std::sync::RwLock<Option<gimbal_upnp::listener::Handle>>>,
 > = LazyLock::new(|| Arc::new(std::sync::RwLock::new(None)));
 
 static WS_SERVER_HANDLE: LazyLock<tokio::sync::RwLock<Option<ws::server::WsServerHandle>>> =
@@ -53,7 +53,7 @@ pub async fn run_basic<T>(
 ) -> std::io::Result<T> {
     #[cfg(feature = "telemetry")]
     let request_metrics = std::sync::Arc::new(
-        moosicbox_telemetry::get_http_metrics_handler().map_err(std::io::Error::other)?,
+        gimbal_telemetry::get_http_metrics_handler().map_err(std::io::Error::other)?,
     );
 
     run(
@@ -91,7 +91,7 @@ pub async fn run<T>(
     #[cfg(feature = "player")] local_players: bool,
     #[cfg(feature = "upnp")] upnp_players: bool,
     #[cfg(feature = "telemetry")] metrics_handler: Arc<
-        Box<dyn moosicbox_telemetry::HttpMetricsHandler>,
+        Box<dyn gimbal_telemetry::HttpMetricsHandler>,
     >,
     on_startup: impl FnOnce(ServerHandle) -> T + Send,
 ) -> std::io::Result<T> {
@@ -109,7 +109,7 @@ pub async fn run<T>(
         }
     };
 
-    let config_db = moosicbox_database_connection::init(
+    let config_db = gimbal_database_connection::init(
         #[cfg(feature = "sqlite")]
         config_db_path.as_deref(),
         None,
@@ -133,7 +133,7 @@ pub async fn run<T>(
         .await
         .expect("Failed to get or init server identity");
 
-    moosicbox_database::config::init(config_database.clone().into());
+    gimbal_database::config::init(config_database.clone().into());
 
     events::profiles_event::init(app_type, config_database.clone())
         .await
@@ -192,7 +192,7 @@ pub async fn run<T>(
     #[cfg(feature = "upnp")]
     let (upnp_service_handle, join_upnp_service) = if upnp_players {
         let upnp_service =
-            moosicbox_upnp::listener::Service::new(moosicbox_upnp::listener::UpnpContext::new());
+            gimbal_upnp::listener::Service::new(gimbal_upnp::listener::UpnpContext::new());
         let upnp_service_handle = upnp_service.handle();
         let join_upnp_service = upnp_service.start();
 
@@ -287,9 +287,9 @@ pub async fn run<T>(
             #[cfg(feature = "telemetry")]
             let app = app
                 .app_data(actix_web::web::Data::new(metrics_handler.clone()))
-                .service(moosicbox_telemetry::metrics)
+                .service(gimbal_telemetry::metrics)
                 .wrap(metrics_handler.request_middleware())
-                .wrap(moosicbox_telemetry::RequestTracing::new());
+                .wrap(gimbal_telemetry::RequestTracing::new());
 
             #[cfg(feature = "static-token-auth")]
             let app = app.wrap(crate::auth::StaticTokenAuth::new(
@@ -398,7 +398,7 @@ pub async fn run<T>(
             )));
 
             #[cfg(feature = "upnp-api")]
-            let app = app.service(moosicbox_upnp::api::bind_services(actix_web::web::scope(
+            let app = app.service(gimbal_upnp::api::bind_services(actix_web::web::scope(
                 "/upnp",
             )));
 
@@ -449,7 +449,7 @@ pub async fn run<T>(
                     let CertifiedKey { cert, key_pair } =
                         generate_simple_self_signed(subject_alt_names).unwrap();
 
-                    let mut cert_file = moosicbox_fs::sync::OpenOptions::new()
+                    let mut cert_file = gimbal_fs::sync::OpenOptions::new()
                         .create(true) // To create a new file
                         .truncate(true)
                         .write(true)
@@ -459,7 +459,7 @@ pub async fn run<T>(
                         .write_all(cert.pem().as_bytes())
                         .expect("Failed to create cert file");
 
-                    let mut key_file = moosicbox_fs::sync::OpenOptions::new()
+                    let mut key_file = gimbal_fs::sync::OpenOptions::new()
                         .create(true) // To create a new file
                         .truncate(true)
                         .write(true)
@@ -515,7 +515,7 @@ pub async fn run<T>(
         |x| x.to_string(),
     );
 
-    if let Err(e) = moosicbox_mdns::register_service(&server_id, &ip, service_port).await {
+    if let Err(e) = gimbal_mdns::register_service(&server_id, &ip, service_port).await {
         moosicbox_assert::die_or_error!("Failed to register mdns service: {e:?}");
     }
 
@@ -660,7 +660,7 @@ pub async fn run<T>(
 
             #[cfg(feature = "upnp")]
             if let Some(upnp_service_handle) = upnp_service_handle {
-                use moosicbox_upnp::listener::Commander as _;
+                use gimbal_upnp::listener::Commander as _;
 
                 log::debug!("Shutting down UpnpListener...");
                 if let Err(e) = upnp_service_handle.shutdown() {

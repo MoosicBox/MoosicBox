@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use bytes::BytesMut;
 use futures::{StreamExt, TryStreamExt};
-use moosicbox_database::{DatabaseError, profiles::LibraryDatabase, query::FilterableQuery};
+use gimbal_database::{DatabaseError, profiles::LibraryDatabase, query::FilterableQuery};
 use moosicbox_music_api::{
     AlbumError, MusicApi,
     models::{ImageCoverSize, ImageCoverSource},

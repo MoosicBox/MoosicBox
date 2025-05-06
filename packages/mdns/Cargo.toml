@@ -1,11 +1,11 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["network-programming"]
-description = "MoosicBox mdns service discovery package"
+description = "Gimbal mdns service discovery package"
 edition     = "2024"
 keywords    = ["discovery", "dns", "mdns", "multicast", "service"]
 license     = "MPL-2.0"
-name        = "moosicbox_mdns"
+name        = "gimbal_mdns"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"

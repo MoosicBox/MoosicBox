@@ -11,12 +11,14 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
+gimbal_database = { workspace = true }
+gimbal_http = { workspace = true, features = ["json", "reqwest"] }
+gimbal_random = { workspace = true, features = ["rand"] }
 moosicbox_assert = { workspace = true }
 moosicbox_audio_decoder = { workspace = true }
 moosicbox_audio_output = { workspace = true }
 moosicbox_auth = { workspace = true }
 moosicbox_channel_utils = { workspace = true, features = ["futures-channel"] }
-moosicbox_database = { workspace = true }
 moosicbox_env_utils = { workspace = true }
 moosicbox_files = { workspace = true, features = [
     "api",
@@ -24,12 +26,10 @@ moosicbox_files = { workspace = true, features = [
     "range",
     "track-range",
 ] }
-moosicbox_http = { workspace = true, features = ["json", "reqwest"] }
 moosicbox_image = { workspace = true, features = ["image"] }
 moosicbox_music_api = { workspace = true }
 moosicbox_music_models = { workspace = true }
 moosicbox_player = { workspace = true }
-moosicbox_random = { workspace = true, features = ["rand"] }
 moosicbox_stream_utils = { workspace = true }
 moosicbox_task = { workspace = true }
 moosicbox_tunnel = { workspace = true }

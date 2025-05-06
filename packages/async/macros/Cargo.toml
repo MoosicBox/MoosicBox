@@ -1,11 +1,11 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["asynchronous", "development-utils"]
-description = "MoosicBox Async macros package"
+description = "Gimbal Async macros package"
 edition     = "2024"
 keywords    = ["async"]
 license     = "MPL-2.0"
-name        = "moosicbox_async_macros"
+name        = "gimbal_async_macros"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"

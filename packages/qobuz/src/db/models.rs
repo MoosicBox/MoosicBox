@@ -1,4 +1,4 @@
-use moosicbox_database::Row;
+use gimbal_database::Row;
 use moosicbox_json_utils::{
     ParseError, ToValueType,
     database::ToValue as _,

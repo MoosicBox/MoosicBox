@@ -13,11 +13,12 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_app_ws = { workspace = true }
 
+gimbal_http              = { workspace = true, features = ["json", "reqwest"] }
+gimbal_upnp              = { workspace = true, optional = true, features = ["player"] }
 moosicbox_assert         = { workspace = true }
 moosicbox_audio_output   = { workspace = true }
 moosicbox_audio_zone     = { workspace = true }
 moosicbox_env_utils      = { workspace = true }
-moosicbox_http           = { workspace = true, features = ["json", "reqwest"] }
 moosicbox_logging        = { workspace = true }
 moosicbox_music_api      = { workspace = true }
 moosicbox_music_models   = { workspace = true }
@@ -26,7 +27,6 @@ moosicbox_player         = { workspace = true, features = ["local"] }
 moosicbox_remote_library = { workspace = true }
 moosicbox_session        = { workspace = true }
 moosicbox_task           = { workspace = true }
-moosicbox_upnp           = { workspace = true, optional = true, features = ["player"] }
 moosicbox_ws             = { workspace = true }
 
 log        = { workspace = true }
@@ -39,7 +39,7 @@ tokio-util = { workspace = true }
 [features]
 default = ["all-sources", "upnp"]
 
-upnp = ["dep:moosicbox_upnp"]
+upnp = ["dep:gimbal_upnp"]
 
 fail-on-warnings = []
 

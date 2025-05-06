@@ -1,11 +1,11 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["development-tools"]
-description = "MoosicBox telemetry package"
+description = "Gimbal telemetry package"
 edition     = "2024"
 keywords    = ["grafana", "otel", "telemetry", "tempo"]
 license     = "MPL-2.0"
-name        = "moosicbox_telemetry"
+name        = "gimbal_telemetry"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"

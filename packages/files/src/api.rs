@@ -9,7 +9,7 @@ use actix_web::{
 };
 use bytes::{Bytes, BytesMut};
 use futures::{StreamExt, TryStreamExt as _};
-use moosicbox_database::profiles::LibraryDatabase;
+use gimbal_database::profiles::LibraryDatabase;
 use moosicbox_music_api::{
     MusicApis, SourceToMusicApi as _,
     models::{ImageCoverSize, TrackAudioQuality, TrackSource},

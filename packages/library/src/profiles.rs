@@ -1,6 +1,6 @@
 use std::sync::{Arc, LazyLock, RwLock};
 
-use moosicbox_database::profiles::LibraryDatabase;
+use gimbal_database::profiles::LibraryDatabase;
 
 use crate::LibraryMusicApi;
 
@@ -71,7 +71,7 @@ impl LibraryMusicApiProfiles {
 pub mod api {
     use actix_web::{FromRequest, HttpRequest, dev::Payload, error::ErrorBadRequest};
     use futures::future::{Ready, err, ok};
-    use moosicbox_database::profiles::api::ProfileName;
+    use gimbal_database::profiles::api::ProfileName;
 
     use super::{LibraryMusicApi, PROFILES};
 

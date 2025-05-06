@@ -14,8 +14,8 @@ version     = "0.1.0"
 ignored = ["strum"]
 
 [dependencies]
+gimbal_database             = { workspace = true }
 moosicbox_audio_zone_models = { workspace = true }
-moosicbox_database          = { workspace = true }
 moosicbox_json_utils        = { workspace = true }
 moosicbox_music_models      = { workspace = true, features = ["api"] }
 
@@ -32,7 +32,7 @@ default = ["all-sources", "api", "openapi"]
 
 fail-on-warnings = []
 
-api = ["moosicbox_database/api"]
+api = ["gimbal_database/api"]
 openapi = [
     "dep:utoipa",
     "moosicbox_audio_zone_models/openapi",

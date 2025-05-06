@@ -14,8 +14,8 @@ pub struct MoosicBox {
     pub dns: String,
 }
 
-impl From<moosicbox_mdns::scanner::MoosicBox> for MoosicBox {
-    fn from(value: moosicbox_mdns::scanner::MoosicBox) -> Self {
+impl From<gimbal_mdns::scanner::MoosicBox> for MoosicBox {
+    fn from(value: gimbal_mdns::scanner::MoosicBox) -> Self {
         Self {
             id: value.id,
             name: value.name,
@@ -36,13 +36,13 @@ pub async fn fetch_moosicbox_servers() -> Result<Vec<MoosicBox>, TauriPlayerErro
 }
 
 pub fn spawn_mdns_scanner() -> (
-    moosicbox_mdns::scanner::service::Handle,
-    JoinHandle<Result<(), moosicbox_mdns::scanner::service::Error>>,
+    gimbal_mdns::scanner::service::Handle,
+    JoinHandle<Result<(), gimbal_mdns::scanner::service::Error>>,
 ) {
     let (tx, rx) = kanal::unbounded_async();
 
-    let context = moosicbox_mdns::scanner::Context::new(tx);
-    let service = moosicbox_mdns::scanner::service::Service::new(context);
+    let context = gimbal_mdns::scanner::Context::new(tx);
+    let service = gimbal_mdns::scanner::service::Service::new(context);
 
     let handle = service.handle();
     let RuntimeHandle::Tokio(runtime_handle) = tauri::async_runtime::handle();

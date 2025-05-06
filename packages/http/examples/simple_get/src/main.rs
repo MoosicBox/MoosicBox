@@ -1,7 +1,7 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
-    Http(#[from] moosicbox_http::Error),
+    Http(#[from] gimbal_http::Error),
     #[error("MissingUrlArgument")]
     MissingUrlArgument,
 }
@@ -16,7 +16,7 @@ async fn main() -> Result<(), Error> {
 
     log::info!("args={url:?}");
 
-    let response = moosicbox_http::Client::new().get(&url).send().await?;
+    let response = gimbal_http::Client::new().get(&url).send().await?;
 
     println!("response: {}", response.text().await?);
 

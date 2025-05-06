@@ -14,12 +14,12 @@ use async_trait::async_trait;
 use atomic_float::AtomicF64;
 use flume::{Receiver, SendError, bounded};
 use futures::{Future, StreamExt as _, TryStreamExt as _};
+use gimbal_database::profiles::LibraryDatabase;
 use local_ip_address::local_ip;
 use moosicbox_audio_decoder::media_sources::{
     bytestream_source::ByteStreamSource, remote_bytestream::RemoteByteStreamMediaSource,
 };
 use moosicbox_audio_output::AudioOutputFactory;
-use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_json_utils::{ParseError, database::DatabaseFetchError};
 use moosicbox_music_api::MusicApi;
 use moosicbox_music_models::{ApiSource, AudioFormat, PlaybackQuality, Track, id::Id};
@@ -64,14 +64,14 @@ pub const DEFAULT_PLAYBACK_RETRY_OPTIONS: PlaybackRetryOptions = PlaybackRetryOp
     retry_delay: std::time::Duration::from_millis(500),
 };
 
-pub static CLIENT: LazyLock<moosicbox_http::Client> = LazyLock::new(moosicbox_http::Client::new);
+pub static CLIENT: LazyLock<gimbal_http::Client> = LazyLock::new(gimbal_http::Client::new);
 
 #[derive(Debug, Error)]
 pub enum PlayerError {
     #[error(transparent)]
     Send(#[from] SendError<()>),
     #[error(transparent)]
-    Http(#[from] moosicbox_http::Error),
+    Http(#[from] gimbal_http::Error),
     #[error(transparent)]
     Parse(#[from] ParseError),
     #[error(transparent)]
@@ -159,7 +159,7 @@ impl Playback {
         playback_target: Option<PlaybackTarget>,
     ) -> Self {
         Self {
-            id: moosicbox_random::rng().next_u64(),
+            id: gimbal_random::rng().next_u64(),
             session_id,
             profile,
             tracks,
@@ -448,7 +448,7 @@ impl PlaybackHandler {
         let receiver = Arc::new(tokio::sync::RwLock::new(None));
 
         Self {
-            id: moosicbox_random::rng().next_u64(),
+            id: gimbal_random::rng().next_u64(),
             playback,
             output,
             player: Arc::new(player),

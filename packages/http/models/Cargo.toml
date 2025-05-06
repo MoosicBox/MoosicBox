@@ -1,11 +1,11 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["development-tools", "network-programming"]
-description = "MoosicBox HTTP models package"
+description = "Gimbal HTTP models package"
 edition     = "2024"
 keywords    = ["http", "network", "web"]
 license     = "MPL-2.0"
-name        = "moosicbox_http_models"
+name        = "gimbal_http_models"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"

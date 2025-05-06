@@ -6,7 +6,7 @@ use actix_web::{
     Result, get,
     web::{self},
 };
-use moosicbox_database::profiles::api::ProfileNameUnverified;
+use gimbal_database::profiles::api::ProfileNameUnverified;
 use serde::Deserialize;
 
 #[derive(Deserialize, Clone)]

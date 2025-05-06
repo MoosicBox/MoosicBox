@@ -26,7 +26,7 @@ mod test {
     #[cfg(feature = "time")]
     #[test_log::test]
     fn can_await_time_future() {
-        moosicbox_time::simulator::with_real_time(|| {
+        gimbal_time::simulator::with_real_time(|| {
             let runtime = build_runtime(&Builder::new()).unwrap();
 
             runtime.block_on(super::time::sleep(Duration::from_millis(10)));
@@ -38,7 +38,7 @@ mod test {
     #[cfg(feature = "time")]
     #[test_log::test]
     fn can_select_future() {
-        moosicbox_time::simulator::with_real_time(|| {
+        gimbal_time::simulator::with_real_time(|| {
             let runtime = build_runtime(&Builder::new()).unwrap();
 
             runtime.block_on(async move {
@@ -54,7 +54,7 @@ mod test {
     #[cfg(feature = "time")]
     #[test_log::test]
     fn can_select_2_futures() {
-        moosicbox_time::simulator::with_real_time(|| {
+        gimbal_time::simulator::with_real_time(|| {
             let runtime = build_runtime(&Builder::new()).unwrap();
 
             runtime.block_on(async move {
@@ -73,7 +73,7 @@ mod test {
     #[cfg(feature = "time")]
     #[test_log::test]
     fn can_select_2_futures_2_block_ons() {
-        moosicbox_time::simulator::with_real_time(|| {
+        gimbal_time::simulator::with_real_time(|| {
             let runtime = build_runtime(&Builder::new()).unwrap();
 
             runtime.block_on(async move {
@@ -101,7 +101,7 @@ mod test {
     #[cfg(feature = "time")]
     #[test_log::test]
     fn can_select_3_futures() {
-        moosicbox_time::simulator::with_real_time(|| {
+        gimbal_time::simulator::with_real_time(|| {
             let runtime = build_runtime(&Builder::new()).unwrap();
 
             runtime.block_on(async move {

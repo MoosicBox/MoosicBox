@@ -369,7 +369,7 @@ impl AudioWrite for PulseAudioOutput {
         log::debug!("{bytes_available} bytes available");
         log::debug!("Latency {latency:?}");
 
-        let start = moosicbox_time::now();
+        let start = gimbal_time::now();
         log::trace!("Writing bytes");
 
         while bytes_available < bytes.len() {
@@ -389,7 +389,7 @@ impl AudioWrite for PulseAudioOutput {
 
         bytes_written += write_bytes(&mut self.stream.borrow_mut(), bytes)?;
 
-        let end = moosicbox_time::now();
+        let end = gimbal_time::now();
         let took_ms = end.duration_since(start).unwrap().as_millis();
 
         let total_bytes = self

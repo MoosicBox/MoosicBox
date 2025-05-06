@@ -5,7 +5,7 @@ use actix_web::{
     route,
     web::{self, Json},
 };
-use moosicbox_database::config::ConfigDatabase;
+use gimbal_database::config::ConfigDatabase;
 use moosicbox_middleware::tunnel_info::TunnelInfo;
 use serde::Deserialize;
 use serde_json::{Value, json};

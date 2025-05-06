@@ -1,19 +1,19 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["asynchronous"]
-description = "MoosicBox Async runtime package"
+description = "Gimbal Async runtime package"
 edition     = "2024"
 keywords    = ["async"]
 license     = "MPL-2.0"
-name        = "moosicbox_async"
+name        = "gimbal_async"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_async_macros = { workspace = true, optional = true }
-moosicbox_random       = { workspace = true, optional = true, features = ["rand"] }
-moosicbox_time         = { workspace = true, optional = true, features = ["std"] }
+gimbal_async_macros = { workspace = true, optional = true }
+gimbal_random       = { workspace = true, optional = true, features = ["rand"] }
+gimbal_time         = { workspace = true, optional = true, features = ["std"] }
 
 log              = { workspace = true }
 pin-project-lite = { workspace = true }
@@ -28,7 +28,7 @@ tokio      = { workspace = true, optional = true, features = ["rt"] }
 tokio-util = { workspace = true, optional = true }
 
 [dev-dependencies]
-moosicbox_time    = { workspace = true, features = ["simulator"] }
+gimbal_time       = { workspace = true, features = ["simulator"] }
 pretty_assertions = { workspace = true }
 test-log          = { workspace = true }
 
@@ -52,16 +52,16 @@ _any_backend = []
 simulator = [
     "_any_backend",
     "dep:futures",
-    "dep:moosicbox_random",
-    "dep:moosicbox_time",
+    "dep:gimbal_random",
+    "dep:gimbal_time",
     "dep:tokio",
-    "moosicbox_async_macros/simulator",
+    "gimbal_async_macros/simulator",
 ]
 tokio = ["_any_backend", "dep:futures", "dep:tokio", "dep:tokio-util"]
 
 fs              = ["tokio?/fs"]
 io              = ["tokio?/io-util"]
-macros          = ["dep:moosicbox_async_macros", "tokio", "tokio?/macros"]
+macros          = ["dep:gimbal_async_macros", "tokio", "tokio?/macros"]
 net             = ["tokio?/net"]
 rt-multi-thread = ["tokio?/rt-multi-thread"]
 sync            = ["tokio?/sync"]

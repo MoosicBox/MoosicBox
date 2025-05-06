@@ -11,6 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
+gimbal_telemetry = { workspace = true }
 moosicbox_assert = { workspace = true }
 moosicbox_config = { workspace = true }
 moosicbox_env_utils = { workspace = true }
@@ -26,7 +27,6 @@ moosicbox_simulator_harness = { workspace = true, features = [
     "time",
 ] }
 moosicbox_task = { workspace = true }
-moosicbox_telemetry = { workspace = true }
 openport = { workspace = true }
 
 actix-web  = { workspace = true }

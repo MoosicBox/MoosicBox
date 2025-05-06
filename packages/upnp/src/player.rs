@@ -321,7 +321,7 @@ impl UpnpPlayer {
         handle: Handle,
     ) -> Self {
         Self {
-            id: moosicbox_random::rng().next_u64(),
+            id: gimbal_random::rng().next_u64(),
             source_to_music_api,
             source,
             transport_uri: Arc::new(tokio::sync::RwLock::new(None)),
@@ -380,7 +380,7 @@ impl UpnpPlayer {
         let size = if std::env::var("UPNP_SEND_SIZE")
             .is_ok_and(|x| ["true", "1"].contains(&x.to_lowercase().as_str()))
         {
-            let mut client = moosicbox_http::Client::new().head(&local_transport_uri);
+            let mut client = gimbal_http::Client::new().head(&local_transport_uri);
 
             if let Some(headers) = headers {
                 for (key, value) in headers {

@@ -11,9 +11,9 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
+gimbal_database      = { workspace = true, features = ["api"] }
 moosicbox_assert     = { workspace = true }
 moosicbox_config     = { workspace = true, features = ["db"] }
-moosicbox_database   = { workspace = true, features = ["api"] }
 moosicbox_json_utils = { workspace = true, features = ["database"] }
 moosicbox_music_api  = { workspace = true, optional = true }
 moosicbox_scan       = { workspace = true, optional = true, features = ["local"] }

@@ -14,9 +14,9 @@ version     = "0.1.0"
 ignored = ["strum"]
 
 [dependencies]
+gimbal_database        = { workspace = true }
 moosicbox_assert       = { workspace = true }
 moosicbox_config       = { workspace = true }
-moosicbox_database     = { workspace = true }
 moosicbox_files        = { workspace = true, features = ["files"] }
 moosicbox_json_utils   = { workspace = true, features = ["serde_json"] }
 moosicbox_music_api    = { workspace = true }
@@ -47,17 +47,17 @@ tokio               = { workspace = true }
 tokio-util          = { workspace = true }
 
 [dev-dependencies]
-moosicbox_database = { workspace = true, features = ["schema"] }
-pretty_assertions  = { workspace = true }
-test-log           = { workspace = true }
-tokio              = { workspace = true, features = ["macros", "rt", "tracing"] }
+gimbal_database   = { workspace = true, features = ["schema"] }
+pretty_assertions = { workspace = true }
+test-log          = { workspace = true }
+tokio             = { workspace = true, features = ["macros", "rt", "tracing"] }
 
 [features]
 default = ["aac", "all-sources", "api", "flac", "mp3", "openapi", "opus"]
 
 fail-on-warnings = []
 
-api = ["dep:actix-web", "moosicbox_database/api", "moosicbox_music_api/api"]
+api = ["dep:actix-web", "gimbal_database/api", "moosicbox_music_api/api"]
 openapi = [
     "dep:utoipa",
     "moosicbox_music_api/openapi",

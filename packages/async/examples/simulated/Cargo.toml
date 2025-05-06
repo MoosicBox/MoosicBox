@@ -9,8 +9,8 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_async  = { workspace = true, features = ["time", "tokio"] }
-moosicbox_random = { workspace = true, features = ["simulator"] }
+gimbal_async  = { workspace = true, features = ["time", "tokio"] }
+gimbal_random = { workspace = true, features = ["simulator"] }
 
 pretty_env_logger = { workspace = true }
 
@@ -19,4 +19,4 @@ default = []
 
 fail-on-warnings = []
 
-simulator = ["moosicbox_async/simulator"]
+simulator = ["gimbal_async/simulator"]

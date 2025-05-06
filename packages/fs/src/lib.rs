@@ -19,9 +19,9 @@ pub trait GenericSyncFile:
 pub trait GenericAsyncFile:
     Send
     + Sync
-    + moosicbox_async::io::AsyncRead
-    + moosicbox_async::io::AsyncWrite
-    + moosicbox_async::io::AsyncSeek
+    + gimbal_async::io::AsyncRead
+    + gimbal_async::io::AsyncWrite
+    + gimbal_async::io::AsyncSeek
 {
 }
 

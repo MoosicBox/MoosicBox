@@ -23,7 +23,7 @@ use actix_web::{
     route,
     web::{self, Json},
 };
-use moosicbox_database::profiles::LibraryDatabase;
+use gimbal_database::profiles::LibraryDatabase;
 use moosicbox_music_api::{MusicApis, SourceToMusicApi as _, models::TrackAudioQuality};
 use moosicbox_paging::Page;
 use regex::{Captures, Regex};

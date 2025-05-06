@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use moosicbox_audio_zone::{db::models::AudioZoneModel, models::Player};
-use moosicbox_database::{
+use gimbal_database::{
     Database, DatabaseValue,
     config::ConfigDatabase,
     profiles::LibraryDatabase,
     query::{FilterableQuery as _, SortDirection, select, where_in},
 };
+use moosicbox_audio_zone::{db::models::AudioZoneModel, models::Player};
 use moosicbox_json_utils::{
     ParseError, ToValueType,
     database::{DatabaseFetchError, ToValue as _},
@@ -493,7 +493,7 @@ pub async fn delete_session_playlist_tracks_by_track_id(
 }
 
 async fn connection_as_model_query(
-    row: &moosicbox_database::Row,
+    row: &gimbal_database::Row,
     db: Arc<Box<dyn Database>>,
 ) -> Result<Connection, DatabaseFetchError> {
     let id = row.to_value::<String>("id")?;
@@ -508,7 +508,7 @@ async fn connection_as_model_query(
 }
 
 async fn session_as_model_query(
-    row: &moosicbox_database::Row,
+    row: &gimbal_database::Row,
     db: Arc<Box<dyn Database>>,
 ) -> Result<Session, DatabaseFetchError> {
     let id = row.to_value("id")?;
@@ -545,7 +545,7 @@ async fn session_as_model_query(
 }
 
 async fn session_playlist_as_model_query(
-    row: &moosicbox_database::Row,
+    row: &gimbal_database::Row,
     db: Arc<Box<dyn Database>>,
 ) -> Result<SessionPlaylist, DatabaseFetchError> {
     let id = row.to_value("id")?;

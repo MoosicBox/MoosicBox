@@ -63,9 +63,8 @@ impl service::Processor for service::Service {
         let tx = ctx.sender.clone();
         let token = ctx.token.clone();
 
-        ctx.handle.replace(moosicbox_task::spawn(
-            "moosicbox_mdns scanner",
-            async move {
+        ctx.handle
+            .replace(moosicbox_task::spawn("gimbal_mdns scanner", async move {
                 let mdns = ServiceDaemon::new()?;
                 let service_type = "_moosicboxserver._tcp.local.";
                 let receiver = mdns.browse(service_type)?;
@@ -102,8 +101,7 @@ impl service::Processor for service::Service {
                 }
 
                 Ok::<_, Error>(())
-            },
-        ));
+            }));
 
         drop(ctx);
 

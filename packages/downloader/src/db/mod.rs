@@ -1,4 +1,4 @@
-use moosicbox_database::{
+use gimbal_database::{
     profiles::LibraryDatabase,
     query::{FilterableQuery, where_eq},
 };
@@ -91,7 +91,7 @@ pub async fn get_download_tasks(
 ) -> Result<Vec<DownloadTask>, DatabaseFetchError> {
     Ok(db
         .select("download_tasks")
-        .sort("id", moosicbox_database::query::SortDirection::Desc)
+        .sort("id", gimbal_database::query::SortDirection::Desc)
         .execute(&**db)
         .await?
         .to_value_type()?)

@@ -97,14 +97,14 @@ impl AudioWrite for PulseAudioOutput {
             frame_count,
             buffer.len()
         );
-        let start = moosicbox_time::now();
+        let start = gimbal_time::now();
         // Write interleaved samples to PulseAudio.
         if let Err(err) = self.pa.write(buffer) {
             log::error!("audio output stream write error: {err}");
 
             Err(AudioOutputError::StreamClosed)
         } else {
-            let end = moosicbox_time::now();
+            let end = gimbal_time::now();
             let took_ms = end.duration_since(start).unwrap().as_millis();
             if took_ms >= 500 {
                 log::error!("Detected audio interrupt");

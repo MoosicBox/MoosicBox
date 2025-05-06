@@ -11,8 +11,8 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
+gimbal_fs              = { workspace = true, features = ["std"] }
 moosicbox_config       = { workspace = true }
-moosicbox_fs           = { workspace = true, features = ["std"] }
 moosicbox_json_utils   = { workspace = true, features = ["tantivy"] }
 moosicbox_music_models = { workspace = true, features = ["tantivy"] }
 moosicbox_task         = { workspace = true }
@@ -46,4 +46,4 @@ api     = ["db", "dep:actix-web", "moosicbox_music_models/api"]
 db      = ["moosicbox_music_models/db"]
 openapi = ["dep:utoipa", "moosicbox_music_models/openapi"]
 
-simulator = ["moosicbox_fs/simulator"]
+simulator = ["gimbal_fs/simulator"]

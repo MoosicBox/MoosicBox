@@ -7,7 +7,7 @@ use actix_web::{
     get, post,
     web::{self, Json},
 };
-use moosicbox_database::profiles::api::ProfileName;
+use gimbal_database::profiles::api::ProfileName;
 use moosicbox_music_api::{MusicApi, MusicApis, SourceToMusicApi as _};
 use moosicbox_music_models::{
     ApiSource, AudioFormat, PlaybackQuality, Track,

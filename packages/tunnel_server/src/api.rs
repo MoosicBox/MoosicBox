@@ -9,9 +9,9 @@ use actix_web::{HttpRequest, Result};
 use actix_web::{HttpResponse, route};
 use bytes::Bytes;
 use futures_util::StreamExt;
+use gimbal_database::profiles::api::ProfileNameUnverified;
+use gimbal_http::models::Method;
 use log::{debug, info};
-use moosicbox_database::profiles::api::ProfileNameUnverified;
-use moosicbox_http::models::Method;
 use moosicbox_tunnel::{
     TunnelEncoding, TunnelHttpRequest, TunnelRequest, TunnelResponse, TunnelStream,
 };
@@ -254,7 +254,7 @@ async fn handle_request(
     headers: Option<Value>,
     profile: Option<String>,
 ) -> Result<HttpResponse> {
-    let request_id = moosicbox_random::rng().next_u64();
+    let request_id = gimbal_random::rng().next_u64();
     let abort_token = CancellationToken::new();
 
     debug!(

@@ -4,8 +4,8 @@ use actix_web::{
     Result, get,
     web::{self, Json},
 };
+use gimbal_database::profiles::api::ProfileName;
 use log::info;
-use moosicbox_database::profiles::api::ProfileName;
 use serde_json::{Value, json};
 
 #[cfg(feature = "openapi")]

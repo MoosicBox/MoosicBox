@@ -1,6 +1,6 @@
 use std::sync::{Arc, PoisonError};
 
-use moosicbox_database::{
+use gimbal_database::{
     DatabaseError, DatabaseValue, profiles::LibraryDatabase, query::FilterableQuery,
 };
 use moosicbox_date_utils::chrono;

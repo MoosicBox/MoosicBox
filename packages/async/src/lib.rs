@@ -10,7 +10,7 @@ use std::{
 #[cfg(feature = "_any_backend")]
 pub use futures;
 #[cfg(feature = "macros")]
-pub use moosicbox_async_macros::{inject_yields, inject_yields_mod};
+pub use gimbal_async_macros::{inject_yields, inject_yields_mod};
 
 #[cfg(feature = "tokio")]
 pub mod tokio;

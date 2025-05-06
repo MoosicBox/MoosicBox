@@ -11,64 +11,64 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-hyperchad_actions             = { workspace = true }
-hyperchad_color               = { workspace = true }
-hyperchad_renderer            = { workspace = true }
-hyperchad_renderer_egui       = { workspace = true }
-hyperchad_renderer_fltk       = { workspace = true }
-hyperchad_transformer         = { workspace = true }
-moosicbox_admin_htmx          = { workspace = true }
-moosicbox_app_native_lib      = { workspace = true }
-moosicbox_app_native_ui       = { workspace = true }
-moosicbox_arb                 = { workspace = true }
-moosicbox_assert              = { workspace = true }
-moosicbox_async               = { workspace = true }
-moosicbox_async_service       = { workspace = true }
-moosicbox_audio_decoder       = { workspace = true }
-moosicbox_audio_encoder       = { workspace = true }
-moosicbox_audio_output        = { workspace = true }
-moosicbox_audio_zone          = { workspace = true }
-moosicbox_audio_zone_models   = { workspace = true }
-moosicbox_auth                = { workspace = true }
-moosicbox_channel_utils       = { workspace = true }
-moosicbox_config              = { workspace = true }
-moosicbox_database            = { workspace = true }
-moosicbox_database_connection = { workspace = true }
-moosicbox_downloader          = { workspace = true }
-moosicbox_env_utils           = { workspace = true }
-moosicbox_files               = { workspace = true }
-moosicbox_http                = { workspace = true }
-moosicbox_image               = { workspace = true }
-moosicbox_json_utils          = { workspace = true }
-moosicbox_library             = { workspace = true }
-moosicbox_library_models      = { workspace = true }
-moosicbox_load_balancer       = { workspace = true }
-moosicbox_logging             = { workspace = true }
-moosicbox_mdns                = { workspace = true }
-moosicbox_menu                = { workspace = true }
-moosicbox_middleware          = { workspace = true }
-moosicbox_music_api           = { workspace = true }
-moosicbox_paging              = { workspace = true }
-moosicbox_player              = { workspace = true }
-moosicbox_profiles            = { workspace = true }
-moosicbox_qobuz               = { workspace = true, optional = true }
-moosicbox_remote_library      = { workspace = true }
-moosicbox_resampler           = { workspace = true }
-moosicbox_scan                = { workspace = true }
-moosicbox_schema              = { workspace = true }
-moosicbox_search              = { workspace = true }
-moosicbox_session             = { workspace = true }
-moosicbox_session_models      = { workspace = true }
-moosicbox_stream_utils        = { workspace = true }
-moosicbox_task                = { workspace = true }
-moosicbox_telemetry           = { workspace = true }
-moosicbox_tidal               = { workspace = true, optional = true }
-moosicbox_tunnel              = { workspace = true }
-moosicbox_tunnel_sender       = { workspace = true }
-moosicbox_upnp                = { workspace = true }
-moosicbox_ws                  = { workspace = true }
-moosicbox_yt                  = { workspace = true, optional = true }
-openport                      = { workspace = true }
+gimbal_async                = { workspace = true }
+gimbal_database             = { workspace = true }
+gimbal_database_connection  = { workspace = true }
+gimbal_http                 = { workspace = true }
+gimbal_mdns                 = { workspace = true }
+gimbal_telemetry            = { workspace = true }
+gimbal_upnp                 = { workspace = true }
+hyperchad_actions           = { workspace = true }
+hyperchad_color             = { workspace = true }
+hyperchad_renderer          = { workspace = true }
+hyperchad_renderer_egui     = { workspace = true }
+hyperchad_renderer_fltk     = { workspace = true }
+hyperchad_transformer       = { workspace = true }
+moosicbox_admin_htmx        = { workspace = true }
+moosicbox_app_native_lib    = { workspace = true }
+moosicbox_app_native_ui     = { workspace = true }
+moosicbox_arb               = { workspace = true }
+moosicbox_assert            = { workspace = true }
+moosicbox_async_service     = { workspace = true }
+moosicbox_audio_decoder     = { workspace = true }
+moosicbox_audio_encoder     = { workspace = true }
+moosicbox_audio_output      = { workspace = true }
+moosicbox_audio_zone        = { workspace = true }
+moosicbox_audio_zone_models = { workspace = true }
+moosicbox_auth              = { workspace = true }
+moosicbox_channel_utils     = { workspace = true }
+moosicbox_config            = { workspace = true }
+moosicbox_downloader        = { workspace = true }
+moosicbox_env_utils         = { workspace = true }
+moosicbox_files             = { workspace = true }
+moosicbox_image             = { workspace = true }
+moosicbox_json_utils        = { workspace = true }
+moosicbox_library           = { workspace = true }
+moosicbox_library_models    = { workspace = true }
+moosicbox_load_balancer     = { workspace = true }
+moosicbox_logging           = { workspace = true }
+moosicbox_menu              = { workspace = true }
+moosicbox_middleware        = { workspace = true }
+moosicbox_music_api         = { workspace = true }
+moosicbox_paging            = { workspace = true }
+moosicbox_player            = { workspace = true }
+moosicbox_profiles          = { workspace = true }
+moosicbox_qobuz             = { workspace = true, optional = true }
+moosicbox_remote_library    = { workspace = true }
+moosicbox_resampler         = { workspace = true }
+moosicbox_scan              = { workspace = true }
+moosicbox_schema            = { workspace = true }
+moosicbox_search            = { workspace = true }
+moosicbox_session           = { workspace = true }
+moosicbox_session_models    = { workspace = true }
+moosicbox_stream_utils      = { workspace = true }
+moosicbox_task              = { workspace = true }
+moosicbox_tidal             = { workspace = true, optional = true }
+moosicbox_tunnel            = { workspace = true }
+moosicbox_tunnel_sender     = { workspace = true }
+moosicbox_ws                = { workspace = true }
+moosicbox_yt                = { workspace = true, optional = true }
+openport                    = { workspace = true }
 
 [features]
 default = ["all-sources"]

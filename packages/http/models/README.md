@@ -1,1 +1,1 @@
-# MoosicBox HTTP models crate
+# Gimbal HTTP models crate

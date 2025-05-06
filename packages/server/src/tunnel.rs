@@ -1,7 +1,7 @@
 use std::env;
 
+use gimbal_database::config::ConfigDatabase;
 use moosicbox_auth::get_client_id_and_access_token;
-use moosicbox_database::config::ConfigDatabase;
 use moosicbox_tunnel::TunnelRequest;
 use moosicbox_tunnel_sender::{
     TunnelMessage,

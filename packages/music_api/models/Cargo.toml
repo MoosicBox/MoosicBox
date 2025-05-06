@@ -14,7 +14,7 @@ version     = "0.1.0"
 ignored = ["strum"]
 
 [dependencies]
-moosicbox_database     = { workspace = true }
+gimbal_database        = { workspace = true }
 moosicbox_json_utils   = { workspace = true, features = ["serde_json"] }
 moosicbox_music_models = { workspace = true }
 moosicbox_paging       = { workspace = true }
@@ -35,6 +35,6 @@ fail-on-warnings = []
 
 openapi = ["dep:utoipa", "moosicbox_music_models/openapi"]
 
-db = ["moosicbox_database/api", "moosicbox_music_models/db"]
+db = ["gimbal_database/api", "moosicbox_music_models/db"]
 
-api = ["moosicbox_database/api", "moosicbox_music_models/api"]
+api = ["gimbal_database/api", "moosicbox_music_models/api"]

@@ -7,8 +7,8 @@ use actix_web::{
     post,
     web::{self, Json},
 };
+use gimbal_database::profiles::LibraryDatabase;
 use moosicbox_auth::NonTunnelRequestAuthorized;
-use moosicbox_database::profiles::LibraryDatabase;
 use moosicbox_music_api::MusicApis;
 use serde::Deserialize;
 use serde_json::Value;

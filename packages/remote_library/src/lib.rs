@@ -5,7 +5,7 @@
 use std::sync::{Arc, LazyLock};
 
 use async_trait::async_trait;
-use moosicbox_http::models::StatusCode;
+use gimbal_http::models::StatusCode;
 use moosicbox_menu_models::{AlbumVersion, api::ApiAlbumVersion};
 use moosicbox_music_api::{
     AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
@@ -25,13 +25,13 @@ use moosicbox_music_models::{
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use thiserror::Error;
 
-static CLIENT: LazyLock<moosicbox_http::Client> =
-    LazyLock::new(|| moosicbox_http::Client::builder().build().unwrap());
+static CLIENT: LazyLock<gimbal_http::Client> =
+    LazyLock::new(|| gimbal_http::Client::builder().build().unwrap());
 
 #[derive(Debug, Error)]
 pub enum RequestError {
     #[error(transparent)]
-    Request(#[from] moosicbox_http::Error),
+    Request(#[from] gimbal_http::Error),
     #[error("Unsuccessful: {0}")]
     Unsuccessful(String),
 }
@@ -101,7 +101,7 @@ impl MusicApi for RemoteLibraryMusicApi {
     async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError> {
         let request = CLIENT
             .request(
-                moosicbox_http::models::Method::Get,
+                gimbal_http::models::Method::Get,
                 &format!(
                     "{host}/menu/album?albumId={album_id}&source={source}",
                     host = self.host,
@@ -147,7 +147,7 @@ impl MusicApi for RemoteLibraryMusicApi {
 
         let request = CLIENT
             .request(
-                moosicbox_http::models::Method::Get,
+                gimbal_http::models::Method::Get,
                 &format!(
                     "{host}/menu/album/versions?albumId={album_id}&source={source}",
                     host = self.host,
@@ -255,7 +255,7 @@ impl MusicApi for RemoteLibraryMusicApi {
             .join(",");
         let request = CLIENT
             .request(
-                moosicbox_http::models::Method::Get,
+                gimbal_http::models::Method::Get,
                 &format!(
                     "{host}/menu/tracks?trackIds={track_ids_str}&source={source}",
                     host = self.host,
@@ -330,7 +330,7 @@ impl MusicApi for RemoteLibraryMusicApi {
     async fn track(&self, track_id: &Id) -> Result<Option<Track>, TrackError> {
         let request = CLIENT
             .request(
-                moosicbox_http::models::Method::Get,
+                gimbal_http::models::Method::Get,
                 &format!(
                     "{host}/menu/track?trackId={track_id}&source={source}",
                     host = self.host,

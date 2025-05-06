@@ -1,1 +1,1 @@
-# MoosicBox telemetry crate
+# Gimbal telemetry crate

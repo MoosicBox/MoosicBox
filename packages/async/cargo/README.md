@@ -1,1 +1,1 @@
-# DST Demo Async Cargo checker crate
+# Gimbal Async Cargo checker crate

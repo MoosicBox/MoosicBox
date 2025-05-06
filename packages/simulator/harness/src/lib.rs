@@ -19,23 +19,23 @@ pub use moosicbox_simulator_utils as utils;
 pub use turmoil;
 
 #[cfg(feature = "database")]
-pub use moosicbox_database_connection as database_connection;
+pub use gimbal_database_connection as database_connection;
 #[cfg(feature = "fs")]
-pub use moosicbox_fs as fs;
+pub use gimbal_fs as fs;
 #[cfg(feature = "http")]
-pub use moosicbox_http as http;
+pub use gimbal_http as http;
 #[cfg(feature = "mdns")]
-pub use moosicbox_mdns as mdns;
+pub use gimbal_mdns as mdns;
 #[cfg(feature = "random")]
-pub use moosicbox_random as random;
+pub use gimbal_random as random;
 #[cfg(feature = "tcp")]
-pub use moosicbox_tcp as tcp;
+pub use gimbal_tcp as tcp;
 #[cfg(feature = "telemetry")]
-pub use moosicbox_telemetry as telemetry;
+pub use gimbal_telemetry as telemetry;
 #[cfg(feature = "time")]
-pub use moosicbox_time as time;
+pub use gimbal_time as time;
 #[cfg(feature = "upnp")]
-pub use moosicbox_upnp as upnp;
+pub use gimbal_upnp as upnp;
 
 mod formatting;
 pub mod plan;
@@ -49,7 +49,7 @@ static RUNS: LazyLock<u64> = LazyLock::new(|| {
 fn run_info(run_index: u64, props: &[(String, String)]) -> String {
     #[cfg(feature = "time")]
     let extra = {
-        use moosicbox_time::simulator::{epoch_offset, step_multiplier};
+        use gimbal_time::simulator::{epoch_offset, step_multiplier};
 
         format!(
             "\n\
@@ -81,7 +81,7 @@ fn run_info(run_index: u64, props: &[(String, String)]) -> String {
         seed={seed}\n\
         runs={runs}\
         {extra}{props_str}",
-        seed = moosicbox_random::simulator::seed(),
+        seed = gimbal_random::simulator::seed(),
     )
 }
 
@@ -157,19 +157,19 @@ fn run_info_end(
     real_time_millis: u128,
     sim_time_millis: u128,
 ) -> String {
-    let run_from_seed = if *RUNS == 1 && moosicbox_random::simulator::contains_fixed_seed() {
+    let run_from_seed = if *RUNS == 1 && gimbal_random::simulator::contains_fixed_seed() {
         String::new()
     } else {
         let cmd = get_run_command(
             &["SIMULATOR_SEED", "SIMULATOR_RUNS", "SIMULATOR_DURATION"],
-            moosicbox_random::simulator::seed(),
+            gimbal_random::simulator::seed(),
         );
         format!("\n\nTo run again with this seed: `{cmd}`")
     };
-    let run_from_start = if !moosicbox_random::simulator::contains_fixed_seed() && *RUNS > 1 {
+    let run_from_start = if !gimbal_random::simulator::contains_fixed_seed() && *RUNS > 1 {
         let cmd = get_run_command(
             &["SIMULATOR_SEED"],
-            moosicbox_random::simulator::initial_seed(),
+            gimbal_random::simulator::initial_seed(),
         );
         format!("\nTo run entire simulation again from the first run: `{cmd}`")
     } else {
@@ -226,13 +226,13 @@ pub fn run_simulation(bootstrap: &impl SimBootstrap) -> Result<(), Box<dyn std::
     let runs = *RUNS;
 
     for run_index in 1..=runs {
-        moosicbox_random::simulator::reset_rng();
+        gimbal_random::simulator::reset_rng();
         #[cfg(feature = "fs")]
-        moosicbox_fs::simulator::reset_fs();
+        gimbal_fs::simulator::reset_fs();
         #[cfg(feature = "time")]
-        moosicbox_time::simulator::reset_epoch_offset();
+        gimbal_time::simulator::reset_epoch_offset();
         #[cfg(feature = "time")]
-        moosicbox_time::simulator::reset_step_multiplier();
+        gimbal_time::simulator::reset_step_multiplier();
         reset_simulator_cancellation_token();
         reset_step();
 
@@ -242,7 +242,7 @@ pub fn run_simulation(bootstrap: &impl SimBootstrap) -> Result<(), Box<dyn std::
 
         let builder = bootstrap.build_sim(sim_builder());
         #[cfg(feature = "random")]
-        let sim = builder.build_with_rng(Box::new(moosicbox_random::rng().clone()));
+        let sim = builder.build_with_rng(Box::new(gimbal_random::rng().clone()));
         #[cfg(not(feature = "random"))]
         let sim = builder.build();
 
@@ -356,7 +356,7 @@ pub fn run_simulation(bootstrap: &impl SimBootstrap) -> Result<(), Box<dyn std::
             break;
         }
 
-        moosicbox_random::simulator::reset_seed();
+        gimbal_random::simulator::reset_seed();
     }
 
     Ok(())
@@ -372,7 +372,7 @@ fn sim_builder() -> turmoil::Builder {
 
     #[cfg(feature = "time")]
     builder.tick_duration(Duration::from_millis(
-        moosicbox_time::simulator::step_multiplier(),
+        gimbal_time::simulator::step_multiplier(),
     ));
 
     builder

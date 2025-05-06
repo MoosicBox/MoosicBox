@@ -1,1 +1,1 @@
-# MoosicBox TCP crate
+# Gimbal TCP crate

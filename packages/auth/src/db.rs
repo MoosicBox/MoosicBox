@@ -1,4 +1,4 @@
-use moosicbox_database::{
+use gimbal_database::{
     DatabaseValue, boxed,
     config::ConfigDatabase,
     query::{FilterableQuery, SortDirection, where_eq, where_gt},

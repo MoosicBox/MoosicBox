@@ -17,12 +17,13 @@ use futures_util::{
     future::{self, ready},
     pin_mut,
 };
+use gimbal_database::{config::ConfigDatabase, profiles::PROFILES};
+use gimbal_http::models::Method;
 use moosicbox_audio_decoder::{
     AudioDecodeHandler, media_sources::remote_bytestream::RemoteByteStreamMediaSource,
 };
 use moosicbox_auth::AuthError;
 use moosicbox_channel_utils::{MoosicBoxSender as _, futures_channel::PrioritizedSender};
-use moosicbox_database::{config::ConfigDatabase, profiles::PROFILES};
 use moosicbox_env_utils::default_env_usize;
 use moosicbox_files::{
     api::AlbumCoverQuery,
@@ -32,7 +33,6 @@ use moosicbox_files::{
     },
     range::{Range, parse_ranges},
 };
-use moosicbox_http::models::Method;
 use moosicbox_music_api::{SourceToMusicApi as _, models::TrackSource};
 use moosicbox_music_models::{ApiSource, AudioFormat, id::Id};
 use moosicbox_player::symphonia::play_media_source_async;
@@ -210,7 +210,7 @@ impl TunnelSender {
     ) -> (Self, TunnelSenderHandle) {
         let sender = Arc::new(RwLock::new(None));
         let cancellation_token = CancellationToken::new();
-        let id = moosicbox_random::rng().next_u64();
+        let id = gimbal_random::rng().next_u64();
         let player_actions = Arc::new(RwLock::new(vec![]));
         let handle = TunnelSenderHandle {
             sender: sender.clone(),
@@ -1171,8 +1171,8 @@ impl TunnelSender {
         headers: Option<Value>,
         profile: Option<String>,
         user_agent_header: bool,
-    ) -> Result<moosicbox_http::Response, moosicbox_http::Error> {
-        let client = moosicbox_http::Client::new();
+    ) -> Result<gimbal_http::Response, gimbal_http::Error> {
+        let client = gimbal_http::Client::new();
 
         let mut builder = client.request(method, url);
 

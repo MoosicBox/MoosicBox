@@ -9,11 +9,11 @@ use std::{
     sync::{LazyLock, OnceLock},
 };
 
+use gimbal_mdns::scanner::service::Commander;
 use moosicbox_app_state::{
     AppStateError, UPNP_LISTENER_HANDLE, UpdateAppState, ws::WsConnectMessage,
 };
 use moosicbox_logging::free_log_client::DynLayer;
-use moosicbox_mdns::scanner::service::Commander;
 use moosicbox_music_models::{ApiSource, PlaybackQuality, api::ApiTrack, id::Id};
 use moosicbox_player::{Playback, PlayerError};
 use moosicbox_session::models::{ApiSession, ApiUpdateSession, UpdateSession};
@@ -668,7 +668,7 @@ pub fn run() {
     moosicbox_player::on_playback_event(crate::on_playback_event);
 
     let upnp_service =
-        moosicbox_upnp::listener::Service::new(moosicbox_upnp::listener::UpnpContext::new());
+        gimbal_upnp::listener::Service::new(gimbal_upnp::listener::UpnpContext::new());
 
     let upnp_service_handle = upnp_service.handle();
     let join_upnp_service = upnp_service.start_on(&tokio_handle);

@@ -11,8 +11,8 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_database = { workspace = true }
-moosicbox_http = { workspace = true, features = ["json", "reqwest"] }
+gimbal_database = { workspace = true }
+gimbal_http = { workspace = true, features = ["json", "reqwest"] }
 moosicbox_json_utils = { workspace = true, features = [
     "database",
     "serde_json",
@@ -36,5 +36,5 @@ default = ["api", "openapi"]
 
 fail-on-warnings = []
 
-api     = ["moosicbox_database/api"]
+api     = ["gimbal_database/api"]
 openapi = ["dep:utoipa"]

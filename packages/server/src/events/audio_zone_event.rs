@@ -1,5 +1,5 @@
+use gimbal_database::{config::ConfigDatabase, profiles::PROFILES};
 use moosicbox_audio_zone::events::BoxErrorSend;
-use moosicbox_database::{config::ConfigDatabase, profiles::PROFILES};
 
 use crate::WS_SERVER_HANDLE;
 

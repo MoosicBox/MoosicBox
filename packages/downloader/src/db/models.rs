@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use moosicbox_database::{AsId, DatabaseValue};
+use gimbal_database::{AsId, DatabaseValue};
 use moosicbox_json_utils::{
     MissingValue, ParseError, ToValueType, database::ToValue as _, serde_json::ToValue,
 };
@@ -19,7 +19,7 @@ pub struct DownloadLocation {
     pub updated: String,
 }
 
-impl ToValueType<DownloadLocation> for &moosicbox_database::Row {
+impl ToValueType<DownloadLocation> for &gimbal_database::Row {
     fn to_value_type(self) -> Result<DownloadLocation, ParseError> {
         Ok(DownloadLocation {
             id: self.to_value("id")?,
@@ -63,7 +63,7 @@ pub enum DownloadTaskState {
     Error,
 }
 
-impl MissingValue<DownloadTaskState> for &moosicbox_database::Row {}
+impl MissingValue<DownloadTaskState> for &gimbal_database::Row {}
 impl ToValueType<DownloadTaskState> for DatabaseValue {
     fn to_value_type(self) -> Result<DownloadTaskState, ParseError> {
         DownloadTaskState::from_str(
@@ -160,7 +160,7 @@ impl TryFrom<TrackApiSource> for DownloadApiSource {
     }
 }
 
-impl MissingValue<DownloadApiSource> for &moosicbox_database::Row {}
+impl MissingValue<DownloadApiSource> for &gimbal_database::Row {}
 impl ToValueType<DownloadApiSource> for DatabaseValue {
     fn to_value_type(self) -> Result<DownloadApiSource, ParseError> {
         DownloadApiSource::from_str(
@@ -325,8 +325,8 @@ impl ToValueType<DownloadItem> for &serde_json::Value {
     }
 }
 
-impl MissingValue<DownloadItem> for &moosicbox_database::Row {}
-impl ToValueType<DownloadItem> for &moosicbox_database::Row {
+impl MissingValue<DownloadItem> for &gimbal_database::Row {}
+impl ToValueType<DownloadItem> for &gimbal_database::Row {
     fn to_value_type(self) -> Result<DownloadItem, ParseError> {
         let item_type: String = self.to_value("type")?;
 
@@ -385,7 +385,7 @@ pub struct DownloadTask {
     pub updated: String,
 }
 
-impl ToValueType<DownloadTask> for &moosicbox_database::Row {
+impl ToValueType<DownloadTask> for &gimbal_database::Row {
     fn to_value_type(self) -> Result<DownloadTask, ParseError> {
         Ok(DownloadTask {
             id: self.to_value("id")?,

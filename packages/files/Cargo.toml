@@ -14,14 +14,15 @@ version     = "0.1.0"
 ignored = ["profiling", "strum"]
 
 [dependencies]
+gimbal_database = { workspace = true, optional = true }
+gimbal_fs = { workspace = true, features = ["std", "tokio"] }
+gimbal_http = { workspace = true, features = ["reqwest", "stream"] }
+gimbal_time = { workspace = true, features = ["std"] }
 moosicbox_assert = { workspace = true }
 moosicbox_async_service = { workspace = true, optional = true }
 moosicbox_audio_decoder = { workspace = true, optional = true }
 moosicbox_audio_output = { workspace = true, optional = true }
 moosicbox_config = { workspace = true }
-moosicbox_database = { workspace = true, optional = true }
-moosicbox_fs = { workspace = true, features = ["std", "tokio"] }
-moosicbox_http = { workspace = true, features = ["reqwest", "stream"] }
 moosicbox_image = { workspace = true, optional = true }
 moosicbox_music_api = { workspace = true, optional = true }
 moosicbox_music_models = { workspace = true, optional = true, features = [
@@ -30,7 +31,6 @@ moosicbox_music_models = { workspace = true, optional = true, features = [
 moosicbox_parsing_utils = { workspace = true, optional = true }
 moosicbox_stream_utils = { workspace = true }
 moosicbox_task = { workspace = true, optional = true }
-moosicbox_time = { workspace = true, features = ["std"] }
 
 # API Dependencies
 utoipa = { workspace = true, optional = true }
@@ -81,16 +81,16 @@ api = [
     "dep:moosicbox_audio_decoder",
     "dep:moosicbox_task",
     "files",
-    "moosicbox_database/api",
+    "gimbal_database/api",
     "moosicbox_music_api/api",
     "range",
 ]
 files = [
     "dep:flume",
+    "dep:gimbal_database",
     "dep:moosicbox_async_service",
     "dep:moosicbox_audio_decoder",
     "dep:moosicbox_audio_output",
-    "dep:moosicbox_database",
     "dep:moosicbox_music_api",
     "dep:moosicbox_music_models",
     "dep:moosicbox_parsing_utils",

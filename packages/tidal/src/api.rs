@@ -8,7 +8,7 @@ use actix_web::{
     web::{self, Json},
 };
 #[cfg(feature = "db")]
-use moosicbox_database::profiles::LibraryDatabase;
+use gimbal_database::profiles::LibraryDatabase;
 use moosicbox_music_models::{
     ApiSource, ApiSources, TrackApiSource,
     api::{ApiAlbum, ApiArtist},

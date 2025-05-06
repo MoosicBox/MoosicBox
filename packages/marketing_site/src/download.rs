@@ -6,8 +6,8 @@ use moosicbox_marketing_site_ui::download::{FileAsset, Os, OsAsset, OsRelease};
 use regex::Regex;
 use serde::Deserialize;
 
-static CLIENT: LazyLock<moosicbox_http::Client> =
-    LazyLock::new(|| moosicbox_http::Client::builder().build().unwrap());
+static CLIENT: LazyLock<gimbal_http::Client> =
+    LazyLock::new(|| gimbal_http::Client::builder().build().unwrap());
 
 #[allow(clippy::too_many_lines)]
 pub async fn releases_route(req: RouteRequest) -> Result<View, Box<dyn std::error::Error>> {
@@ -149,7 +149,7 @@ pub async fn releases_route(req: RouteRequest) -> Result<View, Box<dyn std::erro
         let response = CLIENT
             .get("https://api.github.com/repos/MoosicBox/MoosicBox/releases")
             .header(
-                moosicbox_http::Header::UserAgent.as_ref(),
+                gimbal_http::Header::UserAgent.as_ref(),
                 "moosicbox-marketing-site",
             )
             .send()

@@ -1,17 +1,17 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["development-utils", "filesystem"]
-description = "Time package"
+description = "Gimbal File-system package"
 edition     = "2024"
 keywords    = ["time"]
 license     = "MPL-2.0"
-name        = "moosicbox_fs"
+name        = "gimbal_fs"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_async = { workspace = true, optional = true, features = [
+gimbal_async = { workspace = true, optional = true, features = [
     "io",
     "rt-multi-thread",
     "sync",
@@ -32,7 +32,7 @@ fail-on-warnings = []
 
 simulator = ["dep:bytes", "sync"]
 std       = ["sync"]
-tokio     = ["async", "dep:tokio", "moosicbox_async/fs", "moosicbox_async/tokio"]
+tokio     = ["async", "dep:tokio", "gimbal_async/fs", "gimbal_async/tokio"]
 
-async = ["dep:moosicbox_async", "moosicbox_async/io"]
+async = ["dep:gimbal_async", "gimbal_async/io"]
 sync  = []

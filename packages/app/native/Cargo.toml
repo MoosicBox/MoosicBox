@@ -37,6 +37,8 @@ no-build      = false
 product-name  = "MoosicBox"
 
 [dependencies]
+gimbal_http = { workspace = true, features = ["json", "reqwest"] }
+gimbal_time = { workspace = true, features = ["std"] }
 hyperchad_actions = { workspace = true }
 moosicbox_app_native_lib = { workspace = true, features = [
     "actions",
@@ -49,7 +51,6 @@ moosicbox_app_state = { workspace = true }
 moosicbox_assert = { workspace = true }
 moosicbox_audio_zone_models = { workspace = true }
 moosicbox_env_utils = { workspace = true }
-moosicbox_http = { workspace = true, features = ["json", "reqwest"] }
 moosicbox_logging = { workspace = true, features = ["free_log"] }
 moosicbox_music_api = { workspace = true }
 moosicbox_music_models = { workspace = true }
@@ -58,7 +59,6 @@ moosicbox_player = { workspace = true }
 moosicbox_remote_library = { workspace = true }
 moosicbox_session_models = { workspace = true }
 moosicbox_task = { workspace = true }
-moosicbox_time = { workspace = true, features = ["std"] }
 moosicbox_ws = { workspace = true }
 
 # Bundled dependencies

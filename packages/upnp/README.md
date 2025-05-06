@@ -1,1 +1,1 @@
-# MoosicBox upnp crate
+# Gimbal upnp crate

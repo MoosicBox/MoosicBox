@@ -11,7 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_http = { workspace = true, optional = true, features = [
+gimbal_http = { workspace = true, optional = true, features = [
     "reqwest",
     "stream",
 ] }
@@ -33,7 +33,7 @@ fail-on-warnings = []
 
 remote-bytestream = [
     "dep:flume",
-    "dep:moosicbox_http",
+    "dep:gimbal_http",
     "dep:moosicbox_task",
     "dep:tokio-util",
     "tokio/macros",

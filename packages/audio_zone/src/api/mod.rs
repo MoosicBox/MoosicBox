@@ -5,7 +5,7 @@ use actix_web::{
     route,
     web::{self, Json},
 };
-use moosicbox_database::{config::ConfigDatabase, profiles::LibraryDatabase};
+use gimbal_database::{config::ConfigDatabase, profiles::LibraryDatabase};
 use moosicbox_paging::Page;
 use serde::Deserialize;
 

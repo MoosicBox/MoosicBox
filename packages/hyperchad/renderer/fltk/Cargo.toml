@@ -11,6 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
+gimbal_http = { workspace = true, features = ["reqwest"] }
 hyperchad_actions = { workspace = true, features = ["logic"] }
 hyperchad_renderer = { workspace = true, features = [
     "canvas",
@@ -19,7 +20,6 @@ hyperchad_renderer = { workspace = true, features = [
 hyperchad_transformer = { workspace = true, features = ["html", "layout"] }
 moosicbox_app_native_image = { workspace = true }
 moosicbox_assert = { workspace = true }
-moosicbox_http = { workspace = true, features = ["reqwest"] }
 moosicbox_logging = { workspace = true }
 moosicbox_task = { workspace = true }
 

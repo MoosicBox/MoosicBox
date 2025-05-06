@@ -9,7 +9,7 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_async = { workspace = true, features = ["simulator", "time", "util"] }
+gimbal_async = { workspace = true, features = ["simulator", "time", "util"] }
 
 ctrlc             = { workspace = true }
 pretty_env_logger = { workspace = true }

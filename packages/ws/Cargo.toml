@@ -14,9 +14,9 @@ version     = "0.1.0"
 ignored = ["strum"]
 
 [dependencies]
+gimbal_database      = { workspace = true }
 moosicbox_assert     = { workspace = true }
 moosicbox_audio_zone = { workspace = true }
-moosicbox_database   = { workspace = true }
 moosicbox_json_utils = { workspace = true, features = ["database"] }
 moosicbox_logging    = { workspace = true, features = ["macros"] }
 moosicbox_session    = { workspace = true }

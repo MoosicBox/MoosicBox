@@ -8,8 +8,8 @@ use actix_web::{
     route, web,
 };
 use base64::{Engine as _, engine::general_purpose};
+use gimbal_database::profiles::LibraryDatabase;
 use maud::{Markup, html};
-use moosicbox_database::profiles::LibraryDatabase;
 #[cfg(feature = "scan")]
 use moosicbox_music_api::MusicApis;
 #[cfg(feature = "scan")]

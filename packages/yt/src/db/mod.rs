@@ -1,4 +1,4 @@
-use moosicbox_database::{DatabaseError, profiles::LibraryDatabase, query::FilterableQuery};
+use gimbal_database::{DatabaseError, profiles::LibraryDatabase, query::FilterableQuery};
 use moosicbox_json_utils::ToValueType;
 use thiserror::Error;
 

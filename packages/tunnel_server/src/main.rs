@@ -52,8 +52,7 @@ fn main() -> Result<(), std::io::Error> {
 
         #[cfg(feature = "telemetry")]
         layers.push(
-            moosicbox_telemetry::init_tracer(env!("CARGO_PKG_NAME"))
-                .map_err(std::io::Error::other)?,
+            gimbal_telemetry::init_tracer(env!("CARGO_PKG_NAME")).map_err(std::io::Error::other)?,
         );
 
         moosicbox_logging::init(Some("moosicbox_tunnel_server.log"), Some(layers))
@@ -61,7 +60,7 @@ fn main() -> Result<(), std::io::Error> {
 
         #[cfg(feature = "telemetry")]
         let metrics_handler = std::sync::Arc::new(
-            moosicbox_telemetry::get_http_metrics_handler().map_err(std::io::Error::other)?,
+            gimbal_telemetry::get_http_metrics_handler().map_err(std::io::Error::other)?,
         );
 
         db::init().await.expect("Failed to init postgres DB");
@@ -118,9 +117,9 @@ fn main() -> Result<(), std::io::Error> {
             #[cfg(feature = "telemetry")]
             let app = app
                 .app_data(actix_web::web::Data::new(metrics_handler.clone()))
-                .service(moosicbox_telemetry::metrics)
+                .service(gimbal_telemetry::metrics)
                 .wrap(metrics_handler.request_middleware())
-                .wrap(moosicbox_telemetry::RequestTracing::new());
+                .wrap(gimbal_telemetry::RequestTracing::new());
 
             let app = app
                 .service(health_endpoint)

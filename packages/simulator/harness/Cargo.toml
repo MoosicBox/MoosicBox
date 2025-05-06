@@ -11,22 +11,22 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
+gimbal_random             = { workspace = true, features = ["simulator"] }
 moosicbox_assert          = { workspace = true }
-moosicbox_random          = { workspace = true, features = ["simulator"] }
 moosicbox_simulator_utils = { workspace = true }
 
-moosicbox_database_connection = { workspace = true, optional = true, features = [
+gimbal_database_connection = { workspace = true, optional = true, features = [
     "simulator",
 ] }
-moosicbox_fs = { workspace = true, optional = true, features = ["simulator"] }
-moosicbox_http = { workspace = true, optional = true, features = ["simulator"] }
-moosicbox_mdns = { workspace = true, optional = true, features = ["simulator"] }
-moosicbox_tcp = { workspace = true, optional = true, features = ["simulator"] }
-moosicbox_telemetry = { workspace = true, optional = true, features = [
+gimbal_fs = { workspace = true, optional = true, features = ["simulator"] }
+gimbal_http = { workspace = true, optional = true, features = ["simulator"] }
+gimbal_mdns = { workspace = true, optional = true, features = ["simulator"] }
+gimbal_tcp = { workspace = true, optional = true, features = ["simulator"] }
+gimbal_telemetry = { workspace = true, optional = true, features = [
     "simulator",
 ] }
-moosicbox_time = { workspace = true, optional = true, features = ["simulator"] }
-moosicbox_upnp = { workspace = true, optional = true, features = ["simulator"] }
+gimbal_time = { workspace = true, optional = true, features = ["simulator"] }
+gimbal_upnp = { workspace = true, optional = true, features = ["simulator"] }
 
 ctrlc       = { workspace = true }
 log         = { workspace = true }
@@ -48,12 +48,12 @@ default = [
 
 fail-on-warnings = []
 
-database  = ["dep:moosicbox_database_connection"]
-fs        = ["dep:moosicbox_fs"]
-http      = ["dep:moosicbox_http"]
-mdns      = ["dep:moosicbox_mdns"]
+database  = ["dep:gimbal_database_connection"]
+fs        = ["dep:gimbal_fs"]
+http      = ["dep:gimbal_http"]
+mdns      = ["dep:gimbal_mdns"]
 random    = []
-tcp       = ["dep:moosicbox_tcp"]
-telemetry = ["dep:moosicbox_telemetry"]
-time      = ["dep:moosicbox_time"]
-upnp      = ["dep:moosicbox_upnp"]
+tcp       = ["dep:gimbal_tcp"]
+telemetry = ["dep:gimbal_telemetry"]
+time      = ["dep:gimbal_time"]
+upnp      = ["dep:gimbal_upnp"]

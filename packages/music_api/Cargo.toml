@@ -14,7 +14,7 @@ version     = "0.1.0"
 ignored = ["strum"]
 
 [dependencies]
-moosicbox_database         = { workspace = true }
+gimbal_database            = { workspace = true }
 moosicbox_menu_models      = { workspace = true }
 moosicbox_music_api_models = { workspace = true }
 moosicbox_music_models     = { workspace = true }
@@ -41,6 +41,6 @@ fail-on-warnings = []
 
 openapi = ["moosicbox_music_api_models/openapi"]
 
-db = ["moosicbox_database/api"]
+db = ["gimbal_database/api"]
 
-api = ["dep:actix-web", "moosicbox_database/api"]
+api = ["dep:actix-web", "gimbal_database/api"]

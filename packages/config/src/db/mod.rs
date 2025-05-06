@@ -1,4 +1,4 @@
-use moosicbox_database::{DatabaseError, config::ConfigDatabase, query::FilterableQuery as _};
+use gimbal_database::{DatabaseError, config::ConfigDatabase, query::FilterableQuery as _};
 use moosicbox_json_utils::{ToValueType as _, database::DatabaseFetchError};
 use nanoid::nanoid;
 use thiserror::Error;

@@ -93,7 +93,7 @@ pub fn make_cache_dir_path() -> Option<PathBuf> {
 pub fn get_tests_dir_path() -> PathBuf {
     std::env::temp_dir().join(format!(
         "moosicbox_tests_{}",
-        moosicbox_random::rng().next_u64()
+        gimbal_random::rng().next_u64()
     ))
 }
 
@@ -102,7 +102,7 @@ pub use db_impl::*;
 
 #[cfg(feature = "db")]
 mod db_impl {
-    use moosicbox_database::{DatabaseError, config::ConfigDatabase};
+    use gimbal_database::{DatabaseError, config::ConfigDatabase};
     use moosicbox_json_utils::database::DatabaseFetchError;
 
     use crate::db::{GetOrInitServerIdentityError, models};

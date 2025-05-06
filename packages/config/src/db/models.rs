@@ -5,7 +5,7 @@ pub struct Profile {
     pub name: String,
 }
 
-impl ToValueType<Profile> for &moosicbox_database::Row {
+impl ToValueType<Profile> for &gimbal_database::Row {
     fn to_value_type(self) -> Result<Profile, ParseError> {
         Ok(Profile {
             id: self.to_value("id")?,

@@ -8,7 +8,7 @@ use std::{
     task::{Context, Poll, Wake, Waker},
 };
 
-use moosicbox_random::{rand::rand::seq::IteratorRandom, rng};
+use gimbal_random::{rand::rand::seq::IteratorRandom, rng};
 use scoped_tls::scoped_thread_local;
 
 use crate::{

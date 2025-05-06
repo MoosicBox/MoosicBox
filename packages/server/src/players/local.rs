@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
+use gimbal_database::config::ConfigDatabase;
+use gimbal_database::profiles::PROFILES;
 use moosicbox_audio_output::AudioOutputScannerError;
-use moosicbox_database::config::ConfigDatabase;
-use moosicbox_database::profiles::PROFILES;
 use moosicbox_ws::WebsocketSendError;
 use thiserror::Error;
 

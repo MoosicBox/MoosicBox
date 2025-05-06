@@ -23,14 +23,18 @@ ignored = ["strum", "tracy-client"]
 normal = ["moosicbox_schema", "tracy-client"]
 
 [dependencies]
+gimbal_database = { workspace = true, features = ["api"] }
+gimbal_database_connection = { workspace = true, features = [] }
+gimbal_fs = { workspace = true, features = ["std"] }
+gimbal_mdns = { workspace = true }
+gimbal_random = { workspace = true, features = ["rand"] }
+gimbal_telemetry = { workspace = true, features = ["actix"], optional = true }
 moosicbox_assert = { workspace = true }
 moosicbox_async_service = { workspace = true }
 moosicbox_audio_output = { workspace = true }
 moosicbox_audio_zone = { workspace = true, features = ["api", "events"] }
 moosicbox_auth = { workspace = true, optional = true }
 moosicbox_config = { workspace = true, features = ["api", "db"] }
-moosicbox_database = { workspace = true, features = ["api"] }
-moosicbox_database_connection = { workspace = true, features = [] }
 moosicbox_env_utils = { workspace = true }
 moosicbox_files = { workspace = true, features = [
     "files",
@@ -38,24 +42,23 @@ moosicbox_files = { workspace = true, features = [
     "range",
     "track-range",
 ] }
-moosicbox_fs = { workspace = true, features = ["std"] }
 moosicbox_json_utils = { workspace = true, features = ["database"] }
 moosicbox_logging = { workspace = true, features = ["free_log"] }
-moosicbox_mdns = { workspace = true }
 moosicbox_middleware = { workspace = true }
 moosicbox_music_api = { workspace = true }
 moosicbox_music_models = { workspace = true }
 moosicbox_profiles = { workspace = true, features = ["events"] }
-moosicbox_random = { workspace = true, features = ["rand"] }
 moosicbox_schema = { workspace = true, optional = true }
 moosicbox_session = { workspace = true, features = ["events"] }
 moosicbox_task = { workspace = true }
-moosicbox_telemetry = { workspace = true, features = [
-    "actix",
-], optional = true }
 moosicbox_ws = { workspace = true, features = ["ws"] }
 
 # APIs
+gimbal_upnp = { workspace = true, optional = true, features = [
+    "api",
+    "listener",
+    "player",
+] }
 moosicbox_admin_htmx = { workspace = true, optional = true }
 moosicbox_downloader = { workspace = true, features = ["api"], optional = true }
 moosicbox_library = { workspace = true, features = ["api"], optional = true }
@@ -74,11 +77,6 @@ moosicbox_tidal = { workspace = true, features = [
     "api",
     "db",
 ], optional = true }
-moosicbox_upnp = { workspace = true, optional = true, features = [
-    "api",
-    "listener",
-    "player",
-] }
 moosicbox_yt = { workspace = true, features = ["api", "db"], optional = true }
 
 # Tunnel dependencies
@@ -146,7 +144,7 @@ default = [
 
 fail-on-warnings = []
 
-telemetry = ["dep:moosicbox_telemetry"]
+telemetry = ["dep:gimbal_telemetry"]
 
 tls = ["actix-web/openssl", "dep:openssl", "dep:rcgen"]
 
@@ -222,36 +220,36 @@ opus = [
 
 postgres = [
     "dep:moosicbox_schema",
-    "moosicbox_database/postgres",
-    "moosicbox_database_connection/creds",
-    "moosicbox_database_connection/postgres",
+    "gimbal_database/postgres",
+    "gimbal_database_connection/creds",
+    "gimbal_database_connection/postgres",
     "moosicbox_schema/postgres",
 ]
-postgres-native-tls = ["moosicbox_database_connection/postgres-native-tls"]
-postgres-openssl = ["moosicbox_database_connection/postgres-openssl"]
+postgres-native-tls = ["gimbal_database_connection/postgres-native-tls"]
+postgres-openssl = ["gimbal_database_connection/postgres-openssl"]
 postgres-raw = [
-    "moosicbox_database/postgres-raw",
-    "moosicbox_database_connection/postgres-raw",
+    "gimbal_database/postgres-raw",
+    "gimbal_database_connection/postgres-raw",
     "postgres",
 ]
 postgres-sqlx = [
-    "moosicbox_database/postgres-sqlx",
-    "moosicbox_database_connection/postgres-sqlx",
+    "gimbal_database/postgres-sqlx",
+    "gimbal_database_connection/postgres-sqlx",
     "postgres",
 ]
 sqlite = [
     "dep:moosicbox_schema",
-    "moosicbox_database_connection/sqlite",
+    "gimbal_database_connection/sqlite",
     "moosicbox_schema/sqlite",
 ]
 sqlite-rusqlite = [
-    "moosicbox_database/sqlite-rusqlite",
-    "moosicbox_database_connection/sqlite-rusqlite",
+    "gimbal_database/sqlite-rusqlite",
+    "gimbal_database_connection/sqlite-rusqlite",
     "sqlite",
 ]
 sqlite-sqlx = [
-    "moosicbox_database/sqlite-sqlx",
-    "moosicbox_database_connection/sqlite-sqlx",
+    "gimbal_database/sqlite-sqlx",
+    "gimbal_database_connection/sqlite-sqlx",
     "sqlite",
 ]
 
@@ -287,7 +285,7 @@ tidal = [
     "moosicbox_tidal/api",
     "moosicbox_tunnel_sender?/tidal",
 ]
-upnp = ["dep:moosicbox_upnp", "player"]
+upnp = ["dep:gimbal_upnp", "player"]
 yt = [
     "moosicbox_downloader?/yt",
     "moosicbox_files/yt",
@@ -340,7 +338,7 @@ scan-api = ["dep:moosicbox_scan", "scan"]
 search-api = ["dep:moosicbox_search", "search"]
 session-api = ["moosicbox_session/api"]
 tidal-api = ["dep:moosicbox_tidal", "tidal"]
-upnp-api = ["dep:moosicbox_upnp", "upnp"]
+upnp-api = ["dep:gimbal_upnp", "upnp"]
 yt-api = ["dep:moosicbox_yt", "yt"]
 
 openapi = [
@@ -349,6 +347,7 @@ openapi = [
     "dep:utoipa-redoc",
     "dep:utoipa-scalar",
     "dep:utoipa-swagger-ui",
+    "gimbal_upnp?/openapi",
     "moosicbox_audio_output/openapi",
     "moosicbox_audio_zone/openapi",
     "moosicbox_auth?/openapi",
@@ -365,7 +364,6 @@ openapi = [
     "moosicbox_search?/openapi",
     "moosicbox_session/openapi",
     "moosicbox_tidal?/openapi",
-    "moosicbox_upnp?/openapi",
     "moosicbox_yt?/openapi",
 ]
 

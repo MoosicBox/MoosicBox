@@ -11,7 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-moosicbox_http         = { workspace = true, features = ["json", "reqwest"] }
+gimbal_http            = { workspace = true, features = ["json", "reqwest"] }
 moosicbox_menu_models  = { workspace = true, features = ["api"] }
 moosicbox_music_api    = { workspace = true }
 moosicbox_music_models = { workspace = true }

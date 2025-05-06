@@ -1,4 +1,4 @@
-use moosicbox_database::{AsId, DatabaseValue, Row};
+use gimbal_database::{AsId, DatabaseValue, Row};
 use moosicbox_json_utils::{
     MissingValue, ParseError, ToValueType,
     database::{AsModel, AsModelResult, ToValue},
@@ -23,7 +23,7 @@ pub struct TidalConfig {
     pub updated: String,
 }
 
-impl MissingValue<TidalConfig> for &moosicbox_database::Row {
+impl MissingValue<TidalConfig> for &gimbal_database::Row {
     fn missing_value(&self, error: ParseError) -> Result<TidalConfig, ParseError> {
         Err(error)
     }

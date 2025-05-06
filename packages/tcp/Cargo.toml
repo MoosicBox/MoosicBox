@@ -1,11 +1,11 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["network-programming"]
-description = "MoosicBox TCP Networking package"
+description = "Gimbal TCP Networking package"
 edition     = "2024"
 keywords    = ["network", "networking", "tcp"]
 license     = "MPL-2.0"
-name        = "moosicbox_tcp"
+name        = "gimbal_tcp"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"

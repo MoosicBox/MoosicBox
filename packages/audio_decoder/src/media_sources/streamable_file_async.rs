@@ -2,8 +2,8 @@ use std::io::{Read, Seek};
 use std::sync::atomic::AtomicBool;
 
 use flume::{Receiver, Sender, bounded};
+use gimbal_http::Client;
 use log::debug;
-use moosicbox_http::Client;
 use rangemap::RangeSet;
 use symphonia::core::io::MediaSource;
 
@@ -53,7 +53,7 @@ impl StreamableFileAsync {
         let chunk = Client::new()
             .get(&url)
             .header(
-                moosicbox_http::Header::Range.as_ref(),
+                gimbal_http::Header::Range.as_ref(),
                 &format!("bytes={start}-{end}"),
             )
             .send()
@@ -165,7 +165,7 @@ impl Read for StreamableFileAsync {
             let file_size = self.buffer.len();
             let (tx, rx) = bounded(1);
 
-            let id = moosicbox_time::now()
+            let id = gimbal_time::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_millis();

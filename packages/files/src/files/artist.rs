@@ -7,7 +7,7 @@ use std::{
 
 use bytes::BytesMut;
 use futures::{StreamExt, TryStreamExt};
-use moosicbox_database::{DatabaseError, profiles::LibraryDatabase, query::FilterableQuery};
+use gimbal_database::{DatabaseError, profiles::LibraryDatabase, query::FilterableQuery};
 use moosicbox_music_api::{
     ArtistError, MusicApi,
     models::{ImageCoverSize, ImageCoverSource},
