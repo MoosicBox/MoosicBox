@@ -37,6 +37,7 @@ members = [
     "packages/env_utils",
     "packages/files",
     "packages/fs",
+    "packages/gimbal",
     "packages/http",
     "packages/http/examples/simple_get",
     "packages/http/models",
@@ -219,6 +220,7 @@ moosicbox_ws                 = { version = "0.1.0", default-features = false, pa
 moosicbox_yt                 = { version = "0.1.0", default-features = false, path = "packages/yt" }
 
 # Internal Gimbal
+gimbal                     = { version = "0.1.0", default-features = false, path = "packages/gimbal" }
 gimbal_async               = { version = "0.1.0", default-features = false, path = "packages/async" }
 gimbal_async_macros        = { version = "0.1.0", default-features = false, path = "packages/async/macros" }
 gimbal_database            = { version = "0.1.0", default-features = false, path = "packages/database" }

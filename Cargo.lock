@@ -4034,6 +4034,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "gimbal"
+version = "0.1.0"
+dependencies = [
+ "gimbal_async",
+ "gimbal_async_macros",
+ "gimbal_database",
+ "gimbal_database_connection",
+ "gimbal_fs",
+ "gimbal_http",
+ "gimbal_http_models",
+ "gimbal_mdns",
+ "gimbal_random",
+ "gimbal_tcp",
+ "gimbal_telemetry",
+ "gimbal_time",
+ "gimbal_upnp",
+]
+
+[[package]]
 name = "gimbal_async"
 version = "0.1.0"
 dependencies = [
@@ -6648,13 +6667,6 @@ dependencies = [
 name = "moosicbox"
 version = "0.1.0"
 dependencies = [
- "gimbal_async",
- "gimbal_database",
- "gimbal_database_connection",
- "gimbal_http",
- "gimbal_mdns",
- "gimbal_telemetry",
- "gimbal_upnp",
  "hyperchad_actions",
  "hyperchad_color",
  "hyperchad_renderer",

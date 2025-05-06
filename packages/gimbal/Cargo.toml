@@ -1,0 +1,61 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools"]
+description = "Gimball package"
+edition     = "2024"
+keywords    = ["gimbal"]
+license     = "MPL-2.0"
+name        = "gimbal"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[dependencies]
+gimbal_async               = { workspace = true, optional = true }
+gimbal_async_macros        = { workspace = true, optional = true }
+gimbal_database            = { workspace = true, optional = true }
+gimbal_database_connection = { workspace = true, optional = true }
+gimbal_fs                  = { workspace = true, optional = true }
+gimbal_http                = { workspace = true, optional = true }
+gimbal_http_models         = { workspace = true, optional = true }
+gimbal_mdns                = { workspace = true, optional = true }
+gimbal_random              = { workspace = true, optional = true }
+gimbal_tcp                 = { workspace = true, optional = true }
+gimbal_telemetry           = { workspace = true, optional = true }
+gimbal_time                = { workspace = true, optional = true }
+gimbal_upnp                = { workspace = true, optional = true }
+
+[features]
+default = ["all"]
+
+fail-on-warnings = []
+
+all = [
+    "async",
+    "async-macros",
+    "database",
+    "database-connection",
+    "fs",
+    "http",
+    "http-models",
+    "mdns",
+    "random",
+    "tcp",
+    "telemetry",
+    "time",
+    "upnp",
+]
+
+async               = ["dep:gimbal_async"]
+async-macros        = ["dep:gimbal_async_macros"]
+database            = ["dep:gimbal_database"]
+database-connection = ["dep:gimbal_database_connection"]
+fs                  = ["dep:gimbal_fs"]
+http                = ["dep:gimbal_http"]
+http-models         = ["dep:gimbal_http_models"]
+mdns                = ["dep:gimbal_mdns"]
+random              = ["dep:gimbal_random"]
+tcp                 = ["dep:gimbal_tcp"]
+telemetry           = ["dep:gimbal_telemetry"]
+time                = ["dep:gimbal_time"]
+upnp                = ["dep:gimbal_upnp"]
