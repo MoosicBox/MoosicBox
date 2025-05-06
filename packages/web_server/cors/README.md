@@ -1,1 +1,1 @@
-# MoosicBox web server core crate
+# MoosicBox web server CORS crate
