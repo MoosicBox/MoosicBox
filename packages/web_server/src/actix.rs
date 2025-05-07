@@ -14,10 +14,10 @@ use actix_web::{
     error::{self},
 };
 use futures_util::{FutureExt, future::LocalBoxFuture};
-use gimbal_http_models::{StatusCode, TryFromU16StatusCodeError};
 use moosicbox_web_server_core::WebServer;
 #[cfg(feature = "cors")]
 use moosicbox_web_server_cors::AllOrSome;
+use switchy_http_models::{StatusCode, TryFromU16StatusCodeError};
 
 #[allow(clippy::fallible_impl_from)]
 impl From<HttpRequest> for actix_web::HttpRequest {

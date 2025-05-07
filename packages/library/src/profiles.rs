@@ -1,6 +1,6 @@
 use std::sync::{Arc, LazyLock, RwLock};
 
-use gimbal_database::profiles::LibraryDatabase;
+use switchy_database::profiles::LibraryDatabase;
 
 use crate::LibraryMusicApi;
 
@@ -71,7 +71,7 @@ impl LibraryMusicApiProfiles {
 pub mod api {
     use actix_web::{FromRequest, HttpRequest, dev::Payload, error::ErrorBadRequest};
     use futures::future::{Ready, err, ok};
-    use gimbal_database::profiles::api::ProfileName;
+    use switchy_database::profiles::api::ProfileName;
 
     use super::{LibraryMusicApi, PROFILES};
 

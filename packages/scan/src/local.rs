@@ -1,6 +1,5 @@
 use async_recursion::async_recursion;
 use futures::Future;
-use gimbal_database::profiles::LibraryDatabase;
 use moosicbox_audiotags::Tag;
 use moosicbox_files::{sanitize_filename, search_for_cover};
 use moosicbox_json_utils::database::DatabaseFetchError;
@@ -14,6 +13,7 @@ use std::{
     pin::Pin,
     sync::{Arc, LazyLock},
 };
+use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
 use tokio::{
     fs::{self, DirEntry},

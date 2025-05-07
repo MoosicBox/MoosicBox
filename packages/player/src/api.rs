@@ -7,7 +7,6 @@ use actix_web::{
     get, post,
     web::{self, Json},
 };
-use gimbal_database::profiles::api::ProfileName;
 use moosicbox_music_api::{MusicApi, MusicApis, SourceToMusicApi as _};
 use moosicbox_music_models::{
     ApiSource, AudioFormat, PlaybackQuality, Track,
@@ -15,6 +14,7 @@ use moosicbox_music_models::{
 };
 use moosicbox_session::models::PlaybackTarget;
 use serde::Deserialize;
+use switchy_database::profiles::api::ProfileName;
 
 use crate::{
     ApiPlaybackStatus, DEFAULT_PLAYBACK_RETRY_OPTIONS, PlaybackHandler, PlaybackStatus, PlayerError,

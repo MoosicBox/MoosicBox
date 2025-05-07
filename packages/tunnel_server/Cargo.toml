@@ -20,19 +20,19 @@ name = "moosicbox_tunnel_server"
 path = "src/main.rs"
 
 [dependencies]
-gimbal_database            = { workspace = true, features = ["api"] }
-gimbal_database_connection = { workspace = true }
-gimbal_http                = { workspace = true, features = ["serde"] }
-gimbal_random              = { workspace = true, features = ["rand"] }
-gimbal_telemetry           = { workspace = true, features = ["actix"], optional = true }
-moosicbox_assert           = { workspace = true }
-moosicbox_async_service    = { workspace = true }
-moosicbox_env_utils        = { workspace = true }
-moosicbox_json_utils       = { workspace = true, features = ["database"] }
-moosicbox_logging          = { workspace = true, features = ["free_log"] }
-moosicbox_middleware       = { workspace = true }
-moosicbox_task             = { workspace = true }
-moosicbox_tunnel           = { workspace = true }
+moosicbox_assert            = { workspace = true }
+moosicbox_async_service     = { workspace = true }
+moosicbox_env_utils         = { workspace = true }
+moosicbox_json_utils        = { workspace = true, features = ["database"] }
+moosicbox_logging           = { workspace = true, features = ["free_log"] }
+moosicbox_middleware        = { workspace = true }
+moosicbox_task              = { workspace = true }
+moosicbox_tunnel            = { workspace = true }
+switchy_database            = { workspace = true, features = ["api"] }
+switchy_database_connection = { workspace = true }
+switchy_http                = { workspace = true, features = ["serde"] }
+switchy_random              = { workspace = true, features = ["rand"] }
+switchy_telemetry           = { workspace = true, features = ["actix"], optional = true }
 
 actix-cors = { workspace = true }
 actix-web = { workspace = true }
@@ -74,20 +74,20 @@ fail-on-warnings = []
 base64 = ["moosicbox_tunnel/base64"]
 
 sqlite = [
-    "gimbal_database_connection/sqlite",
-    "gimbal_database_connection/sqlite-sqlx",
+    "switchy_database_connection/sqlite",
+    "switchy_database_connection/sqlite-sqlx",
 ]
 
 postgres = [
-    "gimbal_database_connection/postgres",
-    "gimbal_database_connection/tls",
+    "switchy_database_connection/postgres",
+    "switchy_database_connection/tls",
 ]
 postgres-native-tls = [
-    "gimbal_database_connection/postgres-native-tls",
     "postgres",
+    "switchy_database_connection/postgres-native-tls",
 ]
-postgres-openssl = ["gimbal_database_connection/postgres-openssl", "postgres"]
-postgres-raw = ["gimbal_database_connection/postgres-raw", "postgres"]
-postgres-sqlx = ["gimbal_database_connection/postgres-sqlx", "postgres"]
+postgres-openssl = ["postgres", "switchy_database_connection/postgres-openssl"]
+postgres-raw = ["postgres", "switchy_database_connection/postgres-raw"]
+postgres-sqlx = ["postgres", "switchy_database_connection/postgres-sqlx"]
 
-telemetry = ["dep:gimbal_telemetry", "dep:tracing"]
+telemetry = ["dep:switchy_telemetry", "dep:tracing"]

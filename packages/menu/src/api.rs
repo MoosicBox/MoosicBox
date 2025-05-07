@@ -7,7 +7,6 @@ use actix_web::{
     get, post,
     web::{self, Json},
 };
-use gimbal_database::profiles::LibraryDatabase;
 use moosicbox_library::{
     LibraryMusicApi,
     db::{get_album_tracks, get_tracks},
@@ -24,6 +23,7 @@ use moosicbox_music_models::{
 };
 use moosicbox_paging::{Page, PagingRequest};
 use serde::Deserialize;
+use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
 
 use crate::library::{

@@ -23,12 +23,6 @@ ignored = ["strum", "tracy-client"]
 normal = ["moosicbox_schema", "tracy-client"]
 
 [dependencies]
-gimbal_database = { workspace = true, features = ["api"] }
-gimbal_database_connection = { workspace = true, features = [] }
-gimbal_fs = { workspace = true, features = ["std"] }
-gimbal_mdns = { workspace = true }
-gimbal_random = { workspace = true, features = ["rand"] }
-gimbal_telemetry = { workspace = true, features = ["actix"], optional = true }
 moosicbox_assert = { workspace = true }
 moosicbox_async_service = { workspace = true }
 moosicbox_audio_output = { workspace = true }
@@ -52,13 +46,14 @@ moosicbox_schema = { workspace = true, optional = true }
 moosicbox_session = { workspace = true, features = ["events"] }
 moosicbox_task = { workspace = true }
 moosicbox_ws = { workspace = true, features = ["ws"] }
+switchy_database = { workspace = true, features = ["api"] }
+switchy_database_connection = { workspace = true, features = [] }
+switchy_fs = { workspace = true, features = ["std"] }
+switchy_mdns = { workspace = true }
+switchy_random = { workspace = true, features = ["rand"] }
+switchy_telemetry = { workspace = true, features = ["actix"], optional = true }
 
 # APIs
-gimbal_upnp = { workspace = true, optional = true, features = [
-    "api",
-    "listener",
-    "player",
-] }
 moosicbox_admin_htmx = { workspace = true, optional = true }
 moosicbox_downloader = { workspace = true, features = ["api"], optional = true }
 moosicbox_library = { workspace = true, features = ["api"], optional = true }
@@ -78,6 +73,11 @@ moosicbox_tidal = { workspace = true, features = [
     "db",
 ], optional = true }
 moosicbox_yt = { workspace = true, features = ["api", "db"], optional = true }
+switchy_upnp = { workspace = true, optional = true, features = [
+    "api",
+    "listener",
+    "player",
+] }
 
 # Tunnel dependencies
 moosicbox_tunnel        = { workspace = true, optional = true }
@@ -144,7 +144,7 @@ default = [
 
 fail-on-warnings = []
 
-telemetry = ["dep:gimbal_telemetry"]
+telemetry = ["dep:switchy_telemetry"]
 
 tls = ["actix-web/openssl", "dep:openssl", "dep:rcgen"]
 
@@ -220,37 +220,37 @@ opus = [
 
 postgres = [
     "dep:moosicbox_schema",
-    "gimbal_database/postgres",
-    "gimbal_database_connection/creds",
-    "gimbal_database_connection/postgres",
     "moosicbox_schema/postgres",
+    "switchy_database/postgres",
+    "switchy_database_connection/creds",
+    "switchy_database_connection/postgres",
 ]
-postgres-native-tls = ["gimbal_database_connection/postgres-native-tls"]
-postgres-openssl = ["gimbal_database_connection/postgres-openssl"]
+postgres-native-tls = ["switchy_database_connection/postgres-native-tls"]
+postgres-openssl = ["switchy_database_connection/postgres-openssl"]
 postgres-raw = [
-    "gimbal_database/postgres-raw",
-    "gimbal_database_connection/postgres-raw",
     "postgres",
+    "switchy_database/postgres-raw",
+    "switchy_database_connection/postgres-raw",
 ]
 postgres-sqlx = [
-    "gimbal_database/postgres-sqlx",
-    "gimbal_database_connection/postgres-sqlx",
     "postgres",
+    "switchy_database/postgres-sqlx",
+    "switchy_database_connection/postgres-sqlx",
 ]
 sqlite = [
     "dep:moosicbox_schema",
-    "gimbal_database_connection/sqlite",
     "moosicbox_schema/sqlite",
+    "switchy_database_connection/sqlite",
 ]
 sqlite-rusqlite = [
-    "gimbal_database/sqlite-rusqlite",
-    "gimbal_database_connection/sqlite-rusqlite",
     "sqlite",
+    "switchy_database/sqlite-rusqlite",
+    "switchy_database_connection/sqlite-rusqlite",
 ]
 sqlite-sqlx = [
-    "gimbal_database/sqlite-sqlx",
-    "gimbal_database_connection/sqlite-sqlx",
     "sqlite",
+    "switchy_database/sqlite-sqlx",
+    "switchy_database_connection/sqlite-sqlx",
 ]
 
 admin-htmx = ["admin-htmx-api"]
@@ -285,7 +285,7 @@ tidal = [
     "moosicbox_tidal/api",
     "moosicbox_tunnel_sender?/tidal",
 ]
-upnp = ["dep:gimbal_upnp", "player"]
+upnp = ["dep:switchy_upnp", "player"]
 yt = [
     "moosicbox_downloader?/yt",
     "moosicbox_files/yt",
@@ -338,7 +338,7 @@ scan-api = ["dep:moosicbox_scan", "scan"]
 search-api = ["dep:moosicbox_search", "search"]
 session-api = ["moosicbox_session/api"]
 tidal-api = ["dep:moosicbox_tidal", "tidal"]
-upnp-api = ["dep:gimbal_upnp", "upnp"]
+upnp-api = ["dep:switchy_upnp", "upnp"]
 yt-api = ["dep:moosicbox_yt", "yt"]
 
 openapi = [
@@ -347,7 +347,6 @@ openapi = [
     "dep:utoipa-redoc",
     "dep:utoipa-scalar",
     "dep:utoipa-swagger-ui",
-    "gimbal_upnp?/openapi",
     "moosicbox_audio_output/openapi",
     "moosicbox_audio_zone/openapi",
     "moosicbox_auth?/openapi",
@@ -365,6 +364,7 @@ openapi = [
     "moosicbox_session/openapi",
     "moosicbox_tidal?/openapi",
     "moosicbox_yt?/openapi",
+    "switchy_upnp?/openapi",
 ]
 
 profiling = [

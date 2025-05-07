@@ -5,7 +5,6 @@ use actix_web::{
     error::ErrorInternalServerError,
     route, web,
 };
-use gimbal_database::profiles::LibraryDatabase;
 use maud::{Markup, html};
 use moosicbox_json_utils::database::DatabaseFetchError;
 #[cfg(feature = "scan")]
@@ -13,6 +12,7 @@ use moosicbox_music_api::MusicApis;
 #[cfg(feature = "scan")]
 use moosicbox_scan::ScanOrigin;
 use serde::Deserialize;
+use switchy_database::profiles::LibraryDatabase;
 
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,

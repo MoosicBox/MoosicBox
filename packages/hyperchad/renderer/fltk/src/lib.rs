@@ -47,7 +47,7 @@ pub use hyperchad_renderer::*;
 
 mod font_metrics;
 
-static CLIENT: LazyLock<gimbal_http::Client> = LazyLock::new(gimbal_http::Client::new);
+static CLIENT: LazyLock<switchy_http::Client> = LazyLock::new(switchy_http::Client::new);
 
 #[cfg(feature = "debug")]
 static DEBUG: LazyLock<RwLock<bool>> = LazyLock::new(|| {
@@ -88,7 +88,7 @@ static FLTK_CALCULATOR: Calculator<font_metrics::FltkFontMetrics> = Calculator::
 #[derive(Debug, Error)]
 pub enum LoadImageError {
     #[error(transparent)]
-    Reqwest(#[from] gimbal_http::Error),
+    Reqwest(#[from] switchy_http::Error),
     #[error(transparent)]
     Image(#[from] image::ImageError),
     #[error(transparent)]

@@ -7,7 +7,6 @@ use std::{
     },
 };
 
-use gimbal_database::{config::ConfigDatabase, profiles::PROFILES};
 use moosicbox_async_service::async_trait;
 use moosicbox_ws::{
     PlayerAction, WebsocketContext, WebsocketDisconnectError, WebsocketMessageError,
@@ -15,6 +14,7 @@ use moosicbox_ws::{
 };
 use serde_json::Value;
 use strum_macros::AsRefStr;
+use switchy_database::{config::ConfigDatabase, profiles::PROFILES};
 use tokio::sync::{RwLock, mpsc};
 use tokio_util::sync::CancellationToken;
 
@@ -261,7 +261,7 @@ impl WsServer {
         log::debug!("Someone joined");
 
         // register session with random connection ID
-        let id = gimbal_random::rng().next_u64();
+        let id = switchy_random::rng().next_u64();
         self.connections.insert(
             id,
             Connection {

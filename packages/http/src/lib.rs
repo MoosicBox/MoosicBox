@@ -6,11 +6,11 @@ use std::{collections::BTreeMap, marker::PhantomData};
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use gimbal_http_models::{Method, StatusCode};
 use strum::{AsRefStr, EnumString};
+use switchy_http_models::{Method, StatusCode};
 use thiserror::Error;
 
-pub use gimbal_http_models as models;
+pub use switchy_http_models as models;
 
 #[cfg(feature = "reqwest")]
 pub mod reqwest;

@@ -5,10 +5,10 @@ use actix_web::{
     route,
     web::{self, Json},
 };
-use gimbal_database::config::ConfigDatabase;
 use moosicbox_middleware::tunnel_info::TunnelInfo;
 use serde::Deserialize;
 use serde_json::{Value, json};
+use switchy_database::config::ConfigDatabase;
 use url::form_urlencoded;
 
 use crate::{NonTunnelRequestAuthorized, create_magic_token, get_credentials_from_magic_token};

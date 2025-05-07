@@ -7,8 +7,6 @@ use actix_web::{
     route,
     web::{self, Json},
 };
-#[cfg(feature = "db")]
-use gimbal_database::profiles::LibraryDatabase;
 use moosicbox_music_models::{
     ApiSource, ApiSources, TrackApiSource,
     api::{ApiAlbum, ApiArtist},
@@ -18,6 +16,8 @@ use moosicbox_search::api::models::ApiSearchResultsResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
+#[cfg(feature = "db")]
+use switchy_database::profiles::LibraryDatabase;
 
 use crate::{
     QobuzAlbumError, QobuzAlbumOrder, QobuzAlbumReleaseType, QobuzAlbumSort, QobuzAlbumTracksError,

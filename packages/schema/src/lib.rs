@@ -4,12 +4,12 @@
 
 use std::collections::BTreeMap;
 
-use gimbal_database::{
+use include_dir::{Dir, DirEntry, File};
+use switchy_database::{
     Database, DatabaseError, DatabaseValue,
     query::FilterableQuery,
     schema::{Column, DataType},
 };
-use include_dir::{Dir, DirEntry, File};
 use thiserror::Error;
 
 #[derive(Debug, Error)]

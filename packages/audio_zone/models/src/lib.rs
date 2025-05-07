@@ -2,9 +2,9 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use gimbal_database::{AsId, DatabaseValue};
 use moosicbox_json_utils::{MissingValue, ParseError, ToValueType, database::ToValue as _};
 use serde::{Deserialize, Serialize};
+use switchy_database::{AsId, DatabaseValue};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AudioZone {
@@ -122,8 +122,8 @@ impl From<ApiPlayer> for Player {
     }
 }
 
-impl MissingValue<Player> for &gimbal_database::Row {}
-impl ToValueType<Player> for &gimbal_database::Row {
+impl MissingValue<Player> for &switchy_database::Row {}
+impl ToValueType<Player> for &switchy_database::Row {
     fn to_value_type(self) -> Result<Player, ParseError> {
         Ok(Player {
             id: self.to_value("id")?,

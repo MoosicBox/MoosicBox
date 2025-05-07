@@ -1,8 +1,5 @@
 use std::str::FromStr as _;
 
-use gimbal_database::{
-    AsId, Database, DatabaseValue, profiles::LibraryDatabase, query::FilterableQuery as _,
-};
 use moosicbox_json_utils::{
     MissingValue, ParseError, ToValueType,
     database::{
@@ -11,6 +8,9 @@ use moosicbox_json_utils::{
 };
 use moosicbox_music_models::{
     AlbumSource, AlbumVersionQuality, ApiSource, ApiSources, AudioFormat, TrackApiSource,
+};
+use switchy_database::{
+    AsId, Database, DatabaseValue, profiles::LibraryDatabase, query::FilterableQuery as _,
 };
 
 use crate::{LibraryAlbum, LibraryAlbumType, LibraryArtist, LibraryTrack, sort_album_versions};
@@ -21,13 +21,13 @@ impl AsId for LibraryTrack {
     }
 }
 
-impl AsModel<LibraryArtist> for &gimbal_database::Row {
+impl AsModel<LibraryArtist> for &switchy_database::Row {
     fn as_model(&self) -> LibraryArtist {
         AsModelResult::as_model(self).unwrap()
     }
 }
 
-impl ToValueType<LibraryArtist> for &gimbal_database::Row {
+impl ToValueType<LibraryArtist> for &switchy_database::Row {
     fn to_value_type(self) -> Result<LibraryArtist, ParseError> {
         Ok(LibraryArtist {
             id: self.to_value("id")?,
@@ -40,7 +40,7 @@ impl ToValueType<LibraryArtist> for &gimbal_database::Row {
     }
 }
 
-impl AsModelResult<LibraryArtist, ParseError> for &gimbal_database::Row {
+impl AsModelResult<LibraryArtist, ParseError> for &switchy_database::Row {
     fn as_model(&self) -> Result<LibraryArtist, ParseError> {
         Ok(LibraryArtist {
             id: self.to_value("id")?,
@@ -59,8 +59,8 @@ impl AsId for LibraryArtist {
     }
 }
 
-impl MissingValue<LibraryAlbumType> for &gimbal_database::Row {}
-impl ToValueType<LibraryAlbumType> for &gimbal_database::Row {
+impl MissingValue<LibraryAlbumType> for &switchy_database::Row {}
+impl ToValueType<LibraryAlbumType> for &switchy_database::Row {
     fn to_value_type(self) -> Result<LibraryAlbumType, ParseError> {
         self.get("album_type")
             .ok_or_else(|| ParseError::MissingValue("album_type".into()))?
@@ -77,14 +77,14 @@ impl ToValueType<LibraryAlbumType> for DatabaseValue {
     }
 }
 
-impl AsModel<LibraryAlbum> for &gimbal_database::Row {
+impl AsModel<LibraryAlbum> for &switchy_database::Row {
     fn as_model(&self) -> LibraryAlbum {
         AsModelResult::as_model(self).unwrap()
     }
 }
 
-impl MissingValue<LibraryAlbum> for &gimbal_database::Row {}
-impl ToValueType<LibraryAlbum> for &gimbal_database::Row {
+impl MissingValue<LibraryAlbum> for &switchy_database::Row {}
+impl ToValueType<LibraryAlbum> for &switchy_database::Row {
     fn to_value_type(self) -> Result<LibraryAlbum, ParseError> {
         #[cfg(any(feature = "tidal", feature = "qobuz", feature = "yt"))]
         use moosicbox_music_models::id::Id;
@@ -163,7 +163,7 @@ impl ToValueType<LibraryAlbum> for &gimbal_database::Row {
     }
 }
 
-impl AsModelResult<LibraryAlbum, ParseError> for &gimbal_database::Row {
+impl AsModelResult<LibraryAlbum, ParseError> for &switchy_database::Row {
     fn as_model(&self) -> Result<LibraryAlbum, ParseError> {
         #[cfg(any(feature = "tidal", feature = "qobuz", feature = "yt"))]
         use moosicbox_music_models::id::Id;
@@ -242,7 +242,7 @@ impl AsModelResult<LibraryAlbum, ParseError> for &gimbal_database::Row {
     }
 }
 
-impl AsModelResultMapped<LibraryAlbum, DatabaseFetchError> for Vec<gimbal_database::Row> {
+impl AsModelResultMapped<LibraryAlbum, DatabaseFetchError> for Vec<switchy_database::Row> {
     #[allow(clippy::too_many_lines)]
     fn as_model_mapped(&self) -> Result<Vec<LibraryAlbum>, DatabaseFetchError> {
         let mut results: Vec<LibraryAlbum> = vec![];
@@ -370,7 +370,7 @@ impl AsModelResultMapped<LibraryAlbum, DatabaseFetchError> for Vec<gimbal_databa
 }
 
 #[async_trait::async_trait]
-impl AsModelQuery<LibraryAlbum> for &gimbal_database::Row {
+impl AsModelQuery<LibraryAlbum> for &switchy_database::Row {
     async fn as_model_query(
         &self,
         db: std::sync::Arc<Box<dyn Database>>,
@@ -459,13 +459,13 @@ impl AsId for LibraryAlbum {
     }
 }
 
-impl AsModel<LibraryTrack> for &gimbal_database::Row {
+impl AsModel<LibraryTrack> for &switchy_database::Row {
     fn as_model(&self) -> LibraryTrack {
         AsModelResult::as_model(self).unwrap()
     }
 }
 
-impl ToValueType<LibraryTrack> for &gimbal_database::Row {
+impl ToValueType<LibraryTrack> for &switchy_database::Row {
     fn to_value_type(self) -> Result<LibraryTrack, ParseError> {
         let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
         Ok(LibraryTrack {
@@ -507,7 +507,7 @@ impl ToValueType<LibraryTrack> for &gimbal_database::Row {
     }
 }
 
-impl AsModelResult<LibraryTrack, ParseError> for &gimbal_database::Row {
+impl AsModelResult<LibraryTrack, ParseError> for &switchy_database::Row {
     fn as_model(&self) -> Result<LibraryTrack, ParseError> {
         let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
         Ok(LibraryTrack {

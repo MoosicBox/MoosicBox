@@ -9,8 +9,6 @@ use actix_web::{HttpRequest, Result};
 use actix_web::{HttpResponse, route};
 use bytes::Bytes;
 use futures_util::StreamExt;
-use gimbal_database::profiles::api::ProfileNameUnverified;
-use gimbal_http::models::Method;
 use log::{debug, info};
 use moosicbox_tunnel::{
     TunnelEncoding, TunnelHttpRequest, TunnelRequest, TunnelResponse, TunnelStream,
@@ -20,6 +18,8 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::str::FromStr as _;
+use switchy_database::profiles::api::ProfileNameUnverified;
+use switchy_http::models::Method;
 use thiserror::Error;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio::sync::oneshot;
@@ -254,7 +254,7 @@ async fn handle_request(
     headers: Option<Value>,
     profile: Option<String>,
 ) -> Result<HttpResponse> {
-    let request_id = gimbal_random::rng().next_u64();
+    let request_id = switchy_random::rng().next_u64();
     let abort_token = CancellationToken::new();
 
     debug!(

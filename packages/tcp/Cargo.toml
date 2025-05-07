@@ -1,17 +1,17 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["network-programming"]
-description = "Gimbal TCP Networking package"
+description = "Switchy TCP Networking package"
 edition     = "2024"
 keywords    = ["network", "networking", "tcp"]
 license     = "MPL-2.0"
-name        = "gimbal_tcp"
+name        = "switchy_tcp"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [package.metadata.workspaces]
-group = "gimbal"
+group = "switchy"
 
 [dependencies]
 async-trait = { workspace = true }

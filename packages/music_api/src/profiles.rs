@@ -86,7 +86,7 @@ impl<S: ::std::hash::BuildHasher + Clone> MusicApisProfiles<S> {
 pub mod api {
     use actix_web::{FromRequest, HttpRequest, dev::Payload, error::ErrorBadRequest};
     use futures::future::{Ready, err, ok};
-    use gimbal_database::profiles::api::ProfileName;
+    use switchy_database::profiles::api::ProfileName;
 
     use super::{MusicApis, PROFILES};
 

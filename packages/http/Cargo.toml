@@ -1,20 +1,20 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["network-programming"]
-description = "Gimbal HTTP Networking package"
+description = "Switchy HTTP Networking package"
 edition     = "2024"
 keywords    = ["http", "network", "networking"]
 license     = "MPL-2.0"
-name        = "gimbal_http"
+name        = "switchy_http"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [package.metadata.workspaces]
-group = "gimbal"
+group = "switchy"
 
 [dependencies]
-gimbal_http_models = { workspace = true }
+switchy_http_models = { workspace = true }
 
 # reqwest
 reqwest = { workspace = true, optional = true }
@@ -37,10 +37,10 @@ default = ["json", "reqwest", "simulator", "stream"]
 
 fail-on-warnings = []
 
-reqwest   = ["dep:reqwest", "gimbal_http_models/reqwest"]
+reqwest   = ["dep:reqwest", "switchy_http_models/reqwest"]
 simulator = []
 
 json   = ["dep:serde_json", "reqwest?/json", "serde"]
 stream = ["dep:futures-core", "reqwest?/stream"]
 
-serde = ["dep:serde", "gimbal_http_models/serde"]
+serde = ["dep:serde", "switchy_http_models/serde"]

@@ -1,0 +1,64 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools"]
+description = "Switchyl package"
+edition     = "2024"
+keywords    = ["switchy"]
+license     = "MPL-2.0"
+name        = "switchy"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[package.metadata.workspaces]
+group = "switchy"
+
+[dependencies]
+switchy_async               = { workspace = true, optional = true }
+switchy_async_macros        = { workspace = true, optional = true }
+switchy_database            = { workspace = true, optional = true }
+switchy_database_connection = { workspace = true, optional = true }
+switchy_fs                  = { workspace = true, optional = true }
+switchy_http                = { workspace = true, optional = true }
+switchy_http_models         = { workspace = true, optional = true }
+switchy_mdns                = { workspace = true, optional = true }
+switchy_random              = { workspace = true, optional = true }
+switchy_tcp                 = { workspace = true, optional = true }
+switchy_telemetry           = { workspace = true, optional = true }
+switchy_time                = { workspace = true, optional = true }
+switchy_upnp                = { workspace = true, optional = true }
+
+[features]
+default = ["all"]
+
+fail-on-warnings = []
+
+all = [
+    "async",
+    "async-macros",
+    "database",
+    "database-connection",
+    "fs",
+    "http",
+    "http-models",
+    "mdns",
+    "random",
+    "tcp",
+    "telemetry",
+    "time",
+    "upnp",
+]
+
+async               = ["dep:switchy_async"]
+async-macros        = ["dep:switchy_async_macros"]
+database            = ["dep:switchy_database"]
+database-connection = ["dep:switchy_database_connection"]
+fs                  = ["dep:switchy_fs"]
+http                = ["dep:switchy_http"]
+http-models         = ["dep:switchy_http_models"]
+mdns                = ["dep:switchy_mdns"]
+random              = ["dep:switchy_random"]
+tcp                 = ["dep:switchy_tcp"]
+telemetry           = ["dep:switchy_telemetry"]
+time                = ["dep:switchy_time"]
+upnp                = ["dep:switchy_upnp"]

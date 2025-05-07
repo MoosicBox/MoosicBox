@@ -6,7 +6,7 @@ pub struct AudioZoneModel {
     pub name: String,
 }
 
-impl ToValueType<AudioZoneModel> for &gimbal_database::Row {
+impl ToValueType<AudioZoneModel> for &switchy_database::Row {
     fn to_value_type(self) -> Result<AudioZoneModel, ParseError> {
         Ok(AudioZoneModel {
             id: self.to_value("id")?,
@@ -21,7 +21,7 @@ pub struct AudioZoneIdWithSessionIdModel {
     pub audio_zone_id: u64,
 }
 
-impl ToValueType<AudioZoneIdWithSessionIdModel> for &gimbal_database::Row {
+impl ToValueType<AudioZoneIdWithSessionIdModel> for &switchy_database::Row {
     fn to_value_type(self) -> Result<AudioZoneIdWithSessionIdModel, ParseError> {
         Ok(AudioZoneIdWithSessionIdModel {
             session_id: self.to_value("session_id")?,
@@ -37,7 +37,7 @@ pub struct AudioZoneWithSessionModel {
     pub name: String,
 }
 
-impl ToValueType<AudioZoneWithSessionModel> for &gimbal_database::Row {
+impl ToValueType<AudioZoneWithSessionModel> for &switchy_database::Row {
     fn to_value_type(self) -> Result<AudioZoneWithSessionModel, ParseError> {
         Ok(AudioZoneWithSessionModel {
             id: self.to_value("id")?,
@@ -53,7 +53,7 @@ pub struct AudioZonePlayer {
     pub player_id: u64,
 }
 
-impl ToValueType<AudioZonePlayer> for &gimbal_database::Row {
+impl ToValueType<AudioZonePlayer> for &switchy_database::Row {
     fn to_value_type(self) -> Result<AudioZonePlayer, ParseError> {
         Ok(AudioZonePlayer {
             audio_zone_id: self.to_value("audio_zone_id")?,
@@ -68,7 +68,7 @@ pub struct AudioZoneAndPlayer {
     pub player_id: u64,
 }
 
-impl ToValueType<AudioZoneAndPlayer> for &gimbal_database::Row {
+impl ToValueType<AudioZoneAndPlayer> for &switchy_database::Row {
     fn to_value_type(self) -> Result<AudioZoneAndPlayer, ParseError> {
         Ok(AudioZoneAndPlayer {
             audio_zone_id: self.to_value("audio_zone_id")?,

@@ -8,10 +8,6 @@ use std::{
 };
 
 use async_trait::async_trait;
-use gimbal_database::{
-    config::ConfigDatabase,
-    profiles::{LibraryDatabase, PROFILES},
-};
 use moosicbox_audio_zone::models::CreateAudioZone;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_session::{
@@ -24,6 +20,10 @@ use moosicbox_session::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use switchy_database::{
+    config::ConfigDatabase,
+    profiles::{LibraryDatabase, PROFILES},
+};
 use thiserror::Error;
 
 use crate::models::{

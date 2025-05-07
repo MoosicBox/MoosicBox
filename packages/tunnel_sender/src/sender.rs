@@ -17,8 +17,6 @@ use futures_util::{
     future::{self, ready},
     pin_mut,
 };
-use gimbal_database::{config::ConfigDatabase, profiles::PROFILES};
-use gimbal_http::models::Method;
 use moosicbox_audio_decoder::{
     AudioDecodeHandler, media_sources::remote_bytestream::RemoteByteStreamMediaSource,
 };
@@ -41,6 +39,8 @@ use moosicbox_tunnel::{TunnelEncoding, TunnelWsResponse};
 use moosicbox_ws::{PlayerAction, WebsocketContext, WebsocketSendError, WebsocketSender};
 use regex::Regex;
 use serde_json::Value;
+use switchy_database::{config::ConfigDatabase, profiles::PROFILES};
+use switchy_http::models::Method;
 use symphonia::core::{
     io::{MediaSourceStream, MediaSourceStreamOptions},
     probe::Hint,
@@ -210,7 +210,7 @@ impl TunnelSender {
     ) -> (Self, TunnelSenderHandle) {
         let sender = Arc::new(RwLock::new(None));
         let cancellation_token = CancellationToken::new();
-        let id = gimbal_random::rng().next_u64();
+        let id = switchy_random::rng().next_u64();
         let player_actions = Arc::new(RwLock::new(vec![]));
         let handle = TunnelSenderHandle {
             sender: sender.clone(),
@@ -1171,8 +1171,8 @@ impl TunnelSender {
         headers: Option<Value>,
         profile: Option<String>,
         user_agent_header: bool,
-    ) -> Result<gimbal_http::Response, gimbal_http::Error> {
-        let client = gimbal_http::Client::new();
+    ) -> Result<switchy_http::Response, switchy_http::Error> {
+        let client = switchy_http::Client::new();
 
         let mut builder = client.request(method, url);
 

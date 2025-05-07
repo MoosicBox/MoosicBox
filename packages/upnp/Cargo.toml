@@ -1,27 +1,27 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["network-programming"]
-description = "Gimbal UPnP package"
+description = "Switchy UPnP package"
 edition     = "2024"
 keywords    = ["dlna", "network", "upnp"]
 license     = "MPL-2.0"
-name        = "gimbal_upnp"
+name        = "switchy_upnp"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [package.metadata.workspaces]
-group = "gimbal"
+group = "switchy"
 
 [package.metadata.cargo-machete]
 ignored = ["strum"]
 
 [dependencies]
-gimbal_http            = { workspace = true, optional = true, features = ["reqwest"] }
 moosicbox_assert       = { workspace = true }
 moosicbox_audio_output = { workspace = true, optional = true }
 moosicbox_logging      = { workspace = true, optional = true, features = ["macros"] }
 moosicbox_task         = { workspace = true }
+switchy_http           = { workspace = true, optional = true, features = ["reqwest"] }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
@@ -33,10 +33,10 @@ moosicbox_async_service = { workspace = true, optional = true }
 tokio-util              = { workspace = true, optional = true }
 
 # Player Dependencies
-gimbal_random       = { workspace = true, optional = true, features = ["rand"] }
 moosicbox_music_api = { workspace = true, optional = true }
 moosicbox_player    = { workspace = true, optional = true }
 moosicbox_session   = { workspace = true, optional = true }
+switchy_random      = { workspace = true, optional = true, features = ["rand"] }
 symphonia           = { workspace = true, optional = true }
 
 async-recursion = { workspace = true }
@@ -70,8 +70,6 @@ listener = [
 ]
 openapi = ["dep:utoipa"]
 player = [
-    "dep:gimbal_http",
-    "dep:gimbal_random",
     "dep:moosicbox_async_service",
     "dep:moosicbox_audio_output",
     "dep:moosicbox_logging",
@@ -80,6 +78,8 @@ player = [
     "dep:moosicbox_session",
     "dep:strum",
     "dep:strum_macros",
+    "dep:switchy_http",
+    "dep:switchy_random",
     "dep:symphonia",
     "listener",
 ]

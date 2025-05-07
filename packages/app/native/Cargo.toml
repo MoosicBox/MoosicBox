@@ -37,8 +37,6 @@ no-build      = false
 product-name  = "MoosicBox"
 
 [dependencies]
-gimbal_http = { workspace = true, features = ["json", "reqwest"] }
-gimbal_time = { workspace = true, features = ["std"] }
 hyperchad_actions = { workspace = true }
 moosicbox_app_native_lib = { workspace = true, features = [
     "actions",
@@ -60,6 +58,8 @@ moosicbox_remote_library = { workspace = true }
 moosicbox_session_models = { workspace = true }
 moosicbox_task = { workspace = true }
 moosicbox_ws = { workspace = true }
+switchy_http = { workspace = true, features = ["json", "reqwest"] }
+switchy_time = { workspace = true, features = ["std"] }
 
 # Bundled dependencies
 moosicbox_app_native_bundled = { workspace = true, optional = true }

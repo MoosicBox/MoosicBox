@@ -11,10 +11,10 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.1"
 
 [dependencies]
-gimbal_http_models        = { workspace = true }
 moosicbox_assert          = { workspace = true }
 moosicbox_web_server_core = { workspace = true }
 moosicbox_web_server_cors = { workspace = true, optional = true }
+switchy_http_models       = { workspace = true }
 
 actix-cors    = { workspace = true, optional = true }
 actix-htmx    = { workspace = true, optional = true }
@@ -47,7 +47,7 @@ actix = [
     "dep:actix-service",
     "dep:actix-web",
     "dep:futures-util",
-    "gimbal_http_models/actix",
+    "switchy_http_models/actix",
 ]
 
 serde = ["dep:serde_json"]

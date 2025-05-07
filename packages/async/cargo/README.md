@@ -1,1 +1,1 @@
-# Gimbal Async Cargo checker crate
+# Switchy Async Cargo checker crate

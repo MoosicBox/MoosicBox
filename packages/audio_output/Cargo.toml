@@ -11,13 +11,13 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.1"
 
 [dependencies]
-gimbal_time             = { workspace = true, features = ["std"] }
 moosicbox_assert        = { workspace = true }
 moosicbox_audio_decoder = { workspace = true }
 moosicbox_env_utils     = { workspace = true }
 moosicbox_resampler     = { workspace = true }
 moosicbox_stream_utils  = { workspace = true }
 moosicbox_task          = { workspace = true }
+switchy_time            = { workspace = true, features = ["std"] }
 
 # API Dependencies
 actix-web        = { workspace = true, optional = true }

@@ -1,8 +1,5 @@
 use std::sync::{Arc, PoisonError};
 
-use gimbal_database::{
-    DatabaseError, DatabaseValue, profiles::LibraryDatabase, query::FilterableQuery,
-};
 use moosicbox_date_utils::chrono;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_library::{
@@ -25,6 +22,9 @@ use moosicbox_search::{
     data::{AsDataValues, AsDeleteTerm},
 };
 use moosicbox_session::delete_session_playlist_tracks_by_track_id;
+use switchy_database::{
+    DatabaseError, DatabaseValue, profiles::LibraryDatabase, query::FilterableQuery,
+};
 use thiserror::Error;
 use tokio::sync::RwLock;
 

@@ -9,9 +9,9 @@ mod db;
 
 use actix_web::{FromRequest, HttpRequest, dev::Payload, error::ErrorUnauthorized, http};
 use futures::future::{Ready, err, ok};
-use gimbal_database::config::ConfigDatabase;
 use moosicbox_json_utils::{ParseError, database::DatabaseFetchError, serde_json::ToValue};
 use serde_json::Value;
+use switchy_database::config::ConfigDatabase;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -24,7 +24,7 @@ pub enum AuthError {
     #[error(transparent)]
     Parse(#[from] ParseError),
     #[error(transparent)]
-    Http(#[from] gimbal_http::Error),
+    Http(#[from] switchy_http::Error),
     #[error("Failed to register client")]
     RegisterClient,
     #[error("Unauthorized")]
@@ -54,9 +54,9 @@ async fn tunnel_magic_token(
 ) -> Result<bool, AuthError> {
     let url =
         format!("{tunnel_host}/auth/magic-token?clientId={client_id}&magicToken={magic_token}");
-    let value: Value = gimbal_http::Client::new()
+    let value: Value = switchy_http::Client::new()
         .post(&url)
-        .header(gimbal_http::Header::Authorization.as_ref(), access_token)
+        .header(switchy_http::Header::Authorization.as_ref(), access_token)
         .send()
         .await?
         .json()
@@ -113,10 +113,10 @@ pub async fn get_client_id_and_access_token(
 async fn register_client(host: &str, client_id: &str) -> Result<Option<String>, AuthError> {
     let url = format!("{host}/auth/register-client?clientId={client_id}");
 
-    Ok(gimbal_http::Client::new()
+    Ok(switchy_http::Client::new()
         .post(&url)
         .header(
-            gimbal_http::Header::Authorization.as_ref(),
+            switchy_http::Header::Authorization.as_ref(),
             &std::env::var("TUNNEL_ACCESS_TOKEN").expect("TUNNEL_ACCESS_TOKEN not set"),
         )
         .send()
@@ -168,13 +168,13 @@ pub async fn fetch_signature_token(
     let url = format!("{host}/auth/signature-token?clientId={client_id}");
 
     log::debug!("Fetching signature token for client_id={client_id}");
-    let response = gimbal_http::Client::new()
+    let response = switchy_http::Client::new()
         .post(&url)
-        .header(gimbal_http::Header::Authorization.as_ref(), access_token)
+        .header(switchy_http::Header::Authorization.as_ref(), access_token)
         .send()
         .await?;
 
-    if response.status() == gimbal_http::models::StatusCode::Unauthorized {
+    if response.status() == switchy_http::models::StatusCode::Unauthorized {
         return Err(AuthError::Unauthorized);
     }
 

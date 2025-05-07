@@ -9,16 +9,15 @@ pub mod db;
 
 pub mod models;
 
-#[cfg(feature = "db")]
-use gimbal_database::DatabaseError;
-#[cfg(feature = "db")]
-use gimbal_database::profiles::LibraryDatabase;
 use itertools::Itertools;
 use models::{QobuzAlbum, QobuzArtist, QobuzRelease, QobuzSearchResults, QobuzTrack};
 #[cfg(feature = "db")]
 use moosicbox_json_utils::database::DatabaseFetchError;
+#[cfg(feature = "db")]
+use switchy_database::DatabaseError;
+#[cfg(feature = "db")]
+use switchy_database::profiles::LibraryDatabase;
 
-use gimbal_http::models::{Method, StatusCode};
 use moosicbox_files::get_content_length;
 use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_models::{
@@ -31,6 +30,7 @@ use std::{
     str::Utf8Error,
     sync::{Arc, LazyLock},
 };
+use switchy_http::models::{Method, StatusCode};
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
@@ -75,8 +75,8 @@ trait ToUrl {
 static QOBUZ_PLAY_API_BASE_URL: &str = "https://play.qobuz.com";
 static QOBUZ_API_BASE_URL: &str = "https://www.qobuz.com/api.json/0.2";
 
-static CLIENT: LazyLock<gimbal_http::Client> =
-    LazyLock::new(|| gimbal_http::Client::builder().build().unwrap());
+static CLIENT: LazyLock<switchy_http::Client> =
+    LazyLock::new(|| switchy_http::Client::builder().build().unwrap());
 
 #[must_use]
 pub fn format_title(title: &str, version: Option<&str>) -> String {
@@ -176,7 +176,7 @@ async fn fetch_credentials(
 #[derive(Debug, Error)]
 pub enum AuthenticatedRequestError {
     #[error(transparent)]
-    Http(#[from] gimbal_http::Error),
+    Http(#[from] switchy_http::Error),
     #[error(transparent)]
     FetchCredentials(#[from] FetchCredentialsError),
     #[error(transparent)]
@@ -349,7 +349,7 @@ async fn authenticated_request_inner(
         )),
         _ => match response.json::<Value>().await {
             Ok(value) => Ok(Some(value)),
-            Err(gimbal_http::Error::Decode) => Ok(None),
+            Err(switchy_http::Error::Decode) => Ok(None),
             Err(e) => Err(AuthenticatedRequestError::Http(e)),
         },
     }
@@ -358,7 +358,7 @@ async fn authenticated_request_inner(
 #[derive(Debug, Error)]
 pub enum RefetchAccessTokenError {
     #[error(transparent)]
-    Http(#[from] gimbal_http::Error),
+    Http(#[from] switchy_http::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
     Database(#[from] DatabaseError),
@@ -579,7 +579,7 @@ pub enum QobuzAlbumOrder {
 #[derive(Debug, Error)]
 pub enum QobuzUserLoginError {
     #[error(transparent)]
-    Http(#[from] gimbal_http::Error),
+    Http(#[from] switchy_http::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
     Database(#[from] DatabaseError),
@@ -683,7 +683,7 @@ pub async fn user_login(
     let response = CLIENT
         .post(&url)
         .header(APP_ID_HEADER_NAME, &app_id)
-        .header(gimbal_http::Header::ContentLength.as_ref(), "0")
+        .header(switchy_http::Header::ContentLength.as_ref(), "0")
         .send()
         .await?;
 
@@ -1703,7 +1703,7 @@ pub async fn track_file_url(
 
     let intent = "stream";
     let format_id = quality.as_format_id();
-    let request_ts = gimbal_time::now()
+    let request_ts = switchy_time::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs();
@@ -1804,7 +1804,7 @@ pub async fn search(
 #[derive(Debug, Error)]
 pub enum QobuzFetchLoginSourceError {
     #[error(transparent)]
-    Http(#[from] gimbal_http::Error),
+    Http(#[from] switchy_http::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
     Database(#[from] DatabaseError),
@@ -1840,7 +1840,7 @@ fn search_bundle_version(login_source: &str) -> Option<String> {
 #[derive(Debug, Error)]
 pub enum QobuzFetchBundleSourceError {
     #[error(transparent)]
-    Http(#[from] gimbal_http::Error),
+    Http(#[from] switchy_http::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
     Database(#[from] DatabaseError),
@@ -1856,7 +1856,7 @@ async fn fetch_bundle_source(bundle_version: &str) -> Result<String, QobuzFetchB
 #[derive(Debug, Error)]
 pub enum QobuzFetchAppSecretsError {
     #[error(transparent)]
-    Http(#[from] gimbal_http::Error),
+    Http(#[from] switchy_http::Error),
     #[error(transparent)]
     Base64Decode(#[from] base64::DecodeError),
     #[cfg(feature = "db")]

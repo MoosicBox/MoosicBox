@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use gimbal_database::Database;
+use switchy_database::Database;
 use thiserror::Error;
 
 #[cfg(feature = "creds")]
@@ -53,7 +53,7 @@ pub enum InitDbError {
     #[error("Credentials are required")]
     CredentialsRequired,
     #[error(transparent)]
-    Database(#[from] gimbal_database::DatabaseError),
+    Database(#[from] switchy_database::DatabaseError),
 }
 
 /// # Panics
@@ -73,7 +73,7 @@ pub async fn init(
     #[cfg(feature = "simulator")]
     {
         Ok(Box::new(
-            gimbal_database::simulator::SimulationDatabase::new()?,
+            switchy_database::simulator::SimulationDatabase::new()?,
         ))
     }
 
@@ -193,7 +193,7 @@ pub fn init_sqlite_rusqlite(
     library.busy_timeout(std::time::Duration::from_millis(10))?;
     let library = std::sync::Arc::new(tokio::sync::Mutex::new(library));
 
-    Ok(Box::new(gimbal_database::rusqlite::RusqliteDatabase::new(
+    Ok(Box::new(switchy_database::rusqlite::RusqliteDatabase::new(
         library,
     )))
 }
@@ -234,8 +234,8 @@ pub async fn init_sqlite_sqlx(
 ) -> Result<Box<dyn Database>, InitSqliteSqlxDatabaseError> {
     use std::sync::Arc;
 
-    use gimbal_database::sqlx::sqlite::SqliteSqlxDatabase;
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+    use switchy_database::sqlx::sqlite::SqliteSqlxDatabase;
 
     let connect_options = SqliteConnectOptions::new();
     let mut connect_options = if let Some(db_location) = db_location {
@@ -283,8 +283,8 @@ pub async fn init_postgres_sqlx(
 ) -> Result<Box<dyn Database>, InitDatabaseError> {
     use std::sync::Arc;
 
-    use gimbal_database::sqlx::postgres::PostgresSqlxDatabase;
     use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+    use switchy_database::sqlx::postgres::PostgresSqlxDatabase;
 
     let connect_options = PgConnectOptions::new();
     let mut connect_options = connect_options
@@ -314,8 +314,8 @@ pub async fn init_postgres_sqlx(
 pub async fn init_postgres_raw_native_tls(
     creds: Credentials,
 ) -> Result<Box<dyn Database>, InitDatabaseError> {
-    use gimbal_database::postgres::postgres::PostgresDatabase;
     use postgres_native_tls::MakeTlsConnector;
+    use switchy_database::postgres::postgres::PostgresDatabase;
 
     let mut config = tokio_postgres::Config::new();
     let mut config = config
@@ -351,9 +351,9 @@ pub async fn init_postgres_raw_native_tls(
 pub async fn init_postgres_raw_openssl(
     creds: Credentials,
 ) -> Result<Box<dyn Database>, InitDatabaseError> {
-    use gimbal_database::postgres::postgres::PostgresDatabase;
     use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
     use postgres_openssl::MakeTlsConnector;
+    use switchy_database::postgres::postgres::PostgresDatabase;
 
     let mut config = tokio_postgres::Config::new();
     let mut config = config
@@ -389,7 +389,7 @@ pub async fn init_postgres_raw_openssl(
 pub async fn init_postgres_raw_no_tls(
     creds: Credentials,
 ) -> Result<Box<dyn Database>, InitDatabaseError> {
-    use gimbal_database::postgres::postgres::PostgresDatabase;
+    use switchy_database::postgres::postgres::PostgresDatabase;
 
     let mut config = tokio_postgres::Config::new();
     let mut config = config

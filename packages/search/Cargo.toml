@@ -11,11 +11,11 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.1"
 
 [dependencies]
-gimbal_fs              = { workspace = true, features = ["std"] }
 moosicbox_config       = { workspace = true }
 moosicbox_json_utils   = { workspace = true, features = ["tantivy"] }
 moosicbox_music_models = { workspace = true, features = ["tantivy"] }
 moosicbox_task         = { workspace = true }
+switchy_fs             = { workspace = true, features = ["std"] }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
@@ -46,4 +46,4 @@ api     = ["db", "dep:actix-web", "moosicbox_music_models/api"]
 db      = ["moosicbox_music_models/db"]
 openapi = ["dep:utoipa", "moosicbox_music_models/openapi"]
 
-simulator = ["gimbal_fs/simulator"]
+simulator = ["switchy_fs/simulator"]

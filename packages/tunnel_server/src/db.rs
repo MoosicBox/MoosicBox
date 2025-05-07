@@ -5,13 +5,13 @@ use std::{pin::Pin, sync::LazyLock};
 use actix_web::error::ErrorInternalServerError;
 use chrono::NaiveDateTime;
 use futures_util::Future;
-use gimbal_database::{
+use moosicbox_json_utils::{MissingValue, ParseError, ToValueType, database::ToValue};
+use serde::{Deserialize, Serialize};
+use switchy_database::{
     Database, DatabaseValue, Row, boxed,
     query::{FilterableQuery, where_eq, where_gte},
 };
-use gimbal_database_connection::InitDbError;
-use moosicbox_json_utils::{MissingValue, ParseError, ToValueType, database::ToValue};
-use serde::{Deserialize, Serialize};
+use switchy_database_connection::InitDbError;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
@@ -27,7 +27,7 @@ pub enum DatabaseError {
     #[error(transparent)]
     InitDb(#[from] InitDbError),
     #[error(transparent)]
-    Db(#[from] gimbal_database::DatabaseError),
+    Db(#[from] switchy_database::DatabaseError),
     #[error(transparent)]
     Parse(#[from] moosicbox_json_utils::ParseError),
 }
@@ -44,7 +44,7 @@ pub async fn init() -> Result<(), DatabaseError> {
 
     #[cfg(feature = "postgres")]
     let creds = Some(
-        gimbal_database_connection::creds::get_db_creds()
+        switchy_database_connection::creds::get_db_creds()
             .await
             .expect("Failed to get DB creds"),
     );
@@ -56,7 +56,7 @@ pub async fn init() -> Result<(), DatabaseError> {
 
     #[cfg(not(feature = "sqlite"))]
     {
-        binding.replace(gimbal_database_connection::init_default_non_sqlite(creds).await?);
+        binding.replace(switchy_database_connection::init_default_non_sqlite(creds).await?);
 
         Ok(())
     }
@@ -70,7 +70,7 @@ pub struct Connection {
     pub updated: NaiveDateTime,
 }
 
-impl MissingValue<Connection> for &gimbal_database::Row {}
+impl MissingValue<Connection> for &switchy_database::Row {}
 impl ToValueType<Connection> for &Row {
     fn to_value_type(self) -> Result<Connection, ParseError> {
         Ok(Connection {
@@ -91,7 +91,7 @@ pub struct SignatureToken {
     pub updated: NaiveDateTime,
 }
 
-impl MissingValue<SignatureToken> for &gimbal_database::Row {}
+impl MissingValue<SignatureToken> for &switchy_database::Row {}
 impl ToValueType<SignatureToken> for &Row {
     fn to_value_type(self) -> Result<SignatureToken, ParseError> {
         Ok(SignatureToken {
@@ -113,7 +113,7 @@ pub struct ClientAccessToken {
     pub updated: NaiveDateTime,
 }
 
-impl MissingValue<ClientAccessToken> for &gimbal_database::Row {}
+impl MissingValue<ClientAccessToken> for &switchy_database::Row {}
 impl ToValueType<ClientAccessToken> for &Row {
     fn to_value_type(self) -> Result<ClientAccessToken, ParseError> {
         Ok(ClientAccessToken {
@@ -135,7 +135,7 @@ pub struct MagicToken {
     pub updated: NaiveDateTime,
 }
 
-impl MissingValue<MagicToken> for &gimbal_database::Row {}
+impl MissingValue<MagicToken> for &switchy_database::Row {}
 impl ToValueType<MagicToken> for &Row {
     fn to_value_type(self) -> Result<MagicToken, ParseError> {
         Ok(MagicToken {
@@ -196,7 +196,7 @@ pub async fn upsert_connection(client_id: &str, tunnel_ws_id: &str) -> Result<()
         let tunnel_ws_id = tunnel_ws_id.clone();
 
         Box::pin(async move {
-            gimbal_database::query::upsert("connections")
+            switchy_database::query::upsert("connections")
                 .value("client_id", client_id.clone())
                 .value("tunnel_ws_id", tunnel_ws_id.clone())
                 .execute(&**DB.lock().await.as_mut().expect("DB not initialized"))
@@ -215,7 +215,7 @@ pub async fn select_connection(client_id: &str) -> Result<Option<Connection>, Da
         let client_id = client_id.clone();
 
         Box::pin(async move {
-            Ok(gimbal_database::query::select("connections")
+            Ok(switchy_database::query::select("connections")
                 .where_eq("client_id", client_id)
                 .execute_first(&**DB.lock().await.as_mut().expect("DB not initialized"))
                 .await?
@@ -235,7 +235,7 @@ pub async fn delete_connection(tunnel_ws_id: &str) -> Result<(), DatabaseError> 
         let tunnel_ws_id = tunnel_ws_id.clone();
 
         Box::pin(async move {
-            let deleted = gimbal_database::query::delete("connections")
+            let deleted = switchy_database::query::delete("connections")
                 .where_eq("tunnel_ws_id", tunnel_ws_id)
                 .execute(&**DB.lock().await.as_mut().expect("DB not initialized"))
                 .await?;
@@ -260,7 +260,7 @@ pub async fn insert_client_access_token(
         let token_hash = token_hash.clone();
 
         Box::pin(async move {
-            gimbal_database::query::insert("client_access_tokens")
+            switchy_database::query::insert("client_access_tokens")
                 .value("token_hash", token_hash)
                 .value("client_id", client_id)
                 .value("expires", DatabaseValue::Null)
@@ -294,7 +294,7 @@ pub async fn select_client_access_token(
         let token_hash = token_hash.clone();
 
         Box::pin(async move {
-            Ok(gimbal_database::query::select("client_access_tokens")
+            Ok(switchy_database::query::select("client_access_tokens")
                 .where_eq("client_id", client_id)
                 .where_eq("token_hash", token_hash)
                 .where_or(boxed!(
@@ -322,7 +322,7 @@ pub async fn insert_magic_token(
         let client_id = client_id.clone();
 
         Box::pin(async move {
-            gimbal_database::query::insert("magic_tokens")
+            switchy_database::query::insert("magic_tokens")
                 .value("magic_token_hash", magic_token_hash)
                 .value("client_id", client_id)
                 .value("expires", DatabaseValue::Null)
@@ -342,7 +342,7 @@ pub async fn select_magic_token(token_hash: &str) -> Result<Option<MagicToken>, 
         let token_hash = token_hash.clone();
 
         Box::pin(async move {
-            Ok(gimbal_database::query::select("magic_tokens")
+            Ok(switchy_database::query::select("magic_tokens")
                 .where_eq("magic_token_hash", token_hash)
                 .where_or(boxed!(
                     where_eq("expires", DatabaseValue::Null),
@@ -369,7 +369,7 @@ pub async fn insert_signature_token(
         let client_id = client_id.clone();
 
         Box::pin(async move {
-            gimbal_database::query::insert("signature_tokens")
+            switchy_database::query::insert("signature_tokens")
                 .value("token_hash", token_hash)
                 .value("client_id", client_id)
                 .value(
@@ -406,7 +406,7 @@ pub async fn select_signature_token(
         let token_hash = token_hash.clone();
 
         Box::pin(async move {
-            Ok(gimbal_database::query::select("signature_tokens")
+            Ok(switchy_database::query::select("signature_tokens")
                 .where_eq("client_id", client_id)
                 .where_eq("token_hash", token_hash)
                 .where_gte("expires", DatabaseValue::Now)
@@ -429,7 +429,7 @@ pub async fn select_signature_tokens(
         let client_id = client_id.clone();
 
         Box::pin(async move {
-            Ok(gimbal_database::query::select("signature_tokens")
+            Ok(switchy_database::query::select("signature_tokens")
                 .where_eq("client_id", client_id)
                 .execute(&**DB.lock().await.as_mut().expect("DB not initialized"))
                 .await?
@@ -447,7 +447,7 @@ pub async fn delete_signature_token(token_hash: &str) -> Result<(), DatabaseErro
         let token_hash = token_hash.clone();
 
         Box::pin(async move {
-            gimbal_database::query::delete("signature_tokens")
+            switchy_database::query::delete("signature_tokens")
                 .where_eq("token_hash", token_hash)
                 .execute(&**DB.lock().await.as_mut().expect("DB not initialized"))
                 .await?;

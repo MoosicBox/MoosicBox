@@ -4,13 +4,13 @@ use std::path::{Path, PathBuf};
 
 use bytes::BytesMut;
 use futures::{StreamExt, TryStreamExt};
-use gimbal_database::{DatabaseError, profiles::LibraryDatabase, query::FilterableQuery};
 use moosicbox_music_api::{
     AlbumError, MusicApi,
     models::{ImageCoverSize, ImageCoverSource},
 };
 use moosicbox_music_models::{Album, id::Id};
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
+use switchy_database::{DatabaseError, profiles::LibraryDatabase, query::FilterableQuery};
 use thiserror::Error;
 use tokio_util::codec::{BytesCodec, FramedRead};
 

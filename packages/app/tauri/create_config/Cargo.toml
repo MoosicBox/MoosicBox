@@ -16,9 +16,9 @@ path              = "src/main.rs"
 required-features = []
 
 [dependencies]
-gimbal_fs         = { workspace = true, features = ["std"] }
 moosicbox_assert  = { workspace = true }
 moosicbox_logging = { workspace = true, features = ["free_log"] }
+switchy_fs        = { workspace = true, features = ["std"] }
 
 clap       = { workspace = true }
 log        = { workspace = true }

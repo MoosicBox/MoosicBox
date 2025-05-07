@@ -1,17 +1,17 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["development-tools"]
-description = "Gimbal telemetry package"
+description = "Switchy telemetry package"
 edition     = "2024"
 keywords    = ["grafana", "otel", "telemetry", "tempo"]
 license     = "MPL-2.0"
-name        = "gimbal_telemetry"
+name        = "switchy_telemetry"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [package.metadata.workspaces]
-group = "gimbal"
+group = "switchy"
 
 [dependencies]
 moosicbox_assert    = { workspace = true }

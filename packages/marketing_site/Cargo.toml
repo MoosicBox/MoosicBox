@@ -42,7 +42,6 @@ no-build      = false
 product-name  = "MoosicBoxMarketingSite"
 
 [dependencies]
-gimbal_http = { workspace = true, features = ["reqwest"] }
 hyperchad_renderer = { workspace = true, optional = true }
 hyperchad_renderer_html = { workspace = true, optional = true }
 moosicbox_app_native_lib = { workspace = true, features = [
@@ -54,6 +53,7 @@ moosicbox_assert = { workspace = true }
 moosicbox_env_utils = { workspace = true }
 moosicbox_logging = { workspace = true, features = ["free_log"] }
 moosicbox_marketing_site_ui = { workspace = true }
+switchy_http = { workspace = true, features = ["reqwest"] }
 
 async-recursion    = { workspace = true, optional = true }
 chrono             = { workspace = true }

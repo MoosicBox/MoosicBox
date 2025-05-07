@@ -14,12 +14,12 @@ version     = "0.1.1"
 ignored = ["strum"]
 
 [dependencies]
-gimbal_database      = { workspace = true }
 moosicbox_assert     = { workspace = true }
 moosicbox_audio_zone = { workspace = true }
 moosicbox_json_utils = { workspace = true, features = ["database"] }
 moosicbox_logging    = { workspace = true, features = ["macros"] }
 moosicbox_session    = { workspace = true }
+switchy_database     = { workspace = true }
 
 async-trait = { workspace = true, optional = true }
 log         = { workspace = true, optional = true }

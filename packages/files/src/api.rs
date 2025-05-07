@@ -9,7 +9,6 @@ use actix_web::{
 };
 use bytes::{Bytes, BytesMut};
 use futures::{StreamExt, TryStreamExt as _};
-use gimbal_database::profiles::LibraryDatabase;
 use moosicbox_music_api::{
     MusicApis, SourceToMusicApi as _,
     models::{ImageCoverSize, TrackAudioQuality, TrackSource},
@@ -20,6 +19,7 @@ use moosicbox_music_models::{
 };
 use moosicbox_parsing_utils::integer_range::ParseIntegersError;
 use serde::Deserialize;
+use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 use tokio_util::codec::{BytesCodec, FramedRead};

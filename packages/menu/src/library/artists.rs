@@ -1,10 +1,10 @@
 #![allow(clippy::module_name_repetitions)]
 
-use gimbal_database::profiles::LibraryDatabase;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_library::{db::get_artists, models::LibraryArtist};
 use moosicbox_music_models::{AlbumSource, ArtistSort};
 use serde::{Deserialize, Serialize};
+use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

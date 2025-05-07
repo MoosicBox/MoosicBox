@@ -21,7 +21,7 @@ thread_local! {
 }
 
 fn gen_epoch_offset() -> u64 {
-    let value = gimbal_random::rng().gen_range(1..100_000_000_000_000u64);
+    let value = switchy_random::rng().gen_range(1..100_000_000_000_000u64);
 
     std::env::var("SIMULATOR_EPOCH_OFFSET")
         .ok()
@@ -57,7 +57,7 @@ thread_local! {
 fn gen_step_multiplier() -> u64 {
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let value = {
-        let value = gimbal_random::rng().gen_range_disti(1..1_000_000_000, 20);
+        let value = switchy_random::rng().gen_range_disti(1..1_000_000_000, 20);
         if value == 0 { 1 } else { value }
     };
     std::env::var("SIMULATOR_STEP_MULTIPLIER")

@@ -1,8 +1,8 @@
-use gimbal_database::{
+use moosicbox_json_utils::{ToValueType, database::DatabaseFetchError};
+use switchy_database::{
     profiles::LibraryDatabase,
     query::{FilterableQuery, where_eq},
 };
-use moosicbox_json_utils::{ToValueType, database::DatabaseFetchError};
 
 pub mod models;
 
@@ -91,7 +91,7 @@ pub async fn get_download_tasks(
 ) -> Result<Vec<DownloadTask>, DatabaseFetchError> {
     Ok(db
         .select("download_tasks")
-        .sort("id", gimbal_database::query::SortDirection::Desc)
+        .sort("id", switchy_database::query::SortDirection::Desc)
         .execute(&**db)
         .await?
         .to_value_type()?)

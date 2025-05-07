@@ -330,7 +330,7 @@ impl LocalPlayer {
     ) -> Result<Self, PlayerError> {
         Ok(Self {
             id: moosicbox_task::spawn_blocking("player: local player rng", || {
-                gimbal_random::rng().next_u64()
+                switchy_random::rng().next_u64()
             })
             .await?,
             playback_type: playback_type.unwrap_or_default(),

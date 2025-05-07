@@ -1,7 +1,7 @@
 use std::time::{Duration, SystemTime};
 
-use gimbal_async::{Error, Runtime, task, time};
-use gimbal_random::{rng, simulator::initial_seed};
+use switchy_async::{Error, Runtime, task, time};
+use switchy_random::{rng, simulator::initial_seed};
 
 fn main() -> Result<(), Error> {
     pretty_env_logger::init();

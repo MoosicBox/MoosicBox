@@ -1,12 +1,12 @@
 use std::env;
 
-use gimbal_database::config::ConfigDatabase;
 use moosicbox_auth::get_client_id_and_access_token;
 use moosicbox_tunnel::TunnelRequest;
 use moosicbox_tunnel_sender::{
     TunnelMessage,
     sender::{TunnelSender, TunnelSenderHandle},
 };
+use switchy_database::config::ConfigDatabase;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 use url::Url;

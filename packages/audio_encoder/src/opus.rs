@@ -1,7 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 
-use gimbal_fs::sync::File;
 use ogg::{PacketReader, PacketWriteEndInfo, PacketWriter};
+use switchy_fs::sync::File;
 use thiserror::Error;
 
 use crate::EncodeInfo;
@@ -222,7 +222,7 @@ impl OpusWrite<'_> {
     #[must_use]
     pub fn new(path: &str) -> Self {
         let _ = std::fs::remove_file(path);
-        let file = gimbal_fs::sync::OpenOptions::new()
+        let file = switchy_fs::sync::OpenOptions::new()
             .create(true) // To create a new file
             .truncate(true)
             .write(true)

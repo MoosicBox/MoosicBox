@@ -1,9 +1,9 @@
 use std::sync::LazyLock;
 use std::{collections::HashMap, sync::Arc};
 
-use gimbal_database::profiles::PROFILES;
-use gimbal_upnp::UpnpDeviceScannerError;
 use moosicbox_session::update_session_audio_output_ids;
+use switchy_database::profiles::PROFILES;
+use switchy_upnp::UpnpDeviceScannerError;
 use thiserror::Error;
 
 use crate::{CONFIG_DB, UPNP_LISTENER_HANDLE, WS_SERVER_HANDLE};
@@ -12,7 +12,7 @@ pub static UPNP_PLAYERS: LazyLock<
     tokio::sync::RwLock<
         Vec<(
             moosicbox_audio_output::AudioOutputFactory,
-            gimbal_upnp::player::UpnpPlayer,
+            switchy_upnp::player::UpnpPlayer,
             moosicbox_player::PlaybackHandler,
         )>,
     >,
@@ -69,22 +69,22 @@ pub async fn init(
     Ok(())
 }
 
-pub async fn load_upnp_players() -> Result<(), gimbal_upnp::UpnpDeviceScannerError> {
+pub async fn load_upnp_players() -> Result<(), switchy_upnp::UpnpDeviceScannerError> {
     static SERVICE_ID: &str = "urn:upnp-org:serviceId:AVTransport";
 
     use moosicbox_audio_output::AudioOutputFactory;
     use moosicbox_player::{PlaybackHandler, PlayerSource};
 
-    gimbal_upnp::scan_devices().await?;
+    switchy_upnp::scan_devices().await?;
 
-    for device in gimbal_upnp::devices().await {
+    for device in switchy_upnp::devices().await {
         let mut players = UPNP_PLAYERS.write().await;
 
         if players.iter().any(|(_, x, _)| x.device.udn() == device.udn) {
             continue;
         }
 
-        let Ok((device, service)) = gimbal_upnp::get_device_and_service(&device.udn, SERVICE_ID)
+        let Ok((device, service)) = switchy_upnp::get_device_and_service(&device.udn, SERVICE_ID)
         else {
             continue;
         };
@@ -94,7 +94,7 @@ pub async fn load_upnp_players() -> Result<(), gimbal_upnp::UpnpDeviceScannerErr
                 continue;
             };
 
-            let player = gimbal_upnp::player::UpnpPlayer::new(
+            let player = switchy_upnp::player::UpnpPlayer::new(
                 Arc::new(Box::new(music_apis)),
                 device.clone(),
                 service.clone(),

@@ -14,7 +14,6 @@ version     = "0.1.1"
 ignored = ["strum"]
 
 [dependencies]
-gimbal_database        = { workspace = true }
 moosicbox_assert       = { workspace = true }
 moosicbox_config       = { workspace = true }
 moosicbox_files        = { workspace = true, features = ["files"] }
@@ -24,6 +23,7 @@ moosicbox_music_models = { workspace = true }
 moosicbox_paging       = { workspace = true }
 moosicbox_scan         = { workspace = true, features = ["local"] }
 moosicbox_task         = { workspace = true }
+switchy_database       = { workspace = true }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
@@ -47,8 +47,8 @@ tokio               = { workspace = true }
 tokio-util          = { workspace = true }
 
 [dev-dependencies]
-gimbal_database   = { workspace = true, features = ["schema"] }
 pretty_assertions = { workspace = true }
+switchy_database  = { workspace = true, features = ["schema"] }
 test-log          = { workspace = true }
 tokio             = { workspace = true, features = ["macros", "rt", "tracing"] }
 
@@ -57,7 +57,7 @@ default = ["aac", "all-sources", "api", "flac", "mp3", "openapi", "opus"]
 
 fail-on-warnings = []
 
-api = ["dep:actix-web", "gimbal_database/api", "moosicbox_music_api/api"]
+api = ["dep:actix-web", "moosicbox_music_api/api", "switchy_database/api"]
 openapi = [
     "dep:utoipa",
     "moosicbox_music_api/openapi",

@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use gimbal_database::config::ConfigDatabase;
-use gimbal_database::profiles::PROFILES;
 use moosicbox_audio_output::AudioOutputScannerError;
 use moosicbox_ws::WebsocketSendError;
+use switchy_database::config::ConfigDatabase;
+use switchy_database::profiles::PROFILES;
 use thiserror::Error;
 
 use crate::WS_SERVER_HANDLE;

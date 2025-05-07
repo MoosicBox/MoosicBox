@@ -17,11 +17,11 @@ moosicbox_profiles = { workspace = true, optional = true, features = [
 ] }
 
 # DB dependencies
-gimbal_database = { workspace = true, optional = true }
 moosicbox_json_utils = { workspace = true, optional = true, features = [
     "database",
 ] }
 nanoid = { workspace = true, optional = true }
+switchy_database = { workspace = true, optional = true }
 
 # API dependencies
 actix-web = { workspace = true, optional = true }
@@ -29,7 +29,7 @@ serde     = { workspace = true, optional = true }
 utoipa    = { workspace = true, optional = true }
 
 # Test dependencies
-gimbal_random = { workspace = true, optional = true, features = ["rand"] }
+switchy_random = { workspace = true, optional = true, features = ["rand"] }
 
 home      = { workspace = true }
 log       = { workspace = true }
@@ -40,14 +40,14 @@ default = ["api", "db", "openapi"]
 
 fail-on-warnings = []
 
-test = ["dep:gimbal_random"]
+test = ["dep:switchy_random"]
 
 db = [
-    "dep:gimbal_database",
     "dep:moosicbox_json_utils",
     "dep:moosicbox_profiles",
     "dep:nanoid",
+    "dep:switchy_database",
 ]
 
-api     = ["db", "dep:actix-web", "dep:serde", "gimbal_database?/api"]
+api     = ["db", "dep:actix-web", "dep:serde", "switchy_database?/api"]
 openapi = ["dep:utoipa"]

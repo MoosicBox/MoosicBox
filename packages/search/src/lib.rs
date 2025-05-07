@@ -114,7 +114,7 @@ fn create_global_search_index(
     path: &Path,
     recreate_if_exists: bool,
 ) -> Result<Index, CreateIndexError> {
-    gimbal_fs::sync::create_dir_all(path)
+    switchy_fs::sync::create_dir_all(path)
         .unwrap_or_else(|_| panic!("Failed to create global search index directory at {path:?}"));
 
     // # Defining the schema
@@ -209,8 +209,8 @@ fn create_global_search_index(
         if recreate_if_exists {
             if Index::exists(&mmap_directory)? {
                 log::debug!("Deleting existing index in dir {path:?}");
-                gimbal_fs::sync::remove_dir_all(path)?;
-                gimbal_fs::sync::create_dir_all(path)?;
+                switchy_fs::sync::remove_dir_all(path)?;
+                switchy_fs::sync::create_dir_all(path)?;
             } else {
                 log::trace!("No existing index in dir {path:?}");
             }
@@ -994,12 +994,12 @@ mod tests {
         fn drop(&mut self) {
             for path in TEMP_DIRS.read().unwrap().iter() {
                 log::debug!("Cleaning up temp directory {:?}", path.as_path());
-                gimbal_fs::sync::remove_dir_all(path.as_path())
+                switchy_fs::sync::remove_dir_all(path.as_path())
                     .expect("Failed to clean up temp directory");
             }
             log::debug!("Cleaning up temp directory {:?}", TESTS_DIR_PATH.as_path());
             if TESTS_DIR_PATH.exists() {
-                gimbal_fs::sync::remove_dir_all(TESTS_DIR_PATH.as_path())
+                switchy_fs::sync::remove_dir_all(TESTS_DIR_PATH.as_path())
                     .expect("Failed to clean up temp directory");
             }
         }

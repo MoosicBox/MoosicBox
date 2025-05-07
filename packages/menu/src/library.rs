@@ -2,7 +2,6 @@ pub mod albums;
 pub mod artists;
 
 use albums::propagate_api_sources_from_library_album;
-use gimbal_database::profiles::LibraryDatabase;
 use moosicbox_date_utils::chrono;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_library::{
@@ -16,6 +15,7 @@ use std::{
     sync::{Arc, PoisonError},
     time::Duration,
 };
+use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -187,7 +187,7 @@ pub async fn get_albums(db: &LibraryDatabase) -> Result<Arc<Vec<LibraryAlbum>>, 
         expiration: Duration::from_secs(5 * 60),
     };
 
-    let start = gimbal_time::now();
+    let start = switchy_time::now();
     let albums = get_or_set_to_cache(request, || async {
         Ok::<CacheItemType, GetAlbumsError>(CacheItemType::Albums(Arc::new(
             db::get_albums(db).await?,
@@ -196,7 +196,7 @@ pub async fn get_albums(db: &LibraryDatabase) -> Result<Arc<Vec<LibraryAlbum>>, 
     .await?
     .into_albums()
     .unwrap();
-    let elapsed = gimbal_time::now()
+    let elapsed = switchy_time::now()
         .duration_since(start)
         .unwrap()
         .as_millis();

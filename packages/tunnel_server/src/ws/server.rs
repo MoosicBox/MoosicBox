@@ -452,7 +452,7 @@ impl WsServer {
         tx: mpsc::UnboundedSender<Msg>,
     ) -> Result<ConnId, DatabaseError> {
         // register session with random connection ID
-        let id = gimbal_random::rng().next_u64();
+        let id = switchy_random::rng().next_u64();
 
         log::debug!("connect: Someone joined {id} sender={sender}");
 
@@ -558,7 +558,7 @@ impl service::Handle {
         profile: Option<String>,
         msg: impl Into<String> + Send,
     ) -> Result<(), WsRequestError> {
-        let request_id = gimbal_random::rng().next_u64();
+        let request_id = switchy_random::rng().next_u64();
 
         self.send_command_async(Command::WsRequest {
             request_id,

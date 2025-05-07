@@ -12,7 +12,7 @@ version     = "0.1.1"
 
 [dependencies]
 # database dependencies
-gimbal_database = { workspace = true, optional = true }
+switchy_database = { workspace = true, optional = true }
 
 # rusqlite dependencies
 rusqlite = { workspace = true, optional = true }
@@ -33,7 +33,7 @@ default = ["database", "rusqlite", "serde_json", "tantivy"]
 
 fail-on-warnings = []
 
-database   = ["dep:async-trait", "dep:gimbal_database"]
+database   = ["dep:async-trait", "dep:switchy_database"]
 rusqlite   = ["dep:rusqlite"]
 serde_json = ["dep:serde_json"]
 tantivy    = ["dep:tantivy"]

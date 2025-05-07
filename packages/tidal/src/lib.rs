@@ -11,16 +11,15 @@ pub mod models;
 
 use std::sync::{Arc, LazyLock};
 
-#[cfg(feature = "db")]
-use gimbal_database::DatabaseError;
-#[cfg(feature = "db")]
-use gimbal_database::profiles::LibraryDatabase;
 use itertools::Itertools as _;
 use models::{TidalAlbum, TidalArtist, TidalSearchResults, TidalTrack};
+#[cfg(feature = "db")]
+use switchy_database::DatabaseError;
+#[cfg(feature = "db")]
+use switchy_database::profiles::LibraryDatabase;
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
-use gimbal_http::models::Method;
 use moosicbox_files::get_content_length;
 use moosicbox_json_utils::{
     MissingValue, ParseError, ToValueType, database::AsModelResult as _, serde_json::ToValue,
@@ -44,6 +43,7 @@ use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
+use switchy_http::models::Method;
 use thiserror::Error;
 use tokio::sync::Mutex;
 use url::form_urlencoded;
@@ -82,8 +82,8 @@ enum TidalApiEndpoint {
     Search,
 }
 
-static CLIENT: LazyLock<gimbal_http::Client> =
-    LazyLock::new(|| gimbal_http::Client::builder().build().unwrap());
+static CLIENT: LazyLock<switchy_http::Client> =
+    LazyLock::new(|| switchy_http::Client::builder().build().unwrap());
 
 static TIDAL_AUTH_API_BASE_URL: &str = "https://auth.tidal.com/v1";
 static TIDAL_API_BASE_URL: &str = "https://api.tidal.com/v1";
@@ -165,7 +165,7 @@ macro_rules! tidal_api_endpoint {
 #[derive(Debug, Error)]
 pub enum TidalDeviceAuthorizationError {
     #[error(transparent)]
-    Http(#[from] gimbal_http::Error),
+    Http(#[from] switchy_http::Error),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
@@ -212,7 +212,7 @@ pub async fn device_authorization(
 #[derive(Debug, Error)]
 pub enum TidalDeviceAuthorizationTokenError {
     #[error(transparent)]
-    Http(#[from] gimbal_http::Error),
+    Http(#[from] switchy_http::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
     Database(#[from] DatabaseError),
@@ -357,7 +357,7 @@ async fn fetch_credentials(
 #[derive(Debug, Error)]
 pub enum AuthenticatedRequestError {
     #[error(transparent)]
-    Http(#[from] gimbal_http::Error),
+    Http(#[from] switchy_http::Error),
     #[error(transparent)]
     FetchCredentials(#[from] FetchCredentialsError),
     #[error(transparent)]
@@ -459,7 +459,7 @@ async fn authenticated_request_inner(
     .await?;
 
     let mut request = CLIENT.request(method, url).header(
-        gimbal_http::Header::Authorization.as_ref(),
+        switchy_http::Header::Authorization.as_ref(),
         &format!("Bearer {}", credentials.access_token),
     );
 
@@ -515,7 +515,7 @@ async fn authenticated_request_inner(
         )),
         _ => match response.json::<Value>().await {
             Ok(value) => Ok(Some(value)),
-            Err(gimbal_http::Error::Decode) => Ok(None),
+            Err(switchy_http::Error::Decode) => Ok(None),
             Err(e) => Err(AuthenticatedRequestError::Http(e)),
         },
     }
@@ -524,7 +524,7 @@ async fn authenticated_request_inner(
 #[derive(Debug, Error)]
 pub enum RefetchAccessTokenError {
     #[error(transparent)]
-    Http(#[from] gimbal_http::Error),
+    Http(#[from] switchy_http::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
     Database(#[from] DatabaseError),

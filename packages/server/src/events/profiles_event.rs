@@ -1,6 +1,5 @@
 use std::{collections::HashMap, sync::Arc};
 
-use gimbal_database::{Database, config::ConfigDatabase};
 use moosicbox_config::AppType;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_music_api::MusicApi;
@@ -8,6 +7,7 @@ use moosicbox_music_models::ApiSource;
 use moosicbox_profiles::events::{
     BoxErrorSend, on_profiles_updated_event, trigger_profiles_updated_event,
 };
+use switchy_database::{Database, config::ConfigDatabase};
 
 async fn add_profile(
     #[allow(unused)] app_type: AppType,
@@ -27,7 +27,7 @@ async fn add_profile(
         }
     };
 
-    let library_db = gimbal_database_connection::init(
+    let library_db = switchy_database_connection::init(
         #[cfg(feature = "sqlite")]
         library_db_profile_path.as_deref(),
         None,
@@ -44,7 +44,7 @@ async fn add_profile(
 
     #[allow(unused)]
     let library_database =
-        gimbal_database::profiles::PROFILES.add_fetch(profile, library_database.clone());
+        switchy_database::profiles::PROFILES.add_fetch(profile, library_database.clone());
 
     #[allow(clippy::redundant_clone)]
     #[cfg(feature = "library")]
@@ -98,7 +98,7 @@ async fn remove_profile(
 ) -> Result<(), std::io::Error> {
     log::debug!("remove_profile: app_type={app_type} profile={profile}");
 
-    gimbal_database::profiles::PROFILES.remove(profile);
+    switchy_database::profiles::PROFILES.remove(profile);
     moosicbox_music_api::profiles::PROFILES.remove(profile);
     #[cfg(feature = "library")]
     moosicbox_library::profiles::PROFILES.remove(profile);

@@ -1,1 +1,1 @@
-# Gimbal mdns crate
+# Switchy mdns crate

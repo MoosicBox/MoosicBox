@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
-use gimbal_database::{Database, DatabaseValue, Row};
+use switchy_database::{Database, DatabaseValue, Row};
 use thiserror::Error;
 
 use crate::{MissingValue, ParseError, ToValueType};
@@ -12,7 +12,7 @@ pub enum DatabaseFetchError {
     #[error("Invalid Request")]
     InvalidRequest,
     #[error(transparent)]
-    Database(#[from] gimbal_database::DatabaseError),
+    Database(#[from] switchy_database::DatabaseError),
     #[error(transparent)]
     Parse(#[from] ParseError),
 }
@@ -332,7 +332,7 @@ trait Get {
 
 impl Get for &Row {
     fn get(&self, index: &str) -> Option<DatabaseValue> {
-        gimbal_database::Row::get(self, index)
+        switchy_database::Row::get(self, index)
     }
 }
 
@@ -589,16 +589,16 @@ pub trait AsModelResultMut<T, E> {
     /// * If the model fails to be created
     fn as_model_mut<'a>(&'a mut self) -> Result<Vec<T>, E>
     where
-        for<'b> &'b gimbal_database::Row: ToValueType<T>;
+        for<'b> &'b switchy_database::Row: ToValueType<T>;
 }
 
-impl<T, E> AsModelResultMut<T, E> for Vec<gimbal_database::Row>
+impl<T, E> AsModelResultMut<T, E> for Vec<switchy_database::Row>
 where
     E: From<DatabaseFetchError>,
 {
     fn as_model_mut<'a>(&'a mut self) -> Result<Vec<T>, E>
     where
-        for<'b> &'b gimbal_database::Row: ToValueType<T>,
+        for<'b> &'b switchy_database::Row: ToValueType<T>,
     {
         let mut values = vec![];
 

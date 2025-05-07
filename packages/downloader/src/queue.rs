@@ -9,11 +9,11 @@ use std::{
 };
 
 use futures::Future;
-use gimbal_database::{
-    DatabaseError, DatabaseValue, Row, profiles::LibraryDatabase, query::FilterableQuery,
-};
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_scan::local::ScanItem;
+use switchy_database::{
+    DatabaseError, DatabaseValue, Row, profiles::LibraryDatabase, query::FilterableQuery,
+};
 use thiserror::Error;
 use tokio::{
     sync::{Mutex, RwLock},
@@ -544,10 +544,10 @@ impl Drop for DownloadQueue {
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
-    use gimbal_database::{Database, Row, query::*, schema::CreateTableStatement};
     use moosicbox_music_api::models::TrackAudioQuality;
     use moosicbox_music_models::{Album, Artist, Track, id::Id};
     use pretty_assertions::assert_eq;
+    use switchy_database::{Database, Row, query::*, schema::CreateTableStatement};
 
     use crate::db::models::{DownloadApiSource, DownloadItem, DownloadTaskState};
 

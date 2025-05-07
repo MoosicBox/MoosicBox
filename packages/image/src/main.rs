@@ -145,7 +145,7 @@ async fn try_resize_local_file(
 fn save_bytes_to_file(bytes: &[u8], path: &Path, start: Option<u64>) -> Result<(), std::io::Error> {
     std::fs::create_dir_all(path.parent().expect("No parent directory"))?;
 
-    let file = gimbal_fs::sync::OpenOptions::new()
+    let file = switchy_fs::sync::OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(start.is_none_or(|start| start == 0))

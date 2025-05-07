@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
-use gimbal_database::{AsId, DatabaseValue};
 use moosicbox_json_utils::{MissingValue, ParseError, ToValueType, database::ToValue as _};
 use serde::{Deserialize, Serialize};
+use switchy_database::{AsId, DatabaseValue};
 
 use crate::ScanOrigin;
 
@@ -16,8 +16,8 @@ pub struct ScanLocation {
     pub updated: String,
 }
 
-impl MissingValue<ScanOrigin> for &gimbal_database::Row {}
-impl ToValueType<ScanOrigin> for &gimbal_database::Row {
+impl MissingValue<ScanOrigin> for &switchy_database::Row {}
+impl ToValueType<ScanOrigin> for &switchy_database::Row {
     fn to_value_type(self) -> Result<ScanOrigin, ParseError> {
         self.get("origin")
             .ok_or_else(|| ParseError::MissingValue("origin".into()))?
@@ -34,8 +34,8 @@ impl ToValueType<ScanOrigin> for DatabaseValue {
     }
 }
 
-impl MissingValue<ScanLocation> for &gimbal_database::Row {}
-impl ToValueType<ScanLocation> for &gimbal_database::Row {
+impl MissingValue<ScanLocation> for &switchy_database::Row {}
+impl ToValueType<ScanLocation> for &switchy_database::Row {
     fn to_value_type(self) -> Result<ScanLocation, ParseError> {
         Ok(ScanLocation {
             id: self.to_value("id")?,

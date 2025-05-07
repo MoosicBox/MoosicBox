@@ -2,8 +2,8 @@ use actix_web::{
     Scope,
     dev::{ServiceFactory, ServiceRequest},
 };
-use gimbal_database::{DatabaseError, config::ConfigDatabase};
 use maud::{Markup, html};
+use switchy_database::{DatabaseError, config::ConfigDatabase};
 
 pub const fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,

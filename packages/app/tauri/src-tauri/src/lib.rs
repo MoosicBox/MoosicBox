@@ -9,7 +9,6 @@ use std::{
     sync::{LazyLock, OnceLock},
 };
 
-use gimbal_mdns::scanner::service::Commander;
 use moosicbox_app_state::{
     AppStateError, UPNP_LISTENER_HANDLE, UpdateAppState, ws::WsConnectMessage,
 };
@@ -22,6 +21,7 @@ use moosicbox_ws::models::{
 };
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
+use switchy_mdns::scanner::service::Commander;
 use tauri::{AppHandle, Emitter};
 use thiserror::Error;
 
@@ -668,7 +668,7 @@ pub fn run() {
     moosicbox_player::on_playback_event(crate::on_playback_event);
 
     let upnp_service =
-        gimbal_upnp::listener::Service::new(gimbal_upnp::listener::UpnpContext::new());
+        switchy_upnp::listener::Service::new(switchy_upnp::listener::UpnpContext::new());
 
     let upnp_service_handle = upnp_service.handle();
     let join_upnp_service = upnp_service.start_on(&tokio_handle);

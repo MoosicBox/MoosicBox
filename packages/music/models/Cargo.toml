@@ -14,11 +14,11 @@ version     = "0.1.1"
 ignored = ["strum_macros"]
 
 [dependencies]
-gimbal_database         = { workspace = true, optional = true }
 moosicbox_assert        = { workspace = true }
 moosicbox_date_utils    = { workspace = true, features = ["chrono"] }
 moosicbox_json_utils    = { workspace = true, features = ["serde_json"] }
 moosicbox_parsing_utils = { workspace = true }
+switchy_database        = { workspace = true, optional = true }
 
 # API Dependencies
 utoipa = { workspace = true, optional = true }
@@ -42,10 +42,10 @@ default = ["all-formats", "all-sources", "api", "db", "openapi", "tantivy"]
 
 fail-on-warnings = []
 
-api     = ["gimbal_database/api"]
+api     = ["switchy_database/api"]
 openapi = ["dep:utoipa"]
 
-db = ["dep:gimbal_database", "moosicbox_json_utils/database"]
+db = ["dep:switchy_database", "moosicbox_json_utils/database"]
 
 tantivy = ["dep:tantivy"]
 

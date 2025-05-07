@@ -8,7 +8,6 @@ use actix_web::{
     route, web,
 };
 use base64::{Engine as _, engine::general_purpose};
-use gimbal_database::profiles::LibraryDatabase;
 use maud::{Markup, html};
 #[cfg(feature = "scan")]
 use moosicbox_music_api::MusicApis;
@@ -16,6 +15,7 @@ use moosicbox_music_api::MusicApis;
 use moosicbox_scan::ScanOrigin;
 use moosicbox_tidal::{TidalDeviceAuthorizationTokenError, db::TidalConfigError};
 use serde::Deserialize;
+use switchy_database::profiles::LibraryDatabase;
 use urlencoding::encode;
 
 static C1: &str = "elU0WEhWVms=";

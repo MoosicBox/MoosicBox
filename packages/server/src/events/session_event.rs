@@ -1,5 +1,5 @@
-use gimbal_database::profiles::PROFILES;
 use moosicbox_session::events::BoxErrorSend;
+use switchy_database::profiles::PROFILES;
 
 use crate::{CONFIG_DB, WS_SERVER_HANDLE};
 

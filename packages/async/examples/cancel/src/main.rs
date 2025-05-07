@@ -1,6 +1,6 @@
 use std::{sync::LazyLock, time::Duration};
 
-use gimbal_async::{Error, Runtime, time, util::CancellationToken};
+use switchy_async::{Error, Runtime, time, util::CancellationToken};
 
 static TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
 

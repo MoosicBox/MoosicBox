@@ -31,7 +31,7 @@ pub enum CacheItemType {
 /// * If time went backwards
 #[must_use]
 pub fn current_time_nanos() -> u128 {
-    let start = gimbal_time::now();
+    let start = switchy_time::now();
     let since_the_epoch = start
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards");

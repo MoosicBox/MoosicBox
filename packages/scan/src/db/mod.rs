@@ -1,5 +1,5 @@
-use gimbal_database::{profiles::LibraryDatabase, query::FilterableQuery};
 use moosicbox_json_utils::{ToValueType, database::DatabaseFetchError};
+use switchy_database::{profiles::LibraryDatabase, query::FilterableQuery};
 
 use crate::ScanOrigin;
 

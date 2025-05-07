@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use gimbal_database::profiles::LibraryDatabase;
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_music_api::{AlbumsError, MusicApi, models::AlbumsRequest};
 use moosicbox_music_models::{Album, ApiSource, AudioFormat, Track};
 use moosicbox_paging::PagingRequest;
+use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
 use tokio::{select, sync::RwLock};
 use tokio_util::sync::CancellationToken;
@@ -41,8 +41,8 @@ pub async fn scan(
     token: CancellationToken,
     scanner: Option<Scanner>,
 ) -> Result<(), ScanError> {
-    let total_start = gimbal_time::now();
-    let start = gimbal_time::now();
+    let total_start = switchy_time::now();
+    let start = switchy_time::now();
     let output = Arc::new(RwLock::new(ScanOutput::new()));
 
     let limit = 100;
@@ -88,7 +88,7 @@ pub async fn scan(
         };
     }
 
-    let end = gimbal_time::now();
+    let end = switchy_time::now();
     log::info!(
         "Finished initial scan in {}ms",
         end.duration_since(start).unwrap().as_millis()
@@ -99,7 +99,7 @@ pub async fn scan(
     output.reindex_global_search_index(db).await?;
     drop(output);
 
-    let end = gimbal_time::now();
+    let end = switchy_time::now();
     log::info!(
         "Finished total scan in {}ms",
         end.duration_since(total_start).unwrap().as_millis(),

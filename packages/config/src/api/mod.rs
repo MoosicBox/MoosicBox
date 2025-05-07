@@ -5,8 +5,8 @@ use actix_web::{
     route,
     web::{self, Json},
 };
-use gimbal_database::config::ConfigDatabase;
 use serde::Deserialize;
+use switchy_database::config::ConfigDatabase;
 
 use crate::api::models::ApiProfile;
 

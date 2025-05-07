@@ -35,7 +35,7 @@ pub fn generate<P: AsRef<Path>>(bundled: bool, output: P) {
         bundled,
     };
 
-    let mut file = gimbal_fs::sync::OpenOptions::new()
+    let mut file = switchy_fs::sync::OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)

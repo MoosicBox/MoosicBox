@@ -21,7 +21,6 @@ use db::{
     models::{CreateDownloadTask, DownloadItem, DownloadTask},
 };
 use futures::StreamExt;
-use gimbal_database::profiles::LibraryDatabase;
 use id3::Timestamp;
 use moosicbox_audiotags::Tag;
 use moosicbox_config::get_config_dir_path;
@@ -46,6 +45,7 @@ use moosicbox_music_models::{
 };
 use queue::ProgressListener;
 use regex::{Captures, Regex};
+use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
 use tokio::select;
 

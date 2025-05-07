@@ -5,9 +5,9 @@ use actix_web::{
     route,
     web::{self, Json},
 };
-use gimbal_database::{config::ConfigDatabase, profiles::LibraryDatabase};
 use moosicbox_paging::Page;
 use serde::Deserialize;
+use switchy_database::{config::ConfigDatabase, profiles::LibraryDatabase};
 
 use crate::models::{ApiAudioZone, ApiAudioZoneWithSession, CreateAudioZone, UpdateAudioZone};
 

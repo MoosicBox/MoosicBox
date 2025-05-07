@@ -1,17 +1,17 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["database"]
-description = "Gimbal database package"
+description = "Switchy database package"
 edition     = "2024"
 keywords    = ["database", "mysql", "postgres", "sqlite"]
 license     = "MPL-2.0"
-name        = "gimbal_database"
+name        = "switchy_database"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [package.metadata.workspaces]
-group = "gimbal"
+group = "switchy"
 
 [dependencies]
 moosicbox_assert = { workspace = true }

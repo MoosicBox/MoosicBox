@@ -11,12 +11,12 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-gimbal_time                  = { workspace = true, features = ["std"] }
 hyperchad_actions            = { workspace = true, features = ["serde"] }
 hyperchad_color              = { workspace = true, features = ["serde"] }
 hyperchad_transformer_models = { workspace = true, default-features = false }
 moosicbox_assert             = { workspace = true }
 moosicbox_logging            = { workspace = true, features = ["macros"] }
+switchy_time                 = { workspace = true, features = ["std"] }
 
 bumpalo     = { workspace = true, features = ["collections"], optional = true }
 html-escape = { workspace = true }

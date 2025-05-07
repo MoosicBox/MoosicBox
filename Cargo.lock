@@ -884,9 +884,9 @@ dependencies = [
 name = "async_simulated"
 version = "0.1.0"
 dependencies = [
- "gimbal_async",
- "gimbal_random",
  "pretty_env_logger",
+ "switchy_async",
+ "switchy_random",
 ]
 
 [[package]]
@@ -4034,248 +4034,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gimbal"
-version = "0.1.0"
-dependencies = [
- "gimbal_async",
- "gimbal_async_macros",
- "gimbal_database",
- "gimbal_database_connection",
- "gimbal_fs",
- "gimbal_http",
- "gimbal_http_models",
- "gimbal_mdns",
- "gimbal_random",
- "gimbal_tcp",
- "gimbal_telemetry",
- "gimbal_time",
- "gimbal_upnp",
-]
-
-[[package]]
-name = "gimbal_async"
-version = "0.1.0"
-dependencies = [
- "futures",
- "gimbal_async_macros",
- "gimbal_random",
- "gimbal_time",
- "log",
- "pin-project-lite",
- "pretty_assertions",
- "scoped-tls",
- "test-log",
- "thiserror 2.0.12",
- "tokio",
- "tokio-util",
-]
-
-[[package]]
-name = "gimbal_async_cargo"
-version = "0.1.0"
-dependencies = [
- "clap 4.5.37",
- "log",
- "pretty_env_logger",
- "syn 2.0.101",
- "walkdir",
-]
-
-[[package]]
-name = "gimbal_async_macros"
-version = "0.1.0"
-dependencies = [
- "log",
- "quote",
- "syn 2.0.101",
-]
-
-[[package]]
-name = "gimbal_database"
-version = "0.1.0"
-dependencies = [
- "actix-web",
- "async-trait",
- "chrono",
- "futures",
- "log",
- "moosicbox_assert",
- "moosicbox_task",
- "postgres-protocol",
- "qstring",
- "regex",
- "rusqlite",
- "sqlx",
- "sqlx-postgres",
- "thiserror 2.0.12",
- "tokio",
- "tokio-postgres",
- "tokio-util",
-]
-
-[[package]]
-name = "gimbal_database_connection"
-version = "0.1.0"
-dependencies = [
- "aws-config",
- "aws-sdk-ssm",
- "gimbal_database",
- "log",
- "native-tls",
- "openssl",
- "postgres-native-tls",
- "postgres-openssl",
- "rusqlite",
- "sqlx",
- "thiserror 2.0.12",
- "tokio",
- "tokio-postgres",
-]
-
-[[package]]
-name = "gimbal_fs"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "gimbal_async",
- "log",
- "pretty_assertions",
- "tokio",
-]
-
-[[package]]
-name = "gimbal_http"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bytes",
- "futures-core",
- "futures-util",
- "gimbal_http_models",
- "log",
- "paste",
- "reqwest",
- "serde",
- "serde_json",
- "strum 0.27.1",
- "thiserror 2.0.12",
-]
-
-[[package]]
-name = "gimbal_http_models"
-version = "0.1.0"
-dependencies = [
- "actix-web",
- "moosicbox_assert",
- "reqwest",
- "serde",
- "strum 0.27.1",
- "thiserror 2.0.12",
-]
-
-[[package]]
-name = "gimbal_mdns"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "hostname 0.4.1",
- "kanal",
- "log",
- "mdns-sd",
- "moosicbox_assert",
- "moosicbox_async_service",
- "moosicbox_task",
- "strum_macros 0.27.1",
- "thiserror 2.0.12",
-]
-
-[[package]]
-name = "gimbal_random"
-version = "0.1.0"
-dependencies = [
- "log",
- "rand 0.8.5",
-]
-
-[[package]]
-name = "gimbal_tcp"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "log",
- "paste",
- "thiserror 2.0.12",
- "tokio",
- "turmoil",
-]
-
-[[package]]
-name = "gimbal_telemetry"
-version = "0.1.0"
-dependencies = [
- "actix-web",
- "actix-web-opentelemetry",
- "futures-util",
- "log",
- "moosicbox_assert",
- "moosicbox_env_utils",
- "moosicbox_logging",
- "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry-prometheus",
- "opentelemetry_sdk",
- "prometheus 0.14.0",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "gimbal_time"
-version = "0.1.0"
-dependencies = [
- "gimbal_random",
- "log",
- "scoped-tls",
-]
-
-[[package]]
-name = "gimbal_upnp"
-version = "0.1.0"
-dependencies = [
- "actix-web",
- "async-recursion",
- "async-trait",
- "flume",
- "futures",
- "gimbal_http",
- "gimbal_random",
- "itertools 0.14.0",
- "log",
- "moosicbox_assert",
- "moosicbox_async_service",
- "moosicbox_audio_output",
- "moosicbox_logging",
- "moosicbox_music_api",
- "moosicbox_player",
- "moosicbox_session",
- "moosicbox_task",
- "pin-utils",
- "regex",
- "roxmltree 0.20.0",
- "rupnp",
- "serde",
- "strum 0.27.1",
- "strum_macros 0.27.1",
- "symphonia",
- "thiserror 2.0.12",
- "tokio",
- "tokio-util",
- "utoipa",
- "xml",
-]
-
-[[package]]
 name = "gimli"
 version = "0.31.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4911,9 +4669,9 @@ dependencies = [
 name = "http_simple_get"
 version = "0.1.0"
 dependencies = [
- "gimbal_http",
  "log",
  "pretty_env_logger",
+ "switchy_http",
  "thiserror 2.0.12",
  "tokio",
 ]
@@ -5125,7 +4883,6 @@ dependencies = [
  "eframe",
  "egui_extras",
  "flume",
- "gimbal_http",
  "hyperchad_actions",
  "hyperchad_color",
  "hyperchad_renderer",
@@ -5141,6 +4898,7 @@ dependencies = [
  "profiling",
  "puffin",
  "puffin_http",
+ "switchy_http",
  "tracing-subscriber",
  "tracy-client 0.18.0",
 ]
@@ -5153,7 +4911,6 @@ dependencies = [
  "bytes",
  "fltk",
  "flume",
- "gimbal_http",
  "hyperchad_actions",
  "hyperchad_renderer",
  "hyperchad_transformer",
@@ -5163,6 +4920,7 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_logging",
  "moosicbox_task",
+ "switchy_http",
  "thiserror 2.0.12",
  "tokio",
 ]
@@ -5268,7 +5026,6 @@ name = "hyperchad_transformer"
 version = "0.1.0"
 dependencies = [
  "bumpalo",
- "gimbal_time",
  "html-escape",
  "hyperchad_actions",
  "hyperchad_color",
@@ -5286,6 +5043,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.27.1",
+ "switchy_time",
  "syntect",
  "test-log",
  "thiserror 2.0.12",
@@ -6744,7 +6502,6 @@ dependencies = [
  "actix-htmx",
  "actix-web",
  "base64 0.22.1",
- "gimbal_database",
  "log",
  "maud",
  "moosicbox_assert",
@@ -6756,6 +6513,7 @@ dependencies = [
  "moosicbox_tidal",
  "serde",
  "serde_json",
+ "switchy_database",
  "urlencoding",
  "whoami",
 ]
@@ -6766,8 +6524,6 @@ version = "0.15.2"
 dependencies = [
  "app-tauri-plugin-player",
  "console-subscriber",
- "gimbal_mdns",
- "gimbal_upnp",
  "kanal",
  "log",
  "moosicbox_app_client",
@@ -6785,6 +6541,8 @@ dependencies = [
  "serde_json",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "switchy_mdns",
+ "switchy_upnp",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
@@ -6806,12 +6564,12 @@ name = "moosicbox_app_create_config"
 version = "0.1.1"
 dependencies = [
  "clap 4.5.37",
- "gimbal_fs",
  "log",
  "moosicbox_assert",
  "moosicbox_logging",
  "serde",
  "serde_json",
+ "switchy_fs",
 ]
 
 [[package]]
@@ -6820,8 +6578,6 @@ version = "0.1.1"
 dependencies = [
  "console-subscriber",
  "flume",
- "gimbal_http",
- "gimbal_time",
  "hyperchad_actions",
  "log",
  "moosicbox_app_native_bundled",
@@ -6842,6 +6598,8 @@ dependencies = [
  "moosicbox_ws",
  "serde_json",
  "strum 0.27.1",
+ "switchy_http",
+ "switchy_time",
  "thiserror 2.0.12",
  "tokio",
  "tokio-util",
@@ -6917,8 +6675,6 @@ dependencies = [
 name = "moosicbox_app_state"
 version = "0.1.1"
 dependencies = [
- "gimbal_http",
- "gimbal_upnp",
  "log",
  "moosicbox_app_ws",
  "moosicbox_assert",
@@ -6936,6 +6692,8 @@ dependencies = [
  "moosicbox_ws",
  "serde",
  "serde_json",
+ "switchy_http",
+ "switchy_upnp",
  "thiserror 2.0.12",
  "tokio",
  "tokio-util",
@@ -7018,13 +6776,13 @@ dependencies = [
  "bytes",
  "flume",
  "futures",
- "gimbal_http",
- "gimbal_time",
  "log",
  "moosicbox_stream_utils",
  "moosicbox_task",
  "profiling",
  "rangemap",
+ "switchy_http",
+ "switchy_time",
  "symphonia",
  "thiserror 2.0.12",
  "tokio",
@@ -7038,11 +6796,11 @@ dependencies = [
  "audiopus",
  "fdk-aac",
  "flacenc",
- "gimbal_fs",
  "log",
  "mp3lame-encoder",
  "ogg",
  "opus",
+ "switchy_fs",
  "thiserror 2.0.12",
 ]
 
@@ -7054,7 +6812,6 @@ dependencies = [
  "bytes",
  "cpal",
  "fdk-aac",
- "gimbal_time",
  "libpulse-binding",
  "libpulse-simple-binding",
  "log",
@@ -7071,6 +6828,7 @@ dependencies = [
  "opus",
  "rb",
  "serde",
+ "switchy_time",
  "symphonia",
  "thiserror 2.0.12",
  "tokio",
@@ -7082,7 +6840,6 @@ name = "moosicbox_audio_zone"
 version = "0.1.1"
 dependencies = [
  "actix-web",
- "gimbal_database",
  "log",
  "moosicbox_assert",
  "moosicbox_audio_zone_models",
@@ -7090,6 +6847,7 @@ dependencies = [
  "moosicbox_paging",
  "moosicbox_task",
  "serde",
+ "switchy_database",
  "tokio",
  "utoipa",
 ]
@@ -7098,11 +6856,11 @@ dependencies = [
 name = "moosicbox_audio_zone_models"
 version = "0.1.1"
 dependencies = [
- "gimbal_database",
  "log",
  "moosicbox_assert",
  "moosicbox_json_utils",
  "serde",
+ "switchy_database",
  "utoipa",
 ]
 
@@ -7126,13 +6884,13 @@ version = "0.1.1"
 dependencies = [
  "actix-web",
  "futures",
- "gimbal_database",
- "gimbal_http",
  "log",
  "moosicbox_json_utils",
  "moosicbox_middleware",
  "serde",
  "serde_json",
+ "switchy_database",
+ "switchy_http",
  "thiserror 2.0.12",
  "url",
  "utoipa",
@@ -7154,8 +6912,6 @@ name = "moosicbox_config"
 version = "0.1.1"
 dependencies = [
  "actix-web",
- "gimbal_database",
- "gimbal_random",
  "home",
  "log",
  "moosicbox_assert",
@@ -7163,6 +6919,8 @@ dependencies = [
  "moosicbox_profiles",
  "nanoid",
  "serde",
+ "switchy_database",
+ "switchy_random",
  "thiserror 2.0.12",
  "utoipa",
 ]
@@ -7184,7 +6942,6 @@ dependencies = [
  "async-trait",
  "atomic_float",
  "futures",
- "gimbal_database",
  "hyper 1.6.0",
  "id3",
  "log",
@@ -7204,6 +6961,7 @@ dependencies = [
  "serde_json",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "switchy_database",
  "test-log",
  "thiserror 2.0.12",
  "tokio",
@@ -7232,10 +6990,6 @@ dependencies = [
  "flume",
  "futures",
  "futures-core",
- "gimbal_database",
- "gimbal_fs",
- "gimbal_http",
- "gimbal_time",
  "log",
  "moosicbox_assert",
  "moosicbox_async_service",
@@ -7254,6 +7008,10 @@ dependencies = [
  "serde",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "switchy_database",
+ "switchy_fs",
+ "switchy_http",
+ "switchy_time",
  "symphonia",
  "thiserror 2.0.12",
  "tokio",
@@ -7268,7 +7026,6 @@ version = "0.1.1"
 dependencies = [
  "bytes",
  "clap 4.5.37",
- "gimbal_fs",
  "image",
  "libvips",
  "log",
@@ -7276,6 +7033,7 @@ dependencies = [
  "profiling",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "switchy_fs",
  "thiserror 2.0.12",
  "tokio",
  "webp",
@@ -7287,10 +7045,10 @@ version = "0.1.1"
 dependencies = [
  "async-trait",
  "chrono",
- "gimbal_database",
  "log",
  "rusqlite",
  "serde_json",
+ "switchy_database",
  "tantivy",
  "thiserror 2.0.12",
 ]
@@ -7304,8 +7062,6 @@ dependencies = [
  "async-trait",
  "enum-as-inner",
  "futures",
- "gimbal_database",
- "gimbal_time",
  "log",
  "moosicbox_assert",
  "moosicbox_audio_output",
@@ -7323,6 +7079,8 @@ dependencies = [
  "serde_json",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "switchy_database",
+ "switchy_time",
  "thiserror 2.0.12",
  "tokio",
  "utoipa",
@@ -7333,7 +7091,6 @@ name = "moosicbox_library_models"
 version = "0.1.1"
 dependencies = [
  "async-trait",
- "gimbal_database",
  "log",
  "moosicbox_assert",
  "moosicbox_date_utils",
@@ -7343,6 +7100,7 @@ dependencies = [
  "serde_json",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "switchy_database",
  "utoipa",
 ]
 
@@ -7407,7 +7165,6 @@ dependencies = [
  "chrono",
  "clap 4.5.37",
  "console-subscriber",
- "gimbal_http",
  "hyperchad_renderer",
  "hyperchad_renderer_html",
  "log",
@@ -7419,6 +7176,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "switchy_http",
  "tokio",
 ]
 
@@ -7441,8 +7199,6 @@ name = "moosicbox_menu"
 version = "0.1.1"
 dependencies = [
  "actix-web",
- "gimbal_database",
- "gimbal_time",
  "log",
  "moosicbox_assert",
  "moosicbox_date_utils",
@@ -7459,6 +7215,8 @@ dependencies = [
  "moosicbox_tidal",
  "moosicbox_yt",
  "serde",
+ "switchy_database",
+ "switchy_time",
  "thiserror 2.0.12",
  "tokio",
  "utoipa",
@@ -7505,13 +7263,13 @@ dependencies = [
  "actix-web",
  "async-trait",
  "futures",
- "gimbal_database",
  "log",
  "moosicbox_menu_models",
  "moosicbox_music_api_models",
  "moosicbox_music_models",
  "moosicbox_paging",
  "pretty_assertions",
+ "switchy_database",
  "test-log",
  "thiserror 2.0.12",
  "tokio",
@@ -7521,7 +7279,6 @@ dependencies = [
 name = "moosicbox_music_api_models"
 version = "0.1.1"
 dependencies = [
- "gimbal_database",
  "log",
  "moosicbox_json_utils",
  "moosicbox_music_models",
@@ -7530,6 +7287,7 @@ dependencies = [
  "serde_json",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "switchy_database",
  "utoipa",
 ]
 
@@ -7537,7 +7295,6 @@ dependencies = [
 name = "moosicbox_music_models"
 version = "0.1.1"
 dependencies = [
- "gimbal_database",
  "log",
  "moosicbox_assert",
  "moosicbox_date_utils",
@@ -7548,6 +7305,7 @@ dependencies = [
  "serde_json",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "switchy_database",
  "tantivy",
  "test-log",
  "thiserror 2.0.12",
@@ -7582,9 +7340,6 @@ dependencies = [
  "bytes",
  "flume",
  "futures",
- "gimbal_database",
- "gimbal_http",
- "gimbal_random",
  "local-ip-address 0.6.5",
  "log",
  "moosicbox_assert",
@@ -7602,6 +7357,9 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "switchy_database",
+ "switchy_http",
+ "switchy_random",
  "symphonia",
  "thiserror 2.0.12",
  "tokio",
@@ -7628,9 +7386,6 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "futures",
- "gimbal_database",
- "gimbal_http",
- "gimbal_time",
  "itertools 0.14.0",
  "log",
  "md5",
@@ -7648,6 +7403,9 @@ dependencies = [
  "serde_json",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "switchy_database",
+ "switchy_http",
+ "switchy_time",
  "thiserror 2.0.12",
  "tokio",
  "url",
@@ -7659,12 +7417,12 @@ name = "moosicbox_remote_library"
 version = "0.1.1"
 dependencies = [
  "async-trait",
- "gimbal_http",
  "log",
  "moosicbox_menu_models",
  "moosicbox_music_api",
  "moosicbox_music_models",
  "moosicbox_paging",
+ "switchy_http",
  "thiserror 2.0.12",
  "tokio",
 ]
@@ -7687,9 +7445,6 @@ dependencies = [
  "actix-web",
  "async-recursion",
  "futures",
- "gimbal_database",
- "gimbal_http",
- "gimbal_time",
  "log",
  "moosicbox_assert",
  "moosicbox_audiotags",
@@ -7711,6 +7466,9 @@ dependencies = [
  "serde_json",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "switchy_database",
+ "switchy_http",
+ "switchy_time",
  "thiserror 2.0.12",
  "tokio",
  "tokio-util",
@@ -7721,10 +7479,10 @@ dependencies = [
 name = "moosicbox_schema"
 version = "0.1.1"
 dependencies = [
- "gimbal_database",
  "include_dir",
  "log",
  "moosicbox_assert",
+ "switchy_database",
  "thiserror 2.0.12",
 ]
 
@@ -7733,7 +7491,6 @@ name = "moosicbox_search"
 version = "0.1.1"
 dependencies = [
  "actix-web",
- "gimbal_fs",
  "itertools 0.14.0",
  "log",
  "moosicbox_config",
@@ -7745,6 +7502,7 @@ dependencies = [
  "serde",
  "serial_test",
  "static_init",
+ "switchy_fs",
  "tantivy",
  "test-log",
  "thiserror 2.0.12",
@@ -7763,13 +7521,6 @@ dependencies = [
  "console-subscriber",
  "flume",
  "futures-util",
- "gimbal_database",
- "gimbal_database_connection",
- "gimbal_fs",
- "gimbal_mdns",
- "gimbal_random",
- "gimbal_telemetry",
- "gimbal_upnp",
  "local-ip-address 0.6.5",
  "log",
  "moosicbox_admin_htmx",
@@ -7811,6 +7562,13 @@ dependencies = [
  "serde_json",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "switchy_database",
+ "switchy_database_connection",
+ "switchy_fs",
+ "switchy_mdns",
+ "switchy_random",
+ "switchy_telemetry",
+ "switchy_upnp",
  "thiserror 2.0.12",
  "throttle",
  "tokio",
@@ -7830,7 +7588,6 @@ name = "moosicbox_server_simulator"
 version = "0.1.1"
 dependencies = [
  "actix-web",
- "gimbal_telemetry",
  "log",
  "moosicbox_assert",
  "moosicbox_config",
@@ -7843,6 +7600,7 @@ dependencies = [
  "openport",
  "serde_json",
  "strum 0.27.1",
+ "switchy_telemetry",
  "tokio",
  "tokio-util",
 ]
@@ -7852,7 +7610,6 @@ name = "moosicbox_session"
 version = "0.1.1"
 dependencies = [
  "actix-web",
- "gimbal_database",
  "log",
  "moosicbox_assert",
  "moosicbox_audio_zone",
@@ -7864,6 +7621,7 @@ dependencies = [
  "moosicbox_task",
  "serde",
  "serde_json",
+ "switchy_database",
  "thiserror 2.0.12",
  "tokio",
  "utoipa",
@@ -7873,7 +7631,6 @@ dependencies = [
 name = "moosicbox_session_models"
 version = "0.1.1"
 dependencies = [
- "gimbal_database",
  "log",
  "moosicbox_audio_zone_models",
  "moosicbox_json_utils",
@@ -7881,6 +7638,7 @@ dependencies = [
  "serde",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "switchy_database",
  "utoipa",
 ]
 
@@ -7889,19 +7647,19 @@ name = "moosicbox_simulator_harness"
 version = "0.1.1"
 dependencies = [
  "ctrlc",
- "gimbal_database_connection",
- "gimbal_fs",
- "gimbal_http",
- "gimbal_mdns",
- "gimbal_random",
- "gimbal_tcp",
- "gimbal_telemetry",
- "gimbal_time",
- "gimbal_upnp",
  "log",
  "moosicbox_assert",
  "moosicbox_simulator_utils",
  "shell-words",
+ "switchy_database_connection",
+ "switchy_fs",
+ "switchy_http",
+ "switchy_mdns",
+ "switchy_random",
+ "switchy_tcp",
+ "switchy_telemetry",
+ "switchy_time",
+ "switchy_upnp",
  "turmoil",
 ]
 
@@ -7919,10 +7677,10 @@ dependencies = [
  "bytes",
  "flume",
  "futures",
- "gimbal_http",
  "log",
  "moosicbox_task",
  "pin-project",
+ "switchy_http",
  "thiserror 2.0.12",
  "tokio",
  "tokio-util",
@@ -7946,8 +7704,6 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "futures",
- "gimbal_database",
- "gimbal_http",
  "itertools 0.14.0",
  "log",
  "moosicbox_assert",
@@ -7964,6 +7720,8 @@ dependencies = [
  "serde_json",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "switchy_database",
+ "switchy_http",
  "thiserror 2.0.12",
  "tokio",
  "url",
@@ -7977,14 +7735,14 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "futures-util",
- "gimbal_http",
- "gimbal_time",
  "log",
  "moosicbox_assert",
  "serde",
  "serde_json",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "switchy_http",
+ "switchy_time",
  "thiserror 2.0.12",
  "tokio",
  "tokio-util",
@@ -7999,9 +7757,6 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-util",
- "gimbal_database",
- "gimbal_http",
- "gimbal_random",
  "log",
  "moosicbox_assert",
  "moosicbox_audio_decoder",
@@ -8022,6 +7777,9 @@ dependencies = [
  "serde",
  "serde-aux",
  "serde_json",
+ "switchy_database",
+ "switchy_http",
+ "switchy_random",
  "symphonia",
  "thiserror 2.0.12",
  "tokio",
@@ -8040,11 +7798,6 @@ dependencies = [
  "chrono",
  "console-subscriber",
  "futures-util",
- "gimbal_database",
- "gimbal_database_connection",
- "gimbal_http",
- "gimbal_random",
- "gimbal_telemetry",
  "hex",
  "log",
  "moosicbox_assert",
@@ -8061,6 +7814,11 @@ dependencies = [
  "sha2",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "switchy_database",
+ "switchy_database_connection",
+ "switchy_http",
+ "switchy_random",
+ "switchy_telemetry",
  "thiserror 2.0.12",
  "tokio",
  "tokio-util",
@@ -8080,7 +7838,6 @@ dependencies = [
  "bytes",
  "const_format",
  "futures-util",
- "gimbal_http_models",
  "log",
  "moosicbox_assert",
  "moosicbox_web_server_core",
@@ -8089,6 +7846,7 @@ dependencies = [
  "serde",
  "serde-querystring",
  "serde_json",
+ "switchy_http_models",
  "thiserror 2.0.12",
  "utoipa",
  "utoipa-rapidoc",
@@ -8108,8 +7866,8 @@ dependencies = [
 name = "moosicbox_web_server_cors"
 version = "0.1.1"
 dependencies = [
- "gimbal_http_models",
  "moosicbox_assert",
+ "switchy_http_models",
 ]
 
 [[package]]
@@ -8117,7 +7875,6 @@ name = "moosicbox_ws"
 version = "0.1.1"
 dependencies = [
  "async-trait",
- "gimbal_database",
  "log",
  "moosicbox_assert",
  "moosicbox_audio_zone",
@@ -8128,6 +7885,7 @@ dependencies = [
  "serde_json",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "switchy_database",
  "thiserror 2.0.12",
 ]
 
@@ -8140,8 +7898,6 @@ dependencies = [
  "async-trait",
  "chrono",
  "futures",
- "gimbal_database",
- "gimbal_http",
  "log",
  "moosicbox_assert",
  "moosicbox_date_utils",
@@ -8157,6 +7913,8 @@ dependencies = [
  "serde_json",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "switchy_database",
+ "switchy_http",
  "thiserror 2.0.12",
  "tokio",
  "url",
@@ -12921,6 +12679,248 @@ dependencies = [
  "base64 0.21.7",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "switchy"
+version = "0.1.0"
+dependencies = [
+ "switchy_async",
+ "switchy_async_macros",
+ "switchy_database",
+ "switchy_database_connection",
+ "switchy_fs",
+ "switchy_http",
+ "switchy_http_models",
+ "switchy_mdns",
+ "switchy_random",
+ "switchy_tcp",
+ "switchy_telemetry",
+ "switchy_time",
+ "switchy_upnp",
+]
+
+[[package]]
+name = "switchy_async"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "log",
+ "pin-project-lite",
+ "pretty_assertions",
+ "scoped-tls",
+ "switchy_async_macros",
+ "switchy_random",
+ "switchy_time",
+ "test-log",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "switchy_async_cargo"
+version = "0.1.0"
+dependencies = [
+ "clap 4.5.37",
+ "log",
+ "pretty_env_logger",
+ "syn 2.0.101",
+ "walkdir",
+]
+
+[[package]]
+name = "switchy_async_macros"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
+name = "switchy_database"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "async-trait",
+ "chrono",
+ "futures",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_task",
+ "postgres-protocol",
+ "qstring",
+ "regex",
+ "rusqlite",
+ "sqlx",
+ "sqlx-postgres",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-postgres",
+ "tokio-util",
+]
+
+[[package]]
+name = "switchy_database_connection"
+version = "0.1.0"
+dependencies = [
+ "aws-config",
+ "aws-sdk-ssm",
+ "log",
+ "native-tls",
+ "openssl",
+ "postgres-native-tls",
+ "postgres-openssl",
+ "rusqlite",
+ "sqlx",
+ "switchy_database",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-postgres",
+]
+
+[[package]]
+name = "switchy_fs"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "log",
+ "pretty_assertions",
+ "switchy_async",
+ "tokio",
+]
+
+[[package]]
+name = "switchy_http"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "futures-core",
+ "futures-util",
+ "log",
+ "paste",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "strum 0.27.1",
+ "switchy_http_models",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "switchy_http_models"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "moosicbox_assert",
+ "reqwest",
+ "serde",
+ "strum 0.27.1",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "switchy_mdns"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "hostname 0.4.1",
+ "kanal",
+ "log",
+ "mdns-sd",
+ "moosicbox_assert",
+ "moosicbox_async_service",
+ "moosicbox_task",
+ "strum_macros 0.27.1",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "switchy_random"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "rand 0.8.5",
+]
+
+[[package]]
+name = "switchy_tcp"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "log",
+ "paste",
+ "thiserror 2.0.12",
+ "tokio",
+ "turmoil",
+]
+
+[[package]]
+name = "switchy_telemetry"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "actix-web-opentelemetry",
+ "futures-util",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_env_utils",
+ "moosicbox_logging",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry-prometheus",
+ "opentelemetry_sdk",
+ "prometheus 0.14.0",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "switchy_time"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "scoped-tls",
+ "switchy_random",
+]
+
+[[package]]
+name = "switchy_upnp"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "async-recursion",
+ "async-trait",
+ "flume",
+ "futures",
+ "itertools 0.14.0",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_async_service",
+ "moosicbox_audio_output",
+ "moosicbox_logging",
+ "moosicbox_music_api",
+ "moosicbox_player",
+ "moosicbox_session",
+ "moosicbox_task",
+ "pin-utils",
+ "regex",
+ "roxmltree 0.20.0",
+ "rupnp",
+ "serde",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
+ "switchy_http",
+ "switchy_random",
+ "symphonia",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-util",
+ "utoipa",
+ "xml",
 ]
 
 [[package]]

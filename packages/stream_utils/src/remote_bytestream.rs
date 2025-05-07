@@ -4,7 +4,7 @@ use std::io::{Read, Seek};
 use bytes::Bytes;
 use flume::{Receiver, Sender, bounded, unbounded};
 use futures::StreamExt;
-use gimbal_http::Client;
+use switchy_http::Client;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -102,8 +102,8 @@ impl RemoteByteStreamFetcher {
                 };
 
                 match response.status() {
-                    gimbal_http::models::StatusCode::Ok
-                    | gimbal_http::models::StatusCode::PartialContent => {}
+                    switchy_http::models::StatusCode::Ok
+                    | switchy_http::models::StatusCode::PartialContent => {}
                     _ => {
                         log::error!(
                             "Received error response ({}): {:?}",

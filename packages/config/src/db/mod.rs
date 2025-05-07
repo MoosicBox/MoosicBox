@@ -1,6 +1,6 @@
-use gimbal_database::{DatabaseError, config::ConfigDatabase, query::FilterableQuery as _};
 use moosicbox_json_utils::{ToValueType as _, database::DatabaseFetchError};
 use nanoid::nanoid;
+use switchy_database::{DatabaseError, config::ConfigDatabase, query::FilterableQuery as _};
 use thiserror::Error;
 
 pub mod models;

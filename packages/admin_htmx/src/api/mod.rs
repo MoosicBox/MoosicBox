@@ -7,12 +7,12 @@ use actix_web::{
     error::ErrorInternalServerError,
     route, web,
 };
-use gimbal_database::{
+use maud::{DOCTYPE, Markup, PreEscaped, html};
+use serde::Deserialize;
+use switchy_database::{
     config::ConfigDatabase,
     profiles::{LibraryDatabase, PROFILES, api::ProfileName},
 };
-use maud::{DOCTYPE, Markup, PreEscaped, html};
-use serde::Deserialize;
 
 pub mod info;
 pub mod profiles;

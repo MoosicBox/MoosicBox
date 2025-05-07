@@ -14,9 +14,9 @@ version     = "0.1.1"
 ignored = ["strum"]
 
 [dependencies]
-gimbal_http      = { workspace = true, features = ["serde"] }
-gimbal_time      = { workspace = true, features = ["std"] }
 moosicbox_assert = { workspace = true }
+switchy_http     = { workspace = true, features = ["serde"] }
+switchy_time     = { workspace = true, features = ["std"] }
 
 # Base64 dependencies
 base64 = { workspace = true, optional = true }

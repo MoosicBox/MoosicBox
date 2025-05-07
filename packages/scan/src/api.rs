@@ -7,11 +7,11 @@ use actix_web::{
     post,
     web::{self, Json},
 };
-use gimbal_database::profiles::LibraryDatabase;
 use moosicbox_auth::NonTunnelRequestAuthorized;
 use moosicbox_music_api::MusicApis;
 use serde::Deserialize;
 use serde_json::Value;
+use switchy_database::profiles::LibraryDatabase;
 
 use crate::{ScanError, ScanOrigin, disable_scan_origin, enable_scan_origin, run_scan};
 

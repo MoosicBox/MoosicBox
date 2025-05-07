@@ -8,8 +8,8 @@ use std::{
     task::{Context, Poll, Wake, Waker},
 };
 
-use gimbal_random::{rand::rand::seq::IteratorRandom, rng};
 use scoped_tls::scoped_thread_local;
+use switchy_random::{rand::rand::seq::IteratorRandom, rng};
 
 use crate::{
     Error,

@@ -14,7 +14,6 @@ version     = "0.1.0"
 ignored = ["hyperchad_color", "image", "tracy-client"]
 
 [dependencies]
-gimbal_http = { workspace = true, features = ["reqwest"] }
 hyperchad_actions = { workspace = true, features = ["logic"] }
 hyperchad_color = { workspace = true, features = ["egui"] }
 hyperchad_renderer = { workspace = true, features = [
@@ -31,6 +30,7 @@ moosicbox_app_native_image = { workspace = true }
 moosicbox_assert = { workspace = true }
 moosicbox_logging = { workspace = true, features = ["macros"] }
 moosicbox_task = { workspace = true }
+switchy_http = { workspace = true, features = ["reqwest"] }
 
 async-trait = { workspace = true }
 eframe = { workspace = true, default-features = false, features = [

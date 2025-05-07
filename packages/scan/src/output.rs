@@ -7,7 +7,6 @@ use std::{
 };
 
 use futures::future::join_all;
-use gimbal_database::{DatabaseError, DatabaseValue, TryFromError, profiles::LibraryDatabase};
 use moosicbox_date_utils::chrono;
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
 use moosicbox_json_utils::database::DatabaseFetchError;
@@ -26,15 +25,16 @@ use moosicbox_music_models::{
 use moosicbox_search::{
     PopulateIndexError, RecreateIndexError, data::AsDataValues as _, populate_global_search_index,
 };
+use switchy_database::{DatabaseError, DatabaseValue, TryFromError, profiles::LibraryDatabase};
 use thiserror::Error;
 use tokio::{sync::RwLock, task::JoinError};
 
 use crate::CACHE_DIR;
 
-static IMAGE_CLIENT: LazyLock<gimbal_http::Client> = LazyLock::new(gimbal_http::Client::new);
+static IMAGE_CLIENT: LazyLock<switchy_http::Client> = LazyLock::new(switchy_http::Client::new);
 
 async fn search_for_cover(
-    client: &gimbal_http::Client,
+    client: &switchy_http::Client,
     path: &Path,
     name: &str,
     url: &str,
@@ -615,9 +615,9 @@ impl ScanOutput {
 
         log::info!("Scanned {artist_count} artists, {album_count} albums, {track_count} tracks");
 
-        let db_start = gimbal_time::now();
+        let db_start = switchy_time::now();
 
-        let db_artists_start = gimbal_time::now();
+        let db_artists_start = switchy_time::now();
 
         let existing_artist_ids = db
             .select("artists")
@@ -637,7 +637,7 @@ impl ScanOutput {
         )
         .await?;
 
-        let db_artists_end = gimbal_time::now();
+        let db_artists_end = switchy_time::now();
         log::info!(
             "Finished db artists update for scan in {}ms",
             db_artists_end
@@ -654,7 +654,7 @@ impl ScanOutput {
             )));
         }
 
-        let db_albums_start = gimbal_time::now();
+        let db_albums_start = switchy_time::now();
 
         let existing_album_ids = db
             .select("albums")
@@ -681,7 +681,7 @@ impl ScanOutput {
 
         let db_albums = add_album_maps_and_get_albums(db, album_maps).await?;
 
-        let db_albums_end = gimbal_time::now();
+        let db_albums_end = switchy_time::now();
         log::info!(
             "Finished db albums update for scan in {}ms",
             db_albums_end
@@ -698,7 +698,7 @@ impl ScanOutput {
             )));
         }
 
-        let db_tracks_start = gimbal_time::now();
+        let db_tracks_start = switchy_time::now();
 
         let existing_track_ids = db
             .select("tracks")
@@ -758,7 +758,7 @@ impl ScanOutput {
 
         let db_tracks = add_tracks(db, insert_tracks).await?;
 
-        let db_tracks_end = gimbal_time::now();
+        let db_tracks_end = switchy_time::now();
         log::info!(
             "Finished db tracks update for scan in {}ms",
             db_tracks_end
@@ -775,7 +775,7 @@ impl ScanOutput {
             )));
         }
 
-        let db_track_sizes_start = gimbal_time::now();
+        let db_track_sizes_start = switchy_time::now();
         let track_sizes = tracks
             .iter()
             .zip(db_tracks.iter())
@@ -795,7 +795,7 @@ impl ScanOutput {
 
         set_track_sizes(db, &track_sizes).await?;
 
-        let db_track_sizes_end = gimbal_time::now();
+        let db_track_sizes_end = switchy_time::now();
         log::info!(
             "Finished db track_sizes update for scan in {}ms",
             db_track_sizes_end
@@ -804,7 +804,7 @@ impl ScanOutput {
                 .as_millis()
         );
 
-        let end = gimbal_time::now();
+        let end = switchy_time::now();
         log::info!(
             "Finished db update for scan in {}ms",
             end.duration_since(db_start).unwrap().as_millis(),
@@ -837,7 +837,7 @@ impl ScanOutput {
         &self,
         db: &LibraryDatabase,
     ) -> Result<(), UpdateDatabaseError> {
-        let reindex_start = gimbal_time::now();
+        let reindex_start = switchy_time::now();
 
         moosicbox_search::data::recreate_global_search_index().await?;
 
@@ -868,7 +868,7 @@ impl ScanOutput {
 
         populate_global_search_index(&tracks, false).await?;
 
-        let reindex_end = gimbal_time::now();
+        let reindex_end = switchy_time::now();
         log::info!(
             "Finished search reindex update for scan in {}ms",
             reindex_end

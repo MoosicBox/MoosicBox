@@ -393,12 +393,12 @@ impl std::fmt::Display for Id {
 
 #[cfg(feature = "db")]
 mod db {
-    use gimbal_database::{AsId, DatabaseValue};
     use moosicbox_json_utils::{
         ParseError, ToValueType,
         database::{AsModel, AsModelResult, ToValue as _},
     };
     use serde::{Deserialize, Serialize};
+    use switchy_database::{AsId, DatabaseValue};
 
     use super::Id;
 
@@ -408,13 +408,13 @@ mod db {
         pub id: i32,
     }
 
-    impl AsModel<NumberId> for &gimbal_database::Row {
+    impl AsModel<NumberId> for &switchy_database::Row {
         fn as_model(&self) -> NumberId {
             AsModelResult::as_model(self).unwrap()
         }
     }
 
-    impl AsModelResult<NumberId, ParseError> for &gimbal_database::Row {
+    impl AsModelResult<NumberId, ParseError> for &switchy_database::Row {
         fn as_model(&self) -> Result<NumberId, ParseError> {
             Ok(NumberId {
                 id: self.to_value("id")?,
@@ -435,13 +435,13 @@ mod db {
         pub id: String,
     }
 
-    impl AsModel<StringId> for &gimbal_database::Row {
+    impl AsModel<StringId> for &switchy_database::Row {
         fn as_model(&self) -> StringId {
             AsModelResult::as_model(self).unwrap()
         }
     }
 
-    impl AsModelResult<StringId, ParseError> for &gimbal_database::Row {
+    impl AsModelResult<StringId, ParseError> for &switchy_database::Row {
         fn as_model(&self) -> Result<StringId, ParseError> {
             Ok(StringId {
                 id: self.to_value("id")?,
@@ -455,7 +455,7 @@ mod db {
         }
     }
 
-    impl From<Id> for gimbal_database::DatabaseValue {
+    impl From<Id> for switchy_database::DatabaseValue {
         fn from(val: Id) -> Self {
             match val {
                 Id::String(x) => Self::String(x),
@@ -464,7 +464,7 @@ mod db {
         }
     }
 
-    impl From<&Id> for gimbal_database::DatabaseValue {
+    impl From<&Id> for switchy_database::DatabaseValue {
         fn from(val: &Id) -> Self {
             match val {
                 Id::String(x) => Self::String(x.to_owned()),
@@ -473,8 +473,8 @@ mod db {
         }
     }
 
-    impl moosicbox_json_utils::MissingValue<Id> for &gimbal_database::Row {}
-    impl ToValueType<Id> for gimbal_database::DatabaseValue {
+    impl moosicbox_json_utils::MissingValue<Id> for &switchy_database::Row {}
+    impl ToValueType<Id> for switchy_database::DatabaseValue {
         fn to_value_type(self) -> Result<Id, ParseError> {
             match self {
                 Self::String(x) | Self::StringOpt(Some(x)) => Ok(Id::String(x)),

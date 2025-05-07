@@ -41,7 +41,8 @@ fn main() -> std::io::Result<()> {
 
         #[cfg(feature = "telemetry")]
         layers.push(
-            gimbal_telemetry::init_tracer(env!("CARGO_PKG_NAME")).map_err(std::io::Error::other)?,
+            switchy_telemetry::init_tracer(env!("CARGO_PKG_NAME"))
+                .map_err(std::io::Error::other)?,
         );
 
         moosicbox_logging::init(Some("moosicbox_server.log"), Some(layers))
@@ -49,7 +50,7 @@ fn main() -> std::io::Result<()> {
 
         #[cfg(feature = "telemetry")]
         let request_metrics = std::sync::Arc::new(
-            gimbal_telemetry::get_http_metrics_handler().map_err(std::io::Error::other)?,
+            switchy_telemetry::get_http_metrics_handler().map_err(std::io::Error::other)?,
         );
 
         moosicbox_server::run(

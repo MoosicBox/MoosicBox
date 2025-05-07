@@ -1,20 +1,20 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["date-and-time", "development-tools"]
-description = "Gimbal Time package"
+description = "Switchy Time package"
 edition     = "2024"
 keywords    = ["time"]
 license     = "MPL-2.0"
-name        = "gimbal_time"
+name        = "switchy_time"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [package.metadata.workspaces]
-group = "gimbal"
+group = "switchy"
 
 [dependencies]
-gimbal_random = { workspace = true, optional = true, features = ["rand"] }
+switchy_random = { workspace = true, optional = true, features = ["rand"] }
 
 log        = { workspace = true }
 scoped-tls = { workspace = true, optional = true }
@@ -24,5 +24,5 @@ default = ["simulator", "std"]
 
 fail-on-warnings = []
 
-simulator = ["dep:gimbal_random", "dep:scoped-tls"]
+simulator = ["dep:scoped-tls", "dep:switchy_random"]
 std       = []

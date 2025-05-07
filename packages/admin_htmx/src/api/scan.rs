@@ -7,12 +7,12 @@ use actix_web::{
     error::ErrorInternalServerError,
     route, web,
 };
-use gimbal_database::profiles::LibraryDatabase;
 use maud::{Markup, html};
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_music_api::MusicApis;
 use moosicbox_scan::ScanOrigin;
 use serde::Deserialize;
+use switchy_database::profiles::LibraryDatabase;
 
 use crate::api::util::clear_input;
 

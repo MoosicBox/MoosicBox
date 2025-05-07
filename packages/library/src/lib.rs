@@ -13,7 +13,6 @@ use models::{LibraryAlbum, LibraryArtist, LibraryTrack};
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
-use gimbal_database::profiles::LibraryDatabase;
 use moosicbox_files::get_content_length;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_library_models::{LibraryAlbumType, track_source_to_u8};
@@ -39,6 +38,7 @@ use moosicbox_search::{
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
+use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
@@ -1535,7 +1535,7 @@ pub enum ReindexError {
 /// * If failed to recreate the index
 /// * If failed to populate the index
 pub async fn reindex_global_search_index(db: &LibraryDatabase) -> Result<(), ReindexError> {
-    let reindex_start = gimbal_time::now();
+    let reindex_start = switchy_time::now();
 
     moosicbox_search::data::recreate_global_search_index().await?;
 
@@ -1567,7 +1567,7 @@ pub async fn reindex_global_search_index(db: &LibraryDatabase) -> Result<(), Rei
 
     populate_global_search_index(&tracks, false).await?;
 
-    let reindex_end = gimbal_time::now();
+    let reindex_end = switchy_time::now();
     log::info!(
         "Finished search reindex update for scan in {}ms",
         reindex_end

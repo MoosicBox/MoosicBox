@@ -8,13 +8,13 @@ use std::{path::PathBuf, sync::atomic::AtomicUsize};
 
 use db::get_enabled_scan_origins;
 use event::{PROGRESS_LISTENERS, ProgressEvent, ScanTask};
-use gimbal_database::profiles::LibraryDatabase;
 use moosicbox_config::get_cache_dir_path;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_music_api::{MusicApi, MusicApis, MusicApisError, SourceToMusicApi as _};
 use moosicbox_music_models::{ApiSource, TrackApiSource};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
+use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 

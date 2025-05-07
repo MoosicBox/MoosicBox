@@ -1,5 +1,5 @@
-use gimbal_database::{DatabaseError, profiles::LibraryDatabase, query::FilterableQuery};
 use moosicbox_json_utils::ToValueType;
+use switchy_database::{DatabaseError, profiles::LibraryDatabase, query::FilterableQuery};
 use thiserror::Error;
 
 pub mod models;

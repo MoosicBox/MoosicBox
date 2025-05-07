@@ -7,13 +7,13 @@ use std::{
 
 use bytes::BytesMut;
 use futures::{StreamExt, TryStreamExt};
-use gimbal_database::{DatabaseError, profiles::LibraryDatabase, query::FilterableQuery};
 use moosicbox_music_api::{
     ArtistError, MusicApi,
     models::{ImageCoverSize, ImageCoverSource},
 };
 use moosicbox_music_models::{Artist, id::Id};
 use moosicbox_stream_utils::stalled_monitor::StalledReadMonitor;
+use switchy_database::{DatabaseError, profiles::LibraryDatabase, query::FilterableQuery};
 use thiserror::Error;
 use tokio_util::codec::{BytesCodec, FramedRead};
 

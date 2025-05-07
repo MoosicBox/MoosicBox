@@ -11,22 +11,22 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.1"
 
 [dependencies]
-gimbal_random             = { workspace = true, features = ["simulator"] }
 moosicbox_assert          = { workspace = true }
 moosicbox_simulator_utils = { workspace = true }
+switchy_random            = { workspace = true, features = ["simulator"] }
 
-gimbal_database_connection = { workspace = true, optional = true, features = [
+switchy_database_connection = { workspace = true, optional = true, features = [
     "simulator",
 ] }
-gimbal_fs = { workspace = true, optional = true, features = ["simulator"] }
-gimbal_http = { workspace = true, optional = true, features = ["simulator"] }
-gimbal_mdns = { workspace = true, optional = true, features = ["simulator"] }
-gimbal_tcp = { workspace = true, optional = true, features = ["simulator"] }
-gimbal_telemetry = { workspace = true, optional = true, features = [
+switchy_fs = { workspace = true, optional = true, features = ["simulator"] }
+switchy_http = { workspace = true, optional = true, features = ["simulator"] }
+switchy_mdns = { workspace = true, optional = true, features = ["simulator"] }
+switchy_tcp = { workspace = true, optional = true, features = ["simulator"] }
+switchy_telemetry = { workspace = true, optional = true, features = [
     "simulator",
 ] }
-gimbal_time = { workspace = true, optional = true, features = ["simulator"] }
-gimbal_upnp = { workspace = true, optional = true, features = ["simulator"] }
+switchy_time = { workspace = true, optional = true, features = ["simulator"] }
+switchy_upnp = { workspace = true, optional = true, features = ["simulator"] }
 
 ctrlc       = { workspace = true }
 log         = { workspace = true }
@@ -48,12 +48,12 @@ default = [
 
 fail-on-warnings = []
 
-database  = ["dep:gimbal_database_connection"]
-fs        = ["dep:gimbal_fs"]
-http      = ["dep:gimbal_http"]
-mdns      = ["dep:gimbal_mdns"]
+database  = ["dep:switchy_database_connection"]
+fs        = ["dep:switchy_fs"]
+http      = ["dep:switchy_http"]
+mdns      = ["dep:switchy_mdns"]
 random    = []
-tcp       = ["dep:gimbal_tcp"]
-telemetry = ["dep:gimbal_telemetry"]
-time      = ["dep:gimbal_time"]
-upnp      = ["dep:gimbal_upnp"]
+tcp       = ["dep:switchy_tcp"]
+telemetry = ["dep:switchy_telemetry"]
+time      = ["dep:switchy_time"]
+upnp      = ["dep:switchy_upnp"]

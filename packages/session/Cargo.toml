@@ -11,13 +11,13 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.1"
 
 [dependencies]
-gimbal_database          = { workspace = true }
 moosicbox_assert         = { workspace = true }
 moosicbox_audio_zone     = { workspace = true }
 moosicbox_json_utils     = { workspace = true }
 moosicbox_library        = { workspace = true }
 moosicbox_music_models   = { workspace = true, features = ["api"] }
 moosicbox_session_models = { workspace = true }
+switchy_database         = { workspace = true }
 
 # API Dependencies
 actix-web        = { workspace = true, optional = true }
@@ -50,8 +50,8 @@ fail-on-warnings = []
 api = [
     "dep:actix-web",
     "dep:moosicbox_paging",
-    "gimbal_database/api",
     "moosicbox_session_models/api",
+    "switchy_database/api",
 ]
 openapi = [
     "dep:utoipa",

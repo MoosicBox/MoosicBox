@@ -1,9 +1,9 @@
-use gimbal_database::{AsId, DatabaseValue, Row};
 use moosicbox_json_utils::{
     MissingValue, ParseError, ToValueType,
     database::{AsModel, AsModelResult, ToValue},
 };
 use serde::{Deserialize, Serialize};
+use switchy_database::{AsId, DatabaseValue, Row};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -23,7 +23,7 @@ pub struct YtConfig {
     pub updated: String,
 }
 
-impl MissingValue<YtConfig> for &gimbal_database::Row {}
+impl MissingValue<YtConfig> for &switchy_database::Row {}
 impl ToValueType<YtConfig> for &Row {
     fn to_value_type(self) -> Result<YtConfig, ParseError> {
         Ok(YtConfig {

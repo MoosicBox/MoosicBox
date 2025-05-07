@@ -2,9 +2,9 @@ use std::io::{Read, Seek};
 use std::sync::atomic::AtomicBool;
 
 use flume::{Receiver, Sender, bounded};
-use gimbal_http::Client;
 use log::debug;
 use rangemap::RangeSet;
+use switchy_http::Client;
 use symphonia::core::io::MediaSource;
 
 // Used in cpal_output.rs to mute the stream when buffering.
@@ -53,7 +53,7 @@ impl StreamableFileAsync {
         let chunk = Client::new()
             .get(&url)
             .header(
-                gimbal_http::Header::Range.as_ref(),
+                switchy_http::Header::Range.as_ref(),
                 &format!("bytes={start}-{end}"),
             )
             .send()
@@ -165,7 +165,7 @@ impl Read for StreamableFileAsync {
             let file_size = self.buffer.len();
             let (tx, rx) = bounded(1);
 
-            let id = gimbal_time::now()
+            let id = switchy_time::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_millis();

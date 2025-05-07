@@ -5,13 +5,13 @@ use actix_web::{
     error::ErrorInternalServerError,
     route, web,
 };
-use gimbal_database::{
-    config::ConfigDatabase,
-    profiles::{PROFILES, api::ProfileName},
-};
 use maud::{Markup, html};
 use moosicbox_json_utils::database::DatabaseFetchError;
 use serde::Deserialize;
+use switchy_database::{
+    config::ConfigDatabase,
+    profiles::{PROFILES, api::ProfileName},
+};
 
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,

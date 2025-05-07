@@ -3,11 +3,11 @@
 #![allow(clippy::multiple_crate_versions)]
 
 use db::{audio_zone_try_from_db, audio_zone_with_session_try_from_db};
-use gimbal_database::{config::ConfigDatabase, profiles::LibraryDatabase};
 use moosicbox_audio_zone_models::{
     AudioZone, AudioZoneWithSession, CreateAudioZone, UpdateAudioZone,
 };
 use moosicbox_json_utils::database::DatabaseFetchError;
+use switchy_database::{config::ConfigDatabase, profiles::LibraryDatabase};
 
 #[cfg(feature = "api")]
 pub mod api;

@@ -1,22 +1,22 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["asynchronous"]
-description = "Gimbal Async runtime package"
+description = "Switchy Async runtime package"
 edition     = "2024"
 keywords    = ["async"]
 license     = "MPL-2.0"
-name        = "gimbal_async"
+name        = "switchy_async"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [package.metadata.workspaces]
-group = "gimbal"
+group = "switchy"
 
 [dependencies]
-gimbal_async_macros = { workspace = true, optional = true }
-gimbal_random       = { workspace = true, optional = true, features = ["rand"] }
-gimbal_time         = { workspace = true, optional = true, features = ["std"] }
+switchy_async_macros = { workspace = true, optional = true }
+switchy_random       = { workspace = true, optional = true, features = ["rand"] }
+switchy_time         = { workspace = true, optional = true, features = ["std"] }
 
 log              = { workspace = true }
 pin-project-lite = { workspace = true }
@@ -31,8 +31,8 @@ tokio      = { workspace = true, optional = true, features = ["rt"] }
 tokio-util = { workspace = true, optional = true }
 
 [dev-dependencies]
-gimbal_time       = { workspace = true, features = ["simulator"] }
 pretty_assertions = { workspace = true }
+switchy_time      = { workspace = true, features = ["simulator"] }
 test-log          = { workspace = true }
 
 [features]
@@ -55,16 +55,16 @@ _any_backend = []
 simulator = [
     "_any_backend",
     "dep:futures",
-    "dep:gimbal_random",
-    "dep:gimbal_time",
+    "dep:switchy_random",
+    "dep:switchy_time",
     "dep:tokio",
-    "gimbal_async_macros/simulator",
+    "switchy_async_macros/simulator",
 ]
 tokio = ["_any_backend", "dep:futures", "dep:tokio", "dep:tokio-util"]
 
 fs              = ["tokio?/fs"]
 io              = ["tokio?/io-util"]
-macros          = ["dep:gimbal_async_macros", "tokio", "tokio?/macros"]
+macros          = ["dep:switchy_async_macros", "tokio", "tokio?/macros"]
 net             = ["tokio?/net"]
 rt-multi-thread = ["tokio?/rt-multi-thread"]
 sync            = ["tokio?/sync"]

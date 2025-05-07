@@ -14,9 +14,6 @@ version     = "0.1.1"
 ignored = ["strum"]
 
 [dependencies]
-gimbal_database        = { workspace = true }
-gimbal_http            = { workspace = true, features = ["reqwest"] }
-gimbal_time            = { workspace = true, features = ["std"] }
 moosicbox_assert       = { workspace = true }
 moosicbox_config       = { workspace = true }
 moosicbox_date_utils   = { workspace = true, features = ["chrono"] }
@@ -28,6 +25,9 @@ moosicbox_music_models = { workspace = true }
 moosicbox_paging       = { workspace = true }
 moosicbox_search       = { workspace = true }
 moosicbox_task         = { workspace = true }
+switchy_database       = { workspace = true }
+switchy_http           = { workspace = true, features = ["reqwest"] }
+switchy_time           = { workspace = true, features = ["std"] }
 
 # API Dependencies
 actix-web      = { workspace = true, optional = true }

@@ -7,7 +7,6 @@ use actix_web::{
     route,
     web::{self, Json},
 };
-use gimbal_database::profiles::LibraryDatabase;
 use moosicbox_music_api::models::AlbumsRequest;
 use moosicbox_music_models::{AlbumSort, api::ApiAlbum, id::parse_integer_ranges_to_ids};
 use moosicbox_paging::{Page, PagingRequest};
@@ -15,6 +14,7 @@ use moosicbox_search::api::models::ApiSearchResultsResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
+use switchy_database::profiles::LibraryDatabase;
 
 use crate::{
     LibraryAddFavoriteAlbumError, LibraryAddFavoriteArtistError, LibraryAddFavoriteTrackError,

@@ -11,8 +11,8 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.1"
 
 [dependencies]
-gimbal_database  = { workspace = true, features = ["schema"] }
 moosicbox_assert = { workspace = true }
+switchy_database = { workspace = true, features = ["schema"] }
 
 include_dir = { workspace = true }
 log         = { workspace = true }
@@ -23,5 +23,5 @@ default = ["postgres", "sqlite"]
 
 fail-on-warnings = []
 
-postgres = ["gimbal_database/postgres"]
-sqlite   = ["gimbal_database/sqlite"]
+postgres = ["switchy_database/postgres"]
+sqlite   = ["switchy_database/sqlite"]

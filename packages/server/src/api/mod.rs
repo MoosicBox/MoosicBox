@@ -4,9 +4,9 @@ use actix_web::{
     Result, get,
     web::{self, Json},
 };
-use gimbal_database::profiles::api::ProfileName;
 use log::info;
 use serde_json::{Value, json};
+use switchy_database::profiles::api::ProfileName;
 
 #[cfg(feature = "openapi")]
 pub mod openapi;

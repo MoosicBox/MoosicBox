@@ -13,7 +13,7 @@ version     = "0.1.1"
 [dependencies]
 moosicbox_assert = { workspace = true }
 
-gimbal_http_models = { workspace = true }
+switchy_http_models = { workspace = true }
 
 [features]
 default = []

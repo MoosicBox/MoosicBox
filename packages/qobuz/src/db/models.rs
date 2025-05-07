@@ -1,4 +1,3 @@
-use gimbal_database::Row;
 use moosicbox_json_utils::{
     ParseError, ToValueType,
     database::ToValue as _,
@@ -6,6 +5,7 @@ use moosicbox_json_utils::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use switchy_database::Row;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]

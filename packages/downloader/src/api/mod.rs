@@ -23,12 +23,12 @@ use actix_web::{
     route,
     web::{self, Json},
 };
-use gimbal_database::profiles::LibraryDatabase;
 use moosicbox_music_api::{MusicApis, SourceToMusicApi as _, models::TrackAudioQuality};
 use moosicbox_paging::Page;
 use regex::{Captures, Regex};
 use serde::Deserialize;
 use serde_json::Value;
+use switchy_database::profiles::LibraryDatabase;
 use tokio::sync::RwLock;
 
 pub mod models;

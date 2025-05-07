@@ -27,8 +27,6 @@ tauri-build = { workspace = true, features = [] }
 [dependencies]
 moosicbox_app_state = { workspace = true, features = ["upnp"] }
 
-gimbal_mdns            = { workspace = true, features = ["scanner"] }
-gimbal_upnp            = { workspace = true, features = ["player"] }
 moosicbox_assert       = { workspace = true }
 moosicbox_env_utils    = { workspace = true }
 moosicbox_logging      = { workspace = true, features = ["free_log"] }
@@ -37,6 +35,8 @@ moosicbox_player       = { workspace = true, features = ["local"] }
 moosicbox_session      = { workspace = true }
 moosicbox_task         = { workspace = true }
 moosicbox_ws           = { workspace = true }
+switchy_mdns           = { workspace = true, features = ["scanner"] }
+switchy_upnp           = { workspace = true, features = ["player"] }
 
 # Bundled Dependencies
 moosicbox_app_tauri_bundled = { workspace = true, optional = true }

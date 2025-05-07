@@ -46,8 +46,8 @@ use thiserror::Error;
 #[cfg(feature = "_canvas")]
 mod visualization;
 
-static CLIENT: LazyLock<gimbal_http::Client> =
-    LazyLock::new(|| gimbal_http::Client::builder().build().unwrap());
+static CLIENT: LazyLock<switchy_http::Client> =
+    LazyLock::new(|| switchy_http::Client::builder().build().unwrap());
 
 static STATE: LazyLock<moosicbox_app_state::AppState> = LazyLock::new(|| {
     moosicbox_app_state::AppState::default()
@@ -1181,7 +1181,7 @@ pub enum RouteError {
     #[error(transparent)]
     ParseInt(#[from] ParseIntError),
     #[error(transparent)]
-    Reqwest(#[from] gimbal_http::Error),
+    Reqwest(#[from] switchy_http::Error),
     #[error("Route failed: {0:?}")]
     RouteFailed(Box<dyn std::error::Error>),
 }
