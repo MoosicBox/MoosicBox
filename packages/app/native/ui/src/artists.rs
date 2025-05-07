@@ -1,6 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use hyperchad_transformer_models::{ImageLoading, LayoutOverflow};
+use hyperchad::transformer_models::{ImageLoading, LayoutOverflow};
 use maud::{Markup, PreEscaped, html};
 use moosicbox_music_models::{
     AlbumType, ApiSource,

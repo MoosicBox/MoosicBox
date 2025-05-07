@@ -37,7 +37,6 @@ no-build      = false
 product-name  = "MoosicBox"
 
 [dependencies]
-hyperchad_actions = { workspace = true }
 moosicbox_app_native_lib = { workspace = true, features = [
     "actions",
     "logic",

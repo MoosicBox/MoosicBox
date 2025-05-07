@@ -14,15 +14,15 @@ pub mod state;
 
 use albums::album_cover_img_from_album;
 use formatting::TimeFormat;
-use hyperchad_actions::{
-    ActionType,
-    logic::{
-        get_height_px_str_id, get_mouse_x_self, get_mouse_y_str_id, get_visibility_str_id,
-        get_width_px_self,
+use hyperchad::{
+    actions::{
+        ActionType,
+        logic::{
+            get_height_px_str_id, get_mouse_x_self, get_mouse_y_str_id, get_visibility_str_id,
+            get_width_px_self,
+        },
     },
-};
-use hyperchad_transformer_models::{
-    AlignItems, JustifyContent, LayoutOverflow, Position, Visibility,
+    transformer_models::{AlignItems, JustifyContent, LayoutOverflow, Position, Visibility},
 };
 use maud::{Markup, html};
 use moosicbox_music_models::{AlbumSort, ApiSource, TrackApiSource, api::ApiTrack, id::Id};
@@ -93,7 +93,7 @@ pub enum Action {
     },
 }
 
-impl From<Action> for hyperchad_actions::Action {
+impl From<Action> for hyperchad::actions::Action {
     fn from(value: Action) -> Self {
         ActionType::Custom {
             action: value.to_string(),
@@ -354,7 +354,7 @@ fn volume_slider(size: u16, volume_percent: f64) -> Markup {
             sx-background="#181a1b"
             sx-cursor="pointer"
             fx-mouse-down=(
-                hyperchad_actions::logic::Arithmetic::group(
+                hyperchad::actions::logic::Arithmetic::group(
                     get_height_px_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID)
                         .minus(get_mouse_y_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID))
                 )

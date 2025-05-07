@@ -11,12 +11,6 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
 [dependencies]
-hyperchad_actions           = { workspace = true }
-hyperchad_color             = { workspace = true }
-hyperchad_renderer          = { workspace = true }
-hyperchad_renderer_egui     = { workspace = true }
-hyperchad_renderer_fltk     = { workspace = true }
-hyperchad_transformer       = { workspace = true }
 moosicbox_admin_htmx        = { workspace = true }
 moosicbox_app_native_lib    = { workspace = true }
 moosicbox_app_native_ui     = { workspace = true }
@@ -61,7 +55,6 @@ moosicbox_tunnel            = { workspace = true }
 moosicbox_tunnel_sender     = { workspace = true }
 moosicbox_ws                = { workspace = true }
 moosicbox_yt                = { workspace = true, optional = true }
-openport                    = { workspace = true }
 
 [features]
 default = ["all-sources"]

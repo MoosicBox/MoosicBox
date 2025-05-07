@@ -122,7 +122,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     log::debug!("app_native: navigating to home");
                     let _handle = app.router.navigate_spawn(
                         "/",
-                        moosicbox_app_native_lib::router::RequestInfo {
+                        moosicbox_app_native_lib::hyperchad::router::RequestInfo {
                             client: moosicbox_app_native_lib::CLIENT_INFO.clone(),
                         },
                     );

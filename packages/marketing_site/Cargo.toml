@@ -42,8 +42,6 @@ no-build      = false
 product-name  = "MoosicBoxMarketingSite"
 
 [dependencies]
-hyperchad_renderer = { workspace = true, optional = true }
-hyperchad_renderer_html = { workspace = true, optional = true }
 moosicbox_app_native_lib = { workspace = true, features = [
     "json",
     "logic",
@@ -87,11 +85,7 @@ egui = ["moosicbox_app_native_lib/egui"]
 egui-glow = ["egui", "moosicbox_app_native_lib/egui-glow"]
 egui-wgpu = ["egui", "moosicbox_app_native_lib/egui-wgpu"]
 fltk = ["moosicbox_app_native_lib/fltk"]
-html = [
-    "dep:hyperchad_renderer_html",
-    "hyperchad_renderer/html",
-    "moosicbox_app_native_lib/html",
-]
+html = ["moosicbox_app_native_lib/html"]
 vanilla-js = [
     "html",
     "moosicbox_app_native_lib/plugin-nav",
@@ -99,12 +93,12 @@ vanilla-js = [
     "moosicbox_app_native_lib/vanilla-js",
 ]
 
-actix = ["hyperchad_renderer_html?/actix", "moosicbox_app_native_lib/actix"]
+actix = ["moosicbox_app_native_lib/actix"]
 
 wayland = ["moosicbox_app_native_lib/wayland"]
 x11     = ["moosicbox_app_native_lib/x11"]
 
-lambda = ["hyperchad_renderer_html?/lambda", "moosicbox_app_native_lib/lambda"]
+lambda = ["moosicbox_app_native_lib/lambda"]
 
 windows-console = []
 
@@ -117,11 +111,7 @@ unsafe            = ["moosicbox_app_native_lib/unsafe"]
 
 benchmark = ["moosicbox_app_native_lib/benchmark"]
 
-assets = [
-    "dep:async-recursion",
-    "dep:hyperchad_renderer",
-    "moosicbox_app_native_lib/assets",
-]
+assets        = ["dep:async-recursion", "moosicbox_app_native_lib/assets"]
 static-routes = ["moosicbox_app_native_lib/static-routes"]
 
 dev = ["assets", "static-routes"]

@@ -15,8 +15,8 @@ use std::{
 };
 
 use flume::SendError;
-use hyperchad_actions::logic::Value;
-use moosicbox_app_native_lib::{
+use moosicbox_app_native_lib::hyperchad::{
+    actions::{self, logic::Value},
     renderer::{Color, PartialView, Renderer, View},
     router::{Container, RouteRequest, Router},
 };
@@ -64,7 +64,7 @@ static RENDERER: OnceLock<Box<dyn Renderer>> = OnceLock::new();
 mod assets {
     use std::{path::PathBuf, sync::LazyLock};
 
-    use moosicbox_app_native_lib::renderer;
+    use moosicbox_app_native_lib::hyperchad::renderer;
 
     static CARGO_MANIFEST_DIR: LazyLock<Option<std::path::PathBuf>> =
         LazyLock::new(|| std::option_env!("CARGO_MANIFEST_DIR").map(Into::into));
@@ -82,10 +82,11 @@ mod assets {
             renderer::assets::StaticAssetRoute {
                 route: format!(
                     "js/{}",
-                    moosicbox_app_native_lib::renderer_vanilla_js::SCRIPT_NAME_HASHED.as_str()
+                    moosicbox_app_native_lib::hyperchad::renderer_vanilla_js::SCRIPT_NAME_HASHED
+                        .as_str()
                 ),
                 target: renderer::assets::AssetPathTarget::FileContents(
-                    moosicbox_app_native_lib::renderer_vanilla_js::SCRIPT
+                    moosicbox_app_native_lib::hyperchad::renderer_vanilla_js::SCRIPT
                         .as_bytes()
                         .into(),
                 ),
@@ -153,7 +154,7 @@ async fn current_sessions_updated(sessions: Vec<ApiSession>) {
                 .unwrap()
                 .navigate_spawn(
                     "/",
-                    moosicbox_app_native_lib::router::RequestInfo {
+                    moosicbox_app_native_lib::hyperchad::router::RequestInfo {
                         client: moosicbox_app_native_lib::CLIENT_INFO.clone(),
                     },
                 )
@@ -747,9 +748,7 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
 
                 let width = value
                     .ok_or(AppStateError::ActionMissingParam)?
-                    .as_f32(
-                        None::<&Box<dyn Fn(&hyperchad_actions::logic::CalcValue) -> Option<Value>>>,
-                    )
+                    .as_f32(None::<&Box<dyn Fn(&actions::logic::CalcValue) -> Option<Value>>>)
                     .ok_or(AppStateError::ActionInvalidParam)?;
 
                 let height = moosicbox_app_native_ui::VIZ_HEIGHT;
@@ -892,11 +891,7 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
                     log::debug!("handle_action: SetVolume: {value:?}");
                     let volume = value
                         .ok_or(AppStateError::ActionMissingParam)?
-                        .as_f32(
-                            None::<
-                                &Box<dyn Fn(&hyperchad_actions::logic::CalcValue) -> Option<Value>>,
-                            >,
-                        )
+                        .as_f32(None::<&Box<dyn Fn(&actions::logic::CalcValue) -> Option<Value>>>)
                         .ok_or(AppStateError::ActionInvalidParam)?;
                     if STATE.get_current_session().await.is_some_and(|x| {
                         x.volume
@@ -933,11 +928,7 @@ async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppSt
                     log::debug!("handle_action: SeekCurrentTrackPercent: {value:?}");
                     let seek = value
                         .ok_or(AppStateError::ActionMissingParam)?
-                        .as_f32(
-                            None::<
-                                &Box<dyn Fn(&hyperchad_actions::logic::CalcValue) -> Option<Value>>,
-                            >,
-                        )
+                        .as_f32(None::<&Box<dyn Fn(&actions::logic::CalcValue) -> Option<Value>>>)
                         .ok_or(AppStateError::ActionInvalidParam)?;
                     let session = STATE.get_current_session_ref().await;
                     if let Some(session) = session {

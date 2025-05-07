@@ -6437,12 +6437,6 @@ dependencies = [
 name = "moosicbox"
 version = "0.1.0"
 dependencies = [
- "hyperchad_actions",
- "hyperchad_color",
- "hyperchad_renderer",
- "hyperchad_renderer_egui",
- "hyperchad_renderer_fltk",
- "hyperchad_transformer",
  "moosicbox_admin_htmx",
  "moosicbox_app_native_lib",
  "moosicbox_app_native_ui",
@@ -6487,7 +6481,6 @@ dependencies = [
  "moosicbox_tunnel_sender",
  "moosicbox_ws",
  "moosicbox_yt",
- "openport",
 ]
 
 [[package]]
@@ -6590,7 +6583,6 @@ version = "0.1.1"
 dependencies = [
  "console-subscriber",
  "flume",
- "hyperchad_actions",
  "log",
  "moosicbox_app_native_bundled",
  "moosicbox_app_native_lib",
@@ -6646,13 +6638,7 @@ name = "moosicbox_app_native_lib"
 version = "0.1.1"
 dependencies = [
  "flume",
- "hyperchad_actions",
- "hyperchad_renderer",
- "hyperchad_renderer_egui",
- "hyperchad_renderer_fltk",
- "hyperchad_renderer_html",
- "hyperchad_renderer_vanilla_js",
- "hyperchad_router",
+ "hyperchad",
  "log",
  "moosicbox_assert",
  "moosicbox_env_utils",
@@ -6666,8 +6652,7 @@ dependencies = [
 name = "moosicbox_app_native_ui"
 version = "0.1.1"
 dependencies = [
- "hyperchad_actions",
- "hyperchad_transformer_models",
+ "hyperchad",
  "log",
  "maud",
  "moosicbox_app_native_image",
@@ -7177,8 +7162,6 @@ dependencies = [
  "chrono",
  "clap 4.5.37",
  "console-subscriber",
- "hyperchad_renderer",
- "hyperchad_renderer_html",
  "log",
  "moosicbox_app_native_lib",
  "moosicbox_assert",

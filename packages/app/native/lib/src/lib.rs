@@ -4,33 +4,22 @@
 
 use std::sync::Arc;
 
-use hyperchad_renderer::{Color, Handle, RenderRunner, Renderer, transformer::ResponsiveTrigger};
-use hyperchad_router::Router;
+use hyperchad::{
+    renderer::{Color, Handle, RenderRunner, Renderer, transformer::ResponsiveTrigger},
+    router::Router,
+};
 use moosicbox_env_utils::default_env_usize;
 use thiserror::Error;
 use tokio::runtime::Runtime;
 
-pub use hyperchad_renderer as renderer;
-pub use hyperchad_router as router;
-
-#[cfg(feature = "egui")]
-pub use hyperchad_renderer_egui as renderer_egui;
-
-#[cfg(feature = "fltk")]
-pub use hyperchad_renderer_fltk as renderer_fltk;
-
-#[cfg(feature = "vanilla-js")]
-pub use hyperchad_renderer_vanilla_js as renderer_vanilla_js;
-
-#[cfg(feature = "html")]
-pub use hyperchad_renderer_html as renderer_html;
+pub use hyperchad;
 
 #[cfg(any(feature = "egui", feature = "fltk"))]
-pub static CLIENT_INFO: std::sync::LazyLock<Arc<hyperchad_router::ClientInfo>> =
+pub static CLIENT_INFO: std::sync::LazyLock<Arc<hyperchad::router::ClientInfo>> =
     std::sync::LazyLock::new(|| {
         let os_name = os_info::get().os_type().to_string();
-        Arc::new(hyperchad_router::ClientInfo {
-            os: hyperchad_router::ClientOs { name: os_name },
+        Arc::new(hyperchad::router::ClientInfo {
+            os: hyperchad::router::ClientOs { name: os_name },
         })
     });
 
@@ -38,20 +27,20 @@ pub static CLIENT_INFO: std::sync::LazyLock<Arc<hyperchad_router::ClientInfo>> =
 mod egui {
     use std::sync::Arc;
 
-    use hyperchad_renderer::transformer::layout::calc::{Calculator, CalculatorDefaults};
-    use hyperchad_renderer_egui::eframe::egui::{self};
-    use hyperchad_renderer_egui::font_metrics::EguiFontMetrics;
+    use hyperchad::renderer::transformer::layout::calc::{Calculator, CalculatorDefaults};
+    use hyperchad::renderer_egui::eframe::egui::{self};
+    use hyperchad::renderer_egui::font_metrics::EguiFontMetrics;
 
     #[derive(Clone)]
     pub struct EguiCalculator(pub Option<Arc<Calculator<EguiFontMetrics>>>);
 
-    impl hyperchad_renderer::transformer::layout::Calc for EguiCalculator {
-        fn calc(&self, container: &mut hyperchad_router::Container) -> bool {
+    impl hyperchad::renderer::transformer::layout::Calc for EguiCalculator {
+        fn calc(&self, container: &mut hyperchad::router::Container) -> bool {
             self.0.as_ref().unwrap().calc(container)
         }
     }
 
-    impl hyperchad_renderer_egui::layout::EguiCalc for EguiCalculator {
+    impl hyperchad::renderer_egui::layout::EguiCalc for EguiCalculator {
         fn with_context(mut self, context: egui::Context) -> Self {
             const DELTA: f32 = 14.0f32 / 16.0;
             self.0 = Some(Arc::new(Calculator::new(
@@ -99,7 +88,7 @@ pub enum NativeAppError {
 #[cfg(feature = "logic")]
 type ActionHandler = Box<
     dyn Fn(
-            (&str, Option<&hyperchad_actions::logic::Value>),
+            (&str, Option<&hyperchad::actions::logic::Value>),
         ) -> Result<bool, Box<dyn std::error::Error>>
         + Send
         + Sync,
@@ -123,7 +112,7 @@ pub struct NativeAppBuilder {
     action_handlers: Vec<Arc<ActionHandler>>,
     resize_listeners: Vec<Arc<ResizeListener>>,
     #[cfg(feature = "assets")]
-    static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
+    static_asset_routes: Vec<hyperchad::renderer::assets::StaticAssetRoute>,
 }
 
 impl Default for NativeAppBuilder {
@@ -135,67 +124,65 @@ impl Default for NativeAppBuilder {
 #[derive(Clone)]
 pub enum RendererType {
     #[cfg(feature = "egui")]
-    Egui(hyperchad_renderer_egui::EguiRenderer<EguiCalculator>),
+    Egui(hyperchad::renderer_egui::EguiRenderer<EguiCalculator>),
     #[cfg(feature = "fltk")]
-    Fltk(hyperchad_renderer_fltk::FltkRenderer),
-    #[cfg(feature = "html")]
-    #[cfg(feature = "actix")]
+    Fltk(hyperchad::renderer_fltk::FltkRenderer),
+    #[cfg(all(feature = "html", feature = "actix"))]
     Html(
-        hyperchad_renderer_html::HtmlRenderer<
-            hyperchad_renderer_html::actix::ActixApp<
-                hyperchad_renderer_html::actix::PreparedRequest,
-                hyperchad_renderer_html::actix::HtmlActixResponseProcessor<
-                    hyperchad_renderer_html::DefaultHtmlTagRenderer,
+        hyperchad::renderer_html::HtmlRenderer<
+            hyperchad::renderer_html::actix::ActixApp<
+                hyperchad::renderer_html::actix::PreparedRequest,
+                hyperchad::renderer_html::actix::HtmlActixResponseProcessor<
+                    hyperchad::renderer_html::DefaultHtmlTagRenderer,
                 >,
             >,
         >,
     ),
-    #[cfg(feature = "html")]
-    #[cfg(feature = "lambda")]
+    #[cfg(all(feature = "html", feature = "lambda"))]
     HtmlLambda(
-        hyperchad_renderer_html::HtmlRenderer<
-            hyperchad_renderer_html::lambda::LambdaApp<
-                hyperchad_renderer_html::lambda::PreparedRequest,
-                hyperchad_renderer_html::lambda::HtmlLambdaResponseProcessor<
-                    hyperchad_renderer_html::DefaultHtmlTagRenderer,
+        hyperchad::renderer_html::HtmlRenderer<
+            hyperchad::renderer_html::lambda::LambdaApp<
+                hyperchad::renderer_html::lambda::PreparedRequest,
+                hyperchad::renderer_html::lambda::HtmlLambdaResponseProcessor<
+                    hyperchad::renderer_html::DefaultHtmlTagRenderer,
                 >,
             >,
         >,
     ),
     #[cfg(feature = "html")]
     HtmlStub(
-        hyperchad_renderer_html::HtmlRenderer<
-            hyperchad_renderer_html::stub::StubApp<hyperchad_renderer_html::DefaultHtmlTagRenderer>,
+        hyperchad::renderer_html::HtmlRenderer<
+            hyperchad::renderer_html::stub::StubApp<
+                hyperchad::renderer_html::DefaultHtmlTagRenderer,
+            >,
         >,
     ),
     #[cfg(feature = "vanilla-js")]
     VanillaJsStub(
-        hyperchad_renderer_html::HtmlRenderer<
-            hyperchad_renderer_html::stub::StubApp<
-                hyperchad_renderer_vanilla_js::VanillaJsTagRenderer,
+        hyperchad::renderer_html::HtmlRenderer<
+            hyperchad::renderer_html::stub::StubApp<
+                hyperchad::renderer_vanilla_js::VanillaJsTagRenderer,
             >,
         >,
     ),
-    #[cfg(feature = "vanilla-js")]
-    #[cfg(feature = "actix")]
+    #[cfg(all(feature = "vanilla-js", feature = "actix"))]
     VanillaJs(
-        hyperchad_renderer_html::HtmlRenderer<
-            hyperchad_renderer_html::actix::ActixApp<
-                hyperchad_renderer_html::actix::PreparedRequest,
-                hyperchad_renderer_html::actix::HtmlActixResponseProcessor<
-                    hyperchad_renderer_vanilla_js::VanillaJsTagRenderer,
+        hyperchad::renderer_html::HtmlRenderer<
+            hyperchad::renderer_html::actix::ActixApp<
+                hyperchad::renderer_html::actix::PreparedRequest,
+                hyperchad::renderer_html::actix::HtmlActixResponseProcessor<
+                    hyperchad::renderer_vanilla_js::VanillaJsTagRenderer,
                 >,
             >,
         >,
     ),
-    #[cfg(feature = "vanilla-js")]
-    #[cfg(feature = "lambda")]
+    #[cfg(all(feature = "vanilla-js", feature = "lambda"))]
     VanillaJsLambda(
-        hyperchad_renderer_html::HtmlRenderer<
-            hyperchad_renderer_html::lambda::LambdaApp<
-                hyperchad_renderer_html::lambda::PreparedRequest,
-                hyperchad_renderer_html::lambda::HtmlLambdaResponseProcessor<
-                    hyperchad_renderer_vanilla_js::VanillaJsTagRenderer,
+        hyperchad::renderer_html::HtmlRenderer<
+            hyperchad::renderer_html::lambda::LambdaApp<
+                hyperchad::renderer_html::lambda::PreparedRequest,
+                hyperchad::renderer_html::lambda::HtmlLambdaResponseProcessor<
+                    hyperchad::renderer_vanilla_js::VanillaJsTagRenderer,
                 >,
             >,
         >,
@@ -283,7 +270,7 @@ impl RendererType {
         handle: Handle,
     ) -> Result<Box<dyn RenderRunner>, Box<dyn std::error::Error + Send>> {
         renderer!(self, value, {
-            use hyperchad_renderer::ToRenderRunner as _;
+            use hyperchad::renderer::ToRenderRunner as _;
             value.to_runner(handle)
         })
     }
@@ -295,7 +282,7 @@ impl RendererType {
 }
 
 #[cfg(feature = "html")]
-impl From<RendererType> for Option<Box<dyn hyperchad_renderer::HtmlTagRenderer + Send + Sync>> {
+impl From<RendererType> for Option<Box<dyn hyperchad::renderer::HtmlTagRenderer + Send + Sync>> {
     fn from(value: RendererType) -> Self {
         Some(match value {
             #[cfg(feature = "egui")]
@@ -430,7 +417,7 @@ impl NativeAppBuilder {
     #[must_use]
     pub fn with_action_handler<E: std::error::Error + 'static>(
         mut self,
-        func: impl Fn(&str, Option<&hyperchad_actions::logic::Value>) -> Result<bool, E>
+        func: impl Fn(&str, Option<&hyperchad::actions::logic::Value>) -> Result<bool, E>
         + Send
         + Sync
         + 'static,
@@ -469,9 +456,9 @@ impl NativeAppBuilder {
     #[must_use]
     fn listen_actions(
         action_handlers: Vec<Arc<ActionHandler>>,
-    ) -> flume::Sender<(String, Option<hyperchad_actions::logic::Value>)> {
+    ) -> flume::Sender<(String, Option<hyperchad::actions::logic::Value>)> {
         let (action_tx, action_rx) =
-            flume::unbounded::<(String, Option<hyperchad_actions::logic::Value>)>();
+            flume::unbounded::<(String, Option<hyperchad::actions::logic::Value>)>();
 
         moosicbox_task::spawn("action listener", {
             async move {
@@ -524,7 +511,7 @@ impl NativeAppBuilder {
     #[must_use]
     pub fn with_static_asset_route(
         mut self,
-        path: impl Into<hyperchad_renderer::assets::StaticAssetRoute>,
+        path: impl Into<hyperchad::renderer::assets::StaticAssetRoute>,
     ) -> Self {
         self.static_asset_routes.push(path.into());
         self
@@ -536,7 +523,7 @@ impl NativeAppBuilder {
     /// * If the asset path type is an invalid path type (not a file or directory)
     #[cfg(feature = "assets")]
     pub fn with_static_asset_route_result<
-        Path: TryInto<hyperchad_renderer::assets::StaticAssetRoute>,
+        Path: TryInto<hyperchad::renderer::assets::StaticAssetRoute>,
     >(
         mut self,
         path: Path,
@@ -606,7 +593,7 @@ impl NativeAppBuilder {
                 let action_tx = Self::listen_actions(self.action_handlers);
                 let resize_tx = Self::listen_resize(self.resize_listeners);
                 let calculator = EguiCalculator(None);
-                let renderer = hyperchad_renderer_egui::EguiRenderer::new(
+                let renderer = hyperchad::renderer_egui::EguiRenderer::new(
                     router.clone(),
                     #[cfg(feature = "logic")]
                     action_tx,
@@ -622,7 +609,7 @@ impl NativeAppBuilder {
                             if let Err(e) = router
                                 .navigate_send(
                                     &path,
-                                    hyperchad_router::RequestInfo {
+                                    hyperchad::router::RequestInfo {
                                         client: CLIENT_INFO.clone(),
                                     },
                                 )
@@ -642,7 +629,7 @@ impl NativeAppBuilder {
             {
                 let router = self.router.unwrap();
                 let action_tx = Self::listen_actions(self.action_handlers);
-                let renderer = hyperchad_renderer_fltk::FltkRenderer::new(action_tx);
+                let renderer = hyperchad::renderer_fltk::FltkRenderer::new(action_tx);
                 moosicbox_task::spawn("fltk navigation listener", {
                     let renderer = renderer.clone();
                     async move {
@@ -650,7 +637,7 @@ impl NativeAppBuilder {
                             if let Err(e) = router
                                 .navigate_send(
                                     &path,
-                                    hyperchad_router::RequestInfo {
+                                    hyperchad::router::RequestInfo {
                                         client: CLIENT_INFO.clone(),
                                     },
                                 )
@@ -670,11 +657,11 @@ impl NativeAppBuilder {
             {
                 let router = self.router.unwrap();
                 #[allow(unused_mut)]
-                let mut renderer = hyperchad_renderer_html::router_to_actix(
-                    hyperchad_renderer_vanilla_js::VanillaJsTagRenderer::default(),
+                let mut renderer = hyperchad::renderer_html::router_to_actix(
+                    hyperchad::renderer_vanilla_js::VanillaJsTagRenderer::default(),
                     router,
                 )
-                .with_extend_html_renderer(hyperchad_renderer_vanilla_js::VanillaJsRenderer {});
+                .with_extend_html_renderer(hyperchad::renderer_vanilla_js::VanillaJsRenderer {});
 
                 #[cfg(feature = "actions")]
                 {
@@ -693,11 +680,11 @@ impl NativeAppBuilder {
             #[cfg(all(feature = "lambda", feature = "vanilla-js"))]
             {
                 let router = self.router.unwrap();
-                let renderer = hyperchad_renderer_html::router_to_lambda(
-                    hyperchad_renderer_vanilla_js::VanillaJsTagRenderer::default(),
+                let renderer = hyperchad::renderer_html::router_to_lambda(
+                    hyperchad::renderer_vanilla_js::VanillaJsTagRenderer::default(),
                     router,
                 )
-                .with_extend_html_renderer(hyperchad_renderer_vanilla_js::VanillaJsRenderer {});
+                .with_extend_html_renderer(hyperchad::renderer_vanilla_js::VanillaJsRenderer {});
 
                 #[cfg(feature = "assets")]
                 let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
@@ -710,8 +697,8 @@ impl NativeAppBuilder {
             #[cfg(all(feature = "actix", feature = "html"))]
             {
                 let router = self.router.unwrap();
-                let renderer = hyperchad_renderer_html::router_to_actix(
-                    hyperchad_renderer_html::DefaultHtmlTagRenderer::default(),
+                let renderer = hyperchad::renderer_html::router_to_actix(
+                    hyperchad::renderer_html::DefaultHtmlTagRenderer::default(),
                     router,
                 );
 
@@ -726,8 +713,8 @@ impl NativeAppBuilder {
             #[cfg(all(feature = "lambda", feature = "html"))]
             {
                 let router = self.router.unwrap();
-                let renderer = hyperchad_renderer_html::router_to_lambda(
-                    hyperchad_renderer_html::DefaultHtmlTagRenderer::default(),
+                let renderer = hyperchad::renderer_html::router_to_lambda(
+                    hyperchad::renderer_html::DefaultHtmlTagRenderer::default(),
                     router,
                 );
 
@@ -744,18 +731,18 @@ impl NativeAppBuilder {
                 if cfg!(feature = "vanilla-js") {
                     #[cfg(feature = "vanilla-js")]
                     {
-                        RendererType::VanillaJsStub(hyperchad_renderer_html::HtmlRenderer::new(
-                            hyperchad_renderer_html::stub::StubApp::new(
-                                hyperchad_renderer_vanilla_js::VanillaJsTagRenderer::default(),
+                        RendererType::VanillaJsStub(hyperchad::renderer_html::HtmlRenderer::new(
+                            hyperchad::renderer_html::stub::StubApp::new(
+                                hyperchad::renderer_vanilla_js::VanillaJsTagRenderer::default(),
                             ),
                         ))
                     }
                     #[cfg(not(feature = "vanilla-js"))]
                     unreachable!()
                 } else {
-                    RendererType::HtmlStub(hyperchad_renderer_html::HtmlRenderer::new(
-                        hyperchad_renderer_html::stub::StubApp::new(
-                            hyperchad_renderer_html::DefaultHtmlTagRenderer::default(),
+                    RendererType::HtmlStub(hyperchad::renderer_html::HtmlRenderer::new(
+                        hyperchad::renderer_html::stub::StubApp::new(
+                            hyperchad::renderer_html::DefaultHtmlTagRenderer::default(),
                         ),
                     ))
                 }
@@ -828,14 +815,14 @@ impl NativeApp {
                 while let Some(content) = router.wait_for_navigation().await {
                     log::debug!("app_native_lib::start: router received content");
                     match content {
-                        hyperchad_renderer::Content::View(view) => {
+                        hyperchad::renderer::Content::View(view) => {
                             renderer!(&renderer, value, value.render(view).await?);
                         }
-                        hyperchad_renderer::Content::PartialView(..) => {
+                        hyperchad::renderer::Content::PartialView(..) => {
                             moosicbox_assert::die_or_warn!("Received invalid content type");
                         }
                         #[cfg(feature = "json")]
-                        hyperchad_renderer::Content::Json(..) => {
+                        hyperchad::renderer::Content::Json(..) => {
                             moosicbox_assert::die_or_warn!("Received invalid content type");
                         }
                     }

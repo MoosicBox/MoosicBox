@@ -6,8 +6,10 @@ use std::{path::PathBuf, sync::LazyLock};
 
 use moosicbox_app_native_lib::{
     NativeApp, NativeAppBuilder, NativeAppError, RendererType,
-    renderer::Color,
-    router::{RoutePath, Router},
+    hyperchad::{
+        renderer::Color,
+        router::{RoutePath, Router},
+    },
 };
 use moosicbox_env_utils::option_env_f32;
 use serde_json::json;
@@ -52,31 +54,34 @@ static ASSETS_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
 });
 
 #[cfg(feature = "assets")]
-pub static ASSETS: LazyLock<Vec<hyperchad_renderer::assets::StaticAssetRoute>> =
-    LazyLock::new(|| {
-        vec![
-            #[cfg(feature = "vanilla-js")]
-            moosicbox_app_native_lib::renderer::assets::StaticAssetRoute {
-                route: format!(
-                    "js/{}",
-                    moosicbox_app_native_lib::renderer_vanilla_js::SCRIPT_NAME_HASHED.as_str()
-                ),
-                target: hyperchad_renderer::assets::AssetPathTarget::FileContents(
-                    moosicbox_app_native_lib::renderer_vanilla_js::SCRIPT
+pub static ASSETS: LazyLock<
+    Vec<moosicbox_app_native_lib::hyperchad::renderer::assets::StaticAssetRoute>,
+> = LazyLock::new(|| {
+    vec![
+        #[cfg(feature = "vanilla-js")]
+        moosicbox_app_native_lib::hyperchad::renderer::assets::StaticAssetRoute {
+            route: format!(
+                "js/{}",
+                moosicbox_app_native_lib::hyperchad::renderer_vanilla_js::SCRIPT_NAME_HASHED
+                    .as_str()
+            ),
+            target:
+                moosicbox_app_native_lib::hyperchad::renderer::assets::AssetPathTarget::FileContents(
+                    moosicbox_app_native_lib::hyperchad::renderer_vanilla_js::SCRIPT
                         .as_bytes()
                         .into(),
                 ),
-            },
-            moosicbox_app_native_lib::renderer::assets::StaticAssetRoute {
-                route: "favicon.ico".to_string(),
-                target: ASSETS_DIR.join("favicon.ico").try_into().unwrap(),
-            },
-            moosicbox_app_native_lib::renderer::assets::StaticAssetRoute {
-                route: "public".to_string(),
-                target: ASSETS_DIR.clone().try_into().unwrap(),
-            },
-        ]
-    });
+        },
+        moosicbox_app_native_lib::hyperchad::renderer::assets::StaticAssetRoute {
+            route: "favicon.ico".to_string(),
+            target: ASSETS_DIR.join("favicon.ico").try_into().unwrap(),
+        },
+        moosicbox_app_native_lib::hyperchad::renderer::assets::StaticAssetRoute {
+            route: "public".to_string(),
+            target: ASSETS_DIR.clone().try_into().unwrap(),
+        },
+    ]
+});
 
 pub static BACKGROUND_COLOR: LazyLock<Color> = LazyLock::new(|| Color::from_hex("#181a1b"));
 pub static VIEWPORT: LazyLock<String> = LazyLock::new(|| "width=device-width".to_string());
@@ -118,14 +123,14 @@ pub async fn start(builder: NativeAppBuilder) -> Result<NativeApp, NativeAppErro
     {
         app.renderer.add_responsive_trigger(
             "mobile".into(),
-            hyperchad_renderer::transformer::ResponsiveTrigger::MaxWidth(
-                hyperchad_renderer::transformer::Number::Integer(600),
+            moosicbox_app_native_lib::hyperchad::renderer::transformer::ResponsiveTrigger::MaxWidth(
+                moosicbox_app_native_lib::hyperchad::renderer::transformer::Number::Integer(600),
             ),
         );
         app.renderer.add_responsive_trigger(
             "mobile-large".into(),
-            hyperchad_renderer::transformer::ResponsiveTrigger::MaxWidth(
-                hyperchad_renderer::transformer::Number::Integer(1100),
+            moosicbox_app_native_lib::hyperchad::renderer::transformer::ResponsiveTrigger::MaxWidth(
+                moosicbox_app_native_lib::hyperchad::renderer::transformer::Number::Integer(1100),
             ),
         );
     }
@@ -153,9 +158,11 @@ pub async fn generate(
 
     #[cfg(all(feature = "html", feature = "static-routes"))]
     {
-        use hyperchad_renderer::{Content, HtmlTagRenderer, PartialView, View};
-        use hyperchad_renderer_html::html::container_element_to_html_response;
-        use moosicbox_app_native_lib::router::{ClientInfo, ClientOs, RequestInfo, RouteRequest};
+        use moosicbox_app_native_lib::hyperchad::{
+            renderer::{Content, HtmlTagRenderer, PartialView, View},
+            renderer_html::html::container_element_to_html_response,
+            router::{ClientInfo, ClientOs, RequestInfo, RouteRequest},
+        };
         use tokio::io::AsyncWriteExt as _;
 
         let output = output.unwrap_or_else(|| {
@@ -265,7 +272,7 @@ pub async fn generate(
 
         #[cfg(feature = "assets")]
         {
-            use moosicbox_app_native_lib::renderer::assets::AssetPathTarget;
+            use moosicbox_app_native_lib::hyperchad::renderer::assets::AssetPathTarget;
 
             use std::path::Path;
 

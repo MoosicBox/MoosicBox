@@ -5,7 +5,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use moosicbox_app_native_lib::renderer::{
+use moosicbox_app_native_lib::hyperchad::renderer::{
     Color,
     canvas::{self, CanvasAction, Pos},
 };
@@ -189,7 +189,7 @@ async fn visualization_updated(
 }
 
 async fn clear_canvas() {
-    use moosicbox_app_native_lib::renderer::canvas;
+    use moosicbox_app_native_lib::hyperchad::renderer::canvas;
 
     use crate::RENDERER;
 

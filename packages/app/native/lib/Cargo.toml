@@ -11,19 +11,10 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.1"
 
 [dependencies]
-hyperchad_actions = { workspace = true }
-hyperchad_renderer = { workspace = true }
-hyperchad_renderer_egui = { workspace = true, optional = true }
-hyperchad_renderer_fltk = { workspace = true, optional = true }
-hyperchad_renderer_html = { workspace = true, optional = true }
-hyperchad_renderer_vanilla_js = { workspace = true, optional = true, features = [
-    "hash",
-    "script",
-] }
-hyperchad_router = { workspace = true }
-moosicbox_assert = { workspace = true }
+hyperchad           = { workspace = true, features = ["actions", "renderer", "router"] }
+moosicbox_assert    = { workspace = true }
 moosicbox_env_utils = { workspace = true }
-moosicbox_task = { workspace = true }
+moosicbox_task      = { workspace = true }
 
 flume     = { workspace = true }
 log       = { workspace = true }
@@ -48,82 +39,84 @@ default = [
 
 fail-on-warnings = []
 
-maud = ["hyperchad_renderer/maud"]
+maud = ["hyperchad/renderer-maud"]
 
-egui = ["dep:hyperchad_renderer_egui", "logic"]
-egui-glow = ["egui", "hyperchad_renderer_egui/glow"]
-egui-wgpu = ["egui", "hyperchad_renderer_egui/wgpu"]
-fltk = ["dep:hyperchad_renderer_fltk", "logic"]
-html = ["dep:hyperchad_renderer_html"]
+egui = ["hyperchad/renderer-egui", "logic"]
+egui-glow = ["egui", "hyperchad/renderer-egui-glow"]
+egui-wgpu = ["egui", "hyperchad/renderer-egui-wgpu"]
+fltk = ["hyperchad/renderer-fltk", "logic"]
+html = ["hyperchad/renderer-html"]
 vanilla-js = [
-    "dep:hyperchad_renderer_vanilla_js",
     "html",
-    "hyperchad_renderer_html/extend",
+    "hyperchad/renderer-html-extend",
+    "hyperchad/renderer-vanilla-js",
+    "hyperchad/renderer-vanilla-js-hash",
+    "hyperchad/renderer-vanilla-js-script",
 ]
 
-actions = ["hyperchad_renderer_html?/actions"]
-sse     = ["hyperchad_renderer_html?/sse"]
+actions = ["hyperchad/renderer-html-actions"]
+sse     = ["hyperchad/renderer-html-sse"]
 
 json = [
-    "hyperchad_renderer/json",
-    "hyperchad_renderer_html?/json",
-    "hyperchad_router/json",
+    "hyperchad/renderer-html-json",
+    "hyperchad/renderer-json",
+    "hyperchad/router-json",
 ]
 
-logic = ["hyperchad_actions/logic", "hyperchad_renderer/logic"]
+logic = ["hyperchad/actions-logic", "hyperchad/renderer-logic"]
 
-actix  = ["hyperchad_renderer_html?/actix"]
-lambda = ["hyperchad_renderer_html?/lambda"]
+actix  = ["hyperchad/renderer-html-actix"]
+lambda = ["hyperchad/renderer-html-lambda"]
 
-wayland = ["hyperchad_renderer_egui?/wayland"]
-x11     = ["hyperchad_renderer_egui?/x11"]
+wayland = ["hyperchad/renderer-egui-wayland"]
+x11     = ["hyperchad/renderer-egui-x11"]
 
-debug = ["hyperchad_renderer_egui?/debug", "hyperchad_renderer_fltk?/debug"]
-format = ["hyperchad_renderer_fltk?/format", "hyperchad_router/format"]
+debug = ["hyperchad/renderer-egui-debug", "hyperchad/renderer-fltk-debug"]
+format = ["hyperchad/renderer-fltk-format", "hyperchad/router-format"]
 profiling-puffin = [
-    "hyperchad_renderer/profiling-puffin",
-    "hyperchad_renderer_egui?/profiling-puffin",
+    "hyperchad/renderer-egui-profiling-puffin",
+    "hyperchad/renderer-profiling-puffin",
 ]
 profiling-tracing = [
-    "hyperchad_renderer/profiling-tracing",
-    "hyperchad_renderer_egui?/profiling-tracing",
+    "hyperchad/renderer-egui-profiling-tracing",
+    "hyperchad/renderer-profiling-tracing",
 ]
 profiling-tracy = [
-    "hyperchad_renderer/profiling-tracy",
-    "hyperchad_renderer_egui?/profiling-tracy",
+    "hyperchad/renderer-egui-profiling-tracy",
+    "hyperchad/renderer-profiling-tracy",
 ]
-syntax-highlighting = ["hyperchad_router/syntax-highlighting"]
-unsafe = ["hyperchad_renderer_fltk?/unsafe"]
+syntax-highlighting = ["hyperchad/router-syntax-highlighting"]
+unsafe = ["hyperchad/renderer-fltk-unsafe"]
 
-benchmark = ["hyperchad_renderer/benchmark"]
+benchmark = ["hyperchad/renderer-benchmark"]
 
-assets = ["hyperchad_renderer/assets", "hyperchad_renderer_html?/assets"]
+assets = ["hyperchad/renderer-assets", "hyperchad/renderer-html-assets"]
 
-static-routes = ["hyperchad_router/static-routes"]
+static-routes = ["hyperchad/router-static-routes"]
 
-all-plugins = ["hyperchad_renderer_vanilla_js?/all-plugins"]
+all-plugins = ["hyperchad/renderer-vanilla-js-all-plugins"]
 
-plugin-actions = ["hyperchad_renderer_vanilla_js?/plugin-actions"]
-plugin-actions-change = ["hyperchad_renderer_vanilla_js?/plugin-actions-change"]
-plugin-actions-click = ["hyperchad_renderer_vanilla_js?/plugin-actions-click"]
+plugin-actions = ["hyperchad/renderer-vanilla-js-plugin-actions"]
+plugin-actions-change = ["hyperchad/renderer-vanilla-js-plugin-actions-change"]
+plugin-actions-click = ["hyperchad/renderer-vanilla-js-plugin-actions-click"]
 plugin-actions-click-outside = [
-    "hyperchad_renderer_vanilla_js?/plugin-actions-click-outside",
+    "hyperchad/renderer-vanilla-js-plugin-actions-click-outside",
 ]
-plugin-actions-event = ["hyperchad_renderer_vanilla_js?/plugin-actions-event"]
+plugin-actions-event = ["hyperchad/renderer-vanilla-js-plugin-actions-event"]
 plugin-actions-immediate = [
-    "hyperchad_renderer_vanilla_js?/plugin-actions-immediate",
+    "hyperchad/renderer-vanilla-js-plugin-actions-immediate",
 ]
 plugin-actions-mouse-down = [
-    "hyperchad_renderer_vanilla_js?/plugin-actions-mouse-down",
+    "hyperchad/renderer-vanilla-js-plugin-actions-mouse-down",
 ]
 plugin-actions-mouse-over = [
-    "hyperchad_renderer_vanilla_js?/plugin-actions-mouse-over",
+    "hyperchad/renderer-vanilla-js-plugin-actions-mouse-over",
 ]
-plugin-actions-resize = ["hyperchad_renderer_vanilla_js?/plugin-actions-resize"]
+plugin-actions-resize = ["hyperchad/renderer-vanilla-js-plugin-actions-resize"]
 
-plugin-canvas    = ["hyperchad_renderer_vanilla_js?/plugin-canvas"]
-plugin-event     = ["hyperchad_renderer_vanilla_js?/plugin-event"]
-plugin-idiomorph = ["hyperchad_renderer_vanilla_js?/plugin-idiomorph"]
-plugin-nav       = ["hyperchad_renderer_vanilla_js?/plugin-nav"]
-plugin-routing   = ["hyperchad_renderer_vanilla_js?/plugin-routing"]
-plugin-sse       = ["hyperchad_renderer_vanilla_js?/plugin-sse"]
+plugin-canvas    = ["hyperchad/renderer-vanilla-js-plugin-canvas"]
+plugin-event     = ["hyperchad/renderer-vanilla-js-plugin-event"]
+plugin-idiomorph = ["hyperchad/renderer-vanilla-js-plugin-idiomorph"]
+plugin-nav       = ["hyperchad/renderer-vanilla-js-plugin-nav"]
+plugin-routing   = ["hyperchad/renderer-vanilla-js-plugin-routing"]
+plugin-sse       = ["hyperchad/renderer-vanilla-js-plugin-sse"]

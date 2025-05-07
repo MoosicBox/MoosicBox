@@ -1,7 +1,9 @@
 #![allow(clippy::module_name_repetitions)]
 
-use hyperchad_actions::{ActionType, logic::get_visibility_self};
-use hyperchad_transformer_models::{AlignItems, LayoutDirection, Visibility};
+use hyperchad::{
+    actions::{ActionType, logic::get_visibility_self},
+    transformer_models::{AlignItems, LayoutDirection, Visibility},
+};
 use maud::{Markup, html};
 use moosicbox_music_models::api::ApiTrack;
 

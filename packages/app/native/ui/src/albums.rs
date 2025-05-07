@@ -1,13 +1,13 @@
 #![allow(clippy::module_name_repetitions)]
 
-use hyperchad_actions::{
-    ActionType,
-    logic::{
-        get_data_attr_value_self, get_event_value, get_visibility_self, get_visibility_str_id,
+use hyperchad::{
+    actions::{
+        ActionType,
+        logic::{
+            get_data_attr_value_self, get_event_value, get_visibility_self, get_visibility_str_id,
+        },
     },
-};
-use hyperchad_transformer_models::{
-    AlignItems, ImageLoading, JustifyContent, LayoutOverflow, Visibility,
+    transformer_models::{AlignItems, ImageLoading, JustifyContent, LayoutOverflow, Visibility},
 };
 use maud::{Markup, PreEscaped, html};
 use moosicbox_menu_models::api::ApiAlbumVersion;

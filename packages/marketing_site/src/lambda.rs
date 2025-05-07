@@ -4,7 +4,7 @@
 
 use std::sync::{Arc, LazyLock};
 
-use hyperchad_renderer_html::lambda::lambda_http::tracing;
+use moosicbox_app_native_lib::hyperchad::renderer_html::lambda::lambda_http::tracing;
 use tokio::runtime::Runtime;
 
 static RUNTIME: LazyLock<Arc<Runtime>> = LazyLock::new(|| {
