@@ -251,7 +251,7 @@ hyperchad_transformer          = { version = "0.1.0", default-features = false, 
 hyperchad_transformer_models   = { version = "0.1.0", default-features = false, path = "packages/hyperchad/transformer/models" }
 
 app-tauri-plugin-player = { version = "0.1.0", default-features = false, path = "packages/app/tauri/tauri-plugin-player" }
-openport                = { version = "0.1.0", default-features = false, path = "packages/openport" }
+openport                = { version = "0.1.1", default-features = false, path = "packages/openport" }
 
 actix = "0.13.5"
 actix-cors = "0.7.1"
