@@ -49,16 +49,111 @@ all = [
     "transformer-models",
 ]
 
-actions              = ["dep:hyperchad_actions"]
-color                = ["dep:hyperchad_color"]
-js-bundler           = ["dep:hyperchad_js_bundler"]
-renderer             = ["dep:hyperchad_renderer"]
-renderer-egui        = ["dep:hyperchad_renderer_egui"]
+serde = ["actions-serde", "transformer-models-serde"]
+
+actions       = ["dep:hyperchad_actions"]
+actions-logic = ["hyperchad_actions?/logic"]
+actions-serde = ["hyperchad_actions?/serde"]
+
+color = ["dep:hyperchad_color"]
+
+js-bundler = ["dep:hyperchad_js_bundler"]
+
+renderer                   = ["dep:hyperchad_renderer"]
+renderer-assets            = ["hyperchad_renderer?/assets"]
+renderer-benchmark         = ["hyperchad_renderer?/benchmark"]
+renderer-json              = ["hyperchad_renderer?/json"]
+renderer-logic             = ["hyperchad_renderer?/logic"]
+renderer-maud              = ["hyperchad_renderer?/maud"]
+renderer-profiling-puffin  = ["hyperchad_renderer?/profiling-puffin"]
+renderer-profiling-tracing = ["hyperchad_renderer?/profiling-tracing"]
+renderer-profiling-tracy   = ["hyperchad_renderer?/profiling-tracy"]
+
+renderer-egui                   = ["dep:hyperchad_renderer_egui"]
+renderer-egui-debug             = ["hyperchad_renderer_egui?/debug"]
+renderer-egui-glow              = ["hyperchad_renderer_egui?/glow"]
+renderer-egui-profiling-puffin  = ["hyperchad_renderer_egui?/profiling-puffin"]
+renderer-egui-profiling-tracing = ["hyperchad_renderer_egui?/profiling-tracing"]
+renderer-egui-profiling-tracy   = ["hyperchad_renderer_egui?/profiling-tracy"]
+renderer-egui-wayland           = ["hyperchad_renderer_egui?/wayland"]
+renderer-egui-wgpu              = ["hyperchad_renderer_egui?/wgpu"]
+renderer-egui-x11               = ["hyperchad_renderer_egui?/x11"]
+
 renderer-fltk        = ["dep:hyperchad_renderer_fltk"]
-renderer-html        = ["dep:hyperchad_renderer_html"]
-renderer-html-actix  = ["dep:hyperchad_renderer_html_actix"]
-renderer-html-lambda = ["dep:hyperchad_renderer_html_lambda"]
-renderer-vanilla-js  = ["dep:hyperchad_renderer_vanilla_js"]
-router               = ["dep:hyperchad_router"]
-transformer          = ["dep:hyperchad_transformer"]
-transformer-models   = ["dep:hyperchad_transformer_models"]
+renderer-fltk-debug  = ["hyperchad_renderer_fltk?/debug"]
+renderer-fltk-format = ["hyperchad_renderer_fltk?/format"]
+renderer-fltk-unsafe = ["hyperchad_renderer_fltk?/unsafe"]
+
+renderer-html         = ["dep:hyperchad_renderer_html", "hyperchad_renderer/html"]
+renderer-html-actions = ["hyperchad_renderer_html?/actions"]
+renderer-html-assets  = ["hyperchad_renderer_html?/assets"]
+renderer-html-extend  = ["hyperchad_renderer_html?/extend"]
+renderer-html-json    = ["hyperchad_renderer_html?/json"]
+renderer-html-sse     = ["hyperchad_renderer_html?/sse"]
+
+renderer-html-actix = [
+    "dep:hyperchad_renderer_html_actix",
+    "hyperchad_renderer_html?/actix",
+]
+
+renderer-html-lambda = [
+    "dep:hyperchad_renderer_html_lambda",
+    "hyperchad_renderer_html?/lambda",
+]
+
+renderer-vanilla-js = ["dep:hyperchad_renderer_vanilla_js"]
+renderer-vanilla-js-all-plugins = ["hyperchad_renderer_vanilla_js?/all-plugins"]
+renderer-vanilla-js-hash = ["hyperchad_renderer_vanilla_js?/hash"]
+renderer-vanilla-js-plugin-actions = [
+    "hyperchad_renderer_vanilla_js?/plugin-actions",
+]
+renderer-vanilla-js-plugin-actions-change = [
+    "hyperchad_renderer_vanilla_js?/plugin-actions-change",
+]
+renderer-vanilla-js-plugin-actions-click = [
+    "hyperchad_renderer_vanilla_js?/plugin-actions-click",
+]
+renderer-vanilla-js-plugin-actions-click-outside = [
+    "hyperchad_renderer_vanilla_js?/plugin-actions-click-outside",
+]
+renderer-vanilla-js-plugin-actions-event = [
+    "hyperchad_renderer_vanilla_js?/plugin-actions-event",
+]
+renderer-vanilla-js-plugin-actions-immediate = [
+    "hyperchad_renderer_vanilla_js?/plugin-actions-immediate",
+]
+renderer-vanilla-js-plugin-actions-mouse-down = [
+    "hyperchad_renderer_vanilla_js?/plugin-actions-mouse-down",
+]
+renderer-vanilla-js-plugin-actions-mouse-over = [
+    "hyperchad_renderer_vanilla_js?/plugin-actions-mouse-over",
+]
+renderer-vanilla-js-plugin-actions-resize = [
+    "hyperchad_renderer_vanilla_js?/plugin-actions-resize",
+]
+renderer-vanilla-js-plugin-canvas = [
+    "hyperchad_renderer_vanilla_js?/plugin-canvas",
+]
+renderer-vanilla-js-plugin-event = [
+    "hyperchad_renderer_vanilla_js?/plugin-event",
+]
+renderer-vanilla-js-plugin-idiomorph = [
+    "hyperchad_renderer_vanilla_js?/plugin-idiomorph",
+]
+renderer-vanilla-js-plugin-nav = ["hyperchad_renderer_vanilla_js?/plugin-nav"]
+renderer-vanilla-js-plugin-routing = [
+    "hyperchad_renderer_vanilla_js?/plugin-routing",
+]
+renderer-vanilla-js-plugin-sse = ["hyperchad_renderer_vanilla_js?/plugin-sse"]
+renderer-vanilla-js-script = ["hyperchad_renderer_vanilla_js?/script"]
+
+router                     = ["dep:hyperchad_router"]
+router-format              = ["hyperchad_router?/format"]
+router-json                = ["hyperchad_router?/json"]
+router-static-routes       = ["hyperchad_router?/static-routes"]
+router-syntax-highlighting = ["hyperchad_router?/syntax-highlighting"]
+
+transformer = ["dep:hyperchad_transformer"]
+
+transformer-models       = ["dep:hyperchad_transformer_models"]
+transformer-models-serde = ["hyperchad_transformer_models?/serde"]

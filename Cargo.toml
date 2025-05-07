@@ -236,6 +236,7 @@ switchy_time                = { version = "0.1.0", default-features = false, pat
 switchy_upnp                = { version = "0.1.0", default-features = false, path = "packages/upnp" }
 
 # Internal Hyperchad
+hyperchad                      = { version = "0.1.0", default-features = false, path = "packages/hyperchad" }
 hyperchad_actions              = { version = "0.1.0", default-features = false, path = "packages/hyperchad/actions" }
 hyperchad_color                = { version = "0.1.0", default-features = false, path = "packages/hyperchad/color" }
 hyperchad_js_bundler           = { version = "0.1.0", default-features = false, path = "packages/hyperchad/js_bundler" }
