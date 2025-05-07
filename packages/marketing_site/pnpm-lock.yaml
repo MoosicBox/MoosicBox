@@ -15,8 +15,8 @@ importers:
         specifier: ^9.26.0
         version: 9.26.0
       '@pulumi/aws':
-        specifier: ^6.79.1
-        version: 6.79.1(typescript@5.8.3)
+        specifier: ^6.80.0
+        version: 6.80.0(typescript@5.8.3)
       '@pulumi/pulumi':
         specifier: ^3.167.0
         version: 3.167.0(typescript@5.8.3)
@@ -325,8 +325,8 @@ packages:
   '@protobufjs/utf8@1.1.0':
     resolution: {integrity: sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==}
 
-  '@pulumi/aws@6.79.1':
-    resolution: {integrity: sha512-EfpPJ9YNfL1DJ1DfdGjBXD2SEWyXF6RcO17Wu2H73p8k15exnIJ9jU1bm4gnd5i6R9iaY7oRKZj0ZjxC0fc+bA==}
+  '@pulumi/aws@6.80.0':
+    resolution: {integrity: sha512-7+k/2PPqFz09Ykb+YkabaHa2RjvFREfUds4oBV57dsZkKpZsoCy58xV94oUvcPPB52OE4Z2zpGsvIg3z2mCTHw==}
 
   '@pulumi/pulumi@3.167.0':
     resolution: {integrity: sha512-nqqG9ya86CO8eRpPSL34K0NWhQbH2hXAlVo+lCvi7I51nKFqaJITvfgfVEqwKU0g3KJspK8ZG0/1OZBRe0Dogg==}
@@ -410,8 +410,8 @@ packages:
   '@types/keyv@3.1.4':
     resolution: {integrity: sha512-BQ5aZNSCpj7D6K2ksrRCTmKRLEpnPvWDiLPfoGyhZ++8YtiK9d/3DBKPJgry359X/P1PfruyYwvnvwFjuEiEIg==}
 
-  '@types/node@22.15.11':
-    resolution: {integrity: sha512-rlyK0vuU7VLEYQfXuC7QTFxDvkb6tKhDI7wR4r6ZzM0k8BJd44W0jxo6xmUjqSs4AlYmiYfLJU2f0pAG/FtCRw==}
+  '@types/node@22.15.14':
+    resolution: {integrity: sha512-BL1eyu/XWsFGTtDWOYULQEs4KR0qdtYfCxYAUYRoB7JP7h9ETYLgQTww6kH8Sj2C0pFGgrpM0XKv6/kbIzYJ1g==}
 
   '@types/responselike@1.0.3':
     resolution: {integrity: sha512-H/+L+UkTV33uf49PH5pCAUBVPNj2nDBXTN+qS1dOwyyg24l3CcicicCA7ca+HMvJBZcFgl5r8e+RR6elsb4Lyw==}
@@ -1804,8 +1804,8 @@ packages:
     resolution: {integrity: sha512-y+WKFlBR8BGXnsNlIHFGPZmyDf3DFMoLhaflAnyZgV6rG6xu+JwesTo2Q9R6XwYmtmwAFCkAk3e35jEdoeh/3g==}
     engines: {node: '>=10'}
 
-  protobufjs@7.5.0:
-    resolution: {integrity: sha512-Z2E/kOY1QjoMlCytmexzYfDm/w5fKAiRwpSzGtdnXW1zC88Z2yXazHHrOtwCzn+7wSxyE8PYM4rvVcMphF9sOA==}
+  protobufjs@7.4.0:
+    resolution: {integrity: sha512-mRUWCc3KUU4w1jU8sGxICXH/gNS94DvI1gxqDvBzhj1JpcsimQkYiOJfwsPUykUI5ZaspFbSgmBLER8IrQ3tqw==}
     engines: {node: '>=12.0.0'}
 
   proxy-addr@2.0.7:
@@ -2398,7 +2398,7 @@ snapshots:
     dependencies:
       lodash.camelcase: 4.3.0
       long: 5.3.2
-      protobufjs: 7.5.0
+      protobufjs: 7.4.0
       yargs: 17.7.2
 
   '@humanfs/core@0.19.1': {}
@@ -2706,7 +2706,7 @@ snapshots:
 
   '@protobufjs/utf8@1.1.0': {}
 
-  '@pulumi/aws@6.79.1(typescript@5.8.3)':
+  '@pulumi/aws@6.80.0(typescript@5.8.3)':
     dependencies:
       '@pulumi/pulumi': 3.167.0(typescript@5.8.3)
       mime: 2.6.0
@@ -2807,7 +2807,7 @@ snapshots:
     dependencies:
       '@types/http-cache-semantics': 4.0.4
       '@types/keyv': 3.1.4
-      '@types/node': 22.15.11
+      '@types/node': 22.15.14
       '@types/responselike': 1.0.3
 
   '@types/estree@1.0.7': {}
@@ -2822,15 +2822,15 @@ snapshots:
 
   '@types/keyv@3.1.4':
     dependencies:
-      '@types/node': 22.15.11
+      '@types/node': 22.15.14
 
-  '@types/node@22.15.11':
+  '@types/node@22.15.14':
     dependencies:
       undici-types: 6.21.0
 
   '@types/responselike@1.0.3':
     dependencies:
-      '@types/node': 22.15.11
+      '@types/node': 22.15.14
 
   '@types/semver@7.7.0': {}
 
@@ -4401,7 +4401,7 @@ snapshots:
       err-code: 2.0.3
       retry: 0.12.0
 
-  protobufjs@7.5.0:
+  protobufjs@7.4.0:
     dependencies:
       '@protobufjs/aspromise': 1.1.2
       '@protobufjs/base64': 1.1.2
@@ -4413,7 +4413,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
-      '@types/node': 22.15.11
+      '@types/node': 22.15.14
       long: 5.3.2
 
   proxy-addr@2.0.7:
