@@ -8,7 +8,7 @@ license     = "MPL-2.0"
 name        = "moosicbox_task"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
-version     = "0.1.0"
+version     = "0.1.1"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tokio_unstable)'] }

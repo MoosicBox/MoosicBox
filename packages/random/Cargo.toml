@@ -10,6 +10,9 @@ readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
+[package.metadata.workspaces]
+group = "gimbal"
+
 [dependencies]
 log  = { workspace = true }
 rand = { version = "=0.8.5", features = ["small_rng"] }

@@ -10,6 +10,9 @@ readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
+[package.metadata.workspaces]
+group = "gimbal"
+
 [dependencies]
 moosicbox_assert = { workspace = true }
 moosicbox_task   = { workspace = true, optional = true }

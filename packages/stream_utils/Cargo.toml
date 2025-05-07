@@ -8,7 +8,7 @@ license     = "MPL-2.0"
 name        = "moosicbox_stream_utils"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
-version     = "0.1.0"
+version     = "0.1.1"
 
 [dependencies]
 gimbal_http = { workspace = true, optional = true, features = [
