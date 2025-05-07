@@ -10,6 +10,9 @@ readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
+[package.metadata.workspaces]
+group = "hyperchad"
+
 [package.metadata.cargo-machete]
 ignored = ["hyperchad_color", "image", "tracy-client"]
 

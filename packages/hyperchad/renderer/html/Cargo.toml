@@ -10,6 +10,9 @@ readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.0"
 
+[package.metadata.workspaces]
+group = "hyperchad"
+
 [dependencies]
 hyperchad_renderer             = { workspace = true, features = ["canvas", "html"] }
 hyperchad_renderer_html_actix  = { workspace = true, optional = true }
