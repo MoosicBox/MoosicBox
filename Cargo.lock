@@ -4811,7 +4811,19 @@ dependencies = [
 name = "hyperchad"
 version = "0.1.0"
 dependencies = [
+ "hyperchad_actions",
+ "hyperchad_color",
+ "hyperchad_js_bundler",
+ "hyperchad_renderer",
+ "hyperchad_renderer_egui",
+ "hyperchad_renderer_fltk",
+ "hyperchad_renderer_html",
+ "hyperchad_renderer_html_actix",
+ "hyperchad_renderer_html_lambda",
+ "hyperchad_renderer_vanilla_js",
+ "hyperchad_router",
  "hyperchad_transformer",
+ "hyperchad_transformer_models",
 ]
 
 [[package]]
