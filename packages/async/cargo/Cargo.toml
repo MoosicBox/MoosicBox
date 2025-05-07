@@ -1,6 +1,6 @@
 [package]
 authors     = ["Braden Steffaniak"]
-categories  = ["asynchronous", "development-utils"]
+categories  = ["asynchronous", "development-tools"]
 description = "Cargo async linter package"
 edition     = "2024"
 keywords    = ["async"]

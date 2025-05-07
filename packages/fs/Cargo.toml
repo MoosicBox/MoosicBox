@@ -1,6 +1,6 @@
 [package]
 authors     = ["Braden Steffaniak"]
-categories  = ["development-utils", "filesystem"]
+categories  = ["development-tools", "filesystem"]
 description = "Gimbal File-system package"
 edition     = "2024"
 keywords    = ["time"]

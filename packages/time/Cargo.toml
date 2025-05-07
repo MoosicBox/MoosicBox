@@ -1,6 +1,6 @@
 [package]
 authors     = ["Braden Steffaniak"]
-categories  = ["date-and-time", "development-utils"]
+categories  = ["date-and-time", "development-tools"]
 description = "Gimbal Time package"
 edition     = "2024"
 keywords    = ["time"]
