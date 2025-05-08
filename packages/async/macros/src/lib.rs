@@ -20,7 +20,7 @@ impl VisitMut for YieldInjector {
             let base = (*expr_await.base).clone();
             *expr = syn::parse_quote!({
                 let __yield_res = #base.await;
-                ::switchy_async::task::yield_now().await;
+                ::switchy::unsync::task::yield_now().await;
                 __yield_res
             });
         }
