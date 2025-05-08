@@ -166,7 +166,7 @@ jobs:
                               '[
                                   .[]
                                   | {
-                                      "name": (.name | sub("^moosicbox_"; "")),
+                                      "name": (.name | sub("^(moosicbox|switchy|hyperchad)_"; "")),
                                       "path": (.path),
                                       "features": (.features),
                                       "requiredFeatures": (if .requiredFeatures != null then .requiredFeatures | join(",") else null end),
