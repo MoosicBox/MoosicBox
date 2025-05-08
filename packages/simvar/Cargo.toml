@@ -46,7 +46,9 @@ random    = ["simvar_harness/random"]
 tcp       = ["simvar_harness/tcp"]
 telemetry = ["simvar_harness/telemetry"]
 time      = ["simvar_harness/time"]
-tui       = ["simvar_harness/tui"]
 upnp      = ["simvar_harness/upnp"]
 
 utils = ["dep:simvar_utils"]
+
+pretty_env_logger = ["simvar_harness/pretty_env_logger"]
+tui               = ["simvar_harness/tui"]
