@@ -96,99 +96,133 @@ simulator = [
 ]
 
 async                 = ["dep:switchy_async"]
-async-fs              = ["switchy_async?/fs"]
-async-io              = ["switchy_async?/io"]
-async-net             = ["switchy_async?/net"]
-async-rt-multi-thread = ["switchy_async?/rt-multi-thread"]
-async-simulator       = ["switchy_async?/simulator"]
-async-sync            = ["switchy_async?/sync"]
-async-time            = ["switchy_async?/time"]
-async-tokio           = ["switchy_async?/tokio"]
-async-util            = ["switchy_async?/util"]
+async-fs              = ["async", "switchy_async?/fs"]
+async-io              = ["async", "switchy_async?/io"]
+async-net             = ["async", "switchy_async?/net"]
+async-rt-multi-thread = ["async", "switchy_async?/rt-multi-thread"]
+async-simulator       = ["async", "switchy_async?/simulator"]
+async-sync            = ["async", "switchy_async?/sync"]
+async-time            = ["async", "switchy_async?/time"]
+async-tokio           = ["async", "switchy_async?/tokio"]
+async-util            = ["async", "switchy_async?/util"]
 
-async-macros = ["dep:switchy_async_macros", "switchy_async?/macros"]
+async-macros = ["async", "dep:switchy_async_macros", "switchy_async?/macros"]
 
 database                 = ["dep:switchy_database"]
-database-api             = ["switchy_database?/api"]
-database-mysql           = ["switchy_database?/mysql"]
-database-mysql-sqlx      = ["switchy_database?/mysql-sqlx"]
-database-postgres        = ["switchy_database?/postgres"]
-database-postgres-raw    = ["switchy_database?/postgres-raw"]
-database-postgres-sqlx   = ["switchy_database?/postgres-sqlx"]
-database-schema          = ["switchy_database?/schema"]
-database-simulator       = ["switchy_database?/simulator"]
-database-sqlite          = ["switchy_database?/sqlite"]
-database-sqlite-rusqlite = ["switchy_database?/sqlite-rusqlite"]
-database-sqlite-sqlx     = ["switchy_database?/sqlite-sqlx"]
-database-sqlx            = ["switchy_database?/sqlx"]
-database-tls             = ["switchy_database?/tls"]
+database-api             = ["database", "switchy_database?/api"]
+database-mysql           = ["database", "switchy_database?/mysql"]
+database-mysql-sqlx      = ["database", "switchy_database?/mysql-sqlx"]
+database-postgres        = ["database", "switchy_database?/postgres"]
+database-postgres-raw    = ["database", "switchy_database?/postgres-raw"]
+database-postgres-sqlx   = ["database", "switchy_database?/postgres-sqlx"]
+database-schema          = ["database", "switchy_database?/schema"]
+database-simulator       = ["database", "switchy_database?/simulator"]
+database-sqlite          = ["database", "switchy_database?/sqlite"]
+database-sqlite-rusqlite = ["database", "switchy_database?/sqlite-rusqlite"]
+database-sqlite-sqlx     = ["database", "switchy_database?/sqlite-sqlx"]
+database-sqlx            = ["database", "switchy_database?/sqlx"]
+database-tls             = ["database", "switchy_database?/tls"]
 
 database-connection = ["dep:switchy_database_connection"]
-database-connection-creds = ["switchy_database_connection?/creds"]
-database-connection-mysql = ["switchy_database_connection?/mysql"]
-database-connection-mysql-sqlx = ["switchy_database_connection?/mysql-sqlx"]
-database-connection-postgres = ["switchy_database_connection?/postgres"]
+database-connection-creds = [
+    "database-connection",
+    "switchy_database_connection?/creds",
+]
+database-connection-mysql = [
+    "database-connection",
+    "switchy_database_connection?/mysql",
+]
+database-connection-mysql-sqlx = [
+    "database-connection",
+    "switchy_database_connection?/mysql-sqlx",
+]
+database-connection-postgres = [
+    "database-connection",
+    "switchy_database_connection?/postgres",
+]
 database-connection-postgres-native-tls = [
+    "database-connection",
     "switchy_database_connection?/postgres-native-tls",
 ]
 database-connection-postgres-openssl = [
+    "database-connection",
     "switchy_database_connection?/postgres-openssl",
 ]
-database-connection-postgres-raw = ["switchy_database_connection?/postgres-raw"]
+database-connection-postgres-raw = [
+    "database-connection",
+    "switchy_database_connection?/postgres-raw",
+]
 database-connection-postgres-sqlx = [
+    "database-connection",
     "switchy_database_connection?/postgres-sqlx",
 ]
-database-connection-simulator = ["switchy_database_connection?/simulator"]
-database-connection-sqlite = ["switchy_database_connection?/sqlite"]
+database-connection-simulator = [
+    "database-connection",
+    "switchy_database_connection?/simulator",
+]
+database-connection-sqlite = [
+    "database-connection",
+    "switchy_database_connection?/sqlite",
+]
 database-connection-sqlite-rusqlite = [
+    "database-connection",
     "switchy_database_connection?/sqlite-rusqlite",
 ]
-database-connection-sqlite-sqlx = ["switchy_database_connection?/sqlite-sqlx"]
-database-connection-sqlx = ["switchy_database_connection?/sqlx"]
-database-connection-tls = ["switchy_database_connection?/tls"]
+database-connection-sqlite-sqlx = [
+    "database-connection",
+    "switchy_database_connection?/sqlite-sqlx",
+]
+database-connection-sqlx = [
+    "database-connection",
+    "switchy_database_connection?/sqlx",
+]
+database-connection-tls = [
+    "database-connection",
+    "switchy_database_connection?/tls",
+]
 
 fs           = ["dep:switchy_fs"]
-fs-async     = ["switchy_fs?/async"]
-fs-simulator = ["switchy_fs?/simulator"]
-fs-std       = ["switchy_fs?/std"]
-fs-sync      = ["switchy_fs?/sync"]
-fs-tokio     = ["switchy_fs?/tokio"]
+fs-async     = ["fs", "switchy_fs?/async"]
+fs-simulator = ["fs", "switchy_fs?/simulator"]
+fs-std       = ["fs", "switchy_fs?/std"]
+fs-sync      = ["fs", "switchy_fs?/sync"]
+fs-tokio     = ["fs", "switchy_fs?/tokio"]
 
 http           = ["dep:switchy_http"]
-http-json      = ["switchy_http?/json"]
-http-reqwest   = ["switchy_http?/reqwest"]
-http-serde     = ["switchy_http?/serde"]
-http-simulator = ["switchy_http?/simulator"]
-http-stream    = ["switchy_http?/stream"]
+http-json      = ["http", "switchy_http?/json"]
+http-reqwest   = ["http", "switchy_http?/reqwest"]
+http-serde     = ["http", "switchy_http?/serde"]
+http-simulator = ["http", "switchy_http?/simulator"]
+http-stream    = ["http", "switchy_http?/stream"]
 
 http-models         = ["dep:switchy_http_models"]
-http-models-actix   = ["switchy_http_models?/actix"]
-http-models-reqwest = ["switchy_http_models?/reqwest"]
-http-models-serde   = ["switchy_http_models?/serde"]
+http-models-actix   = ["http-models", "switchy_http_models?/actix"]
+http-models-reqwest = ["http-models", "switchy_http_models?/reqwest"]
+http-models-serde   = ["http-models", "switchy_http_models?/serde"]
 
 mdns           = ["dep:switchy_mdns"]
-mdns-scanner   = ["switchy_mdns?/scanner"]
-mdns-simulator = ["switchy_mdns?/simulator"]
+mdns-scanner   = ["mdns", "switchy_mdns?/scanner"]
+mdns-simulator = ["mdns", "switchy_mdns?/simulator"]
 
 random           = ["dep:switchy_random"]
-random-rand      = ["switchy_random?/rand"]
-random-simulator = ["switchy_random?/simulator"]
+random-rand      = ["random", "switchy_random?/rand"]
+random-simulator = ["random", "switchy_random?/simulator"]
 
 tcp           = ["dep:switchy_tcp"]
-tcp-simulator = ["switchy_tcp?/simulator"]
-tcp-tokio     = ["switchy_tcp?/tokio"]
+tcp-simulator = ["switchy_tcp?/simulator", "tcp"]
+tcp-tokio     = ["switchy_tcp?/tokio", "tcp"]
 
 telemetry           = ["dep:switchy_telemetry"]
-telemetry-actix     = ["switchy_telemetry?/actix"]
-telemetry-simulator = ["switchy_telemetry?/simulator"]
+telemetry-actix     = ["switchy_telemetry?/actix", "telemetry"]
+telemetry-simulator = ["switchy_telemetry?/simulator", "telemetry"]
 
 time           = ["dep:switchy_time"]
-time-simulator = ["switchy_time?/simulator"]
-time-std       = ["switchy_time?/std"]
+time-simulator = ["switchy_time?/simulator", "time"]
+time-std       = ["switchy_time?/std", "time"]
 
 upnp           = ["dep:switchy_upnp"]
-upnp-api       = ["switchy_upnp?/api"]
-upnp-listener  = ["switchy_upnp?/listener"]
-upnp-openapi   = ["switchy_upnp?/openapi"]
-upnp-player    = ["switchy_upnp?/player"]
-upnp-simulator = ["switchy_upnp?/simulator"]
+upnp-api       = ["switchy_upnp?/api", "upnp"]
+upnp-listener  = ["switchy_upnp?/listener", "upnp"]
+upnp-openapi   = ["switchy_upnp?/openapi", "upnp"]
+upnp-player    = ["switchy_upnp?/player", "upnp"]
+upnp-simulator = ["switchy_upnp?/simulator", "upnp"]
