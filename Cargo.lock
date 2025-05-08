@@ -12845,11 +12845,17 @@ name = "switchy_tcp"
 version = "0.1.1"
 dependencies = [
  "async-trait",
+ "bytes",
+ "flume",
  "log",
  "paste",
+ "pretty_assertions",
+ "scoped-tls",
+ "serial_test",
+ "switchy_async",
+ "test-log",
  "thiserror 2.0.12",
  "tokio",
- "turmoil",
 ]
 
 [[package]]

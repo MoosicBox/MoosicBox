@@ -14,17 +14,39 @@ version     = "0.1.1"
 group = "switchy"
 
 [dependencies]
+switchy_async = { version = "0.1.0", path = "../async", default-features = false, features = [
+    "io",
+    "macros",
+    "sync",
+    "time",
+    "util",
+] }
+
 async-trait = { workspace = true }
 log         = { workspace = true }
 paste       = { workspace = true }
 thiserror   = { workspace = true }
 tokio       = { workspace = true, features = ["net"] }
-turmoil     = { workspace = true, optional = true }
+
+# Simulator
+bytes      = { workspace = true, optional = true }
+flume      = { workspace = true, optional = true }
+scoped-tls = { workspace = true, optional = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+serial_test       = { workspace = true }
+test-log          = { workspace = true }
 
 [features]
 default = ["simulator", "tokio"]
 
 fail-on-warnings = []
 
-simulator = ["dep:turmoil"]
-tokio     = []
+simulator = [
+    "dep:bytes",
+    "dep:flume",
+    "dep:scoped-tls",
+    "switchy_async/simulator",
+]
+tokio = ["switchy_async/tokio"]

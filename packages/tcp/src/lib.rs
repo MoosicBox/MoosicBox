@@ -18,6 +18,13 @@ pub mod simulator;
 pub enum Error {
     #[error(transparent)]
     IO(#[from] ::std::io::Error),
+    #[error(transparent)]
+    AddrParse(#[from] ::std::net::AddrParseError),
+    #[error(transparent)]
+    ParseInt(#[from] std::num::ParseIntError),
+    #[cfg(feature = "simulator")]
+    #[error("Send error")]
+    Send,
 }
 
 #[async_trait]
@@ -29,6 +36,16 @@ pub trait GenericTcpStream<R: GenericTcpStreamReadHalf, W: GenericTcpStreamWrite
     AsyncRead + AsyncWrite + Send + Sync + Unpin
 {
     fn into_split(self) -> (R, W);
+
+    /// # Errors
+    ///
+    /// * If the underlying `TcpStream` fails to get the `local_addr`
+    fn local_addr(&self) -> std::io::Result<SocketAddr>;
+
+    /// # Errors
+    ///
+    /// * If the underlying `TcpStream` fails to get the `peer_addr`
+    fn peer_addr(&self) -> std::io::Result<SocketAddr>;
 }
 pub trait GenericTcpStreamReadHalf: AsyncRead + Send + Sync + Unpin {}
 pub trait GenericTcpStreamWriteHalf: AsyncWrite + Send + Sync + Unpin {}
@@ -81,6 +98,37 @@ macro_rules! impl_http {
             impl GenericTcpStream<ModuleTcpStreamReadHalf, ModuleTcpStreamWriteHalf> for ModuleTcpStream {
                 fn into_split(self) -> (ModuleTcpStreamReadHalf, ModuleTcpStreamWriteHalf) {
                     self.0.into_split()
+                }
+
+                fn local_addr(&self) -> std::io::Result<SocketAddr> {
+                    self.0.local_addr()
+                }
+
+                fn peer_addr(&self) -> std::io::Result<SocketAddr> {
+                    self.0.peer_addr()
+                }
+            }
+
+            impl ModuleTcpStream {
+                /// # Errors
+                ///
+                /// * If the underlying `TcpStream` fails to connect
+                pub async fn connect(addr: &str) -> std::io::Result<Self> {
+                    Ok(Self($module::TcpStream::connect(addr).await?, PhantomData, PhantomData))
+                }
+
+                /// # Errors
+                ///
+                /// * If the underlying `TcpStream` fails to get the `local_addr`
+                pub fn local_addr(&self) -> std::io::Result<SocketAddr> {
+                    self.0.local_addr()
+                }
+
+                /// # Errors
+                ///
+                /// * If the underlying `TcpStream` fails to get the `peer_addr`
+                pub fn peer_addr(&self) -> std::io::Result<SocketAddr> {
+                    self.0.peer_addr()
                 }
             }
 

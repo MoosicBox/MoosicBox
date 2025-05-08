@@ -7,17 +7,17 @@ use crate::{
     GenericTcpStreamWriteHalf, impl_read_inner, impl_write_inner,
 };
 
-pub struct TcpListener(::tokio::net::TcpListener);
-pub struct TcpStream(::tokio::net::TcpStream);
-pub struct TcpStreamReadHalf(::tokio::net::tcp::OwnedReadHalf);
-pub struct TcpStreamWriteHalf(::tokio::net::tcp::OwnedWriteHalf);
+pub struct TcpListener(tokio::net::TcpListener);
+pub struct TcpStream(tokio::net::TcpStream);
+pub struct TcpStreamReadHalf(tokio::net::tcp::OwnedReadHalf);
+pub struct TcpStreamWriteHalf(tokio::net::tcp::OwnedWriteHalf);
 
 impl TcpListener {
     /// # Errors
     ///
     /// * If the `tokio::new::TcpListener` fails to bind the address
     pub async fn bind(addr: &str) -> Result<Self, crate::Error> {
-        Ok(Self(::tokio::net::TcpListener::bind(addr).await?))
+        Ok(Self(tokio::net::TcpListener::bind(addr).await?))
     }
 }
 
@@ -27,7 +27,7 @@ impl crate::TokioTcpListener {
     /// * If the `tokio::net::TcpListener` fails to bind the address
     pub async fn bind(addr: impl Into<String>) -> Result<Self, Error> {
         Ok(Self(
-            TcpListener(::tokio::net::TcpListener::bind(addr.into()).await?),
+            TcpListener(tokio::net::TcpListener::bind(addr.into()).await?),
             PhantomData,
             PhantomData,
             PhantomData,
@@ -51,6 +51,23 @@ impl GenericTcpStream<TcpStreamReadHalf, TcpStreamWriteHalf> for TcpStream {
         let (r, w) = self.0.into_split();
 
         (TcpStreamReadHalf(r), TcpStreamWriteHalf(w))
+    }
+
+    fn local_addr(&self) -> std::io::Result<SocketAddr> {
+        self.0.local_addr()
+    }
+
+    fn peer_addr(&self) -> std::io::Result<SocketAddr> {
+        self.0.peer_addr()
+    }
+}
+
+impl TcpStream {
+    /// # Errors
+    ///
+    /// * If the underlying `tokio::net::TcpStream` fails to connect
+    pub async fn connect(addr: &str) -> std::io::Result<Self> {
+        Ok(Self(tokio::net::TcpStream::connect(addr).await?))
     }
 }
 
