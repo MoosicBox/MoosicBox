@@ -56,7 +56,9 @@ RUN cat Cargo.toml | \
     \"packages\/server\",\r\
     \"packages\/session\",\r\
     \"packages\/session\/models\",\r\
-    \"packages\/simulator\/utils\",\r\
+    \"packages\/simvar\",\r\
+    \"packages\/simvar\/harness\",\r\
+    \"packages\/simvar\/utils\",\r\
     \"packages\/stream_utils\",\r\
     \"packages\/switchy\",\r\
     \"packages\/tcp\",\r\
@@ -122,7 +124,9 @@ COPY packages/server/Cargo.toml packages/server/Cargo.toml
 COPY packages/server/build.rs packages/server/build.rs
 COPY packages/session/Cargo.toml packages/session/Cargo.toml
 COPY packages/session/models/Cargo.toml packages/session/models/Cargo.toml
-COPY packages/simulator/utils/Cargo.toml packages/simulator/utils/Cargo.toml
+COPY packages/simvar/Cargo.toml packages/simvar/Cargo.toml
+COPY packages/simvar/harness/Cargo.toml packages/simvar/harness/Cargo.toml
+COPY packages/simvar/utils/Cargo.toml packages/simvar/utils/Cargo.toml
 COPY packages/stream_utils/Cargo.toml packages/stream_utils/Cargo.toml
 COPY packages/switchy/Cargo.toml packages/switchy/Cargo.toml
 COPY packages/tcp/Cargo.toml packages/tcp/Cargo.toml
@@ -182,6 +186,7 @@ packages/schema|\
 packages/search|\
 packages/server|\
 packages/session|\
+packages/simvar|\
 packages/stream_utils|\
 packages/switchy|\
 packages/tcp|\
@@ -213,7 +218,8 @@ path=\"..\/..\/temp_lib.rs\"/" | \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/music_api/models/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/music/models/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/session/models/Cargo.toml" && \
-    printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/simulator/utils/Cargo.toml"
+    printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/simvar/harness/Cargo.toml" && \
+    printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/simvar/utils/Cargo.toml"
 
 RUN mkdir packages/server/src && \
   echo 'fn main() {}' >packages/server/src/main.rs

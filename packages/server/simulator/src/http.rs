@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, io};
 
-use moosicbox_simulator_harness::switchy::tcp::TcpStream;
+use simvar::switchy::tcp::TcpStream;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
 pub struct HttpResponse {

@@ -7669,11 +7669,11 @@ dependencies = [
  "moosicbox_env_utils",
  "moosicbox_logging",
  "moosicbox_server",
- "moosicbox_simulator_harness",
  "moosicbox_task",
  "net2",
  "openport",
  "serde_json",
+ "simvar",
  "strum 0.27.1",
  "switchy_telemetry",
  "tokio",
@@ -7715,31 +7715,6 @@ dependencies = [
  "strum_macros 0.27.1",
  "switchy_database",
  "utoipa",
-]
-
-[[package]]
-name = "moosicbox_simulator_harness"
-version = "0.1.1"
-dependencies = [
- "btparse",
- "color-backtrace",
- "ctrlc",
- "log",
- "moosicbox_simulator_utils",
- "oneshot",
- "pretty_env_logger",
- "ratatui",
- "scoped-tls",
- "shell-words",
- "switchy",
- "thiserror 2.0.12",
-]
-
-[[package]]
-name = "moosicbox_simulator_utils"
-version = "0.1.1"
-dependencies = [
- "switchy",
 ]
 
 [[package]]
@@ -11675,6 +11650,39 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a9c6883ca9c3c7c90e888de77b7a5c849c779d25d74a1269b0218b14e8b136c"
 dependencies = [
  "log",
+]
+
+[[package]]
+name = "simvar"
+version = "0.1.0"
+dependencies = [
+ "simvar_harness",
+ "simvar_utils",
+]
+
+[[package]]
+name = "simvar_harness"
+version = "0.1.0"
+dependencies = [
+ "btparse",
+ "color-backtrace",
+ "ctrlc",
+ "log",
+ "oneshot",
+ "pretty_env_logger",
+ "ratatui",
+ "scoped-tls",
+ "shell-words",
+ "simvar_utils",
+ "switchy",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "simvar_utils"
+version = "0.1.0"
+dependencies = [
+ "switchy",
 ]
 
 [[package]]

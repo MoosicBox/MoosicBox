@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use moosicbox_simulator_harness::plan::InteractionPlan;
+use simvar::plan::InteractionPlan;
 use strum::{EnumDiscriminants, EnumIter};
 
 use crate::host::moosicbox_server::{HOST, PORT};

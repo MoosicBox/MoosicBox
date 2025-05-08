@@ -1,10 +1,8 @@
 use std::sync::LazyLock;
 
-use moosicbox_simulator_harness::{
-    Sim, plan::InteractionPlan as _, switchy::time::simulator::step_multiplier,
-};
 use plan::{HealthCheckInteractionPlan, Interaction};
 use serde_json::Value;
+use simvar::{Sim, plan::InteractionPlan as _, switchy::time::simulator::step_multiplier};
 
 pub mod plan;
 

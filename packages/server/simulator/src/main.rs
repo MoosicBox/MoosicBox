@@ -5,7 +5,7 @@
 use std::{process::ExitCode, sync::LazyLock};
 
 use moosicbox_server_simulator::{client, handle_actions, host};
-use moosicbox_simulator_harness::{Sim, SimBootstrap, run_simulation};
+use simvar::{Sim, SimBootstrap, run_simulation};
 
 static PORT: LazyLock<Option<u16>> = LazyLock::new(|| {
     std::env::var("PORT")

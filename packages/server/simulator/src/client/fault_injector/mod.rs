@@ -1,5 +1,5 @@
-use moosicbox_simulator_harness::{Sim, plan::InteractionPlan as _, switchy::random::rng};
 use plan::{FaultInjectionInteractionPlan, Interaction};
+use simvar::{Sim, plan::InteractionPlan as _, switchy::random::rng};
 
 pub mod plan;
 

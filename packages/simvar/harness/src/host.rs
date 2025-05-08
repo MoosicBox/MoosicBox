@@ -1,7 +1,7 @@
 use std::{pin::Pin, sync::Arc};
 
-use moosicbox_simulator_utils::run_until_simulation_cancelled;
 use scoped_tls::scoped_thread_local;
+use simvar_utils::run_until_simulation_cancelled;
 use switchy::{
     tcp::simulator::with_host as with_tcp_host,
     unsync::{runtime, task::JoinHandle},

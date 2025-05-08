@@ -86,8 +86,9 @@ members = [
     "packages/server/simulator",
     "packages/session",
     "packages/session/models",
-    "packages/simulator/harness",
-    "packages/simulator/utils",
+    "packages/simvar",
+    "packages/simvar/harness",
+    "packages/simvar/utils",
     "packages/stream_utils",
     "packages/switchy",
     "packages/task",
@@ -206,8 +207,6 @@ moosicbox_search             = { version = "0.1.1", default-features = false, pa
 moosicbox_server             = { version = "0.1.1", default-features = false, path = "packages/server" }
 moosicbox_session            = { version = "0.1.1", default-features = false, path = "packages/session" }
 moosicbox_session_models     = { version = "0.1.1", default-features = false, path = "packages/session/models" }
-moosicbox_simulator_harness  = { version = "0.1.1", default-features = false, path = "packages/simulator/harness" }
-moosicbox_simulator_utils    = { version = "0.1.1", default-features = false, path = "packages/simulator/utils" }
 moosicbox_stream_utils       = { version = "0.1.1", default-features = false, path = "packages/stream_utils" }
 moosicbox_task               = { version = "0.1.1", default-features = false, path = "packages/task" }
 moosicbox_tidal              = { version = "0.1.1", default-features = false, path = "packages/tidal" }
@@ -250,6 +249,11 @@ hyperchad_renderer_vanilla_js  = { version = "0.1.0", default-features = false, 
 hyperchad_router               = { version = "0.1.0", default-features = false, path = "packages/hyperchad/router" }
 hyperchad_transformer          = { version = "0.1.0", default-features = false, path = "packages/hyperchad/transformer" }
 hyperchad_transformer_models   = { version = "0.1.0", default-features = false, path = "packages/hyperchad/transformer/models" }
+
+# Internal Simvar
+simvar         = { version = "0.1.0", default-features = false, path = "packages/simvar" }
+simvar_harness = { version = "0.1.0", default-features = false, path = "packages/simvar/harness" }
+simvar_utils   = { version = "0.1.0", default-features = false, path = "packages/simvar/utils" }
 
 app-tauri-plugin-player = { version = "0.1.0", default-features = false, path = "packages/app/tauri/tauri-plugin-player" }
 openport                = { version = "0.1.1", default-features = false, path = "packages/openport" }

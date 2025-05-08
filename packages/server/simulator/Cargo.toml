@@ -16,7 +16,9 @@ moosicbox_config = { workspace = true }
 moosicbox_env_utils = { workspace = true }
 moosicbox_logging = { workspace = true }
 moosicbox_server = { workspace = true, features = ["simulator"] }
-moosicbox_simulator_harness = { workspace = true, features = [
+moosicbox_task = { workspace = true }
+openport = { workspace = true }
+simvar = { workspace = true, features = [
     "async",
     "database",
     "fs",
@@ -29,8 +31,6 @@ moosicbox_simulator_harness = { workspace = true, features = [
     "tui",
     "upnp",
 ] }
-moosicbox_task = { workspace = true }
-openport = { workspace = true }
 switchy_telemetry = { workspace = true }
 
 actix-web  = { workspace = true }
@@ -48,6 +48,6 @@ fail-on-warnings = []
 
 player    = ["moosicbox_server/player"]
 telemetry = ["moosicbox_server/telemetry"]
-upnp      = ["moosicbox_server/upnp", "moosicbox_simulator_harness/upnp", "player"]
+upnp      = ["moosicbox_server/upnp", "player", "simvar/upnp"]
 
 sqlite = ["moosicbox_server/sqlite"]

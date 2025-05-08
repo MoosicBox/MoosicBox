@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use moosicbox_simulator_harness::{Sim, switchy::tcp::TcpStream};
+use simvar::{Sim, switchy::tcp::TcpStream};
 
 pub mod client;
 pub mod host;

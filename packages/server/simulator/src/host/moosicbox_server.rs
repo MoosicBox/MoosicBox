@@ -7,7 +7,8 @@ use std::{
 use actix_web::dev::ServerHandle;
 use moosicbox_config::AppType;
 use moosicbox_env_utils::default_env;
-use moosicbox_simulator_harness::{
+use net2::TcpBuilder;
+use simvar::{
     Sim,
     switchy::{
         random::rng,
@@ -16,7 +17,6 @@ use moosicbox_simulator_harness::{
     },
     utils::run_until_simulation_cancelled,
 };
-use net2::TcpBuilder;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 

@@ -48,7 +48,9 @@
 !/packages/server
 !/packages/session
 !/packages/session/models
-!/packages/simulator/utils
+!/packages/simvar
+!/packages/simvar/harness
+!/packages/simvar/utils
 !/packages/stream_utils
 !/packages/switchy
 !/packages/tcp

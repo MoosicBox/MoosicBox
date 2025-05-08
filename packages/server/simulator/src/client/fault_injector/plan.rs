@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use moosicbox_simulator_harness::{
+use simvar::{
     plan::InteractionPlan,
     switchy::{
         random::{rand::rand::seq::IteratorRandom as _, rng},

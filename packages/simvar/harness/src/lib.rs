@@ -18,7 +18,7 @@ use color_backtrace::{BacktracePrinter, termcolor::Buffer};
 use config::run_info;
 use formatting::TimeFormat as _;
 use host::{Host, HostResult};
-use moosicbox_simulator_utils::{
+use simvar_utils::{
     cancel_global_simulation, cancel_simulation, is_global_simulator_cancelled,
     is_simulator_cancelled, reset_simulator_cancellation_token, worker_thread_id,
 };
@@ -29,7 +29,7 @@ use switchy::{
 };
 
 pub use config::{SimConfig, SimProperties, SimResult, SimRunProperties};
-pub use moosicbox_simulator_utils as utils;
+pub use simvar_utils as utils;
 
 pub use switchy;
 

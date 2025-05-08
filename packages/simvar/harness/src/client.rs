@@ -1,7 +1,7 @@
 use std::pin::Pin;
 
-use moosicbox_simulator_utils::run_until_simulation_cancelled;
 use scoped_tls::scoped_thread_local;
+use simvar_utils::run_until_simulation_cancelled;
 use switchy::unsync::{futures::FutureExt as _, runtime, task::JoinHandle};
 
 use crate::Actor;
