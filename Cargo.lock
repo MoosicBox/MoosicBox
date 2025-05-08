@@ -12678,7 +12678,7 @@ dependencies = [
 
 [[package]]
 name = "switchy"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "switchy_async",
  "switchy_async_macros",
@@ -12697,7 +12697,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_async"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "futures",
  "log",
@@ -12715,7 +12715,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_async_cargo"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "clap 4.5.37",
  "log",
@@ -12726,7 +12726,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_async_macros"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "log",
  "quote",
@@ -12735,7 +12735,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_database"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "actix-web",
  "async-trait",
@@ -12758,7 +12758,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_database_connection"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "aws-config",
  "aws-sdk-ssm",
@@ -12777,7 +12777,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_fs"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bytes",
  "log",
@@ -12788,7 +12788,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_http"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "bytes",
@@ -12806,7 +12806,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_http_models"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "actix-web",
  "moosicbox_assert",
@@ -12818,7 +12818,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_mdns"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "hostname 0.4.1",
@@ -12834,7 +12834,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_random"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "log",
  "rand 0.8.5",
@@ -12842,7 +12842,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_tcp"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "bytes",
@@ -12860,7 +12860,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_telemetry"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "actix-web",
  "actix-web-opentelemetry",
@@ -12881,7 +12881,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_time"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "log",
  "scoped-tls",
@@ -12890,7 +12890,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_upnp"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "actix-web",
  "async-recursion",

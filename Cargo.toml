@@ -220,20 +220,20 @@ moosicbox_ws                 = { version = "0.1.1", default-features = false, pa
 moosicbox_yt                 = { version = "0.1.1", default-features = false, path = "packages/yt" }
 
 # Internal Switchy
-switchy                     = { version = "0.1.1", default-features = false, path = "packages/switchy" }
-switchy_async               = { version = "0.1.1", default-features = false, path = "packages/async" }
-switchy_async_macros        = { version = "0.1.1", default-features = false, path = "packages/async/macros" }
-switchy_database            = { version = "0.1.1", default-features = false, path = "packages/database" }
-switchy_database_connection = { version = "0.1.1", default-features = false, path = "packages/database_connection" }
-switchy_fs                  = { version = "0.1.1", default-features = false, path = "packages/fs" }
-switchy_http                = { version = "0.1.1", default-features = false, path = "packages/http" }
-switchy_http_models         = { version = "0.1.1", default-features = false, path = "packages/http/models" }
-switchy_mdns                = { version = "0.1.1", default-features = false, path = "packages/mdns" }
-switchy_random              = { version = "0.1.1", default-features = false, path = "packages/random" }
-switchy_tcp                 = { version = "0.1.1", default-features = false, path = "packages/tcp" }
-switchy_telemetry           = { version = "0.1.1", default-features = false, path = "packages/telemetry" }
-switchy_time                = { version = "0.1.1", default-features = false, path = "packages/time" }
-switchy_upnp                = { version = "0.1.1", default-features = false, path = "packages/upnp" }
+switchy                     = { version = "0.1.2", default-features = false, path = "packages/switchy" }
+switchy_async               = { version = "0.1.2", default-features = false, path = "packages/async" }
+switchy_async_macros        = { version = "0.1.2", default-features = false, path = "packages/async/macros" }
+switchy_database            = { version = "0.1.2", default-features = false, path = "packages/database" }
+switchy_database_connection = { version = "0.1.2", default-features = false, path = "packages/database_connection" }
+switchy_fs                  = { version = "0.1.2", default-features = false, path = "packages/fs" }
+switchy_http                = { version = "0.1.2", default-features = false, path = "packages/http" }
+switchy_http_models         = { version = "0.1.2", default-features = false, path = "packages/http/models" }
+switchy_mdns                = { version = "0.1.2", default-features = false, path = "packages/mdns" }
+switchy_random              = { version = "0.1.2", default-features = false, path = "packages/random" }
+switchy_tcp                 = { version = "0.1.2", default-features = false, path = "packages/tcp" }
+switchy_telemetry           = { version = "0.1.2", default-features = false, path = "packages/telemetry" }
+switchy_time                = { version = "0.1.2", default-features = false, path = "packages/time" }
+switchy_upnp                = { version = "0.1.2", default-features = false, path = "packages/upnp" }
 
 # Internal Hyperchad
 hyperchad                      = { version = "0.1.0", default-features = false, path = "packages/hyperchad" }

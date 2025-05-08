@@ -1,14 +1,14 @@
 [package]
 authors     = ["Braden Steffaniak"]
 categories  = ["development-tools"]
-description = "Switchyl package"
+description = "Switchy package"
 edition     = "2024"
 keywords    = ["switchy"]
 license     = "MPL-2.0"
 name        = "switchy"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
-version     = "0.1.1"
+version     = "0.1.2"
 
 [package.metadata.workspaces]
 group = "switchy"
