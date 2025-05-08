@@ -11,49 +11,43 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.1"
 
 [dependencies]
-moosicbox_assert          = { workspace = true }
 moosicbox_simulator_utils = { workspace = true }
-switchy_random            = { workspace = true, features = ["simulator"] }
-
-switchy_database_connection = { workspace = true, optional = true, features = [
+switchy = { workspace = true, features = [
+    "async",
+    "random",
     "simulator",
+    "tcp",
 ] }
-switchy_fs = { workspace = true, optional = true, features = ["simulator"] }
-switchy_http = { workspace = true, optional = true, features = ["simulator"] }
-switchy_mdns = { workspace = true, optional = true, features = ["simulator"] }
-switchy_tcp = { workspace = true, optional = true, features = ["simulator"] }
-switchy_telemetry = { workspace = true, optional = true, features = [
-    "simulator",
-] }
-switchy_time = { workspace = true, optional = true, features = ["simulator"] }
-switchy_upnp = { workspace = true, optional = true, features = ["simulator"] }
 
-ctrlc       = { workspace = true }
-log         = { workspace = true }
-shell-words = { workspace = true }
-turmoil     = { workspace = true }
+btparse         = { workspace = true }
+color-backtrace = { workspace = true }
+ctrlc           = { workspace = true }
+log             = { workspace = true }
+scoped-tls      = { workspace = true }
+shell-words     = { workspace = true }
+thiserror       = { workspace = true }
+
+# TUI
+oneshot = { workspace = true, optional = true }
+ratatui = { workspace = true, optional = true }
+
+# Logging
+pretty_env_logger = { workspace = true, optional = true }
 
 [features]
-default = [
-    "database",
-    "fs",
-    "http",
-    "mdns",
-    "random",
-    "tcp",
-    "telemetry",
-    "time",
-    "upnp",
-]
+default = ["pretty_env_logger", "tui"]
 
 fail-on-warnings = []
 
-database  = ["dep:switchy_database_connection"]
-fs        = ["dep:switchy_fs"]
-http      = ["dep:switchy_http"]
-mdns      = ["dep:switchy_mdns"]
+async     = []
+database  = ["switchy/database-connection"]
+fs        = ["switchy/fs"]
+http      = ["switchy/http"]
+mdns      = ["switchy/mdns"]
 random    = []
-tcp       = ["dep:switchy_tcp"]
-telemetry = ["dep:switchy_telemetry"]
-time      = ["dep:switchy_time"]
-upnp      = ["dep:switchy_upnp"]
+tcp       = []
+telemetry = ["switchy/telemetry"]
+time      = ["switchy/time"]
+upnp      = ["switchy/upnp"]
+
+tui = ["dep:oneshot", "dep:ratatui"]

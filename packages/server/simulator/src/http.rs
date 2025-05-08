@@ -1,6 +1,6 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, io};
 
-use moosicbox_simulator_harness::turmoil::{self, net::TcpStream};
+use moosicbox_simulator_harness::switchy::tcp::TcpStream;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
 pub struct HttpResponse {
@@ -33,11 +33,7 @@ pub fn headers_contains_in_order(
 /// # Errors
 ///
 /// * If fails to read/write any bytes from/to the `TcpStream`
-pub async fn http_request(
-    method: &str,
-    stream: &mut TcpStream,
-    path: &str,
-) -> turmoil::Result<String> {
+pub async fn http_request(method: &str, stream: &mut TcpStream, path: &str) -> io::Result<String> {
     let host = "127.0.0.1";
 
     let request = format!(

@@ -8,10 +8,7 @@ use std::{
     time::Duration,
 };
 
-use moosicbox_simulator_harness::{
-    CancellableSim,
-    turmoil::{self, net::TcpStream},
-};
+use moosicbox_simulator_harness::{Sim, switchy::tcp::TcpStream};
 
 pub mod client;
 pub mod host;
@@ -37,7 +34,7 @@ pub fn queue_bounce(host: impl Into<String>) {
 /// # Panics
 ///
 /// * If `ACTIONS` `Mutex` fails to lock
-pub fn handle_actions(sim: &mut impl CancellableSim) {
+pub fn handle_actions(sim: &mut impl Sim) {
     let actions = ACTIONS.lock().unwrap().drain(..).collect::<Vec<_>>();
     for action in actions {
         match action {
@@ -56,7 +53,7 @@ pub async fn try_connect(addr: &str, max_attempts: usize) -> Result<TcpStream, s
     let mut count = 0;
     Ok(loop {
         tokio::select! {
-            resp = turmoil::net::TcpStream::connect(addr) => {
+            resp = TcpStream::connect(addr) => {
                 match resp {
                     Ok(x) => break x,
                     Err(e) => {

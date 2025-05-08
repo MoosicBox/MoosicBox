@@ -50,6 +50,8 @@
 !/packages/session/models
 !/packages/simulator/utils
 !/packages/stream_utils
+!/packages/switchy
+!/packages/tcp
 !/packages/task
 !/packages/telemetry
 !/packages/tidal

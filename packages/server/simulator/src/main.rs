@@ -2,10 +2,10 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::sync::LazyLock;
+use std::{process::ExitCode, sync::LazyLock};
 
 use moosicbox_server_simulator::{client, handle_actions, host};
-use moosicbox_simulator_harness::{CancellableSim, SimBootstrap, run_simulation};
+use moosicbox_simulator_harness::{Sim, SimBootstrap, run_simulation};
 
 static PORT: LazyLock<Option<u16>> = LazyLock::new(|| {
     std::env::var("PORT")
@@ -19,20 +19,24 @@ static PORT: LazyLock<Option<u16>> = LazyLock::new(|| {
 pub struct Simulator;
 
 impl SimBootstrap for Simulator {
-    fn on_start(&self, sim: &mut impl CancellableSim) {
+    fn on_start(&self, sim: &mut impl Sim) {
         host::moosicbox_server::start(sim, *PORT);
 
         client::health_checker::start(sim);
         client::fault_injector::start(sim);
     }
 
-    fn on_step(&self, sim: &mut impl CancellableSim) {
+    fn on_step(&self, sim: &mut impl Sim) {
         handle_actions(sim);
     }
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    moosicbox_logging::init(None, None)?;
+fn main() -> Result<ExitCode, Box<dyn std::error::Error>> {
+    let results = run_simulation(Simulator)?;
 
-    run_simulation(&Simulator)
+    if results.iter().any(|x| !x.is_success()) {
+        return Ok(ExitCode::FAILURE);
+    }
+
+    Ok(ExitCode::SUCCESS)
 }

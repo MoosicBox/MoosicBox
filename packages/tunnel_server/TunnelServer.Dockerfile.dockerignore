@@ -13,12 +13,16 @@
 !/packages/http/models
 !/packages/json_utils
 !/packages/logging
+!/packages/mdns
 !/packages/middleware
 !/packages/profiles
 !/packages/random
 !/packages/simulator/utils
+!/packages/switchy
 !/packages/task
+!/packages/tcp
 !/packages/telemetry
 !/packages/time
 !/packages/tunnel
 !/packages/tunnel_server
+!/packages/upnp

@@ -1,7 +1,7 @@
 use std::sync::LazyLock;
 
 use moosicbox_simulator_harness::{
-    CancellableSim, plan::InteractionPlan as _, time::simulator::step_multiplier,
+    Sim, plan::InteractionPlan as _, switchy::time::simulator::step_multiplier,
 };
 use plan::{HealthCheckInteractionPlan, Interaction};
 use serde_json::Value;
@@ -13,10 +13,10 @@ use crate::{
     try_connect,
 };
 
-pub fn start(sim: &mut impl CancellableSim) {
+pub fn start(sim: &mut impl Sim) {
     let mut plan = HealthCheckInteractionPlan::new().with_gen_interactions(1000);
 
-    sim.client_until_cancelled("HealthCheck", async move {
+    sim.client("HealthCheck", async move {
         loop {
             while let Some(interaction) = plan.step() {
                 perform_interaction(interaction).await?;
@@ -28,7 +28,9 @@ pub fn start(sim: &mut impl CancellableSim) {
     });
 }
 
-async fn perform_interaction(interaction: &Interaction) -> Result<(), Box<dyn std::error::Error>> {
+async fn perform_interaction(
+    interaction: &Interaction,
+) -> Result<(), Box<dyn std::error::Error + Send>> {
     log::debug!("perform_interaction: interaction={interaction:?}");
 
     match interaction {
@@ -45,7 +47,7 @@ async fn perform_interaction(interaction: &Interaction) -> Result<(), Box<dyn st
     Ok(())
 }
 
-async fn health_check(host: &str) -> Result<(), Box<dyn std::error::Error>> {
+async fn health_check(host: &str) -> Result<(), Box<dyn std::error::Error + Send>> {
     static TIMEOUT: LazyLock<u64> = LazyLock::new(|| 10 * step_multiplier());
 
     tokio::select! {
@@ -56,14 +58,14 @@ async fn health_check(host: &str) -> Result<(), Box<dyn std::error::Error>> {
             return Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::TimedOut,
                 format!("Failed to get healthy response within {} seconds", *TIMEOUT)
-            )) as Box<dyn std::error::Error>);
+            )) as Box<dyn std::error::Error + Send>);
         }
     }
 
     Ok(())
 }
 
-async fn assert_health(host: &str) -> Result<(), Box<dyn std::error::Error>> {
+async fn assert_health(host: &str) -> Result<(), Box<dyn std::error::Error + Send>> {
     let response = loop {
         log::debug!("[Client] Connecting to server...");
         let mut stream = match try_connect(host, 1).await {

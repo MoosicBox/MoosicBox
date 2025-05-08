@@ -1,16 +1,16 @@
-use moosicbox_simulator_harness::{CancellableSim, plan::InteractionPlan as _, random::rng};
+use moosicbox_simulator_harness::{Sim, plan::InteractionPlan as _, switchy::random::rng};
 use plan::{FaultInjectionInteractionPlan, Interaction};
 
 pub mod plan;
 
 use crate::{host::moosicbox_server::HOST, queue_bounce};
 
-pub fn start(sim: &mut impl CancellableSim) {
+pub fn start(sim: &mut impl Sim) {
     log::debug!("Generating initial test plan");
 
     let mut plan = FaultInjectionInteractionPlan::new().with_gen_interactions(1000);
 
-    sim.client_until_cancelled("FaultInjector", async move {
+    sim.client("FaultInjector", async move {
         loop {
             while let Some(interaction) = plan.step() {
                 perform_interaction(interaction).await?;
@@ -21,7 +21,9 @@ pub fn start(sim: &mut impl CancellableSim) {
     });
 }
 
-async fn perform_interaction(interaction: &Interaction) -> Result<(), Box<dyn std::error::Error>> {
+async fn perform_interaction(
+    interaction: &Interaction,
+) -> Result<(), Box<dyn std::error::Error + Send>> {
     log::debug!("perform_interaction: interaction={interaction:?}");
 
     match interaction {

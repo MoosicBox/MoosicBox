@@ -8,11 +8,13 @@ use actix_web::dev::ServerHandle;
 use moosicbox_config::AppType;
 use moosicbox_env_utils::default_env;
 use moosicbox_simulator_harness::{
-    CancellableSim,
-    random::rng,
-    time::simulator::step_multiplier,
-    turmoil::{self, net::TcpStream},
-    utils::simulator_cancellation_token,
+    Sim,
+    switchy::{
+        random::rng,
+        tcp::{GenericTcpListener as _, GenericTcpStream as _, TcpListener, TcpStream},
+        time::simulator::step_multiplier,
+    },
+    utils::run_until_simulation_cancelled,
 };
 use net2::TcpBuilder;
 use tokio::task::JoinHandle;
@@ -28,7 +30,7 @@ pub static HANDLE: LazyLock<Arc<Mutex<Option<ServerHandle>>>> =
 /// # Panics
 ///
 /// * If fails to find and open port within the specified range
-pub fn start(sim: &mut impl CancellableSim, service_port: Option<u16>) {
+pub fn start(sim: &mut impl Sim, service_port: Option<u16>) {
     let service_port = service_port.unwrap_or_else(|| {
         openport::pick_unused_port(3000..=u16::MAX).expect("No open ports within acceptable range")
     });
@@ -55,41 +57,41 @@ pub fn start(sim: &mut impl CancellableSim, service_port: Option<u16>) {
         async move {
             log::info!("starting 'moosicbox' server");
 
-            let join_handle: Option<_> = simulator_cancellation_token()
-                .run_until_cancelled({
-                    let addr = addr.clone();
-                    async move {
-                        let actual_tcp_listener = bind_std_tcp_addr(&addr).await?;
+            let join_handle = run_until_simulation_cancelled(async move {
+                let addr = addr.clone();
+                let actual_tcp_listener = bind_std_tcp_addr(&addr)
+                    .await
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
 
-                        log::info!("'moosicbox' server TCP listener bound to addr={addr}");
+                log::info!("'moosicbox' server TCP listener bound to addr={addr}");
 
-                        let join_handle = moosicbox_server::run(
-                            AppType::Server,
-                            &host,
-                            service_port,
-                            actix_workers,
-                            Some(actual_tcp_listener),
-                            #[cfg(feature = "player")]
-                            true,
-                            #[cfg(feature = "upnp")]
-                            true,
-                            #[cfg(feature = "telemetry")]
-                            metrics_handler,
-                            move |handle| {
-                                *HANDLE.lock().unwrap() = Some(handle);
-                                if token.is_cancelled() {
-                                    moosicbox_assert::die!("already cancelled");
-                                }
-                                log::info!("moosicbox server started");
-                                start_tcp_listen(&addr, token)
-                            },
-                        )
-                        .await?;
+                let join_handle = moosicbox_server::run(
+                    AppType::Server,
+                    &host,
+                    service_port,
+                    actix_workers,
+                    Some(actual_tcp_listener),
+                    #[cfg(feature = "player")]
+                    true,
+                    #[cfg(feature = "upnp")]
+                    true,
+                    #[cfg(feature = "telemetry")]
+                    metrics_handler,
+                    move |handle| {
+                        *HANDLE.lock().unwrap() = Some(handle);
+                        if token.is_cancelled() {
+                            moosicbox_assert::die!("already cancelled");
+                        }
+                        log::info!("moosicbox server started");
+                        start_tcp_listen(&addr, token)
+                    },
+                )
+                .await
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
 
-                        Ok::<_, Box<dyn std::error::Error>>(join_handle)
-                    }
-                })
-                .await;
+                Ok::<_, Box<dyn std::error::Error + Send>>(join_handle)
+            })
+            .await;
 
             let binding = HANDLE.lock().unwrap().take().clone();
             if let Some(existing) = binding {
@@ -100,7 +102,10 @@ pub fn start(sim: &mut impl CancellableSim, service_port: Option<u16>) {
             log::info!("moosicbox server closed");
 
             if let Some(join_handle) = join_handle {
-                if let Err(e) = join_handle?.await? {
+                if let Err(e) = join_handle?
+                    .await
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?
+                {
                     log::error!("moosicbox_server error: {e:?}");
                 }
             }
@@ -185,7 +190,7 @@ fn start_tcp_listen(
     moosicbox_task::spawn("simulation TCP listener", async move {
         log::debug!("simulation TCP listener: starting TcpListener...");
 
-        let listener = turmoil::net::TcpListener::bind(format!("0.0.0.0:{PORT}"))
+        let listener = TcpListener::bind(format!("0.0.0.0:{PORT}"))
             .await
             .inspect_err(|e| {
                 log::error!("simulation TCP listener: failed to bind TcpListener: {e:?}");

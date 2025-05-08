@@ -58,6 +58,8 @@ RUN cat Cargo.toml | \
     \"packages\/session\/models\",\r\
     \"packages\/simulator\/utils\",\r\
     \"packages\/stream_utils\",\r\
+    \"packages\/switchy\",\r\
+    \"packages\/tcp\",\r\
     \"packages\/task\",\r\
     \"packages\/telemetry\",\r\
     \"packages\/tidal\",\r\
@@ -122,6 +124,8 @@ COPY packages/session/Cargo.toml packages/session/Cargo.toml
 COPY packages/session/models/Cargo.toml packages/session/models/Cargo.toml
 COPY packages/simulator/utils/Cargo.toml packages/simulator/utils/Cargo.toml
 COPY packages/stream_utils/Cargo.toml packages/stream_utils/Cargo.toml
+COPY packages/switchy/Cargo.toml packages/switchy/Cargo.toml
+COPY packages/tcp/Cargo.toml packages/tcp/Cargo.toml
 COPY packages/task/Cargo.toml packages/task/Cargo.toml
 COPY packages/telemetry/Cargo.toml packages/telemetry/Cargo.toml
 COPY packages/tidal/Cargo.toml packages/tidal/Cargo.toml
@@ -179,6 +183,8 @@ packages/search|\
 packages/server|\
 packages/session|\
 packages/stream_utils|\
+packages/switchy|\
+packages/tcp|\
 packages/task|\
 packages/telemetry|\
 packages/tidal|\

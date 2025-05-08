@@ -2,8 +2,10 @@ use std::time::Duration;
 
 use moosicbox_simulator_harness::{
     plan::InteractionPlan,
-    random::{rand::rand::seq::IteratorRandom as _, rng},
-    time::simulator::step_multiplier,
+    switchy::{
+        random::{rand::rand::seq::IteratorRandom as _, rng},
+        time::simulator::step_multiplier,
+    },
 };
 use strum::{EnumDiscriminants, EnumIter, IntoEnumIterator as _};
 

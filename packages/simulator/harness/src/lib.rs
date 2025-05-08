@@ -3,42 +3,50 @@
 #![allow(clippy::multiple_crate_versions)]
 
 use std::{
+    cell::RefCell,
+    collections::BTreeMap,
     panic::AssertUnwindSafe,
-    sync::{Arc, LazyLock, Mutex, atomic::AtomicBool},
+    sync::{
+        Arc, LazyLock, Mutex,
+        atomic::{AtomicBool, AtomicU64},
+    },
     time::{Duration, SystemTime},
 };
 
+use client::{Client, ClientResult};
+use color_backtrace::{BacktracePrinter, termcolor::Buffer};
+use config::run_info;
 use formatting::TimeFormat as _;
+use host::{Host, HostResult};
 use moosicbox_simulator_utils::{
-    cancel_simulation, duration, reset_simulator_cancellation_token, reset_step,
-    simulator_cancellation_token, step_next,
+    cancel_global_simulation, cancel_simulation, is_global_simulator_cancelled,
+    is_simulator_cancelled, reset_simulator_cancellation_token, worker_thread_id,
 };
-use turmoil::Sim;
+use switchy::{
+    random::{rand::rand::seq::SliceRandom as _, rng},
+    time::simulator::{current_step, next_step, reset_step},
+    unsync::thread_id,
+};
 
+pub use config::{SimConfig, SimProperties, SimResult, SimRunProperties};
 pub use moosicbox_simulator_utils as utils;
-pub use turmoil;
 
-#[cfg(feature = "database")]
-pub use switchy_database_connection as database_connection;
-#[cfg(feature = "fs")]
-pub use switchy_fs as fs;
-#[cfg(feature = "http")]
-pub use switchy_http as http;
-#[cfg(feature = "mdns")]
-pub use switchy_mdns as mdns;
-#[cfg(feature = "random")]
-pub use switchy_random as random;
-#[cfg(feature = "tcp")]
-pub use switchy_tcp as tcp;
-#[cfg(feature = "telemetry")]
-pub use switchy_telemetry as telemetry;
-#[cfg(feature = "time")]
-pub use switchy_time as time;
-#[cfg(feature = "upnp")]
-pub use switchy_upnp as upnp;
+pub use switchy;
 
+mod client;
+mod config;
 mod formatting;
+mod host;
+mod logging;
 pub mod plan;
+#[cfg(feature = "tui")]
+mod tui;
+
+const USE_TUI: bool = cfg!(feature = "tui") && std::option_env!("NO_TUI").is_none();
+
+thread_local! {
+    static PANIC: RefCell<Option<String>> = const { RefCell::new(None) };
+}
 
 static RUNS: LazyLock<u64> = LazyLock::new(|| {
     std::env::var("SIMULATOR_RUNS")
@@ -46,157 +54,46 @@ static RUNS: LazyLock<u64> = LazyLock::new(|| {
         .map_or(1, |x| x.parse::<u64>().unwrap())
 });
 
-fn run_info(run_index: u64, props: &[(String, String)]) -> String {
-    #[cfg(feature = "time")]
-    let extra = {
-        use switchy_time::simulator::{epoch_offset, step_multiplier};
-
-        format!(
-            "\n\
-            epoch_offset={epoch_offset}\n\
-            step_multiplier={step_multiplier}",
-            epoch_offset = epoch_offset(),
-            step_multiplier = step_multiplier(),
-        )
-    };
-    #[cfg(not(feature = "time"))]
-    let extra = String::new();
-
-    let mut props_str = String::new();
-    for (k, v) in props {
-        use std::fmt::Write as _;
-
-        write!(props_str, "\n{k}={v}").unwrap();
-    }
-
-    let runs = *RUNS;
-    let runs = if runs > 1 {
-        format!("{run_index}/{runs}")
-    } else {
-        runs.to_string()
-    };
-
-    format!(
-        "\
-        seed={seed}\n\
-        runs={runs}\
-        {extra}{props_str}",
-        seed = switchy_random::simulator::seed(),
-    )
-}
-
-fn get_cargoified_args() -> Vec<String> {
-    let mut args = std::env::args().collect::<Vec<_>>();
-
-    let Some(cmd) = args.first() else {
-        return args;
-    };
-
-    let mut components = cmd.split('/');
-
-    if matches!(components.next(), Some("target")) {
-        let Some(profile) = components.next() else {
-            return args;
-        };
-        let profile = profile.to_string();
-
-        let Some(binary_name) = components.next() else {
-            return args;
-        };
-        let binary_name = binary_name.to_string();
-
-        args.remove(0);
-        args.insert(0, binary_name);
-        args.insert(0, "-p".to_string());
-
-        if profile == "release" {
-            args.insert(0, "--release".to_string());
-        } else if profile != "debug" {
-            args.insert(0, profile);
-            args.insert(0, "--profile".to_string());
-        }
-
-        args.insert(0, "run".to_string());
-        args.insert(0, "cargo".to_string());
-    }
-
-    args
-}
-
-fn get_run_command(skip_env: &[&str], seed: u64) -> String {
-    let args = get_cargoified_args();
-    let quoted_args = args
-        .iter()
-        .map(|x| shell_words::quote(x.as_str()))
-        .collect::<Vec<_>>();
-    let cmd = quoted_args.join(" ");
-
-    let mut env_vars = String::new();
-
-    for (name, value) in std::env::vars() {
-        use std::fmt::Write as _;
-
-        if !name.starts_with("SIMULATOR_") && name != "RUST_LOG" {
-            continue;
-        }
-        if skip_env.iter().any(|x| *x == name) {
-            continue;
-        }
-
-        write!(env_vars, "{name}={} ", shell_words::quote(value.as_str())).unwrap();
-    }
-
-    format!("SIMULATOR_SEED={seed} {env_vars}{cmd}")
-}
-
-#[allow(clippy::cast_precision_loss)]
-fn run_info_end(
-    run_index: u64,
-    props: &[(String, String)],
-    successful: bool,
-    real_time_millis: u128,
-    sim_time_millis: u128,
-) -> String {
-    let run_from_seed = if *RUNS == 1 && switchy_random::simulator::contains_fixed_seed() {
-        String::new()
-    } else {
-        let cmd = get_run_command(
-            &["SIMULATOR_SEED", "SIMULATOR_RUNS", "SIMULATOR_DURATION"],
-            switchy_random::simulator::seed(),
-        );
-        format!("\n\nTo run again with this seed: `{cmd}`")
-    };
-    let run_from_start = if !switchy_random::simulator::contains_fixed_seed() && *RUNS > 1 {
-        let cmd = get_run_command(
-            &["SIMULATOR_SEED"],
-            switchy_random::simulator::initial_seed(),
-        );
-        format!("\nTo run entire simulation again from the first run: `{cmd}`")
-    } else {
-        String::new()
-    };
-    format!(
-        "\
-        {run_info}\n\
-        successful={successful}\n\
-        real_time_elapsed={real_time}\n\
-        simulated_time_elapsed={simulated_time} ({simulated_time_x:.2}x)\
-        {run_from_seed}{run_from_start}",
-        run_info = run_info(run_index, props),
-        real_time = real_time_millis.into_formatted(),
-        simulated_time = sim_time_millis.into_formatted(),
-        simulated_time_x = sim_time_millis as f64 / real_time_millis as f64,
-    )
-}
-
 static END_SIM: LazyLock<AtomicBool> = LazyLock::new(|| AtomicBool::new(false));
+
+#[cfg(feature = "tui")]
+static DISPLAY_STATE: LazyLock<tui::DisplayState> = LazyLock::new(tui::DisplayState::new);
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    IO(#[from] std::io::Error),
+    #[error(transparent)]
+    Step(Box<dyn std::error::Error + Send>),
+}
+
+fn ctrl_c() {
+    log::debug!("ctrl_c called");
+    #[cfg(feature = "tui")]
+    if USE_TUI {
+        DISPLAY_STATE.exit();
+    }
+    end_sim();
+}
 
 pub fn end_sim() {
     END_SIM.store(true, std::sync::atomic::Ordering::SeqCst);
 
-    if !simulator_cancellation_token().is_cancelled() {
-        cancel_simulation();
+    if !is_global_simulator_cancelled() {
+        cancel_global_simulation();
     }
+}
+
+fn try_get_backtrace() -> Option<String> {
+    let bt = std::backtrace::Backtrace::force_capture();
+    let bt = btparse::deserialize(&bt).ok()?;
+
+    let mut buffer = Buffer::ansi();
+    BacktracePrinter::default()
+        .print_trace(&bt, &mut buffer)
+        .ok()?;
+
+    Some(String::from_utf8_lossy(buffer.as_slice()).to_string())
 }
 
 /// # Panics
@@ -208,70 +105,309 @@ pub fn end_sim() {
 /// * The contents of this function are wrapped in a `catch_unwind` call, so if
 ///   any panic happens, it will be wrapped into an error on the outer `Result`
 /// * If the `Sim` `step` returns an error, we return that in an Ok(Err(e))
-#[allow(clippy::too_many_lines)]
-pub fn run_simulation(bootstrap: &impl SimBootstrap) -> Result<(), Box<dyn std::error::Error>> {
-    ctrlc::set_handler(end_sim).expect("Error setting Ctrl-C handler");
+#[allow(clippy::let_and_return)]
+pub fn run_simulation<B: SimBootstrap>(
+    bootstrap: B,
+) -> Result<Vec<SimResult>, Box<dyn std::error::Error>> {
+    static MAX_PARALLEL: LazyLock<u64> = LazyLock::new(|| {
+        std::env::var("SIMULATOR_MAX_PARALLEL").ok().map_or_else(
+            || {
+                u64::try_from(
+                    std::thread::available_parallelism()
+                        .map(Into::into)
+                        .unwrap_or(1usize),
+                )
+                .unwrap()
+            },
+            |x| x.parse::<u64>().unwrap(),
+        )
+    });
 
-    let panic = Arc::new(Mutex::new(None));
+    // claim thread_id 1 for main thread
+    let _ = thread_id();
+
+    ctrlc::set_handler(ctrl_c).expect("Error setting Ctrl-C handler");
+
+    #[cfg(feature = "pretty_env_logger")]
+    logging::init_pretty_env_logger()?;
+
+    #[cfg(feature = "tui")]
+    let tui_handle = if USE_TUI {
+        Some(tui::spawn(DISPLAY_STATE.clone()))
+    } else {
+        None
+    };
+
     std::panic::set_hook(Box::new({
-        let prev_hook = std::panic::take_hook();
-        let panic = panic.clone();
         move |x| {
-            *panic.lock().unwrap() = Some(x.to_string());
+            let thread_id = thread_id();
+            let mut panic_str = x.to_string();
+            if let Some(bt) = try_get_backtrace() {
+                panic_str = format!("{panic_str}\n{bt}");
+            }
+            log::debug!("caught panic on thread_id={thread_id}: {panic_str}");
+            PANIC.with_borrow_mut(|x| *x = Some(panic_str));
             end_sim();
-            prev_hook(x);
         }
     }));
 
     let runs = *RUNS;
+    let max_parallel = *MAX_PARALLEL;
 
-    for run_index in 1..=runs {
-        switchy_random::simulator::reset_rng();
+    log::debug!("Running simulation with max_parallel={max_parallel}");
+
+    let sim_orchestrator = SimOrchestrator::new(
+        bootstrap,
+        runs,
+        max_parallel,
+        #[cfg(feature = "tui")]
+        DISPLAY_STATE.clone(),
+    );
+
+    let resp = sim_orchestrator.start();
+
+    #[cfg(feature = "tui")]
+    if let Some(tui_handle) = tui_handle {
+        tui_handle.join().unwrap()?;
+    }
+
+    #[cfg(feature = "tui")]
+    if USE_TUI {
+        if let Ok(results) = &resp {
+            eprintln!(
+                "{}",
+                results
+                    .iter()
+                    .filter(|x| !x.is_success())
+                    .map(SimResult::to_string)
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            );
+        }
+    }
+
+    resp
+}
+
+struct SimOrchestrator<B: SimBootstrap> {
+    bootstrap: B,
+    runs: u64,
+    max_parallel: u64,
+    #[cfg(feature = "tui")]
+    display_state: tui::DisplayState,
+}
+
+impl<B: SimBootstrap> SimOrchestrator<B> {
+    const fn new(
+        bootstrap: B,
+        runs: u64,
+        max_parallel: u64,
+        #[cfg(feature = "tui")] display_state: tui::DisplayState,
+    ) -> Self {
+        Self {
+            bootstrap,
+            runs,
+            max_parallel,
+            #[cfg(feature = "tui")]
+            display_state,
+        }
+    }
+
+    fn start(self) -> Result<Vec<SimResult>, Box<dyn std::error::Error>> {
+        let parallel = std::cmp::min(self.runs, self.max_parallel);
+        let run_index = Arc::new(AtomicU64::new(0));
+
+        let bootstrap = Arc::new(self.bootstrap);
+        let results = Arc::new(Mutex::new(BTreeMap::new()));
+
+        if self.max_parallel == 0 {
+            for run_number in 1..=self.runs {
+                let simulation = Simulation::new(
+                    &*bootstrap,
+                    #[cfg(feature = "tui")]
+                    self.display_state.clone(),
+                );
+
+                let result = simulation.run(run_number, None);
+
+                results.lock().unwrap().insert(0, result);
+
+                if END_SIM.load(std::sync::atomic::Ordering::SeqCst) {
+                    break;
+                }
+            }
+        } else {
+            let mut threads = vec![];
+
+            for i in 0..parallel {
+                log::debug!("starting thread {i}");
+
+                let run_index = run_index.clone();
+                let bootstrap = bootstrap.clone();
+                let runs = self.runs;
+                let results = results.clone();
+                #[cfg(feature = "tui")]
+                let display_state = self.display_state.clone();
+
+                let handle = std::thread::spawn(move || {
+                    let _ = thread_id();
+                    let thread_id = worker_thread_id();
+                    let simulation = Simulation::new(
+                        &*bootstrap,
+                        #[cfg(feature = "tui")]
+                        display_state.clone(),
+                    );
+
+                    loop {
+                        if END_SIM.load(std::sync::atomic::Ordering::SeqCst) {
+                            log::debug!("simulation has ended. thread {i} ({thread_id}) finished");
+                            break;
+                        }
+
+                        let run_index = run_index.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        if run_index >= runs {
+                            log::debug!(
+                                "finished all runs ({runs}). thread {i} ({thread_id}) finished"
+                            );
+                            break;
+                        }
+
+                        log::debug!(
+                            "starting simulation run_index={run_index} on thread {i} ({thread_id})"
+                        );
+
+                        let result = simulation.run(run_index + 1, Some(thread_id));
+
+                        results.lock().unwrap().insert(thread_id, result);
+
+                        log::debug!(
+                            "simulation finished run_index={run_index} on thread {i} ({thread_id})"
+                        );
+                    }
+
+                    Ok::<_, String>(())
+                });
+
+                threads.push(handle);
+            }
+
+            let mut errors = vec![];
+
+            for (i, thread) in threads.into_iter().enumerate() {
+                log::debug!("joining thread {i}...");
+
+                match thread.join() {
+                    Ok(x) => {
+                        if let Err(e) = x {
+                            errors.push(e);
+                        }
+                        log::debug!("thread {i} joined");
+                    }
+                    Err(e) => {
+                        log::error!("failed to join thread {i}: {e:?}");
+                    }
+                }
+            }
+
+            if !errors.is_empty() {
+                return Err(errors.join("\n").into());
+            }
+        }
+
+        Ok(Arc::try_unwrap(results)
+            .unwrap()
+            .into_inner()
+            .unwrap()
+            .into_values()
+            .collect())
+    }
+}
+
+struct Simulation<'a, B: SimBootstrap> {
+    #[cfg(feature = "tui")]
+    display_state: tui::DisplayState,
+    bootstrap: &'a B,
+}
+
+impl<'a, B: SimBootstrap> Simulation<'a, B> {
+    const fn new(
+        bootstrap: &'a B,
+        #[cfg(feature = "tui")] display_state: tui::DisplayState,
+    ) -> Self {
+        Self {
+            #[cfg(feature = "tui")]
+            display_state,
+            bootstrap,
+        }
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn run(&self, run_number: u64, thread_id: Option<u64>) -> SimResult {
+        if run_number > 1 {
+            switchy::random::simulator::reset_seed();
+        }
+
+        switchy::random::simulator::reset_rng();
+        switchy::tcp::simulator::reset();
         #[cfg(feature = "fs")]
-        switchy_fs::simulator::reset_fs();
+        switchy::fs::simulator::reset_fs();
         #[cfg(feature = "time")]
-        switchy_time::simulator::reset_epoch_offset();
+        switchy::time::simulator::reset_epoch_offset();
         #[cfg(feature = "time")]
-        switchy_time::simulator::reset_step_multiplier();
+        switchy::time::simulator::reset_step_multiplier();
         reset_simulator_cancellation_token();
         reset_step();
 
-        let duration_secs = duration();
+        self.bootstrap.init();
 
-        bootstrap.init();
+        let config = self.bootstrap.build_sim(SimConfig::from_rng());
+        let duration = config.duration;
+        let duration_steps = duration.as_millis();
 
-        let builder = bootstrap.build_sim(sim_builder());
-        #[cfg(feature = "random")]
-        let sim = builder.build_with_rng(Box::new(switchy_random::rng().clone()));
-        #[cfg(not(feature = "random"))]
-        let sim = builder.build();
+        let mut managed_sim = ManagedSim::new(config);
 
-        let mut managed_sim = ManagedSim::new(sim);
+        let props = SimProperties {
+            run_number,
+            thread_id,
+            config,
+            extra: self.bootstrap.props(),
+        };
 
-        let props = bootstrap.props();
-
-        println!(
+        logging::log_message(format!(
             "\n\
             =========================== START ============================\n\
             Server simulator starting\n{}\n\
             ==============================================================\n",
-            run_info(run_index, &props)
-        );
+            run_info(&props)
+        ));
 
         let start = SystemTime::now();
 
-        bootstrap.on_start(&mut managed_sim);
+        #[cfg(feature = "tui")]
+        self.display_state
+            .update_sim_state(thread_id.unwrap_or(1), run_number, config, 0.0, false);
+
+        self.bootstrap.on_start(&mut managed_sim);
 
         let resp = std::panic::catch_unwind(AssertUnwindSafe(|| {
-            let print_step = |sim: &Sim<'_>, step| {
-                #[allow(clippy::cast_precision_loss)]
-                if duration_secs < u64::MAX {
+            let print_step = |sim: &ManagedSim, step| {
+                if duration < Duration::MAX {
+                    #[allow(clippy::cast_precision_loss)]
+                    let progress = (step as f64 / duration_steps as f64).clamp(0.0, 1.0);
+
+                    #[cfg(feature = "tui")]
+                    self.display_state.update_sim_state(
+                        thread_id.unwrap_or(1),
+                        run_number,
+                        config,
+                        progress,
+                        false,
+                    );
+
                     log::info!(
                         "step {step} ({}) ({:.1}%)",
                         sim.elapsed().as_millis().into_formatted(),
-                        SystemTime::now().duration_since(start).unwrap().as_millis() as f64
-                            / (duration_secs as f64 * 1000.0)
-                            * 100.0,
+                        progress * 100.0,
                     );
                 } else {
                     log::info!(
@@ -281,149 +417,282 @@ pub fn run_simulation(bootstrap: &impl SimBootstrap) -> Result<(), Box<dyn std::
                 }
             };
 
-            loop {
-                if !simulator_cancellation_token().is_cancelled() {
-                    let step = step_next();
+            managed_sim.start();
 
-                    if duration_secs < u64::MAX
-                        && SystemTime::now().duration_since(start).unwrap().as_secs()
-                            >= duration_secs
-                    {
-                        print_step(&managed_sim.sim, step);
+            loop {
+                if !is_simulator_cancelled() {
+                    let step = next_step();
+
+                    if duration < Duration::MAX && u128::from(step) >= duration_steps {
+                        log::debug!("sim ran for {duration_steps} steps. stopping");
+                        print_step(&managed_sim, step);
                         cancel_simulation();
+                        break;
                     }
 
                     if step % 1000 == 0 {
-                        print_step(&managed_sim.sim, step);
+                        print_step(&managed_sim, step);
                     }
 
-                    bootstrap.on_step(&mut managed_sim);
+                    self.bootstrap.on_step(&mut managed_sim);
+
+                    #[cfg(feature = "tui")]
+                    self.display_state
+                        .update_sim_step(thread_id.unwrap_or(1), step);
                 }
 
-                match managed_sim.sim.step() {
-                    Ok(completed) => {
-                        if completed {
-                            log::debug!("sim completed");
-                            break;
-                        }
-                    }
-                    Err(e) => {
-                        let message = e.to_string();
-                        if message.starts_with("Ran for duration: ")
-                            && message.ends_with(" without completing")
-                        {
-                            break;
-                        }
-                        return Err(e);
-                    }
+                if managed_sim.step()? {
+                    log::debug!("sim completed");
+                    break;
                 }
             }
 
-            Ok(())
+            Ok::<_, Error>(())
         }));
 
-        bootstrap.on_end(&mut managed_sim);
+        self.bootstrap.on_end(&mut managed_sim);
 
         let end = SystemTime::now();
         let real_time_millis = end.duration_since(start).unwrap().as_millis();
-        let sim_time_millis = managed_sim.sim.elapsed().as_millis();
+        let sim_time_millis = managed_sim.elapsed().as_millis();
+        let steps = current_step() - 1;
+
+        #[cfg(feature = "tui")]
+        self.display_state.run_completed();
+
+        log::debug!("after simulation run");
+
+        let run = SimRunProperties {
+            steps,
+            real_time_millis,
+            sim_time_millis,
+        };
 
         managed_sim.shutdown();
 
-        let panic = panic.lock().unwrap().clone();
+        let panic = PANIC.with_borrow(Clone::clone);
 
-        println!(
-            "\n\
-            =========================== FINISH ===========================\n\
-            Server simulator finished\n{}\n\
-            ==============================================================",
-            run_info_end(
-                run_index,
-                &props,
-                resp.as_ref().is_ok_and(Result::is_ok) && panic.is_none(),
-                real_time_millis,
-                sim_time_millis,
-            )
+        let result = if let Err(e) = resp {
+            SimResult::Fail {
+                props,
+                run,
+                error: if panic.is_none() {
+                    Some(format!("{e:?}"))
+                } else {
+                    None
+                },
+                panic,
+            }
+        } else if let Ok(Err(e)) = resp {
+            SimResult::Fail {
+                props,
+                run,
+                error: Some(e.to_string()),
+                panic,
+            }
+        } else if let Some(panic) = panic {
+            SimResult::Fail {
+                props,
+                run,
+                error: None,
+                panic: Some(panic),
+            }
+        } else {
+            SimResult::Success { props, run }
+        };
+
+        if !result.is_success() {
+            end_sim();
+        }
+
+        #[cfg(feature = "tui")]
+        self.display_state
+            .update_sim_step(thread_id.unwrap_or(1), steps);
+        #[cfg(feature = "tui")]
+        self.display_state.update_sim_state(
+            thread_id.unwrap_or(1),
+            run_number,
+            config,
+            #[allow(clippy::cast_precision_loss)]
+            if duration < Duration::MAX {
+                (current_step() as f64 / duration_steps as f64).clamp(0.0, 1.0)
+            } else {
+                0.0
+            },
+            !result.is_success(),
         );
 
-        if let Some(panic) = panic {
-            return Err(panic.into());
-        }
+        logging::log_message(result.to_string());
 
-        resp.unwrap()?;
-
-        if END_SIM.load(std::sync::atomic::Ordering::SeqCst) {
-            break;
-        }
-
-        switchy_random::simulator::reset_seed();
+        result
     }
-
-    Ok(())
 }
 
-fn sim_builder() -> turmoil::Builder {
-    let mut builder = turmoil::Builder::new();
-
-    builder
-        .fail_rate(0.0)
-        .repair_rate(1.0)
-        .simulation_duration(Duration::MAX);
-
-    #[cfg(feature = "time")]
-    builder.tick_duration(Duration::from_millis(
-        switchy_time::simulator::step_multiplier(),
-    ));
-
-    builder
-}
-
-pub trait SimBootstrap {
+pub trait SimBootstrap: Send + Sync + 'static {
     #[must_use]
     fn props(&self) -> Vec<(String, String)> {
         vec![]
     }
 
     #[must_use]
-    fn build_sim(&self, builder: turmoil::Builder) -> turmoil::Builder {
-        builder
+    fn build_sim(&self, config: SimConfig) -> SimConfig {
+        config
     }
 
     fn init(&self) {}
 
-    fn on_start(&self, #[allow(unused)] sim: &mut impl CancellableSim) {}
+    fn on_start(&self, #[allow(unused)] sim: &mut impl Sim) {}
 
-    fn on_step(&self, #[allow(unused)] sim: &mut impl CancellableSim) {}
+    fn on_step(&self, #[allow(unused)] sim: &mut impl Sim) {}
 
-    fn on_end(&self, #[allow(unused)] sim: &mut impl CancellableSim) {}
+    fn on_end(&self, #[allow(unused)] sim: &mut impl Sim) {}
 }
 
-pub trait CancellableSim {
+pub trait Sim {
     fn bounce(&mut self, host: impl Into<String>);
 
     fn host<
-        F: Fn() -> Fut + 'static,
-        Fut: Future<Output = Result<(), Box<dyn std::error::Error>>> + 'static,
+        F: Fn() -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = HostResult> + Send + 'static,
     >(
         &mut self,
-        name: &str,
+        name: impl Into<String>,
         action: F,
     );
 
-    fn client_until_cancelled(
+    fn client(
         &mut self,
-        name: &str,
-        action: impl Future<Output = Result<(), Box<dyn std::error::Error>>> + 'static,
+        name: impl Into<String>,
+        action: impl Future<Output = ClientResult> + Send + 'static,
     );
 }
 
-struct ManagedSim<'a> {
-    sim: Sim<'a>,
+struct ManagedSim {
+    config: SimConfig,
+    hosts: Vec<Host>,
+    clients: Vec<Client>,
+    start: Option<SystemTime>,
 }
 
-impl<'a> ManagedSim<'a> {
-    const fn new(sim: Sim<'a>) -> Self {
-        Self { sim }
+impl ManagedSim {
+    const fn new(config: SimConfig) -> Self {
+        Self {
+            config,
+            hosts: vec![],
+            clients: vec![],
+            start: None,
+        }
+    }
+
+    pub fn elapsed(&self) -> Duration {
+        let Some(start) = self.start else {
+            return Duration::ZERO;
+        };
+        switchy::time::now().duration_since(start).unwrap()
+    }
+
+    pub fn start(&mut self) {
+        self.start = Some(switchy::time::now());
+
+        for host in self.hosts.iter_mut().filter(|x| !x.has_started()) {
+            host.start();
+        }
+        for client in &mut self.clients {
+            client.start();
+        }
+    }
+
+    pub fn step(&mut self) -> Result<bool, Error> {
+        log::trace!("step {}", current_step());
+        // if current_step() == 300 {
+        //     panic!();
+        // }
+
+        let mut actors = self
+            .hosts
+            .iter()
+            .map(|x| Box::new(x) as Box<dyn Actor>)
+            .chain(self.clients.iter().map(|x| Box::new(x) as Box<dyn Actor>))
+            .collect::<Vec<_>>();
+
+        if self.config.enable_random_order {
+            actors.shuffle(&mut rng());
+        }
+
+        for actor in actors {
+            actor.tick();
+        }
+
+        let mut remaining_hosts = vec![];
+
+        for mut host in self.hosts.drain(..) {
+            if host.is_running() {
+                remaining_hosts.push(host);
+                continue;
+            }
+            if let Some(handle) = host.handle {
+                host.runtime
+                    .block_on(handle)
+                    .flatten()
+                    .transpose()
+                    .map_err(Error::Step)?;
+            }
+        }
+
+        self.hosts = remaining_hosts;
+
+        let mut remaining_clients = vec![];
+
+        for mut client in self.clients.drain(..) {
+            if client.is_running() {
+                remaining_clients.push(client);
+                continue;
+            }
+            if let Some(handle) = client.handle {
+                client
+                    .runtime
+                    .block_on(handle)
+                    .flatten()
+                    .transpose()
+                    .map_err(Error::Step)?;
+            }
+        }
+
+        self.clients = remaining_clients;
+
+        if is_simulator_cancelled() {
+            log::debug!("cancelled!");
+            let client_count = self.clients.len();
+            for (i, client) in self.clients.drain(..).enumerate() {
+                log::debug!("cancelling client {}/{client_count}!", i + 1);
+                if let Some(handle) = client.handle {
+                    client
+                        .runtime
+                        .block_on(handle)
+                        .flatten()
+                        .transpose()
+                        .map_err(Error::Step)?;
+                }
+            }
+
+            let host_count = self.hosts.len();
+            for (i, host) in self.hosts.drain(..).enumerate() {
+                log::debug!("cancelling host {}/{host_count}!", i + 1);
+                if let Some(handle) = host.handle {
+                    host.runtime
+                        .block_on(handle)
+                        .flatten()
+                        .transpose()
+                        .map_err(Error::Step)?;
+                }
+            }
+        }
+
+        if current_step() % 1000 == 0 || END_SIM.load(std::sync::atomic::Ordering::SeqCst) {
+            log::debug!("hosts={} clients={}", self.hosts.len(), self.clients.len());
+        }
+
+        Ok(self.hosts.is_empty() && self.clients.is_empty())
     }
 
     #[allow(clippy::unused_self)]
@@ -432,42 +701,36 @@ impl<'a> ManagedSim<'a> {
     }
 }
 
-impl CancellableSim for ManagedSim<'_> {
+impl Sim for ManagedSim {
     fn bounce(&mut self, host: impl Into<String>) {
-        Sim::bounce(&mut self.sim, host.into());
+        let host = host.into();
+        log::debug!("bouncing host={host}");
     }
 
     fn host<
-        F: Fn() -> Fut + 'static,
-        Fut: Future<Output = Result<(), Box<dyn std::error::Error>>> + 'static,
+        F: Fn() -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = HostResult> + Send + 'static,
     >(
         &mut self,
-        name: &str,
+        name: impl Into<String>,
         action: F,
     ) {
-        Sim::host(&mut self.sim, name, action);
+        let name = name.into();
+        log::debug!("starting host with name={name}");
+        self.hosts.push(Host::new(name, action));
     }
 
-    fn client_until_cancelled(
+    fn client(
         &mut self,
-        name: &str,
-        action: impl Future<Output = Result<(), Box<dyn std::error::Error>>> + 'static,
+        name: impl Into<String>,
+        action: impl Future<Output = ClientResult> + Send + 'static,
     ) {
-        client_until_cancelled(&mut self.sim, name, action);
+        let name = name.into();
+        log::debug!("starting client with name={name}");
+        self.clients.push(Client::new(name, action));
     }
 }
 
-pub fn client_until_cancelled(
-    sim: &mut Sim<'_>,
-    name: &str,
-    action: impl Future<Output = Result<(), Box<dyn std::error::Error>>> + 'static,
-) {
-    sim.client(name, async move {
-        simulator_cancellation_token()
-            .run_until_cancelled(action)
-            .await
-            .transpose()?;
-
-        Ok(())
-    });
+pub(crate) trait Actor {
+    fn tick(&self);
 }

@@ -17,13 +17,17 @@ moosicbox_env_utils = { workspace = true }
 moosicbox_logging = { workspace = true }
 moosicbox_server = { workspace = true, features = ["simulator"] }
 moosicbox_simulator_harness = { workspace = true, features = [
+    "async",
     "database",
     "fs",
     "http",
     "mdns",
     "random",
+    "tcp",
     "telemetry",
     "time",
+    "tui",
+    "upnp",
 ] }
 moosicbox_task = { workspace = true }
 openport = { workspace = true }

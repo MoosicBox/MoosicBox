@@ -15,21 +15,25 @@ RUN cat Cargo.toml | \
     \"packages\/config\",\r\
     \"packages\/database\",\r\
     \"packages\/database_connection\",\r\
-    \"packages\/http\",\r\
-    \"packages\/http\/models\",\r\
     \"packages\/env_utils\",\r\
     \"packages\/fs\",\r\
+    \"packages\/http\",\r\
+    \"packages\/http\/models\",\r\
     \"packages\/json_utils\",\r\
     \"packages\/logging\",\r\
+    \"packages\/mdns\",\r\
     \"packages\/middleware\",\r\
     \"packages\/profiles\",\r\
     \"packages\/random\",\r\
     \"packages\/simulator\/utils\",\r\
+    \"packages\/switchy\",\r\
     \"packages\/task\",\r\
+    \"packages\/tcp\",\r\
     \"packages\/telemetry\",\r\
     \"packages\/time\",\r\
     \"packages\/tunnel\",\r\
     \"packages\/tunnel_server\",\r\
+    \"packages\/upnp\",\r\
 ]/" | tr '\r' '\n' \
     > Cargo2.toml && \
     mv Cargo2.toml Cargo.toml
@@ -47,16 +51,20 @@ COPY packages/http/Cargo.toml packages/http/Cargo.toml
 COPY packages/http/models/Cargo.toml packages/http/models/Cargo.toml
 COPY packages/json_utils/Cargo.toml packages/json_utils/Cargo.toml
 COPY packages/logging/Cargo.toml packages/logging/Cargo.toml
+COPY packages/mdns/Cargo.toml packages/mdns/Cargo.toml
 COPY packages/middleware/Cargo.toml packages/middleware/Cargo.toml
 COPY packages/profiles/Cargo.toml packages/profiles/Cargo.toml
 COPY packages/random/Cargo.toml packages/random/Cargo.toml
 COPY packages/simulator/utils/Cargo.toml packages/simulator/utils/Cargo.toml
+COPY packages/switchy/Cargo.toml packages/switchy/Cargo.toml
 COPY packages/task/Cargo.toml packages/task/Cargo.toml
+COPY packages/tcp/Cargo.toml packages/tcp/Cargo.toml
 COPY packages/telemetry/Cargo.toml packages/telemetry/Cargo.toml
 COPY packages/time/Cargo.toml packages/time/Cargo.toml
 COPY packages/tunnel/Cargo.toml packages/tunnel/Cargo.toml
 COPY packages/tunnel_server/Cargo.toml packages/tunnel_server/Cargo.toml
 COPY packages/tunnel_server/build.rs packages/tunnel_server/build.rs
+COPY packages/upnp/Cargo.toml packages/upnp/Cargo.toml
 
 RUN touch temp_lib.rs
 
@@ -75,14 +83,18 @@ packages/fs|\
 packages/http|\
 packages/json_utils|\
 packages/logging|\
+packages/mdns|\
 packages/middleware|\
 packages/profiles|\
 packages/random|\
+packages/switchy|\
 packages/task|\
+packages/tcp|\
 packages/telemetry|\
 packages/time|\
 packages/tunnel|\
 packages/tunnel_server|\
+packages/upnp|\
 )/Cargo.toml$"); \
     do printf "\n\n[lib]\npath=\"../../temp_lib.rs\"" >> "$file"; \
   done
