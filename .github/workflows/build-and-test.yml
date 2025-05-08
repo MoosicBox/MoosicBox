@@ -158,7 +158,7 @@ jobs:
                       cargo run -p clippier \
                           features \
                           . \
-                          --chunked 10 \
+                          --chunked 15 \
                           --max-parallel 256 \
                           -o json \
                           --spread \
