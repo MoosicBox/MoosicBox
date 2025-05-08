@@ -8,7 +8,7 @@ license     = "MPL-2.0"
 name        = "switchy_http_models"
 readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
-version     = "0.1.1"
+version     = "0.1.2"
 
 [package.metadata.workspaces]
 group = "switchy"
