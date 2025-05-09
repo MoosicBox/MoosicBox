@@ -1073,15 +1073,35 @@ async fn delete(
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
     let index = AtomicU16::new(0);
+    let where_clause = build_where_clause(filters, &index);
+
+    let select_query = limit.map(|_| format!("SELECT rowid FROM {table_name} {where_clause}",));
+
     let query = format!(
-        "DELETE FROM {table_name} {} {} RETURNING *",
-        build_where_clause(filters, &index),
-        limit.map_or_else(String::new, |limit| format!("LIMIT {limit}"))
+        "DELETE FROM {table_name} {} RETURNING *",
+        build_update_where_clause(filters, limit, select_query.as_deref(), &index),
     );
+
+    let mut all_filter_values: Vec<SqliteDatabaseValue> = filters
+        .map(|filters| {
+            filters
+                .iter()
+                .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
+                .map(std::convert::Into::into)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    if limit.is_some() {
+        all_filter_values.extend(all_filter_values.clone());
+    }
 
     log::trace!(
         "Running delete query: {query} with params: {:?}",
-        filters.map(|f| f.iter().filter_map(|x| x.params()).collect::<Vec<_>>())
+        all_filter_values
+            .iter()
+            .filter_map(crate::query::Expression::params)
+            .collect::<Vec<_>>()
     );
 
     let statement = connection.prepare(&query).await?;
@@ -1091,8 +1111,7 @@ async fn delete(
         .map(|x| x.name().to_string())
         .collect::<Vec<_>>();
 
-    let filters = bexprs_to_values_opt(filters);
-    let query = bind_values(statement.query(), filters.as_deref())?;
+    let query = bind_values(statement.query(), Some(&all_filter_values))?;
 
     to_rows(&column_names, query.fetch(connection)).await
 }
