@@ -654,7 +654,7 @@ async fn update_and_get_row(
             limit
                 .map(|_| {
                     format!(
-                        "SELECT CTID FROM {table_name} {}",
+                        "SELECT rowid FROM {table_name} {}",
                         build_where_clause(filters, &index),
                     )
                 })
@@ -731,7 +731,7 @@ async fn update_and_get_rows(
             limit
                 .map(|_| {
                     format!(
-                        "SELECT CTID FROM {table_name} {}",
+                        "SELECT rowid FROM {table_name} {}",
                         build_where_clause(filters, &index),
                     )
                 })
@@ -860,7 +860,7 @@ fn build_update_where_clause(
 fn build_update_limit_clause(limit: Option<usize>, query: Option<&str>) -> String {
     limit.map_or_else(String::new, |limit| {
         query.map_or_else(String::new, |query| {
-            format!("CTID IN ({query} LIMIT {limit})")
+            format!("rowid IN ({query} LIMIT {limit})")
         })
     })
 }
@@ -1075,7 +1075,7 @@ async fn delete(
     let index = AtomicU16::new(0);
     let where_clause = build_where_clause(filters, &index);
 
-    let select_query = limit.map(|_| format!("SELECT rowid FROM {table_name} {where_clause}",));
+    let select_query = limit.map(|_| format!("SELECT rowid FROM {table_name} {where_clause}"));
 
     let query = format!(
         "DELETE FROM {table_name} {} RETURNING *",
@@ -1313,7 +1313,7 @@ async fn update_chunk(
             limit
                 .map(|_| {
                     format!(
-                        "SELECT CTID FROM {table_name} {}",
+                        "SELECT rowid FROM {table_name} {}",
                         build_where_clause(filters, &index),
                     )
                 })
