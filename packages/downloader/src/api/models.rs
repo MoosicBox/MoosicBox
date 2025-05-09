@@ -95,6 +95,7 @@ impl From<DownloadLocation> for ApiDownloadLocation {
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum ApiDownloadTaskState {
     #[default]
     Pending,
@@ -184,6 +185,7 @@ pub enum StrippedApiDownloadItem {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "type")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum ApiDownloadItem {
     #[serde(rename_all = "camelCase")]
     Track {
@@ -370,6 +372,7 @@ pub struct StrippedApiDownloadTask {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiDownloadTask {
     pub id: u64,
     pub state: ApiDownloadTaskState,

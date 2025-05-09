@@ -96,3 +96,17 @@ pub async fn get_download_tasks(
         .await?
         .to_value_type()?)
 }
+
+#[cfg(feature = "api")]
+pub async fn delete_download_task(
+    db: &LibraryDatabase,
+    task_id: u64,
+) -> Result<Option<DownloadTask>, DatabaseFetchError> {
+    Ok(db
+        .delete("download_tasks")
+        .where_eq("id", task_id)
+        .execute_first(&**db)
+        .await?
+        .as_ref()
+        .to_value_type()?)
+}

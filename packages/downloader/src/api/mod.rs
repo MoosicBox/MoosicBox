@@ -10,7 +10,7 @@ use crate::{
     api::models::{ApiDownloadLocation, ApiDownloadTask, ApiDownloadTaskState},
     create_download_tasks,
     db::{
-        create_download_location, get_download_locations, get_download_tasks,
+        create_download_location, delete_download_task, get_download_locations, get_download_tasks,
         models::DownloadTaskState,
     },
     get_create_download_tasks, get_download_path,
@@ -41,6 +41,7 @@ pub fn bind_services<
     scope
         .service(download_endpoint)
         .service(retry_download_endpoint)
+        .service(delete_download_endpoint)
         .service(download_tasks_endpoint)
         .service(get_download_locations_endpoint)
         .service(add_download_location_endpoint)
@@ -53,6 +54,7 @@ pub fn bind_services<
     paths(
         download_endpoint,
         retry_download_endpoint,
+        delete_download_endpoint,
         download_tasks_endpoint,
         get_download_locations_endpoint,
         add_download_location_endpoint
@@ -246,6 +248,39 @@ pub async fn retry_download_endpoint(
     download_queue.process();
 
     Ok(Json(serde_json::json!({"success": true})))
+}
+
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Downloader"],
+        post,
+        path = "/delete-download",
+        description = "Delete a specific download task",
+        params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
+            ("taskId" = u64, Query, description = "The task ID to delete"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The deleted download task",
+                body = ApiDownloadTask
+            )
+        )
+    )
+)]
+#[route("/delete-download", method = "POST")]
+pub async fn delete_download_endpoint(
+    query: web::Query<RetryDownloadQuery>,
+    db: LibraryDatabase,
+) -> Result<Json<ApiDownloadTask>> {
+    Ok(Json(
+        delete_download_task(&db, query.task_id)
+            .await
+            .map_err(ErrorInternalServerError)?
+            .ok_or_else(|| ErrorNotFound(format!("Download task not found: {}", query.task_id)))?
+            .into(),
+    ))
 }
 
 #[derive(Deserialize)]
