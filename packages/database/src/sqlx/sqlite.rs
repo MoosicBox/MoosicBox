@@ -1073,9 +1073,11 @@ async fn delete(
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
     let index = AtomicU16::new(0);
-    let where_clause = build_where_clause(filters, &index);
 
-    let select_query = limit.map(|_| format!("SELECT rowid FROM {table_name} {where_clause}"));
+    let select_query = limit.map(|_| {
+        let where_clause = build_where_clause(filters, &index);
+        format!("SELECT rowid FROM {table_name} {where_clause}")
+    });
 
     let query = format!(
         "DELETE FROM {table_name} {} RETURNING *",
