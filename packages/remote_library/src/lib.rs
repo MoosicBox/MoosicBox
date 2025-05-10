@@ -57,7 +57,7 @@ impl RemoteLibraryMusicApi {
 #[async_trait]
 impl MusicApi for RemoteLibraryMusicApi {
     fn source(&self) -> ApiSource {
-        unimplemented!("Dynamic MusicApi must be implemented by the struct")
+        self.api_source
     }
 
     async fn artists(
