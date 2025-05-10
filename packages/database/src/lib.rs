@@ -429,11 +429,12 @@ mod tests {
             #[test_log::test]
             async fn test_insert() {
                 let db = setup_db().await;
+                let db = &**db;
 
                 // Insert a record
                 db.insert("users")
                     .value("name", "Alice")
-                    .execute(&**db)
+                    .execute(db)
                     .await
                     .unwrap();
 
@@ -441,7 +442,7 @@ mod tests {
                 let rows = db
                     .select("users")
                     .where_eq("name", "Alice")
-                    .execute(&**db)
+                    .execute(db)
                     .await
                     .unwrap();
 
@@ -457,11 +458,12 @@ mod tests {
             #[test_log::test]
             async fn test_update() {
                 let db = setup_db().await;
+                let db = &**db;
 
                 // Insert a record
                 db.insert("users")
                     .value("name", "Bob")
-                    .execute(&**db)
+                    .execute(db)
                     .await
                     .unwrap();
 
@@ -469,7 +471,7 @@ mod tests {
                 db.update("users")
                     .value("name", "Charlie")
                     .where_eq("name", "Bob")
-                    .execute(&**db)
+                    .execute(db)
                     .await
                     .unwrap();
 
@@ -477,7 +479,7 @@ mod tests {
                 let rows = db
                     .select("users")
                     .where_eq("name", "Charlie")
-                    .execute(&**db)
+                    .execute(db)
                     .await
                     .unwrap();
 
@@ -493,11 +495,12 @@ mod tests {
             #[test_log::test]
             async fn test_delete() {
                 let db = setup_db().await;
+                let db = &**db;
 
                 // Insert a record
                 db.insert("users")
                     .value("name", "Dave")
-                    .execute(&**db)
+                    .execute(db)
                     .await
                     .unwrap();
 
@@ -505,7 +508,7 @@ mod tests {
                 let deleted = db
                     .delete("users")
                     .where_eq("name", "Dave")
-                    .execute(&**db)
+                    .execute(db)
                     .await
                     .unwrap();
 
@@ -520,7 +523,7 @@ mod tests {
                 let rows = db
                     .select("users")
                     .where_eq("name", "Dave")
-                    .execute(&**db)
+                    .execute(db)
                     .await
                     .unwrap();
 
@@ -531,11 +534,12 @@ mod tests {
             #[test_log::test]
             async fn test_delete_with_limit() {
                 let db = setup_db().await;
+                let db = &**db;
 
                 // Insert a record
                 db.insert("users")
                     .value("name", "Dave")
-                    .execute(&**db)
+                    .execute(db)
                     .await
                     .unwrap();
 
@@ -544,7 +548,7 @@ mod tests {
                     .delete("users")
                     .where_not_eq("name", "Bob")
                     .where_eq("name", "Dave")
-                    .execute_first(&**db)
+                    .execute_first(db)
                     .await
                     .unwrap();
 
@@ -559,7 +563,7 @@ mod tests {
                 let rows = db
                     .select("users")
                     .where_eq("name", "Dave")
-                    .execute(&**db)
+                    .execute(db)
                     .await
                     .unwrap();
 
