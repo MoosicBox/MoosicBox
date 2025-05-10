@@ -747,18 +747,6 @@ fn init_download_location() -> Result<PathBuf, TauriPlayerError> {
     Ok(download_location)
 }
 
-#[cfg(target_os = "android")]
-fn init_log() {
-    use android_logger::Config;
-    android_logger::init_once(
-        Config::default()
-            .with_min_level(log::Level::Debug)
-            .with_tag("tauri_app"),
-    );
-    log::set_max_level(log::LevelFilter::Debug);
-}
-
-#[cfg(not(target_os = "android"))]
 fn init_log() {
     let mut layers = vec![];
 
