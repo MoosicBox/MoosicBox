@@ -13,7 +13,6 @@ use std::{
 use moosicbox_app_state::{
     AppStateError, UPNP_LISTENER_HANDLE, UpdateAppState, ws::WsConnectMessage,
 };
-use moosicbox_logging::free_log_client::DynLayer;
 use moosicbox_music_models::{ApiSource, PlaybackQuality, api::ApiTrack, id::Id};
 use moosicbox_player::{Playback, PlayerError};
 use moosicbox_session::models::{ApiSession, ApiUpdateSession, UpdateSession};
@@ -747,7 +746,10 @@ fn init_download_location() -> Result<PathBuf, TauriPlayerError> {
     Ok(download_location)
 }
 
+#[cfg(not(feature = "tauri-logger"))]
 fn init_log() {
+    use moosicbox_logging::free_log_client::DynLayer;
+
     let mut layers = vec![];
 
     if std::env::var("TOKIO_CONSOLE").as_deref() == Ok("1") {
