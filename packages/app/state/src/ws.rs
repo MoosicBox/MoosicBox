@@ -155,7 +155,7 @@ impl AppState {
                         }
                     },
                     WsMessage::Ping => {
-                        log::debug!("got ping");
+                        log::trace!("got ping");
                     }
                 }
             }

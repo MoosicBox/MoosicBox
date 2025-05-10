@@ -146,7 +146,7 @@ impl WsClient {
             Message::Binary(m) => WsMessage::Message(m),
             Message::Ping(_m) => WsMessage::Ping,
             Message::Pong(_m) => {
-                log::debug!("Received pong");
+                log::trace!("Received pong");
                 return Ok(());
             }
             Message::Close(_m) => unimplemented!(),
