@@ -21,3 +21,5 @@ node_modules
 *.bak
 
 */Cargo.lock
+.aider*
+.env
