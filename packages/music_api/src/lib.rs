@@ -25,6 +25,26 @@ pub struct MusicApis<S: ::std::hash::BuildHasher + Clone = std::hash::RandomStat
     Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>, S>>,
 );
 
+impl Default for MusicApis<std::hash::RandomState> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MusicApis<std::hash::RandomState> {
+    #[must_use]
+    pub fn new() -> Self {
+        Self(Arc::new(HashMap::new()))
+    }
+
+    pub fn add_source(&mut self, api: Arc<Box<dyn MusicApi>>) {
+        let mut map = (*self.0).clone();
+        map.insert(api.source(), api);
+
+        self.0 = Arc::new(map);
+    }
+}
+
 impl<S: ::std::hash::BuildHasher + Clone> From<&MusicApis<S>>
     for Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>, S>>
 {
