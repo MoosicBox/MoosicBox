@@ -13,6 +13,10 @@
         "core:menu:default",
         "core:tray:default",
         "core:window:allow-set-title",
-        "dialog:allow-open"
+        "dialog:allow-open",
+        "fs:read-all",
+        "fs:write-all",
+        "fs:allow-app-read-recursive",
+        "fs:allow-app-write-recursive"
     ]
 }

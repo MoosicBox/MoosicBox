@@ -16,6 +16,7 @@ moosicbox_app_ws = { workspace = true }
 moosicbox_assert         = { workspace = true }
 moosicbox_audio_output   = { workspace = true }
 moosicbox_audio_zone     = { workspace = true }
+moosicbox_downloader     = { workspace = true, optional = true }
 moosicbox_env_utils      = { workspace = true }
 moosicbox_logging        = { workspace = true }
 moosicbox_music_api      = { workspace = true }
@@ -26,6 +27,7 @@ moosicbox_remote_library = { workspace = true }
 moosicbox_session        = { workspace = true }
 moosicbox_task           = { workspace = true }
 moosicbox_ws             = { workspace = true }
+switchy_database         = { workspace = true, optional = true }
 switchy_http             = { workspace = true, features = ["json", "reqwest"] }
 switchy_upnp             = { workspace = true, optional = true, features = ["player"] }
 
@@ -37,26 +39,38 @@ tokio      = { workspace = true, features = ["macros"] }
 tokio-util = { workspace = true }
 
 [features]
-default = ["all-sources", "upnp"]
+default = ["all-sources", "downloader", "upnp"]
 
 upnp = ["dep:switchy_upnp"]
 
 fail-on-warnings = []
 
+aac  = ["moosicbox_downloader/aac", "moosicbox_music_models/aac"]
+flac = ["moosicbox_downloader/flac", "moosicbox_music_models/flac"]
+mp3  = ["moosicbox_downloader/mp3", "moosicbox_music_models/mp3"]
+opus = ["moosicbox_downloader/opus", "moosicbox_music_models/opus"]
+
 all-sources = ["qobuz", "tidal", "yt"]
 
 qobuz = [
+    "moosicbox_downloader/qobuz",
     "moosicbox_music_models/qobuz",
     "moosicbox_player/qobuz",
     "moosicbox_session/qobuz",
 ]
 tidal = [
+    "moosicbox_downloader/tidal",
     "moosicbox_music_models/tidal",
     "moosicbox_player/tidal",
     "moosicbox_session/tidal",
 ]
 yt = [
+    "moosicbox_downloader/yt",
     "moosicbox_music_models/yt",
     "moosicbox_player/yt",
     "moosicbox_session/yt",
 ]
+
+db = ["dep:switchy_database"]
+
+downloader = ["db", "dep:moosicbox_downloader"]

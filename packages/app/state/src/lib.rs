@@ -5,6 +5,7 @@
 use std::{
     collections::HashMap,
     future::Future,
+    path::PathBuf,
     pin::Pin,
     sync::{Arc, LazyLock},
 };
@@ -141,6 +142,9 @@ pub enum AppStateError {
     ConnectWs(#[from] ConnectWsError),
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
+    #[cfg(feature = "downloader")]
+    #[error(transparent)]
+    Download(#[from] moosicbox_downloader::DownloadError),
 }
 
 impl AppStateError {
@@ -205,8 +209,11 @@ pub struct PlaybackTargetSessionPlayer {
     pub player_type: PlayerType,
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct AppState {
+    #[cfg(feature = "db")]
+    #[allow(unused)]
+    library_db: switchy_database::profiles::LibraryDatabase,
     pub api_url: Arc<RwLock<Option<String>>>,
     pub profile: Arc<RwLock<Option<String>>>,
     pub ws_url: Arc<RwLock<Option<String>>>,
@@ -228,6 +235,7 @@ pub struct AppState {
     pub current_connections: Arc<RwLock<Vec<ApiConnection>>>,
     pub pending_player_sessions: Arc<RwLock<HashMap<u64, u64>>>,
     pub current_sessions: Arc<RwLock<Vec<ApiSession>>>,
+    pub default_download_location: Arc<std::sync::RwLock<Option<PathBuf>>>,
     #[allow(clippy::type_complexity)]
     pub on_current_sessions_updated_listeners: Vec<
         Arc<Box<dyn Fn(&[ApiSession]) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>>,
@@ -299,7 +307,88 @@ pub struct AppState {
     >,
 }
 
+impl std::fmt::Debug for AppState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AppState")
+            .field("api_url", &self.api_url)
+            .field("profile", &self.profile)
+            .field("ws_url", &self.ws_url)
+            .field("ws_connection_id", &self.ws_connection_id)
+            .field("connection_id", &self.connection_id)
+            .field("connection_name", &self.connection_name)
+            .field("signature_token", &self.signature_token)
+            .field("client_id", &self.client_id)
+            .field("api_token", &self.api_token)
+            .field("ws_token", &self.ws_token)
+            .field("ws_join_handle", &self.ws_join_handle)
+            .field(
+                "audio_zone_active_api_players",
+                &self.audio_zone_active_api_players,
+            )
+            .field("active_players", &self.active_players)
+            .field("playback_quality", &self.playback_quality)
+            .field("ws_message_buffer", &self.ws_message_buffer)
+            .field("current_playback_target", &self.current_playback_target)
+            .field("current_connections", &self.current_connections)
+            .field("pending_player_sessions", &self.pending_player_sessions)
+            .field("current_sessions", &self.current_sessions)
+            .field("default_download_location", &self.default_download_location)
+            .field("current_session_id", &self.current_session_id)
+            .field("current_audio_zones", &self.current_audio_zones)
+            .field("current_players", &self.current_players)
+            .finish_non_exhaustive()
+    }
+}
+
 impl AppState {
+    #[allow(clippy::new_without_default)]
+    #[must_use]
+    pub fn new(
+        #[cfg(feature = "db")] library_db: switchy_database::profiles::LibraryDatabase,
+    ) -> Self {
+        Self {
+            #[cfg(feature = "db")]
+            library_db,
+            api_url: Arc::default(),
+            profile: Arc::default(),
+            ws_url: Arc::default(),
+            ws_connection_id: Arc::default(),
+            connection_id: Arc::default(),
+            connection_name: Arc::default(),
+            signature_token: Arc::default(),
+            client_id: Arc::default(),
+            api_token: Arc::default(),
+            ws_token: Arc::default(),
+            ws_handle: Arc::default(),
+            ws_join_handle: Arc::default(),
+            audio_zone_active_api_players: Arc::default(),
+            active_players: Arc::default(),
+            playback_quality: Arc::default(),
+            ws_message_buffer: Arc::default(),
+            current_playback_target: Arc::default(),
+            current_connections: Arc::default(),
+            pending_player_sessions: Arc::default(),
+            current_sessions: Arc::default(),
+            default_download_location: Arc::default(),
+            on_current_sessions_updated_listeners: Vec::default(),
+            on_audio_zone_with_sessions_updated_listeners: Vec::default(),
+            on_connections_updated_listeners: Vec::default(),
+            current_session_id: Arc::default(),
+            current_audio_zones: Arc::default(),
+            current_players: Arc::default(),
+            #[cfg(feature = "upnp")]
+            upnp_av_transport_services: Arc::default(),
+            on_before_handle_playback_update_listeners: Vec::default(),
+            on_after_handle_playback_update_listeners: Vec::default(),
+            on_before_update_playlist_listeners: Vec::default(),
+            on_after_update_playlist_listeners: Vec::default(),
+            on_before_handle_ws_message_listeners: Vec::default(),
+            on_after_handle_ws_message_listeners: Vec::default(),
+            on_before_set_state_listeners: Vec::default(),
+            on_after_set_state_listeners: Vec::default(),
+        }
+    }
+
     #[must_use]
     pub fn with_on_before_handle_playback_update_listener<F: Future<Output = ()> + Send>(
         mut self,
@@ -485,6 +574,21 @@ impl AppState {
         });
 
         Some(binding)
+    }
+
+    /// # Panics
+    ///
+    /// * If the `default_download_location` `RwLock` is poisoned
+    pub fn set_default_download_location(&self, path: PathBuf) {
+        *self.default_download_location.write().unwrap() = Some(path);
+    }
+
+    /// # Panics
+    ///
+    /// * If the `default_download_location` `RwLock` is poisoned
+    #[must_use]
+    pub fn get_default_download_location(&self) -> Option<PathBuf> {
+        self.default_download_location.read().unwrap().clone()
     }
 
     /// # Errors
@@ -1770,6 +1874,37 @@ impl AppState {
         *self.current_audio_zones.write().await = zones.into_items();
 
         self.update_audio_zones().await?;
+
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// * If the download request fails
+    #[cfg(all(feature = "downloader", feature = "db"))]
+    pub async fn local_download(
+        &self,
+        request: moosicbox_downloader::DownloadRequest,
+    ) -> Result<(), AppStateError> {
+        use moosicbox_music_api::{CachedMusicApi, MusicApis};
+        use moosicbox_music_models::ApiSource;
+        use moosicbox_remote_library::RemoteLibraryMusicApi;
+
+        static PROFILE: &str = "master";
+
+        let Some(api_url) = self.api_url.read().await.clone() else {
+            return Err(AppStateError::unknown("API_URL not set"));
+        };
+
+        let mut music_apis = MusicApis::new();
+
+        for api_source in ApiSource::all() {
+            music_apis.add_source(Arc::new(Box::new(CachedMusicApi::new(
+                RemoteLibraryMusicApi::new(api_url.clone(), *api_source, PROFILE.to_string()),
+            ))));
+        }
+
+        moosicbox_downloader::download(request, self.library_db.clone(), music_apis).await?;
 
         Ok(())
     }

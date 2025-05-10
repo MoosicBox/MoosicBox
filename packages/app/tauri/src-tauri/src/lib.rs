@@ -6,6 +6,7 @@ use std::{
     collections::HashMap,
     env,
     fmt::{Debug, Write},
+    path::PathBuf,
     sync::{LazyLock, OnceLock},
 };
 
@@ -22,7 +23,7 @@ use moosicbox_ws::models::{
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 use switchy_mdns::scanner::service::Commander;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager as _};
 use thiserror::Error;
 
 mod mdns;
@@ -58,14 +59,9 @@ pub enum AppError {
 static APP: OnceLock<AppHandle> = OnceLock::new();
 static LOG_LAYER: OnceLock<moosicbox_logging::free_log_client::FreeLogLayer> = OnceLock::new();
 
-static STATE: LazyLock<moosicbox_app_state::AppState> = LazyLock::new(|| {
-    moosicbox_app_state::AppState::default()
-        .with_on_before_handle_playback_update_listener(propagate_state_to_plugin)
-        .with_on_after_update_playlist_listener(update_player_plugin_playlist)
-        .with_on_before_handle_ws_message_listener(handle_before_ws_message)
-        .with_on_after_handle_ws_message_listener(handle_after_ws_message)
-        .with_on_before_set_state_listener(update_log_layer)
-});
+static STATE_LOCK: OnceLock<moosicbox_app_state::AppState> = OnceLock::new();
+static STATE: LazyLock<moosicbox_app_state::AppState> =
+    LazyLock::new(|| STATE_LOCK.get().unwrap().clone());
 
 #[cfg(feature = "bundled")]
 static THREADS: LazyLock<usize> =
@@ -104,6 +100,71 @@ async fn on_startup() -> Result<(), tauri::Error> {
             },
         )?;
     }
+
+    Ok(())
+}
+
+#[cfg(feature = "downloader")]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DownloadItems {
+    pub track_id: Option<Id>,
+    pub track_ids: Option<Vec<Id>>,
+    pub album_id: Option<Id>,
+    pub album_ids: Option<Vec<Id>>,
+}
+
+#[cfg(feature = "downloader")]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum DownloadSource {
+    #[cfg(feature = "tidal")]
+    Tidal,
+    #[cfg(feature = "qobuz")]
+    Qobuz,
+    #[cfg(feature = "yt")]
+    Yt,
+}
+
+#[cfg(feature = "downloader")]
+impl From<DownloadSource> for moosicbox_downloader::DownloadApiSource {
+    fn from(value: DownloadSource) -> Self {
+        match value {
+            #[cfg(feature = "tidal")]
+            DownloadSource::Tidal => Self::Tidal,
+            #[cfg(feature = "qobuz")]
+            DownloadSource::Qobuz => Self::Qobuz,
+            #[cfg(feature = "yt")]
+            DownloadSource::Yt => Self::Yt,
+        }
+    }
+}
+
+#[allow(unreachable_code, unused_variables)]
+#[cfg(feature = "downloader")]
+#[tauri::command]
+async fn local_download(
+    items: DownloadItems,
+    source: DownloadSource,
+) -> Result<(), TauriPlayerError> {
+    let Some(directory) = STATE.get_default_download_location() else {
+        return Err(TauriPlayerError::Unknown(
+            "No default download location".to_string(),
+        ));
+    };
+
+    let request = moosicbox_downloader::DownloadRequest {
+        directory,
+        track_id: items.track_id,
+        track_ids: items.track_ids,
+        album_id: items.album_id,
+        album_ids: items.album_ids,
+        download_album_cover: Some(true),
+        download_artist_cover: Some(true),
+        quality: Some(moosicbox_downloader::TrackAudioQuality::FlacHighestRes),
+        source: source.into(),
+    };
+
+    STATE.local_download(request).await?;
 
     Ok(())
 }
@@ -244,14 +305,20 @@ async fn handle_after_ws_message(message: OutboundPayload) {
 #[serde(untagged)]
 pub enum TrackId {
     Library(u64),
+    #[cfg(feature = "tidal")]
     Tidal(u64),
+    #[cfg(feature = "qobuz")]
     Qobuz(u64),
 }
 
 impl From<TrackId> for Id {
     fn from(value: TrackId) -> Self {
         match value {
-            TrackId::Library(id) | TrackId::Tidal(id) | TrackId::Qobuz(id) => Self::Number(id),
+            TrackId::Library(id) => Self::Number(id),
+            #[cfg(feature = "tidal")]
+            TrackId::Tidal(id) => Self::Number(id),
+            #[cfg(feature = "qobuz")]
+            TrackId::Qobuz(id) => Self::Number(id),
         }
     }
 }
@@ -610,12 +677,89 @@ async fn handle_media_event(
     Ok(())
 }
 
-/// # Panics
-///
-/// * If the `UPnP` listener fails to initialize
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-#[allow(clippy::too_many_lines)]
-pub fn run() {
+#[allow(unused)]
+fn get_data_dir() -> Result<PathBuf, TauriPlayerError> {
+    log::debug!("get_data_dir");
+
+    let path = APP
+        .get()
+        .unwrap()
+        .path()
+        .app_data_dir()
+        .map_err(|e| TauriPlayerError::Unknown(e.to_string()))?;
+
+    log::debug!("get_data_dir path={path:?}");
+
+    Ok(path)
+}
+
+#[cfg(feature = "db")]
+fn get_db_location() -> Result<PathBuf, TauriPlayerError> {
+    Ok(get_data_dir()?.join("db"))
+}
+
+#[cfg(feature = "db")]
+fn init_db_location() -> Result<PathBuf, TauriPlayerError> {
+    use tauri_plugin_fs::FsExt as _;
+
+    let db_location = get_db_location()?;
+
+    if db_location.exists() {
+        log::debug!("db location exists: {db_location:?}");
+    } else {
+        log::debug!("Creating db location: {db_location:?}");
+        std::fs::create_dir_all(&db_location)
+            .map_err(|e| TauriPlayerError::Unknown(e.to_string()))?;
+    }
+
+    let scope = APP.get().unwrap().fs_scope();
+    scope.allow_directory(&db_location, true).unwrap();
+    assert!(scope.is_allowed(&db_location));
+
+    Ok(db_location)
+}
+
+#[cfg(feature = "downloader")]
+fn get_download_location() -> Result<PathBuf, TauriPlayerError> {
+    Ok(get_data_dir()?.join("downloads"))
+}
+
+#[cfg(feature = "downloader")]
+fn init_download_location() -> Result<PathBuf, TauriPlayerError> {
+    use tauri_plugin_fs::FsExt as _;
+
+    let download_location = get_download_location()?;
+
+    if download_location.exists() {
+        log::debug!("download location exists: {download_location:?}");
+    } else {
+        log::debug!("Creating download location: {download_location:?}");
+        std::fs::create_dir_all(&download_location)
+            .map_err(|e| TauriPlayerError::Unknown(e.to_string()))?;
+    }
+
+    let scope = APP.get().unwrap().fs_scope();
+    scope.allow_directory(&download_location, true).unwrap();
+    assert!(scope.is_allowed(&download_location));
+
+    STATE.set_default_download_location(download_location.clone());
+
+    Ok(download_location)
+}
+
+#[cfg(target_os = "android")]
+fn init_log() {
+    use android_logger::Config;
+    android_logger::init_once(
+        Config::default()
+            .with_min_level(log::Level::Debug)
+            .with_tag("tauri_app"),
+    );
+    log::set_max_level(log::LevelFilter::Debug);
+}
+
+#[cfg(not(target_os = "android"))]
+fn init_log() {
     let mut layers = vec![];
 
     if std::env::var("TOKIO_CONSOLE").as_deref() == Ok("1") {
@@ -630,6 +774,15 @@ pub fn run() {
     let layer =
         moosicbox_logging::init(filename, Some(layers)).expect("Failed to initialize FreeLog");
     LOG_LAYER.set(layer).expect("Failed to set LOG_LAYER");
+}
+
+/// # Panics
+///
+/// * If the `UPnP` listener fails to initialize
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[allow(clippy::too_many_lines)]
+pub fn run() {
+    init_log();
 
     let tauri::async_runtime::RuntimeHandle::Tokio(tokio_handle) = tauri::async_runtime::handle();
 
@@ -681,11 +834,72 @@ pub fn run() {
 
     #[allow(unused_mut)]
     let mut app_builder = tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Debug)
+                .build(),
+        )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(app_tauri_plugin_player::init())
-        .setup(|app| {
+        .setup(move |app| {
             APP.get_or_init(|| app.handle().clone());
+
+            tokio_handle.block_on(async {
+                #[cfg(feature = "db")]
+                let _config_db = {
+                    let db = switchy_database::profiles::LibraryDatabase {
+                        database: std::sync::Arc::new(
+                            switchy_database_connection::init(
+                                Some(&init_db_location().unwrap().join("config.db")),
+                                None,
+                            )
+                            .await
+                            .unwrap(),
+                        ),
+                    };
+                    if let Err(e) = moosicbox_schema::migrate_config(&*db).await {
+                        moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
+                    }
+                    db
+                };
+                #[cfg(feature = "db")]
+                let library_db = {
+                    let db = switchy_database::profiles::LibraryDatabase {
+                        database: std::sync::Arc::new(
+                            switchy_database_connection::init(
+                                Some(&init_db_location().unwrap().join("library.db")),
+                                None,
+                            )
+                            .await
+                            .unwrap(),
+                        ),
+                    };
+                    if let Err(e) = moosicbox_schema::migrate_library(&*db).await {
+                        moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
+                    }
+                    db
+                };
+                STATE_LOCK
+                    .set(
+                        moosicbox_app_state::AppState::new(
+                            #[cfg(feature = "db")]
+                            library_db,
+                        )
+                        .with_on_before_handle_playback_update_listener(propagate_state_to_plugin)
+                        .with_on_after_update_playlist_listener(update_player_plugin_playlist)
+                        .with_on_before_handle_ws_message_listener(handle_before_ws_message)
+                        .with_on_after_handle_ws_message_listener(handle_after_ws_message)
+                        .with_on_before_set_state_listener(update_log_layer),
+                    )
+                    .unwrap();
+            });
+
+            #[cfg(feature = "downloader")]
+            if let Err(e) = init_download_location() {
+                log::error!("Failed to initialize download location: {e:?}");
+            }
 
             #[cfg(target_os = "android")]
             {
@@ -727,10 +941,17 @@ pub fn run() {
             api_proxy_get,
             api_proxy_post,
             mdns::fetch_moosicbox_servers,
+            #[cfg(feature = "downloader")]
+            local_download,
         ]);
 
     app_builder
-        .build(tauri::generate_context!())
+        .build(
+            #[allow(clippy::large_stack_frames)]
+            {
+                tauri::generate_context!()
+            },
+        )
         .expect("error while running tauri application")
         .run({
             #[cfg(feature = "bundled")]

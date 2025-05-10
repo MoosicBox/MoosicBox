@@ -108,7 +108,21 @@ connectionName.listen((name) => {
 
 const apiOverride: Partial<ApiType> = {};
 
-const originalApi = { ...api };
+async function download(
+    items: {
+        trackId?: string | number;
+        trackIds?: (string | number)[];
+        albumId?: string | number;
+        albumIds?: (string | number)[];
+    },
+    source: Api.DownloadApiSource,
+    _signal?: AbortSignal | null,
+): Promise<void> {
+    console.log('should be downloading....');
+    tryInvoke('download', { items, source });
+}
+
+const originalApi = { ...api, download };
 
 function updateApi(secure: boolean) {
     if (secure) {
