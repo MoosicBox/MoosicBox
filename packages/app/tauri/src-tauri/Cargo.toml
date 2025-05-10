@@ -91,17 +91,17 @@ all-supported-os-formats = ["aac", "flac"]
 # Encoders
 aac = [
     "moosicbox_app_tauri_bundled?/aac",
-    "moosicbox_downloader/aac",
+    "moosicbox_downloader?/aac",
     "moosicbox_music_models/aac",
 ]
 flac = [
     "moosicbox_app_tauri_bundled?/flac",
-    "moosicbox_downloader/flac",
+    "moosicbox_downloader?/flac",
     "moosicbox_music_models/flac",
 ]
 mp3 = [
     "moosicbox_app_tauri_bundled?/mp3",
-    "moosicbox_downloader/mp3",
+    "moosicbox_downloader?/mp3",
     "moosicbox_music_models/mp3",
 ]
 
