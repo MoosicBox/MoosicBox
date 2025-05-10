@@ -43,6 +43,11 @@ thiserror   = { workspace = true }
 tokio       = { workspace = true, features = ["sync"] }
 tokio-util  = { workspace = true, optional = true }
 
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+test-log          = { workspace = true }
+tokio             = { workspace = true, features = ["macros", "rt"] }
+
 [features]
 default = [
     "api",
