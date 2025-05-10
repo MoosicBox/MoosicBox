@@ -782,6 +782,7 @@ fn init_log() {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 #[allow(clippy::too_many_lines)]
 pub fn run() {
+    #[cfg(not(feature = "tauri-logger"))]
     init_log();
 
     let tauri::async_runtime::RuntimeHandle::Tokio(tokio_handle) = tauri::async_runtime::handle();
@@ -833,13 +834,18 @@ pub fn run() {
     let (mdns_handle, join_mdns_service) = mdns::spawn_mdns_scanner();
 
     #[allow(unused_mut)]
-    let mut app_builder = tauri::Builder::default()
-        .plugin(tauri_plugin_fs::init())
-        .plugin(
+    let mut app_builder = tauri::Builder::default().plugin(tauri_plugin_fs::init());
+
+    #[cfg(feature = "tauri-logger")]
+    {
+        app_builder = app_builder.plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Debug)
                 .build(),
-        )
+        );
+    }
+
+    app_builder = app_builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(app_tauri_plugin_player::init())

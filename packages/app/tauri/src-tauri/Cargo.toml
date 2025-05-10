@@ -62,7 +62,7 @@ strum_macros              = { workspace = true }
 tauri                     = { workspace = true, features = ["protocol-asset"] }
 tauri-plugin-dialog       = { workspace = true }
 tauri-plugin-fs           = { workspace = true }
-tauri-plugin-log          = { workspace = true }
+tauri-plugin-log          = { workspace = true, optional = true }
 tauri-plugin-notification = { workspace = true }
 thiserror                 = { workspace = true }
 tokio                     = { workspace = true, features = ["macros"] }
@@ -147,3 +147,5 @@ downloader = [
     "dep:moosicbox_downloader",
     "moosicbox_app_state/downloader",
 ]
+
+tauri-logger = ["dep:tauri-plugin-log"]
