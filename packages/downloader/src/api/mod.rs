@@ -1,19 +1,14 @@
-use std::{
-    path::PathBuf,
-    str::FromStr as _,
-    sync::{Arc, LazyLock},
-};
+use std::{path::PathBuf, str::FromStr as _, sync::LazyLock};
 
 use crate::{
-    CreateDownloadTasksError, DownloadApiSource, GetCreateDownloadTasksError, GetDownloadPathError,
-    MoosicboxDownloader,
+    CreateDownloadTasksError, DOWNLOAD_QUEUE, DownloadApiSource, DownloadError, DownloadRequest,
+    GetCreateDownloadTasksError, GetDownloadPathError, MoosicboxDownloader,
     api::models::{ApiDownloadLocation, ApiDownloadTask, ApiDownloadTaskState},
-    create_download_tasks,
     db::{
         create_download_location, delete_download_task, get_download_locations, get_download_tasks,
         models::DownloadTaskState,
     },
-    get_create_download_tasks, get_download_path,
+    download, get_download_path,
     queue::{DownloadQueue, ProcessDownloadQueueError, ProgressListenerRef},
 };
 use actix_web::{
@@ -23,13 +18,13 @@ use actix_web::{
     route,
     web::{self, Json},
 };
-use moosicbox_music_api::{MusicApis, SourceToMusicApi as _, models::TrackAudioQuality};
+use moosicbox_music_api::{MusicApis, models::TrackAudioQuality};
+use moosicbox_music_models::id::{Id, IdType, parse_id_ranges};
 use moosicbox_paging::Page;
 use regex::{Captures, Regex};
 use serde::Deserialize;
 use serde_json::Value;
 use switchy_database::profiles::LibraryDatabase;
-use tokio::sync::RwLock;
 
 pub mod models;
 
@@ -67,32 +62,9 @@ pub fn bind_services<
 )]
 pub struct Api;
 
-static DOWNLOAD_QUEUE: LazyLock<Arc<RwLock<DownloadQueue>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(DownloadQueue::new())));
-
 pub async fn add_progress_listener_to_download_queue(listener: ProgressListenerRef) {
     let mut queue = DOWNLOAD_QUEUE.write().await;
     *queue = queue.clone().add_progress_listener(listener);
-}
-
-async fn get_default_download_queue(
-    db: LibraryDatabase,
-    music_apis: MusicApis,
-) -> Arc<RwLock<DownloadQueue>> {
-    let queue = { DOWNLOAD_QUEUE.read().await.clone() };
-
-    if !queue.has_database() {
-        let mut queue = DOWNLOAD_QUEUE.write().await;
-        *queue = queue.clone().with_database(db.clone());
-    }
-    if !queue.has_downloader() {
-        let mut queue = DOWNLOAD_QUEUE.write().await;
-        *queue = queue
-            .clone()
-            .with_downloader(Box::new(MoosicboxDownloader::new(db, music_apis)));
-    }
-
-    DOWNLOAD_QUEUE.clone()
 }
 
 impl From<GetDownloadPathError> for actix_web::Error {
@@ -123,7 +95,7 @@ impl From<ProcessDownloadQueueError> for actix_web::Error {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadQuery {
     location_id: Option<u64>,
@@ -135,6 +107,13 @@ pub struct DownloadQuery {
     download_artist_cover: Option<bool>,
     quality: Option<TrackAudioQuality>,
     source: DownloadApiSource,
+}
+
+impl From<DownloadError> for actix_web::Error {
+    fn from(err: DownloadError) -> Self {
+        log::error!("{err:?}");
+        ErrorInternalServerError(err.to_string())
+    }
 }
 
 #[cfg_attr(
@@ -173,31 +152,55 @@ pub async fn download_endpoint(
 ) -> Result<Json<Value>> {
     let download_path = get_download_path(&db, query.location_id).await?;
 
-    let tasks = get_create_download_tasks(
-        &**music_apis
-            .get(query.source.into())
-            .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
-        &download_path,
-        query.track_id.clone(),
-        query.track_ids.clone(),
-        query.album_id.clone(),
-        query.album_ids.clone(),
-        query.download_album_cover.unwrap_or(true),
-        query.download_artist_cover.unwrap_or(true),
-        query.quality,
-        Some(query.source),
-    )
-    .await?;
+    let track_id = if let Some(track_id) = &query.track_id {
+        Some(
+            Id::try_from_str(track_id, query.source.into(), IdType::Track)
+                .map_err(ErrorBadRequest)?,
+        )
+    } else {
+        None
+    };
 
-    let tasks = create_download_tasks(&db, tasks).await?;
+    let album_id = if let Some(album_id) = &query.album_id {
+        Some(
+            Id::try_from_str(album_id, query.source.into(), IdType::Album)
+                .map_err(ErrorBadRequest)?,
+        )
+    } else {
+        None
+    };
 
-    let queue = get_default_download_queue(db.clone(), music_apis).await;
-    let mut download_queue = queue.write().await;
+    let track_ids = if let Some(track_ids) = &query.track_ids {
+        Some(
+            parse_id_ranges(track_ids, query.source.into(), IdType::Track)
+                .map_err(ErrorBadRequest)?,
+        )
+    } else {
+        None
+    };
 
-    download_queue.add_tasks_to_queue(tasks).await;
-    download_queue.process();
+    let album_ids = if let Some(album_ids) = &query.album_ids {
+        Some(
+            parse_id_ranges(album_ids, query.source.into(), IdType::Album)
+                .map_err(ErrorBadRequest)?,
+        )
+    } else {
+        None
+    };
 
-    drop(download_queue);
+    let request = DownloadRequest {
+        directory: download_path,
+        track_id,
+        track_ids,
+        album_id,
+        album_ids,
+        download_album_cover: query.download_album_cover,
+        download_artist_cover: query.download_artist_cover,
+        quality: query.quality,
+        source: query.source,
+    };
+
+    download(request, db, music_apis).await?;
 
     Ok(Json(serde_json::json!({"success": true})))
 }

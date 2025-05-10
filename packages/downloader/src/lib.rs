@@ -12,7 +12,7 @@ use std::{
     time::Duration,
 };
 
-use crate::{db::models::DownloadApiSource, queue::GenericProgressEvent};
+use crate::queue::GenericProgressEvent;
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use atomic_float::AtomicF64;
@@ -37,23 +37,177 @@ use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_music_api::{
     AlbumError, ArtistError, MusicApi, MusicApis, MusicApisError, SourceToMusicApi as _,
     TrackError, TracksError,
-    models::{ImageCoverSize, TrackAudioQuality, TrackSource},
+    models::{ImageCoverSize, TrackSource},
 };
 use moosicbox_music_models::{
-    Album, Artist, AudioFormat, Track, TrackApiSource,
-    id::{Id, IdType, ParseIdsError, parse_id_ranges},
+    Album, ApiSource, Artist, AudioFormat, Track, TrackApiSource,
+    id::{Id, IdType, ParseIdsError},
 };
-use queue::ProgressListener;
+use queue::{DownloadQueue, ProgressListener};
 use regex::{Captures, Regex};
+use serde::{Deserialize, Serialize};
+use strum::{AsRefStr, EnumString};
 use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
-use tokio::select;
+use tokio::{select, sync::RwLock};
+
+pub use moosicbox_music_api::models::TrackAudioQuality;
 
 #[cfg(feature = "api")]
 pub mod api;
 
 pub(crate) mod db;
 pub mod queue;
+
+static DOWNLOAD_QUEUE: LazyLock<Arc<RwLock<DownloadQueue>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(DownloadQueue::new())));
+
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub enum DownloadApiSource {
+    #[cfg(feature = "tidal")]
+    Tidal,
+    #[cfg(feature = "qobuz")]
+    Qobuz,
+    #[cfg(feature = "yt")]
+    Yt,
+}
+
+impl From<ApiSource> for DownloadApiSource {
+    fn from(value: ApiSource) -> Self {
+        match value {
+            #[cfg(feature = "tidal")]
+            ApiSource::Tidal => Self::Tidal,
+            #[cfg(feature = "qobuz")]
+            ApiSource::Qobuz => Self::Qobuz,
+            #[cfg(feature = "yt")]
+            ApiSource::Yt => Self::Yt,
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl From<DownloadApiSource> for ApiSource {
+    fn from(value: DownloadApiSource) -> Self {
+        match value {
+            #[cfg(feature = "tidal")]
+            DownloadApiSource::Tidal => Self::Tidal,
+            #[cfg(feature = "qobuz")]
+            DownloadApiSource::Qobuz => Self::Qobuz,
+            #[cfg(feature = "yt")]
+            DownloadApiSource::Yt => Self::Yt,
+        }
+    }
+}
+
+impl From<DownloadApiSource> for TrackApiSource {
+    fn from(value: DownloadApiSource) -> Self {
+        match value {
+            #[cfg(feature = "tidal")]
+            DownloadApiSource::Tidal => Self::Tidal,
+            #[cfg(feature = "qobuz")]
+            DownloadApiSource::Qobuz => Self::Qobuz,
+            #[cfg(feature = "yt")]
+            DownloadApiSource::Yt => Self::Yt,
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum DownloadError {
+    #[error(transparent)]
+    DatabaseFetch(#[from] DatabaseFetchError),
+    #[error("Failed to get config directory")]
+    FailedToGetConfigDirectory,
+    #[error("Not found")]
+    NotFound,
+    #[error(transparent)]
+    GetDownloadPath(#[from] GetDownloadPathError),
+    #[error(transparent)]
+    GetCreateDownloadTasks(#[from] GetCreateDownloadTasksError),
+    #[error(transparent)]
+    CreateDownloadTasks(#[from] CreateDownloadTasksError),
+    #[error(transparent)]
+    MusicApis(#[from] MusicApisError),
+}
+
+#[derive(Debug, Clone)]
+pub struct DownloadRequest {
+    pub directory: PathBuf,
+    pub track_id: Option<Id>,
+    pub track_ids: Option<Vec<Id>>,
+    pub album_id: Option<Id>,
+    pub album_ids: Option<Vec<Id>>,
+    pub download_album_cover: Option<bool>,
+    pub download_artist_cover: Option<bool>,
+    pub quality: Option<TrackAudioQuality>,
+    pub source: DownloadApiSource,
+}
+
+/// # Errors
+///
+/// * If there is a database error
+/// * If there are errors fetching track/album/artist info
+/// * If failed to fetch the track source
+/// * If failed to add tags to the downloaded audio file
+/// * If an IO error occurs
+/// * If there is an error saving the bytes stream to the file
+/// * If failed to get the content length of the audio data to download
+/// * If given an invalid `ApiSource`
+/// * If an item is not found
+pub async fn download(
+    request: DownloadRequest,
+    db: LibraryDatabase,
+    music_apis: MusicApis,
+) -> Result<(), DownloadError> {
+    let tasks = get_create_download_tasks(
+        &**music_apis.get(request.source.into())?,
+        &request.directory,
+        request.track_id,
+        request.track_ids,
+        request.album_id,
+        request.album_ids,
+        request.download_album_cover.unwrap_or(true),
+        request.download_artist_cover.unwrap_or(true),
+        request.quality,
+        Some(request.source),
+    )
+    .await?;
+
+    let tasks = create_download_tasks(&db, tasks).await?;
+
+    let queue = get_default_download_queue(db.clone(), music_apis).await;
+    let mut download_queue = queue.write().await;
+
+    download_queue.add_tasks_to_queue(tasks).await;
+    download_queue.process();
+
+    drop(download_queue);
+
+    Ok(())
+}
+
+async fn get_default_download_queue(
+    db: LibraryDatabase,
+    music_apis: MusicApis,
+) -> Arc<RwLock<DownloadQueue>> {
+    let queue = { DOWNLOAD_QUEUE.read().await.clone() };
+
+    if !queue.has_database() {
+        let mut queue = DOWNLOAD_QUEUE.write().await;
+        *queue = queue.clone().with_database(db.clone());
+    }
+    if !queue.has_downloader() {
+        let mut queue = DOWNLOAD_QUEUE.write().await;
+        *queue = queue
+            .clone()
+            .with_downloader(Box::new(MoosicboxDownloader::new(db, music_apis)));
+    }
+
+    DOWNLOAD_QUEUE.clone()
+}
 
 #[derive(Debug, Error)]
 pub enum GetDownloadPathError {
@@ -123,10 +277,10 @@ pub enum GetCreateDownloadTasksError {
 pub async fn get_create_download_tasks(
     api: &dyn MusicApi,
     download_path: &Path,
-    track_id: Option<String>,
-    track_ids: Option<String>,
-    album_id: Option<String>,
-    album_ids: Option<String>,
+    track_id: Option<Id>,
+    track_ids: Option<Vec<Id>>,
+    album_id: Option<Id>,
+    album_ids: Option<Vec<Id>>,
     download_album_cover: bool,
     download_artist_cover: bool,
     quality: Option<TrackAudioQuality>,
@@ -139,7 +293,11 @@ pub async fn get_create_download_tasks(
             #[allow(unreachable_code)]
             get_create_download_tasks_for_album_ids(
                 api,
-                &[Id::try_from_str(&album_id, api.source(), IdType::Album)?],
+                &[Id::try_from_str(
+                    &album_id.to_string(),
+                    api.source(),
+                    IdType::Album,
+                )?],
                 download_path,
                 source,
                 quality,
@@ -152,12 +310,10 @@ pub async fn get_create_download_tasks(
 
     if let Some(album_ids) = &album_ids {
         #[allow(unreachable_code)]
-        let album_ids = parse_id_ranges(album_ids, api.source(), IdType::Album)?;
-
         tasks.extend(
             get_create_download_tasks_for_album_ids(
                 api,
-                &album_ids,
+                album_ids,
                 download_path,
                 source,
                 quality,
@@ -173,7 +329,11 @@ pub async fn get_create_download_tasks(
             #[allow(unreachable_code)]
             get_create_download_tasks_for_track_ids(
                 api,
-                &[Id::try_from_str(&track_id, api.source(), IdType::Track)?],
+                &[Id::try_from_str(
+                    &track_id.to_string(),
+                    api.source(),
+                    IdType::Track,
+                )?],
                 download_path,
                 source,
                 quality,
@@ -183,17 +343,9 @@ pub async fn get_create_download_tasks(
     }
 
     if let Some(track_ids) = &track_ids {
-        let track_ids = parse_id_ranges(track_ids, api.source(), IdType::Track)?;
-
         tasks.extend(
-            get_create_download_tasks_for_track_ids(
-                api,
-                &track_ids,
-                download_path,
-                source,
-                quality,
-            )
-            .await?,
+            get_create_download_tasks_for_track_ids(api, track_ids, download_path, source, quality)
+                .await?,
         );
     }
 

@@ -7,9 +7,8 @@ use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 
 use crate::{
-    db::models::{
-        DownloadApiSource, DownloadItem, DownloadLocation, DownloadTask, DownloadTaskState,
-    },
+    DownloadApiSource,
+    db::models::{DownloadItem, DownloadLocation, DownloadTask, DownloadTaskState},
     queue::ProgressEvent,
 };
 

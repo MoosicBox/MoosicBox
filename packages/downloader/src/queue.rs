@@ -549,7 +549,10 @@ mod tests {
     use pretty_assertions::assert_eq;
     use switchy_database::{Database, Row, query::*, schema::CreateTableStatement};
 
-    use crate::db::models::{DownloadApiSource, DownloadItem, DownloadTaskState};
+    use crate::{
+        DownloadApiSource,
+        db::models::{DownloadItem, DownloadTaskState},
+    };
 
     use super::*;
 

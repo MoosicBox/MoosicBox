@@ -4,11 +4,13 @@ use moosicbox_json_utils::{
     MissingValue, ParseError, ToValueType, database::ToValue as _, serde_json::ToValue,
 };
 use moosicbox_music_api::models::TrackAudioQuality;
-use moosicbox_music_models::{ApiSource, TrackApiSource, id::Id};
+use moosicbox_music_models::{TrackApiSource, id::Id};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 use switchy_database::{AsId, DatabaseValue};
 use thiserror::Error;
+
+use crate::DownloadApiSource;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -81,59 +83,6 @@ impl ToValueType<DownloadTaskState> for &serde_json::Value {
                 .ok_or_else(|| ParseError::ConvertType("DownloadTaskState".into()))?,
         )
         .map_err(|_| ParseError::ConvertType("DownloadTaskState".into()))
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub enum DownloadApiSource {
-    #[cfg(feature = "tidal")]
-    Tidal,
-    #[cfg(feature = "qobuz")]
-    Qobuz,
-    #[cfg(feature = "yt")]
-    Yt,
-}
-
-impl From<ApiSource> for DownloadApiSource {
-    fn from(value: ApiSource) -> Self {
-        match value {
-            #[cfg(feature = "tidal")]
-            ApiSource::Tidal => Self::Tidal,
-            #[cfg(feature = "qobuz")]
-            ApiSource::Qobuz => Self::Qobuz,
-            #[cfg(feature = "yt")]
-            ApiSource::Yt => Self::Yt,
-            _ => unreachable!(),
-        }
-    }
-}
-
-impl From<DownloadApiSource> for ApiSource {
-    fn from(value: DownloadApiSource) -> Self {
-        match value {
-            #[cfg(feature = "tidal")]
-            DownloadApiSource::Tidal => Self::Tidal,
-            #[cfg(feature = "qobuz")]
-            DownloadApiSource::Qobuz => Self::Qobuz,
-            #[cfg(feature = "yt")]
-            DownloadApiSource::Yt => Self::Yt,
-        }
-    }
-}
-
-impl From<DownloadApiSource> for TrackApiSource {
-    fn from(value: DownloadApiSource) -> Self {
-        match value {
-            #[cfg(feature = "tidal")]
-            DownloadApiSource::Tidal => Self::Tidal,
-            #[cfg(feature = "qobuz")]
-            DownloadApiSource::Qobuz => Self::Qobuz,
-            #[cfg(feature = "yt")]
-            DownloadApiSource::Yt => Self::Yt,
-        }
     }
 }
 

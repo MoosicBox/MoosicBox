@@ -53,7 +53,7 @@ test-log          = { workspace = true }
 tokio             = { workspace = true, features = ["macros", "rt", "tracing"] }
 
 [features]
-default = ["aac", "all-sources", "api", "flac", "mp3", "openapi", "opus"]
+default = ["all-os-formats", "all-sources", "api", "openapi", "opus"]
 
 fail-on-warnings = []
 
@@ -64,6 +64,9 @@ openapi = [
     "moosicbox_music_models/openapi",
     "moosicbox_paging/openapi",
 ]
+
+all-formats    = ["all-os-formats", "mp3"]
+all-os-formats = ["aac", "flac", "opus"]
 
 aac  = ["moosicbox_files/aac", "moosicbox_music_models/aac"]
 flac = ["moosicbox_files/flac", "moosicbox_music_models/flac"]
