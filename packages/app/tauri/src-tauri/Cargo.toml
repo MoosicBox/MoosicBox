@@ -68,7 +68,7 @@ thiserror                 = { workspace = true }
 tokio                     = { workspace = true, features = ["macros"] }
 
 [features]
-default = ["all-sources", "all-supported-formats", "cpal", "downloader"]
+default = ["all-sources", "all-supported-os-formats", "cpal", "downloader"]
 
 fail-on-warnings = []
 
