@@ -695,7 +695,7 @@ version = "0.38.0+1.3.281"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bb44936d800fea8f016d7f2311c6a4f97aebd5dc86f09906139ec848cf3a46f"
 dependencies = [
- "libloading 0.8.6",
+ "libloading 0.8.7",
 ]
 
 [[package]]
@@ -2246,7 +2246,7 @@ checksum = "0b023947811758c97c59bf9d1c188fd619ad4718dcaa767947df1cadb14f39f4"
 dependencies = [
  "glob",
  "libc",
- "libloading 0.8.6",
+ "libloading 0.8.7",
 ]
 
 [[package]]
@@ -2268,9 +2268,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.37"
+version = "4.5.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eccb054f56cbd38340b380d4a8e69ef1f02f1af43db2f0cc817a4774d80ae071"
+checksum = "ed93b9805f8ba930df42c2590f05453d5ec36cbb85d018868a5b24d31f6ac000"
 dependencies = [
  "clap_builder",
  "clap_derive 4.5.32",
@@ -2278,9 +2278,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.37"
+version = "4.5.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "efd9466fac8543255d3b1fcad4762c5e116ffe808c8a3043d4263cd4fd4862a2"
+checksum = "379026ff283facf611b0ea629334361c4211d1b12ee01024eec1591133b04120"
 dependencies = [
  "anstream",
  "anstyle",
@@ -2341,7 +2341,7 @@ dependencies = [
 name = "clippier"
 version = "0.1.0"
 dependencies = [
- "clap 4.5.37",
+ "clap 4.5.38",
  "itertools 0.14.0",
  "log",
  "moosicbox_logging",
@@ -3111,7 +3111,7 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330c60081dcc4c72131f8eb70510f1ac07223e5d4163db481a04a0befcffa412"
 dependencies = [
- "libloading 0.8.6",
+ "libloading 0.8.7",
 ]
 
 [[package]]
@@ -4336,7 +4336,7 @@ dependencies = [
  "glutin_egl_sys",
  "glutin_glx_sys",
  "glutin_wgl_sys",
- "libloading 0.8.6",
+ "libloading 0.8.7",
  "objc2 0.6.1",
  "objc2-app-kit 0.3.1",
  "objc2-core-foundation",
@@ -5835,7 +5835,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6aae1df220ece3c0ada96b8153459b67eebe9ae9212258bb0134ae60416fdf76"
 dependencies = [
  "libc",
- "libloading 0.8.6",
+ "libloading 0.8.7",
  "pkg-config",
 ]
 
@@ -6101,12 +6101,12 @@ dependencies = [
 
 [[package]]
 name = "libloading"
-version = "0.8.6"
+version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
+checksum = "6a793df0d7afeac54f95b471d3af7f0d4fb975699f972341a4b76988d49cdf0c"
 dependencies = [
  "cfg-if 1.0.0",
- "windows-targets 0.52.6",
+ "windows-targets 0.53.0",
 ]
 
 [[package]]
@@ -6662,7 +6662,7 @@ dependencies = [
 name = "moosicbox_aconverter"
 version = "0.1.1"
 dependencies = [
- "clap 4.5.37",
+ "clap 4.5.38",
  "futures",
  "log",
  "moosicbox_assert",
@@ -6749,7 +6749,7 @@ dependencies = [
 name = "moosicbox_app_create_config"
 version = "0.1.1"
 dependencies = [
- "clap 4.5.37",
+ "clap 4.5.38",
  "log",
  "moosicbox_assert",
  "moosicbox_logging",
@@ -7207,7 +7207,7 @@ name = "moosicbox_image"
 version = "0.1.1"
 dependencies = [
  "bytes",
- "clap 4.5.37",
+ "clap 4.5.38",
  "image",
  "libvips",
  "log",
@@ -7345,7 +7345,7 @@ version = "0.1.1"
 dependencies = [
  "async-recursion",
  "chrono",
- "clap 4.5.37",
+ "clap 4.5.38",
  "console-subscriber",
  "log",
  "moosicbox_app_native_lib",
@@ -13059,7 +13059,7 @@ dependencies = [
 name = "switchy_async_cargo"
 version = "0.1.3"
 dependencies = [
- "clap 4.5.37",
+ "clap 4.5.38",
  "log",
  "pretty_env_logger",
  "syn 2.0.101",
@@ -15751,7 +15751,7 @@ dependencies = [
  "js-sys",
  "khronos-egl",
  "libc",
- "libloading 0.8.6",
+ "libloading 0.8.7",
  "log",
  "metal",
  "naga",
@@ -16532,7 +16532,7 @@ dependencies = [
  "as-raw-xcb-connection",
  "gethostname",
  "libc",
- "libloading 0.8.6",
+ "libloading 0.8.7",
  "once_cell",
  "rustix 0.38.44",
  "x11rb-protocol",
