@@ -2,7 +2,10 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    sync::{LazyLock, Mutex},
+};
 
 #[cfg(feature = "api")]
 pub mod api;
@@ -32,9 +35,31 @@ impl std::fmt::Display for AppType {
     }
 }
 
+static ROOT_DIR: LazyLock<Mutex<Option<PathBuf>>> = LazyLock::new(|| Mutex::new(None));
+
+/// # Panics
+///
+/// * If the `ROOT_DIR` `Mutex` is poisoned
+pub fn set_root_dir(path: PathBuf) {
+    *ROOT_DIR.lock().unwrap() = Some(path);
+}
+
+#[must_use]
+fn get_root_dir() -> Option<PathBuf> {
+    let mut root_dir = ROOT_DIR.lock().unwrap();
+
+    if root_dir.is_some() {
+        return root_dir.clone();
+    }
+
+    *root_dir = home::home_dir().map(|home| home.join(".local").join("moosicbox"));
+
+    root_dir.clone()
+}
+
 #[must_use]
 pub fn get_config_dir_path() -> Option<PathBuf> {
-    home::home_dir().map(|home| home.join(".local").join("moosicbox"))
+    get_root_dir()
 }
 
 #[must_use]
