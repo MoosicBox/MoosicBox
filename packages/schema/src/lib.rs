@@ -194,7 +194,9 @@ impl Migrations {
                     log::info!("run: running name={name}");
 
                     let migration = String::from_utf8_lossy(migration).to_string();
-                    db.exec_raw(&migration).await?;
+                    db.exec_raw(&migration).await.inspect_err(|e| {
+                        log::error!("run: failed to run name={name} migration: {e:?}");
+                    })?;
 
                     log::info!("run: successfully ran name={name}");
                 }
