@@ -369,12 +369,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for api_source in ApiSource::all() {
         apis_map.insert(
-            *api_source,
+            api_source,
             Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
                 RemoteLibraryMusicApi::new(
                     std::env::var("MOOSICBOX_HOST")
                         .unwrap_or_else(|_| "http://localhost:8500".to_string()),
-                    *api_source,
+                    api_source,
                     PROFILE.to_string(),
                 ),
             ))),

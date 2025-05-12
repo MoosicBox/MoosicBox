@@ -8,7 +8,7 @@ use id::Id;
 use moosicbox_date_utils::chrono::{self, NaiveDateTime, parse_date_time};
 use moosicbox_json_utils::{ParseError, ToValueType};
 use serde::{Deserialize, Serialize};
-use strum::{AsRefStr, EnumString};
+use strum::{AsRefStr, EnumIter, EnumString, IntoEnumIterator};
 
 pub mod id;
 
@@ -47,7 +47,18 @@ impl FromStr for ArtistSort {
 }
 
 #[derive(
-    Default, Copy, Debug, Serialize, Deserialize, EnumString, AsRefStr, Eq, PartialEq, Clone, Hash,
+    Default,
+    Copy,
+    Debug,
+    Serialize,
+    Deserialize,
+    EnumString,
+    AsRefStr,
+    EnumIter,
+    Eq,
+    PartialEq,
+    Clone,
+    Hash,
 )]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
@@ -64,23 +75,8 @@ pub enum ApiSource {
 }
 
 impl ApiSource {
-    #[must_use]
-    pub fn all() -> &'static [Self] {
-        static ALL: LazyLock<Vec<ApiSource>> = LazyLock::new(|| {
-            #[allow(unused_mut)]
-            let mut all = vec![ApiSource::Library];
-
-            #[cfg(feature = "tidal")]
-            all.push(ApiSource::Tidal);
-            #[cfg(feature = "qobuz")]
-            all.push(ApiSource::Qobuz);
-            #[cfg(feature = "yt")]
-            all.push(ApiSource::Yt);
-
-            all
-        });
-
-        &ALL
+    pub fn all() -> impl Iterator<Item = Self> {
+        Self::iter()
     }
 }
 

@@ -1933,7 +1933,7 @@ impl AppState {
 
         for api_source in ApiSource::all() {
             music_apis.add_source(Arc::new(Box::new(CachedMusicApi::new(
-                RemoteLibraryMusicApi::new(api_url.clone(), *api_source, PROFILE.to_string()),
+                RemoteLibraryMusicApi::new(api_url.clone(), api_source, PROFILE.to_string()),
             ))));
         }
 
