@@ -145,6 +145,9 @@ pub enum AppStateError {
     #[cfg(feature = "downloader")]
     #[error(transparent)]
     Download(#[from] moosicbox_downloader::DownloadError),
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    InitDb(#[from] switchy_database_connection::InitDbError),
 }
 
 impl AppStateError {
@@ -387,6 +390,36 @@ impl AppState {
             on_before_set_state_listeners: Vec::default(),
             on_after_set_state_listeners: Vec::default(),
         }
+    }
+
+    /// # Errors
+    ///
+    /// * If the `library_db` fails to be created
+    ///
+    /// # Panics
+    ///
+    /// * If the migrations fail to run
+    #[allow(clippy::unused_async)]
+    pub async fn init(
+        #[cfg(feature = "db")] library_db_path: &std::path::Path,
+    ) -> Result<Self, AppStateError> {
+        #[cfg(feature = "db")]
+        let library_db = {
+            let db = switchy_database::profiles::LibraryDatabase {
+                database: std::sync::Arc::new(
+                    switchy_database_connection::init(Some(library_db_path), None).await?,
+                ),
+            };
+            if let Err(e) = moosicbox_schema::migrate_library(&*db).await {
+                moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
+            }
+            db
+        };
+
+        Ok(Self::new(
+            #[cfg(feature = "db")]
+            library_db,
+        ))
     }
 
     #[must_use]

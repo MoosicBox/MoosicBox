@@ -47,6 +47,7 @@ moosicbox_app_native_ui = { workspace = true }
 moosicbox_app_state = { workspace = true }
 moosicbox_assert = { workspace = true }
 moosicbox_audio_zone_models = { workspace = true }
+moosicbox_config = { workspace = true, optional = true }
 moosicbox_env_utils = { workspace = true }
 moosicbox_logging = { workspace = true, features = ["free_log"] }
 moosicbox_music_api = { workspace = true }
@@ -57,10 +58,6 @@ moosicbox_remote_library = { workspace = true }
 moosicbox_session_models = { workspace = true }
 moosicbox_task = { workspace = true }
 moosicbox_ws = { workspace = true }
-switchy_database = { workspace = true, optional = true }
-switchy_database_connection = { workspace = true, optional = true, features = [
-    "sqlite-sqlx",
-] }
 switchy_http = { workspace = true, features = ["json", "reqwest"] }
 switchy_time = { workspace = true, features = ["std"] }
 
@@ -70,6 +67,7 @@ moosicbox_app_native_bundled = { workspace = true, optional = true }
 console-subscriber = { workspace = true, optional = true }
 flume              = { workspace = true }
 log                = { workspace = true }
+profiling          = { workspace = true, optional = true }
 serde_json         = { workspace = true }
 strum              = { workspace = true }
 thiserror          = { workspace = true }
@@ -185,8 +183,6 @@ static-routes = ["moosicbox_app_native_lib/static-routes"]
 
 dev = ["assets", "static-routes"]
 
-db = [
-    "dep:switchy_database",
-    "dep:switchy_database_connection",
-    "moosicbox_app_state/db",
-]
+db = ["moosicbox_app_state/db", "moosicbox_config/db"]
+
+profiling = ["dep:profiling"]

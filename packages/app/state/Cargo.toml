@@ -13,23 +13,27 @@ version     = "0.1.1"
 [dependencies]
 moosicbox_app_ws = { workspace = true }
 
-moosicbox_assert         = { workspace = true }
-moosicbox_audio_output   = { workspace = true }
-moosicbox_audio_zone     = { workspace = true }
-moosicbox_downloader     = { workspace = true, optional = true }
-moosicbox_env_utils      = { workspace = true }
-moosicbox_logging        = { workspace = true }
-moosicbox_music_api      = { workspace = true }
-moosicbox_music_models   = { workspace = true }
-moosicbox_paging         = { workspace = true }
-moosicbox_player         = { workspace = true, features = ["local"] }
+moosicbox_assert = { workspace = true }
+moosicbox_audio_output = { workspace = true }
+moosicbox_audio_zone = { workspace = true }
+moosicbox_downloader = { workspace = true, optional = true }
+moosicbox_env_utils = { workspace = true }
+moosicbox_logging = { workspace = true }
+moosicbox_music_api = { workspace = true }
+moosicbox_music_models = { workspace = true }
+moosicbox_paging = { workspace = true }
+moosicbox_player = { workspace = true, features = ["local"] }
 moosicbox_remote_library = { workspace = true }
-moosicbox_session        = { workspace = true }
-moosicbox_task           = { workspace = true }
-moosicbox_ws             = { workspace = true }
-switchy_database         = { workspace = true, optional = true }
-switchy_http             = { workspace = true, features = ["json", "reqwest"] }
-switchy_upnp             = { workspace = true, optional = true, features = ["player"] }
+moosicbox_schema = { workspace = true, optional = true, features = ["sqlite"] }
+moosicbox_session = { workspace = true }
+moosicbox_task = { workspace = true }
+moosicbox_ws = { workspace = true }
+switchy_database = { workspace = true, optional = true }
+switchy_database_connection = { workspace = true, optional = true, features = [
+    "sqlite",
+] }
+switchy_http = { workspace = true, features = ["json", "reqwest"] }
+switchy_upnp = { workspace = true, optional = true, features = ["player"] }
 
 log        = { workspace = true }
 serde      = { workspace = true }
@@ -71,6 +75,10 @@ yt = [
     "moosicbox_session/yt",
 ]
 
-db = ["dep:switchy_database"]
+db = [
+    "dep:moosicbox_schema",
+    "dep:switchy_database",
+    "dep:switchy_database_connection",
+]
 
 downloader = ["db", "dep:moosicbox_downloader"]

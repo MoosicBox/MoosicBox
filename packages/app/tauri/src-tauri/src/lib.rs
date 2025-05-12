@@ -843,46 +843,14 @@ pub fn run() {
             APP.get_or_init(|| app.handle().clone());
 
             tokio_handle.block_on(async {
-                #[cfg(feature = "db")]
-                let _config_db = {
-                    let db = switchy_database::profiles::LibraryDatabase {
-                        database: std::sync::Arc::new(
-                            switchy_database_connection::init(
-                                Some(&init_db_location().unwrap().join("config.db")),
-                                None,
-                            )
-                            .await
-                            .unwrap(),
-                        ),
-                    };
-                    if let Err(e) = moosicbox_schema::migrate_config(&*db).await {
-                        moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
-                    }
-                    db
-                };
-                #[cfg(feature = "db")]
-                let library_db = {
-                    let db = switchy_database::profiles::LibraryDatabase {
-                        database: std::sync::Arc::new(
-                            switchy_database_connection::init(
-                                Some(&init_db_location().unwrap().join("library.db")),
-                                None,
-                            )
-                            .await
-                            .unwrap(),
-                        ),
-                    };
-                    if let Err(e) = moosicbox_schema::migrate_library(&*db).await {
-                        moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
-                    }
-                    db
-                };
                 STATE_LOCK
                     .set(
-                        moosicbox_app_state::AppState::new(
+                        moosicbox_app_state::AppState::init(
                             #[cfg(feature = "db")]
-                            library_db,
+                            &init_db_location().unwrap().join("library.db"),
                         )
+                        .await
+                        .unwrap()
                         .with_on_before_handle_playback_update_listener(propagate_state_to_plugin)
                         .with_on_after_update_playlist_listener(update_player_plugin_playlist)
                         .with_on_before_handle_ws_message_listener(handle_before_ws_message)

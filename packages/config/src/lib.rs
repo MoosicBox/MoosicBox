@@ -13,6 +13,7 @@ pub mod db;
 pub enum AppType {
     App,
     Server,
+    Local,
 }
 
 impl From<AppType> for &str {
@@ -20,6 +21,7 @@ impl From<AppType> for &str {
         match value {
             AppType::App => "app",
             AppType::Server => "server",
+            AppType::Local => "local",
         }
     }
 }
