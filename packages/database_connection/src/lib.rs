@@ -239,7 +239,9 @@ pub async fn init_sqlite_sqlx(
 
     let connect_options = SqliteConnectOptions::new();
     let mut connect_options = if let Some(db_location) = db_location {
-        connect_options.filename(db_location)
+        connect_options
+            .filename(db_location)
+            .create_if_missing(true)
     } else {
         connect_options.in_memory(true)
     };
