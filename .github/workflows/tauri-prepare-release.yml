@@ -186,17 +186,17 @@ jobs:
                       # tag: client
                       features: android,client
 
-                    # - os: ubuntu-latest
-                    #   profile: debug
-                    #   target: android
-                    #   bundled: true
-                    #   features: android,bundled
+                    - os: ubuntu-latest
+                      profile: debug
+                      target: android
+                      bundled: true
+                      features: android,bundled
 
-                    # - os: ubuntu-latest
-                    #   profile: release
-                    #   target: android
-                    #   bundled: true
-                    #   features: android,bundled
+                    - os: ubuntu-latest
+                      profile: release
+                      target: android
+                      bundled: true
+                      features: android,bundled
 
         steps:
             - name: Clean self-hosted runner
