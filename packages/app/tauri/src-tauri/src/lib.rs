@@ -772,56 +772,42 @@ fn init_log() {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 #[allow(clippy::too_many_lines)]
 pub fn run() {
-    #[cfg(not(feature = "tauri-logger"))]
-    init_log();
-
-    let tauri::async_runtime::RuntimeHandle::Tokio(tokio_handle) = tauri::async_runtime::handle();
-
-    #[cfg(feature = "client")]
-    {
-        moosicbox_app_client::init();
-    }
+    #[cfg(feature = "bundled")]
+    #[allow(clippy::type_complexity)]
+    static APP_SERVER_HANDLE: LazyLock<
+        std::sync::Mutex<Option<moosicbox_app_tauri_bundled::service::Handle>>,
+    > = LazyLock::new(|| std::sync::Mutex::new(None));
 
     #[cfg(feature = "bundled")]
-    let (join_app_server, app_server_handle) = {
-        use moosicbox_app_tauri_bundled::service::Commander as _;
+    #[allow(clippy::type_complexity)]
+    static JOIN_APP_SERVER: LazyLock<
+        std::sync::Mutex<
+            Option<
+                tokio::task::JoinHandle<Result<(), moosicbox_app_tauri_bundled::service::Error>>,
+            >,
+        >,
+    > = LazyLock::new(|| std::sync::Mutex::new(None));
 
-        log::debug!("Starting app server");
+    #[allow(clippy::type_complexity)]
+    static JOIN_MDNS_SERVICE: LazyLock<
+        std::sync::Mutex<
+            Option<tokio::task::JoinHandle<Result<(), switchy_mdns::scanner::service::Error>>>,
+        >,
+    > = LazyLock::new(|| std::sync::Mutex::new(None));
 
-        let context = moosicbox_app_tauri_bundled::Context::new(RT.handle());
-        let server = moosicbox_app_tauri_bundled::service::Service::new(context);
+    #[allow(clippy::type_complexity)]
+    static JOIN_UPNP_SERVICE: LazyLock<
+        std::sync::Mutex<
+            Option<tokio::task::JoinHandle<Result<(), switchy_upnp::listener::Error>>>,
+        >,
+    > = LazyLock::new(|| std::sync::Mutex::new(None));
 
-        let app_server_handle = server.handle();
-        let (tx, rx) = tokio::sync::oneshot::channel();
+    #[allow(clippy::type_complexity)]
+    static MDNS_HANDLE: LazyLock<std::sync::Mutex<Option<switchy_mdns::scanner::service::Handle>>> =
+        LazyLock::new(|| std::sync::Mutex::new(None));
 
-        let join_app_server = server.start_on(RT.handle());
-
-        app_server_handle
-            .send_command(moosicbox_app_tauri_bundled::Command::WaitForStartup { sender: tx })
-            .expect("Failed to send WaitForStartup command");
-
-        log::debug!("Waiting for app server to start");
-
-        RT.block_on(rx).expect("Failed to start app server");
-
-        log::debug!("App server started");
-
-        (join_app_server, app_server_handle)
-    };
-
-    moosicbox_player::on_playback_event(crate::on_playback_event);
-
-    let upnp_service =
-        switchy_upnp::listener::Service::new(switchy_upnp::listener::UpnpContext::new());
-
-    let upnp_service_handle = upnp_service.handle();
-    let join_upnp_service = upnp_service.start_on(&tokio_handle);
-
-    UPNP_LISTENER_HANDLE
-        .set(upnp_service_handle)
-        .unwrap_or_else(|_| panic!("Failed to set UPNP_LISTENER_HANDLE"));
-
-    let (mdns_handle, join_mdns_service) = mdns::spawn_mdns_scanner();
+    #[cfg(not(feature = "tauri-logger"))]
+    init_log();
 
     #[allow(unused_mut)]
     let mut app_builder = tauri::Builder::default().plugin(tauri_plugin_fs::init());
@@ -841,6 +827,62 @@ pub fn run() {
         .plugin(app_tauri_plugin_player::init())
         .setup(move |app| {
             APP.get_or_init(|| app.handle().clone());
+
+            moosicbox_config::set_root_dir(get_data_dir().unwrap());
+
+            let tauri::async_runtime::RuntimeHandle::Tokio(tokio_handle) =
+                tauri::async_runtime::handle();
+
+            #[cfg(feature = "client")]
+            {
+                moosicbox_app_client::init();
+            }
+
+            #[cfg(feature = "bundled")]
+            {
+                use moosicbox_app_tauri_bundled::service::Commander as _;
+
+                log::debug!("Starting app server");
+
+                let context = moosicbox_app_tauri_bundled::Context::new(RT.handle());
+                let server = moosicbox_app_tauri_bundled::service::Service::new(context);
+
+                let app_server_handle = server.handle();
+                let (tx, rx) = tokio::sync::oneshot::channel();
+
+                let join_app_server = server.start_on(RT.handle());
+
+                app_server_handle
+                    .send_command(moosicbox_app_tauri_bundled::Command::WaitForStartup {
+                        sender: tx,
+                    })
+                    .expect("Failed to send WaitForStartup command");
+
+                log::debug!("Waiting for app server to start");
+
+                RT.block_on(rx).expect("Failed to start app server");
+
+                log::debug!("App server started");
+
+                *JOIN_APP_SERVER.lock().unwrap() = Some(join_app_server);
+                *APP_SERVER_HANDLE.lock().unwrap() = Some(app_server_handle);
+            };
+
+            moosicbox_player::on_playback_event(crate::on_playback_event);
+
+            let upnp_service =
+                switchy_upnp::listener::Service::new(switchy_upnp::listener::UpnpContext::new());
+
+            let upnp_service_handle = upnp_service.handle();
+            *JOIN_UPNP_SERVICE.lock().unwrap() = Some(upnp_service.start_on(&tokio_handle));
+
+            UPNP_LISTENER_HANDLE
+                .set(upnp_service_handle)
+                .unwrap_or_else(|_| panic!("Failed to set UPNP_LISTENER_HANDLE"));
+
+            let (mdns_handle, join_mdns_service) = mdns::spawn_mdns_scanner();
+            *MDNS_HANDLE.lock().unwrap() = Some(mdns_handle);
+            *JOIN_MDNS_SERVICE.lock().unwrap() = Some(join_mdns_service);
 
             moosicbox_config::set_root_dir(get_data_dir().unwrap());
 
@@ -923,23 +965,21 @@ pub fn run() {
             },
         )
         .expect("error while running tauri application")
-        .run({
+        .run(move |_handle, event| {
+            log::trace!("event: {event:?}");
+
             #[cfg(feature = "bundled")]
-            let app_server_handle = app_server_handle.clone();
-            move |_handle, event| {
-                log::trace!("event: {event:?}");
+            {
+                use moosicbox_app_tauri_bundled::service::Commander as _;
 
-                #[cfg(feature = "bundled")]
+                let event = std::sync::Arc::new(event);
+
+                let value = APP_SERVER_HANDLE.lock().unwrap().clone();
+                if let Err(e) = value
+                    .unwrap()
+                    .send_command(moosicbox_app_tauri_bundled::Command::RunEvent { event })
                 {
-                    use moosicbox_app_tauri_bundled::service::Commander as _;
-
-                    let event = std::sync::Arc::new(event);
-
-                    if let Err(e) = app_server_handle
-                        .send_command(moosicbox_app_tauri_bundled::Command::RunEvent { event })
-                    {
-                        log::error!("AppServer failed to handle event: {e:?}");
-                    }
+                    log::error!("AppServer failed to handle event: {e:?}");
                 }
             }
         });
@@ -949,20 +989,25 @@ pub fn run() {
         use moosicbox_app_tauri_bundled::service::Commander as _;
 
         log::debug!("Shutting down app server..");
-        if let Err(e) = app_server_handle.shutdown() {
+        let handle = APP_SERVER_HANDLE.lock().unwrap().take();
+        if let Err(e) = handle.unwrap().shutdown() {
             log::error!("AppServer failed to shutdown: {e:?}");
         }
     }
 
     log::debug!("Shutting down mdns service..");
-    if let Err(e) = mdns_handle.shutdown() {
-        log::error!("Failed to shutdown mdns service: {e:?}");
+    {
+        let handle = MDNS_HANDLE.lock().unwrap().take();
+        if let Err(e) = handle.unwrap().shutdown() {
+            log::error!("Failed to shutdown mdns service: {e:?}");
+        }
     }
 
     #[cfg(feature = "bundled")]
     {
         log::debug!("Joining app server...");
-        match tauri::async_runtime::block_on(join_app_server) {
+        let server = JOIN_APP_SERVER.lock().unwrap().take();
+        match tauri::async_runtime::block_on(server.unwrap()) {
             Err(e) => {
                 log::error!("Failed to join app server: {e:?}");
             }
@@ -974,12 +1019,18 @@ pub fn run() {
     }
 
     log::debug!("Joining UPnP service..");
-    if let Err(e) = tauri::async_runtime::block_on(join_upnp_service) {
-        log::error!("Failed to join UPnP service: {e:?}");
+    {
+        let handle = JOIN_UPNP_SERVICE.lock().unwrap().take();
+        if let Err(e) = tauri::async_runtime::block_on(handle.unwrap()) {
+            log::error!("Failed to join UPnP service: {e:?}");
+        }
     }
 
     log::debug!("Joining mdns service...");
-    if let Err(e) = tauri::async_runtime::block_on(join_mdns_service) {
-        log::error!("Failed to join mdns service: {e:?}");
+    {
+        let handle = JOIN_MDNS_SERVICE.lock().unwrap().take();
+        if let Err(e) = tauri::async_runtime::block_on(handle.unwrap()) {
+            log::error!("Failed to join mdns service: {e:?}");
+        }
     }
 }
