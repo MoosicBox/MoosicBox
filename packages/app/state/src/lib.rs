@@ -35,9 +35,6 @@ use tokio_util::sync::CancellationToken;
 
 pub mod ws;
 
-#[cfg(feature = "downloader")]
-pub mod downloader;
-
 type ApiPlayersMap = (ApiPlayer, PlayerType, AudioOutputFactory);
 
 static PROXY_CLIENT: LazyLock<switchy_http::Client> = LazyLock::new(switchy_http::Client::new);
@@ -145,12 +142,6 @@ pub enum AppStateError {
     ConnectWs(#[from] ConnectWsError),
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
-    #[cfg(feature = "downloader")]
-    #[error(transparent)]
-    Download(#[from] moosicbox_downloader::DownloadError),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    InitDb(#[from] switchy_database_connection::InitDbError),
 }
 
 impl AppStateError {
@@ -215,11 +206,8 @@ pub struct PlaybackTargetSessionPlayer {
     pub player_type: PlayerType,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct AppState {
-    #[cfg(feature = "db")]
-    #[allow(unused)]
-    library_db: switchy_database::profiles::LibraryDatabase,
     pub api_url: Arc<RwLock<Option<String>>>,
     pub profile: Arc<RwLock<Option<String>>>,
     pub ws_url: Arc<RwLock<Option<String>>>,
@@ -347,96 +335,9 @@ impl std::fmt::Debug for AppState {
 }
 
 impl AppState {
-    #[allow(clippy::new_without_default)]
     #[must_use]
-    pub fn new(
-        #[cfg(feature = "db")] library_db: switchy_database::profiles::LibraryDatabase,
-    ) -> Self {
-        Self {
-            #[cfg(feature = "db")]
-            library_db,
-            api_url: Arc::default(),
-            profile: Arc::default(),
-            ws_url: Arc::default(),
-            ws_connection_id: Arc::default(),
-            connection_id: Arc::default(),
-            connection_name: Arc::default(),
-            signature_token: Arc::default(),
-            client_id: Arc::default(),
-            api_token: Arc::default(),
-            ws_token: Arc::default(),
-            ws_handle: Arc::default(),
-            ws_join_handle: Arc::default(),
-            audio_zone_active_api_players: Arc::default(),
-            active_players: Arc::default(),
-            playback_quality: Arc::default(),
-            ws_message_buffer: Arc::default(),
-            current_playback_target: Arc::default(),
-            current_connections: Arc::default(),
-            pending_player_sessions: Arc::default(),
-            current_sessions: Arc::default(),
-            default_download_location: Arc::default(),
-            on_current_sessions_updated_listeners: Vec::default(),
-            on_audio_zone_with_sessions_updated_listeners: Vec::default(),
-            on_connections_updated_listeners: Vec::default(),
-            current_session_id: Arc::default(),
-            current_audio_zones: Arc::default(),
-            current_players: Arc::default(),
-            #[cfg(feature = "upnp")]
-            upnp_av_transport_services: Arc::default(),
-            on_before_handle_playback_update_listeners: Vec::default(),
-            on_after_handle_playback_update_listeners: Vec::default(),
-            on_before_update_playlist_listeners: Vec::default(),
-            on_after_update_playlist_listeners: Vec::default(),
-            on_before_handle_ws_message_listeners: Vec::default(),
-            on_after_handle_ws_message_listeners: Vec::default(),
-            on_before_set_state_listeners: Vec::default(),
-            on_after_set_state_listeners: Vec::default(),
-        }
-    }
-
-    /// # Errors
-    ///
-    /// * If the `library_db` fails to be created
-    ///
-    /// # Panics
-    ///
-    /// * If the migrations fail to run
-    #[allow(clippy::unused_async)]
-    #[cfg(feature = "db")]
-    pub async fn init_db(library_db_path: &std::path::Path) -> Result<Self, AppStateError> {
-        let library_db = {
-            let db = switchy_database::profiles::LibraryDatabase {
-                database: std::sync::Arc::new(
-                    switchy_database_connection::init(Some(library_db_path), None).await?,
-                ),
-            };
-            if let Err(e) = moosicbox_schema::migrate_library(&*db).await {
-                moosicbox_assert::die_or_panic!("Failed to migrate database: {e:?}");
-            }
-            db
-        };
-
-        Ok(Self::new(library_db))
-    }
-
-    /// # Errors
-    ///
-    /// * Infallible
-    #[allow(clippy::unused_async)]
-    #[cfg(not(feature = "db"))]
-    pub async fn init() -> Result<Self, AppStateError> {
-        Ok(Self::new())
-    }
-
-    #[allow(
-        clippy::unused_async,
-        clippy::missing_panics_doc,
-        clippy::missing_errors_doc
-    )]
-    #[cfg(feature = "db")]
-    pub async fn init() -> Result<Self, AppStateError> {
-        panic!("use init_db");
+    pub fn new() -> Self {
+        Self::default()
     }
 
     #[must_use]

@@ -47,7 +47,6 @@ moosicbox_app_native_ui = { workspace = true }
 moosicbox_app_state = { workspace = true }
 moosicbox_assert = { workspace = true }
 moosicbox_audio_zone_models = { workspace = true }
-moosicbox_config = { workspace = true, optional = true }
 moosicbox_env_utils = { workspace = true }
 moosicbox_logging = { workspace = true, features = ["free_log"] }
 moosicbox_music_api = { workspace = true }
@@ -67,7 +66,6 @@ moosicbox_app_native_bundled = { workspace = true, optional = true }
 console-subscriber = { workspace = true, optional = true }
 flume              = { workspace = true }
 log                = { workspace = true }
-profiling          = { workspace = true, optional = true }
 serde_json         = { workspace = true }
 strum              = { workspace = true }
 thiserror          = { workspace = true }
@@ -79,7 +77,6 @@ default = [
     "all-formats",
     "all-sources",
     "console-subscriber",
-    "db",
     "dev",
     "egui-wgpu",
     "fltk",
@@ -182,7 +179,3 @@ assets        = ["moosicbox_app_native_lib/assets"]
 static-routes = ["moosicbox_app_native_lib/static-routes"]
 
 dev = ["assets", "static-routes"]
-
-db = ["moosicbox_app_state/db", "moosicbox_config/db"]
-
-profiling = ["dep:profiling"]

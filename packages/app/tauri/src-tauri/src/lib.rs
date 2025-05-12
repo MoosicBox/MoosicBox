@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 use switchy_mdns::scanner::service::Commander;
 use tauri::{AppHandle, Emitter, Manager as _};
+use tauri_plugin_fs::FsExt as _;
 use thiserror::Error;
 
 mod mdns;
@@ -99,71 +100,6 @@ async fn on_startup() -> Result<(), tauri::Error> {
             },
         )?;
     }
-
-    Ok(())
-}
-
-#[cfg(feature = "downloader")]
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DownloadItems {
-    pub track_id: Option<Id>,
-    pub track_ids: Option<Vec<Id>>,
-    pub album_id: Option<Id>,
-    pub album_ids: Option<Vec<Id>>,
-}
-
-#[cfg(feature = "downloader")]
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum DownloadSource {
-    #[cfg(feature = "tidal")]
-    Tidal,
-    #[cfg(feature = "qobuz")]
-    Qobuz,
-    #[cfg(feature = "yt")]
-    Yt,
-}
-
-#[cfg(feature = "downloader")]
-impl From<DownloadSource> for moosicbox_downloader::DownloadApiSource {
-    fn from(value: DownloadSource) -> Self {
-        match value {
-            #[cfg(feature = "tidal")]
-            DownloadSource::Tidal => Self::Tidal,
-            #[cfg(feature = "qobuz")]
-            DownloadSource::Qobuz => Self::Qobuz,
-            #[cfg(feature = "yt")]
-            DownloadSource::Yt => Self::Yt,
-        }
-    }
-}
-
-#[allow(unreachable_code, unused_variables)]
-#[cfg(feature = "downloader")]
-#[tauri::command]
-async fn local_download(
-    items: DownloadItems,
-    source: DownloadSource,
-) -> Result<(), TauriPlayerError> {
-    let Some(directory) = STATE.get_default_download_location() else {
-        return Err(TauriPlayerError::Unknown(
-            "No default download location".to_string(),
-        ));
-    };
-
-    let request = moosicbox_downloader::DownloadRequest {
-        directory,
-        track_id: items.track_id,
-        track_ids: items.track_ids,
-        album_id: items.album_id,
-        album_ids: items.album_ids,
-        download_album_cover: Some(true),
-        download_artist_cover: Some(true),
-        quality: Some(moosicbox_downloader::TrackAudioQuality::FlacHighestRes),
-        source: source.into(),
-    };
-
-    STATE.local_download(request).await?;
 
     Ok(())
 }
@@ -689,61 +625,11 @@ fn get_data_dir() -> Result<PathBuf, TauriPlayerError> {
 
     log::debug!("get_data_dir path={path:?}");
 
+    let scope = APP.get().unwrap().fs_scope();
+    scope.allow_directory(&path, true).unwrap();
+    assert!(scope.is_allowed(&path));
+
     Ok(path)
-}
-
-#[cfg(feature = "db")]
-fn get_db_location() -> Result<PathBuf, TauriPlayerError> {
-    Ok(get_data_dir()?.join("db"))
-}
-
-#[cfg(feature = "db")]
-fn init_db_location() -> Result<PathBuf, TauriPlayerError> {
-    use tauri_plugin_fs::FsExt as _;
-
-    let db_location = get_db_location()?;
-
-    if db_location.exists() {
-        log::debug!("db location exists: {db_location:?}");
-    } else {
-        log::debug!("Creating db location: {db_location:?}");
-        std::fs::create_dir_all(&db_location)
-            .map_err(|e| TauriPlayerError::Unknown(e.to_string()))?;
-    }
-
-    let scope = APP.get().unwrap().fs_scope();
-    scope.allow_directory(&db_location, true).unwrap();
-    assert!(scope.is_allowed(&db_location));
-
-    Ok(db_location)
-}
-
-#[cfg(feature = "downloader")]
-fn get_download_location() -> Result<PathBuf, TauriPlayerError> {
-    Ok(get_data_dir()?.join("downloads"))
-}
-
-#[cfg(feature = "downloader")]
-fn init_download_location() -> Result<PathBuf, TauriPlayerError> {
-    use tauri_plugin_fs::FsExt as _;
-
-    let download_location = get_download_location()?;
-
-    if download_location.exists() {
-        log::debug!("download location exists: {download_location:?}");
-    } else {
-        log::debug!("Creating download location: {download_location:?}");
-        std::fs::create_dir_all(&download_location)
-            .map_err(|e| TauriPlayerError::Unknown(e.to_string()))?;
-    }
-
-    let scope = APP.get().unwrap().fs_scope();
-    scope.allow_directory(&download_location, true).unwrap();
-    assert!(scope.is_allowed(&download_location));
-
-    STATE.set_default_download_location(download_location.clone());
-
-    Ok(download_location)
 }
 
 #[cfg(not(feature = "tauri-logger"))]
@@ -887,16 +773,9 @@ pub fn run() {
             moosicbox_config::set_root_dir(get_data_dir().unwrap());
 
             tokio_handle.block_on(async {
-                #[cfg(feature = "db")]
-                let db = moosicbox_app_state::AppState::init_db(
-                    &init_db_location().unwrap().join("library.db"),
-                )
-                .await;
-                #[cfg(not(feature = "db"))]
-                let db = moosicbox_app_state::AppState::init().await;
                 STATE_LOCK
                     .set(
-                        db.unwrap()
+                        moosicbox_app_state::AppState::new()
                             .with_on_before_handle_playback_update_listener(
                                 propagate_state_to_plugin,
                             )
@@ -907,11 +786,6 @@ pub fn run() {
                     )
                     .unwrap();
             });
-
-            #[cfg(feature = "downloader")]
-            if let Err(e) = init_download_location() {
-                log::error!("Failed to initialize download location: {e:?}");
-            }
 
             #[cfg(target_os = "android")]
             {
@@ -953,8 +827,6 @@ pub fn run() {
             api_proxy_get,
             api_proxy_post,
             mdns::fetch_moosicbox_servers,
-            #[cfg(feature = "downloader")]
-            local_download,
         ]);
 
     app_builder

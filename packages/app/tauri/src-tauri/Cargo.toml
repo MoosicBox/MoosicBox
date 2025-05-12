@@ -29,7 +29,6 @@ moosicbox_app_state = { workspace = true, features = ["upnp"] }
 
 moosicbox_assert       = { workspace = true }
 moosicbox_config       = { workspace = true }
-moosicbox_downloader   = { workspace = true, optional = true }
 moosicbox_env_utils    = { workspace = true }
 moosicbox_logging      = { workspace = true, features = ["free_log"] }
 moosicbox_music_models = { workspace = true }
@@ -85,21 +84,9 @@ all-supported-formats    = ["all-supported-os-formats", "mp3"]
 all-supported-os-formats = ["aac", "flac"]
 
 # Encoders
-aac = [
-    "moosicbox_app_tauri_bundled?/aac",
-    "moosicbox_downloader?/aac",
-    "moosicbox_music_models/aac",
-]
-flac = [
-    "moosicbox_app_tauri_bundled?/flac",
-    "moosicbox_downloader?/flac",
-    "moosicbox_music_models/flac",
-]
-mp3 = [
-    "moosicbox_app_tauri_bundled?/mp3",
-    "moosicbox_downloader?/mp3",
-    "moosicbox_music_models/mp3",
-]
+aac  = ["moosicbox_app_tauri_bundled?/aac", "moosicbox_music_models/aac"]
+flac = ["moosicbox_app_tauri_bundled?/flac", "moosicbox_music_models/flac"]
+mp3  = ["moosicbox_app_tauri_bundled?/mp3", "moosicbox_music_models/mp3"]
 
 # Player audio outputs
 asio                = ["moosicbox_player/asio"]
@@ -115,28 +102,18 @@ all-sources = ["qobuz", "tidal", "yt"]
 
 qobuz = [
     "moosicbox_app_state/qobuz",
-    "moosicbox_downloader/qobuz",
     "moosicbox_music_models/qobuz",
     "moosicbox_session/qobuz",
 ]
 tidal = [
     "moosicbox_app_state/tidal",
-    "moosicbox_downloader/tidal",
     "moosicbox_music_models/tidal",
     "moosicbox_session/tidal",
 ]
 yt = [
     "moosicbox_app_state/yt",
-    "moosicbox_downloader/yt",
     "moosicbox_music_models/yt",
     "moosicbox_session/yt",
-]
-
-db = ["moosicbox_app_state/db"]
-downloader = [
-    "db",
-    "dep:moosicbox_downloader",
-    "moosicbox_app_state/downloader",
 ]
 
 tauri-logger = ["dep:tauri-plugin-log"]
