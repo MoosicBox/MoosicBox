@@ -843,19 +843,23 @@ pub fn run() {
             APP.get_or_init(|| app.handle().clone());
 
             tokio_handle.block_on(async {
+                #[cfg(feature = "db")]
+                let db = moosicbox_app_state::AppState::init_db(
+                    &init_db_location().unwrap().join("library.db"),
+                )
+                .await;
+                #[cfg(not(feature = "db"))]
+                let db = moosicbox_app_state::AppState::init().await;
                 STATE_LOCK
                     .set(
-                        moosicbox_app_state::AppState::init(
-                            #[cfg(feature = "db")]
-                            &init_db_location().unwrap().join("library.db"),
-                        )
-                        .await
-                        .unwrap()
-                        .with_on_before_handle_playback_update_listener(propagate_state_to_plugin)
-                        .with_on_after_update_playlist_listener(update_player_plugin_playlist)
-                        .with_on_before_handle_ws_message_listener(handle_before_ws_message)
-                        .with_on_after_handle_ws_message_listener(handle_after_ws_message)
-                        .with_on_before_set_state_listener(update_log_layer),
+                        db.unwrap()
+                            .with_on_before_handle_playback_update_listener(
+                                propagate_state_to_plugin,
+                            )
+                            .with_on_after_update_playlist_listener(update_player_plugin_playlist)
+                            .with_on_before_handle_ws_message_listener(handle_before_ws_message)
+                            .with_on_after_handle_ws_message_listener(handle_after_ws_message)
+                            .with_on_before_set_state_listener(update_log_layer),
                     )
                     .unwrap();
             });

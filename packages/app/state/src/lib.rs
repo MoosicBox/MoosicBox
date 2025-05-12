@@ -403,10 +403,8 @@ impl AppState {
     ///
     /// * If the migrations fail to run
     #[allow(clippy::unused_async)]
-    pub async fn init(
-        #[cfg(feature = "db")] library_db_path: &std::path::Path,
-    ) -> Result<Self, AppStateError> {
-        #[cfg(feature = "db")]
+    #[cfg(feature = "db")]
+    pub async fn init_db(library_db_path: &std::path::Path) -> Result<Self, AppStateError> {
         let library_db = {
             let db = switchy_database::profiles::LibraryDatabase {
                 database: std::sync::Arc::new(
@@ -419,10 +417,26 @@ impl AppState {
             db
         };
 
-        Ok(Self::new(
-            #[cfg(feature = "db")]
-            library_db,
-        ))
+        Ok(Self::new(library_db))
+    }
+
+    /// # Errors
+    ///
+    /// * Infallible
+    #[allow(clippy::unused_async)]
+    #[cfg(not(feature = "db"))]
+    pub async fn init() -> Result<Self, AppStateError> {
+        Ok(Self::new())
+    }
+
+    #[allow(
+        clippy::unused_async,
+        clippy::missing_panics_doc,
+        clippy::missing_errors_doc
+    )]
+    #[cfg(feature = "db")]
+    pub async fn init() -> Result<Self, AppStateError> {
+        panic!("use init_db");
     }
 
     #[must_use]

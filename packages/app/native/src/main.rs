@@ -622,22 +622,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let runner_runtime = runtime.clone();
 
     let mut runner = runner_runtime.block_on(async move {
+        #[cfg(feature = "db")]
+        let db = moosicbox_app_state::AppState::init_db(&{
+            static PROFILE: &str = "master";
+            db::make_profile_library_db_path(moosicbox_config::AppType::Local, PROFILE).unwrap()
+        })
+        .await;
+        #[cfg(not(feature = "db"))]
+        let db = moosicbox_app_state::AppState::init().await;
         STATE_LOCK
             .set(
-                moosicbox_app_state::AppState::init(
-                    #[cfg(feature = "db")]
-                    &{
-                        static PROFILE: &str = "master";
-                        db::make_profile_library_db_path(moosicbox_config::AppType::Local, PROFILE)
-                            .unwrap()
-                    },
-                )
-                .await
-                .unwrap()
-                .with_on_current_sessions_updated_listener(current_sessions_updated)
-                .with_on_audio_zone_with_sessions_updated_listener(audio_zone_with_sessions_updated)
-                .with_on_connections_updated_listener(connections_updated)
-                .with_on_after_handle_playback_update_listener(handle_playback_update),
+                db.unwrap()
+                    .with_on_current_sessions_updated_listener(current_sessions_updated)
+                    .with_on_audio_zone_with_sessions_updated_listener(
+                        audio_zone_with_sessions_updated,
+                    )
+                    .with_on_connections_updated_listener(connections_updated)
+                    .with_on_after_handle_playback_update_listener(handle_playback_update),
             )
             .unwrap();
 
