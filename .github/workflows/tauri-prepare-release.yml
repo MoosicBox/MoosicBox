@@ -183,7 +183,7 @@ jobs:
                     - os: ubuntu-latest
                       profile: release
                       target: android
-                      # tag: client
+                      tag: client
                       features: android,client
 
                     # - os: ubuntu-latest
