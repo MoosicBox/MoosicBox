@@ -453,19 +453,14 @@ impl Database for SqliteSqlxDatabase {
         log::trace!("exec_raw: query:\n{statement}");
 
         let connection = self.get_connection().await?;
-        let mut connection = connection.lock().await;
-        let statement = connection
-            .prepare(statement)
-            .await
-            .map_err(SqlxDatabaseError::Sqlx)?;
-        let query = statement.query();
+        let mut binding = connection.lock().await;
 
-        connection
-            .execute(query)
+        binding
+            .execute(sqlx::raw_sql(statement))
             .await
             .map_err(SqlxDatabaseError::Sqlx)?;
 
-        drop(connection);
+        drop(binding);
 
         Ok(())
     }
