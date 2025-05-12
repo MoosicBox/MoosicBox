@@ -842,6 +842,8 @@ pub fn run() {
         .setup(move |app| {
             APP.get_or_init(|| app.handle().clone());
 
+            moosicbox_config::set_root_dir(get_data_dir().unwrap());
+
             tokio_handle.block_on(async {
                 #[cfg(feature = "db")]
                 let db = moosicbox_app_state::AppState::init_db(

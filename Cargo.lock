@@ -6710,6 +6710,7 @@ dependencies = [
  "moosicbox_app_state",
  "moosicbox_app_tauri_bundled",
  "moosicbox_assert",
+ "moosicbox_config",
  "moosicbox_downloader",
  "moosicbox_env_utils",
  "moosicbox_logging",

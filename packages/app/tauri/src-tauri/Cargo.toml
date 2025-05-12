@@ -28,6 +28,7 @@ tauri-build = { workspace = true, features = [] }
 moosicbox_app_state = { workspace = true, features = ["upnp"] }
 
 moosicbox_assert       = { workspace = true }
+moosicbox_config       = { workspace = true }
 moosicbox_downloader   = { workspace = true, optional = true }
 moosicbox_env_utils    = { workspace = true }
 moosicbox_logging      = { workspace = true, features = ["free_log"] }
