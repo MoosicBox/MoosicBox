@@ -7662,7 +7662,10 @@ dependencies = [
  "log",
  "moosicbox_assert",
  "switchy_database",
+ "switchy_database_connection",
+ "test-log",
  "thiserror 2.0.12",
+ "tokio",
 ]
 
 [[package]]

@@ -18,6 +18,14 @@ include_dir = { workspace = true }
 log         = { workspace = true }
 thiserror   = { workspace = true }
 
+[dev-dependencies]
+switchy_database_connection = { workspace = true, features = [
+    "sqlite-rusqlite",
+    "sqlite-sqlx",
+] }
+test-log = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
+
 [features]
 default = ["postgres", "sqlite"]
 

@@ -249,3 +249,41 @@ mod postgres {
         directory: include_dir!("$CARGO_MANIFEST_DIR/migrations/server/library/postgres"),
     };
 }
+
+#[cfg(feature = "sqlite")]
+#[cfg(test)]
+mod sqlite_tests {
+    use super::*;
+
+    #[test_log::test(tokio::test)]
+    async fn sqlx_config_migrations() {
+        let db = switchy_database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+
+        sqlite::SQLITE_CONFIG_MIGRATIONS.run(&*db).await.unwrap();
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn sqlx_library_migrations() {
+        let db = switchy_database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+
+        sqlite::SQLITE_LIBRARY_MIGRATIONS.run(&*db).await.unwrap();
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn rusqlite_config_migrations() {
+        let db = switchy_database_connection::init_sqlite_rusqlite(None).unwrap();
+
+        sqlite::SQLITE_CONFIG_MIGRATIONS.run(&*db).await.unwrap();
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn rusqlite_library_migrations() {
+        let db = switchy_database_connection::init_sqlite_rusqlite(None).unwrap();
+
+        sqlite::SQLITE_LIBRARY_MIGRATIONS.run(&*db).await.unwrap();
+    }
+}
