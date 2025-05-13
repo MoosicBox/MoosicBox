@@ -43,6 +43,7 @@ use moosicbox_music_models::{
     Album, ApiSource, Artist, AudioFormat, Track, TrackApiSource,
     id::{Id, IdType, ParseIdsError},
 };
+use moosicbox_remote_library::RemoteLibraryMusicApi;
 use queue::{DownloadQueue, ProgressListener};
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
@@ -62,11 +63,12 @@ pub mod queue;
 static DOWNLOAD_QUEUE: LazyLock<Arc<RwLock<DownloadQueue>>> =
     LazyLock::new(|| Arc::new(RwLock::new(DownloadQueue::new())));
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum DownloadApiSource {
+    MoosicBox(String),
     #[cfg(feature = "tidal")]
     Tidal,
     #[cfg(feature = "qobuz")]
@@ -85,32 +87,6 @@ impl From<ApiSource> for DownloadApiSource {
             #[cfg(feature = "yt")]
             ApiSource::Yt => Self::Yt,
             _ => unreachable!(),
-        }
-    }
-}
-
-impl From<DownloadApiSource> for ApiSource {
-    fn from(value: DownloadApiSource) -> Self {
-        match value {
-            #[cfg(feature = "tidal")]
-            DownloadApiSource::Tidal => Self::Tidal,
-            #[cfg(feature = "qobuz")]
-            DownloadApiSource::Qobuz => Self::Qobuz,
-            #[cfg(feature = "yt")]
-            DownloadApiSource::Yt => Self::Yt,
-        }
-    }
-}
-
-impl From<DownloadApiSource> for TrackApiSource {
-    fn from(value: DownloadApiSource) -> Self {
-        match value {
-            #[cfg(feature = "tidal")]
-            DownloadApiSource::Tidal => Self::Tidal,
-            #[cfg(feature = "qobuz")]
-            DownloadApiSource::Qobuz => Self::Qobuz,
-            #[cfg(feature = "yt")]
-            DownloadApiSource::Yt => Self::Yt,
         }
     }
 }
@@ -146,6 +122,27 @@ pub struct DownloadRequest {
     pub source: DownloadApiSource,
 }
 
+fn music_api_from_source(
+    music_apis: &MusicApis,
+    source: DownloadApiSource,
+) -> Result<Arc<Box<dyn MusicApi>>, MusicApisError> {
+    const PROFILE: &str = "master";
+
+    Ok(match source {
+        DownloadApiSource::MoosicBox(host) => Arc::new(Box::new(RemoteLibraryMusicApi::new(
+            host,
+            ApiSource::Library,
+            PROFILE.to_string(),
+        ))),
+        #[cfg(feature = "tidal")]
+        DownloadApiSource::Tidal => music_apis.get(ApiSource::Tidal)?,
+        #[cfg(feature = "qobuz")]
+        DownloadApiSource::Qobuz => music_apis.get(ApiSource::Qobuz)?,
+        #[cfg(feature = "yt")]
+        DownloadApiSource::Yt => music_apis.get(ApiSource::Yt)?,
+    })
+}
+
 /// # Errors
 ///
 /// * If there is a database error
@@ -163,7 +160,7 @@ pub async fn download(
     music_apis: MusicApis,
 ) -> Result<(), DownloadError> {
     let tasks = get_create_download_tasks(
-        &**music_apis.get(request.source.into())?,
+        &**music_api_from_source(&music_apis, request.source.clone())?,
         &request.directory,
         request.track_id,
         request.track_ids,
@@ -299,7 +296,7 @@ pub async fn get_create_download_tasks(
                     IdType::Album,
                 )?],
                 download_path,
-                source,
+                source.clone(),
                 quality,
                 download_album_cover,
                 download_artist_cover,
@@ -315,7 +312,7 @@ pub async fn get_create_download_tasks(
                 api,
                 album_ids,
                 download_path,
-                source,
+                source.clone(),
                 quality,
                 download_album_cover,
                 download_artist_cover,
@@ -335,7 +332,7 @@ pub async fn get_create_download_tasks(
                     IdType::Track,
                 )?],
                 download_path,
-                source,
+                source.clone(),
                 quality,
             )
             .await?,
@@ -398,8 +395,8 @@ pub async fn get_create_download_tasks_for_tracks(
 
         #[allow(clippy::manual_let_else)]
         let source = {
-            if let Some(source) = source {
-                source
+            if let Some(source) = &source {
+                source.clone()
             } else {
                 match track.track_source {
                     TrackApiSource::Local => {
@@ -466,7 +463,7 @@ pub async fn get_create_download_tasks_for_tracks(
 /// * If there are errors fetching track/album/artist info
 /// * If IDs fail to parse
 /// * If given an invalid `ApiSource`
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub async fn get_create_download_tasks_for_album_ids(
     api: &dyn MusicApi,
     album_ids: &[Id],
@@ -568,11 +565,13 @@ pub async fn get_create_download_tasks_for_album_ids(
             .await?
             .into_iter()
             .filter(|track| {
-                source.map_or_else(
+                source.as_ref().map_or_else(
                     || track.track_source != TrackApiSource::Local,
-                    |source| {
-                        let track_source = source.into();
-                        track.track_source == track_source
+                    |source| match source {
+                        DownloadApiSource::MoosicBox(_) => unimplemented!(),
+                        DownloadApiSource::Tidal => track.track_source == TrackApiSource::Tidal,
+                        DownloadApiSource::Qobuz => track.track_source == TrackApiSource::Qobuz,
+                        DownloadApiSource::Yt => track.track_source == TrackApiSource::Yt,
                     },
                 )
             })
@@ -583,8 +582,14 @@ pub async fn get_create_download_tasks_for_album_ids(
         }
 
         tasks.extend(
-            get_create_download_tasks_for_tracks(api, &tracks, download_path, source, quality)
-                .await?,
+            get_create_download_tasks_for_tracks(
+                api,
+                &tracks,
+                download_path,
+                source.clone(),
+                quality,
+            )
+            .await?,
         );
     }
 
@@ -1040,14 +1045,18 @@ pub async fn download_album_id(
         "Starting download for album_id={album_id} quality={quality:?} source={source:?} path={path}"
     );
 
-    let track_source = source.into();
     let tracks = api
         .album_tracks(album_id, None, None, None, None)
         .await?
         .with_rest_of_items_in_batches()
         .await?
         .into_iter()
-        .filter(|track| track.track_source == track_source)
+        .filter(|track| match source {
+            DownloadApiSource::MoosicBox(_) => unimplemented!(),
+            DownloadApiSource::Tidal => track.track_source == TrackApiSource::Tidal,
+            DownloadApiSource::Qobuz => track.track_source == TrackApiSource::Qobuz,
+            DownloadApiSource::Yt => track.track_source == TrackApiSource::Yt,
+        })
         .collect::<Vec<_>>();
 
     for track in &tracks {
@@ -1311,7 +1320,7 @@ impl Downloader for MoosicboxDownloader {
         timeout_duration: Option<Duration>,
     ) -> Result<Track, DownloadTrackError> {
         download_track_id(
-            &**self.music_apis.get(source.into())?,
+            &**music_api_from_source(&self.music_apis, source.clone())?,
             path,
             track_id,
             quality,
@@ -1331,7 +1340,7 @@ impl Downloader for MoosicboxDownloader {
         on_progress: ProgressListener,
     ) -> Result<Album, DownloadAlbumError> {
         download_album_cover(
-            &**self.music_apis.get(source.into())?,
+            &**music_api_from_source(&self.music_apis, source.clone())?,
             &self.db,
             path,
             album_id,
@@ -1349,7 +1358,7 @@ impl Downloader for MoosicboxDownloader {
         on_progress: ProgressListener,
     ) -> Result<Artist, DownloadAlbumError> {
         download_artist_cover(
-            &**self.music_apis.get(source.into())?,
+            &**music_api_from_source(&self.music_apis, source.clone())?,
             &self.db,
             path,
             album_id,

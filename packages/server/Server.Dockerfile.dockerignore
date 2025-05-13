@@ -41,6 +41,7 @@
 !/packages/profiles
 !/packages/qobuz
 !/packages/random
+!/packages/remote_library
 !/packages/resampler
 !/packages/scan
 !/packages/schema

@@ -49,6 +49,7 @@ RUN cat Cargo.toml | \
     \"packages\/profiles\",\r\
     \"packages\/qobuz\",\r\
     \"packages\/random\",\r\
+    \"packages\/remote_library\",\r\
     \"packages\/resampler\",\r\
     \"packages\/scan\",\r\
     \"packages\/schema\",\r\
@@ -116,6 +117,7 @@ COPY packages/player/Cargo.toml packages/player/Cargo.toml
 COPY packages/profiles/Cargo.toml packages/profiles/Cargo.toml
 COPY packages/qobuz/Cargo.toml packages/qobuz/Cargo.toml
 COPY packages/random/Cargo.toml packages/random/Cargo.toml
+COPY packages/remote_library/Cargo.toml packages/remote_library/Cargo.toml
 COPY packages/resampler/Cargo.toml packages/resampler/Cargo.toml
 COPY packages/scan/Cargo.toml packages/scan/Cargo.toml
 COPY packages/schema/Cargo.toml packages/schema/Cargo.toml
@@ -180,6 +182,7 @@ packages/player|\
 packages/profiles|\
 packages/qobuz|\
 packages/random|\
+packages/remote_library|\
 packages/resampler|\
 packages/scan|\
 packages/schema|\

@@ -14,16 +14,17 @@ version     = "0.1.1"
 ignored = ["strum"]
 
 [dependencies]
-moosicbox_assert       = { workspace = true }
-moosicbox_config       = { workspace = true }
-moosicbox_files        = { workspace = true, features = ["files"] }
-moosicbox_json_utils   = { workspace = true, features = ["serde_json"] }
-moosicbox_music_api    = { workspace = true }
-moosicbox_music_models = { workspace = true }
-moosicbox_paging       = { workspace = true }
-moosicbox_scan         = { workspace = true, features = ["local"] }
-moosicbox_task         = { workspace = true }
-switchy_database       = { workspace = true }
+moosicbox_assert         = { workspace = true }
+moosicbox_config         = { workspace = true }
+moosicbox_files          = { workspace = true, features = ["files"] }
+moosicbox_json_utils     = { workspace = true, features = ["serde_json"] }
+moosicbox_music_api      = { workspace = true }
+moosicbox_music_models   = { workspace = true }
+moosicbox_paging         = { workspace = true }
+moosicbox_remote_library = { workspace = true }
+moosicbox_scan           = { workspace = true, features = ["local"] }
+moosicbox_task           = { workspace = true }
+switchy_database         = { workspace = true }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
@@ -88,8 +89,8 @@ tidal = [
     "moosicbox_scan/tidal",
 ]
 yt = [
+    "flac",
     "moosicbox_files/yt",
     "moosicbox_music_models/yt",
     "moosicbox_scan/yt",
-    "flac",
 ]

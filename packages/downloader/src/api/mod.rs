@@ -19,7 +19,10 @@ use actix_web::{
     web::{self, Json},
 };
 use moosicbox_music_api::{MusicApis, models::TrackAudioQuality};
-use moosicbox_music_models::id::{Id, IdType, parse_id_ranges};
+use moosicbox_music_models::{
+    ApiSource,
+    id::{Id, IdType, parse_id_ranges},
+};
 use moosicbox_paging::Page;
 use regex::{Captures, Regex};
 use serde::Deserialize;
@@ -152,38 +155,36 @@ pub async fn download_endpoint(
 ) -> Result<Json<Value>> {
     let download_path = get_download_path(&db, query.location_id).await?;
 
+    let api_source = match &query.source {
+        DownloadApiSource::MoosicBox(..) => ApiSource::Library,
+        #[cfg(feature = "tidal")]
+        DownloadApiSource::Tidal => ApiSource::Tidal,
+        #[cfg(feature = "qobuz")]
+        DownloadApiSource::Qobuz => ApiSource::Qobuz,
+        #[cfg(feature = "yt")]
+        DownloadApiSource::Yt => ApiSource::Yt,
+    };
+
     let track_id = if let Some(track_id) = &query.track_id {
-        Some(
-            Id::try_from_str(track_id, query.source.into(), IdType::Track)
-                .map_err(ErrorBadRequest)?,
-        )
+        Some(Id::try_from_str(track_id, api_source, IdType::Track).map_err(ErrorBadRequest)?)
     } else {
         None
     };
 
     let album_id = if let Some(album_id) = &query.album_id {
-        Some(
-            Id::try_from_str(album_id, query.source.into(), IdType::Album)
-                .map_err(ErrorBadRequest)?,
-        )
+        Some(Id::try_from_str(album_id, api_source, IdType::Album).map_err(ErrorBadRequest)?)
     } else {
         None
     };
 
     let track_ids = if let Some(track_ids) = &query.track_ids {
-        Some(
-            parse_id_ranges(track_ids, query.source.into(), IdType::Track)
-                .map_err(ErrorBadRequest)?,
-        )
+        Some(parse_id_ranges(track_ids, api_source, IdType::Track).map_err(ErrorBadRequest)?)
     } else {
         None
     };
 
     let album_ids = if let Some(album_ids) = &query.album_ids {
-        Some(
-            parse_id_ranges(album_ids, query.source.into(), IdType::Album)
-                .map_err(ErrorBadRequest)?,
-        )
+        Some(parse_id_ranges(album_ids, api_source, IdType::Album).map_err(ErrorBadRequest)?)
     } else {
         None
     };
@@ -197,7 +198,7 @@ pub async fn download_endpoint(
         download_album_cover: query.download_album_cover,
         download_artist_cover: query.download_artist_cover,
         quality: query.quality,
-        source: query.source,
+        source: query.source.clone(),
     };
 
     download(request, db, music_apis).await?;

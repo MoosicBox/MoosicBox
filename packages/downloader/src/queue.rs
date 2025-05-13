@@ -430,7 +430,7 @@ impl DownloadQueue {
                         &task.file_path,
                         track_id,
                         *quality,
-                        *source,
+                        source.clone(),
                         on_progress,
                         Some(*TIMEOUT_DURATION),
                     )
@@ -458,7 +458,7 @@ impl DownloadQueue {
                 album_id, source, ..
             } => {
                 let album = downloader
-                    .download_album_cover(&task.file_path, album_id, *source, on_progress)
+                    .download_album_cover(&task.file_path, album_id, source.clone(), on_progress)
                     .await?;
 
                 if let Some(scanner) = scanner {
@@ -483,7 +483,7 @@ impl DownloadQueue {
                 album_id, source, ..
             } => {
                 let artist = downloader
-                    .download_artist_cover(&task.file_path, album_id, *source, on_progress)
+                    .download_artist_cover(&task.file_path, album_id, source.clone(), on_progress)
                     .await?;
 
                 if let Some(scanner) = scanner {

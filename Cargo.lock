@@ -7128,6 +7128,7 @@ dependencies = [
  "moosicbox_music_api",
  "moosicbox_music_models",
  "moosicbox_paging",
+ "moosicbox_remote_library",
  "moosicbox_scan",
  "moosicbox_task",
  "pretty_assertions",

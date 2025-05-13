@@ -128,10 +128,11 @@ impl From<DownloadTaskState> for ApiDownloadTaskState {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum ApiDownloadApiSource {
+    MoosicBox(String),
     #[cfg(feature = "tidal")]
     Tidal,
     #[cfg(feature = "qobuz")]
@@ -143,6 +144,7 @@ pub enum ApiDownloadApiSource {
 impl From<DownloadApiSource> for ApiDownloadApiSource {
     fn from(value: DownloadApiSource) -> Self {
         match value {
+            DownloadApiSource::MoosicBox(host) => Self::MoosicBox(host),
             #[cfg(feature = "tidal")]
             DownloadApiSource::Tidal => Self::Tidal,
             #[cfg(feature = "qobuz")]
