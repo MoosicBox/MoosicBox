@@ -48,8 +48,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.14.12
-        version: 3.14.12
+        specifier: ^3.14.16
+        version: 3.14.16
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
@@ -426,8 +426,8 @@ packages:
     resolution: {integrity: sha512-jjhdIE/FPF2B7Z1uzc6i3oWKbGcHb87Qw7AWj6jmEqNOfDFbJWtjt/XfwCpvNkpGWlcJaog5vTR+VV8+w9JflA==}
     engines: {node: ^18.18.0 || >=20.0.0}
 
-  '@typescript-eslint/scope-manager@8.32.0':
-    resolution: {integrity: sha512-jc/4IxGNedXkmG4mx4nJTILb6TMjL66D41vyeaPWvDUmeYQzF3lKtN15WsAeTr65ce4mPxwopPSo1yUUAWw0hQ==}
+  '@typescript-eslint/scope-manager@8.32.1':
+    resolution: {integrity: sha512-7IsIaIDeZn7kffk7qXC3o6Z4UblZJKV3UBpkvRNpr5NSyLji7tvTcvmnMNYuYLyh26mN8W723xpo3i4MlD33vA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
   '@typescript-eslint/type-utils@7.18.0':
@@ -444,8 +444,8 @@ packages:
     resolution: {integrity: sha512-iZqi+Ds1y4EDYUtlOOC+aUmxnE9xS/yCigkjA7XpTKV6nCBd3Hp/PRGGmdwnfkV2ThMyYldP1wRpm/id99spTQ==}
     engines: {node: ^18.18.0 || >=20.0.0}
 
-  '@typescript-eslint/types@8.32.0':
-    resolution: {integrity: sha512-O5Id6tGadAZEMThM6L9HmVf5hQUXNSxLVKeGJYWNhhVseps/0LddMkp7//VDkzwJ69lPL0UmZdcZwggj9akJaA==}
+  '@typescript-eslint/types@8.32.1':
+    resolution: {integrity: sha512-YmybwXUJcgGqgAp6bEsgpPXEg6dcCyPyCSr0CAAueacR/CCBi25G3V8gGQ2kRzQRBNol7VQknxMs9HvVa9Rvfg==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
   '@typescript-eslint/typescript-estree@7.18.0':
@@ -467,8 +467,8 @@ packages:
     resolution: {integrity: sha512-cDF0/Gf81QpY3xYyJKDV14Zwdmid5+uuENhjH2EqFaF0ni+yAyq/LzMaIJdhNJXZI7uLzwIlA+V7oWoyn6Curg==}
     engines: {node: ^18.18.0 || >=20.0.0}
 
-  '@typescript-eslint/visitor-keys@8.32.0':
-    resolution: {integrity: sha512-1rYQTCLFFzOI5Nl0c8LUpJT8HxpwVRn9E4CkMsYfuN6ctmQqExjSTzzSk0Tz2apmXy7WU6/6fyaZVVA/thPN+w==}
+  '@typescript-eslint/visitor-keys@8.32.1':
+    resolution: {integrity: sha512-ar0tjQfObzhSaW3C3QNmTc5ofj0hDoNQ5XWrCy6zDyabdr0TWhCkClp+rywGNj/odAFBVzzJrK4tEq5M4Hmu4w==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
   '@ungap/structured-clone@1.3.0':
@@ -2067,8 +2067,8 @@ packages:
     resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
     hasBin: true
 
-  semver@7.7.1:
-    resolution: {integrity: sha512-hlq8tAfn0m/61p4BVRcPzIGr6LKiMwo4VM6dGi6pt4qcRkmNzTcWq6eCEjEh+qXjkMDvPlOFFSGwQjoEa6gyMA==}
+  semver@7.7.2:
+    resolution: {integrity: sha512-RF0Fw+rO5AMf9MAyaRXI4AV0Ulj5lMHqVxxdSgiVbixSCXoEmmX/jk0CuJw4+3SqroYO9VoUh+HcuJivvtJemA==}
     engines: {node: '>=10'}
     hasBin: true
 
@@ -2182,48 +2182,48 @@ packages:
     resolution: {integrity: sha512-MGrFH9Z4NP9Iyhqn16sDtBpRRNJ0Y2hNa6D65h736fVSaPCHr4DM4sWUNvVaSuC+0OBGhwsrydQwmgfg5LncqQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
-  sst-darwin-arm64@3.14.12:
-    resolution: {integrity: sha512-mjZTdtiA4gEaM/rqRsTnPWQXeKZxxnm82VUgkLPG2VLZB7+EF9eaPcVS/4rUKnvDvHCvB3gjadHQjyQpStymag==}
+  sst-darwin-arm64@3.14.16:
+    resolution: {integrity: sha512-BlEPPcXT2xowINAyh0VBM+oEYiJMe5kGXzHTA8j4Oocit7g5h49Ata8wLakqNAgPzjV1J5I4FisvqPnUWO1pTQ==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.14.12:
-    resolution: {integrity: sha512-gpvgqt0bL8YkrVPwSXLozCCu40iK4EYmR3GpD81VQtKPn8Pud8YUzF+TfWwJOOWIIvFD5ZIaiWZYIDRq55iwKQ==}
+  sst-darwin-x64@3.14.16:
+    resolution: {integrity: sha512-BZirTxYLvssW8zO5shd7SkyVwbQAQP2EVdwF4xQAH/tH386/VMvKUgYombzVYRDr7xSYDQBigBw4MxRB/tNniw==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.14.12:
-    resolution: {integrity: sha512-UPIc1zBtxcDMlqVXvyuc255Gf8UVZYQLBTNiACzGsHqplgXPK3hUENrTnUnq+36s6FEuJ7DcJWtJMt2LOeZWtw==}
+  sst-linux-arm64@3.14.16:
+    resolution: {integrity: sha512-CLs4dVqjdlgRxbVKMTAjbkmwJf+XsrRLYv0FBvEHxgCp/ehw32bL/nt/apRJm7n8gXwlwZqaEAHXvsfOk+gLXg==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.14.12:
-    resolution: {integrity: sha512-xgPLHlMVVqH0TV73MI29ThaeVzgx8e5woeFiZlWpH1x9sCOOK6TO98HTIMgYphK+xu2a9Hk9WsypCSM698SoRw==}
+  sst-linux-x64@3.14.16:
+    resolution: {integrity: sha512-byZRYpS0QNzlCuxyvgJdLJPTIpHs5PsE1PUG0uF9xoJo1rYZI0yyxD6ghYOtddbd+l5kkDoqw+5ZXiKsM74M5w==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.14.12:
-    resolution: {integrity: sha512-MuwjqhCBoUYGQT2lgjbvm8mj2fgjOTkTlAqhdvHy2Kl3LU/gWP/Qxc7/Z2qkbi3kQkn9ukZghDdwjLCy9ioteQ==}
+  sst-linux-x86@3.14.16:
+    resolution: {integrity: sha512-jeVz6hHQ2n3NkRsSmshm/57nL/5DMlRaS4vsvnR/JxCVi32zLYnDJZvHXDmfSwtwv+SpwnmBdzgNQ4NcQeNrQQ==}
     cpu: [x86]
     os: [linux]
 
-  sst-win32-arm64@3.14.12:
-    resolution: {integrity: sha512-696e8e03kUxUr3RE4/191/D1tWnWiFixaeGsksz9dysZhduVy3lsswmPqxes55s6JVqSMSUKptujUGhD+mXWmQ==}
+  sst-win32-arm64@3.14.16:
+    resolution: {integrity: sha512-LFPKyI6yQsx8ikIPWmqxwoQEhL3+Gj/Iad/LlqOMZ8mLVKGX7aE92lfPMqx5q+9qq4imNb7clT+Z0CC8Vq6P3Q==}
     cpu: [arm64]
     os: [win32]
 
-  sst-win32-x64@3.14.12:
-    resolution: {integrity: sha512-3eDVbbTN+ZkD9jWKLb/RQspHHom7YnG81jX6ZczMzR1H0cQ5ta/lDWgbUytjxu1rPYXTHzEuBOdo+FI9pgzy5A==}
+  sst-win32-x64@3.14.16:
+    resolution: {integrity: sha512-qKLw5J2cSYwyI8w8njCiW7QRsxIEFF8PkMcUgSUG8yrqUmFHFTuk0jlmCSd8AlUCqoFjSbiM4dK7kg9RvQ8Dlw==}
     cpu: [x64]
     os: [win32]
 
-  sst-win32-x86@3.14.12:
-    resolution: {integrity: sha512-txTVJengDAdbvZ+Y56S6xp35k+SN9Qnh8mA52QN6cBvV5cPIEMXQqzkVcspH88Eagtc7fijStCQqDrz30jG6xQ==}
+  sst-win32-x86@3.14.16:
+    resolution: {integrity: sha512-LV+JWnjl59x0G4HqvKrKFNSm0Ik27nWDJ9D7MW7CQ5A8+gqbJROmf4UUUyp8L0p5s0GnblUYdIYjGJKSS50WlQ==}
     cpu: [x86]
     os: [win32]
 
-  sst@3.14.12:
-    resolution: {integrity: sha512-VcKipIZr8bGpe9mW0dTxTMZhAhIkO2aBK8CZUB6RhzU58fw7PRF8gJdi3zUSVNM9QObZgFwdpsK3uepWl2Rp0g==}
+  sst@3.14.16:
+    resolution: {integrity: sha512-xV0jYmOkrvOWgWykSv6Rs5n/dbmDVXCvQni7kTZJuBaqVqWhLw2ZIPh3TTAT8Aq2Kv0thFPvMpqnk2gfEC57Hw==}
     hasBin: true
 
   statuses@2.0.1:
@@ -2642,7 +2642,7 @@ snapshots:
       promise-all-reject-late: 1.0.1
       promise-call-limit: 3.0.2
       read-package-json-fast: 3.0.2
-      semver: 7.7.1
+      semver: 7.7.2
       ssri: 10.0.6
       treeverse: 3.0.0
       walk-up-path: 3.0.1
@@ -2652,7 +2652,7 @@ snapshots:
 
   '@npmcli/fs@3.1.1':
     dependencies:
-      semver: 7.7.1
+      semver: 7.7.2
 
   '@npmcli/git@5.0.8':
     dependencies:
@@ -2663,7 +2663,7 @@ snapshots:
       proc-log: 4.2.0
       promise-inflight: 1.0.1
       promise-retry: 2.0.1
-      semver: 7.7.1
+      semver: 7.7.2
       which: 4.0.0
     transitivePeerDependencies:
       - bluebird
@@ -2686,7 +2686,7 @@ snapshots:
       json-parse-even-better-errors: 3.0.2
       pacote: 18.0.6
       proc-log: 4.2.0
-      semver: 7.7.1
+      semver: 7.7.2
     transitivePeerDependencies:
       - bluebird
       - supports-color
@@ -2703,7 +2703,7 @@ snapshots:
       json-parse-even-better-errors: 3.0.2
       normalize-package-data: 6.0.2
       proc-log: 4.2.0
-      semver: 7.7.1
+      semver: 7.7.2
     transitivePeerDependencies:
       - bluebird
 
@@ -2767,7 +2767,7 @@ snapshots:
       '@types/shimmer': 1.2.0
       import-in-the-middle: 1.13.1
       require-in-the-middle: 7.5.2
-      semver: 7.7.1
+      semver: 7.7.2
       shimmer: 1.2.1
     transitivePeerDependencies:
       - supports-color
@@ -2803,7 +2803,7 @@ snapshots:
       '@opentelemetry/propagator-b3': 1.30.1(@opentelemetry/api@1.9.0)
       '@opentelemetry/propagator-jaeger': 1.30.1(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-base': 1.30.1(@opentelemetry/api@1.9.0)
-      semver: 7.7.1
+      semver: 7.7.2
 
   '@opentelemetry/semantic-conventions@1.27.0': {}
 
@@ -2863,7 +2863,7 @@ snapshots:
       picomatch: 3.0.1
       pkg-dir: 7.0.0
       require-from-string: 2.0.2
-      semver: 7.7.1
+      semver: 7.7.2
       source-map-support: 0.5.21
       tmp: 0.2.3
       upath: 1.2.0
@@ -2991,10 +2991,10 @@ snapshots:
       '@typescript-eslint/types': 7.18.0
       '@typescript-eslint/visitor-keys': 7.18.0
 
-  '@typescript-eslint/scope-manager@8.32.0':
+  '@typescript-eslint/scope-manager@8.32.1':
     dependencies:
-      '@typescript-eslint/types': 8.32.0
-      '@typescript-eslint/visitor-keys': 8.32.0
+      '@typescript-eslint/types': 8.32.1
+      '@typescript-eslint/visitor-keys': 8.32.1
 
   '@typescript-eslint/type-utils@7.18.0(eslint@8.57.1)(typescript@5.8.3)':
     dependencies:
@@ -3010,7 +3010,7 @@ snapshots:
 
   '@typescript-eslint/types@7.18.0': {}
 
-  '@typescript-eslint/types@8.32.0': {}
+  '@typescript-eslint/types@8.32.1': {}
 
   '@typescript-eslint/typescript-estree@7.18.0(typescript@5.8.3)':
     dependencies:
@@ -3020,7 +3020,7 @@ snapshots:
       globby: 11.1.0
       is-glob: 4.0.3
       minimatch: 9.0.5
-      semver: 7.7.1
+      semver: 7.7.2
       ts-api-utils: 1.4.3(typescript@5.8.3)
     optionalDependencies:
       typescript: 5.8.3
@@ -3043,9 +3043,9 @@ snapshots:
       '@typescript-eslint/types': 7.18.0
       eslint-visitor-keys: 3.4.3
 
-  '@typescript-eslint/visitor-keys@8.32.0':
+  '@typescript-eslint/visitor-keys@8.32.1':
     dependencies:
-      '@typescript-eslint/types': 8.32.0
+      '@typescript-eslint/types': 8.32.1
       eslint-visitor-keys: 4.2.0
 
   '@ungap/structured-clone@1.3.0': {}
@@ -3154,8 +3154,8 @@ snapshots:
   astro-eslint-parser@1.2.2:
     dependencies:
       '@astrojs/compiler': 2.12.0
-      '@typescript-eslint/scope-manager': 8.32.0
-      '@typescript-eslint/types': 8.32.0
+      '@typescript-eslint/scope-manager': 8.32.1
+      '@typescript-eslint/types': 8.32.1
       astrojs-compiler-sync: 1.1.1(@astrojs/compiler@2.12.0)
       debug: 4.4.0
       entities: 6.0.0
@@ -3164,7 +3164,7 @@ snapshots:
       espree: 10.3.0
       fast-glob: 3.3.3
       is-glob: 4.0.3
-      semver: 7.7.1
+      semver: 7.7.2
     transitivePeerDependencies:
       - supports-color
 
@@ -3529,7 +3529,7 @@ snapshots:
   eslint-compat-utils@0.6.5(eslint@8.57.1):
     dependencies:
       eslint: 8.57.1
-      semver: 7.7.1
+      semver: 7.7.2
 
   eslint-config-prettier@9.1.0(eslint@8.57.1):
     dependencies:
@@ -3557,7 +3557,7 @@ snapshots:
     dependencies:
       '@eslint-community/eslint-utils': 4.7.0(eslint@8.57.1)
       '@jridgewell/sourcemap-codec': 1.5.0
-      '@typescript-eslint/types': 8.32.0
+      '@typescript-eslint/types': 8.32.1
       astro-eslint-parser: 1.2.2
       eslint: 8.57.1
       eslint-compat-utils: 0.6.5(eslint@8.57.1)
@@ -4419,7 +4419,7 @@ snapshots:
       make-fetch-happen: 13.0.1
       nopt: 7.2.1
       proc-log: 4.2.0
-      semver: 7.7.1
+      semver: 7.7.2
       tar: 6.2.1
       which: 4.0.0
     transitivePeerDependencies:
@@ -4432,7 +4432,7 @@ snapshots:
   normalize-package-data@6.0.2:
     dependencies:
       hosted-git-info: 7.0.2
-      semver: 7.7.1
+      semver: 7.7.2
       validate-npm-package-license: 3.0.4
 
   normalize-url@6.1.0: {}
@@ -4443,7 +4443,7 @@ snapshots:
 
   npm-install-checks@6.3.0:
     dependencies:
-      semver: 7.7.1
+      semver: 7.7.2
 
   npm-normalize-package-bin@3.0.1: {}
 
@@ -4451,7 +4451,7 @@ snapshots:
     dependencies:
       hosted-git-info: 7.0.2
       proc-log: 4.2.0
-      semver: 7.7.1
+      semver: 7.7.2
       validate-npm-package-name: 5.0.1
 
   npm-packlist@8.0.2:
@@ -4463,7 +4463,7 @@ snapshots:
       npm-install-checks: 6.3.0
       npm-normalize-package-bin: 3.0.1
       npm-package-arg: 11.0.3
-      semver: 7.7.1
+      semver: 7.7.2
 
   npm-registry-fetch@17.1.0:
     dependencies:
@@ -4856,7 +4856,7 @@ snapshots:
 
   semver@6.3.1: {}
 
-  semver@7.7.1: {}
+  semver@7.7.2: {}
 
   send@1.2.0:
     dependencies:
@@ -5006,31 +5006,31 @@ snapshots:
     dependencies:
       minipass: 7.1.2
 
-  sst-darwin-arm64@3.14.12:
+  sst-darwin-arm64@3.14.16:
     optional: true
 
-  sst-darwin-x64@3.14.12:
+  sst-darwin-x64@3.14.16:
     optional: true
 
-  sst-linux-arm64@3.14.12:
+  sst-linux-arm64@3.14.16:
     optional: true
 
-  sst-linux-x64@3.14.12:
+  sst-linux-x64@3.14.16:
     optional: true
 
-  sst-linux-x86@3.14.12:
+  sst-linux-x86@3.14.16:
     optional: true
 
-  sst-win32-arm64@3.14.12:
+  sst-win32-arm64@3.14.16:
     optional: true
 
-  sst-win32-x64@3.14.12:
+  sst-win32-x64@3.14.16:
     optional: true
 
-  sst-win32-x86@3.14.12:
+  sst-win32-x86@3.14.16:
     optional: true
 
-  sst@3.14.12:
+  sst@3.14.16:
     dependencies:
       aws-sdk: 2.1692.0
       aws4fetch: 1.0.18
@@ -5038,14 +5038,14 @@ snapshots:
       opencontrol: 0.0.6
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.14.12
-      sst-darwin-x64: 3.14.12
-      sst-linux-arm64: 3.14.12
-      sst-linux-x64: 3.14.12
-      sst-linux-x86: 3.14.12
-      sst-win32-arm64: 3.14.12
-      sst-win32-x64: 3.14.12
-      sst-win32-x86: 3.14.12
+      sst-darwin-arm64: 3.14.16
+      sst-darwin-x64: 3.14.16
+      sst-linux-arm64: 3.14.16
+      sst-linux-x64: 3.14.16
+      sst-linux-x86: 3.14.16
+      sst-win32-arm64: 3.14.16
+      sst-win32-x64: 3.14.16
+      sst-win32-x86: 3.14.16
     transitivePeerDependencies:
       - supports-color
 
