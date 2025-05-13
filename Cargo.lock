@@ -6905,6 +6905,7 @@ dependencies = [
  "moosicbox_async_service",
  "moosicbox_config",
  "moosicbox_downloader",
+ "moosicbox_profiles",
  "moosicbox_scan",
  "moosicbox_server",
  "moosicbox_task",

@@ -18,6 +18,7 @@ moosicbox_assert        = { workspace = true }
 moosicbox_async_service = { workspace = true }
 moosicbox_config        = { workspace = true }
 moosicbox_downloader    = { workspace = true }
+moosicbox_profiles      = { workspace = true, features = ["events"] }
 moosicbox_scan          = { workspace = true }
 moosicbox_server        = { workspace = true, features = ["app-apis", "sqlite-sqlx"] }
 moosicbox_task          = { workspace = true }

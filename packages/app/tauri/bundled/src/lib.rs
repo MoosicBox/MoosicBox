@@ -98,7 +98,6 @@ impl Context {
     #[must_use]
     pub fn new(handle: &tokio::runtime::Handle) -> Self {
         let downloads_path = moosicbox_downloader::get_default_download_path().unwrap();
-
         std::fs::create_dir_all(&downloads_path).unwrap();
 
         let (sender, receiver) = tokio::sync::oneshot::channel();
@@ -110,15 +109,40 @@ impl Context {
             "moosicbox_app_tauri_bundled server",
             handle,
             moosicbox_server::run_basic(AppType::App, addr, port, None, move |_| {
-                let db = switchy_database::profiles::PROFILES.get("master").unwrap();
-
                 moosicbox_task::spawn(
                     "moosicbox_app_tauri_bundled: create_download_location",
                     async move {
                         let downloads_path_str = downloads_path.to_str().unwrap();
-                        moosicbox_scan::db::add_scan_path(&db, downloads_path_str)
-                            .await
-                            .unwrap();
+
+                        for profile in switchy_database::profiles::PROFILES.names() {
+                            let db = switchy_database::profiles::PROFILES.get(&profile).unwrap();
+                            moosicbox_scan::db::add_scan_path(&db, downloads_path_str)
+                                .await
+                                .unwrap();
+                        }
+
+                        moosicbox_profiles::events::on_profiles_updated_event(
+                            move |added, _removed| {
+                                let added = added.to_vec();
+                                let downloads_path = downloads_path.clone();
+
+                                Box::pin(async move {
+                                    let downloads_path_str = downloads_path.to_str().unwrap();
+
+                                    for profile in &added {
+                                        let db = switchy_database::profiles::PROFILES
+                                            .get(profile)
+                                            .unwrap();
+                                        moosicbox_scan::db::add_scan_path(&db, downloads_path_str)
+                                            .await
+                                            .unwrap();
+                                    }
+
+                                    Ok(())
+                                })
+                            },
+                        )
+                        .await;
                     },
                 );
 
