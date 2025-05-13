@@ -2453,7 +2453,7 @@ impl MusicApi for TidalMusicApi {
 
         Ok(artist
             .picture_url(size.into())
-            .map(ImageCoverSource::RemoteUrl))
+            .map(|url| ImageCoverSource::RemoteUrl { url, headers: None }))
     }
 
     async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
@@ -2685,7 +2685,7 @@ impl MusicApi for TidalMusicApi {
 
         Ok(album
             .cover_url(size.into())
-            .map(ImageCoverSource::RemoteUrl))
+            .map(|url| ImageCoverSource::RemoteUrl { url, headers: None }))
     }
 
     async fn tracks(
@@ -2874,6 +2874,7 @@ impl MusicApi for TidalMusicApi {
                 format: track.format.unwrap_or(AudioFormat::Source),
                 track_id: Some(track.id.clone()),
                 source: track.track_source,
+                headers: None,
             }))
     }
 

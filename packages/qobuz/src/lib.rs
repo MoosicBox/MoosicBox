@@ -2197,7 +2197,7 @@ impl MusicApi for QobuzMusicApi {
             .image
             .as_ref()
             .and_then(|x| x.cover_url_for_size(size.into()))
-            .map(ImageCoverSource::RemoteUrl))
+            .map(|url| ImageCoverSource::RemoteUrl { url, headers: None }))
     }
 
     async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
@@ -2347,7 +2347,7 @@ impl MusicApi for QobuzMusicApi {
             .image
             .as_ref()
             .and_then(|x| x.cover_url_for_size(size.into()))
-            .map(ImageCoverSource::RemoteUrl))
+            .map(|url| ImageCoverSource::RemoteUrl { url, headers: None }))
     }
 
     async fn tracks(
@@ -2515,6 +2515,7 @@ impl MusicApi for QobuzMusicApi {
                 format: track.format.unwrap_or(AudioFormat::Source),
                 track_id: Some(track.id.clone()),
                 source: track.track_source,
+                headers: None,
             }))
     }
 

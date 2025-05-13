@@ -92,6 +92,7 @@ pub enum TrackSource {
         format: AudioFormat,
         track_id: Option<Id>,
         source: TrackApiSource,
+        headers: Option<Vec<(String, String)>>,
     },
 }
 
@@ -151,7 +152,10 @@ impl ToValueType<TrackAudioQuality> for &serde_json::Value {
 #[derive(Debug, Clone)]
 pub enum ImageCoverSource {
     LocalFilePath(String),
-    RemoteUrl(String),
+    RemoteUrl {
+        url: String,
+        headers: Option<Vec<(String, String)>>,
+    },
 }
 
 #[derive(Clone, Copy, Debug)]

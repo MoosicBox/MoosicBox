@@ -421,13 +421,23 @@ pub fn track_key(source: &TrackSource, output_format: AudioFormat) -> String {
             url,
             track_id,
             source,
+            headers,
         } => format!(
-            "remote:{source}:{format}:{id}:{output_format}",
+            "remote:{source}:{format}:{id}:{output_format}:{headers}",
             id = track_id
                 .as_ref()
                 .map(|x| format!("id:{x}"))
                 .as_deref()
-                .unwrap_or(url)
+                .unwrap_or(url),
+            headers = headers
+                .as_ref()
+                .map(|x| x
+                    .iter()
+                    .map(|(k, v)| format!("{k}:{v}"))
+                    .collect::<Vec<_>>()
+                    .join(","))
+                .as_deref()
+                .unwrap_or("")
         ),
     }
 }

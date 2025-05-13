@@ -389,8 +389,8 @@ pub async fn get_audio_bytes(
                         TrackSource::LocalFilePath { path, .. } => {
                             request_audio_bytes_from_file(path, format, size, start, end).await?
                         }
-                        TrackSource::RemoteUrl { url, .. } => {
-                            request_track_bytes_from_url(&url, start, end, format, size).await?
+                        TrackSource::RemoteUrl { url, headers, .. } => {
+                            request_track_bytes_from_url(&url, headers.as_deref(), start, end, format, size).await?
                         }
                     }
                 } else {
@@ -522,9 +522,9 @@ pub async fn get_audio_bytes(
                                 filename: filename_from_path_str(&path),
                             },
                         },
-                        TrackSource::RemoteUrl { url, .. } => match format {
+                        TrackSource::RemoteUrl { url, headers, .. } => match format {
                             AudioFormat::Source => {
-                                request_track_bytes_from_url(&url, start, end, format, size).await?
+                                request_track_bytes_from_url(&url, headers.as_deref(), start, end, format, size).await?
                             }
                             #[allow(unreachable_patterns)]
                             _ => TrackBytes {
@@ -599,6 +599,7 @@ async fn request_audio_bytes_from_file(
 
 async fn request_track_bytes_from_url(
     url: &str,
+    headers: Option<&[(String, String)]>,
     start: Option<u64>,
     end: Option<u64>,
     format: AudioFormat,
@@ -606,10 +607,19 @@ async fn request_track_bytes_from_url(
 ) -> Result<TrackBytes, GetTrackBytesError> {
     let client = switchy_http::Client::new();
 
-    log::debug!("request_track_bytes_from_url: Getting track source from url: {url}");
+    log::debug!(
+        "request_track_bytes_from_url: Getting track source from url={url} headers={headers:?} start={start:?} end={end:?} format={format:?} size={size:?}"
+    );
 
     let mut head_request = client.head(url);
     let mut request = client.get(url);
+
+    if let Some(headers) = headers {
+        for (key, value) in headers {
+            request = request.header(key, value);
+            head_request = head_request.header(key, value);
+        }
+    }
 
     if start.is_some() || end.is_some() {
         let start = start.map_or_else(String::new, |start| start.to_string());

@@ -17,9 +17,146 @@ import {
     toTime,
 } from '~/services/formatting';
 import { addTracksToQueue, playerState, playPlaylist } from '~/services/player';
-import { Api, api, ApiSource, trackId } from '~/services/api';
+import {
+    Api,
+    api,
+    ApiSource,
+    connection,
+    Connection,
+    connections,
+    trackId,
+} from '~/services/api';
 import { artistRoute } from '~/components/Artist/Artist';
-import { areEqualShallow, historyBack } from '~/services/util';
+import {
+    areEqualShallow,
+    clientAtom,
+    clientSignal,
+    historyBack,
+} from '~/services/util';
+import Modal from '~/components/Modal';
+import { config } from '~/config';
+
+const showTransferTargetModal = clientAtom(false);
+let responsePromiseResolves: ((yes: boolean) => void)[] = [];
+
+export async function responsePromise(): Promise<boolean> {
+    return new Promise((resolve) => {
+        responsePromiseResolves.push(resolve);
+    });
+}
+
+function confirmTransferTargetModalFunc(album: () => Api.Album) {
+    const [$showModal] = clientSignal(showTransferTargetModal);
+    const [$connections, _setConnections] = clientSignal(connections);
+    const [toConnection, setToConnection] = createSignal<Connection>();
+
+    function close(response: boolean) {
+        responsePromiseResolves.forEach((x) => x(response));
+        responsePromiseResolves = [];
+        showTransferTargetModal.set(false);
+    }
+
+    async function submit() {
+        const fromConnection = connection.get();
+        if (fromConnection && toConnection()) {
+            console.log(
+                'submitting from',
+                fromConnection,
+                'to',
+                toConnection(),
+            );
+            await api.download(
+                { albumId: album().albumId },
+                { MOOSIC_BOX: fromConnection.apiUrl },
+                toConnection(),
+            );
+            close(true);
+        }
+    }
+
+    createComputed(() => {
+        if (!config.bundled) return;
+        if (toConnection()) return;
+
+        const bundled = $connections()?.find(
+            (con) => con.apiUrl === 'http://localhost:8016',
+        );
+        if (!bundled) {
+            return;
+        }
+        setToConnection(bundled);
+    });
+
+    return (
+        <div data-turbo-permanent id="transfer-modal">
+            <Modal show={() => $showModal()} onClose={() => close(false)}>
+                <div class="transfer-modal-container">
+                    <div class="transfer-modal-header">
+                        <h1>Copy to MoosicBox</h1>
+                        <div
+                            class="transfer-modal-close"
+                            onClick={(e) => {
+                                close(false);
+                                e.stopImmediatePropagation();
+                            }}
+                        >
+                            <img
+                                class="cross-icon"
+                                src="/img/cross-white.svg"
+                                alt="Close copy to MoosicBox modal"
+                            />
+                        </div>
+                    </div>
+                    <div class="transfer-modal-content">
+                        <Show when={$connections()}>
+                            {(connections) => (
+                                <select
+                                    name="to-connection"
+                                    id="to-connection-dropdown"
+                                    onChange={(e) => {
+                                        setToConnection(
+                                            connections().find(
+                                                (con) =>
+                                                    con.id ===
+                                                    parseInt(
+                                                        e.currentTarget.value,
+                                                    ),
+                                            ),
+                                        );
+                                    }}
+                                >
+                                    <For each={connections()}>
+                                        {(con) => (
+                                            <option
+                                                value={con.id}
+                                                selected={
+                                                    con.id ===
+                                                    toConnection()?.id
+                                                }
+                                            >
+                                                {con.name}
+                                            </option>
+                                        )}
+                                    </For>
+                                </select>
+                            )}
+                        </Show>
+                        <button
+                            class="remove-button-styles transfer-modal-confirmation-button"
+                            type="button"
+                            onClick={(e) => {
+                                submit();
+                                e.stopImmediatePropagation();
+                            }}
+                        >
+                            Submit
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+        </div>
+    );
+}
 
 export default function albumPage(props: {
     albumId?: number;
@@ -242,6 +379,15 @@ export default function albumPage(props: {
                 );
                 break;
         }
+    }
+
+    async function confirmTransferTarget() {
+        showTransferTargetModal.set(true);
+
+        // eslint-disable-next-line no-async-promise-executor
+        return new Promise(async (resolve) => {
+            resolve(await responsePromise());
+        });
     }
 
     let shouldNavigate = true;
@@ -929,6 +1075,24 @@ export default function albumPage(props: {
                                         Download album
                                     </button>
                                 </Show>
+                                <Show
+                                    when={
+                                        activeVersion()?.source ===
+                                        Api.TrackSource.LOCAL
+                                    }
+                                >
+                                    <button
+                                        class="album-page-album-controls-playback-download-button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            confirmTransferTarget();
+                                            return false;
+                                        }}
+                                    >
+                                        Transfer album
+                                    </button>
+                                </Show>
                             </div>
                             <div class="album-page-album-controls-options"></div>
                         </div>
@@ -958,6 +1122,7 @@ export default function albumPage(props: {
                 </div>
             </div>
             <Show when={showingArtwork()}>{albumArtworkPreviewer()}</Show>
+            {confirmTransferTargetModalFunc(() => album()!)}
         </div>
     );
 }

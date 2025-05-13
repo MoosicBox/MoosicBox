@@ -173,7 +173,7 @@ async fn fetch_local_album_cover(
 
             Err(FetchLocalAlbumCoverError::NoAlbumCover)
         }
-        ImageCoverSource::RemoteUrl(_) => Err(FetchLocalAlbumCoverError::InvalidSource),
+        ImageCoverSource::RemoteUrl { .. } => Err(FetchLocalAlbumCoverError::InvalidSource),
     }
 }
 
@@ -294,7 +294,7 @@ fn get_remote_album_cover_request(
 ) -> Result<AlbumCoverRequest, AlbumCoverError> {
     match source {
         ImageCoverSource::LocalFilePath(_) => Err(AlbumCoverError::InvalidSource),
-        ImageCoverSource::RemoteUrl(url) => {
+        ImageCoverSource::RemoteUrl { url, headers } => {
             let file_path = get_album_cover_path(
                 &size.to_string(),
                 album.album_source.as_ref(),
@@ -303,7 +303,11 @@ fn get_remote_album_cover_request(
                 &album.title,
             );
 
-            Ok(AlbumCoverRequest { url, file_path })
+            Ok(AlbumCoverRequest {
+                url,
+                file_path,
+                headers,
+            })
         }
     }
 }
@@ -315,7 +319,12 @@ async fn get_remote_album_cover(
 ) -> Result<String, AlbumCoverError> {
     let request = get_remote_album_cover_request(album, source, size)?;
 
-    Ok(get_or_fetch_cover_from_remote_url(&request.url, &request.file_path).await?)
+    Ok(get_or_fetch_cover_from_remote_url(
+        &request.url,
+        request.headers.as_deref(),
+        &request.file_path,
+    )
+    .await?)
 }
 
 async fn get_remote_album_cover_bytes(
@@ -328,6 +337,7 @@ async fn get_remote_album_cover_bytes(
 
     Ok(get_or_fetch_cover_bytes_from_remote_url(
         &request.url,
+        request.headers.as_deref(),
         &request.file_path,
         try_to_get_stream_size,
     )
@@ -337,4 +347,5 @@ async fn get_remote_album_cover_bytes(
 struct AlbumCoverRequest {
     url: String,
     file_path: PathBuf,
+    headers: Option<Vec<(String, String)>>,
 }

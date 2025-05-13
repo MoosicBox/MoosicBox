@@ -430,7 +430,11 @@ export namespace Api {
     export type TrackAudioQuality =
         (typeof TrackAudioQuality)[keyof typeof TrackAudioQuality];
 
-    export type DownloadApiSource = 'TIDAL' | 'QOBUZ' | 'YT';
+    export type DownloadApiSource =
+        | { MOOSIC_BOX: string }
+        | 'TIDAL'
+        | 'QOBUZ'
+        | 'YT';
 
     export interface DownloadTask {
         id: number;
@@ -812,6 +816,7 @@ export interface ApiType {
             albumIds?: (string | number)[];
         },
         source: Api.DownloadApiSource,
+        connection?: Connection | undefined,
         signal?: AbortSignal | null,
     ): Promise<void>;
     getDownloadTasks(
@@ -1801,19 +1806,40 @@ async function download(
         albumIds?: (string | number)[];
     },
     source: Api.DownloadApiSource,
+    connection?: Connection | undefined,
     signal?: AbortSignal | null,
 ): Promise<void> {
-    const con = getConnection();
+    const con = connection ?? getConnection();
     const query = new QueryParams({
         trackId: items.trackId ? `${items.trackId}` : undefined,
         trackIds: items.trackIds ? `${items.trackIds.join(',')}` : undefined,
         albumId: items.albumId ? `${items.albumId}` : undefined,
         albumIds: items.albumIds ? `${items.albumIds.join(',')}` : undefined,
-        source: `${source}`,
         locationId: defaultDownloadLocation.get()
             ? `${defaultDownloadLocation.get()}`
             : undefined,
     });
+
+    switch (source) {
+        case 'TIDAL':
+            query.set('source', source);
+            break;
+        case 'YT':
+            query.set('source', source);
+            break;
+        case 'QOBUZ':
+            query.set('source', source);
+            break;
+        default:
+            if (typeof source === 'object' && 'MOOSIC_BOX' in source) {
+                query.set('source', 'MOOSIC_BOX');
+                query.set('url', source.MOOSIC_BOX);
+                break;
+            }
+
+            source satisfies never;
+            throw new Error(`Invalid source: ${source}`);
+    }
 
     return await requestJson(`${con.apiUrl}/downloader/download?${query}`, {
         method: 'POST',

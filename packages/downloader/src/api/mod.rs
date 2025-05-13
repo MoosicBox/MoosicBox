@@ -1,12 +1,13 @@
 use std::{path::PathBuf, str::FromStr as _, sync::LazyLock};
 
 use crate::{
-    CreateDownloadTasksError, DOWNLOAD_QUEUE, DownloadApiSource, DownloadError, DownloadRequest,
-    GetCreateDownloadTasksError, GetDownloadPathError, MoosicboxDownloader,
+    CreateDownloadTasksError, DOWNLOAD_QUEUE, DownloadApiSource, DownloadApiSourceType,
+    DownloadError, DownloadRequest, GetCreateDownloadTasksError, GetDownloadPathError,
+    MoosicboxDownloader,
     api::models::{ApiDownloadLocation, ApiDownloadTask, ApiDownloadTaskState},
     db::{
-        create_download_location, delete_download_task, get_download_locations, get_download_tasks,
-        models::DownloadTaskState,
+        create_download_location, delete_download_location, delete_download_task,
+        get_download_locations, get_download_tasks, models::DownloadTaskState,
     },
     download, get_download_path,
     queue::{DownloadQueue, ProcessDownloadQueueError, ProgressListenerRef},
@@ -112,7 +113,8 @@ pub struct DownloadQuery {
     download_album_cover: Option<bool>,
     download_artist_cover: Option<bool>,
     quality: Option<TrackAudioQuality>,
-    source: DownloadApiSource,
+    source: DownloadApiSourceType,
+    url: Option<String>,
 }
 
 impl From<DownloadError> for actix_web::Error {
@@ -138,7 +140,8 @@ impl From<DownloadError> for actix_web::Error {
             ("downloadAlbumCover" = Option<bool>, Query, description = "Whether or not to download the album cover, if available"),
             ("downloadArtistCover" = Option<bool>, Query, description = "Whether or not to download the artist cover, if available"),
             ("quality" = Option<TrackAudioQuality>, Query, description = "The track audio quality to download the tracks at"),
-            ("source" = DownloadApiSource, Query, description = "The API source to download the track from"),
+            ("source" = DownloadApiSourceType, Query, description = "The API source to download the track from"),
+            ("url" = Option<String>, Query, description = "The MoosicBox URL to download the audio from"),
         ),
         responses(
             (
@@ -159,13 +162,13 @@ pub async fn download_endpoint(
     let download_path = get_download_path(&db, query.location_id).await?;
 
     let api_source = match &query.source {
-        DownloadApiSource::MoosicBox(..) => ApiSource::Library,
+        DownloadApiSourceType::MoosicBox => ApiSource::Library,
         #[cfg(feature = "tidal")]
-        DownloadApiSource::Tidal => ApiSource::Tidal,
+        DownloadApiSourceType::Tidal => ApiSource::Tidal,
         #[cfg(feature = "qobuz")]
-        DownloadApiSource::Qobuz => ApiSource::Qobuz,
+        DownloadApiSourceType::Qobuz => ApiSource::Qobuz,
         #[cfg(feature = "yt")]
-        DownloadApiSource::Yt => ApiSource::Yt,
+        DownloadApiSourceType::Yt => ApiSource::Yt,
     };
 
     let track_id = if let Some(track_id) = &query.track_id {
@@ -192,6 +195,33 @@ pub async fn download_endpoint(
         None
     };
 
+    let source = match query.source {
+        DownloadApiSourceType::MoosicBox => DownloadApiSource::MoosicBox(
+            query
+                .url
+                .clone()
+                .ok_or_else(|| ErrorBadRequest("Missing MoosicBox url"))?,
+        ),
+        DownloadApiSourceType::Tidal => DownloadApiSource::Tidal,
+        DownloadApiSourceType::Qobuz => DownloadApiSource::Qobuz,
+        DownloadApiSourceType::Yt => DownloadApiSource::Yt,
+    };
+
+    let quality = query.quality;
+
+    log::debug!(
+        "\
+        GET /download: \
+        download_path={download_path:?} \
+        source={source:?} \
+        quality={quality:?} \
+        track_id={track_id:?} \
+        track_ids={track_ids:?} \
+        album_id={album_id:?} \
+        album_ids={album_ids:?}\
+        "
+    );
+
     let request = DownloadRequest {
         directory: download_path,
         track_id,
@@ -200,8 +230,8 @@ pub async fn download_endpoint(
         album_ids,
         download_album_cover: query.download_album_cover,
         download_artist_cover: query.download_artist_cover,
-        quality: query.quality,
-        source: query.source.clone(),
+        quality,
+        source,
     };
 
     download(request, db, music_apis).await?;

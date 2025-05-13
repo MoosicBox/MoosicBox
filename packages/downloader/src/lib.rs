@@ -47,7 +47,7 @@ use moosicbox_remote_library::RemoteLibraryMusicApi;
 use queue::{DownloadQueue, ProgressListener};
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
-use strum::{AsRefStr, EnumString};
+use strum::{AsRefStr, EnumDiscriminants, EnumIter, EnumString};
 use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
 use tokio::{select, sync::RwLock};
@@ -63,9 +63,16 @@ pub mod queue;
 static DOWNLOAD_QUEUE: LazyLock<Arc<RwLock<DownloadQueue>>> =
     LazyLock::new(|| Arc::new(RwLock::new(DownloadQueue::new())));
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[derive(
+    Debug, Serialize, Deserialize, EnumString, EnumDiscriminants, AsRefStr, PartialEq, Eq, Clone,
+)]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[strum_discriminants(derive(EnumIter, Serialize, Deserialize))]
+#[strum_discriminants(serde(rename_all = "SCREAMING_SNAKE_CASE"))]
+#[cfg_attr(feature = "openapi", strum_discriminants(derive(utoipa::ToSchema)))]
+#[strum_discriminants(name(DownloadApiSourceType))]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "source", content = "url")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum DownloadApiSource {
     MoosicBox(String),
@@ -80,13 +87,13 @@ pub enum DownloadApiSource {
 impl From<ApiSource> for DownloadApiSource {
     fn from(value: ApiSource) -> Self {
         match value {
+            ApiSource::Library => unreachable!(),
             #[cfg(feature = "tidal")]
             ApiSource::Tidal => Self::Tidal,
             #[cfg(feature = "qobuz")]
             ApiSource::Qobuz => Self::Qobuz,
             #[cfg(feature = "yt")]
             ApiSource::Yt => Self::Yt,
-            _ => unreachable!(),
         }
     }
 }
@@ -474,6 +481,7 @@ pub async fn get_create_download_tasks_for_album_ids(
     download_artist_cover: bool,
 ) -> Result<Vec<CreateDownloadTask>, GetCreateDownloadTasksError> {
     let mut tasks = vec![];
+    let source = source.clone().unwrap_or_else(|| api.source().into());
 
     for album_id in album_ids {
         let album = api
@@ -533,7 +541,7 @@ pub async fn get_create_download_tasks_for_album_ids(
                         file_path: path,
                         item: DownloadItem::ArtistCover {
                             album_id: album_id.to_owned(),
-                            source: api.source().into(),
+                            source: source.clone(),
                             artist_id: artist.id,
                             title: artist.title,
                             contains_cover: artist.cover.is_some(),
@@ -548,7 +556,7 @@ pub async fn get_create_download_tasks_for_album_ids(
                     file_path: path,
                     item: DownloadItem::AlbumCover {
                         album_id: album_id.to_owned(),
-                        source: api.source().into(),
+                        source: source.clone(),
                         artist_id: album.artist_id,
                         artist: album.artist,
                         title: album.title,
@@ -564,16 +572,11 @@ pub async fn get_create_download_tasks_for_album_ids(
             .with_rest_of_items_in_batches()
             .await?
             .into_iter()
-            .filter(|track| {
-                source.as_ref().map_or_else(
-                    || track.track_source != TrackApiSource::Local,
-                    |source| match source {
-                        DownloadApiSource::MoosicBox(_) => unimplemented!(),
-                        DownloadApiSource::Tidal => track.track_source == TrackApiSource::Tidal,
-                        DownloadApiSource::Qobuz => track.track_source == TrackApiSource::Qobuz,
-                        DownloadApiSource::Yt => track.track_source == TrackApiSource::Yt,
-                    },
-                )
+            .filter(|track| match source {
+                DownloadApiSource::MoosicBox(_) => track.track_source == TrackApiSource::Local,
+                DownloadApiSource::Tidal => track.track_source == TrackApiSource::Tidal,
+                DownloadApiSource::Qobuz => track.track_source == TrackApiSource::Qobuz,
+                DownloadApiSource::Yt => track.track_source == TrackApiSource::Yt,
             })
             .collect::<Vec<_>>();
 
@@ -586,7 +589,7 @@ pub async fn get_create_download_tasks_for_album_ids(
                 api,
                 &tracks,
                 download_path,
-                source.clone(),
+                Some(source.clone()),
                 quality,
             )
             .await?,
@@ -1366,5 +1369,42 @@ impl Downloader for MoosicboxDownloader {
             self.speed.clone(),
         )
         .await
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test_log::test]
+    fn can_deserialize_and_serialize_moosicbox_download_api_source() {
+        let serialized =
+            serde_json::to_string(&DownloadApiSource::MoosicBox("test".to_string())).unwrap();
+        log::debug!("serialized: {serialized}");
+        serde_json::from_str::<DownloadApiSource>(&serialized).unwrap();
+    }
+
+    #[cfg(feature = "tidal")]
+    #[test_log::test]
+    fn can_deserialize_and_serialize_tidal_download_api_source() {
+        let serialized = serde_json::to_string(&DownloadApiSource::Tidal).unwrap();
+        log::debug!("serialized: {serialized}");
+        serde_json::from_str::<DownloadApiSource>(&serialized).unwrap();
+    }
+
+    #[cfg(feature = "qobuz")]
+    #[test_log::test]
+    fn can_deserialize_and_serialize_qobuz_download_api_source() {
+        let serialized = serde_json::to_string(&DownloadApiSource::Qobuz).unwrap();
+        log::debug!("serialized: {serialized}");
+        serde_json::from_str::<DownloadApiSource>(&serialized).unwrap();
+    }
+
+    #[cfg(feature = "yt")]
+    #[test_log::test]
+    fn can_deserialize_and_serialize_yt_download_api_source() {
+        let serialized = serde_json::to_string(&DownloadApiSource::Yt).unwrap();
+        log::debug!("serialized: {serialized}");
+        serde_json::from_str::<DownloadApiSource>(&serialized).unwrap();
     }
 }

@@ -38,6 +38,7 @@ async fn search_for_cover(
     path: &Path,
     name: &str,
     url: &str,
+    headers: Option<&[(String, String)]>,
 ) -> Result<Option<PathBuf>, FetchAndSaveBytesFromRemoteUrlError> {
     std::fs::create_dir_all(path)
         .unwrap_or_else(|_| panic!("Failed to create config directory at {path:?}"));
@@ -55,8 +56,13 @@ async fn search_for_cover(
     } else {
         log::debug!("No existing cover in {path:?}, searching internet");
         Ok(Some(
-            moosicbox_files::fetch_and_save_bytes_from_remote_url(client, &path.join(name), url)
-                .await?,
+            moosicbox_files::fetch_and_save_bytes_from_remote_url(
+                client,
+                &path.join(name),
+                url,
+                headers,
+            )
+            .await?,
         ))
     }
 }
@@ -229,6 +235,7 @@ impl ScanAlbum {
     pub async fn search_cover(
         &mut self,
         url: String,
+        headers: Option<&[(String, String)]>,
         api_source: ApiSource,
     ) -> Result<Option<String>, FetchAndSaveBytesFromRemoteUrlError> {
         if self.cover.is_none() && !self.searched_cover {
@@ -246,7 +253,7 @@ impl ScanAlbum {
                 "album.jpg".to_string()
             };
 
-            let cover = search_for_cover(&IMAGE_CLIENT, &path, &filename, &url).await?;
+            let cover = search_for_cover(&IMAGE_CLIENT, &path, &filename, &url, headers).await?;
 
             self.searched_cover = true;
 
@@ -413,6 +420,7 @@ impl ScanArtist {
     pub async fn search_cover(
         &mut self,
         url: String,
+        headers: Option<&[(String, String)]>,
         api_source: ApiSource,
     ) -> Result<Option<String>, FetchAndSaveBytesFromRemoteUrlError> {
         if self.cover.is_none() && !self.searched_cover {
@@ -431,7 +439,7 @@ impl ScanArtist {
                 "artist.jpg".to_string()
             };
 
-            let cover = search_for_cover(&IMAGE_CLIENT, &path, &filename, &url).await?;
+            let cover = search_for_cover(&IMAGE_CLIENT, &path, &filename, &url, headers).await?;
 
             if let Some(cover) = cover {
                 self.cover = Some(cover.to_str().unwrap().to_string());

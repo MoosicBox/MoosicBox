@@ -309,6 +309,7 @@ pub struct CoverBytes {
 #[cfg(feature = "files")]
 async fn get_or_fetch_cover_bytes_from_remote_url(
     url: &str,
+    headers: Option<&[(String, String)]>,
     file_path: &Path,
     try_to_get_stream_size: bool,
 ) -> Result<CoverBytes, FetchCoverError> {
@@ -339,7 +340,7 @@ async fn get_or_fetch_cover_bytes_from_remote_url(
 
     Ok(CoverBytes {
         stream: moosicbox_stream_utils::stalled_monitor::StalledReadMonitor::new(
-            fetch_bytes_from_remote_url(&IMAGE_CLIENT, url).await?,
+            fetch_bytes_from_remote_url(&IMAGE_CLIENT, url, headers).await?,
         ),
         size,
     })
@@ -348,6 +349,7 @@ async fn get_or_fetch_cover_bytes_from_remote_url(
 #[cfg(feature = "files")]
 async fn get_or_fetch_cover_from_remote_url(
     url: &str,
+    headers: Option<&[(String, String)]>,
     file_path: &Path,
 ) -> Result<String, FetchCoverError> {
     use std::sync::LazyLock;
@@ -358,7 +360,7 @@ async fn get_or_fetch_cover_from_remote_url(
         Ok(file_path.to_str().unwrap().to_string())
     } else {
         Ok(
-            fetch_and_save_bytes_from_remote_url(&IMAGE_CLIENT, file_path, url)
+            fetch_and_save_bytes_from_remote_url(&IMAGE_CLIENT, file_path, url, headers)
                 .await?
                 .to_str()
                 .unwrap()
@@ -386,12 +388,19 @@ pub enum FetchAndSaveBytesFromRemoteUrlError {
 pub async fn fetch_bytes_from_remote_url(
     client: &switchy_http::Client,
     url: &str,
+    headers: Option<&[(String, String)]>,
 ) -> Result<
     Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>,
     FetchAndSaveBytesFromRemoteUrlError,
 > {
     log::debug!("Fetching bytes from remote url: {url}");
-    let response = client.get(url).send().await?;
+    let mut builder = client.get(url);
+
+    for (k, v) in headers.unwrap_or_default() {
+        builder = builder.header(k, v);
+    }
+
+    let response = builder.send().await?;
 
     let status = response.status();
 
@@ -419,9 +428,10 @@ pub async fn fetch_and_save_bytes_from_remote_url(
     client: &switchy_http::Client,
     file_path: &Path,
     url: &str,
+    headers: Option<&[(String, String)]>,
 ) -> Result<PathBuf, FetchAndSaveBytesFromRemoteUrlError> {
     log::debug!("Saving bytes to file: {file_path:?}");
-    let stream = fetch_bytes_from_remote_url(client, url).await?;
+    let stream = fetch_bytes_from_remote_url(client, url, headers).await?;
     save_bytes_stream_to_file(stream, file_path, None).await?;
     Ok(file_path.to_path_buf())
 }

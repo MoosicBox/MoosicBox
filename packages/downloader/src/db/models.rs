@@ -112,7 +112,7 @@ impl TryFrom<TrackApiSource> for DownloadApiSource {
 impl MissingValue<DownloadApiSource> for &switchy_database::Row {}
 impl ToValueType<DownloadApiSource> for DatabaseValue {
     fn to_value_type(self) -> Result<DownloadApiSource, ParseError> {
-        DownloadApiSource::from_str(
+        serde_json::from_str(
             self.as_str()
                 .ok_or_else(|| ParseError::ConvertType("DownloadApiSource".into()))?,
         )
@@ -122,11 +122,8 @@ impl ToValueType<DownloadApiSource> for DatabaseValue {
 
 impl ToValueType<DownloadApiSource> for &serde_json::Value {
     fn to_value_type(self) -> Result<DownloadApiSource, ParseError> {
-        DownloadApiSource::from_str(
-            self.as_str()
-                .ok_or_else(|| ParseError::ConvertType("DownloadApiSource".into()))?,
-        )
-        .map_err(|_| ParseError::ConvertType("DownloadApiSource".into()))
+        serde_json::from_value(self.clone())
+            .map_err(|_| ParseError::ConvertType("DownloadApiSource".into()))
     }
 }
 

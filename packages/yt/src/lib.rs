@@ -2799,6 +2799,7 @@ impl MusicApi for YtMusicApi {
                 format: track.format.unwrap_or(AudioFormat::Source),
                 track_id: Some(track.id.clone()),
                 source: track.track_source,
+                headers: None,
             }))
     }
 

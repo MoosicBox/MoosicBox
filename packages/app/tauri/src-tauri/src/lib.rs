@@ -844,14 +844,33 @@ pub fn run() {
             {
                 use moosicbox_app_tauri_bundled::service::Commander as _;
 
-                let event = std::sync::Arc::new(event);
+                static BUFFER: LazyLock<std::sync::RwLock<Vec<tauri::RunEvent>>> =
+                    LazyLock::new(|| std::sync::RwLock::new(vec![]));
 
                 let value = APP_SERVER_HANDLE.lock().unwrap().clone();
-                if let Err(e) = value
-                    .unwrap()
-                    .send_command(moosicbox_app_tauri_bundled::Command::RunEvent { event })
-                {
-                    log::error!("AppServer failed to handle event: {e:?}");
+
+                if let Some(value) = value {
+                    let mut buffer = BUFFER.write().unwrap();
+
+                    for event in buffer.drain(..) {
+                        let event = std::sync::Arc::new(event);
+                        if let Err(e) = value
+                            .send_command(moosicbox_app_tauri_bundled::Command::RunEvent { event })
+                        {
+                            log::error!("AppServer failed to handle event: {e:?}");
+                        }
+                    }
+
+                    drop(buffer);
+
+                    let event = std::sync::Arc::new(event);
+                    if let Err(e) =
+                        value.send_command(moosicbox_app_tauri_bundled::Command::RunEvent { event })
+                    {
+                        log::error!("AppServer failed to handle event: {e:?}");
+                    }
+                } else {
+                    BUFFER.write().unwrap().push(event);
                 }
             }
         });

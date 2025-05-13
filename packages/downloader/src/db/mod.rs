@@ -64,7 +64,7 @@ pub async fn create_download_task(
     db: &LibraryDatabase,
     task: &CreateDownloadTask,
 ) -> Result<DownloadTask, DatabaseFetchError> {
-    let source = task.item.source().as_ref();
+    let source = serde_json::to_string(task.item.source()).unwrap();
     let quality = task.item.quality().map(AsRef::as_ref);
     let track_id = task.item.track_id();
     let track = task.item.track();
@@ -78,7 +78,7 @@ pub async fn create_download_task(
         .upsert("download_tasks")
         .where_eq("file_path", task.file_path.clone())
         .where_eq("type", task.item.as_ref())
-        .where_eq("source", source)
+        .where_eq("source", &source)
         .where_eq("album_id", album_id)
         .where_eq("artist_id", artist_id)
         .filter_if_some(track_id.map(|x| where_eq("track_id", x)))
@@ -86,7 +86,7 @@ pub async fn create_download_task(
         .value("file_path", task.file_path.clone())
         .value("type", task.item.as_ref())
         .value("track", track)
-        .value("source", source)
+        .value("source", &source)
         .value("quality", quality)
         .value("track_id", track_id)
         .value("album", album)

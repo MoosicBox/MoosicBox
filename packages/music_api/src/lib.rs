@@ -261,7 +261,10 @@ pub trait MusicApi: Send + Sync {
         artist: &Artist,
         _size: ImageCoverSize,
     ) -> Result<Option<ImageCoverSource>, ArtistError> {
-        Ok(artist.cover.clone().map(ImageCoverSource::RemoteUrl))
+        Ok(artist
+            .cover
+            .clone()
+            .map(|url| ImageCoverSource::RemoteUrl { url, headers: None }))
     }
 
     async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, AlbumsError>;
@@ -295,7 +298,10 @@ pub trait MusicApi: Send + Sync {
         album: &Album,
         _size: ImageCoverSize,
     ) -> Result<Option<ImageCoverSource>, AlbumError> {
-        Ok(album.artwork.clone().map(ImageCoverSource::RemoteUrl))
+        Ok(album
+            .artwork
+            .clone()
+            .map(|url| ImageCoverSource::RemoteUrl { url, headers: None }))
     }
 
     async fn tracks(

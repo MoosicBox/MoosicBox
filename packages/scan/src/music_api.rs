@@ -175,7 +175,8 @@ pub async fn scan_albums(
                                 scan_artist
                                     .write()
                                     .await
-                                    .search_cover(url, api.source())
+                                    // FIXME: Pass headers
+                                    .search_cover(url, None, api.source())
                                     .await?;
                             }
                         }
@@ -194,7 +195,8 @@ pub async fn scan_albums(
                     scan_album
                         .write()
                         .await
-                        .search_cover(url, api.source())
+                        // FIXME: Pass headers
+                        .search_cover(url, None, api.source())
                         .await?;
                 }
             }
