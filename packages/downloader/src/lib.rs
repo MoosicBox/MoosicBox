@@ -35,8 +35,7 @@ use moosicbox_files::{
 };
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_music_api::{
-    AlbumError, ArtistError, MusicApi, MusicApis, MusicApisError, SourceToMusicApi as _,
-    TrackError, TracksError,
+    AlbumError, ArtistError, MusicApi, MusicApis, MusicApisError, TrackError, TracksError,
     models::{ImageCoverSize, TrackSource},
 };
 use moosicbox_music_models::{
@@ -129,10 +128,14 @@ pub struct DownloadRequest {
     pub source: DownloadApiSource,
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn music_api_from_source(
-    music_apis: &MusicApis,
+    #[allow(unused)] music_apis: &MusicApis,
     source: DownloadApiSource,
 ) -> Result<Arc<Box<dyn MusicApi>>, MusicApisError> {
+    #[cfg(any(feature = "tidal", feature = "qobuz", feature = "yt"))]
+    use moosicbox_music_api::SourceToMusicApi as _;
+
     const PROFILE: &str = "master";
 
     Ok(match source {
@@ -574,8 +577,11 @@ pub async fn get_create_download_tasks_for_album_ids(
             .into_iter()
             .filter(|track| match source {
                 DownloadApiSource::MoosicBox(_) => track.track_source == TrackApiSource::Local,
+                #[cfg(feature = "tidal")]
                 DownloadApiSource::Tidal => track.track_source == TrackApiSource::Tidal,
+                #[cfg(feature = "qobuz")]
                 DownloadApiSource::Qobuz => track.track_source == TrackApiSource::Qobuz,
+                #[cfg(feature = "yt")]
                 DownloadApiSource::Yt => track.track_source == TrackApiSource::Yt,
             })
             .collect::<Vec<_>>();
@@ -1054,10 +1060,13 @@ pub async fn download_album_id(
         .with_rest_of_items_in_batches()
         .await?
         .into_iter()
-        .filter(|track| match source {
+        .filter(|#[allow(unused)] track| match source {
             DownloadApiSource::MoosicBox(_) => unimplemented!(),
+            #[cfg(feature = "tidal")]
             DownloadApiSource::Tidal => track.track_source == TrackApiSource::Tidal,
+            #[cfg(feature = "qobuz")]
             DownloadApiSource::Qobuz => track.track_source == TrackApiSource::Qobuz,
+            #[cfg(feature = "yt")]
             DownloadApiSource::Yt => track.track_source == TrackApiSource::Yt,
         })
         .collect::<Vec<_>>();

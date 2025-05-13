@@ -202,8 +202,11 @@ pub async fn download_endpoint(
                 .clone()
                 .ok_or_else(|| ErrorBadRequest("Missing MoosicBox url"))?,
         ),
+        #[cfg(feature = "tidal")]
         DownloadApiSourceType::Tidal => DownloadApiSource::Tidal,
+        #[cfg(feature = "qobuz")]
         DownloadApiSourceType::Qobuz => DownloadApiSource::Qobuz,
+        #[cfg(feature = "yt")]
         DownloadApiSourceType::Yt => DownloadApiSource::Yt,
     };
 
