@@ -32,15 +32,15 @@
         "@pulumi/aws": "^6.80.0",
         "@pulumi/pulumi": "^3.169.0",
         "@tsconfig/node18": "18.2.2",
-        "@typescript-eslint/eslint-plugin": "^8.32.0",
-        "@typescript-eslint/parser": "^8.32.0",
+        "@typescript-eslint/eslint-plugin": "^8.32.1",
+        "@typescript-eslint/parser": "^8.32.1",
         "eslint": "^9.26.0",
         "eslint-config-prettier": "^9.1.0",
         "eslint-plugin-import": "^2.31.0",
         "eslint-plugin-node": "^11.1.0",
         "globals": "^15.15.0",
         "prettier": "^3.5.3",
-        "sst": "^3.14.12",
+        "sst": "^3.14.16",
         "typescript": "^5.8.3"
     }
 }
