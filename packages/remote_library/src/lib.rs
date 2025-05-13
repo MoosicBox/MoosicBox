@@ -17,13 +17,14 @@ use moosicbox_music_api::{
     },
 };
 use moosicbox_music_models::{
-    Album, AlbumType, ApiSource, Artist, PlaybackQuality, Track,
-    api::{ApiAlbum, ApiTrack},
+    Album, AlbumType, ApiSource, Artist, AudioFormat, PlaybackQuality, Track,
+    api::{ApiAlbum, ApiArtist, ApiTrack},
     id::Id,
 };
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use switchy_http::models::StatusCode;
 use thiserror::Error;
+use tokio::sync::Mutex;
 
 static CLIENT: LazyLock<switchy_http::Client> =
     LazyLock::new(|| switchy_http::Client::builder().build().unwrap());
@@ -70,8 +71,38 @@ impl MusicApi for RemoteLibraryMusicApi {
         unimplemented!("Fetching artists is not implemented")
     }
 
-    async fn artist(&self, _artist_id: &Id) -> Result<Option<Artist>, ArtistError> {
-        unimplemented!("Fetching artist is not implemented")
+    async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, ArtistError> {
+        let request = CLIENT
+            .request(
+                switchy_http::models::Method::Get,
+                &format!(
+                    "{host}/menu/artist?artistId={artist_id}&source={source}",
+                    host = self.host,
+                    source = self.api_source
+                ),
+            )
+            .header("moosicbox-profile", &self.profile);
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| ArtistError::Other(Box::new(e)))?;
+
+        if !response.status().is_success() {
+            if response.status() == StatusCode::NotFound {
+                return Ok(None);
+            }
+            return Err(ArtistError::Other(Box::new(RequestError::Unsuccessful(
+                format!("Status {}", response.status()),
+            ))));
+        }
+
+        let value: ApiArtist = response
+            .json()
+            .await
+            .map_err(|e| ArtistError::Other(Box::new(e)))?;
+
+        Ok(Some(value.into()))
     }
 
     async fn add_artist(&self, _artist_id: &Id) -> Result<(), AddArtistError> {
@@ -88,10 +119,36 @@ impl MusicApi for RemoteLibraryMusicApi {
 
     async fn artist_cover_source(
         &self,
-        _artist: &Artist,
+        artist: &Artist,
         _size: ImageCoverSize,
     ) -> Result<Option<ImageCoverSource>, ArtistError> {
-        unimplemented!("Fetching artist cover source is not implemented")
+        let artist_id = &artist.id;
+        let url = format!("{host}/files/artists/{artist_id}/source", host = self.host);
+        let request = CLIENT
+            .request(switchy_http::models::Method::Head, &url)
+            .header("moosicbox-profile", &self.profile);
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| ArtistError::Other(Box::new(e)))?;
+
+        if !response.status().is_success() {
+            if response.status() == StatusCode::NotFound {
+                return Ok(None);
+            }
+            return Err(ArtistError::Other(Box::new(RequestError::Unsuccessful(
+                format!("Status {}", response.status()),
+            ))));
+        }
+
+        Ok(Some(ImageCoverSource::RemoteUrl {
+            url,
+            headers: Some(vec![(
+                "moosicbox-profile".to_string(),
+                self.profile.clone(),
+            )]),
+        }))
     }
 
     async fn albums(&self, _request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
@@ -230,10 +287,36 @@ impl MusicApi for RemoteLibraryMusicApi {
 
     async fn album_cover_source(
         &self,
-        _album: &Album,
+        album: &Album,
         _size: ImageCoverSize,
     ) -> Result<Option<ImageCoverSource>, AlbumError> {
-        unimplemented!("Fetching album cover source is not implemented")
+        let album_id = &album.id;
+        let url = format!("{host}/files/albums/{album_id}/source", host = self.host);
+        let request = CLIENT
+            .request(switchy_http::models::Method::Head, &url)
+            .header("moosicbox-profile", &self.profile);
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| AlbumError::Other(Box::new(e)))?;
+
+        if !response.status().is_success() {
+            if response.status() == StatusCode::NotFound {
+                return Ok(None);
+            }
+            return Err(AlbumError::Other(Box::new(RequestError::Unsuccessful(
+                format!("Status {}", response.status()),
+            ))));
+        }
+
+        Ok(Some(ImageCoverSource::RemoteUrl {
+            url,
+            headers: Some(vec![(
+                "moosicbox-profile".to_string(),
+                self.profile.clone(),
+            )]),
+        }))
     }
 
     async fn tracks(
@@ -318,21 +401,86 @@ impl MusicApi for RemoteLibraryMusicApi {
 
     async fn album_tracks(
         &self,
-        _album_id: &Id,
-        _offset: Option<u32>,
-        _limit: Option<u32>,
+        album_id: &Id,
+        offset: Option<u32>,
+        limit: Option<u32>,
         _order: Option<TrackOrder>,
         _order_direction: Option<TrackOrderDirection>,
     ) -> PagingResult<Track, TracksError> {
-        unimplemented!("Fetching album tracks is not implemented")
-    }
+        let offset = offset.unwrap_or(0);
+        let limit = limit.unwrap_or(100);
 
-    async fn track(&self, track_id: &Id) -> Result<Option<Track>, TrackError> {
         let request = CLIENT
             .request(
                 switchy_http::models::Method::Get,
                 &format!(
-                    "{host}/menu/track?trackId={track_id}&source={source}",
+                    "{host}/menu/album/tracks?albumId={album_id}&source={source}",
+                    host = self.host,
+                    source = self.api_source
+                ),
+            )
+            .header("moosicbox-profile", &self.profile);
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| TracksError::Other(Box::new(e)))?;
+
+        if !response.status().is_success() {
+            if response.status() == StatusCode::NotFound {
+                return Ok(PagingResponse::empty());
+            }
+            return Err(TracksError::Other(Box::new(RequestError::Unsuccessful(
+                format!("Status {}", response.status()),
+            ))));
+        }
+
+        let value: Vec<ApiTrack> = response
+            .json()
+            .await
+            .map_err(|e| TracksError::Other(Box::new(e)))?;
+
+        let total = u32::try_from(value.len()).unwrap();
+
+        let tracks = value
+            .into_iter()
+            .skip(std::cmp::min(offset, total) as usize)
+            .take(std::cmp::min(limit, total - offset) as usize)
+            .map(Into::into)
+            .collect();
+
+        Ok(PagingResponse {
+            page: Page::WithTotal {
+                items: tracks,
+                offset,
+                limit,
+                total,
+            },
+            fetch: Arc::new(Mutex::new(Box::new({
+                let api = self.clone();
+                let album_id = album_id.clone();
+
+                move |offset, limit| {
+                    let api = api.clone();
+                    let album_id = album_id.clone();
+
+                    Box::pin(async move {
+                        api.album_tracks(&album_id, Some(offset), Some(limit), None, None)
+                            .await
+                    })
+                }
+            }))),
+        })
+    }
+
+    async fn track(&self, track_id: &Id) -> Result<Option<Track>, TrackError> {
+        let track_ids_str = track_id.to_string();
+
+        let request = CLIENT
+            .request(
+                switchy_http::models::Method::Get,
+                &format!(
+                    "{host}/menu/tracks?trackIds={track_ids_str}&source={source}",
                     host = self.host,
                     source = self.api_source
                 ),
@@ -353,12 +501,14 @@ impl MusicApi for RemoteLibraryMusicApi {
             ))));
         }
 
-        let value = response
-            .json()
+        let mut tracks = response
+            .json::<Vec<ApiTrack>>()
             .await
-            .map_err(|e| TrackError::Other(Box::new(e)))?;
+            .map_err(|e| TrackError::Other(Box::new(e)))?
+            .into_iter()
+            .map(Into::into);
 
-        Ok(Some(value))
+        Ok(tracks.next())
     }
 
     async fn add_track(&self, _track_id: &Id) -> Result<(), AddTrackError> {
@@ -371,10 +521,25 @@ impl MusicApi for RemoteLibraryMusicApi {
 
     async fn track_source(
         &self,
-        _track: TrackOrId,
+        track: TrackOrId,
         _quality: TrackAudioQuality,
     ) -> Result<Option<TrackSource>, TrackError> {
-        unimplemented!("Fetching track source is not implemented")
+        let track_id = track.id();
+        let url = format!("{host}/files/track?trackId={track_id}", host = self.host);
+
+        Ok(track
+            .track(self)
+            .await?
+            .map(|track| TrackSource::RemoteUrl {
+                url,
+                format: track.format.unwrap_or(AudioFormat::Source),
+                track_id: Some(track.id.clone()),
+                source: track.track_source,
+                headers: Some(vec![(
+                    "moosicbox-profile".to_string(),
+                    self.profile.clone(),
+                )]),
+            }))
     }
 
     async fn track_size(
