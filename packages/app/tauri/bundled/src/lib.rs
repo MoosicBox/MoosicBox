@@ -92,8 +92,15 @@ pub struct Context {
 }
 
 impl Context {
+    /// # Panics
+    ///
+    /// * If fails to get the `LibraryDatabase`
     #[must_use]
     pub fn new(handle: &tokio::runtime::Handle) -> Self {
+        let downloads_path = moosicbox_downloader::get_default_download_path().unwrap();
+
+        std::fs::create_dir_all(&downloads_path).unwrap();
+
         let (sender, receiver) = tokio::sync::oneshot::channel();
 
         let addr = "0.0.0.0";
@@ -103,6 +110,18 @@ impl Context {
             "moosicbox_app_tauri_bundled server",
             handle,
             moosicbox_server::run_basic(AppType::App, addr, port, None, move |_| {
+                let db = switchy_database::profiles::PROFILES.get("master").unwrap();
+
+                moosicbox_task::spawn(
+                    "moosicbox_app_tauri_bundled: create_download_location",
+                    async move {
+                        let downloads_path_str = downloads_path.to_str().unwrap();
+                        moosicbox_scan::db::add_scan_path(&db, downloads_path_str)
+                            .await
+                            .unwrap();
+                    },
+                );
+
                 log::info!("App server listening on {addr}:{port}");
                 if let Err(e) = sender.send(()) {
                     log::error!("Failed to send on_startup response: {e:?}");
