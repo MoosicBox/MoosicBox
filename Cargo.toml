@@ -432,15 +432,15 @@ sqlx-postgres = { version = "0.8.5", default-features = false, features = [
 static_init = "1.0.3"
 strum = "0.27.1"
 strum_macros = "0.27.1"
-swc_bundler = "16.0.0"
+swc_bundler = "17.0.0"
 swc_common = { version = "9.2.0", features = ["tty-emitter"] }
 swc_ecma_ast = "9.0.0"
 swc_ecma_codegen = "11.0.0"
 swc_ecma_loader = { version = "9.0.0", features = ["cache", "node"] }
-swc_ecma_minifier = "17.0.0"
+swc_ecma_minifier = "18.0.0"
 swc_ecma_parser = "12.0.0"
 swc_ecma_transforms_base = "13.0.0"
-swc_ecma_transforms_typescript = "14.0.0"
+swc_ecma_transforms_typescript = "15.0.0"
 swc_ecma_visit = "9.0.0"
 symphonia = { version = "0.5.4", features = ["all"] }
 syn = "2.0.101"
