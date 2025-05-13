@@ -856,6 +856,7 @@ export interface ApiType {
         signal?: AbortSignal | null,
     ): Promise<void>;
     addScanPath(path: string, signal?: AbortSignal | null): Promise<void>;
+    removeScanPath(path: string, signal?: AbortSignal | null): Promise<void>;
     getScanPaths(signal?: AbortSignal | null): Promise<Api.ScanPaths>;
     getProfiles(
         connection?: Connection,
@@ -1997,6 +1998,19 @@ async function addScanPath(
     });
 }
 
+async function removeScanPath(
+    path: string,
+    signal?: AbortSignal | null,
+): Promise<void> {
+    const con = getConnection();
+    const query = new QueryParams({ path: `${path}` });
+
+    return await requestJson(`${con.apiUrl}/scan/scan-paths?${query}`, {
+        method: 'DELETE',
+        signal: signal ?? null,
+    });
+}
+
 async function getScanPaths(
     signal?: AbortSignal | null,
 ): Promise<Api.ScanPaths> {
@@ -2190,6 +2204,7 @@ export const api: ApiType = {
     startScan,
     enableScanOrigin,
     addScanPath,
+    removeScanPath,
     getScanPaths,
     getProfiles,
 };

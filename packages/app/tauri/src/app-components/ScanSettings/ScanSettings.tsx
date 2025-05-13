@@ -51,7 +51,20 @@ export function bundledScanSettingsRender() {
                 <Show when={folders()}>
                     {(folders) => (
                         <For each={folders()}>
-                            {(folder) => <p>{folder}</p>}
+                            {(folder) => (
+                                <p>
+                                    {folder}{' '}
+                                    <button
+                                        onClick={async () =>
+                                            await api.removeScanPath(folder)
+                                        }
+                                        type="button"
+                                        class="remove-button-styles moosicbox-button"
+                                    >
+                                        X
+                                    </button>
+                                </p>
+                            )}
                         </For>
                     )}
                 </Show>
