@@ -824,6 +824,10 @@ export interface ApiType {
         path: string,
         signal?: AbortSignal | null,
     ): Promise<Api.DownloadLocation>;
+    removeDownloadLocation(
+        path: string,
+        signal?: AbortSignal | null,
+    ): Promise<Api.DownloadLocation | null>;
     getTrackVisualization(
         track: Api.Track | number,
         source: ApiSource,
@@ -1852,6 +1856,24 @@ async function addDownloadLocation(
     );
 }
 
+async function removeDownloadLocation(
+    path: string,
+    signal?: AbortSignal | null,
+): Promise<Api.DownloadLocation | null> {
+    const con = getConnection();
+    const query = new QueryParams({
+        path: `${path}`,
+    });
+
+    return await requestJson(
+        `${con.apiUrl}/downloader/download-locations?${query}`,
+        {
+            method: 'DELETE',
+            signal: signal ?? null,
+        },
+    );
+}
+
 async function getTrackVisualization(
     track: Api.Track | number,
     source: ApiSource,
@@ -2159,6 +2181,7 @@ export const api: ApiType = {
     getDownloadTasks,
     getDownloadLocations,
     addDownloadLocation,
+    removeDownloadLocation,
     getAudioZones,
     createAudioZone,
     updateAudioZone,

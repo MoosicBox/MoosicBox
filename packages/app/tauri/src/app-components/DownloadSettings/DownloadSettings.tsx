@@ -50,7 +50,18 @@ export default function downloadSettingsRender() {
                                         $defaultDownloadLocation() && (
                                         <span>*</span>
                                     )}{' '}
-                                    {location.path}
+                                    {location.path}{' '}
+                                    <button
+                                        onClick={async () =>
+                                            await api.removeDownloadLocation(
+                                                location.path,
+                                            )
+                                        }
+                                        type="button"
+                                        class="remove-button-styles moosicbox-button"
+                                    >
+                                        X
+                                    </button>
                                     <button
                                         onClick={async () =>
                                             await setAsDefault(location)
