@@ -18,6 +18,7 @@ use actix_web::{
     route,
     web::{self, Json},
 };
+use moosicbox_auth::NonTunnelRequestAuthorized;
 use moosicbox_music_api::{MusicApis, models::TrackAudioQuality};
 use moosicbox_music_models::{
     ApiSource,
@@ -43,6 +44,7 @@ pub fn bind_services<
         .service(download_tasks_endpoint)
         .service(get_download_locations_endpoint)
         .service(add_download_location_endpoint)
+        .service(remove_download_location_endpoint)
 }
 
 #[cfg(feature = "openapi")]
@@ -55,7 +57,8 @@ pub fn bind_services<
         delete_download_endpoint,
         download_tasks_endpoint,
         get_download_locations_endpoint,
-        add_download_location_endpoint
+        add_download_location_endpoint,
+        remove_download_location_endpoint
     ),
     components(schemas(
         DownloadApiSource,
@@ -470,4 +473,61 @@ pub async fn add_download_location_endpoint(
     .map_err(ErrorInternalServerError)?;
 
     Ok(Json(location.into()))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteDownloadLocation {
+    path: String,
+}
+
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["Downloader"],
+        delete,
+        path = "/download-locations",
+        description = "Delete a download location",
+        params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
+            ("path" = String, Query, description = "The download location path"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The successfully deleted download location",
+                body = Value,
+            )
+        )
+    )
+)]
+#[route("/download-locations", method = "DELETE")]
+#[allow(clippy::future_not_send)]
+pub async fn remove_download_location_endpoint(
+    query: web::Query<DeleteDownloadLocation>,
+    db: LibraryDatabase,
+    _: NonTunnelRequestAuthorized,
+) -> Result<Json<Option<ApiDownloadLocation>>> {
+    static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"/mnt/(\w+)").unwrap());
+
+    let path = if std::env::consts::OS == "windows" {
+        REGEX
+            .replace(&query.path, |caps: &Captures| {
+                format!("{}:", caps[1].to_uppercase())
+            })
+            .replace('/', "\\")
+    } else {
+        query.path.clone()
+    };
+
+    let path = PathBuf::from_str(&path)?.canonicalize()?;
+
+    let location = delete_download_location(
+        &db,
+        path.to_str()
+            .ok_or_else(|| ErrorBadRequest(format!("Invalid path: {path:?}")))?,
+    )
+    .await
+    .map_err(ErrorInternalServerError)?;
+
+    Ok(Json(location.map(Into::into)))
 }

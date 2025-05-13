@@ -7144,6 +7144,7 @@ dependencies = [
  "log",
  "moosicbox_assert",
  "moosicbox_audiotags",
+ "moosicbox_auth",
  "moosicbox_config",
  "moosicbox_files",
  "moosicbox_json_utils",

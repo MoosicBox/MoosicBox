@@ -22,6 +22,20 @@ pub async fn create_download_location(
         .to_value_type()?)
 }
 
+#[cfg(feature = "api")]
+pub async fn delete_download_location(
+    db: &LibraryDatabase,
+    path: &str,
+) -> Result<Option<DownloadLocation>, DatabaseFetchError> {
+    Ok(db
+        .delete("download_locations")
+        .where_eq("path", path)
+        .execute_first(&**db)
+        .await?
+        .as_ref()
+        .to_value_type()?)
+}
+
 pub async fn get_download_location(
     db: &LibraryDatabase,
     id: u64,

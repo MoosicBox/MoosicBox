@@ -27,8 +27,9 @@ moosicbox_task           = { workspace = true }
 switchy_database         = { workspace = true }
 
 # API Dependencies
-actix-web = { workspace = true, optional = true }
-utoipa    = { workspace = true, optional = true }
+actix-web      = { workspace = true, optional = true }
+moosicbox_auth = { workspace = true, optional = true }
+utoipa         = { workspace = true, optional = true }
 
 async-recursion     = { workspace = true }
 async-trait         = { workspace = true }
@@ -58,7 +59,12 @@ default = ["all-os-formats", "all-sources", "api", "openapi", "opus"]
 
 fail-on-warnings = []
 
-api = ["dep:actix-web", "moosicbox_music_api/api", "switchy_database/api"]
+api = [
+    "dep:actix-web",
+    "dep:moosicbox_auth",
+    "moosicbox_music_api/api",
+    "switchy_database/api",
+]
 openapi = [
     "dep:utoipa",
     "moosicbox_music_api/openapi",
