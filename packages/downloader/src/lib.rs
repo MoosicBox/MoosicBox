@@ -685,7 +685,6 @@ pub async fn download_track_id(
         path,
         &track,
         quality,
-        source,
         None,
         on_progress,
         speed,
@@ -703,7 +702,6 @@ async fn download_track(
     path: &str,
     track: &Track,
     quality: TrackAudioQuality,
-    source: DownloadApiSource,
     start: Option<u64>,
     on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
@@ -714,7 +712,6 @@ async fn download_track(
         path,
         track,
         quality,
-        source,
         start,
         on_progress.clone(),
         speed.clone(),
@@ -743,7 +740,6 @@ async fn download_track(
                     path,
                     track,
                     quality,
-                    source,
                     start,
                     on_progress,
                     speed,
@@ -787,14 +783,13 @@ async fn download_track_inner(
     path: &str,
     track: &Track,
     quality: TrackAudioQuality,
-    source: DownloadApiSource,
     mut start: Option<u64>,
     on_progress: Arc<tokio::sync::Mutex<ProgressListener>>,
     speed: Arc<AtomicF64>,
     timeout_duration: Option<Duration>,
 ) -> Result<(), DownloadTrackInnerError> {
     log::debug!(
-        "Starting download for track={track:?} quality={quality:?} source={source:?} path={path} start={start:?}"
+        "Starting download for track={track:?} quality={quality:?} path={path} start={start:?}"
     );
 
     let req = api.track_source(track.into(), quality);
@@ -1061,7 +1056,6 @@ pub async fn download_album_id(
             path,
             track,
             quality,
-            source,
             None,
             on_progress.clone(),
             speed.clone(),
