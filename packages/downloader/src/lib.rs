@@ -252,10 +252,17 @@ pub async fn get_download_path(
         )
         .unwrap()
     } else {
-        get_config_dir_path()
-            .ok_or(GetDownloadPathError::FailedToGetConfigDirectory)?
-            .join("downloads")
+        get_default_download_path()?
     })
+}
+
+/// # Errors
+///
+/// * If the config directory path fails to be retrieved
+pub fn get_default_download_path() -> Result<PathBuf, GetDownloadPathError> {
+    Ok(get_config_dir_path()
+        .ok_or(GetDownloadPathError::FailedToGetConfigDirectory)?
+        .join("downloads"))
 }
 
 #[derive(Debug, Error)]
