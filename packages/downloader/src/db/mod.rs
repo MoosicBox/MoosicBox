@@ -8,7 +8,9 @@ pub mod models;
 
 use self::models::{CreateDownloadTask, DownloadLocation, DownloadTask};
 
-#[cfg(feature = "api")]
+/// # Errors
+///
+/// * If there was a database error
 pub async fn create_download_location(
     db: &LibraryDatabase,
     path: &str,
@@ -22,7 +24,9 @@ pub async fn create_download_location(
         .to_value_type()?)
 }
 
-#[cfg(feature = "api")]
+/// # Errors
+///
+/// * If there was a database error
 pub async fn delete_download_location(
     db: &LibraryDatabase,
     path: &str,
@@ -36,6 +40,9 @@ pub async fn delete_download_location(
         .to_value_type()?)
 }
 
+/// # Errors
+///
+/// * If there was a database error
 pub async fn get_download_location(
     db: &LibraryDatabase,
     id: u64,
@@ -49,7 +56,9 @@ pub async fn get_download_location(
         .to_value_type()?)
 }
 
-#[cfg(feature = "api")]
+/// # Errors
+///
+/// * If there was a database error
 pub async fn get_download_locations(
     db: &LibraryDatabase,
 ) -> Result<Vec<DownloadLocation>, DatabaseFetchError> {

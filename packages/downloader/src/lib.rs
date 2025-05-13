@@ -17,7 +17,7 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 use atomic_float::AtomicF64;
 use db::{
-    create_download_task, get_download_location,
+    create_download_task,
     models::{CreateDownloadTask, DownloadItem, DownloadTask},
 };
 use futures::StreamExt;
@@ -51,6 +51,10 @@ use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
 use tokio::{select, sync::RwLock};
 
+pub use db::{
+    create_download_location, delete_download_location, get_download_location,
+    get_download_locations,
+};
 pub use moosicbox_music_api::models::TrackAudioQuality;
 
 #[cfg(feature = "api")]
