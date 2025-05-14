@@ -24,7 +24,6 @@ if (!isServer) {
 }
 
 init({
-    logWriterApiUrl: 'https://logs.moosicbox.com',
     shimConsole: true,
     logLevel: 'WARN',
 });
