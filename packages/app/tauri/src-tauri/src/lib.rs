@@ -77,7 +77,7 @@ static RT: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
 });
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
-#[cfg(not(all(target_os = "android")))]
+#[cfg(not(target_os = "android"))]
 #[tauri::command]
 async fn show_main_window(window: tauri::Window) {
     use tauri::Manager as _;
@@ -819,7 +819,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             on_startup,
-            #[cfg(not(all(target_os = "android")))]
+            #[cfg(not(target_os = "android"))]
             show_main_window,
             set_playback_quality,
             set_state,
