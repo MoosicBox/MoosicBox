@@ -13,7 +13,7 @@ importers:
         version: 0.9.4(prettier-plugin-astro@0.13.0)(prettier@3.5.3)(typescript@5.8.3)
       '@astrojs/node':
         specifier: ^9.2.1
-        version: 9.2.1(astro@5.7.12(@types/node@22.15.17)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.40.2)(typescript@5.8.3)(yaml@2.7.1))
+        version: 9.2.1(astro@5.7.13(@types/node@22.15.17)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.40.2)(typescript@5.8.3)(yaml@2.7.1))
       '@astrojs/solid-js':
         specifier: ^5.0.10
         version: 5.0.10(@testing-library/jest-dom@5.17.0)(@types/node@22.15.17)(jiti@2.4.2)(solid-js@1.9.6)(yaml@2.7.1)
@@ -39,8 +39,8 @@ importers:
         specifier: ^6.3.1
         version: 6.3.1(solid-js@1.9.6)
       astro:
-        specifier: ^5.7.12
-        version: 5.7.12(@types/node@22.15.17)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.40.2)(typescript@5.8.3)(yaml@2.7.1)
+        specifier: ^5.7.13
+        version: 5.7.13(@types/node@22.15.17)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.40.2)(typescript@5.8.3)(yaml@2.7.1)
       astro-sst:
         specifier: ^2.45.2
         version: 2.45.2
@@ -133,8 +133,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.14.16
-        version: 3.14.16
+        specifier: ^3.14.19
+        version: 3.14.19
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
@@ -1651,8 +1651,8 @@ packages:
   astro-sst@2.45.2:
     resolution: {integrity: sha512-Zrrip/9VP5kvoQJ+Kj2tJA1h7mQ3ShAsfKXMqVcz8vqMqCsFjEZPLHDu8zYTGMr3WOX8r3vzY6u5nOeaKFg8ZQ==}
 
-  astro@5.7.12:
-    resolution: {integrity: sha512-UQOItiZz2hcv9PlHTQ6dNqFDIVNPnmwk6eyAjJqPE9O8EDHZK2JKtTRD0CBFN2Uqr0RE0TWP2gqDpLfsa5dJEA==}
+  astro@5.7.13:
+    resolution: {integrity: sha512-cRGq2llKOhV3XMcYwQpfBIUcssN6HEK5CRbcMxAfd9OcFhvWE7KUy50zLioAZVVl3AqgUTJoNTlmZfD2eG0G1w==}
     engines: {node: ^18.17.1 || ^20.3.0 || >=22.0.0, npm: '>=9.6.5', pnpm: '>=7.1.0'}
     hasBin: true
 
@@ -1794,8 +1794,8 @@ packages:
     resolution: {integrity: sha512-8WB3Jcas3swSvjIeA2yvCJ+Miyz5l1ZmB6HFb9R1317dt9LCQoswg/BGrmAmkWVEszSrrg4RwmO46qIm2OEnSA==}
     engines: {node: '>=16'}
 
-  caniuse-lite@1.0.30001717:
-    resolution: {integrity: sha512-auPpttCq6BDEG8ZAuHJIplGw6GODhjw+/11e7IjpnYCxZcW/ONgPs0KVBJ0d1bY3e2+7PRe5RCLyP+PfwVgkYw==}
+  caniuse-lite@1.0.30001718:
+    resolution: {integrity: sha512-AflseV1ahcSunK53NfEs9gFWgOEmzr0f+kaMFA4xiLZlr9Hzt7HxcSpIFcnNCUkz6R6dWKa54rUz3HUmI3nVcw==}
 
   ccount@2.0.1:
     resolution: {integrity: sha512-eyrF0jiFpY+3drT6383f1qhkbGsLSifNAjA61IUjZjmLCWjItY6LB9ft9YhoDgwfmclB2zhu51Lc7+95b8NRAg==}
@@ -1988,8 +1988,8 @@ packages:
       supports-color:
         optional: true
 
-  debug@4.4.0:
-    resolution: {integrity: sha512-6WTZ/IxCY/T6BALoZHaE4ctp9xm+Z5kY/pzYaCHRFeyVhojxlrm+46y68HA6hr0TcwEssoxNiDEUJQjfPZ/RYA==}
+  debug@4.4.1:
+    resolution: {integrity: sha512-KcKCqiftBJcZr++7ykoDIEwSa3XWowTfNPo92BYxjXiyYEVrUQh2aLyhxBCwww+heortUFxEJYcRzosstTEBYQ==}
     engines: {node: '>=6.0'}
     peerDependencies:
       supports-color: '*'
@@ -3853,48 +3853,48 @@ packages:
   split2@3.2.2:
     resolution: {integrity: sha512-9NThjpgZnifTkJpzTZ7Eue85S49QwpNhZTq6GRJwObb6jnLFNGB7Qm73V5HewTROPyxD0C29xqmaI68bQtV+hg==}
 
-  sst-darwin-arm64@3.14.16:
-    resolution: {integrity: sha512-BlEPPcXT2xowINAyh0VBM+oEYiJMe5kGXzHTA8j4Oocit7g5h49Ata8wLakqNAgPzjV1J5I4FisvqPnUWO1pTQ==}
+  sst-darwin-arm64@3.14.19:
+    resolution: {integrity: sha512-Jl7XVXnH9d0dELVID9EB0iYtve4Lxv5LBNOWj2EzLOSMh5k26uaZ9zDYs8RRmLd/DKFA9wyiX4gEz8pnaqnFaw==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.14.16:
-    resolution: {integrity: sha512-BZirTxYLvssW8zO5shd7SkyVwbQAQP2EVdwF4xQAH/tH386/VMvKUgYombzVYRDr7xSYDQBigBw4MxRB/tNniw==}
+  sst-darwin-x64@3.14.19:
+    resolution: {integrity: sha512-XI0Ygln9Al78VtSIJy8Ymiy/HaT5t6q1S01qlFVvGVnkSy8ncm1lmisfeMryetegIQG7JF9hmmzbADPGwevB9g==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.14.16:
-    resolution: {integrity: sha512-CLs4dVqjdlgRxbVKMTAjbkmwJf+XsrRLYv0FBvEHxgCp/ehw32bL/nt/apRJm7n8gXwlwZqaEAHXvsfOk+gLXg==}
+  sst-linux-arm64@3.14.19:
+    resolution: {integrity: sha512-zI0a/8/0a85hm3ssXAtInVUOF5QJbsqi1h+mWU0fmy+r1dmJ0yHLDmsoWucLy+8nT3i23mDIrplgJgYgL9AvIg==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.14.16:
-    resolution: {integrity: sha512-byZRYpS0QNzlCuxyvgJdLJPTIpHs5PsE1PUG0uF9xoJo1rYZI0yyxD6ghYOtddbd+l5kkDoqw+5ZXiKsM74M5w==}
+  sst-linux-x64@3.14.19:
+    resolution: {integrity: sha512-y2Cq+OSWzdHz6rIUk5wObTmUIjrnbsiNr30MhFAveQMDAUfBHaOMYD0ioV53s38+/OqjryHxdRe9BiALS4W0Gg==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.14.16:
-    resolution: {integrity: sha512-jeVz6hHQ2n3NkRsSmshm/57nL/5DMlRaS4vsvnR/JxCVi32zLYnDJZvHXDmfSwtwv+SpwnmBdzgNQ4NcQeNrQQ==}
+  sst-linux-x86@3.14.19:
+    resolution: {integrity: sha512-q4I5QN9Q4H4EajqT39pfxAHeTcjovJg6/SplwZZKgqfFuq2efJmH7capxpW/yJ3qSCM5Un8agC4vnhTpj//M7Q==}
     cpu: [x86]
     os: [linux]
 
-  sst-win32-arm64@3.14.16:
-    resolution: {integrity: sha512-LFPKyI6yQsx8ikIPWmqxwoQEhL3+Gj/Iad/LlqOMZ8mLVKGX7aE92lfPMqx5q+9qq4imNb7clT+Z0CC8Vq6P3Q==}
+  sst-win32-arm64@3.14.19:
+    resolution: {integrity: sha512-AvrU99vX/hJ7LDi8z9NRc4PbJUu2t/m9IgZxJ71K05asIfanyK8QKc74/4TbeKfxBkdX9s9jIi0tQzzVgfaLjg==}
     cpu: [arm64]
     os: [win32]
 
-  sst-win32-x64@3.14.16:
-    resolution: {integrity: sha512-qKLw5J2cSYwyI8w8njCiW7QRsxIEFF8PkMcUgSUG8yrqUmFHFTuk0jlmCSd8AlUCqoFjSbiM4dK7kg9RvQ8Dlw==}
+  sst-win32-x64@3.14.19:
+    resolution: {integrity: sha512-VF1+cHW6KypE+NjzgRq5SCOyZ2jVP9uxf6Uu8xlEdHAfgrSfGwiJFTEyfcYUMqQcxBhBFXHBZ9vVnSpFKiz/mQ==}
     cpu: [x64]
     os: [win32]
 
-  sst-win32-x86@3.14.16:
-    resolution: {integrity: sha512-LV+JWnjl59x0G4HqvKrKFNSm0Ik27nWDJ9D7MW7CQ5A8+gqbJROmf4UUUyp8L0p5s0GnblUYdIYjGJKSS50WlQ==}
+  sst-win32-x86@3.14.19:
+    resolution: {integrity: sha512-60gyG9eVKzvqE5Z2a+YFtyQiTqm2etxkw7MPltY/4sLwrcs2qq0bKk9mjs4zAsku7AYwvA+dI55uNEqpIQDLdQ==}
     cpu: [x86]
     os: [win32]
 
-  sst@3.14.16:
-    resolution: {integrity: sha512-xV0jYmOkrvOWgWykSv6Rs5n/dbmDVXCvQni7kTZJuBaqVqWhLw2ZIPh3TTAT8Aq2Kv0thFPvMpqnk2gfEC57Hw==}
+  sst@3.14.19:
+    resolution: {integrity: sha512-maPVrxFCwmEpwpEUZ7Eu+hG8kJ82Ta72YhPTZPCOo+TNkCyXyPWICUL86EPaN55WCq9Wv0kSa2I8Et2A+Uy3Og==}
     hasBin: true
 
   stack-utils@2.0.6:
@@ -4795,10 +4795,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@astrojs/node@9.2.1(astro@5.7.12(@types/node@22.15.17)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.40.2)(typescript@5.8.3)(yaml@2.7.1))':
+  '@astrojs/node@9.2.1(astro@5.7.13(@types/node@22.15.17)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.40.2)(typescript@5.8.3)(yaml@2.7.1))':
     dependencies:
       '@astrojs/internal-helpers': 0.6.1
-      astro: 5.7.12(@types/node@22.15.17)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.40.2)(typescript@5.8.3)(yaml@2.7.1)
+      astro: 5.7.13(@types/node@22.15.17)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.40.2)(typescript@5.8.3)(yaml@2.7.1)
       send: 1.2.0
       server-destroy: 1.0.1
     transitivePeerDependencies:
@@ -4831,7 +4831,7 @@ snapshots:
   '@astrojs/telemetry@3.2.1':
     dependencies:
       ci-info: 4.2.0
-      debug: 4.4.0
+      debug: 4.4.1
       dlv: 1.1.3
       dset: 3.1.4
       is-docker: 3.0.0
@@ -5219,7 +5219,7 @@ snapshots:
       '@babel/traverse': 7.27.1
       '@babel/types': 7.27.1
       convert-source-map: 2.0.0
-      debug: 4.4.0
+      debug: 4.4.1
       gensync: 1.0.0-beta.2
       json5: 2.2.3
       semver: 6.3.1
@@ -5299,7 +5299,7 @@ snapshots:
       '@babel/parser': 7.27.2
       '@babel/template': 7.27.2
       '@babel/types': 7.27.1
-      debug: 4.4.0
+      debug: 4.4.1
       globals: 11.12.0
     transitivePeerDependencies:
       - supports-color
@@ -5521,7 +5521,7 @@ snapshots:
   '@eslint/config-array@0.20.0':
     dependencies:
       '@eslint/object-schema': 2.1.6
-      debug: 4.4.0
+      debug: 4.4.1
       minimatch: 3.1.2
     transitivePeerDependencies:
       - supports-color
@@ -5535,7 +5535,7 @@ snapshots:
   '@eslint/eslintrc@3.3.1':
     dependencies:
       ajv: 6.12.6
-      debug: 4.4.0
+      debug: 4.4.1
       espree: 10.3.0
       globals: 14.0.0
       ignore: 5.3.2
@@ -6304,7 +6304,7 @@ snapshots:
       '@typescript-eslint/types': 8.32.1
       '@typescript-eslint/typescript-estree': 8.32.1(typescript@5.8.3)
       '@typescript-eslint/visitor-keys': 8.32.1
-      debug: 4.4.0
+      debug: 4.4.1
       eslint: 9.26.0(jiti@2.4.2)
       typescript: 5.8.3
     transitivePeerDependencies:
@@ -6319,7 +6319,7 @@ snapshots:
     dependencies:
       '@typescript-eslint/typescript-estree': 8.32.1(typescript@5.8.3)
       '@typescript-eslint/utils': 8.32.1(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
-      debug: 4.4.0
+      debug: 4.4.1
       eslint: 9.26.0(jiti@2.4.2)
       ts-api-utils: 2.1.0(typescript@5.8.3)
       typescript: 5.8.3
@@ -6332,7 +6332,7 @@ snapshots:
     dependencies:
       '@typescript-eslint/types': 8.32.1
       '@typescript-eslint/visitor-keys': 8.32.1
-      debug: 4.4.0
+      debug: 4.4.1
       fast-glob: 3.3.3
       is-glob: 4.0.3
       minimatch: 9.0.5
@@ -6364,7 +6364,7 @@ snapshots:
     dependencies:
       '@ampproject/remapping': 2.3.0
       '@bcoe/v8-coverage': 0.2.3
-      debug: 4.4.0
+      debug: 4.4.1
       istanbul-lib-coverage: 3.2.2
       istanbul-lib-report: 3.0.1
       istanbul-lib-source-maps: 5.0.6
@@ -6589,7 +6589,7 @@ snapshots:
       '@typescript-eslint/scope-manager': 8.32.1
       '@typescript-eslint/types': 8.32.1
       astrojs-compiler-sync: 1.1.1(@astrojs/compiler@2.12.0)
-      debug: 4.4.0
+      debug: 4.4.1
       entities: 6.0.0
       eslint-scope: 8.3.0
       eslint-visitor-keys: 4.2.0
@@ -6605,7 +6605,7 @@ snapshots:
       '@astrojs/webapi': 3.0.0
       set-cookie-parser: 2.7.1
 
-  astro@5.7.12(@types/node@22.15.17)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.40.2)(typescript@5.8.3)(yaml@2.7.1):
+  astro@5.7.13(@types/node@22.15.17)(aws4fetch@1.0.20)(jiti@2.4.2)(rollup@4.40.2)(typescript@5.8.3)(yaml@2.7.1):
     dependencies:
       '@astrojs/compiler': 2.12.0
       '@astrojs/internal-helpers': 0.6.1
@@ -6623,7 +6623,7 @@ snapshots:
       common-ancestor-path: 1.0.1
       cookie: 1.0.2
       cssesc: 3.0.0
-      debug: 4.4.0
+      debug: 4.4.1
       deterministic-object-hash: 2.0.2
       devalue: 5.1.1
       diff: 5.2.0
@@ -6800,7 +6800,7 @@ snapshots:
     dependencies:
       bytes: 3.1.2
       content-type: 1.0.5
-      debug: 4.4.0
+      debug: 4.4.1
       http-errors: 2.0.0
       iconv-lite: 0.6.3
       on-finished: 2.4.1
@@ -6842,7 +6842,7 @@ snapshots:
 
   browserslist@4.24.5:
     dependencies:
-      caniuse-lite: 1.0.30001717
+      caniuse-lite: 1.0.30001718
       electron-to-chromium: 1.5.152
       node-releases: 2.0.19
       update-browserslist-db: 1.1.3(browserslist@4.24.5)
@@ -6893,7 +6893,7 @@ snapshots:
 
   camelcase@8.0.0: {}
 
-  caniuse-lite@1.0.30001717: {}
+  caniuse-lite@1.0.30001718: {}
 
   ccount@2.0.1: {}
 
@@ -7083,7 +7083,7 @@ snapshots:
     dependencies:
       ms: 2.1.3
 
-  debug@4.4.0:
+  debug@4.4.1:
     dependencies:
       ms: 2.1.3
 
@@ -7480,7 +7480,7 @@ snapshots:
       ajv: 6.12.6
       chalk: 4.1.2
       cross-spawn: 7.0.6
-      debug: 4.4.0
+      debug: 4.4.1
       escape-string-regexp: 4.0.0
       eslint-scope: 8.3.0
       eslint-visitor-keys: 4.2.0
@@ -7573,7 +7573,7 @@ snapshots:
       content-type: 1.0.5
       cookie: 0.7.2
       cookie-signature: 1.2.2
-      debug: 4.4.0
+      debug: 4.4.1
       encodeurl: 2.0.0
       escape-html: 1.0.3
       etag: 1.8.1
@@ -7639,7 +7639,7 @@ snapshots:
 
   finalhandler@2.1.0:
     dependencies:
-      debug: 4.4.0
+      debug: 4.4.1
       encodeurl: 2.0.0
       escape-html: 1.0.3
       on-finished: 2.4.1
@@ -7943,14 +7943,14 @@ snapshots:
   http-proxy-agent@7.0.2:
     dependencies:
       agent-base: 7.1.3
-      debug: 4.4.0
+      debug: 4.4.1
     transitivePeerDependencies:
       - supports-color
 
   https-proxy-agent@7.0.6:
     dependencies:
       agent-base: 7.1.3
-      debug: 4.4.0
+      debug: 4.4.1
     transitivePeerDependencies:
       - supports-color
 
@@ -8154,7 +8154,7 @@ snapshots:
   istanbul-lib-source-maps@5.0.6:
     dependencies:
       '@jridgewell/trace-mapping': 0.3.25
-      debug: 4.4.0
+      debug: 4.4.1
       istanbul-lib-coverage: 3.2.2
     transitivePeerDependencies:
       - supports-color
@@ -8653,7 +8653,7 @@ snapshots:
   micromark@4.0.2:
     dependencies:
       '@types/debug': 4.1.12
-      debug: 4.4.0
+      debug: 4.4.1
       decode-named-character-reference: 1.1.0
       devlop: 1.1.0
       micromark-core-commonmark: 2.0.3
@@ -8713,7 +8713,7 @@ snapshots:
   mqtt-packet@6.10.0:
     dependencies:
       bl: 4.1.0
-      debug: 4.4.0
+      debug: 4.4.1
       process-nextick-args: 2.0.1
     transitivePeerDependencies:
       - supports-color
@@ -8723,7 +8723,7 @@ snapshots:
     dependencies:
       commist: 1.1.0
       concat-stream: 2.0.0
-      debug: 4.4.0
+      debug: 4.4.1
       duplexify: 4.1.3
       help-me: 3.0.0
       inherits: 2.0.4
@@ -8782,7 +8782,7 @@ snapshots:
 
   number-allocator@1.0.14:
     dependencies:
-      debug: 4.4.0
+      debug: 4.4.1
       js-sdsl: 4.3.0
     transitivePeerDependencies:
       - supports-color
@@ -9277,7 +9277,7 @@ snapshots:
 
   router@2.2.0:
     dependencies:
-      debug: 4.4.0
+      debug: 4.4.1
       depd: 2.0.0
       is-promise: 4.0.0
       parseurl: 1.3.3
@@ -9337,7 +9337,7 @@ snapshots:
 
   send@1.2.0:
     dependencies:
-      debug: 4.4.0
+      debug: 4.4.1
       encodeurl: 2.0.0
       escape-html: 1.0.3
       etag: 1.8.1
@@ -9511,31 +9511,31 @@ snapshots:
       readable-stream: 3.6.2
     optional: true
 
-  sst-darwin-arm64@3.14.16:
+  sst-darwin-arm64@3.14.19:
     optional: true
 
-  sst-darwin-x64@3.14.16:
+  sst-darwin-x64@3.14.19:
     optional: true
 
-  sst-linux-arm64@3.14.16:
+  sst-linux-arm64@3.14.19:
     optional: true
 
-  sst-linux-x64@3.14.16:
+  sst-linux-x64@3.14.19:
     optional: true
 
-  sst-linux-x86@3.14.16:
+  sst-linux-x86@3.14.19:
     optional: true
 
-  sst-win32-arm64@3.14.16:
+  sst-win32-arm64@3.14.19:
     optional: true
 
-  sst-win32-x64@3.14.16:
+  sst-win32-x64@3.14.19:
     optional: true
 
-  sst-win32-x86@3.14.16:
+  sst-win32-x86@3.14.19:
     optional: true
 
-  sst@3.14.16:
+  sst@3.14.19:
     dependencies:
       aws-sdk: 2.1692.0
       aws4fetch: 1.0.18
@@ -9543,14 +9543,14 @@ snapshots:
       opencontrol: 0.0.6
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.14.16
-      sst-darwin-x64: 3.14.16
-      sst-linux-arm64: 3.14.16
-      sst-linux-x64: 3.14.16
-      sst-linux-x86: 3.14.16
-      sst-win32-arm64: 3.14.16
-      sst-win32-x64: 3.14.16
-      sst-win32-x86: 3.14.16
+      sst-darwin-arm64: 3.14.19
+      sst-darwin-x64: 3.14.19
+      sst-linux-arm64: 3.14.19
+      sst-linux-x64: 3.14.19
+      sst-linux-x86: 3.14.19
+      sst-win32-arm64: 3.14.19
+      sst-win32-x64: 3.14.19
+      sst-win32-x86: 3.14.19
     transitivePeerDependencies:
       - supports-color
 
@@ -9944,7 +9944,7 @@ snapshots:
   vite-node@1.6.1(@types/node@22.15.17):
     dependencies:
       cac: 6.7.14
-      debug: 4.4.0
+      debug: 4.4.1
       pathe: 1.1.2
       picocolors: 1.1.1
       vite: 5.4.19(@types/node@22.15.17)
@@ -10010,7 +10010,7 @@ snapshots:
       '@vitest/utils': 1.6.1
       acorn-walk: 8.3.4
       chai: 4.5.0
-      debug: 4.4.0
+      debug: 4.4.1
       execa: 8.0.1
       local-pkg: 0.5.1
       magic-string: 0.30.17
