@@ -48,8 +48,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.14.16
-        version: 3.14.16
+        specifier: ^3.14.19
+        version: 3.14.19
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
@@ -751,8 +751,8 @@ packages:
       supports-color:
         optional: true
 
-  debug@4.4.0:
-    resolution: {integrity: sha512-6WTZ/IxCY/T6BALoZHaE4ctp9xm+Z5kY/pzYaCHRFeyVhojxlrm+46y68HA6hr0TcwEssoxNiDEUJQjfPZ/RYA==}
+  debug@4.4.1:
+    resolution: {integrity: sha512-KcKCqiftBJcZr++7ykoDIEwSa3XWowTfNPo92BYxjXiyYEVrUQh2aLyhxBCwww+heortUFxEJYcRzosstTEBYQ==}
     engines: {node: '>=6.0'}
     peerDependencies:
       supports-color: '*'
@@ -1277,8 +1277,8 @@ packages:
     resolution: {integrity: sha512-TR3KfrTZTYLPB6jUjfx6MF9WcWrHL9su5TObK4ZkYgBdWKPOFoSoQIdEuTuR82pmtxH2spWG9h6etwfr1pLBqQ==}
     engines: {node: '>=6'}
 
-  import-in-the-middle@1.13.1:
-    resolution: {integrity: sha512-k2V9wNm9B+ysuelDTHjI9d5KPc4l8zAZTGqj+pcynvWkypZd857ryzN8jNC7Pg2YZXNMJcHRPpaDyCBbNyVRpA==}
+  import-in-the-middle@1.13.2:
+    resolution: {integrity: sha512-Yjp9X7s2eHSXvZYQ0aye6UvwYPrVB5C2k47fuXjFKnYinAByaDZjh4t9MT2wEga9775n6WaIqyHnQhBxYtX2mg==}
 
   imurmurhash@0.1.4:
     resolution: {integrity: sha512-JmXMZ6wuvDmLiHEml9ykzqO6lwFbof0GG4IkcGaENdCRDDmMVnny7s5HsIgHCbaq0w2MyPhDqkhTUgS2LU2PHA==}
@@ -2182,48 +2182,48 @@ packages:
     resolution: {integrity: sha512-MGrFH9Z4NP9Iyhqn16sDtBpRRNJ0Y2hNa6D65h736fVSaPCHr4DM4sWUNvVaSuC+0OBGhwsrydQwmgfg5LncqQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
-  sst-darwin-arm64@3.14.16:
-    resolution: {integrity: sha512-BlEPPcXT2xowINAyh0VBM+oEYiJMe5kGXzHTA8j4Oocit7g5h49Ata8wLakqNAgPzjV1J5I4FisvqPnUWO1pTQ==}
+  sst-darwin-arm64@3.14.19:
+    resolution: {integrity: sha512-Jl7XVXnH9d0dELVID9EB0iYtve4Lxv5LBNOWj2EzLOSMh5k26uaZ9zDYs8RRmLd/DKFA9wyiX4gEz8pnaqnFaw==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.14.16:
-    resolution: {integrity: sha512-BZirTxYLvssW8zO5shd7SkyVwbQAQP2EVdwF4xQAH/tH386/VMvKUgYombzVYRDr7xSYDQBigBw4MxRB/tNniw==}
+  sst-darwin-x64@3.14.19:
+    resolution: {integrity: sha512-XI0Ygln9Al78VtSIJy8Ymiy/HaT5t6q1S01qlFVvGVnkSy8ncm1lmisfeMryetegIQG7JF9hmmzbADPGwevB9g==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.14.16:
-    resolution: {integrity: sha512-CLs4dVqjdlgRxbVKMTAjbkmwJf+XsrRLYv0FBvEHxgCp/ehw32bL/nt/apRJm7n8gXwlwZqaEAHXvsfOk+gLXg==}
+  sst-linux-arm64@3.14.19:
+    resolution: {integrity: sha512-zI0a/8/0a85hm3ssXAtInVUOF5QJbsqi1h+mWU0fmy+r1dmJ0yHLDmsoWucLy+8nT3i23mDIrplgJgYgL9AvIg==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.14.16:
-    resolution: {integrity: sha512-byZRYpS0QNzlCuxyvgJdLJPTIpHs5PsE1PUG0uF9xoJo1rYZI0yyxD6ghYOtddbd+l5kkDoqw+5ZXiKsM74M5w==}
+  sst-linux-x64@3.14.19:
+    resolution: {integrity: sha512-y2Cq+OSWzdHz6rIUk5wObTmUIjrnbsiNr30MhFAveQMDAUfBHaOMYD0ioV53s38+/OqjryHxdRe9BiALS4W0Gg==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.14.16:
-    resolution: {integrity: sha512-jeVz6hHQ2n3NkRsSmshm/57nL/5DMlRaS4vsvnR/JxCVi32zLYnDJZvHXDmfSwtwv+SpwnmBdzgNQ4NcQeNrQQ==}
+  sst-linux-x86@3.14.19:
+    resolution: {integrity: sha512-q4I5QN9Q4H4EajqT39pfxAHeTcjovJg6/SplwZZKgqfFuq2efJmH7capxpW/yJ3qSCM5Un8agC4vnhTpj//M7Q==}
     cpu: [x86]
     os: [linux]
 
-  sst-win32-arm64@3.14.16:
-    resolution: {integrity: sha512-LFPKyI6yQsx8ikIPWmqxwoQEhL3+Gj/Iad/LlqOMZ8mLVKGX7aE92lfPMqx5q+9qq4imNb7clT+Z0CC8Vq6P3Q==}
+  sst-win32-arm64@3.14.19:
+    resolution: {integrity: sha512-AvrU99vX/hJ7LDi8z9NRc4PbJUu2t/m9IgZxJ71K05asIfanyK8QKc74/4TbeKfxBkdX9s9jIi0tQzzVgfaLjg==}
     cpu: [arm64]
     os: [win32]
 
-  sst-win32-x64@3.14.16:
-    resolution: {integrity: sha512-qKLw5J2cSYwyI8w8njCiW7QRsxIEFF8PkMcUgSUG8yrqUmFHFTuk0jlmCSd8AlUCqoFjSbiM4dK7kg9RvQ8Dlw==}
+  sst-win32-x64@3.14.19:
+    resolution: {integrity: sha512-VF1+cHW6KypE+NjzgRq5SCOyZ2jVP9uxf6Uu8xlEdHAfgrSfGwiJFTEyfcYUMqQcxBhBFXHBZ9vVnSpFKiz/mQ==}
     cpu: [x64]
     os: [win32]
 
-  sst-win32-x86@3.14.16:
-    resolution: {integrity: sha512-LV+JWnjl59x0G4HqvKrKFNSm0Ik27nWDJ9D7MW7CQ5A8+gqbJROmf4UUUyp8L0p5s0GnblUYdIYjGJKSS50WlQ==}
+  sst-win32-x86@3.14.19:
+    resolution: {integrity: sha512-60gyG9eVKzvqE5Z2a+YFtyQiTqm2etxkw7MPltY/4sLwrcs2qq0bKk9mjs4zAsku7AYwvA+dI55uNEqpIQDLdQ==}
     cpu: [x86]
     os: [win32]
 
-  sst@3.14.16:
-    resolution: {integrity: sha512-xV0jYmOkrvOWgWykSv6Rs5n/dbmDVXCvQni7kTZJuBaqVqWhLw2ZIPh3TTAT8Aq2Kv0thFPvMpqnk2gfEC57Hw==}
+  sst@3.14.19:
+    resolution: {integrity: sha512-maPVrxFCwmEpwpEUZ7Eu+hG8kJ82Ta72YhPTZPCOo+TNkCyXyPWICUL86EPaN55WCq9Wv0kSa2I8Et2A+Uy3Og==}
     hasBin: true
 
   statuses@2.0.1:
@@ -2519,7 +2519,7 @@ snapshots:
   '@eslint/eslintrc@2.1.4':
     dependencies:
       ajv: 6.12.6
-      debug: 4.4.0
+      debug: 4.4.1
       espree: 9.6.1
       globals: 13.24.0
       ignore: 5.3.2
@@ -2547,7 +2547,7 @@ snapshots:
   '@humanwhocodes/config-array@0.13.0':
     dependencies:
       '@humanwhocodes/object-schema': 2.0.3
-      debug: 4.4.0
+      debug: 4.4.1
       minimatch: 3.1.2
     transitivePeerDependencies:
       - supports-color
@@ -2765,7 +2765,7 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/api-logs': 0.55.0
       '@types/shimmer': 1.2.0
-      import-in-the-middle: 1.13.1
+      import-in-the-middle: 1.13.2
       require-in-the-middle: 7.5.2
       semver: 7.7.2
       shimmer: 1.2.1
@@ -2979,7 +2979,7 @@ snapshots:
       '@typescript-eslint/types': 7.18.0
       '@typescript-eslint/typescript-estree': 7.18.0(typescript@5.8.3)
       '@typescript-eslint/visitor-keys': 7.18.0
-      debug: 4.4.0
+      debug: 4.4.1
       eslint: 8.57.1
     optionalDependencies:
       typescript: 5.8.3
@@ -3000,7 +3000,7 @@ snapshots:
     dependencies:
       '@typescript-eslint/typescript-estree': 7.18.0(typescript@5.8.3)
       '@typescript-eslint/utils': 7.18.0(eslint@8.57.1)(typescript@5.8.3)
-      debug: 4.4.0
+      debug: 4.4.1
       eslint: 8.57.1
       ts-api-utils: 1.4.3(typescript@5.8.3)
     optionalDependencies:
@@ -3016,7 +3016,7 @@ snapshots:
     dependencies:
       '@typescript-eslint/types': 7.18.0
       '@typescript-eslint/visitor-keys': 7.18.0
-      debug: 4.4.0
+      debug: 4.4.1
       globby: 11.1.0
       is-glob: 4.0.3
       minimatch: 9.0.5
@@ -3157,7 +3157,7 @@ snapshots:
       '@typescript-eslint/scope-manager': 8.32.1
       '@typescript-eslint/types': 8.32.1
       astrojs-compiler-sync: 1.1.1(@astrojs/compiler@2.12.0)
-      debug: 4.4.0
+      debug: 4.4.1
       entities: 6.0.0
       eslint-scope: 8.3.0
       eslint-visitor-keys: 4.2.0
@@ -3213,7 +3213,7 @@ snapshots:
     dependencies:
       bytes: 3.1.2
       content-type: 1.0.5
-      debug: 4.4.0
+      debug: 4.4.1
       http-errors: 2.0.0
       iconv-lite: 0.6.3
       on-finished: 2.4.1
@@ -3372,7 +3372,7 @@ snapshots:
     dependencies:
       ms: 2.1.3
 
-  debug@4.4.0:
+  debug@4.4.1:
     dependencies:
       ms: 2.1.3
 
@@ -3668,7 +3668,7 @@ snapshots:
       ajv: 6.12.6
       chalk: 4.1.2
       cross-spawn: 7.0.6
-      debug: 4.4.0
+      debug: 4.4.1
       doctrine: 3.0.0
       escape-string-regexp: 4.0.0
       eslint-scope: 7.2.2
@@ -3760,7 +3760,7 @@ snapshots:
       content-type: 1.0.5
       cookie: 0.7.2
       cookie-signature: 1.2.2
-      debug: 4.4.0
+      debug: 4.4.1
       encodeurl: 2.0.0
       escape-html: 1.0.3
       etag: 1.8.1
@@ -3816,7 +3816,7 @@ snapshots:
 
   finalhandler@2.1.0:
     dependencies:
-      debug: 4.4.0
+      debug: 4.4.1
       encodeurl: 2.0.0
       escape-html: 1.0.3
       on-finished: 2.4.1
@@ -4020,7 +4020,7 @@ snapshots:
   http-proxy-agent@7.0.2:
     dependencies:
       agent-base: 7.1.3
-      debug: 4.4.0
+      debug: 4.4.1
     transitivePeerDependencies:
       - supports-color
 
@@ -4032,7 +4032,7 @@ snapshots:
   https-proxy-agent@7.0.6:
     dependencies:
       agent-base: 7.1.3
-      debug: 4.4.0
+      debug: 4.4.1
     transitivePeerDependencies:
       - supports-color
 
@@ -4055,7 +4055,7 @@ snapshots:
       parent-module: 1.0.1
       resolve-from: 4.0.0
 
-  import-in-the-middle@1.13.1:
+  import-in-the-middle@1.13.2:
     dependencies:
       acorn: 8.14.1
       acorn-import-attributes: 1.9.5(acorn@8.14.1)
@@ -4781,7 +4781,7 @@ snapshots:
 
   require-in-the-middle@7.5.2:
     dependencies:
-      debug: 4.4.0
+      debug: 4.4.1
       module-details-from-path: 1.0.4
       resolve: 1.22.10
     transitivePeerDependencies:
@@ -4811,7 +4811,7 @@ snapshots:
 
   router@2.2.0:
     dependencies:
-      debug: 4.4.0
+      debug: 4.4.1
       depd: 2.0.0
       is-promise: 4.0.0
       parseurl: 1.3.3
@@ -4860,7 +4860,7 @@ snapshots:
 
   send@1.2.0:
     dependencies:
-      debug: 4.4.0
+      debug: 4.4.1
       encodeurl: 2.0.0
       escape-html: 1.0.3
       etag: 1.8.1
@@ -4965,7 +4965,7 @@ snapshots:
   socks-proxy-agent@8.0.5:
     dependencies:
       agent-base: 7.1.3
-      debug: 4.4.0
+      debug: 4.4.1
       socks: 2.8.4
     transitivePeerDependencies:
       - supports-color
@@ -5006,31 +5006,31 @@ snapshots:
     dependencies:
       minipass: 7.1.2
 
-  sst-darwin-arm64@3.14.16:
+  sst-darwin-arm64@3.14.19:
     optional: true
 
-  sst-darwin-x64@3.14.16:
+  sst-darwin-x64@3.14.19:
     optional: true
 
-  sst-linux-arm64@3.14.16:
+  sst-linux-arm64@3.14.19:
     optional: true
 
-  sst-linux-x64@3.14.16:
+  sst-linux-x64@3.14.19:
     optional: true
 
-  sst-linux-x86@3.14.16:
+  sst-linux-x86@3.14.19:
     optional: true
 
-  sst-win32-arm64@3.14.16:
+  sst-win32-arm64@3.14.19:
     optional: true
 
-  sst-win32-x64@3.14.16:
+  sst-win32-x64@3.14.19:
     optional: true
 
-  sst-win32-x86@3.14.16:
+  sst-win32-x86@3.14.19:
     optional: true
 
-  sst@3.14.16:
+  sst@3.14.19:
     dependencies:
       aws-sdk: 2.1692.0
       aws4fetch: 1.0.18
@@ -5038,14 +5038,14 @@ snapshots:
       opencontrol: 0.0.6
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.14.16
-      sst-darwin-x64: 3.14.16
-      sst-linux-arm64: 3.14.16
-      sst-linux-x64: 3.14.16
-      sst-linux-x86: 3.14.16
-      sst-win32-arm64: 3.14.16
-      sst-win32-x64: 3.14.16
-      sst-win32-x86: 3.14.16
+      sst-darwin-arm64: 3.14.19
+      sst-darwin-x64: 3.14.19
+      sst-linux-arm64: 3.14.19
+      sst-linux-x64: 3.14.19
+      sst-linux-x86: 3.14.19
+      sst-win32-arm64: 3.14.19
+      sst-win32-x64: 3.14.19
+      sst-win32-x86: 3.14.19
     transitivePeerDependencies:
       - supports-color
 
@@ -5158,7 +5158,7 @@ snapshots:
   tuf-js@2.2.1:
     dependencies:
       '@tufjs/models': 2.0.1
-      debug: 4.4.0
+      debug: 4.4.1
       make-fetch-happen: 13.0.1
     transitivePeerDependencies:
       - supports-color
