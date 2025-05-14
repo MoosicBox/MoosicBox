@@ -7,6 +7,7 @@ import {
     setCurrentPlaybackTarget,
     setPlayerState,
 } from './player';
+import { isServer } from 'solid-js/web';
 
 export const navigationBarExpanded = clientAtom<boolean>(
     true,
@@ -17,6 +18,69 @@ export const showPlaybackSessions = clientAtom(false);
 export const showPlaybackQuality = clientAtom(false);
 export const showChangePlaybackTargetModal = clientAtom(false);
 export const showScanStatusBanner = clientAtom(false);
+export const errorMessages = clientAtom<string[]>([]);
+
+export function addErrorMessage(message: string) {
+    const existing = errorMessages.get();
+
+    if (existing.some((x) => x === message)) {
+        return;
+    }
+
+    errorMessages.set([...existing, message]);
+}
+
+export function clearErrorMessages() {
+    errorMessages.set([]);
+}
+
+if (!isServer) {
+    window.addEventListener('error', (e) => {
+        let message = e.error.message;
+
+        if (typeof e.error === 'object' && 'error' in e.error) {
+            message += '\n' + e.error.stack;
+        }
+        if ('stack' in e) {
+            message += '\n' + e.stack;
+        }
+
+        console.error(
+            'Error occurred',
+            message,
+            JSON.stringify(e, ['message', 'arguments', 'type', 'name']),
+        );
+        addErrorMessage(message);
+
+        return false;
+    });
+
+    window.addEventListener('unhandledrejection', (e) => {
+        let message = 'Promise Error';
+
+        if (e.reason?.message) {
+            message += ': ' + e.reason.message;
+        } else if (typeof e === 'object' && 'message' in e && e.message) {
+            message += ': ' + e.message;
+        } else if (typeof e.reason === 'string') {
+            message += ': ' + e.reason;
+        }
+
+        if (typeof e.reason === 'object' && 'error' in e.reason) {
+            message += '\n' + e.reason.stack;
+        }
+        if ('stack' in e) {
+            message += '\n' + e.stack;
+        }
+
+        console.error(
+            'Promise Error occurred',
+            message,
+            JSON.stringify(e, ['message', 'arguments', 'type', 'name']),
+        );
+        addErrorMessage(message);
+    });
+}
 
 type StartupCallback = () => void | Promise<void>;
 

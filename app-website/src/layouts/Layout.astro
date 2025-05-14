@@ -6,6 +6,7 @@ import AudioZonesModal from '~/components/AudioZonesModal';
 import PlaybackQualityModal from '~/components/PlaybackQualityModal';
 import PlaybackSessionsModal from '~/components/PlaybackSessionsModal';
 import ChangePlaybackTargetModal from '~/components/ChangePlaybackTargetModal';
+import ErrorModal from '~/components/ErrorModal';
 import ScanStatusBanner from '~/components/ScanStatusBanner';
 import Search from '~/components/Search';
 
@@ -46,6 +47,7 @@ const { title } = Astro.props;
                     <PlaybackSessionsModal client:only />
                     <AudioZonesModal client:only />
                     <ChangePlaybackTargetModal client:only />
+                    <ErrorModal client:only />
                 </main>
             </section>
             <footer

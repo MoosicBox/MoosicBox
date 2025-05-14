@@ -1,0 +1,59 @@
+#error-modal .moosicbox-modal {
+    width: auto;
+    max-width: 500px;
+    min-width: calc(min(90dvw, 200px));
+}
+
+.error-modal-container {
+    width: auto;
+    max-width: 500px;
+    min-width: calc(min(90dvw, 200px));
+    max-height: calc(70vh - 230px);
+    overflow: auto;
+    padding-bottom: 15px;
+}
+
+.error-modal-header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    height: 70px;
+    padding-bottom: 10px;
+}
+
+.error-modal-header-new-button {
+    height: 25px;
+    margin-left: 10px;
+}
+
+.error-modal-content {
+    overflow: auto;
+    overscroll-behavior: contain;
+    height: calc(100% - 120px);
+}
+
+.error-modal-close {
+    display: flex;
+    margin-left: auto;
+    cursor: pointer;
+    width: 50px;
+    height: 50px;
+    align-items: center;
+}
+
+.error-modal-close .cross-icon {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    width: 34px;
+}
+
+.error-modal-confirmation-button {
+    padding: 3px 6px;
+    background-color: #333333;
+    border-radius: 6px;
+}
+
+.error-modal-content-error-message {
+    margin-bottom: 10px;
+}
