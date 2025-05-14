@@ -1202,6 +1202,9 @@ impl AppState {
             };
             headers.insert("moosicbox-profile".to_string(), profile);
         }
+        if matches!(method, "post" | "put") && !headers.contains_key("content-type") {
+            headers.insert("content-type".to_string(), "application/json".to_string());
+        }
 
         let api_token = self.api_token.read().await;
         if let Some(api_token) = api_token.as_ref() {
