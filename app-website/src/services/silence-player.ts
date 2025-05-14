@@ -41,7 +41,8 @@ function initSilence() {
 }
 
 export function isSilencePlaying(): boolean {
-    return tryingToPlay || audio?.paused === false;
+    // eslint-disable-next-line
+    return true || tryingToPlay || audio?.paused === false;
 }
 
 export function startSilence() {
