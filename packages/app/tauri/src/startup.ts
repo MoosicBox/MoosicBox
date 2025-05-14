@@ -50,7 +50,9 @@ override();
 function tryInvoke(event: string, payload?: InvokeArgs) {
     (async () => {
         try {
-            invoke(event, payload);
+            invoke(event, payload).catch((e) => {
+                console.error(`Failed to invoke '${event}':`, e);
+            });
         } catch (e) {
             console.error(`Failed to invoke '${event}':`, e);
         }
