@@ -24,7 +24,7 @@
     "devDependencies": {
         "@eslint/eslintrc": "^3.3.1",
         "@eslint/js": "^9.26.0",
-        "@free-log/node-client": "^0.0.7",
+        "@free-log/node-client": "^0.2.0",
         "@solidjs/meta": "^0.29.4",
         "@solidjs/testing-library": "^0.8.10",
         "@testing-library/jest-dom": "^5.17.0",

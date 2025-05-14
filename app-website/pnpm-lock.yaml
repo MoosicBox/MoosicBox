@@ -67,8 +67,8 @@ importers:
         specifier: ^9.26.0
         version: 9.26.0
       '@free-log/node-client':
-        specifier: ^0.0.7
-        version: 0.0.7
+        specifier: ^0.2.0
+        version: 0.2.0
       '@solidjs/meta':
         specifier: ^0.29.4
         version: 0.29.4(solid-js@1.9.6)
@@ -794,8 +794,8 @@ packages:
     resolution: {integrity: sha512-vBZP4NlzfOlerQTnba4aqZoMhE/a9HY7HRqoOPaETQcSQuWEIyZMHGfVu6w9wGtGK5fED5qRs2DteVCjOH60sA==}
     engines: {node: '>=14'}
 
-  '@free-log/node-client@0.0.7':
-    resolution: {integrity: sha512-xmFIOverfe8UOEQ5CbtedPPrQiDdPFaBWFm4XLEJFyAwawWbQzELrpsebNjNMJmg/+QIT+HSO7fOSXjeR+x+Lg==}
+  '@free-log/node-client@0.2.0':
+    resolution: {integrity: sha512-v3bXccAccMwzwrKoHSnN2T2zeYgbVp+HM19elSZhJi6HDaLonNE7m1oPMbDoUO5oU5Tc2Cz+BayK+mrCi4kyJQ==}
 
   '@hotwired/turbo@8.0.13':
     resolution: {integrity: sha512-M7qXUqcGab6G5PKOiwhgbByTtrPgKPFCTMNQ52QhzUEXEqmp0/ApEguUesh/FPiUjrmFec+3lq98KsWnYY2C7g==}
@@ -5557,7 +5557,7 @@ snapshots:
 
   '@fastify/busboy@2.1.1': {}
 
-  '@free-log/node-client@0.0.7': {}
+  '@free-log/node-client@0.2.0': {}
 
   '@hotwired/turbo@8.0.13': {}
 

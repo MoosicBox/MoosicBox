@@ -18,8 +18,8 @@ importers:
         specifier: ^5.0.10
         version: 5.0.10(@testing-library/jest-dom@5.17.0)(@types/node@22.15.18)(jiti@2.4.2)(solid-js@1.9.6)(yaml@2.7.1)
       '@free-log/node-client':
-        specifier: ^0.0.7
-        version: 0.0.7
+        specifier: ^0.2.0
+        version: 0.2.0
       '@hotwired/turbo':
         specifier: ^8.0.13
         version: 8.0.13
@@ -643,8 +643,8 @@ packages:
     resolution: {integrity: sha512-d9zaMRSTIKDLhctzH12MtXvJKSSUhaHcjV+2Z+GK+EEY7XKpP5yR4x+N3TAcHTcu963nIr+TMcCb4DBCYX1z6Q==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
 
-  '@free-log/node-client@0.0.7':
-    resolution: {integrity: sha512-xmFIOverfe8UOEQ5CbtedPPrQiDdPFaBWFm4XLEJFyAwawWbQzELrpsebNjNMJmg/+QIT+HSO7fOSXjeR+x+Lg==}
+  '@free-log/node-client@0.2.0':
+    resolution: {integrity: sha512-v3bXccAccMwzwrKoHSnN2T2zeYgbVp+HM19elSZhJi6HDaLonNE7m1oPMbDoUO5oU5Tc2Cz+BayK+mrCi4kyJQ==}
 
   '@hotwired/turbo@8.0.13':
     resolution: {integrity: sha512-M7qXUqcGab6G5PKOiwhgbByTtrPgKPFCTMNQ52QhzUEXEqmp0/ApEguUesh/FPiUjrmFec+3lq98KsWnYY2C7g==}
@@ -4495,7 +4495,7 @@ snapshots:
 
   '@eslint/js@8.57.1': {}
 
-  '@free-log/node-client@0.0.7': {}
+  '@free-log/node-client@0.2.0': {}
 
   '@hotwired/turbo@8.0.13': {}
 
