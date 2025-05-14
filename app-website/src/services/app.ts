@@ -44,9 +44,22 @@ function setStartedUp(value: boolean) {
     startedUp = value;
 }
 
+// Make sure startup callbacks run sequentially
+let startupQueuePromise: Promise<void> | void | null = null;
+
+function invokeStartupCallback(func: StartupCallback) {
+    if (startupQueuePromise) {
+        startupQueuePromise = startupQueuePromise.then(() => {
+            return func();
+        });
+        return;
+    }
+    startupQueuePromise = func();
+}
+
 export function onStartupFirst(func: StartupCallback) {
     if (isStartedUp()) {
-        func();
+        invokeStartupCallback(func);
         return;
     }
     getStartupCallbacks().unshift(func);
@@ -54,11 +67,7 @@ export function onStartupFirst(func: StartupCallback) {
 
 export async function onStartup(func: StartupCallback) {
     if (isStartedUp()) {
-        try {
-            await func();
-        } catch (e) {
-            console.error('Startup error:', e);
-        }
+        invokeStartupCallback(func);
         return;
     }
     getStartupCallbacks().push(func);
@@ -107,10 +116,10 @@ connection.listen((con, prev) => {
         api.refetchSignatureToken();
     }
 });
-onStartupFirst(() => {
+onStartupFirst(async () => {
     const con = connection.get();
     if (con) {
-        refreshConnectionProfiles(con);
+        await refreshConnectionProfiles(con);
     }
 });
 onStartup(async () => {

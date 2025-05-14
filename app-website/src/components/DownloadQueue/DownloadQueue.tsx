@@ -9,10 +9,9 @@ import {
 } from 'solid-js';
 import type { JSXElement } from 'solid-js';
 import { api, Api } from '~/services/api';
-import type { ApiSource } from '~/services/api';
 import { downloadsState } from '~/services/downloads';
 import {
-    displayApiSource,
+    displayDownloadApiSource,
     displayDownloadTaskState,
     downloadTaskStateClassName,
 } from '~/services/formatting';
@@ -70,7 +69,7 @@ function downloadTask(task: Api.DownloadTask): JSXElement {
                         <div class="downloads-download-task-header-details">
                             Track ({item.trackId}) - {item.title} -{' '}
                             {displayDownloadTaskState(task.state)} -{' '}
-                            {displayApiSource(item.source as ApiSource)}
+                            {displayDownloadApiSource(item.source)}
                             <Show when={task.state === 'ERROR'}>
                                 <button onClick={() => api.retryDownload(id)}>
                                     Retry

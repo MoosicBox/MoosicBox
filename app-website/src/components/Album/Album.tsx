@@ -1,5 +1,5 @@
 import './album.css';
-import { Api, api } from '~/services/api';
+import { Api, api, ApiSource } from '~/services/api';
 import { addAlbumToQueue, playAlbum } from '~/services/player';
 import { createComputed, createSignal } from 'solid-js';
 import { displayAlbumVersionQualities } from '~/services/formatting';
@@ -56,7 +56,9 @@ function isExplicit(props: AlbumProps): boolean {
             return false;
         default:
             apiSource satisfies never;
-            throw new Error(`Invalid apiSource: ${apiSource}`);
+            throw new Error(
+                `isExplicit: Invalid apiSource: ${JSON.stringify(apiSource)}`,
+            );
     }
 }
 
@@ -161,7 +163,7 @@ export function albumRoute(
         | Api.Track
         | {
               albumId: number | string;
-              apiSource: 'LIBRARY' | 'TIDAL' | 'QOBUZ' | 'YT';
+              apiSource: ApiSource | Api.DownloadApiSource;
           },
 ): string {
     const apiSource = album.apiSource;
@@ -176,8 +178,23 @@ export function albumRoute(
         case 'YT':
             return `/albums?ytAlbumId=${album.albumId}`;
         default:
+            // FIXME: This is a hack to get around the fact that the
+            // MOOSIC_BOX api source doesn't have a linkable route
+            if (typeof apiSource === 'object' && 'MOOSIC_BOX' in apiSource) {
+                return '/';
+            }
+            if (
+                typeof apiSource === 'object' &&
+                'source' in apiSource &&
+                'url' in apiSource
+            ) {
+                return '/';
+            }
+
             apiSource satisfies never;
-            throw new Error(`Invalid apiSource: ${apiSource}`);
+            throw new Error(
+                `albumRoute: Invalid apiSource: ${JSON.stringify(apiSource)}`,
+            );
     }
 }
 

@@ -31,7 +31,9 @@ export function artistRoute(
             }`;
         default:
             apiSource satisfies never;
-            throw new Error(`Invalid apiSource: ${apiSource}`);
+            throw new Error(
+                `artistRoute: Invalid apiSource: ${JSON.stringify(apiSource)}`,
+            );
     }
 }
 

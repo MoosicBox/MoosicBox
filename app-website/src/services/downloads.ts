@@ -61,6 +61,10 @@ export const [downloadsState, setDownloadsState] = createStore<DownloadsState>({
 function handleDownloadEvent(event: DownloadEvent) {
     const eventType = event.type;
 
+    if (downloadsState.tasks.every((task) => task.id !== event.taskId)) {
+        tryRefreshDownloadsState(event.taskId);
+    }
+
     switch (eventType) {
         case 'SIZE':
             setDownloadsState(
@@ -149,7 +153,30 @@ function isHistorical(state: Api.DownloadTaskState): boolean {
     return !isCurrent(state);
 }
 
-onStartup(async () => {
+const checkedFor: number[] = [];
+let pendingRefreshDownloadsState: Promise<void> | null = null;
+
+function tryRefreshDownloadsState(taskId: number) {
+    if (checkedFor.includes(taskId)) {
+        console.debug('Already checked for taskId', taskId);
+        return;
+    }
+    checkedFor.push(taskId);
+
+    if (pendingRefreshDownloadsState) {
+        pendingRefreshDownloadsState.then(() => {
+            if (downloadsState.tasks.every((task) => task.id !== taskId)) {
+                tryRefreshDownloadsState(taskId);
+            }
+        });
+
+        return;
+    }
+
+    pendingRefreshDownloadsState = refreshDownloadsState();
+}
+
+async function refreshDownloadsState() {
     const tasks = await api.getDownloadTasks();
 
     const current = tasks.items.filter(({ state }) => isCurrent(state));
@@ -162,4 +189,8 @@ onStartup(async () => {
             state.historyTasks = history;
         }),
     );
+}
+
+onStartup(async () => {
+    refreshDownloadsState();
 });
