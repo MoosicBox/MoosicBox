@@ -48,8 +48,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.14.19
-        version: 3.14.19
+        specifier: ^3.14.24
+        version: 3.14.24
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
@@ -386,8 +386,8 @@ packages:
   '@types/keyv@3.1.4':
     resolution: {integrity: sha512-BQ5aZNSCpj7D6K2ksrRCTmKRLEpnPvWDiLPfoGyhZ++8YtiK9d/3DBKPJgry359X/P1PfruyYwvnvwFjuEiEIg==}
 
-  '@types/node@22.15.17':
-    resolution: {integrity: sha512-wIX2aSZL5FE+MR0JlvF87BNVrtFWf6AE6rxSE9X7OwnVvoyCQjpzSRJ+M87se/4QCkCiebQAqrJ0y6fwIyi7nw==}
+  '@types/node@22.15.18':
+    resolution: {integrity: sha512-v1DKRfUdyW+jJhZNEI1PYy29S2YRxMV5AOO/x/SjKmW0acCIOqmbj6Haf9eHAhsPmrhlHSxEhv/1WszcLWV4cg==}
 
   '@types/responselike@1.0.3':
     resolution: {integrity: sha512-H/+L+UkTV33uf49PH5pCAUBVPNj2nDBXTN+qS1dOwyyg24l3CcicicCA7ca+HMvJBZcFgl5r8e+RR6elsb4Lyw==}
@@ -1014,8 +1014,8 @@ packages:
     resolution: {integrity: sha512-kEcvvCBByWXGnZy6JUlgAp2gBIUjfCAV6P6TgT1/aaQKcmuAEC4OZTV1I4EWQLz2gxZw76atuVyvHhTxvi0Flw==}
     engines: {node: '>=0.4.x'}
 
-  eventsource-parser@3.0.1:
-    resolution: {integrity: sha512-VARTJ9CYeuQYb0pZEPbzi740OWFgpHe7AYJ2WFZVnUDUQp5Dk2yJUgF36YsZ81cOyxT0QxmXD2EQpapAouzWVA==}
+  eventsource-parser@3.0.2:
+    resolution: {integrity: sha512-6RxOBZ/cYgd8usLwsEl+EC09Au/9BcmCKYF2/xbml6DNczf7nv0MQb+7BA2F+li6//I+28VNlQR37XfQtcAJuA==}
     engines: {node: '>=18.0.0'}
 
   eventsource@3.0.7:
@@ -1927,8 +1927,8 @@ packages:
     resolution: {integrity: sha512-y+WKFlBR8BGXnsNlIHFGPZmyDf3DFMoLhaflAnyZgV6rG6xu+JwesTo2Q9R6XwYmtmwAFCkAk3e35jEdoeh/3g==}
     engines: {node: '>=10'}
 
-  protobufjs@7.5.1:
-    resolution: {integrity: sha512-3qx3IRjR9WPQKagdwrKjO3Gu8RgQR2qqw+1KnigWhoVjFqegIj1K3bP11sGqhxrO46/XL7lekuG4jmjL+4cLsw==}
+  protobufjs@7.5.2:
+    resolution: {integrity: sha512-f2ls6rpO6G153Cy+o2XQ+Y0sARLOZ17+OGVLHrc3VUKcLHYKEKWbkSujdBWQXM7gKn5NTfp0XnRPZn1MIu8n9w==}
     engines: {node: '>=12.0.0'}
 
   proxy-addr@2.0.7:
@@ -2182,48 +2182,48 @@ packages:
     resolution: {integrity: sha512-MGrFH9Z4NP9Iyhqn16sDtBpRRNJ0Y2hNa6D65h736fVSaPCHr4DM4sWUNvVaSuC+0OBGhwsrydQwmgfg5LncqQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
-  sst-darwin-arm64@3.14.19:
-    resolution: {integrity: sha512-Jl7XVXnH9d0dELVID9EB0iYtve4Lxv5LBNOWj2EzLOSMh5k26uaZ9zDYs8RRmLd/DKFA9wyiX4gEz8pnaqnFaw==}
+  sst-darwin-arm64@3.14.24:
+    resolution: {integrity: sha512-ceISCJyF85L+sEagBlO6MSklvqV5UglhhoUxHlLMa5wRCXWvQXyHCPTYHNrNQg3gSOl6PJv7ykMGdlEsdBmMPg==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.14.19:
-    resolution: {integrity: sha512-XI0Ygln9Al78VtSIJy8Ymiy/HaT5t6q1S01qlFVvGVnkSy8ncm1lmisfeMryetegIQG7JF9hmmzbADPGwevB9g==}
+  sst-darwin-x64@3.14.24:
+    resolution: {integrity: sha512-Cfg5LV6l1hR9GcZMjLi3MazKiKBOe/nL45ma7TDm3OMyl+rSXbPJfiP8W8r/t3UgDVpnHvpSKVbIxMj6c+mvPg==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.14.19:
-    resolution: {integrity: sha512-zI0a/8/0a85hm3ssXAtInVUOF5QJbsqi1h+mWU0fmy+r1dmJ0yHLDmsoWucLy+8nT3i23mDIrplgJgYgL9AvIg==}
+  sst-linux-arm64@3.14.24:
+    resolution: {integrity: sha512-Ey8Z8ynEX9g7SmndghPN8gPm80+/yaN9kDfJdYh1o7EyKQRQ6TR+s8D31K7UrnNce8biNnh5zQg2012pI+GpzA==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.14.19:
-    resolution: {integrity: sha512-y2Cq+OSWzdHz6rIUk5wObTmUIjrnbsiNr30MhFAveQMDAUfBHaOMYD0ioV53s38+/OqjryHxdRe9BiALS4W0Gg==}
+  sst-linux-x64@3.14.24:
+    resolution: {integrity: sha512-PovYhCFtOss33Gqw62aCmHhns+s8xieHSUVgCI4jURBQRFJN7+/EnreeBVsEm4Z5i0Tgh2pouiOmZbkHnjsFig==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.14.19:
-    resolution: {integrity: sha512-q4I5QN9Q4H4EajqT39pfxAHeTcjovJg6/SplwZZKgqfFuq2efJmH7capxpW/yJ3qSCM5Un8agC4vnhTpj//M7Q==}
+  sst-linux-x86@3.14.24:
+    resolution: {integrity: sha512-vWwZ1w86bvpu73PgAPeO8oTsIVJeG8zpV/Y2vxEZj0U/wewDoM3OmidIE80962J6OvCK51lrpO2Z+XMR3JyTXw==}
     cpu: [x86]
     os: [linux]
 
-  sst-win32-arm64@3.14.19:
-    resolution: {integrity: sha512-AvrU99vX/hJ7LDi8z9NRc4PbJUu2t/m9IgZxJ71K05asIfanyK8QKc74/4TbeKfxBkdX9s9jIi0tQzzVgfaLjg==}
+  sst-win32-arm64@3.14.24:
+    resolution: {integrity: sha512-KkUZ4icdlSHwkrdfwaOnXkDYGkFK7Obu4cU5yGT/ulqD4nyLpK64HmCDMqFbimppa0J+X5mWmO7T6N4ilkBnLA==}
     cpu: [arm64]
     os: [win32]
 
-  sst-win32-x64@3.14.19:
-    resolution: {integrity: sha512-VF1+cHW6KypE+NjzgRq5SCOyZ2jVP9uxf6Uu8xlEdHAfgrSfGwiJFTEyfcYUMqQcxBhBFXHBZ9vVnSpFKiz/mQ==}
+  sst-win32-x64@3.14.24:
+    resolution: {integrity: sha512-pXuJ8ajsoE2BkNloyLYs1BasnG6gFdR45o+KIOkvz6hj0QwAayvPdWQjkTCSPuOcMpoPUaPA9P+AQHiTSLWxDw==}
     cpu: [x64]
     os: [win32]
 
-  sst-win32-x86@3.14.19:
-    resolution: {integrity: sha512-60gyG9eVKzvqE5Z2a+YFtyQiTqm2etxkw7MPltY/4sLwrcs2qq0bKk9mjs4zAsku7AYwvA+dI55uNEqpIQDLdQ==}
+  sst-win32-x86@3.14.24:
+    resolution: {integrity: sha512-OqW/Z5aqf2j5Rj4bfC1N99AhCEzyvWlrswZvzBAZIuLIWeObHp+3TV9IwgQWNDSQbKmBDxKiqrrx+tzz9lQ+rA==}
     cpu: [x86]
     os: [win32]
 
-  sst@3.14.19:
-    resolution: {integrity: sha512-maPVrxFCwmEpwpEUZ7Eu+hG8kJ82Ta72YhPTZPCOo+TNkCyXyPWICUL86EPaN55WCq9Wv0kSa2I8Et2A+Uy3Og==}
+  sst@3.14.24:
+    resolution: {integrity: sha512-+Ml53Vc200POVunGygAHgpj3vH+4Mfu/g8NWNgI/7Lg16dipxrranTq8gLutVPZ61vz0Iu/dfPufIPG1jrk8yw==}
     hasBin: true
 
   statuses@2.0.1:
@@ -2285,8 +2285,8 @@ packages:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
 
-  synckit@0.11.4:
-    resolution: {integrity: sha512-Q/XQKRaJiLiFIBNN+mndW7S/RHxvwzuZS6ZwmRzUBqJBv/5QIKCEwkBC8GBf8EQJKYnaFs0wOZbKTXBPj8L9oQ==}
+  synckit@0.11.5:
+    resolution: {integrity: sha512-frqvfWyDA5VPVdrWfH24uM6SI/O8NLpVbIIJxb8t/a3YGsp4AW9CYgSKC0OaSEfexnp7Y1pVh2Y6IHO8ggGDmA==}
     engines: {node: ^14.18.0 || >=16.0.0}
 
   tar@6.2.1:
@@ -2541,7 +2541,7 @@ snapshots:
     dependencies:
       lodash.camelcase: 4.3.0
       long: 5.3.2
-      protobufjs: 7.5.1
+      protobufjs: 7.5.2
       yargs: 17.7.2
 
   '@humanwhocodes/config-array@0.13.0':
@@ -2928,7 +2928,7 @@ snapshots:
     dependencies:
       '@types/http-cache-semantics': 4.0.4
       '@types/keyv': 3.1.4
-      '@types/node': 22.15.17
+      '@types/node': 22.15.18
       '@types/responselike': 1.0.3
 
   '@types/google-protobuf@3.15.12': {}
@@ -2939,15 +2939,15 @@ snapshots:
 
   '@types/keyv@3.1.4':
     dependencies:
-      '@types/node': 22.15.17
+      '@types/node': 22.15.18
 
-  '@types/node@22.15.17':
+  '@types/node@22.15.18':
     dependencies:
       undici-types: 6.21.0
 
   '@types/responselike@1.0.3':
     dependencies:
-      '@types/node': 22.15.17
+      '@types/node': 22.15.18
 
   '@types/semver@7.7.0': {}
 
@@ -3171,7 +3171,7 @@ snapshots:
   astrojs-compiler-sync@1.1.1(@astrojs/compiler@2.12.0):
     dependencies:
       '@astrojs/compiler': 2.12.0
-      synckit: 0.11.4
+      synckit: 0.11.5
 
   async-function@1.0.0: {}
 
@@ -3728,11 +3728,11 @@ snapshots:
 
   events@1.1.1: {}
 
-  eventsource-parser@3.0.1: {}
+  eventsource-parser@3.0.2: {}
 
   eventsource@3.0.7:
     dependencies:
-      eventsource-parser: 3.0.1
+      eventsource-parser: 3.0.2
 
   execa@5.1.1:
     dependencies:
@@ -4698,7 +4698,7 @@ snapshots:
       err-code: 2.0.3
       retry: 0.12.0
 
-  protobufjs@7.5.1:
+  protobufjs@7.5.2:
     dependencies:
       '@protobufjs/aspromise': 1.1.2
       '@protobufjs/base64': 1.1.2
@@ -4710,7 +4710,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
-      '@types/node': 22.15.17
+      '@types/node': 22.15.18
       long: 5.3.2
 
   proxy-addr@2.0.7:
@@ -5006,31 +5006,31 @@ snapshots:
     dependencies:
       minipass: 7.1.2
 
-  sst-darwin-arm64@3.14.19:
+  sst-darwin-arm64@3.14.24:
     optional: true
 
-  sst-darwin-x64@3.14.19:
+  sst-darwin-x64@3.14.24:
     optional: true
 
-  sst-linux-arm64@3.14.19:
+  sst-linux-arm64@3.14.24:
     optional: true
 
-  sst-linux-x64@3.14.19:
+  sst-linux-x64@3.14.24:
     optional: true
 
-  sst-linux-x86@3.14.19:
+  sst-linux-x86@3.14.24:
     optional: true
 
-  sst-win32-arm64@3.14.19:
+  sst-win32-arm64@3.14.24:
     optional: true
 
-  sst-win32-x64@3.14.19:
+  sst-win32-x64@3.14.24:
     optional: true
 
-  sst-win32-x86@3.14.19:
+  sst-win32-x86@3.14.24:
     optional: true
 
-  sst@3.14.19:
+  sst@3.14.24:
     dependencies:
       aws-sdk: 2.1692.0
       aws4fetch: 1.0.18
@@ -5038,14 +5038,14 @@ snapshots:
       opencontrol: 0.0.6
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.14.19
-      sst-darwin-x64: 3.14.19
-      sst-linux-arm64: 3.14.19
-      sst-linux-x64: 3.14.19
-      sst-linux-x86: 3.14.19
-      sst-win32-arm64: 3.14.19
-      sst-win32-x64: 3.14.19
-      sst-win32-x86: 3.14.19
+      sst-darwin-arm64: 3.14.24
+      sst-darwin-x64: 3.14.24
+      sst-linux-arm64: 3.14.24
+      sst-linux-x64: 3.14.24
+      sst-linux-x86: 3.14.24
+      sst-win32-arm64: 3.14.24
+      sst-win32-x64: 3.14.24
+      sst-win32-x86: 3.14.24
     transitivePeerDependencies:
       - supports-color
 
@@ -5116,7 +5116,7 @@ snapshots:
 
   supports-preserve-symlinks-flag@1.0.0: {}
 
-  synckit@0.11.4:
+  synckit@0.11.5:
     dependencies:
       '@pkgr/core': 0.2.4
       tslib: 2.8.1
