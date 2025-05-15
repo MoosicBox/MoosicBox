@@ -1,1 +1,1 @@
-pub use tokio::time::sleep;
+pub use tokio::time::{interval, sleep};
