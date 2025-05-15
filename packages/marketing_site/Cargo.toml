@@ -21,26 +21,6 @@ name              = "moosicbox_marketing_site_lambda_vanilla_js"
 path              = "src/lambda_vanilla_js.rs"
 required-features = ["lambda", "vanilla-js"]
 
-[package.metadata.bundle]
-category          = "Music"
-copyright         = "Copyright (c) Braden Steffaniak 2025. All rights reserved."
-deb_depends       = []
-icon              = ["128x128.png", "128x128@2x.png", "32x32.png"]
-identifier        = "com.moosicbox.marketing_site"
-name              = "MoosicBoxMarketingSite"
-resources         = []
-short_description = "A music app for cows"
-
-[package.metadata.wix]
-compiler-args = ["-nologo"]
-dbg-build     = false
-dbg-name      = false
-eula          = false
-linker-args   = ["-nologo"]
-name          = "MoosicBoxMarketingSite"
-no-build      = false
-product-name  = "MoosicBoxMarketingSite"
-
 [dependencies]
 moosicbox_app_native_lib = { workspace = true, features = [
     "json",
