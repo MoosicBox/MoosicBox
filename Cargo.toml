@@ -18,6 +18,7 @@ members = [
     "packages/assert",
     "packages/async",
     "packages/async/cargo",
+    "packages/async/examples/cancel",
     "packages/async/examples/simulated",
     "packages/async/macros",
     "packages/async_service",

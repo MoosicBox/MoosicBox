@@ -909,6 +909,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "async_cancel"
+version = "0.1.0"
+dependencies = [
+ "ctrlc",
+ "pretty_env_logger",
+ "switchy_async",
+]
+
+[[package]]
 name = "async_simulated"
 version = "0.1.0"
 dependencies = [
