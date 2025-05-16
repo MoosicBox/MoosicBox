@@ -37,11 +37,14 @@ no-build      = false
 product-name  = "MoosicBox"
 
 [dependencies]
-moosicbox_app_native_lib = { workspace = true, features = [
+hyperchad = { workspace = true, features = [
     "actions",
+    "app",
     "logic",
-    "maud",
-    "sse",
+    "renderer",
+    "renderer-canvas",
+    "renderer-maud",
+    "router",
 ] }
 moosicbox_app_native_ui = { workspace = true }
 moosicbox_app_state = { workspace = true }
@@ -59,6 +62,7 @@ moosicbox_task = { workspace = true }
 moosicbox_ws = { workspace = true }
 switchy_async = { workspace = true, features = [
     "macros",
+    "net",
     "rt-multi-thread",
     "sync",
     "time",
@@ -98,43 +102,43 @@ console-subscriber = ["dep:console-subscriber"]
 _calculated_canvas = ["_canvas"]
 _canvas            = []
 
-egui = ["_calculated_canvas", "moosicbox_app_native_lib/egui"]
-egui-glow = ["egui", "moosicbox_app_native_lib/egui-glow"]
-egui-wgpu = ["egui", "moosicbox_app_native_lib/egui-wgpu"]
-fltk = ["_calculated_canvas", "moosicbox_app_native_lib/fltk"]
-html = ["_canvas", "moosicbox_app_native_lib/html"]
+egui = ["_calculated_canvas", "hyperchad/renderer-egui"]
+egui-glow = ["egui", "hyperchad/renderer-egui-glow"]
+egui-wgpu = ["egui", "hyperchad/renderer-egui-wgpu"]
+fltk = ["_calculated_canvas", "hyperchad/renderer-fltk"]
+html = ["_canvas", "hyperchad/renderer-html", "hyperchad/renderer-html-sse"]
 vanilla-js = [
     "_canvas",
     "html",
-    "moosicbox_app_native_lib/plugin-actions",
-    "moosicbox_app_native_lib/plugin-canvas",
-    "moosicbox_app_native_lib/plugin-event",
-    "moosicbox_app_native_lib/plugin-idiomorph",
-    "moosicbox_app_native_lib/plugin-nav",
-    "moosicbox_app_native_lib/plugin-routing",
-    "moosicbox_app_native_lib/plugin-sse",
-    "moosicbox_app_native_lib/vanilla-js",
+    "hyperchad/renderer-vanilla-js",
+    "hyperchad/renderer-vanilla-js-plugin-actions",
+    "hyperchad/renderer-vanilla-js-plugin-canvas",
+    "hyperchad/renderer-vanilla-js-plugin-event",
+    "hyperchad/renderer-vanilla-js-plugin-idiomorph",
+    "hyperchad/renderer-vanilla-js-plugin-nav",
+    "hyperchad/renderer-vanilla-js-plugin-routing",
+    "hyperchad/renderer-vanilla-js-plugin-sse",
 ]
 
-actix  = ["moosicbox_app_native_lib/actix"]
-lambda = ["moosicbox_app_native_lib/lambda"]
+actix  = ["hyperchad/renderer-html-actix"]
+lambda = ["hyperchad/renderer-html-lambda"]
 
-wayland = ["moosicbox_app_native_lib/wayland"]
-x11     = ["moosicbox_app_native_lib/x11"]
+wayland = ["hyperchad/wayland"]
+x11     = ["hyperchad/x11"]
 
 bundled = ["all-sources", "dep:moosicbox_app_native_bundled"]
 
 windows-console = []
 
-debug               = ["moosicbox_app_native_lib/debug"]
-format              = ["moosicbox_app_native_lib/format"]
-profiling-puffin    = ["moosicbox_app_native_lib/profiling-puffin"]
-profiling-tracing   = ["moosicbox_app_native_lib/profiling-tracing"]
-profiling-tracy     = ["moosicbox_app_native_lib/profiling-tracy"]
-syntax-highlighting = ["moosicbox_app_native_lib/syntax-highlighting"]
-unsafe              = ["moosicbox_app_native_lib/unsafe"]
+debug               = ["hyperchad/debug"]
+format              = ["hyperchad/format"]
+profiling-puffin    = ["hyperchad/profiling-puffin"]
+profiling-tracing   = ["hyperchad/profiling-tracing"]
+profiling-tracy     = ["hyperchad/profiling-tracy"]
+syntax-highlighting = ["hyperchad/router-syntax-highlighting"]
+unsafe              = ["hyperchad/unsafe"]
 
-benchmark = ["moosicbox_app_native_lib/benchmark"]
+benchmark = ["hyperchad/benchmark"]
 
 all-formats    = ["all-os-formats", "mp3"]
 all-os-formats = ["aac", "flac", "opus"]
@@ -181,7 +185,7 @@ yt = [
     "moosicbox_session_models/yt",
 ]
 
-assets        = ["moosicbox_app_native_lib/assets"]
-static-routes = ["moosicbox_app_native_lib/static-routes"]
+assets        = ["hyperchad/renderer-assets"]
+static-routes = ["hyperchad/router-static-routes"]
 
 dev = ["assets", "static-routes"]

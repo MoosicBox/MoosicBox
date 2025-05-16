@@ -22,6 +22,7 @@ moosicbox_task        = { workspace = true }
 flume     = { workspace = true }
 futures   = { workspace = true }
 log       = { workspace = true }
+os_info   = { workspace = true }
 qstring   = { workspace = true }
 thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["rt-multi-thread", "sync"] }

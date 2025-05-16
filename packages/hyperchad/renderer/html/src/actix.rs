@@ -10,7 +10,7 @@ use hyperchad_renderer::{Color, Content, HtmlTagRenderer, PartialView, RendererE
 use hyperchad_renderer_html_actix::actix_web::{
     error::ErrorInternalServerError, http::header::USER_AGENT,
 };
-use hyperchad_router::{ClientInfo, ClientOs, RequestInfo, Router};
+use hyperchad_router::{ClientInfo, ClientOs, Navigation, RequestInfo, Router};
 use hyperchad_transformer::ResponsiveTrigger;
 use uaparser::{Parser as _, UserAgentParser};
 
@@ -140,6 +140,12 @@ pub struct PreparedRequest {
     info: RequestInfo,
 }
 
+impl From<PreparedRequest> for Navigation {
+    fn from(value: PreparedRequest) -> Self {
+        Self::from((value.path, value.info.client))
+    }
+}
+
 #[async_trait]
 impl<T: HtmlTagRenderer + Clone + Send + Sync>
     hyperchad_renderer_html_actix::ActixResponseProcessor<PreparedRequest>
@@ -186,7 +192,7 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
     async fn to_response(&self, req: PreparedRequest) -> Result<HttpResponse, actix_web::Error> {
         let content = self
             .router
-            .navigate(&req.path, req.info.clone())
+            .navigate(req.clone())
             .await
             .map_err(ErrorInternalServerError)?;
 

@@ -5,8 +5,8 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use moosicbox_app_native_lib::hyperchad::renderer::{
-    Color,
+use hyperchad::renderer::{
+    Color, Renderer as _,
     canvas::{self, CanvasAction, Pos},
 };
 use moosicbox_music_models::{ApiSource, id::Id};
@@ -189,7 +189,7 @@ async fn visualization_updated(
 }
 
 async fn clear_canvas() {
-    use moosicbox_app_native_lib::hyperchad::renderer::canvas;
+    use hyperchad::renderer::canvas;
 
     use crate::RENDERER;
 

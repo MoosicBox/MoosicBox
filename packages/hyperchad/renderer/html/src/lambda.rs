@@ -5,7 +5,7 @@ use std::{
 
 use async_trait::async_trait;
 use hyperchad_renderer::{Color, HtmlTagRenderer, PartialView, View};
-use hyperchad_router::{ClientInfo, ClientOs, RequestInfo, Router};
+use hyperchad_router::{ClientInfo, ClientOs, Navigation, RequestInfo, Router};
 use hyperchad_transformer::ResponsiveTrigger;
 use lambda_http::{Request, RequestExt as _, http::header::USER_AGENT};
 use uaparser::{Parser as _, UserAgentParser};
@@ -138,6 +138,12 @@ pub struct PreparedRequest {
     info: RequestInfo,
 }
 
+impl From<PreparedRequest> for Navigation {
+    fn from(value: PreparedRequest) -> Self {
+        Self::from((value.path, value.info.client))
+    }
+}
+
 #[async_trait]
 impl<T: HtmlTagRenderer + Clone + Send + Sync>
     hyperchad_renderer_html_lambda::LambdaResponseProcessor<PreparedRequest>
@@ -181,7 +187,7 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
     async fn to_response(&self, req: PreparedRequest) -> Result<Content, lambda_runtime::Error> {
         let content = self
             .router
-            .navigate(&req.path, req.info.clone())
+            .navigate(req.clone())
             .await
             .map_err(|e| Box::new(e) as lambda_runtime::Error)?;
 

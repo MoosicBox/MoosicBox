@@ -15,8 +15,9 @@ use std::{
 };
 
 use flume::SendError;
-use moosicbox_app_native_lib::hyperchad::{
+use hyperchad::{
     actions::{self, logic::Value},
+    app::{AppBuilder, renderer::DefaultRenderer},
     renderer::{Color, PartialView, Renderer, View},
     router::{Container, RouteRequest, Router},
 };
@@ -54,13 +55,13 @@ static STATE: LazyLock<moosicbox_app_state::AppState> =
     LazyLock::new(|| STATE_LOCK.get().unwrap().clone());
 
 static ROUTER: OnceLock<Router> = OnceLock::new();
-static RENDERER: OnceLock<Box<dyn Renderer>> = OnceLock::new();
+static RENDERER: OnceLock<DefaultRenderer> = OnceLock::new();
 
 #[cfg(feature = "assets")]
 mod assets {
     use std::{path::PathBuf, sync::LazyLock};
 
-    use moosicbox_app_native_lib::hyperchad::renderer;
+    use hyperchad::renderer;
 
     static CARGO_MANIFEST_DIR: LazyLock<Option<std::path::PathBuf>> =
         LazyLock::new(|| std::option_env!("CARGO_MANIFEST_DIR").map(Into::into));
@@ -78,13 +79,10 @@ mod assets {
             renderer::assets::StaticAssetRoute {
                 route: format!(
                     "js/{}",
-                    moosicbox_app_native_lib::hyperchad::renderer_vanilla_js::SCRIPT_NAME_HASHED
-                        .as_str()
+                    hyperchad::renderer_vanilla_js::SCRIPT_NAME_HASHED.as_str()
                 ),
                 target: renderer::assets::AssetPathTarget::FileContents(
-                    moosicbox_app_native_lib::hyperchad::renderer_vanilla_js::SCRIPT
-                        .as_bytes()
-                        .into(),
+                    hyperchad::renderer_vanilla_js::SCRIPT.as_bytes().into(),
                 ),
             },
             renderer::assets::StaticAssetRoute {
@@ -148,12 +146,7 @@ async fn current_sessions_updated(sessions: Vec<ApiSession>) {
             ROUTER
                 .get()
                 .unwrap()
-                .navigate_spawn(
-                    "/",
-                    moosicbox_app_native_lib::hyperchad::router::RequestInfo {
-                        client: moosicbox_app_native_lib::CLIENT_INFO.clone(),
-                    },
-                )
+                .navigate_spawn("/")
                 .await
                 .expect("Failed to navigate to home")
                 .expect("Failed to navigate to home");
@@ -582,7 +575,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let width = option_env_f32("WINDOW_WIDTH").unwrap().unwrap_or(1000.0);
     let height = option_env_f32("WINDOW_HEIGHT").unwrap().unwrap_or(600.0);
 
-    let mut app = moosicbox_app_native_lib::NativeAppBuilder::new()
+    let mut app = AppBuilder::new()
         .with_title("MoosicBox".to_string())
         .with_description("A music app for cows".to_string())
         .with_router(router)
@@ -602,6 +595,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .with_size(width, height);
 
+    #[cfg(any(feature = "egui", feature = "fltk"))]
+    app.initial_route("/");
+
     #[cfg(feature = "_canvas")]
     visualization::set_dimensions(width, f32::from(moosicbox_app_native_ui::VIZ_HEIGHT));
 
@@ -612,131 +608,113 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    #[cfg(not(feature = "bundled"))]
-    let runner_runtime = runtime;
+    STATE_LOCK
+        .set(
+            moosicbox_app_state::AppState::new()
+                .with_on_current_sessions_updated_listener(current_sessions_updated)
+                .with_on_audio_zone_with_sessions_updated_listener(audio_zone_with_sessions_updated)
+                .with_on_connections_updated_listener(connections_updated)
+                .with_on_after_handle_playback_update_listener(handle_playback_update),
+        )
+        .unwrap();
+
+    runtime.spawn(async move {
+        while let Ok((action, value)) = action_rx.recv_async().await {
+            if let Err(e) = handle_action(action, value).await {
+                log::error!("Failed to handle action: {e:?}");
+            }
+        }
+    });
+
     #[cfg(feature = "bundled")]
-    let runner_runtime = runtime.clone();
+    let (join_app_server, app_server_handle) = {
+        use moosicbox_app_native_bundled::service::Commander as _;
 
-    let mut runner = runner_runtime.block_on(async move {
-        STATE_LOCK
-            .set(
-                moosicbox_app_state::AppState::new()
-                    .with_on_current_sessions_updated_listener(current_sessions_updated)
-                    .with_on_audio_zone_with_sessions_updated_listener(
-                        audio_zone_with_sessions_updated,
-                    )
-                    .with_on_connections_updated_listener(connections_updated)
-                    .with_on_after_handle_playback_update_listener(handle_playback_update),
-            )
-            .unwrap();
+        log::debug!("Starting app server");
 
-        moosicbox_task::spawn("native app action listener", async move {
-            while let Ok((action, value)) = action_rx.recv_async().await {
-                if let Err(e) = handle_action(action, value).await {
-                    log::error!("Failed to handle action: {e:?}");
-                }
-            }
-        });
+        let context = moosicbox_app_native_bundled::Context::new(runtime.handle());
+        let server = moosicbox_app_native_bundled::service::Service::new(context);
 
-        #[cfg(feature = "bundled")]
-        let (join_app_server, app_server_handle) = {
-            use moosicbox_app_native_bundled::service::Commander as _;
+        let app_server_handle = server.handle();
+        let (tx, rx) = switchy_async::sync::oneshot::channel();
 
-            log::debug!("Starting app server");
+        let join_app_server = server.start_on(runtime.handle());
 
-            let context = moosicbox_app_native_bundled::Context::new(runtime.handle());
-            let server = moosicbox_app_native_bundled::service::Service::new(context);
+        app_server_handle
+            .send_command(moosicbox_app_native_bundled::Command::WaitForStartup { sender: tx })
+            .expect("Failed to send WaitForStartup command");
 
-            let app_server_handle = server.handle();
-            let (tx, rx) = switchy_async::sync::oneshot::channel();
+        log::debug!("Waiting for app server to start");
 
-            let join_app_server = server.start_on(runtime.handle());
+        runtime.block_on(rx).expect("Failed to start app server");
 
-            app_server_handle
-                .send_command(moosicbox_app_native_bundled::Command::WaitForStartup { sender: tx })
-                .expect("Failed to send WaitForStartup command");
+        log::debug!("App server started");
 
-            log::debug!("Waiting for app server to start");
+        (join_app_server, app_server_handle)
+    };
 
-            runtime.block_on(rx).expect("Failed to start app server");
+    if let (Some(x), Some(y)) = (
+        option_env_i32("WINDOW_X").unwrap(),
+        option_env_i32("WINDOW_Y").unwrap(),
+    ) {
+        app = app.with_position(x, y);
+    }
+    log::debug!("app_native: setting up routes");
 
-            log::debug!("App server started");
+    log::debug!("app_native: creating app");
+    let app = app.build_default()?;
 
-            (join_app_server, app_server_handle)
-        };
+    moosicbox_assert::assert_or_panic!(
+        RENDERER.set(app.renderer.clone()).is_ok(),
+        "Already set RENDERER"
+    );
 
-        if let (Some(x), Some(y)) = (
-            option_env_i32("WINDOW_X").unwrap(),
-            option_env_i32("WINDOW_Y").unwrap(),
-        ) {
-            app = app.with_position(x, y);
-        }
-        log::debug!("app_native: setting up routes");
+    runtime.spawn(async move {
+        STATE
+            .set_state(moosicbox_app_state::UpdateAppState {
+                connection_id: Some("123".into()),
+                connection_name: Some("Test Egui".into()),
+                api_url: Some(
+                    std::env::var("MOOSICBOX_HOST")
+                        .as_deref()
+                        .unwrap_or("http://localhost:8500")
+                        .to_string(),
+                ),
+                client_id: std::env::var("MOOSICBOX_CLIENT_ID").ok(),
+                signature_token: std::env::var("MOOSICBOX_SIGNATURE_TOKEN").ok(),
+                api_token: std::env::var("MOOSICBOX_API_TOKEN").ok(),
+                profile: Some(PROFILE.to_string()),
+                playback_target: None,
+                current_session_id: None,
+            })
+            .await?;
 
-        log::debug!("app_native: creating app");
-        let mut app = app
-            .create()
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
-
-        moosicbox_assert::assert_or_panic!(
-            RENDERER.set(app.renderer.clone().into()).is_ok(),
-            "Already set RENDERER"
-        );
-
-        moosicbox_task::spawn("Initialize AppState", async move {
-            STATE
-                .set_state(moosicbox_app_state::UpdateAppState {
-                    connection_id: Some("123".into()),
-                    connection_name: Some("Test Egui".into()),
-                    api_url: Some(
-                        std::env::var("MOOSICBOX_HOST")
-                            .as_deref()
-                            .unwrap_or("http://localhost:8500")
-                            .to_string(),
-                    ),
-                    client_id: std::env::var("MOOSICBOX_CLIENT_ID").ok(),
-                    signature_token: std::env::var("MOOSICBOX_SIGNATURE_TOKEN").ok(),
-                    api_token: std::env::var("MOOSICBOX_API_TOKEN").ok(),
-                    profile: Some(PROFILE.to_string()),
-                    playback_target: None,
-                    current_session_id: None,
-                })
-                .await?;
-
-            Ok::<_, moosicbox_app_state::AppStateError>(())
-        });
-
-        log::debug!("app_native: starting app");
-        app.start()
-            .await
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
-
-        #[cfg(feature = "bundled")]
-        {
-            use moosicbox_app_native_bundled::service::Commander as _;
-
-            log::debug!("Shutting down app server..");
-            if let Err(e) = app_server_handle.shutdown() {
-                moosicbox_assert::die_or_error!("AppServer failed to shutdown: {e:?}");
-            }
-
-            log::debug!("Joining app server...");
-            match runtime.block_on(join_app_server) {
-                Err(e) => {
-                    moosicbox_assert::die_or_error!("Failed to join app server: {e:?}");
-                }
-                Ok(Err(e)) => {
-                    moosicbox_assert::die_or_error!("Failed to join app server: {e:?}");
-                }
-                _ => {}
-            }
-        }
-
-        app.into_runner()
-    })?;
+        Ok::<_, moosicbox_app_state::AppStateError>(())
+    });
 
     log::debug!("app_native: running");
-    runner.run().unwrap();
+    app.run()?;
+
+    #[cfg(feature = "bundled")]
+    {
+        use moosicbox_app_native_bundled::service::Commander as _;
+
+        log::debug!("Shutting down app server..");
+        if let Err(e) = app_server_handle.shutdown() {
+            moosicbox_assert::die_or_error!("AppServer failed to shutdown: {e:?}");
+        }
+
+        log::debug!("Joining app server...");
+        match runtime.block_on(join_app_server) {
+            Err(e) => {
+                moosicbox_assert::die_or_error!("Failed to join app server: {e:?}");
+            }
+            Ok(Err(e)) => {
+                moosicbox_assert::die_or_error!("Failed to join app server: {e:?}");
+            }
+            _ => {}
+        }
+    }
 
     Ok(())
 }

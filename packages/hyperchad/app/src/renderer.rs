@@ -1,15 +1,85 @@
 use crate::{App, AppBuilder, BuilderError};
 
 #[cfg(feature = "egui")]
+pub type DefaultRenderer = egui::EguiRenderer;
+
+#[cfg(all(feature = "fltk", not(feature = "egui")))]
+pub type DefaultRenderer = fltk::FltkRenderer;
+
+#[cfg(all(
+    feature = "actix",
+    feature = "vanilla-js",
+    not(any(feature = "egui", feature = "fltk"))
+))]
+pub type DefaultRenderer = html::actix::vanilla_js::HtmlVanillaJsActixRenderer;
+
+#[cfg(all(
+    feature = "lambda",
+    feature = "vanilla-js",
+    not(any(feature = "egui", feature = "fltk", feature = "actix"))
+))]
+pub type DefaultRenderer = html::lambda::vanilla_js::HtmlVanillaJsLambdaRenderer;
+
+#[cfg(all(
+    feature = "actix",
+    feature = "html",
+    not(any(
+        feature = "egui",
+        feature = "fltk",
+        feature = "lambda",
+        feature = "vanilla-js"
+    ))
+))]
+pub type DefaultRenderer = html::actix::HtmlActixRenderer;
+
+#[cfg(all(
+    feature = "lambda",
+    feature = "html",
+    not(any(
+        feature = "egui",
+        feature = "fltk",
+        feature = "lambda",
+        feature = "vanilla-js",
+        feature = "actix"
+    ))
+))]
+pub type DefaultRenderer = html::lambda::HtmlLambdaRenderer;
+
+#[cfg(all(
+    feature = "html",
+    not(any(
+        feature = "egui",
+        feature = "fltk",
+        feature = "lambda",
+        feature = "actix",
+        feature = "lambda"
+    ))
+))]
+pub type DefaultRenderer = html::vanilla_js::HtmlVanillaJsRenderer;
+
+#[cfg(all(
+    feature = "html",
+    not(any(
+        feature = "egui",
+        feature = "fltk",
+        feature = "lambda",
+        feature = "vanilla-js",
+        feature = "actix",
+        feature = "lambda"
+    ))
+))]
+pub type DefaultRenderer = html::HtmlStubRenderer;
+
+#[cfg(feature = "egui")]
 mod egui {
     use std::sync::Arc;
 
     use async_trait::async_trait;
     use hyperchad_renderer::transformer::layout::calc::{Calculator, CalculatorDefaults};
     use hyperchad_renderer_egui::{eframe::egui, font_metrics::EguiFontMetrics};
-    use hyperchad_router::Router;
+    use hyperchad_router::{DEFAULT_CLIENT_INFO, Router};
 
-    use crate::{App, AppBuilder, BuilderError, Cleaner, DEFAULT_CLIENT_INFO, Error, Generator};
+    use crate::{App, AppBuilder, BuilderError, Cleaner, Error, Generator};
 
     #[derive(Clone)]
     pub struct EguiCalculator(pub Option<Arc<Calculator<EguiFontMetrics>>>);
@@ -105,12 +175,12 @@ mod egui {
                 async move {
                     while let Some(path) = renderer.wait_for_navigation().await {
                         if let Err(e) = router
-                            .navigate_send(
+                            .navigate_send((
                                 &path,
                                 hyperchad_router::RequestInfo {
                                     client: DEFAULT_CLIENT_INFO.clone(),
                                 },
-                            )
+                            ))
                             .await
                         {
                             log::error!("Failed to navigate: {e:?}");
@@ -127,9 +197,9 @@ mod egui {
 #[cfg(feature = "fltk")]
 mod fltk {
     use async_trait::async_trait;
-    use hyperchad_router::Router;
+    use hyperchad_router::{Router, DEFAULT_CLIENT_INFO};
 
-    use crate::{App, AppBuilder, BuilderError, Cleaner, DEFAULT_CLIENT_INFO, Error, Generator};
+    use crate::{App, AppBuilder, BuilderError, Cleaner, Error, Generator};
 
     pub type FltkRenderer = hyperchad_renderer_fltk::FltkRenderer;
 
@@ -174,12 +244,12 @@ mod fltk {
                 async move {
                     while let Some(path) = renderer.wait_for_navigation().await {
                         if let Err(e) = router
-                            .navigate_send(
+                            .navigate_send((
                                 &path,
                                 hyperchad_router::RequestInfo {
                                     client: DEFAULT_CLIENT_INFO.clone(),
                                 },
-                            )
+                            ))
                             .await
                         {
                             log::error!("Failed to navigate: {e:?}");
@@ -663,12 +733,12 @@ impl AppBuilder {
     ///
     /// * If the `AppBuilder` is missing a router
     #[cfg(feature = "egui")]
-    pub fn build_default(self) -> Result<App<egui::EguiRenderer>, BuilderError> {
+    pub fn build_default(self) -> Result<App<DefaultRenderer>, BuilderError> {
         self.build_default_egui()
     }
 
     #[cfg(all(feature = "fltk", not(feature = "egui")))]
-    pub fn build_default(self) -> Result<App<fltk::FltkRenderer>, BuilderError> {
+    pub fn build_default(self) -> Result<App<DefaultRenderer>, BuilderError> {
         self.build_default_fltk()
     }
 
@@ -677,9 +747,7 @@ impl AppBuilder {
         feature = "vanilla-js",
         not(any(feature = "egui", feature = "fltk"))
     ))]
-    pub fn build_default(
-        self,
-    ) -> Result<App<html::actix::vanilla_js::HtmlVanillaJsActixRenderer>, BuilderError> {
+    pub fn build_default(self) -> Result<App<DefaultRenderer>, BuilderError> {
         self.build_default_html_vanilla_js_actix()
     }
 
@@ -688,9 +756,7 @@ impl AppBuilder {
         feature = "vanilla-js",
         not(any(feature = "egui", feature = "fltk", feature = "actix"))
     ))]
-    pub fn build_default(
-        self,
-    ) -> Result<App<html::lambda::vanilla_js::HtmlVanillaJsLambdaRenderer>, BuilderError> {
+    pub fn build_default(self) -> Result<App<DefaultRenderer>, BuilderError> {
         self.build_default_html_vanilla_js_lambda()
     }
 
@@ -704,7 +770,7 @@ impl AppBuilder {
             feature = "vanilla-js"
         ))
     ))]
-    pub fn build_default(self) -> Result<App<html::actix::HtmlActixRenderer>, BuilderError> {
+    pub fn build_default(self) -> Result<App<DefaultRenderer>, BuilderError> {
         self.build_default_html_actix()
     }
 
@@ -719,7 +785,7 @@ impl AppBuilder {
             feature = "actix"
         ))
     ))]
-    pub fn build_default(self) -> Result<App<html::lambda::HtmlLambdaRenderer>, BuilderError> {
+    pub fn build_default(self) -> Result<App<DefaultRenderer>, BuilderError> {
         self.build_default_html_lambda()
     }
 
@@ -733,9 +799,7 @@ impl AppBuilder {
             feature = "lambda"
         ))
     ))]
-    pub fn build_default(
-        self,
-    ) -> Result<App<html::vanilla_js::HtmlVanillaJsRenderer>, BuilderError> {
+    pub fn build_default(self) -> Result<App<DefaultRenderer>, BuilderError> {
         self.build_default_html_vanilla_js()
     }
 
@@ -750,7 +814,7 @@ impl AppBuilder {
             feature = "lambda"
         ))
     ))]
-    pub fn build_default(self) -> Result<App<html::HtmlStubRenderer>, BuilderError> {
+    pub fn build_default(self) -> Result<App<DefaultRenderer>, BuilderError> {
         self.build_default_html()
     }
 }

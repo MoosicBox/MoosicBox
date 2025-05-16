@@ -5069,7 +5069,6 @@ dependencies = [
  "log",
  "moosicbox_assert",
  "moosicbox_env_utils",
- "os_info",
  "serde_json",
  "switchy_async",
  "thiserror 2.0.12",
@@ -5259,6 +5258,7 @@ dependencies = [
  "log",
  "moosicbox_assert",
  "moosicbox_task",
+ "os_info",
  "qstring",
  "thiserror 2.0.12",
  "tokio",
@@ -6674,7 +6674,6 @@ name = "moosicbox"
 version = "0.1.0"
 dependencies = [
  "moosicbox_admin_htmx",
- "moosicbox_app_native_lib",
  "moosicbox_app_native_ui",
  "moosicbox_arb",
  "moosicbox_assert",
@@ -6822,9 +6821,9 @@ version = "0.1.1"
 dependencies = [
  "console-subscriber",
  "flume",
+ "hyperchad",
  "log",
  "moosicbox_app_native_bundled",
- "moosicbox_app_native_lib",
  "moosicbox_app_native_ui",
  "moosicbox_app_state",
  "moosicbox_assert",
@@ -6869,21 +6868,6 @@ name = "moosicbox_app_native_image"
 version = "0.1.1"
 dependencies = [
  "bytes",
-]
-
-[[package]]
-name = "moosicbox_app_native_lib"
-version = "0.1.1"
-dependencies = [
- "flume",
- "hyperchad",
- "log",
- "moosicbox_assert",
- "moosicbox_env_utils",
- "moosicbox_task",
- "os_info",
- "switchy_async",
- "thiserror 2.0.12",
 ]
 
 [[package]]

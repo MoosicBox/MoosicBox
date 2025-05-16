@@ -7,19 +7,11 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use clap::{Parser, Subcommand, arg, command};
 use hyperchad_renderer::{Color, RenderRunner, Renderer, ToRenderRunner};
-use hyperchad_router::{ClientInfo, RoutePath, Router};
+use hyperchad_router::{Navigation, RoutePath, Router};
 use moosicbox_env_utils::default_env_usize;
 use switchy_async::{futures::channel::oneshot, runtime::Runtime, task};
 
-mod renderer;
-
-static DEFAULT_CLIENT_INFO: std::sync::LazyLock<std::sync::Arc<hyperchad_router::ClientInfo>> =
-    std::sync::LazyLock::new(|| {
-        let os_name = os_info::get().os_type().to_string();
-        std::sync::Arc::new(hyperchad_router::ClientInfo {
-            os: hyperchad_router::ClientOs { name: os_name },
-        })
-    });
+pub mod renderer;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -93,55 +85,10 @@ type ActionHandler = Box<
 >;
 type ResizeListener = Box<dyn Fn(f32, f32) -> Result<(), Box<dyn std::error::Error>> + Send + Sync>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InitialRoute(String, Arc<ClientInfo>);
-
-impl From<&str> for InitialRoute {
-    fn from(value: &str) -> Self {
-        Self(value.to_string(), DEFAULT_CLIENT_INFO.clone())
-    }
-}
-
-impl From<String> for InitialRoute {
-    fn from(value: String) -> Self {
-        Self(value, DEFAULT_CLIENT_INFO.clone())
-    }
-}
-
-impl From<&String> for InitialRoute {
-    fn from(value: &String) -> Self {
-        Self(value.clone(), DEFAULT_CLIENT_INFO.clone())
-    }
-}
-
-impl From<&hyperchad_router::ClientInfo> for InitialRoute {
-    fn from(value: &hyperchad_router::ClientInfo) -> Self {
-        Self(value.os.name.clone(), Arc::new(value.clone()))
-    }
-}
-
-impl From<(&str, hyperchad_router::ClientInfo)> for InitialRoute {
-    fn from(value: (&str, hyperchad_router::ClientInfo)) -> Self {
-        Self(value.0.to_string(), Arc::new(value.1))
-    }
-}
-
-impl From<(String, hyperchad_router::ClientInfo)> for InitialRoute {
-    fn from(value: (String, hyperchad_router::ClientInfo)) -> Self {
-        Self(value.0, Arc::new(value.1))
-    }
-}
-
-impl From<(&String, hyperchad_router::ClientInfo)> for InitialRoute {
-    fn from(value: (&String, hyperchad_router::ClientInfo)) -> Self {
-        Self(value.0.to_string(), Arc::new(value.1))
-    }
-}
-
 #[derive(Clone)]
 pub struct AppBuilder {
     router: Option<Router>,
-    initial_route: Option<InitialRoute>,
+    initial_route: Option<Navigation>,
     x: Option<i32>,
     y: Option<i32>,
     background: Option<Color>,
@@ -223,12 +170,12 @@ impl AppBuilder {
     }
 
     #[must_use]
-    pub fn with_initial_route(mut self, initial_route: impl Into<InitialRoute>) -> Self {
+    pub fn with_initial_route(mut self, initial_route: impl Into<Navigation>) -> Self {
         self.initial_route = Some(initial_route.into());
         self
     }
 
-    pub fn initial_route(&mut self, initial_route: impl Into<InitialRoute>) -> &mut Self {
+    pub fn initial_route(&mut self, initial_route: impl Into<Navigation>) -> &mut Self {
         self.initial_route = Some(initial_route.into());
         self
     }
@@ -509,7 +456,7 @@ pub struct App<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'sta
     viewport: Option<String>,
     width: f32,
     height: f32,
-    initial_route: Option<InitialRoute>,
+    initial_route: Option<Navigation>,
 }
 
 impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R> {
@@ -646,12 +593,7 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
         log::debug!("app: starting app");
         if let Some(initial_route) = initial_route {
             log::debug!("app: navigating to home");
-            let _handle = router.navigate_spawn(
-                &initial_route.0,
-                hyperchad_router::RequestInfo {
-                    client: initial_route.1.clone(),
-                },
-            );
+            let _handle = router.navigate_spawn(initial_route);
         }
 
         let runtime = self.runtime()?;

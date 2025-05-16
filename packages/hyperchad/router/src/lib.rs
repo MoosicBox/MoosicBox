@@ -16,6 +16,14 @@ use qstring::QString;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
+pub static DEFAULT_CLIENT_INFO: std::sync::LazyLock<std::sync::Arc<ClientInfo>> =
+    std::sync::LazyLock::new(|| {
+        let os_name = os_info::get().os_type().to_string();
+        std::sync::Arc::new(ClientInfo {
+            os: ClientOs { name: os_name },
+        })
+    });
+
 pub type RouteFunc = Arc<
     Box<
         dyn (Fn(
@@ -218,6 +226,81 @@ impl Default for Router {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Navigation(String, Arc<ClientInfo>);
+
+impl From<&str> for Navigation {
+    fn from(value: &str) -> Self {
+        Self(value.to_string(), DEFAULT_CLIENT_INFO.clone())
+    }
+}
+
+impl From<String> for Navigation {
+    fn from(value: String) -> Self {
+        Self(value, DEFAULT_CLIENT_INFO.clone())
+    }
+}
+
+impl From<&String> for Navigation {
+    fn from(value: &String) -> Self {
+        Self(value.clone(), DEFAULT_CLIENT_INFO.clone())
+    }
+}
+
+impl From<(&str, ClientInfo)> for Navigation {
+    fn from(value: (&str, ClientInfo)) -> Self {
+        Self(value.0.to_string(), Arc::new(value.1))
+    }
+}
+
+impl From<(String, ClientInfo)> for Navigation {
+    fn from(value: (String, ClientInfo)) -> Self {
+        Self(value.0, Arc::new(value.1))
+    }
+}
+
+impl From<(&String, ClientInfo)> for Navigation {
+    fn from(value: (&String, ClientInfo)) -> Self {
+        Self(value.0.to_string(), Arc::new(value.1))
+    }
+}
+
+impl From<(&str, Arc<ClientInfo>)> for Navigation {
+    fn from(value: (&str, Arc<ClientInfo>)) -> Self {
+        Self(value.0.to_string(), value.1)
+    }
+}
+
+impl From<(String, Arc<ClientInfo>)> for Navigation {
+    fn from(value: (String, Arc<ClientInfo>)) -> Self {
+        Self(value.0, value.1)
+    }
+}
+
+impl From<(&String, Arc<ClientInfo>)> for Navigation {
+    fn from(value: (&String, Arc<ClientInfo>)) -> Self {
+        Self(value.0.to_string(), value.1)
+    }
+}
+
+impl From<(&str, RequestInfo)> for Navigation {
+    fn from(value: (&str, RequestInfo)) -> Self {
+        Self(value.0.to_string(), value.1.client)
+    }
+}
+
+impl From<(String, RequestInfo)> for Navigation {
+    fn from(value: (String, RequestInfo)) -> Self {
+        Self(value.0, value.1.client)
+    }
+}
+
+impl From<(&String, RequestInfo)> for Navigation {
+    fn from(value: (&String, RequestInfo)) -> Self {
+        Self(value.0.to_string(), value.1.client)
+    }
+}
+
 impl Router {
     #[must_use]
     pub fn new() -> Self {
@@ -355,10 +438,20 @@ impl Router {
     /// # Panics
     ///
     /// Will panic if routes `RwLock` is poisoned.
-    pub async fn navigate(&self, path: &str, info: RequestInfo) -> Result<Content, NavigateError> {
+    pub async fn navigate(
+        &self,
+        navigation: impl Into<Navigation>,
+    ) -> Result<Content, NavigateError> {
+        let navigation = navigation.into();
+        let path = navigation.0;
+        let client_info = navigation.1;
+        let request_info = RequestInfo {
+            client: client_info,
+        };
+
         log::debug!("navigate: path={path}");
 
-        let req = RouteRequest::from_path(path, info);
+        let req = RouteRequest::from_path(&path, request_info);
         let handler = self.get_route_func(&req.path);
 
         Ok(if let Some(handler) = handler {
@@ -384,11 +477,21 @@ impl Router {
     /// # Panics
     ///
     /// Will panic if routes `RwLock` is poisoned.
-    pub async fn navigate_send(&self, path: &str, info: RequestInfo) -> Result<(), NavigateError> {
+    pub async fn navigate_send(
+        &self,
+        navigation: impl Into<Navigation>,
+    ) -> Result<(), NavigateError> {
+        let navigation = navigation.into();
+        let path = navigation.0;
+        let client_info = navigation.1;
+        let request_info = RequestInfo {
+            client: client_info,
+        };
+
         log::debug!("navigate_send: path={path}");
 
         let view = {
-            let req = RouteRequest::from_path(path, info);
+            let req = RouteRequest::from_path(&path, request_info);
             let handler = self.get_route_func(&req.path);
 
             if let Some(handler) = handler {
@@ -421,12 +524,13 @@ impl Router {
     #[must_use]
     pub fn navigate_spawn(
         &self,
-        path: &str,
-        info: RequestInfo,
+        navigation: impl Into<Navigation>,
     ) -> JoinHandle<Result<(), Box<dyn std::error::Error + Send>>> {
-        log::debug!("navigate_spawn: path={path}");
+        let navigation = navigation.into();
 
-        self.navigate_spawn_on(&tokio::runtime::Handle::current(), path, info)
+        log::debug!("navigate_spawn: navigation={navigation:?}");
+
+        self.navigate_spawn_on(&tokio::runtime::Handle::current(), navigation)
     }
 
     /// # Errors
@@ -436,16 +540,16 @@ impl Router {
     pub fn navigate_spawn_on(
         &self,
         handle: &tokio::runtime::Handle,
-        path: &str,
-        info: RequestInfo,
+        navigation: impl Into<Navigation>,
     ) -> JoinHandle<Result<(), Box<dyn std::error::Error + Send>>> {
-        log::debug!("navigate_spawn_on: path={path}");
+        let navigation = navigation.into();
 
-        let path = path.to_owned();
+        log::debug!("navigate_spawn_on: navigation={navigation:?}");
+
         let router = self.clone();
         moosicbox_task::spawn_on("NativeApp navigate_spawn", handle, async move {
             router
-                .navigate_send(&path, info)
+                .navigate_send(navigation)
                 .await
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)
         })

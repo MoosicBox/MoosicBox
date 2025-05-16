@@ -975,7 +975,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                             } => {
                                 if trigger.as_deref() == Some("load") {
                                     let info = RequestInfo { client };
-                                    match router.navigate(&route, info).await {
+                                    match router.navigate((&route, info)).await {
                                         Ok(content) => {
                                             let Some(ctx) = ctx.read().unwrap().clone() else {
                                                 moosicbox_assert::die_or_panic!(

@@ -64,11 +64,12 @@ color = ["dep:hyperchad_color"]
 js-bundler = ["dep:hyperchad_js_bundler"]
 
 renderer = ["dep:hyperchad_renderer"]
-renderer-assets = ["hyperchad_app?/assets", "hyperchad_renderer?/assets"]
-renderer-benchmark = ["hyperchad_renderer?/benchmark"]
-renderer-json = ["hyperchad_app?/json", "hyperchad_renderer?/json"]
-renderer-logic = ["hyperchad_app?/logic", "hyperchad_renderer?/logic"]
-renderer-maud = ["hyperchad_renderer?/maud"]
+renderer-assets = ["hyperchad_app?/assets", "hyperchad_renderer/assets"]
+renderer-benchmark = ["hyperchad_renderer/benchmark"]
+renderer-canvas = ["hyperchad_renderer/canvas"]
+renderer-json = ["hyperchad_app?/json", "hyperchad_renderer/json"]
+renderer-logic = ["hyperchad_app?/logic", "hyperchad_renderer/logic"]
+renderer-maud = ["hyperchad_renderer/maud"]
 renderer-profiling-puffin = [
     "hyperchad_app?/profiling-puffin",
     "hyperchad_renderer?/profiling-puffin",
@@ -260,3 +261,5 @@ profiling-tracing = [
     "renderer-profiling-tracing",
 ]
 profiling-tracy = ["renderer-egui-profiling-tracy", "renderer-profiling-tracy"]
+
+logic = ["actions-logic", "renderer-logic"]
