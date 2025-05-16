@@ -46,18 +46,29 @@ impl PartialEq for Runtime {
 }
 
 impl GenericRuntime for Runtime {
-    fn block_on<F: Future + Send + 'static>(&self, f: F) -> F::Output
-    where
-        F::Output: Send,
-    {
+    fn block_on<F: Future>(&self, future: F) -> F::Output {
         assert!(
             Self::current().is_none(),
             "Cannot run block_on within a runtime"
         );
         log::trace!("block_on");
         self.start();
-        let rx = self.spawner.spawn_blocking(self.clone(), f).rx;
-        block_on_receiver(rx, self)
+        let mut future = Box::pin(future);
+        let waker = futures::task::noop_waker();
+        let mut ctx = Context::from_waker(&waker);
+        loop {
+            #[allow(clippy::significant_drop_in_scrutinee)]
+            match future.as_mut().poll(&mut ctx) {
+                Poll::Ready(x) => {
+                    return x;
+                }
+                Poll::Pending => {
+                    if !self.process_next_task() {
+                        std::thread::yield_now();
+                    }
+                }
+            }
+        }
     }
 
     fn wait(self) -> Result<(), Error> {
@@ -281,10 +292,7 @@ pub fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static
     RUNTIME.with(|runtime| runtime.spawn(future))
 }
 
-pub fn block_on<F: Future + Send + 'static>(future: F) -> F::Output
-where
-    F::Output: Send,
-{
+pub fn block_on<F: Future + 'static>(future: F) -> F::Output {
     RUNTIME.with(|runtime| runtime.block_on(future))
 }
 
@@ -398,29 +406,6 @@ impl Wake for Task {
             self.runtime.spawner.inner_spawn_blocking(&self);
         } else {
             self.runtime.spawner.inner_spawn(&self);
-        }
-    }
-}
-
-fn block_on_receiver<T>(
-    mut receiver: futures::channel::oneshot::Receiver<T>,
-    runtime: &Runtime,
-) -> T {
-    log::trace!("block_on_receiver");
-    let waker = futures::task::noop_waker();
-    let mut cx = Context::from_waker(&waker);
-    let mut receiver = Pin::new(&mut receiver);
-
-    loop {
-        match receiver.as_mut().poll(&mut cx) {
-            Poll::Ready(Ok(x)) => return x,
-            Poll::Ready(Err(..)) => panic!("Task was cancelled"),
-            Poll::Pending => {
-                log::trace!("block_on_receiver: pending");
-                if !runtime.process_next_task() {
-                    std::thread::yield_now();
-                }
-            }
         }
     }
 }

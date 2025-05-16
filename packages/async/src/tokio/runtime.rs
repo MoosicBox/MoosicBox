@@ -33,11 +33,8 @@ impl Runtime {
 }
 
 impl GenericRuntime for Runtime {
-    fn block_on<F: Future + Send + 'static>(&self, f: F) -> F::Output
-    where
-        F::Output: Send,
-    {
-        self.0.block_on(f)
+    fn block_on<F: Future>(&self, future: F) -> F::Output {
+        self.0.block_on(future)
     }
 
     /// FIXME: This doesn't await all tasks. We probably need to add all

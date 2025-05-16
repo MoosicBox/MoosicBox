@@ -38,9 +38,7 @@ pub enum Error {
 }
 
 pub trait GenericRuntime {
-    fn block_on<F: Future + Send + 'static>(&self, f: F) -> F::Output
-    where
-        F::Output: Send;
+    fn block_on<F: Future>(&self, future: F) -> F::Output;
 
     /// # Errors
     ///
@@ -98,10 +96,7 @@ macro_rules! impl_async {
         pub use $module::select;
 
         impl $module::runtime::Runtime {
-            pub fn block_on<F: Future + Send + 'static>(&self, f: F) -> F::Output
-            where
-                F::Output: Send,
-            {
+            pub fn block_on<F: Future + 'static>(&self, f: F) -> F::Output {
                 <Self as GenericRuntime>::block_on(self, f)
             }
 
