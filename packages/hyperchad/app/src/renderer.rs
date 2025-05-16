@@ -308,6 +308,8 @@ mod html {
             static BACKGROUND_COLOR: LazyLock<Color> = LazyLock::new(|| Color::from_hex("#181a1b"));
             static VIEWPORT: LazyLock<String> = LazyLock::new(|| "width=device-width".to_string());
 
+            log::debug!("generate: output={output:?}");
+
             let output = output.unwrap_or_else(|| {
                 CARGO_MANIFEST_DIR
                     .as_ref()
@@ -316,6 +318,11 @@ mod html {
             });
             let output_path: PathBuf = output.into();
             let static_routes = router.static_routes.read().unwrap().clone();
+
+            if static_routes.is_empty() {
+                log::debug!("generate: no static routes");
+                return Ok(());
+            }
 
             if output_path.is_dir() {
                 std::fs::remove_dir_all(&output_path)?;

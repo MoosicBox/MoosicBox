@@ -470,6 +470,8 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
     pub fn run(self) -> Result<(), Error> {
         let args = Args::parse();
 
+        log::debug!("run: args={args:?}");
+
         match args.cmd {
             Commands::DynamicRoutes => self.dynamic_routes(),
             Commands::Clean { output } => self.clean_sync(output),
