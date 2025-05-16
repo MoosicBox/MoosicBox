@@ -65,6 +65,8 @@ pub enum Error {
     IO(#[from] std::io::Error),
     #[error(transparent)]
     Step(Box<dyn std::error::Error + Send>),
+    #[error(transparent)]
+    Join(#[from] switchy::unsync::task::JoinError),
 }
 
 fn ctrl_c() {
@@ -632,8 +634,7 @@ impl ManagedSim {
             }
             if let Some(handle) = host.handle {
                 host.runtime
-                    .block_on(handle)
-                    .flatten()
+                    .block_on(handle)?
                     .transpose()
                     .map_err(Error::Step)?;
             }
@@ -651,8 +652,7 @@ impl ManagedSim {
             if let Some(handle) = client.handle {
                 client
                     .runtime
-                    .block_on(handle)
-                    .flatten()
+                    .block_on(handle)?
                     .transpose()
                     .map_err(Error::Step)?;
             }
@@ -668,8 +668,7 @@ impl ManagedSim {
                 if let Some(handle) = client.handle {
                     client
                         .runtime
-                        .block_on(handle)
-                        .flatten()
+                        .block_on(handle)?
                         .transpose()
                         .map_err(Error::Step)?;
                 }
@@ -680,8 +679,7 @@ impl ManagedSim {
                 log::debug!("cancelling host {}/{host_count}!", i + 1);
                 if let Some(handle) = host.handle {
                     host.runtime
-                        .block_on(handle)
-                        .flatten()
+                        .block_on(handle)?
                         .transpose()
                         .map_err(Error::Step)?;
                 }

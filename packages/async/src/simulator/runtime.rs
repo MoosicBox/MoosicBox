@@ -13,7 +13,7 @@ use switchy_random::{rand::rand::seq::IteratorRandom, rng};
 
 pub use crate::Builder;
 
-use crate::{Error, GenericRuntime};
+use crate::{Error, GenericRuntime, task};
 
 type Queue = Arc<Mutex<Vec<Arc<Task>>>>;
 
@@ -173,7 +173,7 @@ impl Runtime {
 pub struct JoinHandle<T> {
     rx: futures::channel::oneshot::Receiver<T>,
     #[allow(clippy::option_option)]
-    result: Option<Option<T>>,
+    result: Option<Result<T, task::JoinError>>,
     finished: bool,
 }
 
@@ -190,7 +190,7 @@ impl<T: Send + Unpin> JoinHandle<T> {
         match receiver.poll(&mut cx) {
             Poll::Ready(x) => {
                 self.finished = true;
-                self.result = Some(x.ok());
+                self.result = Some(x.map_err(|_| task::JoinError::new()));
                 true
             }
             Poll::Pending => false,
@@ -199,7 +199,7 @@ impl<T: Send + Unpin> JoinHandle<T> {
 }
 
 impl<T: Send + Unpin> Future for JoinHandle<T> {
-    type Output = Option<T>;
+    type Output = Result<T, task::JoinError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         if let Some(result) = self.as_mut().result.take() {
@@ -208,7 +208,7 @@ impl<T: Send + Unpin> Future for JoinHandle<T> {
 
         let receiver = Pin::new(&mut self.get_mut().rx);
         match receiver.poll(cx) {
-            Poll::Ready(x) => Poll::Ready(x.ok()),
+            Poll::Ready(x) => Poll::Ready(x.map_err(|_| task::JoinError::new())),
             Poll::Pending => Poll::Pending,
         }
     }
