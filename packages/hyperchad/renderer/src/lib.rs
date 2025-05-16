@@ -225,7 +225,9 @@ pub trait Renderer: ToRenderRunner + Send + Sync {
     async fn render_canvas(
         &self,
         update: canvas::CanvasUpdate,
-    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
+    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        unimplemented!("Unable to render canvas update={update:?}")
+    }
 }
 
 #[cfg(feature = "html")]
