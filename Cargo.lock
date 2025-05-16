@@ -7410,10 +7410,9 @@ version = "0.1.1"
 dependencies = [
  "async-recursion",
  "chrono",
- "clap 4.5.38",
  "console-subscriber",
+ "hyperchad",
  "log",
- "moosicbox_app_native_lib",
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_logging",
@@ -7421,6 +7420,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "switchy_async",
  "switchy_http",
  "tokio",
 ]

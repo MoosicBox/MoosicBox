@@ -22,20 +22,30 @@ path              = "src/lambda_vanilla_js.rs"
 required-features = ["lambda", "vanilla-js"]
 
 [dependencies]
-moosicbox_app_native_lib = { workspace = true, features = [
+hyperchad = { workspace = true, features = [
+    "actions",
+    "actions-logic",
+    "app",
+    "color",
     "json",
-    "logic",
-    "maud",
+    "renderer",
+    "renderer-maud",
+    "router",
 ] }
 moosicbox_assert = { workspace = true }
 moosicbox_env_utils = { workspace = true }
 moosicbox_logging = { workspace = true, features = ["free_log"] }
 moosicbox_marketing_site_ui = { workspace = true }
+switchy_async = { workspace = true, features = [
+    "net",
+    "rt-multi-thread",
+    "time",
+    "tokio",
+] }
 switchy_http = { workspace = true, features = ["reqwest"] }
 
 async-recursion    = { workspace = true, optional = true }
 chrono             = { workspace = true }
-clap               = { workspace = true }
 console-subscriber = { workspace = true, optional = true }
 log                = { workspace = true }
 regex              = { workspace = true }
@@ -61,37 +71,37 @@ fail-on-warnings = []
 
 console-subscriber = ["dep:console-subscriber"]
 
-egui = ["moosicbox_app_native_lib/egui"]
-egui-glow = ["egui", "moosicbox_app_native_lib/egui-glow"]
-egui-wgpu = ["egui", "moosicbox_app_native_lib/egui-wgpu"]
-fltk = ["moosicbox_app_native_lib/fltk"]
-html = ["moosicbox_app_native_lib/html"]
+_egui = []
+egui-glow = ["_egui", "hyperchad/renderer-egui-glow"]
+egui-wgpu = ["_egui", "hyperchad/renderer-egui-wgpu"]
+fltk = ["hyperchad/renderer-fltk"]
+html = ["hyperchad/renderer-html"]
 vanilla-js = [
     "html",
-    "moosicbox_app_native_lib/plugin-nav",
-    "moosicbox_app_native_lib/plugin-routing",
-    "moosicbox_app_native_lib/vanilla-js",
+    "hyperchad/renderer-vanilla-js",
+    "hyperchad/renderer-vanilla-js-plugin-nav",
+    "hyperchad/renderer-vanilla-js-plugin-routing",
 ]
 
-actix = ["moosicbox_app_native_lib/actix"]
+actix = ["hyperchad/renderer-html-actix"]
 
-wayland = ["moosicbox_app_native_lib/wayland"]
-x11     = ["moosicbox_app_native_lib/x11"]
+wayland = ["hyperchad/wayland"]
+x11     = ["hyperchad/x11"]
 
-lambda = ["moosicbox_app_native_lib/lambda"]
+lambda = ["hyperchad/renderer-html-lambda"]
 
 windows-console = []
 
-debug             = ["moosicbox_app_native_lib/debug"]
-format            = ["moosicbox_app_native_lib/format"]
-profiling-puffin  = ["moosicbox_app_native_lib/profiling-puffin"]
-profiling-tracing = ["moosicbox_app_native_lib/profiling-tracing"]
-profiling-tracy   = ["moosicbox_app_native_lib/profiling-tracy"]
-unsafe            = ["moosicbox_app_native_lib/unsafe"]
+debug             = ["hyperchad/debug"]
+format            = ["hyperchad/format"]
+profiling-puffin  = ["hyperchad/profiling-puffin"]
+profiling-tracing = ["hyperchad/profiling-tracing"]
+profiling-tracy   = ["hyperchad/profiling-tracy"]
+unsafe            = ["hyperchad/unsafe"]
 
-benchmark = ["moosicbox_app_native_lib/benchmark"]
+benchmark = ["hyperchad/benchmark"]
 
-assets        = ["dep:async-recursion", "moosicbox_app_native_lib/assets"]
-static-routes = ["moosicbox_app_native_lib/static-routes"]
+assets        = ["dep:async-recursion", "hyperchad/renderer-html-assets"]
+static-routes = ["hyperchad/router-static-routes"]
 
 dev = ["assets", "static-routes"]

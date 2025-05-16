@@ -4,16 +4,19 @@
 
 use std::sync::{Arc, LazyLock};
 
-use moosicbox_app_native_lib::hyperchad::renderer_html::lambda::lambda_http::tracing;
-use tokio::runtime::Runtime;
+use hyperchad::renderer_html::lambda::lambda_http::tracing;
+use moosicbox_env_utils::default_env_usize;
+use switchy_async::runtime::Runtime;
 
 static RUNTIME: LazyLock<Arc<Runtime>> = LazyLock::new(|| {
-    Arc::new(
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap(),
-    )
+    let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
+    log::debug!("Running with {threads} max blocking threads");
+    let runtime = switchy_async::runtime::Builder::new()
+        .max_blocking_threads(u16::try_from(threads).unwrap())
+        .build()
+        .unwrap();
+
+    Arc::new(runtime)
 });
 
 /// # Errors
@@ -26,14 +29,8 @@ static RUNTIME: LazyLock<Arc<Runtime>> = LazyLock::new(|| {
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     tracing::init_default_subscriber();
 
-    let mut runner = RUNTIME.block_on(async move {
-        let builder = moosicbox_marketing_site::init().with_runtime_arc(RUNTIME.clone());
-        moosicbox_marketing_site::start(builder)
-            .await?
-            .into_runner()
-    })?;
-
-    runner.run().unwrap();
+    let builder = moosicbox_marketing_site::init().with_runtime_arc(RUNTIME.clone());
+    moosicbox_marketing_site::start(builder)?;
 
     Ok(())
 }
