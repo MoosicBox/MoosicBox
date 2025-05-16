@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::{path::PathBuf, sync::LazyLock};
+use std::sync::LazyLock;
 
 use hyperchad::{app::AppBuilder, color::Color, router::Router};
 use moosicbox_env_utils::option_env_f32;
@@ -14,6 +14,7 @@ static BACKGROUND_COLOR: LazyLock<Color> = LazyLock::new(|| Color::from_hex("#18
 
 pub static VIEWPORT: LazyLock<String> = LazyLock::new(|| "width=device-width".to_string());
 
+#[cfg(feature = "assets")]
 static CARGO_MANIFEST_DIR: LazyLock<Option<std::path::PathBuf>> =
     LazyLock::new(|| std::option_env!("CARGO_MANIFEST_DIR").map(Into::into));
 
@@ -43,9 +44,9 @@ pub static ROUTER: LazyLock<Router> = LazyLock::new(|| {
 });
 
 #[cfg(feature = "assets")]
-static ASSETS_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+static ASSETS_DIR: LazyLock<std::path::PathBuf> = LazyLock::new(|| {
     CARGO_MANIFEST_DIR.as_ref().map_or_else(
-        || <PathBuf as std::str::FromStr>::from_str("public").unwrap(),
+        || <std::path::PathBuf as std::str::FromStr>::from_str("public").unwrap(),
         |dir| dir.join("public"),
     )
 });
@@ -79,6 +80,7 @@ pub static ASSETS: LazyLock<Vec<hyperchad::renderer::assets::StaticAssetRoute>> 
 ///
 /// * If an invalid number is given to `WINDOW_WIDTH` or `WINDOW_HEIGHT`
 pub fn init() -> AppBuilder {
+    #[allow(unused_mut)]
     let mut app = AppBuilder::new()
         .with_router(ROUTER.clone())
         .with_background(*BACKGROUND_COLOR)
