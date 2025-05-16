@@ -33,8 +33,9 @@ pub fn thread_id() -> u64 {
 pub enum Error {
     #[error(transparent)]
     IO(#[from] std::io::Error),
-    #[error("Join")]
-    Join,
+    #[cfg(feature = "_any_backend")]
+    #[error(transparent)]
+    Join(#[from] task::JoinError),
 }
 
 pub trait GenericRuntime {
