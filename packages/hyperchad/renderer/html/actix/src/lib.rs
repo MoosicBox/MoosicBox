@@ -14,9 +14,8 @@ use actix_web::{
 };
 use async_trait::async_trait;
 use flume::Receiver;
-use hyperchad_renderer::{Content, RenderRunner, RendererEvent, ToRenderRunner};
+use hyperchad_renderer::{Content, Handle, RenderRunner, RendererEvent, ToRenderRunner};
 use moosicbox_env_utils::default_env_u16;
-use tokio::runtime::Handle;
 
 pub use actix_web;
 
@@ -124,7 +123,7 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
 
         let html_app = self.app.clone();
 
-        moosicbox_task::block_on_runtime("html server", &self.handle, async move {
+        self.handle.block_on(async move {
             let app = move || {
                 let cors = Cors::default()
                     .allow_any_origin()

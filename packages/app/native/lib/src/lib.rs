@@ -9,8 +9,8 @@ use hyperchad::{
     router::Router,
 };
 use moosicbox_env_utils::default_env_usize;
+use switchy_async::runtime::Runtime;
 use thiserror::Error;
-use tokio::runtime::Runtime;
 
 pub use hyperchad;
 
@@ -106,8 +106,8 @@ pub struct NativeAppBuilder {
     height: Option<f32>,
     router: Option<Router>,
     renderer: Option<RendererType>,
-    runtime_handle: Option<tokio::runtime::Handle>,
-    runtime: Option<Arc<tokio::runtime::Runtime>>,
+    runtime_handle: Option<switchy_async::runtime::Handle>,
+    runtime: Option<Arc<switchy_async::runtime::Runtime>>,
     #[cfg(feature = "logic")]
     action_handlers: Vec<Arc<ActionHandler>>,
     resize_listeners: Vec<Arc<ResizeListener>>,
@@ -590,7 +590,7 @@ impl NativeAppBuilder {
     /// # Panics
     ///
     /// * If missing router
-    /// * If failed to start tokio runtime
+    /// * If failed to start `switchy_async` runtime
     ///
     /// # Errors
     ///
@@ -780,14 +780,14 @@ pub struct NativeApp {
     height: Option<f32>,
     pub router: Router,
     pub renderer: RendererType,
-    runtime_handle: Option<tokio::runtime::Handle>,
-    runtime: Option<Arc<tokio::runtime::Runtime>>,
+    runtime_handle: Option<switchy_async::runtime::Handle>,
+    runtime: Option<Arc<switchy_async::runtime::Runtime>>,
 }
 
 impl NativeApp {
     /// # Panics
     ///
-    /// * If failed to create new tokio runtime
+    /// * If failed to create new `switchy_async` runtime
     ///
     /// # Errors
     ///
@@ -810,9 +810,8 @@ impl NativeApp {
             let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
             log::debug!("Running with {threads} max blocking threads");
             Arc::new(
-                tokio::runtime::Builder::new_multi_thread()
-                    .enable_all()
-                    .max_blocking_threads(threads)
+                switchy_async::runtime::Builder::new()
+                    .max_blocking_threads(u16::try_from(threads).unwrap())
                     .build()
                     .unwrap(),
             )
@@ -820,7 +819,7 @@ impl NativeApp {
 
         self.runtime_handle.replace(runtime.handle().clone());
 
-        moosicbox_task::spawn_on("app_native_lib::start: router", runtime.handle(), {
+        runtime.spawn({
             let renderer = self.renderer.clone();
             let router = self.router.clone();
             async move {

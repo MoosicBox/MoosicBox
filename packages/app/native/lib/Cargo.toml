@@ -15,12 +15,12 @@ hyperchad           = { workspace = true, features = ["actions", "renderer", "ro
 moosicbox_assert    = { workspace = true }
 moosicbox_env_utils = { workspace = true }
 moosicbox_task      = { workspace = true }
+switchy_async       = { workspace = true, features = ["rt-multi-thread", "tokio"] }
 
 flume     = { workspace = true }
 log       = { workspace = true }
 os_info   = { workspace = true }
 thiserror = { workspace = true }
-tokio     = { workspace = true, features = ["rt-multi-thread", "sync"] }
 
 [features]
 default = [

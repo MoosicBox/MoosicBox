@@ -6,13 +6,12 @@ use std::{io::Write, marker::PhantomData};
 
 use async_trait::async_trait;
 use flate2::{Compression, write::GzEncoder};
-use hyperchad_renderer::{RenderRunner, ToRenderRunner};
+use hyperchad_renderer::{Handle, RenderRunner, ToRenderRunner};
 use lambda_http::{
     Request, Response,
     http::header::{CONTENT_ENCODING, CONTENT_TYPE},
     service_fn,
 };
-use tokio::runtime::Handle;
 
 pub use lambda_http;
 pub use lambda_runtime;
@@ -126,10 +125,9 @@ impl<
             }
         });
 
-        moosicbox_task::block_on_runtime("html server", &self.handle, async move {
-            lambda_http::run(func).await
-        })
-        .map_err(|e| e as Box<dyn std::error::Error + Send>)?;
+        self.handle
+            .block_on(async move { lambda_http::run(func).await })
+            .map_err(|e| e as Box<dyn std::error::Error + Send>)?;
 
         log::debug!("run: finished");
 

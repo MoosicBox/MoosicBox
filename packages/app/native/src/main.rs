@@ -356,9 +356,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
     log::debug!("Running with {threads} max blocking threads");
 
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .max_blocking_threads(threads)
+    let runtime = switchy_async::runtime::Builder::new()
+        .max_blocking_threads(u16::try_from(threads).unwrap())
         .build()
         .unwrap();
 
@@ -649,7 +648,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let server = moosicbox_app_native_bundled::service::Service::new(context);
 
             let app_server_handle = server.handle();
-            let (tx, rx) = tokio::sync::oneshot::channel();
+            let (tx, rx) = switchy_async::sync::oneshot::channel();
 
             let join_app_server = server.start_on(runtime.handle());
 

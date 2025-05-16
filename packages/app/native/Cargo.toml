@@ -57,6 +57,14 @@ moosicbox_remote_library = { workspace = true }
 moosicbox_session_models = { workspace = true }
 moosicbox_task = { workspace = true }
 moosicbox_ws = { workspace = true }
+switchy_async = { workspace = true, features = [
+    "macros",
+    "rt-multi-thread",
+    "sync",
+    "time",
+    "tokio",
+    "util",
+] }
 switchy_http = { workspace = true, features = ["json", "reqwest"] }
 switchy_time = { workspace = true, features = ["std"] }
 
@@ -69,8 +77,6 @@ log                = { workspace = true }
 serde_json         = { workspace = true }
 strum              = { workspace = true }
 thiserror          = { workspace = true }
-tokio              = { workspace = true, features = ["macros", "rt-multi-thread"] }
-tokio-util         = { workspace = true }
 
 [features]
 default = [

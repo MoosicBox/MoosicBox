@@ -10,7 +10,7 @@ use html::{
     element_classes_to_html, element_style_to_html, number_to_html_string, write_css_attr_important,
 };
 use hyperchad_renderer::{
-    Color, HtmlTagRenderer, PartialView, RenderRunner, Renderer, ToRenderRunner, View,
+    Color, Handle, HtmlTagRenderer, PartialView, RenderRunner, Renderer, ToRenderRunner, View,
     canvas::CanvasUpdate,
 };
 use hyperchad_router::Container;
@@ -19,7 +19,6 @@ use hyperchad_transformer::{
     models::{AlignItems, LayoutDirection, TextAlign, Visibility},
 };
 use maud::{DOCTYPE, PreEscaped, html};
-use tokio::runtime::Handle;
 
 #[cfg(feature = "actix")]
 pub use actix::router_to_actix;

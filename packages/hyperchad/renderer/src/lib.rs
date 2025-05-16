@@ -14,7 +14,7 @@ use std::{future::Future, pin::Pin};
 use async_trait::async_trait;
 pub use hyperchad_color::Color;
 use hyperchad_transformer::{Container, ResponsiveTrigger, html::ParseError};
-pub use tokio::runtime::Handle;
+pub use switchy_async::runtime::Handle;
 
 pub use hyperchad_transformer as transformer;
 

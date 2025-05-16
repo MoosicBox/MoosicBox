@@ -5096,7 +5096,7 @@ dependencies = [
  "maud",
  "serde",
  "serde_json",
- "tokio",
+ "switchy_async",
 ]
 
 [[package]]
@@ -6822,11 +6822,10 @@ dependencies = [
  "moosicbox_ws",
  "serde_json",
  "strum 0.27.1",
+ "switchy_async",
  "switchy_http",
  "switchy_time",
  "thiserror 2.0.12",
- "tokio",
- "tokio-util",
 ]
 
 [[package]]
@@ -6864,8 +6863,8 @@ dependencies = [
  "moosicbox_env_utils",
  "moosicbox_task",
  "os_info",
+ "switchy_async",
  "thiserror 2.0.12",
- "tokio",
 ]
 
 [[package]]

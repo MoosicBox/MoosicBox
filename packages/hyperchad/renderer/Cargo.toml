@@ -16,6 +16,7 @@ group = "hyperchad"
 [dependencies]
 hyperchad_color       = { workspace = true }
 hyperchad_transformer = { workspace = true, features = ["html"] }
+switchy_async         = { workspace = true, features = ["rt-multi-thread", "tokio"] }
 
 async-trait = { workspace = true }
 bytes       = { workspace = true, optional = true }
@@ -23,7 +24,6 @@ log         = { workspace = true }
 maud        = { workspace = true, optional = true }
 serde       = { workspace = true, optional = true }
 serde_json  = { workspace = true, optional = true }
-tokio       = { workspace = true, features = ["rt"] }
 
 [features]
 default = [
