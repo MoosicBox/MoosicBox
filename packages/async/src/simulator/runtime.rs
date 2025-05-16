@@ -20,6 +20,43 @@ type Queue = Arc<Mutex<Vec<Arc<Task>>>>;
 static RUNTIME_ID: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(1));
 static TASK_ID: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(1));
 
+#[derive(Debug, Clone)]
+pub struct Handle {
+    runtime: Arc<Runtime>,
+}
+
+impl Handle {
+    pub fn block_on<F: Future + 'static>(&self, f: F) -> F::Output
+    where
+        F::Output: Send,
+    {
+        self.runtime.block_on(f)
+    }
+
+    pub fn spawn<T: Send + 'static>(
+        &self,
+        future: impl Future<Output = T> + Send + 'static,
+    ) -> JoinHandle<T> {
+        self.runtime.spawn(future)
+    }
+
+    pub fn spawn_blocking<F, R>(&self, func: F) -> JoinHandle<R>
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        self.runtime.spawn_blocking(func)
+    }
+
+    /// # Panics
+    ///
+    /// * If no runtime is currently running
+    #[must_use]
+    pub fn current() -> Self {
+        Runtime::current().map(|x| x.handle().clone()).unwrap()
+    }
+}
+
 scoped_thread_local! {
     static RUNTIME: Runtime
 }
@@ -31,6 +68,7 @@ pub struct Runtime {
     spawner: Spawner,
     tasks: Arc<AtomicU64>,
     active: Arc<AtomicBool>,
+    handle: Option<Handle>,
 }
 
 impl Default for Runtime {
@@ -90,7 +128,7 @@ impl Runtime {
     pub fn new() -> Self {
         let queue = Arc::new(Mutex::new(vec![]));
 
-        Self {
+        let mut this = Self {
             id: RUNTIME_ID.fetch_add(1, Ordering::SeqCst),
             spawner: Spawner {
                 queue: queue.clone(),
@@ -98,7 +136,22 @@ impl Runtime {
             queue,
             tasks: Arc::new(AtomicU64::new(0)),
             active: Arc::new(AtomicBool::new(false)),
-        }
+            handle: None,
+        };
+
+        this.handle = Some(Handle {
+            runtime: Arc::new(this.clone()),
+        });
+
+        this
+    }
+
+    /// # Panics
+    ///
+    /// * If `handle` is empty
+    #[must_use]
+    pub const fn handle(&self) -> &Handle {
+        self.handle.as_ref().unwrap()
     }
 
     fn start(&self) {

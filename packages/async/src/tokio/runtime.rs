@@ -5,6 +5,7 @@ use tokio::task::JoinHandle;
 use crate::{Error, GenericRuntime};
 
 pub use crate::Builder;
+pub use tokio::runtime::Handle;
 
 #[derive(Debug)]
 pub struct Runtime(tokio::runtime::Runtime);
@@ -29,6 +30,10 @@ impl Runtime {
         future: impl Future<Output = T> + Send + 'static,
     ) -> JoinHandle<T> {
         self.0.spawn(future)
+    }
+
+    pub fn handle(&self) -> &Handle {
+        self.0.handle()
     }
 }
 
