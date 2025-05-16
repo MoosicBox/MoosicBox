@@ -375,20 +375,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let runtime = Arc::new(runtime);
 
     let router = Router::new()
-        .with_route(&["/", "/home"], |_| async {
+        .with_static_route(&["/", "/home"], |_| async {
             moosicbox_app_native_ui::home(&convert_state(&STATE).await)
         })
-        .with_route("/downloads", |_| async {
+        .with_static_route("/downloads", |_| async {
             moosicbox_app_native_ui::downloads(&convert_state(&STATE).await)
         })
-        .with_route("/settings", |_| async {
+        .with_static_route("/settings", |_| async {
             moosicbox_app_native_ui::settings::settings(&convert_state(&STATE).await)
         })
-        .with_route_result("/audio-zones", |req| async { audio_zones_route(req).await })
-        .with_route_result("/playback-sessions", |req| async {
+        .with_static_route_result("/audio-zones", |req| async { audio_zones_route(req).await })
+        .with_static_route_result("/playback-sessions", |req| async {
             playback_sessions_route(req).await
         })
-        .with_route_result("/albums", |req| async move {
+        .with_static_route_result("/albums", |req| async move {
             Ok::<_, Box<dyn std::error::Error>>(if let Some(album_id) = req.query.get("albumId") {
                 let source: ApiSource = req
                     .query
@@ -497,7 +497,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/albums-list",
             |req| async move { albums_list_route(req).await },
         )
-        .with_route_result("/artists", |req| async move {
+        .with_static_route_result("/artists", |req| async move {
             Ok::<_, Box<dyn std::error::Error>>(
                 if let Some(artist_id) = req.query.get("artistId") {
                     let source: Option<ApiSource> =
