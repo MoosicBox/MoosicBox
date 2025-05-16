@@ -26,14 +26,12 @@ hyperchad_renderer_vanilla_js = { workspace = true, optional = true, features = 
 hyperchad_router = { workspace = true }
 moosicbox_assert = { workspace = true }
 moosicbox_env_utils = { workspace = true }
-moosicbox_task = { workspace = true }
 switchy_async = { workspace = true, features = ["rt-multi-thread", "tokio"] }
 
 async-trait = { workspace = true }
 clap        = { workspace = true }
 flume       = { workspace = true }
 log         = { workspace = true }
-os_info     = { workspace = true }
 serde_json  = { workspace = true }
 thiserror   = { workspace = true }
 

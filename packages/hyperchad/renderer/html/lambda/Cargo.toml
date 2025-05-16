@@ -17,7 +17,6 @@ group = "hyperchad"
 hyperchad_renderer  = { workspace = true, features = ["canvas"] }
 moosicbox_assert    = { workspace = true }
 moosicbox_env_utils = { workspace = true }
-moosicbox_task      = { workspace = true }
 
 async-trait    = { workspace = true }
 flate2         = { workspace = true }
@@ -25,7 +24,6 @@ lambda_http    = { workspace = true }
 lambda_runtime = { workspace = true }
 log            = { workspace = true }
 serde_json     = { workspace = true, optional = true }
-tokio          = { workspace = true }
 
 [features]
 default = ["assets", "debug", "json"]

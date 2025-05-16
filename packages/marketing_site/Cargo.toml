@@ -44,14 +44,12 @@ switchy_async = { workspace = true, features = [
 ] }
 switchy_http = { workspace = true, features = ["reqwest"] }
 
-async-recursion    = { workspace = true, optional = true }
 chrono             = { workspace = true }
 console-subscriber = { workspace = true, optional = true }
 log                = { workspace = true }
 regex              = { workspace = true }
 serde              = { workspace = true }
 serde_json         = { workspace = true }
-tokio              = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]
 default = [
@@ -101,7 +99,7 @@ unsafe            = ["hyperchad/unsafe"]
 
 benchmark = ["hyperchad/benchmark"]
 
-assets        = ["dep:async-recursion", "hyperchad/renderer-html-assets"]
+assets        = ["hyperchad/renderer-html-assets"]
 static-routes = ["hyperchad/router-static-routes"]
 
 dev = ["assets", "static-routes"]

@@ -5069,7 +5069,6 @@ dependencies = [
  "log",
  "moosicbox_assert",
  "moosicbox_env_utils",
- "moosicbox_task",
  "os_info",
  "serde_json",
  "switchy_async",
@@ -5193,7 +5192,6 @@ dependencies = [
  "moosicbox_logging",
  "serde_json",
  "thiserror 2.0.12",
- "tokio",
  "uaparser",
 ]
 
@@ -5214,10 +5212,8 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_middleware",
- "moosicbox_task",
  "serde",
  "serde_json",
- "tokio",
 ]
 
 [[package]]
@@ -5232,9 +5228,7 @@ dependencies = [
  "log",
  "moosicbox_assert",
  "moosicbox_env_utils",
- "moosicbox_task",
  "serde_json",
- "tokio",
 ]
 
 [[package]]
@@ -7408,7 +7402,6 @@ dependencies = [
 name = "moosicbox_marketing_site"
 version = "0.1.1"
 dependencies = [
- "async-recursion",
  "chrono",
  "console-subscriber",
  "hyperchad",
@@ -7422,7 +7415,6 @@ dependencies = [
  "serde_json",
  "switchy_async",
  "switchy_http",
- "tokio",
 ]
 
 [[package]]

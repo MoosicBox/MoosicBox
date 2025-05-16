@@ -30,7 +30,6 @@ log         = { workspace = true }
 maud        = { workspace = true }
 serde_json  = { workspace = true, optional = true }
 thiserror   = { workspace = true, optional = true }
-tokio       = { workspace = true }
 uaparser    = { workspace = true }
 
 [features]
