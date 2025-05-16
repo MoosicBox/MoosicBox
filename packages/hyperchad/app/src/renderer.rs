@@ -1,4 +1,4 @@
-use crate::{App, AppBuilder, BuilderError};
+use crate::AppBuilder;
 
 #[cfg(feature = "egui")]
 pub type DefaultRenderer = egui::EguiRenderer;
@@ -38,7 +38,6 @@ pub type DefaultRenderer = html::actix::HtmlActixRenderer;
     not(any(
         feature = "egui",
         feature = "fltk",
-        feature = "lambda",
         feature = "vanilla-js",
         feature = "actix"
     ))
@@ -50,7 +49,6 @@ pub type DefaultRenderer = html::lambda::HtmlLambdaRenderer;
     not(any(
         feature = "egui",
         feature = "fltk",
-        feature = "lambda",
         feature = "actix",
         feature = "lambda"
     ))
@@ -64,11 +62,18 @@ pub type DefaultRenderer = html::vanilla_js::HtmlVanillaJsRenderer;
         feature = "fltk",
         feature = "lambda",
         feature = "vanilla-js",
-        feature = "actix",
-        feature = "lambda"
+        feature = "actix"
     ))
 ))]
 pub type DefaultRenderer = html::HtmlStubRenderer;
+
+#[cfg(not(any(
+    feature = "html",
+    feature = "egui",
+    feature = "fltk",
+    feature = "vanilla-js"
+)))]
+pub type DefaultRenderer = stub::StubRenderer;
 
 #[cfg(feature = "egui")]
 mod egui {
@@ -197,7 +202,7 @@ mod egui {
 #[cfg(feature = "fltk")]
 mod fltk {
     use async_trait::async_trait;
-    use hyperchad_router::{Router, DEFAULT_CLIENT_INFO};
+    use hyperchad_router::{DEFAULT_CLIENT_INFO, Router};
 
     use crate::{App, AppBuilder, BuilderError, Cleaner, Error, Generator};
 
@@ -728,38 +733,174 @@ mod html {
     }
 }
 
+pub mod stub {
+    use async_trait::async_trait;
+    use hyperchad_renderer::{
+        Color, Handle, PartialView, RenderRunner, Renderer, ToRenderRunner, View,
+        transformer::ResponsiveTrigger,
+    };
+
+    use crate::{App, AppBuilder, BuilderError, Cleaner, Error, Generator};
+
+    #[derive(Debug, Clone)]
+    pub struct StubRenderer;
+
+    #[async_trait]
+    impl Renderer for StubRenderer {
+        /// # Errors
+        ///
+        /// Will error if `Renderer` implementation app fails to start
+        #[allow(clippy::too_many_arguments)]
+        async fn init(
+            &mut self,
+            _width: f32,
+            _height: f32,
+            _x: Option<i32>,
+            _y: Option<i32>,
+            _background: Option<Color>,
+            _title: Option<&str>,
+            _description: Option<&str>,
+            _viewport: Option<&str>,
+        ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+            Ok(())
+        }
+
+        fn add_responsive_trigger(&mut self, _name: String, _trigger: ResponsiveTrigger) {}
+
+        /// # Errors
+        ///
+        /// Will error if `Renderer` implementation fails to emit the event.
+        async fn emit_event(
+            &self,
+            _event_name: String,
+            _event_value: Option<String>,
+        ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+            Ok(())
+        }
+
+        /// # Errors
+        ///
+        /// Will error if `Renderer` implementation fails to render the view.
+        async fn render(
+            &self,
+            _view: View,
+        ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+            Ok(())
+        }
+
+        /// # Errors
+        ///
+        /// Will error if `Renderer` implementation fails to render the partial elements.
+        async fn render_partial(
+            &self,
+            _partial: PartialView,
+        ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+            Ok(())
+        }
+    }
+
+    #[async_trait]
+    impl Generator for StubRenderer {
+        async fn generate(
+            &self,
+            _router: &hyperchad_router::Router,
+            _output: Option<String>,
+        ) -> Result<(), Error> {
+            Ok(())
+        }
+    }
+
+    #[async_trait]
+    impl Cleaner for StubRenderer {
+        async fn clean(&self, _output: Option<String>) -> Result<(), Error> {
+            Ok(())
+        }
+    }
+
+    pub struct StubRunner;
+
+    impl RenderRunner for StubRunner {
+        fn run(&mut self) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+            Ok(())
+        }
+    }
+
+    impl ToRenderRunner for StubRenderer {
+        /// # Errors
+        ///
+        /// Will error if `Renderer` implementation fails to run
+        fn to_runner(
+            self,
+            _handle: Handle,
+        ) -> Result<Box<dyn hyperchad_renderer::RenderRunner>, Box<dyn std::error::Error + Send>>
+        {
+            Ok(Box::new(StubRunner))
+        }
+    }
+
+    impl AppBuilder {
+        /// # Errors
+        ///
+        /// * If the `AppBuilder` is missing a router
+        pub fn build_stub(self, renderer: StubRenderer) -> Result<App<StubRenderer>, BuilderError> {
+            self.build(renderer)
+        }
+
+        /// # Errors
+        ///
+        /// * If the `AppBuilder` is missing a router
+        pub fn build_default_stub(self) -> Result<App<StubRenderer>, BuilderError> {
+            let renderer = StubRenderer;
+
+            self.build(renderer)
+        }
+    }
+}
+
 impl AppBuilder {
     /// # Errors
     ///
-    /// * If the `AppBuilder` is missing a router
+    /// * If fails to build the default renderer
     #[cfg(feature = "egui")]
-    pub fn build_default(self) -> Result<App<DefaultRenderer>, BuilderError> {
+    pub fn build_default(self) -> Result<crate::App<DefaultRenderer>, crate::BuilderError> {
         self.build_default_egui()
     }
 
+    /// # Errors
+    ///
+    /// * If fails to build the default renderer
     #[cfg(all(feature = "fltk", not(feature = "egui")))]
-    pub fn build_default(self) -> Result<App<DefaultRenderer>, BuilderError> {
+    pub fn build_default(self) -> Result<crate::App<DefaultRenderer>, crate::BuilderError> {
         self.build_default_fltk()
     }
 
+    /// # Errors
+    ///
+    /// * If fails to build the default renderer
     #[cfg(all(
         feature = "actix",
         feature = "vanilla-js",
         not(any(feature = "egui", feature = "fltk"))
     ))]
-    pub fn build_default(self) -> Result<App<DefaultRenderer>, BuilderError> {
+    pub fn build_default(self) -> Result<crate::App<DefaultRenderer>, crate::BuilderError> {
         self.build_default_html_vanilla_js_actix()
     }
 
+    /// # Errors
+    ///
+    /// * If fails to build the default renderer
     #[cfg(all(
         feature = "lambda",
         feature = "vanilla-js",
         not(any(feature = "egui", feature = "fltk", feature = "actix"))
     ))]
-    pub fn build_default(self) -> Result<App<DefaultRenderer>, BuilderError> {
+    pub fn build_default(self) -> Result<crate::App<DefaultRenderer>, crate::BuilderError> {
         self.build_default_html_vanilla_js_lambda()
     }
 
+    /// # Errors
+    ///
+    /// * If fails to build the default renderer
     #[cfg(all(
         feature = "actix",
         feature = "html",
@@ -770,51 +911,70 @@ impl AppBuilder {
             feature = "vanilla-js"
         ))
     ))]
-    pub fn build_default(self) -> Result<App<DefaultRenderer>, BuilderError> {
+    pub fn build_default(self) -> Result<crate::App<DefaultRenderer>, crate::BuilderError> {
         self.build_default_html_actix()
     }
 
+    /// # Errors
+    ///
+    /// * If fails to build the default renderer
     #[cfg(all(
         feature = "lambda",
         feature = "html",
         not(any(
             feature = "egui",
             feature = "fltk",
-            feature = "lambda",
             feature = "vanilla-js",
             feature = "actix"
         ))
     ))]
-    pub fn build_default(self) -> Result<App<DefaultRenderer>, BuilderError> {
+    pub fn build_default(self) -> Result<crate::App<DefaultRenderer>, crate::BuilderError> {
         self.build_default_html_lambda()
     }
 
+    /// # Errors
+    ///
+    /// * If fails to build the default renderer
     #[cfg(all(
         feature = "html",
         not(any(
             feature = "egui",
             feature = "fltk",
-            feature = "lambda",
             feature = "actix",
             feature = "lambda"
         ))
     ))]
-    pub fn build_default(self) -> Result<App<DefaultRenderer>, BuilderError> {
+    pub fn build_default(self) -> Result<crate::App<DefaultRenderer>, crate::BuilderError> {
         self.build_default_html_vanilla_js()
     }
 
+    /// # Errors
+    ///
+    /// * If fails to build the default renderer
     #[cfg(all(
         feature = "html",
         not(any(
             feature = "egui",
             feature = "fltk",
-            feature = "lambda",
             feature = "vanilla-js",
             feature = "actix",
             feature = "lambda"
         ))
     ))]
-    pub fn build_default(self) -> Result<App<DefaultRenderer>, BuilderError> {
+    pub fn build_default(self) -> Result<crate::App<DefaultRenderer>, crate::BuilderError> {
         self.build_default_html()
+    }
+
+    /// # Errors
+    ///
+    /// * If fails to build the default renderer
+    #[cfg(not(any(
+        feature = "html",
+        feature = "egui",
+        feature = "fltk",
+        feature = "vanilla-js"
+    )))]
+    pub fn build_default(self) -> Result<crate::App<DefaultRenderer>, crate::BuilderError> {
+        self.build_default_stub()
     }
 }
