@@ -205,6 +205,15 @@ impl Runtime {
         RUNTIME.set(self, || self.spawner.spawn(self.clone(), future))
     }
 
+    pub fn spawn_blocking<F, R>(&self, func: F) -> JoinHandle<R>
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        self.start();
+        RUNTIME.set(self, || self.spawner.spawn_blocking(self.clone(), func))
+    }
+
     fn active(&self) -> bool {
         self.active.load(Ordering::SeqCst)
     }
@@ -293,16 +302,16 @@ impl Spawner {
         }
     }
 
-    fn spawn_blocking<T: Send + 'static>(
-        &self,
-        runtime: Runtime,
-        future: impl Future<Output = T> + Send + 'static,
-    ) -> JoinHandle<T> {
+    fn spawn_blocking<F, R>(&self, runtime: Runtime, func: F) -> JoinHandle<R>
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Send + 'static,
+    {
         log::trace!("spawn_blocking");
         let (tx, rx) = futures::channel::oneshot::channel();
 
         let wrapped = async move {
-            let _ = tx.send(future.await);
+            let _ = tx.send(func());
         };
 
         self.inner_spawn_blocking(&Task::new(runtime, true, wrapped));
@@ -343,6 +352,14 @@ impl Spawner {
 
 pub fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> JoinHandle<T> {
     RUNTIME.with(|runtime| runtime.spawn(future))
+}
+
+pub fn spawn_blocking<F, R>(func: F) -> JoinHandle<R>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    RUNTIME.with(|runtime| runtime.spawn_blocking(func))
 }
 
 pub fn block_on<F: Future + 'static>(future: F) -> F::Output {
