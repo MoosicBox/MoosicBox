@@ -18,8 +18,6 @@ pub mod tokio;
 #[cfg(feature = "simulator")]
 pub mod simulator;
 
-pub mod runtime;
-
 static THREAD_ID_COUNTER: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(1));
 
 thread_local! {
@@ -39,12 +37,53 @@ pub enum Error {
     Join,
 }
 
+pub trait GenericRuntime {
+    fn block_on<F: Future + Send + 'static>(&self, f: F) -> F::Output
+    where
+        F::Output: Send;
+
+    /// # Errors
+    ///
+    /// * If the `GenericRuntime` fails to join
+    fn wait(self) -> Result<(), Error>;
+}
+
+pub struct Builder {
+    #[cfg(feature = "rt-multi-thread")]
+    pub max_blocking_threads: Option<u16>,
+}
+
+impl Default for Builder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Builder {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            #[cfg(feature = "rt-multi-thread")]
+            max_blocking_threads: None,
+        }
+    }
+
+    #[cfg(feature = "rt-multi-thread")]
+    pub fn max_blocking_threads<T: Into<Option<u16>>>(
+        &mut self,
+        max_blocking_threads: T,
+    ) -> &mut Self {
+        self.max_blocking_threads = max_blocking_threads.into();
+        self
+    }
+}
+
 #[allow(unused)]
 macro_rules! impl_async {
     ($module:ident $(,)?) => {
         pub use $module::task;
 
-        pub use $module::runtime::Runtime;
+        pub use $module::runtime;
 
         #[cfg(feature = "io")]
         pub use $module::io;
@@ -63,18 +102,18 @@ macro_rules! impl_async {
             where
                 F::Output: Send,
             {
-                <Self as crate::runtime::GenericRuntime>::block_on(self, f)
+                <Self as GenericRuntime>::block_on(self, f)
             }
 
             /// # Errors
             ///
             /// * If the `Runtime` fails to join
             pub fn wait(self) -> Result<(), Error> {
-                <Self as crate::runtime::GenericRuntime>::wait(self)
+                <Self as GenericRuntime>::wait(self)
             }
         }
 
-        impl crate::runtime::Builder {
+        impl Builder {
             /// # Errors
             ///
             /// * If the underlying `Runtime` fails to build

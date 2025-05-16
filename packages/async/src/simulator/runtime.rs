@@ -11,10 +11,9 @@ use std::{
 use scoped_tls::scoped_thread_local;
 use switchy_random::{rand::rand::seq::IteratorRandom, rng};
 
-use crate::{
-    Error,
-    runtime::{Builder, GenericRuntime},
-};
+pub use crate::Builder;
+
+use crate::{Error, GenericRuntime};
 
 type Queue = Arc<Mutex<Vec<Arc<Task>>>>;
 

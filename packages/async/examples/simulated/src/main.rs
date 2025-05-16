@@ -1,6 +1,6 @@
 use std::time::{Duration, SystemTime};
 
-use switchy_async::{Error, Runtime, task, time};
+use switchy_async::{Error, runtime::Runtime, task, time};
 use switchy_random::{rng, simulator::initial_seed};
 
 fn main() -> Result<(), Error> {
