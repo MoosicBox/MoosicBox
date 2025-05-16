@@ -273,9 +273,9 @@ mod html {
     use std::{path::PathBuf, sync::LazyLock};
 
     use async_trait::async_trait;
-    use hyperchad_renderer::{Color, ToRenderRunner};
+    use hyperchad_renderer::ToRenderRunner;
     use hyperchad_renderer_html::{HtmlApp, HtmlRenderer};
-    use hyperchad_router::{RoutePath, Router};
+    use hyperchad_router::Router;
 
     use crate::{App, AppBuilder, BuilderError};
     use crate::{Cleaner, Error, Generator};
@@ -287,23 +287,25 @@ mod html {
     static DEFAULT_OUTPUT_DIR: &str = "gen";
     static CARGO_MANIFEST_DIR: LazyLock<Option<std::path::PathBuf>> =
         LazyLock::new(|| std::env::var("CARGO_MANIFEST_DIR").ok().map(Into::into));
-    static BACKGROUND_COLOR: LazyLock<Color> = LazyLock::new(|| Color::from_hex("#181a1b"));
-    static VIEWPORT: LazyLock<String> = LazyLock::new(|| "width=device-width".to_string());
 
     #[async_trait]
     impl<T: HtmlApp + ToRenderRunner + Send + Sync> Generator for HtmlRenderer<T> {
+        #[cfg(not(feature = "static-routes"))]
+        async fn generate(&self, _router: &Router, _output: Option<String>) -> Result<(), Error> {
+            panic!("Must have `static-routes` enabled to generate");
+        }
+
         #[allow(clippy::too_many_lines)]
+        #[cfg(feature = "static-routes")]
         async fn generate(&self, router: &Router, output: Option<String>) -> Result<(), Error> {
             use std::io::Write as _;
 
-            use hyperchad_renderer::{Content, PartialView, View};
+            use hyperchad_renderer::{Color, Content, PartialView, View};
             use hyperchad_renderer_html::html::container_element_to_html_response;
-            use hyperchad_router::{ClientInfo, ClientOs, RequestInfo, RouteRequest};
+            use hyperchad_router::{ClientInfo, ClientOs, RequestInfo, RoutePath, RouteRequest};
 
-            assert!(
-                cfg!(feature = "static-routes"),
-                "Must have `static-routes` enabled to gen"
-            );
+            static BACKGROUND_COLOR: LazyLock<Color> = LazyLock::new(|| Color::from_hex("#181a1b"));
+            static VIEWPORT: LazyLock<String> = LazyLock::new(|| "width=device-width".to_string());
 
             let output = output.unwrap_or_else(|| {
                 CARGO_MANIFEST_DIR
