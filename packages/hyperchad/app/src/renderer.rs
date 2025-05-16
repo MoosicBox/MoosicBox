@@ -46,6 +46,7 @@ pub type DefaultRenderer = html::lambda::HtmlLambdaRenderer;
 
 #[cfg(all(
     feature = "html",
+    feature = "vanilla-js",
     not(any(
         feature = "egui",
         feature = "fltk",
@@ -939,6 +940,7 @@ impl AppBuilder {
     /// * If fails to build the default renderer
     #[cfg(all(
         feature = "html",
+        feature = "vanilla-js",
         not(any(
             feature = "egui",
             feature = "fltk",
