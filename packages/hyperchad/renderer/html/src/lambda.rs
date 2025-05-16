@@ -53,6 +53,10 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlLambdaResponseProcessor<T> {
 impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
     for LambdaApp<PreparedRequest, HtmlLambdaResponseProcessor<T>>
 {
+    fn tag_renderer(&self) -> &dyn HtmlTagRenderer {
+        &self.processor.tag_renderer
+    }
+
     fn with_responsive_trigger(mut self, name: String, trigger: ResponsiveTrigger) -> Self {
         self.processor
             .tag_renderer

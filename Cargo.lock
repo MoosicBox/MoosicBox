@@ -5024,6 +5024,7 @@ name = "hyperchad"
 version = "0.1.0"
 dependencies = [
  "hyperchad_actions",
+ "hyperchad_app",
  "hyperchad_color",
  "hyperchad_js_bundler",
  "hyperchad_renderer",
@@ -5049,6 +5050,30 @@ dependencies = [
  "quickcheck",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "hyperchad_app"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "clap 4.5.38",
+ "flume",
+ "hyperchad_actions",
+ "hyperchad_renderer",
+ "hyperchad_renderer_egui",
+ "hyperchad_renderer_fltk",
+ "hyperchad_renderer_html",
+ "hyperchad_renderer_vanilla_js",
+ "hyperchad_router",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_env_utils",
+ "moosicbox_task",
+ "os_info",
+ "serde_json",
+ "switchy_async",
+ "thiserror 2.0.12",
 ]
 
 [[package]]

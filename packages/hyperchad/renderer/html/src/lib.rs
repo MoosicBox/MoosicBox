@@ -368,6 +368,8 @@ const fn override_item_to_css_name(item: &OverrideItem) -> &'static [u8] {
 }
 
 pub trait HtmlApp {
+    fn tag_renderer(&self) -> &dyn HtmlTagRenderer;
+
     #[must_use]
     fn with_responsive_trigger(self, _name: String, _trigger: ResponsiveTrigger) -> Self;
     fn add_responsive_trigger(&mut self, _name: String, _trigger: ResponsiveTrigger);

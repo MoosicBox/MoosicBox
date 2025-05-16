@@ -203,6 +203,15 @@ pub struct Router {
     pub receiver: Receiver<Content>,
 }
 
+impl std::fmt::Debug for Router {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Router")
+            .field("sender", &self.sender)
+            .field("receiver", &self.receiver)
+            .finish_non_exhaustive()
+    }
+}
+
 impl Default for Router {
     fn default() -> Self {
         Self::new()

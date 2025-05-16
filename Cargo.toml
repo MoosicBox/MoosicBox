@@ -43,6 +43,7 @@ members = [
     "packages/http/models",
     "packages/hyperchad",
     "packages/hyperchad/actions",
+    "packages/hyperchad/app",
     "packages/hyperchad/color",
     "packages/hyperchad/js_bundler",
     "packages/hyperchad/renderer",
@@ -238,6 +239,7 @@ switchy_upnp                = { version = "0.1.3", default-features = false, pat
 # Internal Hyperchad
 hyperchad                      = { version = "0.1.0", default-features = false, path = "packages/hyperchad" }
 hyperchad_actions              = { version = "0.1.0", default-features = false, path = "packages/hyperchad/actions" }
+hyperchad_app                  = { version = "0.1.0", default-features = false, path = "packages/hyperchad/app" }
 hyperchad_color                = { version = "0.1.0", default-features = false, path = "packages/hyperchad/color" }
 hyperchad_js_bundler           = { version = "0.1.0", default-features = false, path = "packages/hyperchad/js_bundler" }
 hyperchad_renderer             = { version = "0.1.0", default-features = false, path = "packages/hyperchad/renderer" }

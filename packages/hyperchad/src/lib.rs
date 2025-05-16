@@ -4,6 +4,8 @@
 
 #[cfg(feature = "actions")]
 pub use hyperchad_actions as actions;
+#[cfg(feature = "app")]
+pub use hyperchad_app as app;
 #[cfg(feature = "color")]
 pub use hyperchad_color as color;
 #[cfg(feature = "js-bundler")]

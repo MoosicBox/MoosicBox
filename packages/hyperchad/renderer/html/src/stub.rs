@@ -15,6 +15,10 @@ impl<T: HtmlTagRenderer> StubApp<T> {
 }
 
 impl<T: HtmlTagRenderer> HtmlApp for StubApp<T> {
+    fn tag_renderer(&self) -> &dyn HtmlTagRenderer {
+        &self.tag_renderer
+    }
+
     fn with_responsive_trigger(mut self, name: String, trigger: ResponsiveTrigger) -> Self {
         self.tag_renderer.add_responsive_trigger(name, trigger);
         self
