@@ -318,7 +318,7 @@ fn parse_track_sources(value: &str) -> Result<Vec<TrackApiSource>, RouteError> {
 
 static PROFILE: &str = "master";
 
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if cfg!(feature = "profiling-tracing") {
         // no global tracing defined here
