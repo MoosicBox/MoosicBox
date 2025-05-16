@@ -41,9 +41,9 @@ async fn search_for_cover(
     headers: Option<&[(String, String)]>,
 ) -> Result<Option<PathBuf>, FetchAndSaveBytesFromRemoteUrlError> {
     std::fs::create_dir_all(path)
-        .unwrap_or_else(|_| panic!("Failed to create config directory at {path:?}"));
+        .unwrap_or_else(|_| panic!("Failed to create config directory at {}", path.display()));
 
-    log::debug!("Searching for existing cover in {path:?}...");
+    log::debug!("Searching for existing cover in {}...", path.display());
 
     if let Some(cover_file) = std::fs::read_dir(path)
         .unwrap()
@@ -51,10 +51,17 @@ async fn search_for_cover(
         .find(|p| p.file_name().to_str().unwrap() == name)
         .map(|dir| dir.path())
     {
-        log::debug!("Found existing cover in {path:?}: '{cover_file:?}'");
+        log::debug!(
+            "Found existing cover in {}: '{}'",
+            path.display(),
+            cover_file.display()
+        );
         Ok(Some(cover_file))
     } else {
-        log::debug!("No existing cover in {path:?}, searching internet");
+        log::debug!(
+            "No existing cover in {}, searching internet",
+            path.display()
+        );
         Ok(Some(
             moosicbox_files::fetch_and_save_bytes_from_remote_url(
                 client,

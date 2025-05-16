@@ -200,27 +200,22 @@ macro_rules! impl_http {
 
             #[async_trait]
             impl GenericResponse for ModuleResponse {
-                #[must_use]
                 fn status(&self) -> StatusCode {
                     self.0.status()
                 }
 
-                #[must_use]
                 fn headers(&mut self) -> &BTreeMap<String, String> {
                     self.0.headers()
                 }
 
-                #[must_use]
                 async fn text(&mut self) -> Result<String, Error> {
                     self.0.text().await
                 }
 
-                #[must_use]
                 async fn bytes(&mut self) -> Result<Bytes, Error> {
                     self.0.bytes().await
                 }
 
-                #[must_use]
                 #[cfg(feature = "stream")]
                 fn bytes_stream(
                     &mut self,

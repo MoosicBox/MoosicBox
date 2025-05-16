@@ -64,7 +64,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     )?;
 
-    log::debug!("Converting file ({source:?}) => ({output:?}) with {output_encoding:?} encoding");
+    log::debug!(
+        "Converting file ({}) => ({}) with {output_encoding:?} encoding",
+        source.display(),
+        output.display()
+    );
 
     let bytes = get_audio_bytes(
         TrackSource::LocalFilePath {
@@ -80,7 +84,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await?;
 
-    log::debug!("Saving file ({output:?})");
+    log::debug!("Saving file ({})", output.display());
 
     save_bytes_stream_to_file(
         bytes.stream.map(|x| match x {
@@ -112,11 +116,14 @@ pub enum TagTrackFileError {
 ///
 /// * If the output file is not a valid string
 pub fn tag_track_file(input_path: &Path, output_path: &Path) -> Result<(), TagTrackFileError> {
-    log::debug!("Reading source tags from input_path={input_path:?}");
+    log::debug!(
+        "Reading source tags from input_path={}",
+        input_path.display()
+    );
 
     let input_tag = Tag::new().read_from_path(input_path)?;
 
-    log::debug!("Copying tags to output_path={output_path:?}");
+    log::debug!("Copying tags to output_path={}", output_path.display());
 
     let mut output_tag = Tag::new().read_from_path(output_path)?;
 

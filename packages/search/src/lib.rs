@@ -114,8 +114,12 @@ fn create_global_search_index(
     path: &Path,
     recreate_if_exists: bool,
 ) -> Result<Index, CreateIndexError> {
-    switchy_fs::sync::create_dir_all(path)
-        .unwrap_or_else(|_| panic!("Failed to create global search index directory at {path:?}"));
+    switchy_fs::sync::create_dir_all(path).unwrap_or_else(|_| {
+        panic!(
+            "Failed to create global search index directory at {}",
+            path.display()
+        )
+    });
 
     // # Defining the schema
     //
@@ -208,17 +212,17 @@ fn create_global_search_index(
 
         if recreate_if_exists {
             if Index::exists(&mmap_directory)? {
-                log::debug!("Deleting existing index in dir {path:?}");
+                log::debug!("Deleting existing index in dir {}", path.display());
                 switchy_fs::sync::remove_dir_all(path)?;
                 switchy_fs::sync::create_dir_all(path)?;
             } else {
-                log::trace!("No existing index in dir {path:?}");
+                log::trace!("No existing index in dir {}", path.display());
             }
-            log::debug!("Creating Index in dir {path:?}");
+            log::debug!("Creating Index in dir {}", path.display());
             Index::create_in_dir(path, schema)?
         } else {
             let directory: Box<dyn Directory> = Box::new(mmap_directory);
-            log::debug!("Opening or creating index in dir {path:?}");
+            log::debug!("Opening or creating index in dir {}", path.display());
             Index::open_or_create(directory, schema)?
         }
     })

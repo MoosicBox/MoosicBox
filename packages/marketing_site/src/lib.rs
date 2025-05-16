@@ -218,7 +218,7 @@ pub async fn generate(
                         .await
                         .expect("Failed to create dirs");
 
-                    log::debug!("gen path={path_str} -> {output_path:?}");
+                    log::debug!("gen path={path_str} -> {}", output_path.display());
 
                     let mut file = tokio::fs::File::options()
                         .truncate(true)
@@ -245,14 +245,17 @@ pub async fn generate(
                                 &*tag_renderer,
                             )?;
 
-                            log::debug!("gen path={path_str} -> {output_path:?}\n{html}");
+                            log::debug!("gen path={path_str} -> {}\n{html}", output_path.display());
 
                             file.write_all(html.as_bytes())
                                 .await
                                 .expect("Failed to write file");
                         }
                         Content::Json(value) => {
-                            log::debug!("gen path={path_str} -> {output_path:?}\n{value}");
+                            log::debug!(
+                                "gen path={path_str} -> {}\n{value}",
+                                output_path.display()
+                            );
 
                             file.write_all(
                                 serde_json::to_string(&value)

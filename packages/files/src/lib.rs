@@ -262,7 +262,7 @@ pub async fn save_bytes_stream_to_file_with_progress_listener<
 
         read += len;
 
-        log::trace!("Writing bytes to {path:?}: {len} ({read} total)");
+        log::trace!("Writing bytes to {}: {len} ({read} total)", path.display());
 
         writer
             .write(&bytes)
@@ -430,7 +430,7 @@ pub async fn fetch_and_save_bytes_from_remote_url(
     url: &str,
     headers: Option<&[(String, String)]>,
 ) -> Result<PathBuf, FetchAndSaveBytesFromRemoteUrlError> {
-    log::debug!("Saving bytes to file: {file_path:?}");
+    log::debug!("Saving bytes to file: {}", file_path.display());
     let stream = fetch_bytes_from_remote_url(client, url, headers).await?;
     save_bytes_stream_to_file(stream, file_path, None).await?;
     Ok(file_path.to_path_buf())
@@ -446,7 +446,7 @@ pub async fn search_for_cover(
     save_path: Option<PathBuf>,
     tag: Option<Box<dyn AudioTag + Send + Sync>>,
 ) -> Result<Option<PathBuf>, std::io::Error> {
-    log::trace!("Searching for cover {path:?}");
+    log::trace!("Searching for cover {}", path.display());
     if let Ok(mut cover_dir) = tokio::fs::read_dir(path.clone()).await {
         while let Ok(Some(p)) = cover_dir.next_entry().await {
             if p.file_name().to_str().is_some_and(|name| {

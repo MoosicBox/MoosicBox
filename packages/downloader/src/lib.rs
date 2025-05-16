@@ -903,7 +903,10 @@ async fn download_track_inner(
         }
     }
 
-    log::debug!("Downloading track to track_path={track_path:?} start={start:?}");
+    log::debug!(
+        "Downloading track to track_path={} start={start:?}",
+        track_path.display()
+    );
 
     {
         let mut reader = bytes.stream;
@@ -963,11 +966,17 @@ async fn download_track_inner(
         }
     }
 
-    log::debug!("Finished downloading track to track_path={track_path:?}");
+    log::debug!(
+        "Finished downloading track to track_path={}",
+        track_path.display()
+    );
 
     tag_track_file(&track_path, track)?;
 
-    log::debug!("Completed track download for track_path={track_path:?}");
+    log::debug!(
+        "Completed track download for track_path={}",
+        track_path.display()
+    );
 
     Ok(())
 }
@@ -987,7 +996,7 @@ pub enum TagTrackFileError {
 ///
 /// * If `moosicbox_audiotags` fails to tag the audio file
 pub fn tag_track_file(track_path: &Path, track: &Track) -> Result<(), TagTrackFileError> {
-    log::debug!("Adding tags to track_path={track_path:?}");
+    log::debug!("Adding tags to track_path={}", track_path.display());
 
     let mut tag = Tag::new().read_from_path(track_path)?;
 
@@ -1165,7 +1174,7 @@ pub async fn download_album_cover(
 
     (on_progress.lock().await)(GenericProgressEvent::Size { bytes: bytes.size }).await;
 
-    log::debug!("Saving album cover to {cover_path:?}");
+    log::debug!("Saving album cover to {}", cover_path.display());
 
     let result = save_bytes_stream_to_file_with_speed_listener(
         bytes.stream.map(|x| match x {
@@ -1248,7 +1257,7 @@ pub async fn download_artist_cover(
 
     (on_progress.lock().await)(GenericProgressEvent::Size { bytes: bytes.size }).await;
 
-    log::debug!("Saving artist cover to {cover_path:?}");
+    log::debug!("Saving artist cover to {}", cover_path.display());
 
     let result = save_bytes_stream_to_file_with_speed_listener(
         bytes.stream.map(|x| match x {

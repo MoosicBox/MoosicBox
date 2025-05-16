@@ -26,12 +26,12 @@ impl TryFrom<PathBuf> for AssetPathTarget {
         } else if value.exists() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                format!("Invalid file type for asset at {value:?}"),
+                format!("Invalid file type for asset at {}", value.display()),
             ));
         } else {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
-                format!("Asset doesn't exist at {value:?}"),
+                format!("Asset doesn't exist at {}", value.display()),
             ));
         })
     }

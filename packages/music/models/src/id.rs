@@ -170,7 +170,7 @@ impl Id {
     }
 
     #[must_use]
-    pub fn as_str(&self) -> Option<&str> {
+    pub const fn as_str(&self) -> Option<&str> {
         match self {
             Self::String(x) => Some(x.as_str()),
             Self::Number(_) => None,

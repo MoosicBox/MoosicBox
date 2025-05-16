@@ -971,7 +971,7 @@ pub enum ResizeImageError {
     IO(#[from] std::io::Error),
 }
 
-#[allow(unused, clippy::unused_async)]
+#[allow(unused, clippy::unused_async, clippy::too_many_lines)]
 pub(crate) async fn resize_image_path(
     id: Id,
     id_type: IdType,
@@ -1000,7 +1000,10 @@ pub(crate) async fn resize_image_path(
         .join(format!("{id}_{width}_{height}{extension}"));
 
     if cache_path.is_file() {
-        log::debug!("resize_image_path: cache_path={cache_path:?} is_file=true");
+        log::debug!(
+            "resize_image_path: cache_path={} is_file=true",
+            cache_path.display()
+        );
         let Some(image_type) = extension.strip_prefix(".") else {
             return Err(ResizeImageError::InvalidExtension);
         };
@@ -1020,7 +1023,10 @@ pub(crate) async fn resize_image_path(
 
         return Ok(response.streaming(stream));
     }
-    log::debug!("resize_image_path: cache_path={cache_path:?} is_file=false");
+    log::debug!(
+        "resize_image_path: cache_path={} is_file=false",
+        cache_path.display()
+    );
 
     let resized: Bytes = if cfg!(feature = "libvips") {
         #[cfg(feature = "libvips")]

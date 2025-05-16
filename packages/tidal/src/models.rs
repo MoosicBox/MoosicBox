@@ -33,7 +33,10 @@ pub struct TidalArtist {
 
 impl From<TidalArtist> for Artist {
     fn from(value: TidalArtist) -> Self {
-        let cover = artist_picture_url(value.picture.as_deref(), TidalArtistImageSize::Max);
+        let cover = value
+            .picture
+            .as_deref()
+            .map(|x| artist_picture_url(x, TidalArtistImageSize::Max));
 
         Self {
             id: value.id.into(),
@@ -118,15 +121,13 @@ impl Display for TidalArtistImageSize {
 impl TidalArtist {
     #[must_use]
     pub fn picture_url(&self, size: TidalArtistImageSize) -> Option<String> {
-        artist_picture_url(self.picture.as_deref(), size)
+        self.picture.as_deref().map(|x| artist_picture_url(x, size))
     }
 }
 
-fn artist_picture_url(picture: Option<&str>, size: TidalArtistImageSize) -> Option<String> {
-    picture.map(|picture| {
-        let picture_path = picture.replace('-', "/");
-        format!("https://resources.tidal.com/images/{picture_path}/{size}x{size}.jpg")
-    })
+fn artist_picture_url(picture: &str, size: TidalArtistImageSize) -> String {
+    let picture_path = picture.replace('-', "/");
+    format!("https://resources.tidal.com/images/{picture_path}/{size}x{size}.jpg")
 }
 
 impl ToValueType<TidalArtist> for &serde_json::Value {

@@ -1457,7 +1457,10 @@ async fn track_to_playable_file(
             }
         }
 
-        log::trace!("track_to_playable_file: getting file at path={path:?}");
+        log::trace!(
+            "track_to_playable_file: getting file at path={}",
+            path.display()
+        );
         let file = tokio::fs::File::open(path.to_path_buf()).await?;
 
         log::trace!("track_to_playable_file: Creating ByteStreamSource");

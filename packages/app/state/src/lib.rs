@@ -176,8 +176,8 @@ pub enum PlayerType {
     #[cfg(feature = "upnp")]
     Upnp {
         source_to_music_api: Arc<Box<dyn moosicbox_music_api::SourceToMusicApi + Send + Sync>>,
-        device: switchy_upnp::Device,
-        service: switchy_upnp::Service,
+        device: Box<switchy_upnp::Device>,
+        service: Box<switchy_upnp::Service>,
         handle: switchy_upnp::listener::Handle,
     },
 }
@@ -645,8 +645,8 @@ impl AppState {
             } => {
                 let upnp_player = switchy_upnp::player::UpnpPlayer::new(
                     source_to_music_api,
-                    device,
-                    service,
+                    *device,
+                    *service,
                     player_source,
                     handle,
                 );
@@ -1028,8 +1028,8 @@ impl AppState {
                     host: url.to_owned(),
                     profile: profile.clone(),
                 })),
-                device: service.device.clone(),
-                service: service.service.clone(),
+                device: Box::new(service.device.clone()),
+                service: Box::new(service.service.clone()),
                 handle: UPNP_LISTENER_HANDLE.get().unwrap().clone(),
             };
             let output: AudioOutputFactory =

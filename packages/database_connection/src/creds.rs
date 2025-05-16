@@ -11,7 +11,11 @@ pub enum GetDbCredsError {
     #[error("Failed to fetch SSM Parameters: {0:?}")]
     FailedSsmParameters(
         #[from]
-        aws_sdk_ssm::error::SdkError<aws_sdk_ssm::operation::get_parameters::GetParametersError>,
+        Box<
+            aws_sdk_ssm::error::SdkError<
+                aws_sdk_ssm::operation::get_parameters::GetParametersError,
+            >,
+        >,
     ),
     #[error("Invalid SSM Parameters")]
     InvalidSsmParameters,
@@ -81,7 +85,7 @@ pub async fn get_db_creds() -> Result<Credentials, GetDbCredsError> {
                 .await
             {
                 Ok(params) => params,
-                Err(err) => return Err(GetDbCredsError::FailedSsmParameters(err)),
+                Err(err) => return Err(GetDbCredsError::FailedSsmParameters(Box::new(err))),
             };
             let params = params
                 .parameters

@@ -80,12 +80,10 @@ pub struct Response {
 
 #[async_trait]
 impl GenericResponse for Response {
-    #[must_use]
     fn status(&self) -> StatusCode {
         self.inner.as_ref().unwrap().status().into()
     }
 
-    #[must_use]
     fn headers(&mut self) -> &BTreeMap<String, String> {
         if self.headers.is_none() {
             self.headers = Some(headers_to_btree(self.inner.as_ref().unwrap().headers()));
@@ -94,19 +92,16 @@ impl GenericResponse for Response {
         self.headers.as_ref().unwrap()
     }
 
-    #[must_use]
     async fn text(&mut self) -> Result<String, Error> {
         let response = self.inner.take().unwrap();
         Ok(response.text().await?)
     }
 
-    #[must_use]
     async fn bytes(&mut self) -> Result<Bytes, Error> {
         let response = self.inner.take().unwrap();
         Ok(response.bytes().await?)
     }
 
-    #[must_use]
     #[cfg(feature = "stream")]
     fn bytes_stream(
         &mut self,

@@ -61,7 +61,6 @@ impl<T: HtmlTagRenderer + Clone> HtmlActixResponseProcessor<T> {
 impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
     for ActixApp<PreparedRequest, HtmlActixResponseProcessor<T>>
 {
-    #[must_use]
     fn with_responsive_trigger(mut self, name: String, trigger: ResponsiveTrigger) -> Self {
         self.processor
             .tag_renderer
@@ -75,7 +74,6 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
             .add_responsive_trigger(name, trigger);
     }
 
-    #[must_use]
     fn with_viewport(mut self, viewport: Option<String>) -> Self {
         self.processor.viewport = viewport;
         self
@@ -85,7 +83,6 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
         self.processor.viewport = viewport;
     }
 
-    #[must_use]
     fn with_title(mut self, title: Option<String>) -> Self {
         self.processor.title = title;
         self
@@ -95,7 +92,6 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
         self.processor.title = title;
     }
 
-    #[must_use]
     fn with_description(mut self, description: Option<String>) -> Self {
         self.processor.description = description;
         self
@@ -105,7 +101,6 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
         self.processor.description = description;
     }
 
-    #[must_use]
     fn with_background(mut self, background: Option<Color>) -> Self {
         self.processor.background = background;
         self
@@ -115,7 +110,6 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
         self.processor.background = background;
     }
 
-    #[must_use]
     fn with_html_renderer_event_rx(mut self, rx: Receiver<RendererEvent>) -> Self {
         self.renderer_event_rx = rx;
         self
@@ -126,7 +120,6 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
     }
 
     #[cfg(feature = "assets")]
-    #[must_use]
     fn with_static_asset_routes(
         mut self,
         paths: impl Into<Vec<hyperchad_renderer::assets::StaticAssetRoute>>,

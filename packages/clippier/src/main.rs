@@ -136,7 +136,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => {
             let path = PathBuf::from_str(&file)?;
             let cargo_path = path.join("Cargo.toml");
-            log::debug!("Loading file '{cargo_path:?}'");
+            log::debug!("Loading file '{}'", cargo_path.display());
             let source = std::fs::read_to_string(&cargo_path)?;
             let value: Value = toml::from_str(&source)?;
 
@@ -214,7 +214,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => {
             let path = PathBuf::from_str(&file)?;
             let cargo_path = path.join("Cargo.toml");
-            log::debug!("Loading file '{cargo_path:?}'");
+            log::debug!("Loading file '{}'", cargo_path.display());
             let source = std::fs::read_to_string(&cargo_path)?;
             let value: Value = toml::from_str(&source)?;
 
@@ -322,7 +322,7 @@ fn process_configs(
     spread: bool,
     specific_features: Option<&[String]>,
 ) -> Result<Vec<serde_json::Map<String, serde_json::Value>>, Box<dyn std::error::Error>> {
-    log::debug!("Loading file '{path:?}'");
+    log::debug!("Loading file '{}'", path.display());
     let cargo_path = path.join("Cargo.toml");
     let source = std::fs::read_to_string(cargo_path)?;
     let value: Value = toml::from_str(&source)?;
@@ -336,7 +336,7 @@ fn process_configs(
         None
     };
 
-    log::debug!("{path:?} conf={conf:?}");
+    log::debug!("{} conf={conf:?}", path.display());
 
     let configs = conf.as_ref().map(|x| x.config.clone()).map_or_else(
         || {

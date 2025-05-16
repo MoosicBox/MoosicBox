@@ -623,7 +623,7 @@ fn get_data_dir() -> Result<PathBuf, TauriPlayerError> {
         .app_data_dir()
         .map_err(|e| TauriPlayerError::Unknown(e.to_string()))?;
 
-    log::debug!("get_data_dir path={path:?}");
+    log::debug!("get_data_dir path={}", path.display());
 
     let scope = APP.get().unwrap().fs_scope();
     scope.allow_directory(&path, true).unwrap();

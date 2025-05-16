@@ -215,14 +215,15 @@ pub async fn download_endpoint(
     log::debug!(
         "\
         GET /download: \
-        download_path={download_path:?} \
+        download_path={download_path} \
         source={source:?} \
         quality={quality:?} \
         track_id={track_id:?} \
         track_ids={track_ids:?} \
         album_id={album_id:?} \
         album_ids={album_ids:?}\
-        "
+        ",
+        download_path = download_path.display(),
     );
 
     let request = DownloadRequest {
@@ -500,7 +501,7 @@ pub async fn add_download_location_endpoint(
     let location = create_download_location(
         &db,
         path.to_str()
-            .ok_or_else(|| ErrorBadRequest(format!("Invalid path: {path:?}")))?,
+            .ok_or_else(|| ErrorBadRequest(format!("Invalid path: {}", path.display())))?,
     )
     .await
     .map_err(ErrorInternalServerError)?;
@@ -557,7 +558,7 @@ pub async fn remove_download_location_endpoint(
     let location = delete_download_location(
         &db,
         path.to_str()
-            .ok_or_else(|| ErrorBadRequest(format!("Invalid path: {path:?}")))?,
+            .ok_or_else(|| ErrorBadRequest(format!("Invalid path: {}", path.display())))?,
     )
     .await
     .map_err(ErrorInternalServerError)?;

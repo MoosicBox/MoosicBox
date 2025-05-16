@@ -1,4 +1,4 @@
-#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::module_name_repetitions, clippy::struct_field_names)]
 
 use flacenc::{
     bitsink::{ByteSink, MemSink},

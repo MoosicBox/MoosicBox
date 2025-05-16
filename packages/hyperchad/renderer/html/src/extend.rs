@@ -14,7 +14,7 @@ pub struct HtmlRendererEventPub {
 #[derive(Debug, Error)]
 pub enum HtmlRendererEventPubError {
     #[error(transparent)]
-    Sender(#[from] flume::SendError<RendererEvent>),
+    Sender(#[from] Box<flume::SendError<RendererEvent>>),
 }
 
 impl HtmlRendererEventPub {
@@ -29,7 +29,7 @@ impl HtmlRendererEventPub {
     ///
     /// * If the sender failed to send the event
     pub fn publish(&self, event: RendererEvent) -> Result<(), HtmlRendererEventPubError> {
-        Ok(self.sender.send(event)?)
+        Ok(self.sender.send(event).map_err(Box::new)?)
     }
 }
 

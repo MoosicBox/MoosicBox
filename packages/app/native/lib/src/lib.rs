@@ -124,65 +124,77 @@ impl Default for NativeAppBuilder {
 #[derive(Clone)]
 pub enum RendererType {
     #[cfg(feature = "egui")]
-    Egui(hyperchad::renderer_egui::EguiRenderer<EguiCalculator>),
+    Egui(Box<hyperchad::renderer_egui::EguiRenderer<EguiCalculator>>),
     #[cfg(feature = "fltk")]
-    Fltk(hyperchad::renderer_fltk::FltkRenderer),
+    Fltk(Box<hyperchad::renderer_fltk::FltkRenderer>),
     #[cfg(all(feature = "html", feature = "actix"))]
     Html(
-        hyperchad::renderer_html::HtmlRenderer<
-            hyperchad::renderer_html::actix::ActixApp<
-                hyperchad::renderer_html::actix::PreparedRequest,
-                hyperchad::renderer_html::actix::HtmlActixResponseProcessor<
-                    hyperchad::renderer_html::DefaultHtmlTagRenderer,
+        Box<
+            hyperchad::renderer_html::HtmlRenderer<
+                hyperchad::renderer_html::actix::ActixApp<
+                    hyperchad::renderer_html::actix::PreparedRequest,
+                    hyperchad::renderer_html::actix::HtmlActixResponseProcessor<
+                        hyperchad::renderer_html::DefaultHtmlTagRenderer,
+                    >,
                 >,
             >,
         >,
     ),
     #[cfg(all(feature = "html", feature = "lambda"))]
     HtmlLambda(
-        hyperchad::renderer_html::HtmlRenderer<
-            hyperchad::renderer_html::lambda::LambdaApp<
-                hyperchad::renderer_html::lambda::PreparedRequest,
-                hyperchad::renderer_html::lambda::HtmlLambdaResponseProcessor<
-                    hyperchad::renderer_html::DefaultHtmlTagRenderer,
+        Box<
+            hyperchad::renderer_html::HtmlRenderer<
+                hyperchad::renderer_html::lambda::LambdaApp<
+                    hyperchad::renderer_html::lambda::PreparedRequest,
+                    hyperchad::renderer_html::lambda::HtmlLambdaResponseProcessor<
+                        hyperchad::renderer_html::DefaultHtmlTagRenderer,
+                    >,
                 >,
             >,
         >,
     ),
     #[cfg(feature = "html")]
     HtmlStub(
-        hyperchad::renderer_html::HtmlRenderer<
-            hyperchad::renderer_html::stub::StubApp<
-                hyperchad::renderer_html::DefaultHtmlTagRenderer,
+        Box<
+            hyperchad::renderer_html::HtmlRenderer<
+                hyperchad::renderer_html::stub::StubApp<
+                    hyperchad::renderer_html::DefaultHtmlTagRenderer,
+                >,
             >,
         >,
     ),
     #[cfg(feature = "vanilla-js")]
     VanillaJsStub(
-        hyperchad::renderer_html::HtmlRenderer<
-            hyperchad::renderer_html::stub::StubApp<
-                hyperchad::renderer_vanilla_js::VanillaJsTagRenderer,
+        Box<
+            hyperchad::renderer_html::HtmlRenderer<
+                hyperchad::renderer_html::stub::StubApp<
+                    hyperchad::renderer_vanilla_js::VanillaJsTagRenderer,
+                >,
             >,
         >,
     ),
     #[cfg(all(feature = "vanilla-js", feature = "actix"))]
     VanillaJs(
-        hyperchad::renderer_html::HtmlRenderer<
-            hyperchad::renderer_html::actix::ActixApp<
-                hyperchad::renderer_html::actix::PreparedRequest,
-                hyperchad::renderer_html::actix::HtmlActixResponseProcessor<
-                    hyperchad::renderer_vanilla_js::VanillaJsTagRenderer,
+        Box<
+            hyperchad::renderer_html::HtmlRenderer<
+                hyperchad::renderer_html::actix::ActixApp<
+                    hyperchad::renderer_html::actix::PreparedRequest,
+                    hyperchad::renderer_html::actix::HtmlActixResponseProcessor<
+                        hyperchad::renderer_vanilla_js::VanillaJsTagRenderer,
+                    >,
                 >,
             >,
         >,
     ),
     #[cfg(all(feature = "vanilla-js", feature = "lambda"))]
     VanillaJsLambda(
-        hyperchad::renderer_html::HtmlRenderer<
-            hyperchad::renderer_html::lambda::LambdaApp<
-                hyperchad::renderer_html::lambda::PreparedRequest,
-                hyperchad::renderer_html::lambda::HtmlLambdaResponseProcessor<
-                    hyperchad::renderer_vanilla_js::VanillaJsTagRenderer,
+        Box<
+            hyperchad::renderer_html::HtmlRenderer<
+                hyperchad::renderer_html::lambda::LambdaApp<
+                    hyperchad::renderer_html::lambda::PreparedRequest,
+                    hyperchad::renderer_html::lambda::HtmlLambdaResponseProcessor<
+                        hyperchad::renderer_vanilla_js::VanillaJsTagRenderer,
+                    >,
                 >,
             >,
         >,
@@ -314,7 +326,7 @@ impl From<RendererType> for Option<Box<dyn hyperchad::renderer::HtmlTagRenderer 
 
 impl From<RendererType> for Box<dyn Renderer> {
     fn from(value: RendererType) -> Self {
-        renderer!(value, value, Box::new(value))
+        renderer!(value, value, value)
     }
 }
 
@@ -620,7 +632,7 @@ impl NativeAppBuilder {
                         }
                     }
                 });
-                RendererType::Egui(renderer)
+                RendererType::Egui(Box::new(renderer))
             }
             #[cfg(not(feature = "egui"))]
             unreachable!()
@@ -648,7 +660,7 @@ impl NativeAppBuilder {
                         }
                     }
                 });
-                RendererType::Fltk(renderer)
+                RendererType::Fltk(Box::new(renderer))
             }
             #[cfg(not(feature = "fltk"))]
             unreachable!()
@@ -672,7 +684,7 @@ impl NativeAppBuilder {
                 #[cfg(feature = "assets")]
                 let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
 
-                RendererType::VanillaJs(renderer)
+                RendererType::VanillaJs(Box::new(renderer))
             }
             #[cfg(not(all(feature = "actix", feature = "vanilla-js")))]
             unreachable!()
@@ -689,7 +701,7 @@ impl NativeAppBuilder {
                 #[cfg(feature = "assets")]
                 let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
 
-                RendererType::VanillaJsLambda(renderer)
+                RendererType::VanillaJsLambda(Box::new(renderer))
             }
             #[cfg(not(all(feature = "lambda", feature = "vanilla-js")))]
             unreachable!()
@@ -705,7 +717,7 @@ impl NativeAppBuilder {
                 #[cfg(feature = "assets")]
                 let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
 
-                RendererType::Html(renderer)
+                RendererType::Html(Box::new(renderer))
             }
             #[cfg(not(all(feature = "actix", feature = "html")))]
             unreachable!()
@@ -721,7 +733,7 @@ impl NativeAppBuilder {
                 #[cfg(feature = "assets")]
                 let renderer = renderer.with_static_asset_routes(self.static_asset_routes);
 
-                RendererType::HtmlLambda(renderer)
+                RendererType::HtmlLambda(Box::new(renderer))
             }
             #[cfg(not(all(feature = "lambda", feature = "html")))]
             unreachable!()
@@ -731,20 +743,22 @@ impl NativeAppBuilder {
                 if cfg!(feature = "vanilla-js") {
                     #[cfg(feature = "vanilla-js")]
                     {
-                        RendererType::VanillaJsStub(hyperchad::renderer_html::HtmlRenderer::new(
-                            hyperchad::renderer_html::stub::StubApp::new(
-                                hyperchad::renderer_vanilla_js::VanillaJsTagRenderer::default(),
+                        RendererType::VanillaJsStub(Box::new(
+                            hyperchad::renderer_html::HtmlRenderer::new(
+                                hyperchad::renderer_html::stub::StubApp::new(
+                                    hyperchad::renderer_vanilla_js::VanillaJsTagRenderer::default(),
+                                ),
                             ),
                         ))
                     }
                     #[cfg(not(feature = "vanilla-js"))]
                     unreachable!()
                 } else {
-                    RendererType::HtmlStub(hyperchad::renderer_html::HtmlRenderer::new(
+                    RendererType::HtmlStub(Box::new(hyperchad::renderer_html::HtmlRenderer::new(
                         hyperchad::renderer_html::stub::StubApp::new(
                             hyperchad::renderer_html::DefaultHtmlTagRenderer::default(),
                         ),
-                    ))
+                    )))
                 }
             }
             #[cfg(not(feature = "html"))]

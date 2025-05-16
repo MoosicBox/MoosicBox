@@ -64,27 +64,22 @@ pub struct Response {
 
 #[async_trait]
 impl GenericResponse for Response {
-    #[must_use]
     fn status(&self) -> StatusCode {
         StatusCode::Ok
     }
 
-    #[must_use]
     fn headers(&mut self) -> &BTreeMap<String, String> {
         &self.headers
     }
 
-    #[must_use]
     async fn text(&mut self) -> Result<String, Error> {
         Ok(String::new())
     }
 
-    #[must_use]
     async fn bytes(&mut self) -> Result<Bytes, Error> {
         Ok(Bytes::new())
     }
 
-    #[must_use]
     #[cfg(feature = "stream")]
     fn bytes_stream(
         &mut self,
