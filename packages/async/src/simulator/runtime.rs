@@ -91,22 +91,24 @@ impl GenericRuntime for Runtime {
         );
         log::trace!("block_on");
         self.start();
-        let mut future = Box::pin(future);
-        let waker = futures::task::noop_waker();
-        let mut ctx = Context::from_waker(&waker);
-        loop {
-            #[allow(clippy::significant_drop_in_scrutinee)]
-            match future.as_mut().poll(&mut ctx) {
-                Poll::Ready(x) => {
-                    return x;
-                }
-                Poll::Pending => {
-                    if !self.process_next_task() {
-                        std::thread::yield_now();
+        RUNTIME.set(self, || {
+            let mut future = Box::pin(future);
+            let waker = futures::task::noop_waker();
+            let mut ctx = Context::from_waker(&waker);
+            loop {
+                #[allow(clippy::significant_drop_in_scrutinee)]
+                match future.as_mut().poll(&mut ctx) {
+                    Poll::Ready(x) => {
+                        return x;
+                    }
+                    Poll::Pending => {
+                        if !self.process_next_task() {
+                            std::thread::yield_now();
+                        }
                     }
                 }
             }
-        }
+        })
     }
 
     fn wait(self) -> Result<(), Error> {
