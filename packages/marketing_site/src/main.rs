@@ -52,11 +52,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         option_env_f32("WINDOW_HEIGHT").unwrap().unwrap_or(600.0),
     );
 
-    #[cfg(feature = "assets")]
-    for assets in moosicbox_marketing_site::ASSETS.iter().cloned() {
-        builder = builder.with_static_asset_route_result(assets)?;
-    }
-
     if let (Some(x), Some(y)) = (
         option_env_i32("WINDOW_X").unwrap(),
         option_env_i32("WINDOW_Y").unwrap(),
