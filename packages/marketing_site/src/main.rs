@@ -62,7 +62,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(any(feature = "_egui", feature = "fltk"))]
     builder.initial_route("/");
 
-    moosicbox_marketing_site::start(builder)?;
+    moosicbox_marketing_site::build_app(builder)?.run()?;
 
     Ok(())
 }

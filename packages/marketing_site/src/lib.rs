@@ -4,7 +4,11 @@
 
 use std::sync::LazyLock;
 
-use hyperchad::{app::AppBuilder, color::Color, router::Router};
+use hyperchad::{
+    app::{App, AppBuilder, renderer::DefaultRenderer},
+    color::Color,
+    router::Router,
+};
 use moosicbox_env_utils::option_env_f32;
 use serde_json::json;
 
@@ -102,7 +106,7 @@ pub fn init() -> AppBuilder {
 /// # Errors
 ///
 /// * If the `NativeApp` fails to start
-pub fn start(builder: AppBuilder) -> Result<(), hyperchad::app::Error> {
+pub fn build_app(builder: AppBuilder) -> Result<App<DefaultRenderer>, hyperchad::app::Error> {
     use hyperchad::renderer::Renderer as _;
 
     #[allow(unused_mut)]
@@ -121,7 +125,5 @@ pub fn start(builder: AppBuilder) -> Result<(), hyperchad::app::Error> {
         ),
     );
 
-    app.run()?;
-
-    Ok(())
+    Ok(app)
 }
