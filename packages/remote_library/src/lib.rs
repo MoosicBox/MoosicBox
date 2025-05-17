@@ -113,8 +113,38 @@ impl MusicApi for RemoteLibraryMusicApi {
         unimplemented!("Removing artist is not implemented")
     }
 
-    async fn album_artist(&self, _album_id: &Id) -> Result<Option<Artist>, ArtistError> {
-        unimplemented!("Fetching album artist is not implemented")
+    async fn album_artist(&self, album_id: &Id) -> Result<Option<Artist>, ArtistError> {
+        let request = CLIENT
+            .request(
+                switchy_http::models::Method::Get,
+                &format!(
+                    "{host}/menu/artist?albumId={album_id}&source={source}",
+                    host = self.host,
+                    source = self.api_source
+                ),
+            )
+            .header("moosicbox-profile", &self.profile);
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| ArtistError::Other(Box::new(e)))?;
+
+        if !response.status().is_success() {
+            if response.status() == StatusCode::NotFound {
+                return Ok(None);
+            }
+            return Err(ArtistError::Other(Box::new(RequestError::Unsuccessful(
+                format!("Status {}", response.status()),
+            ))));
+        }
+
+        let value: ApiArtist = response
+            .json()
+            .await
+            .map_err(|e| ArtistError::Other(Box::new(e)))?;
+
+        Ok(Some(value.into()))
     }
 
     async fn artist_cover_source(
