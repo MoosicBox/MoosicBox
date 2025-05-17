@@ -381,6 +381,11 @@ pub trait HtmlApp {
         paths: impl Into<Vec<hyperchad_renderer::assets::StaticAssetRoute>>,
     ) -> Self;
 
+    #[cfg(feature = "assets")]
+    fn static_asset_routes(
+        &self,
+    ) -> impl Iterator<Item = &hyperchad_renderer::assets::StaticAssetRoute>;
+
     #[must_use]
     fn with_viewport(self, viewport: Option<String>) -> Self;
     fn set_viewport(&mut self, viewport: Option<String>);
@@ -468,6 +473,13 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> HtmlRenderer<T> {
     ) -> Self {
         self.app = self.app.with_static_asset_routes(paths);
         self
+    }
+
+    #[cfg(feature = "assets")]
+    pub fn static_asset_routes(
+        &self,
+    ) -> impl Iterator<Item = &hyperchad_renderer::assets::StaticAssetRoute> {
+        self.app.static_asset_routes()
     }
 
     #[cfg(feature = "extend")]

@@ -61,11 +61,6 @@ pub trait Generator {
     async fn generate(&self, router: &Router, output: Option<String>) -> Result<(), Error> {
         unimplemented!("generate: unimplemented router={router:?} output={output:?}")
     }
-
-    #[cfg(feature = "assets")]
-    fn assets(&self) -> impl Iterator<Item = &hyperchad_renderer::assets::StaticAssetRoute> {
-        std::iter::empty()
-    }
 }
 
 #[async_trait]

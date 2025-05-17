@@ -6,11 +6,17 @@ use crate::HtmlApp;
 #[derive(Clone)]
 pub struct StubApp<T: HtmlTagRenderer> {
     pub tag_renderer: T,
+    #[cfg(feature = "assets")]
+    pub static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
 }
 
 impl<T: HtmlTagRenderer> StubApp<T> {
     pub const fn new(tag_renderer: T) -> Self {
-        Self { tag_renderer }
+        Self {
+            tag_renderer,
+            #[cfg(feature = "assets")]
+            static_asset_routes: vec![],
+        }
     }
 }
 
@@ -30,10 +36,18 @@ impl<T: HtmlTagRenderer> HtmlApp for StubApp<T> {
 
     #[cfg(feature = "assets")]
     fn with_static_asset_routes(
-        self,
-        _paths: impl Into<Vec<hyperchad_renderer::assets::StaticAssetRoute>>,
+        mut self,
+        paths: impl Into<Vec<hyperchad_renderer::assets::StaticAssetRoute>>,
     ) -> Self {
+        self.static_asset_routes = paths.into();
         self
+    }
+
+    #[cfg(feature = "assets")]
+    fn static_asset_routes(
+        &self,
+    ) -> impl Iterator<Item = &hyperchad_renderer::assets::StaticAssetRoute> {
+        self.static_asset_routes.iter()
     }
 
     fn with_viewport(self, _viewport: Option<String>) -> Self {

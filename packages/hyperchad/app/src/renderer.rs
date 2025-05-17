@@ -445,7 +445,7 @@ mod html {
                     Ok(())
                 }
 
-                for route in self.assets() {
+                for route in self.static_asset_routes() {
                     let assets_output = output_path.join(&route.route);
                     log::debug!("generate: asset {}", assets_output.display());
                     std::fs::create_dir_all(assets_output.parent().unwrap())
@@ -766,6 +766,9 @@ mod html {
                         hyperchad_renderer_vanilla_js::VanillaJsTagRenderer::default(),
                     ),
                 );
+
+                #[cfg(feature = "assets")]
+                let renderer = renderer.with_static_asset_routes(self.static_asset_routes.clone());
 
                 self.build(renderer)
             }

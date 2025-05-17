@@ -129,6 +129,13 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
         self.static_asset_routes = paths.into();
         self
     }
+
+    #[cfg(feature = "assets")]
+    fn static_asset_routes(
+        &self,
+    ) -> impl Iterator<Item = &hyperchad_renderer::assets::StaticAssetRoute> {
+        self.static_asset_routes.iter()
+    }
 }
 
 #[derive(Clone)]
