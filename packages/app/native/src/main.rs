@@ -384,8 +384,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_static_route("/settings", |_| async {
             moosicbox_app_native_ui::settings::settings(&convert_state(&STATE).await)
         })
-        .with_static_route_result("/audio-zones", |req| async { audio_zones_route(req).await })
-        .with_static_route_result("/playback-sessions", |req| async {
+        .with_route_result("/audio-zones", |req| async { audio_zones_route(req).await })
+        .with_route_result("/playback-sessions", |req| async {
             playback_sessions_route(req).await
         })
         .with_static_route_result("/albums", |req| async move {
