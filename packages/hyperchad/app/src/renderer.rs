@@ -329,7 +329,6 @@ mod html {
 
             if static_routes.is_empty() {
                 log::debug!("generate: no static routes");
-                return Ok(());
             }
 
             if output_path.is_dir() {
