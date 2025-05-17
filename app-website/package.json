@@ -23,7 +23,7 @@
     "type": "module",
     "devDependencies": {
         "@eslint/eslintrc": "^3.3.1",
-        "@eslint/js": "^9.26.0",
+        "@eslint/js": "^9.27.0",
         "@free-log/node-client": "^0.2.0",
         "@solidjs/meta": "^0.29.4",
         "@solidjs/testing-library": "^0.8.10",
@@ -36,7 +36,7 @@
         "@vitest/coverage-v8": "^1.6.1",
         "@vitest/ui": "^1.6.1",
         "astro-eslint-parser": "^1.2.2",
-        "eslint": "^9.26.0",
+        "eslint": "^9.27.0",
         "eslint-config-prettier": "^9.1.0",
         "eslint-plugin-astro": "^1.3.1",
         "eslint-plugin-import": "^2.31.0",
@@ -46,7 +46,7 @@
         "jsdom": "^24.1.3",
         "prettier": "^3.5.3",
         "prettier-plugin-astro": "^0.13.0",
-        "sst": "^3.14.25",
+        "sst": "^3.14.27",
         "typescript": "^5.8.3",
         "vite": "^5.4.19",
         "vitest": "^1.6.1"
@@ -55,7 +55,7 @@
         "@astrojs/check": "^0.9.4",
         "@astrojs/node": "^9.2.1",
         "@astrojs/solid-js": "^5.0.10",
-        "@aws-sdk/client-ssm": "^3.810.0",
+        "@aws-sdk/client-ssm": "^3.812.0",
         "@hotwired/turbo": "^8.0.13",
         "@nanostores/persistent": "^0.9.1",
         "@nanostores/solid": "^0.4.2",
@@ -68,7 +68,7 @@
         "howler": "^2.2.4",
         "htmx.org": "^2.0.4",
         "nanostores": "^0.9.5",
-        "solid-js": "^1.9.6"
+        "solid-js": "^1.9.7"
     },
     "description": "",
     "version": "0.1.0",
