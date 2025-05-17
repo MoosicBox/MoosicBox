@@ -156,6 +156,8 @@ mod egui {
         ///
         /// * If the `AppBuilder` is missing a router
         pub fn build_egui(self, renderer: EguiRenderer) -> Result<App<EguiRenderer>, BuilderError> {
+            log::debug!("build_egui");
+
             self.build(renderer)
         }
 
@@ -163,6 +165,8 @@ mod egui {
         ///
         /// * If the `AppBuilder` is missing a router
         pub fn build_default_egui(self) -> Result<App<EguiRenderer>, BuilderError> {
+            log::debug!("build_default_egui");
+
             let action_tx = self.listen_actions(self.action_handlers.clone());
             let resize_tx = self.listen_resize(self.resize_listeners.clone());
             let router = self.router.clone().ok_or(BuilderError::MissingRouter)?;
@@ -234,6 +238,8 @@ mod fltk {
         ///
         /// * If the `AppBuilder` is missing a router
         pub fn build_fltk(self, renderer: FltkRenderer) -> Result<App<FltkRenderer>, BuilderError> {
+            log::debug!("build_fltk");
+
             self.build(renderer)
         }
 
@@ -241,6 +247,8 @@ mod fltk {
         ///
         /// * If the `AppBuilder` is missing a router
         pub fn build_default_fltk(self) -> Result<App<FltkRenderer>, BuilderError> {
+            log::debug!("build_default_fltk");
+
             let action_tx = self.listen_actions(self.action_handlers.clone());
             let router = self.router.clone().ok_or(BuilderError::MissingRouter)?;
             let renderer = hyperchad_renderer_fltk::FltkRenderer::new(action_tx);
@@ -363,7 +371,7 @@ mod html {
                         let output_path = output_path.join(format!("{path_str}.html"));
                         std::fs::create_dir_all(output_path.parent().unwrap())?;
 
-                        log::debug!("gen path={path_str} -> {}", output_path.display());
+                        log::debug!("generate: path={path_str} -> {}", output_path.display());
 
                         let mut file = std::fs::File::options()
                             .truncate(true)
@@ -389,7 +397,7 @@ mod html {
                                 )?;
 
                                 log::debug!(
-                                    "gen path={path_str} -> {}:\n{html}",
+                                    "generate: path={path_str} -> {}:\n{html}",
                                     output_path.display()
                                 );
 
@@ -399,7 +407,7 @@ mod html {
                             #[cfg(feature = "json")]
                             Content::Json(value) => {
                                 log::debug!(
-                                    "gen path={path_str} -> {}:\n{value}",
+                                    "generate: path={path_str} -> {}:\n{value}",
                                     output_path.display()
                                 );
 
@@ -440,6 +448,7 @@ mod html {
 
                 for route in self.assets() {
                     let assets_output = output_path.join(&route.route);
+                    log::debug!("generate: asset {}", assets_output.display());
                     std::fs::create_dir_all(assets_output.parent().unwrap())
                         .expect("Failed to create dirs");
                     match &route.target {
@@ -497,6 +506,8 @@ mod html {
             self,
             renderer: HtmlStubRenderer,
         ) -> Result<App<HtmlStubRenderer>, BuilderError> {
+            log::debug!("build_html");
+
             self.build(renderer)
         }
 
@@ -504,6 +515,8 @@ mod html {
         ///
         /// * If the `AppBuilder` is missing a router
         pub fn build_default_html(self) -> Result<App<HtmlStubRenderer>, BuilderError> {
+            log::debug!("build_default_html");
+
             let renderer = hyperchad_renderer_html::HtmlRenderer::new(
                 hyperchad_renderer_html::stub::StubApp::new(
                     hyperchad_renderer_html::DefaultHtmlTagRenderer::default(),
@@ -535,6 +548,8 @@ mod html {
                 self,
                 renderer: HtmlActixRenderer,
             ) -> Result<App<HtmlActixRenderer>, BuilderError> {
+                log::debug!("build_html_actix");
+
                 self.build(renderer)
             }
 
@@ -542,6 +557,8 @@ mod html {
             ///
             /// * If the `AppBuilder` is missing a router
             pub fn build_default_html_actix(self) -> Result<App<HtmlActixRenderer>, BuilderError> {
+                log::debug!("build_default_html_actix");
+
                 let router = self.router.clone().ok_or(BuilderError::MissingRouter)?;
 
                 let renderer = hyperchad_renderer_html::router_to_actix(
@@ -577,6 +594,8 @@ mod html {
                     self,
                     renderer: HtmlVanillaJsActixRenderer,
                 ) -> Result<App<HtmlVanillaJsActixRenderer>, BuilderError> {
+                    log::debug!("build_html_vanilla_js_actix");
+
                     self.build(renderer)
                 }
 
@@ -586,6 +605,8 @@ mod html {
                 pub fn build_default_html_vanilla_js_actix(
                     self,
                 ) -> Result<App<HtmlVanillaJsActixRenderer>, BuilderError> {
+                    log::debug!("build_default_html_vanilla_js_actix");
+
                     let router = self.router.clone().ok_or(BuilderError::MissingRouter)?;
 
                     #[allow(unused_mut)]
@@ -641,6 +662,8 @@ mod html {
             pub fn build_default_html_lambda(
                 self,
             ) -> Result<App<HtmlLambdaRenderer>, BuilderError> {
+                log::debug!("build_default_html_lambda");
+
                 let router = self.router.clone().ok_or(BuilderError::MissingRouter)?;
 
                 let renderer = hyperchad_renderer_html::router_to_lambda(
@@ -676,6 +699,8 @@ mod html {
                     self,
                     renderer: HtmlVanillaJsLambdaRenderer,
                 ) -> Result<App<HtmlVanillaJsLambdaRenderer>, BuilderError> {
+                    log::debug!("build_html_vanilla_js_lambda");
+
                     self.build(renderer)
                 }
 
@@ -685,6 +710,8 @@ mod html {
                 pub fn build_default_html_vanilla_js_lambda(
                     self,
                 ) -> Result<App<HtmlVanillaJsLambdaRenderer>, BuilderError> {
+                    log::debug!("build_default_html_vanilla_js_lambda");
+
                     let router = self.router.clone().ok_or(BuilderError::MissingRouter)?;
 
                     #[allow(unused_mut)]
@@ -722,6 +749,8 @@ mod html {
                 self,
                 renderer: HtmlVanillaJsRenderer,
             ) -> Result<App<HtmlVanillaJsRenderer>, BuilderError> {
+                log::debug!("build_html_vanilla_js");
+
                 self.build(renderer)
             }
 
@@ -731,6 +760,8 @@ mod html {
             pub fn build_default_html_vanilla_js(
                 self,
             ) -> Result<App<HtmlVanillaJsRenderer>, BuilderError> {
+                log::debug!("build_default_html_vanilla_js");
+
                 let renderer = hyperchad_renderer_html::HtmlRenderer::new(
                     hyperchad_renderer_html::stub::StubApp::new(
                         hyperchad_renderer_vanilla_js::VanillaJsTagRenderer::default(),
@@ -853,6 +884,8 @@ pub mod stub {
         ///
         /// * If the `AppBuilder` is missing a router
         pub fn build_stub(self, renderer: StubRenderer) -> Result<App<StubRenderer>, BuilderError> {
+            log::debug!("build_stub");
+
             self.build(renderer)
         }
 
@@ -860,6 +893,8 @@ pub mod stub {
         ///
         /// * If the `AppBuilder` is missing a router
         pub fn build_default_stub(self) -> Result<App<StubRenderer>, BuilderError> {
+            log::debug!("build_default_stub");
+
             let renderer = StubRenderer;
 
             self.build(renderer)
