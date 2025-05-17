@@ -30,7 +30,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     tracing::init_default_subscriber();
 
     let builder = moosicbox_marketing_site::init().with_runtime_arc(RUNTIME.clone());
-    moosicbox_marketing_site::build_app(builder)?.serve_sync()?;
+    moosicbox_marketing_site::build_app(builder)?.handle_serve()?;
 
     Ok(())
 }

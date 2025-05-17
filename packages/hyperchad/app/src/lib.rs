@@ -9,7 +9,7 @@ use clap::{Parser, Subcommand, arg, command};
 use hyperchad_renderer::{Color, RenderRunner, Renderer, ToRenderRunner};
 use hyperchad_router::{Navigation, RoutePath, Router};
 use moosicbox_env_utils::default_env_usize;
-use switchy_async::{futures::channel::oneshot, runtime::Runtime, task};
+use switchy_async::{futures::channel::oneshot, runtime::Runtime};
 
 pub mod renderer;
 
@@ -475,7 +475,14 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
         }
     }
 
-    fn handle_serve(mut self) -> Result<(), Error> {
+    /// # Errors
+    ///
+    /// * If the `App` fails to serve
+    ///
+    /// # Panics
+    ///
+    /// * If the one-shot channel fails to send after the runner completes
+    pub fn handle_serve(mut self) -> Result<(), Error> {
         let runtime = self.runtime()?;
 
         let mut runner = runtime.block_on(async move { self.serve().await })?;
@@ -606,7 +613,7 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
         let description = self.description.clone();
         let viewport = self.viewport.clone();
 
-        task::spawn({
+        runtime.spawn({
             let renderer = renderer.clone();
             async move {
                 log::debug!("app_native_lib::start: router listening");
@@ -630,6 +637,8 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
             }
         });
 
+        log::debug!("app: initialing renderer");
+
         renderer
             .init(
                 width,
@@ -642,6 +651,8 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
                 viewport.as_deref(),
             )
             .await?;
+
+        log::debug!("app: to_runner");
 
         Ok(renderer.to_runner(handle)?)
     }
