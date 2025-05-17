@@ -602,10 +602,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     visualization::set_dimensions(width, f32::from(moosicbox_app_native_ui::VIZ_HEIGHT));
 
     #[cfg(feature = "assets")]
-    {
-        for assets in assets::ASSETS.iter().cloned() {
-            app = app.with_static_asset_route_result(assets).unwrap();
-        }
+    for assets in assets::ASSETS.iter().cloned() {
+        log::debug!("app_native: adding static asset route: {assets:?}");
+        app = app.with_static_asset_route_result(assets).unwrap();
     }
 
     STATE_LOCK
