@@ -21,7 +21,7 @@ use moosicbox_music_models::{
     api::{ApiAlbum, ApiArtist, ApiTrack},
     id::Id,
 };
-use moosicbox_paging::{Page, PagingResponse, PagingResult};
+use moosicbox_paging::{Page, PagingRequest, PagingResponse, PagingResult};
 use switchy_http::models::StatusCode;
 use thiserror::Error;
 use tokio::sync::Mutex;
@@ -181,8 +181,102 @@ impl MusicApi for RemoteLibraryMusicApi {
         }))
     }
 
-    async fn albums(&self, _request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
-        unimplemented!("Fetching albums is not implemented")
+    async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
+        let url = format!(
+            "{host}/menu/albums?offset={offset}&limit={limit}{sort}{sources}{filters}",
+            host = self.host,
+            offset = request.page.as_ref().map_or(0, |x| x.offset),
+            limit = request.page.as_ref().map_or(100, |x| x.limit),
+            sort = request
+                .sort
+                .as_ref()
+                .map_or_else(String::new, |x| format!("&sort={x}")),
+            sources = request.sources.as_ref().map_or_else(String::new, |x| {
+                format!(
+                    "&sources={sources}",
+                    sources = x
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )
+            }),
+            filters = request.filters.as_ref().map_or_else(String::new, |x| {
+                format!(
+                    "{name}{artist}{search}{album_type}{artist_id}{tidal_artist_id}{qobuz_artist_id}",
+                    name = x
+                        .name
+                        .as_ref()
+                        .map_or_else(String::new, |x| format!("&name={x}")),
+                    artist = x
+                        .artist
+                        .as_ref()
+                        .map_or_else(String::new, |x| format!("&artist={x}")),
+                    search = x
+                        .search
+                        .as_ref()
+                        .map_or_else(String::new, |x| format!("&search={x}")),
+                    album_type = x
+                        .album_type
+                        .as_ref()
+                        .map_or_else(String::new, |x| format!("&albumType={x}")),
+                    artist_id = x
+                        .artist_id
+                        .as_ref()
+                        .map_or_else(String::new, |x| format!("&artistId={x}")),
+                    tidal_artist_id = x
+                        .tidal_artist_id
+                        .as_ref()
+                        .map_or_else(String::new, |x| format!("&tidalArtistId={x}")),
+                    qobuz_artist_id = x
+                        .qobuz_artist_id
+                        .as_ref()
+                        .map_or_else(String::new, |x| format!("&qobuzArtistId={x}")),
+                )
+            }),
+        );
+
+        let req = CLIENT
+            .request(switchy_http::models::Method::Get, &url)
+            .header("moosicbox-profile", &self.profile);
+
+        let response = req
+            .send()
+            .await
+            .map_err(|e| AlbumsError::Other(Box::new(e)))?;
+
+        if !response.status().is_success() {
+            if response.status() == StatusCode::NotFound {
+                return Ok(PagingResponse::empty());
+            }
+            return Err(AlbumsError::Other(Box::new(RequestError::Unsuccessful(
+                format!("Status {}", response.status()),
+            ))));
+        }
+
+        let page: Page<ApiAlbum> = response
+            .json()
+            .await
+            .map_err(|e| AlbumsError::Other(Box::new(e)))?;
+
+        let page: Page<Result<Album, _>> = page.map(TryInto::try_into);
+        let page = page
+            .transpose()
+            .map_err(|e| AlbumsError::Other(Box::new(e)))?;
+
+        let page = PagingResponse::new(page, {
+            let api = self.clone();
+            let request = request.clone();
+
+            move |offset, limit| {
+                let api = api.clone();
+                let mut request = request.clone();
+                request.page = Some(PagingRequest { offset, limit });
+                Box::pin(async move { api.albums(&request).await })
+            }
+        });
+
+        Ok(page)
     }
 
     async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError> {
