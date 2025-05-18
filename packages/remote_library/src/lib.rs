@@ -11,9 +11,9 @@ use moosicbox_music_api::{
     ArtistError, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError, RemoveTrackError,
     TrackError, TrackOrId, TracksError,
     models::{
-        AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
-        ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
-        TrackSource,
+        AlbumFilters, AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder,
+        ArtistOrderDirection, ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder,
+        TrackOrderDirection, TrackSource,
     },
 };
 use moosicbox_music_models::{
@@ -391,14 +391,35 @@ impl MusicApi for RemoteLibraryMusicApi {
 
     async fn artist_albums(
         &self,
-        _artist_id: &Id,
-        _album_type: Option<AlbumType>,
-        _offset: Option<u32>,
-        _limit: Option<u32>,
+        artist_id: &Id,
+        album_type: Option<AlbumType>,
+        offset: Option<u32>,
+        limit: Option<u32>,
         _order: Option<AlbumOrder>,
         _order_direction: Option<AlbumOrderDirection>,
     ) -> PagingResult<Album, ArtistAlbumsError> {
-        unimplemented!("Fetching artist albums is not implemented")
+        let request = AlbumsRequest {
+            page: Some(PagingRequest {
+                offset: offset.unwrap_or(0),
+                limit: limit.unwrap_or(100),
+            }),
+            sources: None,
+            sort: None,
+            filters: Some(AlbumFilters {
+                name: None,
+                artist: None,
+                search: None,
+                album_type,
+                artist_id: Some(artist_id.clone()),
+                tidal_artist_id: None,
+                qobuz_artist_id: None,
+            }),
+        };
+
+        self.albums(&request)
+            .await
+            .map(|x| x.map_err(|e| ArtistAlbumsError::Other(Box::new(e))))
+            .map_err(|e| ArtistAlbumsError::Other(Box::new(e)))
     }
 
     async fn add_album(&self, _album_id: &Id) -> Result<(), AddAlbumError> {
