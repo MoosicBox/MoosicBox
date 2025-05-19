@@ -27,12 +27,12 @@ jobs:
                       bundled: true
                       features: desktop,bundled
 
-                    - os: ubuntu-latest
-                      profile: release
-                      target: desktop
-                      tag: release
-                      bundled: true
-                      features: desktop,bundled
+                    # - os: ubuntu-latest
+                    #   profile: release
+                    #   target: desktop
+                    #   tag: release
+                    #   bundled: true
+                    #   features: desktop,bundled
 
                     - os: ubuntu-latest
                       profile: release-lto
@@ -54,12 +54,12 @@ jobs:
                       bundled: true
                       features: desktop,bundled
 
-                    - os: windows-latest
-                      profile: release
-                      target: desktop
-                      tag: release
-                      bundled: true
-                      features: desktop,bundled
+                    # - os: windows-latest
+                    #   profile: release
+                    #   target: desktop
+                    #   tag: release
+                    #   bundled: true
+                    #   features: desktop,bundled
 
                     - os: windows-latest
                       profile: release-lto
@@ -81,12 +81,12 @@ jobs:
                       bundled: true
                       features: desktop,bundled
 
-                    - os: macos-latest
-                      profile: release
-                      target: desktop
-                      tag: release
-                      bundled: true
-                      features: desktop,bundled
+                    # - os: macos-latest
+                    #   profile: release
+                    #   target: desktop
+                    #   tag: release
+                    #   bundled: true
+                    #   features: desktop,bundled
 
                     - os: macos-latest
                       profile: release-lto
@@ -107,11 +107,11 @@ jobs:
                       tag: debug-client
                       features: desktop,client
 
-                    - os: ubuntu-latest
-                      profile: release
-                      target: desktop
-                      tag: release-client
-                      features: desktop,client
+                    # - os: ubuntu-latest
+                    #   profile: release
+                    #   target: desktop
+                    #   tag: release-client
+                    #   features: desktop,client
 
                     - os: ubuntu-latest
                       profile: release-lto
@@ -131,11 +131,11 @@ jobs:
                       tag: debug-client
                       features: desktop,client
 
-                    - os: windows-latest
-                      profile: release
-                      target: desktop
-                      tag: release-client
-                      features: desktop,client
+                    # - os: windows-latest
+                    #   profile: release
+                    #   target: desktop
+                    #   tag: release-client
+                    #   features: desktop,client
 
                     - os: windows-latest
                       profile: release-lto
@@ -155,11 +155,11 @@ jobs:
                       tag: debug-client
                       features: desktop,client
 
-                    - os: macos-latest
-                      profile: release
-                      target: desktop
-                      tag: release-client
-                      features: desktop,client
+                    # - os: macos-latest
+                    #   profile: release
+                    #   target: desktop
+                    #   tag: release-client
+                    #   features: desktop,client
 
                     - os: macos-latest
                       profile: release-lto
@@ -206,13 +206,13 @@ jobs:
                       features: desktop,bundled
                       config: tauri.hyperchad.conf.json
 
-                    - os: ubuntu-latest
-                      profile: release
-                      target: desktop
-                      tag: hyperchad-release
-                      bundled: true
-                      features: desktop,bundled
-                      config: tauri.hyperchad.conf.json
+                    # - os: ubuntu-latest
+                    #   profile: release
+                    #   target: desktop
+                    #   tag: hyperchad-release
+                    #   bundled: true
+                    #   features: desktop,bundled
+                    #   config: tauri.hyperchad.conf.json
 
                     - os: ubuntu-latest
                       profile: release-lto
@@ -238,13 +238,13 @@ jobs:
                       features: desktop,bundled
                       config: tauri.hyperchad.conf.json
 
-                    - os: windows-latest
-                      profile: release
-                      target: desktop
-                      tag: hyperchad-release
-                      bundled: true
-                      features: desktop,bundled
-                      config: tauri.hyperchad.conf.json
+                    # - os: windows-latest
+                    #   profile: release
+                    #   target: desktop
+                    #   tag: hyperchad-release
+                    #   bundled: true
+                    #   features: desktop,bundled
+                    #   config: tauri.hyperchad.conf.json
 
                     - os: windows-latest
                       profile: release-lto
@@ -270,13 +270,13 @@ jobs:
                       features: desktop,bundled
                       config: tauri.hyperchad.conf.json
 
-                    - os: macos-latest
-                      profile: release
-                      target: desktop
-                      tag: hyperchad-release
-                      bundled: true
-                      features: desktop,bundled
-                      config: tauri.hyperchad.conf.json
+                    # - os: macos-latest
+                    #   profile: release
+                    #   target: desktop
+                    #   tag: hyperchad-release
+                    #   bundled: true
+                    #   features: desktop,bundled
+                    #   config: tauri.hyperchad.conf.json
 
                     - os: macos-latest
                       profile: release-lto
@@ -301,12 +301,12 @@ jobs:
                       features: desktop,client
                       config: tauri.hyperchad.conf.json
 
-                    - os: ubuntu-latest
-                      profile: release
-                      target: desktop
-                      tag: hyperchad-release-client
-                      features: desktop,client
-                      config: tauri.hyperchad.conf.json
+                    # - os: ubuntu-latest
+                    #   profile: release
+                    #   target: desktop
+                    #   tag: hyperchad-release-client
+                    #   features: desktop,client
+                    #   config: tauri.hyperchad.conf.json
 
                     - os: ubuntu-latest
                       profile: release-lto
@@ -329,12 +329,12 @@ jobs:
                       features: desktop,client
                       config: tauri.hyperchad.conf.json
 
-                    - os: windows-latest
-                      profile: release
-                      target: desktop
-                      tag: hyperchad-release-client
-                      features: desktop,client
-                      config: tauri.hyperchad.conf.json
+                    # - os: windows-latest
+                    #   profile: release
+                    #   target: desktop
+                    #   tag: hyperchad-release-client
+                    #   features: desktop,client
+                    #   config: tauri.hyperchad.conf.json
 
                     - os: windows-latest
                       profile: release-lto
@@ -357,12 +357,12 @@ jobs:
                       features: desktop,client
                       config: tauri.hyperchad.conf.json
 
-                    - os: macos-latest
-                      profile: release
-                      target: desktop
-                      tag: hyperchad-release-client
-                      features: desktop,client
-                      config: tauri.hyperchad.conf.json
+                    # - os: macos-latest
+                    #   profile: release
+                    #   target: desktop
+                    #   tag: hyperchad-release-client
+                    #   features: desktop,client
+                    #   config: tauri.hyperchad.conf.json
 
                     - os: macos-latest
                       profile: release-lto
