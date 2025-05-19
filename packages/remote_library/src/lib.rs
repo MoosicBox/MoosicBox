@@ -63,12 +63,79 @@ impl MusicApi for RemoteLibraryMusicApi {
 
     async fn artists(
         &self,
-        _offset: Option<u32>,
-        _limit: Option<u32>,
-        _order: Option<ArtistOrder>,
-        _order_direction: Option<ArtistOrderDirection>,
+        offset: Option<u32>,
+        limit: Option<u32>,
+        order: Option<ArtistOrder>,
+        order_direction: Option<ArtistOrderDirection>,
     ) -> PagingResult<Artist, ArtistsError> {
-        unimplemented!("Fetching artists is not implemented")
+        let offset = offset.unwrap_or(0);
+        let limit = limit.unwrap_or(100);
+
+        let request = CLIENT
+            .request(
+                switchy_http::models::Method::Get,
+                &format!(
+                    "{host}/menu/artists{sort}{direction}",
+                    host = self.host,
+                    sort = order
+                        .as_ref()
+                        .map_or_else(String::new, |x| format!("?sort={x}")),
+                    direction = order_direction
+                        .as_ref()
+                        .map_or_else(String::new, |x| format!("&direction={x}")),
+                ),
+            )
+            .header("moosicbox-profile", &self.profile);
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| ArtistsError::Other(Box::new(e)))?;
+
+        if !response.status().is_success() {
+            if response.status() == StatusCode::NotFound {
+                return Ok(PagingResponse::empty());
+            }
+            return Err(ArtistsError::Other(Box::new(RequestError::Unsuccessful(
+                format!("Status {}", response.status()),
+            ))));
+        }
+
+        let value: Vec<ApiArtist> = response
+            .json()
+            .await
+            .map_err(|e| ArtistsError::Other(Box::new(e)))?;
+
+        let total = u32::try_from(value.len()).unwrap();
+        let items: Result<Vec<_>, _> = value
+            .into_iter()
+            .skip(offset as usize)
+            .take(std::cmp::min(total - offset, limit) as usize)
+            .map(TryInto::try_into)
+            .collect();
+        let items = items.map_err(|e| ArtistsError::Other(Box::new(e)))?;
+
+        let page = PagingResponse::new(
+            Page::WithTotal {
+                items,
+                offset,
+                limit,
+                total,
+            },
+            {
+                let api = self.clone();
+
+                move |offset, limit| {
+                    let api = api.clone();
+                    Box::pin(async move {
+                        api.artists(Some(offset), Some(limit), order, order_direction)
+                            .await
+                    })
+                }
+            },
+        );
+
+        Ok(page)
     }
 
     async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, ArtistError> {
