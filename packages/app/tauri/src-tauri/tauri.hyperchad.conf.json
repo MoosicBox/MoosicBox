@@ -5,7 +5,7 @@
         "devUrl": "http://localhost:8343",
         "frontendDist": "../../native/gen"
     },
-    "identifier": "com.moosicbox.hyperchad",
+    "identifier": "com.moosicbox",
     "productName": "MoosicBox",
     "version": "0.16.1",
     "bundle": {
