@@ -40,12 +40,12 @@ jobs:
                       bundled: true
                       features: desktop,bundled
 
-                    - os: ubuntu-latest
-                      profile: release-lto-no-panic
-                      target: desktop
-                      tag: release-lto-no-panic
-                      bundled: true
-                      features: desktop,bundled
+                    # - os: ubuntu-latest
+                    #   profile: release-lto-no-panic
+                    #   target: desktop
+                    #   tag: release-lto-no-panic
+                    #   bundled: true
+                    #   features: desktop,bundled
 
                     - os: windows-latest
                       profile: debug
@@ -67,12 +67,12 @@ jobs:
                       bundled: true
                       features: desktop,bundled
 
-                    - os: windows-latest
-                      profile: release-lto-no-panic
-                      target: desktop
-                      tag: release-lto-no-panic
-                      bundled: true
-                      features: desktop,bundled
+                    # - os: windows-latest
+                    #   profile: release-lto-no-panic
+                    #   target: desktop
+                    #   tag: release-lto-no-panic
+                    #   bundled: true
+                    #   features: desktop,bundled
 
                     - os: macos-latest
                       profile: debug
@@ -94,12 +94,12 @@ jobs:
                       bundled: true
                       features: desktop,bundled
 
-                    - os: macos-latest
-                      profile: release-lto-no-panic
-                      target: desktop
-                      tag: release-lto-no-panic
-                      bundled: true
-                      features: desktop,bundled
+                    # - os: macos-latest
+                    #   profile: release-lto-no-panic
+                    #   target: desktop
+                    #   tag: release-lto-no-panic
+                    #   bundled: true
+                    #   features: desktop,bundled
 
                     - os: ubuntu-latest
                       profile: debug
@@ -119,11 +119,11 @@ jobs:
                       tag: client
                       features: desktop,client
 
-                    - os: ubuntu-latest
-                      profile: release-lto-no-panic
-                      target: desktop
-                      tag: release-lto-no-panic-client
-                      features: desktop,client
+                    # - os: ubuntu-latest
+                    #   profile: release-lto-no-panic
+                    #   target: desktop
+                    #   tag: release-lto-no-panic-client
+                    #   features: desktop,client
 
                     - os: windows-latest
                       profile: debug
@@ -143,11 +143,11 @@ jobs:
                       tag: client
                       features: desktop,client
 
-                    - os: windows-latest
-                      profile: release-lto-no-panic
-                      target: desktop
-                      tag: release-lto-no-panic-client
-                      features: desktop,client
+                    # - os: windows-latest
+                    #   profile: release-lto-no-panic
+                    #   target: desktop
+                    #   tag: release-lto-no-panic-client
+                    #   features: desktop,client
 
                     - os: macos-latest
                       profile: debug
@@ -167,11 +167,11 @@ jobs:
                       tag: client
                       features: desktop,client
 
-                    - os: macos-latest
-                      profile: release-lto-no-panic
-                      target: desktop
-                      tag: release-lto-no-panic-client
-                      features: desktop,client
+                    # - os: macos-latest
+                    #   profile: release-lto-no-panic
+                    #   target: desktop
+                    #   tag: release-lto-no-panic-client
+                    #   features: desktop,client
 
                     - os: ubuntu-latest
                       profile: debug
@@ -222,13 +222,13 @@ jobs:
                       features: desktop,bundled
                       config: tauri.hyperchad.conf.json
 
-                    - os: ubuntu-latest
-                      profile: release-lto-no-panic
-                      target: desktop
-                      tag: hyperchad-release-lto-no-panic
-                      bundled: true
-                      features: desktop,bundled
-                      config: tauri.hyperchad.conf.json
+                    # - os: ubuntu-latest
+                    #   profile: release-lto-no-panic
+                    #   target: desktop
+                    #   tag: hyperchad-release-lto-no-panic
+                    #   bundled: true
+                    #   features: desktop,bundled
+                    #   config: tauri.hyperchad.conf.json
 
                     - os: windows-latest
                       profile: debug
@@ -254,13 +254,13 @@ jobs:
                       features: desktop,bundled
                       config: tauri.hyperchad.conf.json
 
-                    - os: windows-latest
-                      profile: release-lto-no-panic
-                      target: desktop
-                      tag: hyperchad-release-lto-no-panic
-                      bundled: true
-                      features: desktop,bundled
-                      config: tauri.hyperchad.conf.json
+                    # - os: windows-latest
+                    #   profile: release-lto-no-panic
+                    #   target: desktop
+                    #   tag: hyperchad-release-lto-no-panic
+                    #   bundled: true
+                    #   features: desktop,bundled
+                    #   config: tauri.hyperchad.conf.json
 
                     - os: macos-latest
                       profile: debug
@@ -286,13 +286,13 @@ jobs:
                       features: desktop,bundled
                       config: tauri.hyperchad.conf.json
 
-                    - os: macos-latest
-                      profile: release-lto-no-panic
-                      target: desktop
-                      tag: hyperchad-release-lto-no-panic
-                      bundled: true
-                      features: desktop,bundled
-                      config: tauri.hyperchad.conf.json
+                    # - os: macos-latest
+                    #   profile: release-lto-no-panic
+                    #   target: desktop
+                    #   tag: hyperchad-release-lto-no-panic
+                    #   bundled: true
+                    #   features: desktop,bundled
+                    #   config: tauri.hyperchad.conf.json
 
                     - os: ubuntu-latest
                       profile: debug
@@ -315,12 +315,12 @@ jobs:
                       features: desktop,client
                       config: tauri.hyperchad.conf.json
 
-                    - os: ubuntu-latest
-                      profile: release-lto-no-panic
-                      target: desktop
-                      tag: hyperchad-release-lto-no-panic-client
-                      features: desktop,client
-                      config: tauri.hyperchad.conf.json
+                    # - os: ubuntu-latest
+                    #   profile: release-lto-no-panic
+                    #   target: desktop
+                    #   tag: hyperchad-release-lto-no-panic-client
+                    #   features: desktop,client
+                    #   config: tauri.hyperchad.conf.json
 
                     - os: windows-latest
                       profile: debug
@@ -343,12 +343,12 @@ jobs:
                       features: desktop,client
                       config: tauri.hyperchad.conf.json
 
-                    - os: windows-latest
-                      profile: release-lto-no-panic
-                      target: desktop
-                      tag: hyperchad-release-lto-no-panic-client
-                      features: desktop,client
-                      config: tauri.hyperchad.conf.json
+                    # - os: windows-latest
+                    #   profile: release-lto-no-panic
+                    #   target: desktop
+                    #   tag: hyperchad-release-lto-no-panic-client
+                    #   features: desktop,client
+                    #   config: tauri.hyperchad.conf.json
 
                     - os: macos-latest
                       profile: debug
@@ -371,12 +371,12 @@ jobs:
                       features: desktop,client
                       config: tauri.hyperchad.conf.json
 
-                    - os: macos-latest
-                      profile: release-lto-no-panic
-                      target: desktop
-                      tag: hyperchad-release-lto-no-panic-client
-                      features: desktop,client
-                      config: tauri.hyperchad.conf.json
+                    # - os: macos-latest
+                    #   profile: release-lto-no-panic
+                    #   target: desktop
+                    #   tag: hyperchad-release-lto-no-panic-client
+                    #   features: desktop,client
+                    #   config: tauri.hyperchad.conf.json
 
                     - os: ubuntu-latest
                       profile: debug
