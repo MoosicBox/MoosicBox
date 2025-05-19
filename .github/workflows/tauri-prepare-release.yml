@@ -545,7 +545,7 @@ jobs:
             - name: Build Tauri Desktop App
               if: ${{ matrix.release.target == 'desktop' }}
               working-directory: MoosicBox/packages/app/tauri
-              run: pnpm tauri build${{ matrix.release.profile == 'debug' && ' --debug' || ' -- --profile ' }}${{ matrix.release.profile != 'debug' && matrix.release.profile || '' }} ${{ matrix.release.features && format('--features {0}', matrix.release.features) || '' }} ${{ matrix.release.config && format('--config src-tauri/{0}', matrix.release.config) || '' }}
+              run: pnpm tauri build ${{ matrix.release.config && format('--config src-tauri/{0}', matrix.release.config) || '' }}${{ matrix.release.profile == 'debug' && ' --debug' || ' -- --profile ' }}${{ matrix.release.profile != 'debug' && matrix.release.profile || '' }} ${{ matrix.release.features && format('--features {0}', matrix.release.features) || '' }}
 
             - name: Set up Keystore
               if: ${{ matrix.release.target == 'android' }}
@@ -563,7 +563,7 @@ jobs:
               working-directory: MoosicBox/packages/app/tauri
               run: |
                   export CPATH="$PWD/src-tauri/include:$CPATH"
-                  pnpm tauri ${{ matrix.release.target }} build${{ matrix.release.profile == 'debug' && ' --debug' || '' }} ${{ matrix.release.features && format('--features {0}', matrix.release.features) || '' }} ${{ matrix.release.config && format('--config src-tauri/{0}', matrix.release.config) || '' }}
+                  pnpm tauri ${{ matrix.release.target }} build ${{ matrix.release.config && format('--config src-tauri/{0}', matrix.release.config) || '' }}${{ matrix.release.profile == 'debug' && ' --debug' || '' }} ${{ matrix.release.features && format('--features {0}', matrix.release.features) || '' }}
 
             - name: Make assets directory
               shell: bash
