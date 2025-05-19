@@ -42,7 +42,7 @@ pub fn album_cover_url(
             "{}/files/albums/{}/{width}x{height}?moosicboxProfile=master&source={}",
             std::env::var("MOOSICBOX_HOST")
                 .as_deref()
-                .unwrap_or("http://localhost:8500"),
+                .unwrap_or("http://localhost:8016"),
             album_id,
             source,
         )

@@ -25,7 +25,7 @@ fn artist_cover_url(artist: &ApiArtist, width: u16, height: u16) -> String {
             "{}/files/artists/{}/{width}x{height}?moosicboxProfile=master",
             std::env::var("MOOSICBOX_HOST")
                 .as_deref()
-                .unwrap_or("http://localhost:8500"),
+                .unwrap_or("http://localhost:8016"),
             artist.artist_id
         )
     } else {

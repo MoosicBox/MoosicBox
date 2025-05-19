@@ -362,7 +362,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
                 RemoteLibraryMusicApi::new(
                     std::env::var("MOOSICBOX_HOST")
-                        .unwrap_or_else(|_| "http://localhost:8500".to_string()),
+                        .unwrap_or_else(|_| "http://localhost:8016".to_string()),
                     api_source,
                     PROFILE.to_string(),
                 ),
@@ -508,7 +508,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             "{}/menu/artist?moosicboxProfile={PROFILE}&artistId={artist_id}{}",
                             std::env::var("MOOSICBOX_HOST")
                                 .as_deref()
-                                .unwrap_or("http://localhost:8500"),
+                                .unwrap_or("http://localhost:8016"),
                             source.map_or_else(String::new, |x| format!("&source={x}")),
                         ))
                         .send()
@@ -539,7 +539,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             "{}/menu/artists?moosicboxProfile={PROFILE}&offset=0&limit=2000",
                             std::env::var("MOOSICBOX_HOST")
                                 .as_deref()
-                                .unwrap_or("http://localhost:8500")
+                                .unwrap_or("http://localhost:8016")
                         ))
                         .send()
                         .await?;
@@ -676,7 +676,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 api_url: Some(
                     std::env::var("MOOSICBOX_HOST")
                         .as_deref()
-                        .unwrap_or("http://localhost:8500")
+                        .unwrap_or("http://localhost:8016")
                         .to_string(),
                 ),
                 client_id: std::env::var("MOOSICBOX_CLIENT_ID").ok(),
@@ -1197,7 +1197,7 @@ async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteError> 
             "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}&sort={sort}{}",
             std::env::var("MOOSICBOX_HOST")
                 .as_deref()
-                .unwrap_or("http://localhost:8500"),
+                .unwrap_or("http://localhost:8016"),
             if filtered_sources.is_empty() {
                 String::new()
             } else {
@@ -1276,7 +1276,7 @@ async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
             "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}&sort={sort}{}",
             std::env::var("MOOSICBOX_HOST")
                 .as_deref()
-                .unwrap_or("http://localhost:8500"),
+                .unwrap_or("http://localhost:8016"),
             if filtered_sources.is_empty() {
                 String::new()
             } else {
@@ -1340,7 +1340,7 @@ async fn artist_albums_list_route(req: RouteRequest) -> Result<View, RouteError>
         "{}/menu/albums?moosicboxProfile={PROFILE}&artistId={artist_id}&source={source}&albumType={album_type}",
         std::env::var("MOOSICBOX_HOST")
             .as_deref()
-            .unwrap_or("http://localhost:8500")
+            .unwrap_or("http://localhost:8016")
     );
     let response = CLIENT.get(&url).send().await?;
 
@@ -1368,7 +1368,7 @@ async fn audio_zones_route(_req: RouteRequest) -> Result<View, RouteError> {
         "{}/audio-zone/with-session?moosicboxProfile={PROFILE}",
         std::env::var("MOOSICBOX_HOST")
             .as_deref()
-            .unwrap_or("http://localhost:8500")
+            .unwrap_or("http://localhost:8016")
     );
     let response = CLIENT.get(&url).send().await?;
 
@@ -1394,7 +1394,7 @@ async fn playback_sessions_route(_req: RouteRequest) -> Result<View, RouteError>
         "{}/session/sessions?moosicboxProfile={PROFILE}",
         std::env::var("MOOSICBOX_HOST")
             .as_deref()
-            .unwrap_or("http://localhost:8500")
+            .unwrap_or("http://localhost:8016")
     );
     let response = CLIENT.get(&url).send().await?;
 
