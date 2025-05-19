@@ -518,8 +518,8 @@ xml = "0.8.20"
 # utoipa-scalar            = { git = "https://github.com/juhaku/utoipa" }
 # utoipa-swagger-ui        = { git = "https://github.com/juhaku/utoipa" }
 
-utoipa            = { git = "https://github.com/jayvdb/utoipa", branch = "bump-zip" }
-utoipa-rapidoc    = { git = "https://github.com/jayvdb/utoipa", branch = "bump-zip" }
-utoipa-redoc      = { git = "https://github.com/jayvdb/utoipa", branch = "bump-zip" }
-utoipa-scalar     = { git = "https://github.com/jayvdb/utoipa", branch = "bump-zip" }
-utoipa-swagger-ui = { git = "https://github.com/jayvdb/utoipa", branch = "bump-zip" }
+utoipa            = { git = "https://github.com/juhaku/utoipa" }
+utoipa-rapidoc    = { git = "https://github.com/juhaku/utoipa" }
+utoipa-redoc      = { git = "https://github.com/juhaku/utoipa" }
+utoipa-scalar     = { git = "https://github.com/juhaku/utoipa" }
+utoipa-swagger-ui = { git = "https://github.com/juhaku/utoipa" }

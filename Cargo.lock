@@ -15148,7 +15148,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 [[package]]
 name = "utoipa"
 version = "5.3.1"
-source = "git+https://github.com/jayvdb/utoipa?branch=bump-zip#d0a434ffbb16857097cdbcace8e381f2b8924656"
+source = "git+https://github.com/juhaku/utoipa#cecda0531bf7d90800af66b186055932ee730526"
 dependencies = [
  "indexmap 2.9.0",
  "serde",
@@ -15159,7 +15159,7 @@ dependencies = [
 [[package]]
 name = "utoipa-gen"
 version = "5.3.1"
-source = "git+https://github.com/jayvdb/utoipa?branch=bump-zip#d0a434ffbb16857097cdbcace8e381f2b8924656"
+source = "git+https://github.com/juhaku/utoipa#cecda0531bf7d90800af66b186055932ee730526"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -15170,7 +15170,7 @@ dependencies = [
 [[package]]
 name = "utoipa-rapidoc"
 version = "6.0.0"
-source = "git+https://github.com/jayvdb/utoipa?branch=bump-zip#d0a434ffbb16857097cdbcace8e381f2b8924656"
+source = "git+https://github.com/juhaku/utoipa#cecda0531bf7d90800af66b186055932ee730526"
 dependencies = [
  "actix-web",
  "serde",
@@ -15181,7 +15181,7 @@ dependencies = [
 [[package]]
 name = "utoipa-redoc"
 version = "6.0.0"
-source = "git+https://github.com/jayvdb/utoipa?branch=bump-zip#d0a434ffbb16857097cdbcace8e381f2b8924656"
+source = "git+https://github.com/juhaku/utoipa#cecda0531bf7d90800af66b186055932ee730526"
 dependencies = [
  "actix-web",
  "serde",
@@ -15192,7 +15192,7 @@ dependencies = [
 [[package]]
 name = "utoipa-scalar"
 version = "0.3.0"
-source = "git+https://github.com/jayvdb/utoipa?branch=bump-zip#d0a434ffbb16857097cdbcace8e381f2b8924656"
+source = "git+https://github.com/juhaku/utoipa#cecda0531bf7d90800af66b186055932ee730526"
 dependencies = [
  "actix-web",
  "serde",
@@ -15203,7 +15203,7 @@ dependencies = [
 [[package]]
 name = "utoipa-swagger-ui"
 version = "9.0.1"
-source = "git+https://github.com/jayvdb/utoipa?branch=bump-zip#d0a434ffbb16857097cdbcace8e381f2b8924656"
+source = "git+https://github.com/juhaku/utoipa#cecda0531bf7d90800af66b186055932ee730526"
 dependencies = [
  "actix-web",
  "base64 0.22.1",
