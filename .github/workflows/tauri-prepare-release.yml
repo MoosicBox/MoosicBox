@@ -198,6 +198,216 @@ jobs:
                       bundled: true
                       features: android,bundled
 
+                    - os: ubuntu-latest
+                      profile: debug
+                      target: desktop
+                      tag: hyperchad-debug
+                      bundled: true
+                      features: desktop,bundled
+                      config: tauri.hyperchad.conf.json
+
+                    - os: ubuntu-latest
+                      profile: release
+                      target: desktop
+                      tag: hyperchad-release
+                      bundled: true
+                      features: desktop,bundled
+                      config: tauri.hyperchad.conf.json
+
+                    - os: ubuntu-latest
+                      profile: release-lto
+                      target: desktop
+                      tag: hyperchad
+                      bundled: true
+                      features: desktop,bundled
+                      config: tauri.hyperchad.conf.json
+
+                    - os: ubuntu-latest
+                      profile: release-lto-no-panic
+                      target: desktop
+                      tag: hyperchad-release-lto-no-panic
+                      bundled: true
+                      features: desktop,bundled
+                      config: tauri.hyperchad.conf.json
+
+                    - os: windows-latest
+                      profile: debug
+                      target: desktop
+                      tag: hyperchad-debug
+                      bundled: true
+                      features: desktop,bundled
+                      config: tauri.hyperchad.conf.json
+
+                    - os: windows-latest
+                      profile: release
+                      target: desktop
+                      tag: hyperchad-release
+                      bundled: true
+                      features: desktop,bundled
+                      config: tauri.hyperchad.conf.json
+
+                    - os: windows-latest
+                      profile: release-lto
+                      target: desktop
+                      tag: hyperchad
+                      bundled: true
+                      features: desktop,bundled
+                      config: tauri.hyperchad.conf.json
+
+                    - os: windows-latest
+                      profile: release-lto-no-panic
+                      target: desktop
+                      tag: hyperchad-release-lto-no-panic
+                      bundled: true
+                      features: desktop,bundled
+                      config: tauri.hyperchad.conf.json
+
+                    - os: macos-latest
+                      profile: debug
+                      target: desktop
+                      tag: hyperchad-debug
+                      bundled: true
+                      features: desktop,bundled
+                      config: tauri.hyperchad.conf.json
+
+                    - os: macos-latest
+                      profile: release
+                      target: desktop
+                      tag: hyperchad-release
+                      bundled: true
+                      features: desktop,bundled
+                      config: tauri.hyperchad.conf.json
+
+                    - os: macos-latest
+                      profile: release-lto
+                      target: desktop
+                      tag: hyperchad
+                      bundled: true
+                      features: desktop,bundled
+                      config: tauri.hyperchad.conf.json
+
+                    - os: macos-latest
+                      profile: release-lto-no-panic
+                      target: desktop
+                      tag: hyperchad-release-lto-no-panic
+                      bundled: true
+                      features: desktop,bundled
+                      config: tauri.hyperchad.conf.json
+
+                    - os: ubuntu-latest
+                      profile: debug
+                      target: desktop
+                      tag: hyperchad-debug-client
+                      features: desktop,client
+                      config: tauri.hyperchad.conf.json
+
+                    - os: ubuntu-latest
+                      profile: release
+                      target: desktop
+                      tag: hyperchad-release-client
+                      features: desktop,client
+                      config: tauri.hyperchad.conf.json
+
+                    - os: ubuntu-latest
+                      profile: release-lto
+                      target: desktop
+                      tag: hyperchad-client
+                      features: desktop,client
+                      config: tauri.hyperchad.conf.json
+
+                    - os: ubuntu-latest
+                      profile: release-lto-no-panic
+                      target: desktop
+                      tag: hyperchad-release-lto-no-panic-client
+                      features: desktop,client
+                      config: tauri.hyperchad.conf.json
+
+                    - os: windows-latest
+                      profile: debug
+                      target: desktop
+                      tag: hyperchad-debug-client
+                      features: desktop,client
+                      config: tauri.hyperchad.conf.json
+
+                    - os: windows-latest
+                      profile: release
+                      target: desktop
+                      tag: hyperchad-release-client
+                      features: desktop,client
+                      config: tauri.hyperchad.conf.json
+
+                    - os: windows-latest
+                      profile: release-lto
+                      target: desktop
+                      tag: hyperchad-client
+                      features: desktop,client
+                      config: tauri.hyperchad.conf.json
+
+                    - os: windows-latest
+                      profile: release-lto-no-panic
+                      target: desktop
+                      tag: hyperchad-release-lto-no-panic-client
+                      features: desktop,client
+                      config: tauri.hyperchad.conf.json
+
+                    - os: macos-latest
+                      profile: debug
+                      target: desktop
+                      tag: hyperchad-debug-client
+                      features: desktop,client
+                      config: tauri.hyperchad.conf.json
+
+                    - os: macos-latest
+                      profile: release
+                      target: desktop
+                      tag: hyperchad-release-client
+                      features: desktop,client
+                      config: tauri.hyperchad.conf.json
+
+                    - os: macos-latest
+                      profile: release-lto
+                      target: desktop
+                      tag: hyperchad-client
+                      features: desktop,client
+                      config: tauri.hyperchad.conf.json
+
+                    - os: macos-latest
+                      profile: release-lto-no-panic
+                      target: desktop
+                      tag: hyperchad-release-lto-no-panic-client
+                      features: desktop,client
+                      config: tauri.hyperchad.conf.json
+
+                    - os: ubuntu-latest
+                      profile: debug
+                      target: android
+                      tag: hyperchad-debug
+                      features: android,client
+                      config: tauri.hyperchad.conf.json
+
+                    - os: ubuntu-latest
+                      profile: release
+                      target: android
+                      tag: hyperchad-client
+                      features: android,client
+                      config: tauri.hyperchad.conf.json
+
+                    # - os: ubuntu-latest
+                    #   profile: debug
+                    #   target: android
+                    #   tag: hyperchad
+                    #   bundled: true
+                    #   features: android,bundled
+                    #   config: tauri.hyperchad.conf.json
+
+                    - os: ubuntu-latest
+                      profile: release
+                      target: android
+                      tag: hyperchad
+                      bundled: true
+                      features: android,bundled
+                      config: tauri.hyperchad.conf.json
+
         steps:
             - name: Clean self-hosted runner
               if: ${{ matrix.release.runner == 'self-hosted' }}
@@ -335,7 +545,7 @@ jobs:
             - name: Build Tauri Desktop App
               if: ${{ matrix.release.target == 'desktop' }}
               working-directory: MoosicBox/packages/app/tauri
-              run: pnpm tauri build${{ matrix.release.profile == 'debug' && ' --debug' || ' -- --profile ' }}${{ matrix.release.profile != 'debug' && matrix.release.profile || '' }} ${{ matrix.release.features && format('--features {0}', matrix.release.features) || '' }}
+              run: pnpm tauri build${{ matrix.release.profile == 'debug' && ' --debug' || ' -- --profile ' }}${{ matrix.release.profile != 'debug' && matrix.release.profile || '' }} ${{ matrix.release.features && format('--features {0}', matrix.release.features) || '' }} ${{ matrix.release.config && format('--config src-tauri/{0}', matrix.release.config) || '' }}
 
             - name: Set up Keystore
               if: ${{ matrix.release.target == 'android' }}
@@ -353,7 +563,7 @@ jobs:
               working-directory: MoosicBox/packages/app/tauri
               run: |
                   export CPATH="$PWD/src-tauri/include:$CPATH"
-                  pnpm tauri ${{ matrix.release.target }} build${{ matrix.release.profile == 'debug' && ' --debug' || '' }} ${{ matrix.release.features && format('--features {0}', matrix.release.features) || '' }}
+                  pnpm tauri ${{ matrix.release.target }} build${{ matrix.release.profile == 'debug' && ' --debug' || '' }} ${{ matrix.release.features && format('--features {0}', matrix.release.features) || '' }} ${{ matrix.release.config && format('--config src-tauri/{0}', matrix.release.config) || '' }}
 
             - name: Make assets directory
               shell: bash
