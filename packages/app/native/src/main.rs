@@ -497,7 +497,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/albums-list",
             |req| async move { albums_list_route(req).await },
         )
-        .with_static_route_result("/artists", |req| async move {
+        .with_route_result("/artists", |req| async move {
             Ok::<_, Box<dyn std::error::Error>>(
                 if let Some(artist_id) = req.query.get("artistId") {
                     let source: Option<ApiSource> =
