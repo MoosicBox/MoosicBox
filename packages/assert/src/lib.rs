@@ -84,11 +84,12 @@ macro_rules! assert_or_error {
 #[macro_export]
 macro_rules! assert_or_unimplemented {
     ($evaluate:expr, $(,)?) => {
+        let success = ($evaluate);
         if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1"
-            && !($evaluate)
+            && !success
         {
-            $crate::assert!($evaluate)
-        } else if !($evaluate) {
+            $crate::assert!(success)
+        } else if !success {
             unimplemented!(
                 "{}",
                 $crate::Colorize::on_red($crate::Colorize::white($crate::Colorize::bold(
@@ -103,11 +104,12 @@ macro_rules! assert_or_unimplemented {
         }
     };
     ($evaluate:expr, $($message:tt)+) => {
+        let success = ($evaluate);
         if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1"
-            && !($evaluate)
+            && !success
         {
-            $crate::assert!($evaluate, $($message)*)
-        } else if !($evaluate) {
+            $crate::assert!(success, $($message)*)
+        } else if !success {
             unimplemented!(
                 "{}",
                 $crate::Colorize::on_red($crate::Colorize::white($crate::Colorize::bold(
@@ -130,7 +132,7 @@ macro_rules! assert_or_panic {
         if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1"
             && !success
         {
-            $crate::assert!($evaluate)
+            $crate::assert!(success)
         } else if !success {
             panic!(
                 "{}",
@@ -150,7 +152,7 @@ macro_rules! assert_or_panic {
         if $crate::moosicbox_env_utils::default_env!("ENABLE_ASSERT", "false") == "1"
             && !success
         {
-            $crate::assert!($evaluate, $($message)*)
+            $crate::assert!(success, $($message)*)
         } else if !success {
             panic!(
                 "{}",
