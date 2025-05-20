@@ -9,7 +9,7 @@ use clap::{Parser, Subcommand, arg, command};
 use hyperchad_renderer::{Color, RenderRunner, Renderer, ToRenderRunner};
 use hyperchad_router::{Navigation, RoutePath, Router};
 use moosicbox_env_utils::default_env_usize;
-use switchy_async::{futures::channel::oneshot, runtime::Runtime};
+use switchy_async::{futures::channel::oneshot, runtime::Handle};
 
 pub mod renderer;
 
@@ -92,7 +92,7 @@ pub struct AppBuilder {
     viewport: Option<String>,
     width: Option<f32>,
     height: Option<f32>,
-    runtime: Option<Arc<switchy_async::runtime::Runtime>>,
+    runtime_handle: Option<switchy_async::runtime::Handle>,
     #[cfg(feature = "logic")]
     action_handlers: Vec<Arc<ActionHandler>>,
     resize_listeners: Vec<Arc<ResizeListener>>,
@@ -115,7 +115,7 @@ impl std::fmt::Debug for AppBuilder {
             .field("viewport", &self.viewport)
             .field("width", &self.width)
             .field("height", &self.height)
-            .field("runtime", &self.runtime);
+            .field("runtime", &self.runtime_handle);
 
         #[cfg(feature = "assets")]
         builder.field("static_asset_routes", &self.static_asset_routes);
@@ -144,7 +144,7 @@ impl AppBuilder {
             viewport: None,
             width: None,
             height: None,
-            runtime: None,
+            runtime_handle: None,
             #[cfg(feature = "logic")]
             action_handlers: vec![],
             resize_listeners: vec![],
@@ -279,13 +279,8 @@ impl AppBuilder {
     }
 
     #[must_use]
-    pub fn with_runtime(self, runtime: Runtime) -> Self {
-        self.with_runtime_arc(Arc::new(runtime))
-    }
-
-    #[must_use]
-    pub fn with_runtime_arc(mut self, runtime: Arc<Runtime>) -> Self {
-        self.runtime.replace(runtime);
+    pub fn with_runtime_handle(mut self, handle: Handle) -> Self {
+        self.runtime_handle.replace(handle);
         self
     }
 
@@ -356,11 +351,9 @@ impl AppBuilder {
     }
 
     fn runtime_handle(&self) -> switchy_async::runtime::Handle {
-        self.runtime
+        self.runtime_handle
             .clone()
-            .map_or_else(switchy_async::runtime::Handle::current, |x| {
-                x.handle().clone()
-            })
+            .unwrap_or_else(switchy_async::runtime::Handle::current)
     }
 
     #[cfg(feature = "assets")]
@@ -424,7 +417,8 @@ impl AppBuilder {
         Ok(App {
             renderer,
             router,
-            runtime: self.runtime,
+            runtime: None,
+            runtime_handle: self.runtime_handle,
             x: self.x,
             y: self.y,
             background: self.background,
@@ -442,7 +436,8 @@ impl AppBuilder {
 pub struct App<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> {
     pub renderer: R,
     pub router: Router,
-    pub runtime: Option<Arc<switchy_async::runtime::Runtime>>,
+    runtime: Option<switchy_async::runtime::Runtime>,
+    pub runtime_handle: Option<switchy_async::runtime::Handle>,
     x: Option<i32>,
     y: Option<i32>,
     background: Option<Color>,
@@ -483,7 +478,7 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
     ///
     /// * If the one-shot channel fails to send after the runner completes
     pub fn handle_serve(mut self) -> Result<(), Error> {
-        let runtime = self.runtime()?;
+        let runtime = self.runtime_handle()?;
 
         let mut runner = runtime.block_on(async move { self.serve().await })?;
 
@@ -498,19 +493,19 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
         Ok(())
     }
 
-    fn runtime(&mut self) -> Result<Arc<Runtime>, Error> {
-        Ok(if let Some(runtime) = self.runtime.clone() {
-            runtime
+    fn runtime_handle(&mut self) -> Result<Handle, Error> {
+        Ok(if let Some(handle) = self.runtime_handle.clone() {
+            handle
         } else {
             let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
             log::debug!("Running with {threads} max blocking threads");
-            let runtime = Arc::new(
-                switchy_async::runtime::Builder::new()
-                    .max_blocking_threads(u16::try_from(threads).unwrap())
-                    .build()?,
-            );
-            self.runtime = Some(runtime.clone());
-            runtime
+            let runtime = switchy_async::runtime::Builder::new()
+                .max_blocking_threads(u16::try_from(threads).unwrap())
+                .build()?;
+            let handle = runtime.handle().clone();
+            self.runtime_handle = Some(handle.clone());
+            self.runtime = Some(runtime);
+            handle
         })
     }
 
@@ -548,7 +543,7 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
     ///
     /// * If the `Renderer` fails to generate the output
     pub fn generate_sync(mut self, output: Option<String>) -> Result<(), Error> {
-        self.runtime()?
+        self.runtime_handle()?
             .block_on(async move { self.generate(output).await })
     }
 
@@ -564,7 +559,7 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
     ///
     /// * If the `Renderer` fails to clean the output
     pub fn clean_sync(mut self, output: Option<String>) -> Result<(), Error> {
-        self.runtime()?
+        self.runtime_handle()?
             .block_on(async move { self.clean(output).await })
     }
 
@@ -584,7 +579,8 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
     ///
     /// * If the `MAX_THREADS` environment variable is not a valid `u16` integer
     pub fn serve_sync(mut self) -> Result<Box<dyn RenderRunner>, Error> {
-        self.runtime()?.block_on(async move { self.serve().await })
+        self.runtime_handle()?
+            .block_on(async move { self.serve().await })
     }
 
     /// # Errors
@@ -601,8 +597,7 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
             let _handle = router.navigate_spawn(initial_route);
         }
 
-        let runtime = self.runtime()?;
-        let handle = runtime.handle().clone();
+        let handle = self.runtime_handle()?;
         let mut renderer = self.renderer.clone();
 
         let width = self.width;
@@ -614,7 +609,7 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
         let description = self.description.clone();
         let viewport = self.viewport.clone();
 
-        runtime.spawn({
+        handle.spawn({
             let renderer = renderer.clone();
             async move {
                 log::debug!("app_native_lib::start: router listening");

@@ -579,7 +579,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_title("MoosicBox".to_string())
         .with_description("A music app for cows".to_string())
         .with_router(router)
-        .with_runtime_arc(runtime.clone())
+        .with_runtime_handle(runtime.handle().clone())
         .with_background(Color::from_hex("#181a1b"))
         .with_action_handler(move |x, value| {
             Ok::<_, SendError<(Action, Option<Value>)>>(match Action::try_from(x) {
