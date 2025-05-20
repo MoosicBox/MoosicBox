@@ -19,6 +19,7 @@ hyperchad_transformer = { workspace = true, features = ["html"] }
 moosicbox_assert      = { workspace = true }
 moosicbox_task        = { workspace = true }
 
+bytes     = { workspace = true }
 flume     = { workspace = true }
 futures   = { workspace = true }
 log       = { workspace = true }
