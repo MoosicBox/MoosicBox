@@ -3,7 +3,7 @@
 #![allow(clippy::multiple_crate_versions)]
 
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     pin::Pin,
     sync::{Arc, RwLock},
 };
@@ -53,7 +53,7 @@ pub struct RequestInfo {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RouteRequest {
     pub path: String,
-    pub query: HashMap<String, String>,
+    pub query: BTreeMap<String, String>,
     pub info: RequestInfo,
 }
 
