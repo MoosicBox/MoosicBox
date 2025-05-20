@@ -78,6 +78,7 @@ impl RouteRequest {
 pub enum RoutePath {
     Literal(String),
     Literals(Vec<String>),
+    LiteralPrefix(String),
 }
 
 impl RoutePath {
@@ -86,6 +87,7 @@ impl RoutePath {
         match self {
             Self::Literal(route_path) => route_path == path,
             Self::Literals(route_paths) => route_paths.iter().any(|x| x == path),
+            Self::LiteralPrefix(route_path) => path.starts_with(route_path),
         }
     }
 }

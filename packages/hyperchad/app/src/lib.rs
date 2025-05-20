@@ -536,6 +536,7 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
                             continue;
                         }
                     }
+                    RoutePath::LiteralPrefix(..) => continue,
                 }
             );
         }

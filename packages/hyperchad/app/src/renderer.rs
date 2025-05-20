@@ -345,6 +345,7 @@ mod html {
                             continue;
                         }
                     }
+                    RoutePath::LiteralPrefix(..) => continue,
                 };
                 let path_str = path_str.strip_prefix('/').unwrap_or(path_str);
                 let path_str = if path_str.is_empty() {
