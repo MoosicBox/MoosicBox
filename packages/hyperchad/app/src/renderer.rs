@@ -278,7 +278,7 @@ mod fltk {
 }
 
 #[cfg(feature = "html")]
-mod html {
+pub mod html {
     use std::{path::PathBuf, sync::LazyLock};
 
     use async_trait::async_trait;
