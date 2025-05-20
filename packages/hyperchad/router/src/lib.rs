@@ -8,6 +8,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use bytes::Bytes;
 use flume::{Receiver, Sender};
 use futures::Future;
 use hyperchad_renderer::Content;
@@ -55,6 +56,7 @@ pub struct RouteRequest {
     pub path: String,
     pub query: BTreeMap<String, String>,
     pub info: RequestInfo,
+    pub body: Option<Arc<Bytes>>,
 }
 
 impl RouteRequest {
@@ -70,6 +72,7 @@ impl RouteRequest {
             path: path.to_owned(),
             query: QString::from(query).into_iter().collect(),
             info,
+            body: None,
         }
     }
 }

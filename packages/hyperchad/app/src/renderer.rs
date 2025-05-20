@@ -364,6 +364,7 @@ mod html {
                             },
                         }),
                     },
+                    body: None,
                 };
 
                 match handler(req).await {
