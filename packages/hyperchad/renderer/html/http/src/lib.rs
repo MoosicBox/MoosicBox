@@ -27,6 +27,7 @@ pub enum Error {
     Recv(#[from] flume::RecvError),
     #[error(transparent)]
     Navigate(#[from] hyperchad_router::NavigateError),
+    #[cfg(feature = "_json")]
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
 }
