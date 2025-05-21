@@ -5218,6 +5218,7 @@ version = "0.1.0"
 dependencies = [
  "flume",
  "http 1.3.1",
+ "hyperchad_color",
  "hyperchad_renderer",
  "hyperchad_renderer_html",
  "hyperchad_router",

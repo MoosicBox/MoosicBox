@@ -5,6 +5,7 @@
 use std::{collections::HashMap, sync::LazyLock};
 
 use http::Response;
+use hyperchad_color::Color;
 use hyperchad_renderer::{Content, HtmlTagRenderer, PartialView, View};
 use hyperchad_renderer_html::html::container_element_to_html;
 use hyperchad_router::{RouteRequest, Router};
@@ -44,6 +45,10 @@ pub struct HttpApp<R: HtmlTagRenderer + Sync> {
     >,
     #[cfg(feature = "assets")]
     pub static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
+    background: Option<Color>,
+    title: Option<String>,
+    description: Option<String>,
+    viewport: Option<String>,
 }
 
 impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
@@ -146,16 +151,28 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
             }) => {
                 let content = container_element_to_html(&view, &self.renderer)?;
 
-                self.renderer
-                    .root_html(&HEADERS, &view, content, None, None, None, None)
+                self.renderer.root_html(
+                    &HEADERS,
+                    &view,
+                    content,
+                    self.viewport.as_deref(),
+                    self.background,
+                    self.title.as_deref(),
+                    self.description.as_deref(),
+                )
             }
             Content::PartialView(PartialView {
                 container: view, ..
             }) => {
                 let content = container_element_to_html(&view, &self.renderer)?;
 
-                self.renderer
-                    .partial_html(&HEADERS, &view, content, None, None)
+                self.renderer.partial_html(
+                    &HEADERS,
+                    &view,
+                    content,
+                    self.viewport.as_deref(),
+                    self.background,
+                )
             }
             #[cfg(feature = "json")]
             Content::Json(json) => {
@@ -184,7 +201,35 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
             action_tx: None,
             #[cfg(feature = "assets")]
             static_asset_routes: vec![],
+            background: None,
+            title: None,
+            description: None,
+            viewport: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_viewport(mut self, content: impl Into<String>) -> Self {
+        self.viewport.replace(content.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_background(mut self, color: impl Into<Color>) -> Self {
+        self.background.replace(color.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_title(mut self, title: impl Into<String>) -> Self {
+        self.title.replace(title.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.description.replace(description.into());
+        self
     }
 
     #[cfg(feature = "actions")]
